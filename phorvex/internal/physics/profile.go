@@ -1,0 +1,29 @@
+/*
+ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD.
+ */
+
+// Package physics is the swappable PHYSICS surface: a PhysicsProfile turns a pod's
+// live telemetry into a residual r_i(t) in [0,1] — how far the pod is behaving from
+// its healthy model. High residual = behaving unlike itself = elevated risk, even
+// with no detector alert (the detection-independent signal, PRD §5.1/§4.1).
+//
+// Add a profile = add ONE file with an init() that calls Registry.Register. The
+// decision engine reads it back via Registry.Default()/Get(); no core change.
+package physics
+
+import (
+	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/registry"
+)
+
+// PhysicsProfile is the governing-behavior model of a healthy workload and the
+// measured deviation from it.
+type PhysicsProfile interface {
+	registry.Named
+	// Residual returns r_i in [0,1]. It MUST be honest about missing telemetry:
+	// when view.Telemetry.Present is false it returns 0 (no fabricated anomaly).
+	Residual(view *model.WorkloadView, pol model.Policy) float64
+}
+
+// Registry holds the registered PhysicsProfiles.
+var Registry = registry.New[PhysicsProfile]()

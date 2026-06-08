@@ -1,0 +1,19 @@
+# De-risk: confirm the previously-UN-RUN CPU AI scenarios execute end-to-end
+# (split-oracle + a spread of ai2) before the full background smoke. d-nomtd only
+# (fast, no operator), 1 trial. Read-only intent: positive control must achieve.
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-ai-test"
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+phoenixSrcDir: "../phoenix-extended"
+outDir: "out-ai-derisk"
+defenderFilter:
+  - "d-nomtd"
+scenarioFilter:
+  - "ai1-prompt-injection"
+  - "ai2-mcp-tool-poisoning"
+  - "ai2-poisoned-model-registry"
+  - "ai2-rag-retrieval-poisoning"
+  - "ai2-agent-injection-to-persistence"

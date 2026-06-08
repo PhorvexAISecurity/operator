@@ -1,0 +1,32 @@
+# Per-target config for the FULL >=20-trial benchmark on the LIVE kind cluster.
+#
+# IDENTICAL loop to the smoke (config.kind.yaml) — only trialsPerArm and outDir
+# change. Same masterSeed => the smoke's arms reproduce and extend deterministically.
+# Single-node kind, context kind-amtd-test, node amtd-test-control-plane (no GPU,
+# no MIG, no real multi-node). The safety guard verifies the live current-context
+# AND apiserver host match this named context before ANY mutating call.
+
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+
+# FULL BENCHMARK: 20 trials per (scenario, defender) arm. With the negative-control
+# + adaptive passes the SAME loop runs; the per-arm CIs tighten as n grows
+# (df=19 => 95% t=2.093, vs 12.706 at n=2).
+trialsPerArm: 20
+
+# Fixed master seed (same as the smoke) — every per-trial RNG derives
+# deterministically from it, so the whole run reproduces exactly.
+masterSeed: 1337
+
+# phoenix-extended source tree for the FullPhoenix arm to build bin/manager.exe
+# and install the genuine CRDs from config/crd/bases.
+phoenixSrcDir: "../phoenix-extended"
+
+# Separate output dir so the smoke artifacts are preserved alongside the benchmark.
+outDir: "out-bench"
+
+# Empty => every registered plugin (all scenarios x all defenders + adaptive).
+defenderFilter: []
+scenarioFilter: []

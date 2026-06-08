@@ -1,0 +1,271 @@
+﻿=== go test -C C:\Users\moh87733\Phorvex\build\phoenix-extended ./... -count=1 -v (KUBEBUILDER_ASSETS=C:\Users\moh87733\AppData\Local\kubebuilder-envtest\k8s\1.30.3-windows-amd64) ===
+=== RUN   TestMatchStrategy_ByteCompatWithDeepEqual
+--- PASS: TestMatchStrategy_ByteCompatWithDeepEqual (0.04s)
+=== RUN   TestMatchStrategy_TimedRotateRule
+--- PASS: TestMatchStrategy_TimedRotateRule (0.00s)
+=== RUN   TestMatchStrategy_ScoredPath
+=== RUN   TestMatchStrategy_ScoredPath/ScoreThreshold_gte_hit
+=== RUN   TestMatchStrategy_ScoredPath/score_clause_vs_nil_AnomalyScore_is_false
+=== RUN   TestMatchStrategy_ScoredPath/source_guard_blocks_unrelated_event
+=== RUN   TestMatchStrategy_ScoredPath/metrics_Exists
+=== RUN   TestMatchStrategy_ScoredPath/In_on_threatLevel
+=== RUN   TestMatchStrategy_ScoredPath/conjunction_AND
+--- PASS: TestMatchStrategy_ScoredPath (0.00s)
+    --- PASS: TestMatchStrategy_ScoredPath/ScoreThreshold_gte_hit (0.00s)
+    --- PASS: TestMatchStrategy_ScoredPath/score_clause_vs_nil_AnomalyScore_is_false (0.00s)
+    --- PASS: TestMatchStrategy_ScoredPath/source_guard_blocks_unrelated_event (0.00s)
+    --- PASS: TestMatchStrategy_ScoredPath/metrics_Exists (0.00s)
+    --- PASS: TestMatchStrategy_ScoredPath/In_on_threatLevel (0.00s)
+    --- PASS: TestMatchStrategy_ScoredPath/conjunction_AND (0.00s)
+=== RUN   TestMatchStrategyForMode
+--- PASS: TestMatchStrategyForMode (0.00s)
+PASS
+ok  	github.com/r6security/phoenix/api/v1beta1	1.313s
+?   	github.com/r6security/phoenix/cmd	[no test files]
+=== RUN   TestMatchStrategy_LegacyEqualsDeepEqual
+    matcher_test.go:78: verified MatchStrategy == reflect.DeepEqual over 262144 legacy (rule,event) pairs
+--- PASS: TestMatchStrategy_LegacyEqualsDeepEqual (0.03s)
+=== RUN   TestMatchStrategy_LegacySpotChecks
+=== RUN   TestMatchStrategy_LegacySpotChecks/all-equal_full_triple
+=== RUN   TestMatchStrategy_LegacySpotChecks/type_differs
+=== RUN   TestMatchStrategy_LegacySpotChecks/threatLevel_differs
+=== RUN   TestMatchStrategy_LegacySpotChecks/source_differs
+=== RUN   TestMatchStrategy_LegacySpotChecks/both_empty_Rule
+=== RUN   TestMatchStrategy_LegacySpotChecks/empty_rule_vs_populated_event
+=== RUN   TestMatchStrategy_LegacySpotChecks/populated_rule_vs_empty_event
+=== RUN   TestMatchStrategy_LegacySpotChecks/rule_omits_threatLevel,_event_sets_it_(exact_compares_all_3)
+--- PASS: TestMatchStrategy_LegacySpotChecks (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/all-equal_full_triple (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/type_differs (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/threatLevel_differs (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/source_differs (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/both_empty_Rule (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/empty_rule_vs_populated_event (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/populated_rule_vs_empty_event (0.00s)
+    --- PASS: TestMatchStrategy_LegacySpotChecks/rule_omits_threatLevel,_event_sets_it_(exact_compares_all_3) (0.00s)
+=== RUN   TestMatchStrategy_ScoredOperators
+=== RUN   TestMatchStrategy_ScoredOperators/Gte_hit_(0.90>=0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Gte_boundary_(0.85>=0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Gte_miss_(0.50>=0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Gt_hit_(0.86>0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Gt_boundary_excluded_(0.85>0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Lte_hit_(0.50<=0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Lte_boundary_(0.85<=0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Lte_miss_(0.90<=0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Lt_hit_(0.50<0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/Lt_boundary_excluded_(0.85<0.85)
+=== RUN   TestMatchStrategy_ScoredOperators/In_hit_(critical_in_{high,critical})
+=== RUN   TestMatchStrategy_ScoredOperators/In_miss_(critical_in_{low,medium})
+=== RUN   TestMatchStrategy_ScoredOperators/NotIn_hit_(critical_not_in_{low,medium})
+=== RUN   TestMatchStrategy_ScoredOperators/NotIn_miss_(critical_not_in_{high,critical})
+=== RUN   TestMatchStrategy_ScoredOperators/Eq_hit_(threatLevel==critical)
+=== RUN   TestMatchStrategy_ScoredOperators/Eq_miss_(threatLevel==warning)
+=== RUN   TestMatchStrategy_ScoredOperators/NotEq_hit_(threatLevel!=warning)
+=== RUN   TestMatchStrategy_ScoredOperators/NotEq_miss_(threatLevel!=critical)
+=== RUN   TestMatchStrategy_ScoredOperators/Exists_hit_(metrics.high_gpu_usage_present)
+=== RUN   TestMatchStrategy_ScoredOperators/Exists_miss_(metrics.absent_key)
+=== RUN   TestMatchStrategy_ScoredOperators/metrics_Eq_hit
+=== RUN   TestMatchStrategy_ScoredOperators/metrics_Eq_miss
+--- PASS: TestMatchStrategy_ScoredOperators (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Gte_hit_(0.90>=0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Gte_boundary_(0.85>=0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Gte_miss_(0.50>=0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Gt_hit_(0.86>0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Gt_boundary_excluded_(0.85>0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Lte_hit_(0.50<=0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Lte_boundary_(0.85<=0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Lte_miss_(0.90<=0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Lt_hit_(0.50<0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Lt_boundary_excluded_(0.85<0.85) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/In_hit_(critical_in_{high,critical}) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/In_miss_(critical_in_{low,medium}) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/NotIn_hit_(critical_not_in_{low,medium}) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/NotIn_miss_(critical_not_in_{high,critical}) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Eq_hit_(threatLevel==critical) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Eq_miss_(threatLevel==warning) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/NotEq_hit_(threatLevel!=warning) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/NotEq_miss_(threatLevel!=critical) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Exists_hit_(metrics.high_gpu_usage_present) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/Exists_miss_(metrics.absent_key) (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/metrics_Eq_hit (0.00s)
+    --- PASS: TestMatchStrategy_ScoredOperators/metrics_Eq_miss (0.00s)
+=== RUN   TestMatchStrategy_ScoreThresholdEqualsGte
+--- PASS: TestMatchStrategy_ScoreThresholdEqualsGte (0.00s)
+=== RUN   TestMatchStrategy_ScoreClauseVsNilScoreIsFalse
+=== RUN   TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/ScoreThreshold_vs_nil_score
+=== RUN   TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/Match_anomalyScore_Gte_vs_nil_score
+=== RUN   TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/anomalyScore_Exists_vs_nil_score_is_false
+=== RUN   TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/metric_clause_vs_absent_metric_is_false
+--- PASS: TestMatchStrategy_ScoreClauseVsNilScoreIsFalse (0.00s)
+    --- PASS: TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/ScoreThreshold_vs_nil_score (0.00s)
+    --- PASS: TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/Match_anomalyScore_Gte_vs_nil_score (0.00s)
+    --- PASS: TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/anomalyScore_Exists_vs_nil_score_is_false (0.00s)
+    --- PASS: TestMatchStrategy_ScoreClauseVsNilScoreIsFalse/metric_clause_vs_absent_metric_is_false (0.00s)
+=== RUN   TestMatchStrategyForMode_ExactInertScoredHonored
+--- PASS: TestMatchStrategyForMode_ExactInertScoredHonored (0.00s)
+=== RUN   TestMatchStrategy_GuardBlocksUnrelatedEvent
+=== RUN   TestMatchStrategy_GuardBlocksUnrelatedEvent/Source_guard_blocks_a_high_score_from_another_source
+=== RUN   TestMatchStrategy_GuardBlocksUnrelatedEvent/Type_guard_blocks_a_score_clause_on_a_mismatched_type
+=== RUN   TestMatchStrategy_GuardBlocksUnrelatedEvent/conjunction_of_guards_and_clauses_(AND)
+--- PASS: TestMatchStrategy_GuardBlocksUnrelatedEvent (0.00s)
+    --- PASS: TestMatchStrategy_GuardBlocksUnrelatedEvent/Source_guard_blocks_a_high_score_from_another_source (0.00s)
+    --- PASS: TestMatchStrategy_GuardBlocksUnrelatedEvent/Type_guard_blocks_a_score_clause_on_a_mismatched_type (0.00s)
+    --- PASS: TestMatchStrategy_GuardBlocksUnrelatedEvent/conjunction_of_guards_and_clauses_(AND) (0.00s)
+=== RUN   TestMaxConcurrentRotations_DefersAtCap
+--- PASS: TestMaxConcurrentRotations_DefersAtCap (0.00s)
+=== RUN   TestMaxConcurrentRotations_ProceedsUnderCap
+--- PASS: TestMaxConcurrentRotations_ProceedsUnderCap (0.00s)
+=== RUN   TestMaxConcurrentRotations_NilUnlimited
+--- PASS: TestMaxConcurrentRotations_NilUnlimited (0.00s)
+=== RUN   TestCountInFlightRotations_CountsOnlySelectorMatches
+--- PASS: TestCountInFlightRotations_CountsOnlySelectorMatches (0.00s)
+=== RUN   TestMutationApplier_Resolve_OverridesWinsOverPolicyRef
+--- PASS: TestMutationApplier_Resolve_OverridesWinsOverPolicyRef (0.00s)
+=== RUN   TestMutationApplier_Resolve_PolicyRefInferenceRotation
+--- PASS: TestMutationApplier_Resolve_PolicyRefInferenceRotation (0.00s)
+=== RUN   TestMutationApplier_Resolve_ContextMutationPolicyEmpty
+--- PASS: TestMutationApplier_Resolve_ContextMutationPolicyEmpty (0.00s)
+=== RUN   TestMutationApplier_Resolve_BothNilEmpty
+--- PASS: TestMutationApplier_Resolve_BothNilEmpty (0.00s)
+=== RUN   TestMutationApplier_Apply_ImageDefaultContainer
+--- PASS: TestMutationApplier_Apply_ImageDefaultContainer (0.00s)
+=== RUN   TestMutationApplier_Apply_ImageNamedContainer
+--- PASS: TestMutationApplier_Apply_ImageNamedContainer (0.00s)
+=== RUN   TestMutationApplier_Apply_ContainerNotFound
+--- PASS: TestMutationApplier_Apply_ContainerNotFound (0.00s)
+=== RUN   TestMutationApplier_Apply_EnvSetAndOverwrite
+--- PASS: TestMutationApplier_Apply_EnvSetAndOverwrite (0.00s)
+=== RUN   TestMutationApplier_Apply_GPUDropToZero
+--- PASS: TestMutationApplier_Apply_GPUDropToZero (0.00s)
+=== RUN   TestMutationApplier_Apply_GPUInvalidQuantity
+--- PASS: TestMutationApplier_Apply_GPUInvalidQuantity (0.00s)
+=== RUN   TestMutationApplier_Apply_EmptyOverlayNoChange
+--- PASS: TestMutationApplier_Apply_EmptyOverlayNoChange (0.00s)
+=== RUN   TestMutationApplier_Apply_IdempotentReapply
+--- PASS: TestMutationApplier_Apply_IdempotentReapply (0.00s)
+=== RUN   TestMutationApplier_Apply_NoContainersError
+--- PASS: TestMutationApplier_Apply_NoContainersError (0.00s)
+=== RUN   TestNIMReconciler_Reconcile_NoAnnotation
+--- PASS: TestNIMReconciler_Reconcile_NoAnnotation (0.00s)
+=== RUN   TestNIMReconciler_Reconcile_NoTimedEvent
+--- PASS: TestNIMReconciler_Reconcile_NoTimedEvent (0.00s)
+=== RUN   TestNIMReconciler_Reconcile_ValidTimedEvent_PassThrough
+--- PASS: TestNIMReconciler_Reconcile_ValidTimedEvent_PassThrough (0.00s)
+=== RUN   TestNIMReconciler_Reconcile_InProgressEarlyReturn
+--- PASS: TestNIMReconciler_Reconcile_InProgressEarlyReturn (0.00s)
+=== RUN   TestNIMReconciler_Reconcile_InvalidJSON
+--- PASS: TestNIMReconciler_Reconcile_InvalidJSON (0.00s)
+=== RUN   TestNIMReconciler_Reconcile_PodNotFound
+--- PASS: TestNIMReconciler_Reconcile_PodNotFound (0.00s)
+=== RUN   TestNIMReconciler_DeterminePodStartupState
+=== RUN   TestNIMReconciler_DeterminePodStartupState/Pending
+=== RUN   TestNIMReconciler_DeterminePodStartupState/Running
+=== RUN   TestNIMReconciler_DeterminePodStartupState/Failed
+=== RUN   TestNIMReconciler_DeterminePodStartupState/Succeeded
+=== RUN   TestNIMReconciler_DeterminePodStartupState/Unknown
+--- PASS: TestNIMReconciler_DeterminePodStartupState (0.00s)
+    --- PASS: TestNIMReconciler_DeterminePodStartupState/Pending (0.00s)
+    --- PASS: TestNIMReconciler_DeterminePodStartupState/Running (0.00s)
+    --- PASS: TestNIMReconciler_DeterminePodStartupState/Failed (0.00s)
+    --- PASS: TestNIMReconciler_DeterminePodStartupState/Succeeded (0.00s)
+    --- PASS: TestNIMReconciler_DeterminePodStartupState/Unknown (0.00s)
+=== RUN   TestFindTimedEvent
+=== RUN   TestFindTimedEvent/empty
+=== RUN   TestFindTimedEvent/no_match
+=== RUN   TestFindTimedEvent/one_match
+=== RUN   TestFindTimedEvent/first_of_two_matches
+=== RUN   TestFindTimedEvent/type_match_only_no_match
+--- PASS: TestFindTimedEvent (0.00s)
+    --- PASS: TestFindTimedEvent/empty (0.00s)
+    --- PASS: TestFindTimedEvent/no_match (0.00s)
+    --- PASS: TestFindTimedEvent/one_match (0.00s)
+    --- PASS: TestFindTimedEvent/first_of_two_matches (0.00s)
+    --- PASS: TestFindTimedEvent/type_match_only_no_match (0.00s)
+=== RUN   TestClassify_DeploymentRoute
+--- PASS: TestClassify_DeploymentRoute (0.00s)
+=== RUN   TestClassify_StatefulSetRoute
+--- PASS: TestClassify_StatefulSetRoute (0.00s)
+=== RUN   TestClassify_DaemonSetRoute
+--- PASS: TestClassify_DaemonSetRoute (0.00s)
+=== RUN   TestClassify_BarePod
+--- PASS: TestClassify_BarePod (0.00s)
+=== RUN   TestClassify_JobOwned
+--- PASS: TestClassify_JobOwned (0.00s)
+=== RUN   TestClassify_BareReplicaSet
+--- PASS: TestClassify_BareReplicaSet (0.00s)
+=== RUN   TestClassify_EmptyOverlayShortCircuits
+--- PASS: TestClassify_EmptyOverlayShortCircuits (0.00s)
+=== RUN   TestPatchOwnerTemplate_AppliesAndIsIdempotent
+--- PASS: TestPatchOwnerTemplate_AppliesAndIsIdempotent (0.00s)
+=== RUN   TestSecurityEventReconciler_Rotate_TimedReschedule
+--- PASS: TestSecurityEventReconciler_Rotate_TimedReschedule (0.00s)
+=== RUN   TestSecurityEventReconciler_ExactMatch_DeleteStillWorks
+--- PASS: TestSecurityEventReconciler_ExactMatch_DeleteStillWorks (0.00s)
+=== RUN   TestSecurityEventReconciler_ExactMode_ScoredClauseInert
+--- PASS: TestSecurityEventReconciler_ExactMode_ScoredClauseInert (0.00s)
+=== RUN   TestSecurityEventReconciler_ScoredMode_PanicSelectsRotate
+--- PASS: TestSecurityEventReconciler_ScoredMode_PanicSelectsRotate (0.00s)
+=== RUN   TestRotate_DurableRoute_MutatesOwnerTemplate
+--- PASS: TestRotate_DurableRoute_MutatesOwnerTemplate (0.00s)
+=== RUN   TestRotate_ColdFallback_BarePod
+--- PASS: TestRotate_ColdFallback_BarePod (0.00s)
+=== RUN   TestRotate_ColdFallback_JobOwned
+--- PASS: TestRotate_ColdFallback_JobOwned (0.00s)
+=== RUN   TestRotate_NilOverlay_PureColdReschedule
+--- PASS: TestRotate_NilOverlay_PureColdReschedule (0.00s)
+=== RUN   TestRotate_G1_Idempotence
+--- PASS: TestRotate_G1_Idempotence (0.00s)
+=== RUN   TestRotate_G2_InProgressLock
+--- PASS: TestRotate_G2_InProgressLock (0.00s)
+=== RUN   TestRotate_G3_MinIntervalFloor
+--- PASS: TestRotate_G3_MinIntervalFloor (0.00s)
+=== RUN   TestRotate_G3_MinIntervalElapsed
+--- PASS: TestRotate_G3_MinIntervalElapsed (0.00s)
+=== RUN   TestRotate_BurstOneAction
+--- PASS: TestRotate_BurstOneAction (0.00s)
+=== RUN   TestRotate_G4_ReadinessGate
+--- PASS: TestRotate_G4_ReadinessGate (0.00s)
+=== RUN   TestRotate_G5_BackoffWindowSkips
+--- PASS: TestRotate_G5_BackoffWindowSkips (0.00s)
+=== RUN   TestRotate_G5_CrashLoopArmsBackoffAndRollsBack
+--- PASS: TestRotate_G5_CrashLoopArmsBackoffAndRollsBack (0.00s)
+=== RUN   TestRotate_SuccessResetsFailureCounter
+--- PASS: TestRotate_SuccessResetsFailureCounter (0.00s)
+=== RUN   TestRotate_SecurityEventStatusOutcome
+--- PASS: TestRotate_SecurityEventStatusOutcome (0.00s)
+=== RUN   TestAPIs
+Running Suite: Controller Suite - C:\Users\moh87733\Phorvex\build\phoenix-extended\internal\controller
+======================================================================================================
+Random Seed: [1m1780203731[0m
+
+Will run [1m0[0m of [1m0[0m specs
+
+[38;5;10m[1mRan 0 of 0 Specs in 0.001 seconds[0m
+[38;5;10m[1mSUCCESS![0m -- [38;5;10m[1m0 Passed[0m | [38;5;9m[1m0 Failed[0m | [38;5;11m[1m0 Pending[0m | [38;5;14m[1m0 Skipped[0m
+--- PASS: TestAPIs (0.00s)
+PASS
+ok  	github.com/r6security/phoenix/internal/controller	0.400s
+=== RUN   TestCheapSuite_A_GapMeanEqualsBaseInterval
+--- PASS: TestCheapSuite_A_GapMeanEqualsBaseInterval (0.00s)
+=== RUN   TestCheapSuite_B_SpreadNoDegenerateSpike
+--- PASS: TestCheapSuite_B_SpreadNoDegenerateSpike (0.00s)
+=== RUN   TestCheapSuite_C_PredictionErrorAtLeastJitter
+--- PASS: TestCheapSuite_C_PredictionErrorAtLeastJitter (0.00s)
+=== RUN   TestCheapSuite_D_MaxLifetimeBounded
+--- PASS: TestCheapSuite_D_MaxLifetimeBounded (0.00s)
+=== RUN   TestCheapSuite_E_ZeroJitterDeterministicBitForBit
+--- PASS: TestCheapSuite_E_ZeroJitterDeterministicBitForBit (0.00s)
+=== RUN   TestCheapSuite_E_EqualEndpointsFixedMagnitude
+--- PASS: TestCheapSuite_E_EqualEndpointsFixedMagnitude (0.00s)
+=== RUN   TestCheapSuite_F_RestartSafetyReseedReproducesOffset
+--- PASS: TestCheapSuite_F_RestartSafetyReseedReproducesOffset (0.00s)
+=== RUN   TestCheapSuite_G_PerPodPhaseOffsetDeSync
+--- PASS: TestCheapSuite_G_PerPodPhaseOffsetDeSync (0.00s)
+=== RUN   TestCheapSuite_TruncatedNormalInBand
+--- PASS: TestCheapSuite_TruncatedNormalInBand (0.00s)
+=== RUN   TestCryptoRand_InBandAndVaried
+--- PASS: TestCryptoRand_InBandAndVaried (0.00s)
+PASS
+ok  	github.com/r6security/phoenix/internal/scheduler	0.224s
+?   	github.com/r6security/phoenix/pkg/controllers	[no test files]
+EXIT CODE: 0

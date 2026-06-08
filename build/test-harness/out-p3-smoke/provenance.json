@@ -1,0 +1,1099 @@
+{
+  "masterSeed": 1337,
+  "trialsPerArm": 2,
+  "context": "kind-amtd-test",
+  "namespace": "amtd-attack-test",
+  "metricsFile": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\metrics.jsonl",
+  "entries": [
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-nomtd",
+      "trial": 0,
+      "seed": 1479160330485617191,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-nomtd_t0.log",
+      "commands": [
+        "kubectl create namespace amtd-attack-test",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "held-out CVE foothold alive=true (no detector event); detection-free eviction=false",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-nomtd",
+      "trial": 1,
+      "seed": -753155076481972218,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-nomtd_t1.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "held-out CVE foothold alive=true (no detector event); detection-free eviction=false",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-nomtd",
+      "trial": 2,
+      "seed": -2985470483449561627,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-nomtd_t2.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-fullphoenix",
+      "trial": 0,
+      "seed": 1953674719317008725,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-fullphoenix_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "held-out CVE foothold alive=true (no detector event); detection-free eviction=false",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-fullphoenix",
+      "trial": 1,
+      "seed": -278640687650580684,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-fullphoenix_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "held-out CVE foothold alive=true (no detector event); detection-free eviction=false",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-fullphoenix",
+      "trial": 2,
+      "seed": 6418305533252187543,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-fullphoenix_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-phorvex",
+      "trial": 0,
+      "seed": -3163528028163429871,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-phorvex_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "held-out CVE foothold alive=false (no detector event); detection-free eviction=true",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-phorvex",
+      "trial": 1,
+      "seed": -5395843435131019280,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-phorvex_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "held-out CVE foothold alive=false (no detector event); detection-free eviction=true",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-phorvex",
+      "trial": 2,
+      "seed": 1301102785771748947,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-phorvex_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-r6blindtimer",
+      "trial": 0,
+      "seed": -1084495300501523405,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-r6blindtimer_t0.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "held-out CVE foothold alive=false (no detector event); detection-free eviction=true",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-r6blindtimer",
+      "trial": 1,
+      "seed": -3316810707469112814,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-r6blindtimer_t1.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "held-out CVE foothold alive=false (no detector event); detection-free eviction=true",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-r6blindtimer",
+      "trial": 2,
+      "seed": -5549126114436702223,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-r6blindtimer_t2.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-randomequal",
+      "trial": 0,
+      "seed": -8603844154900583862,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-randomequal_t0.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl delete pod c1cve-target -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1cve-target-r58300 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl exec -n amtd-attack-test c1cve-target-r58300 -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "held-out CVE foothold alive=false (no detector event); detection-free eviction=true",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-randomequal",
+      "trial": 1,
+      "seed": -6371528747932994453,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-randomequal_t1.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl delete pod c1cve-target -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1cve-target-r35600 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl exec -n amtd-attack-test c1cve-target-r35600 -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "held-out CVE foothold alive=false (no detector event); detection-free eviction=true",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-randomequal",
+      "trial": 2,
+      "seed": 5378269104873788936,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-randomequal_t2.log",
+      "commands": [
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-reactive-only",
+      "trial": 0,
+      "seed": -4438730957507435219,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-reactive-only_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "held-out CVE foothold alive=true (no detector event); detection-free eviction=false",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-reactive-only",
+      "trial": 1,
+      "seed": -6671046364475024628,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-reactive-only_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1cve-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "held-out CVE foothold alive=true (no detector event); detection-free eviction=false",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-heldout-cve",
+      "defender": "d-reactive-only",
+      "trial": 2,
+      "seed": 25899856427743599,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-heldout-cve_d-reactive-only_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1cve-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1cve-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-nomtd",
+      "trial": 0,
+      "seed": 6731298648974623767,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-nomtd_t0.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "adaptive re-strike foothold alive=true (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-nomtd",
+      "trial": 1,
+      "seed": 4498983242007034358,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-nomtd_t1.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "adaptive re-strike foothold alive=true (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-nomtd",
+      "trial": 2,
+      "seed": 2266667835039444949,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-nomtd_t2.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-fullphoenix",
+      "trial": 0,
+      "seed": 474001874446586949,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-fullphoenix_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "adaptive re-strike foothold alive=true (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-fullphoenix",
+      "trial": 1,
+      "seed": -1758313532521002460,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-fullphoenix_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "adaptive re-strike foothold alive=true (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-fullphoenix",
+      "trial": 2,
+      "seed": 4938632688381765767,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-fullphoenix_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-phorvex",
+      "trial": 0,
+      "seed": -7063192825999624735,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-phorvex_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "adaptive re-strike foothold alive=false (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-phorvex",
+      "trial": 1,
+      "seed": 9151235840742337472,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-phorvex_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "adaptive re-strike foothold alive=false (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-phorvex",
+      "trial": 2,
+      "seed": -2598562012064445917,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-phorvex_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-r6blindtimer",
+      "trial": 0,
+      "seed": 6604938067891180899,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-r6blindtimer_t0.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "adaptive re-strike foothold alive=false (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-r6blindtimer",
+      "trial": 1,
+      "seed": 4372622660923591490,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-r6blindtimer_t1.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "adaptive re-strike foothold alive=false (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-r6blindtimer",
+      "trial": 2,
+      "seed": 2140307253956002081,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-r6blindtimer_t2.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-randomequal",
+      "trial": 0,
+      "seed": 1802767041485087930,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-randomequal_t0.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "adaptive re-strike foothold alive=false (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-randomequal",
+      "trial": 1,
+      "seed": 4035082448452677339,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-randomequal_t1.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl delete pod c1adapt-target -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1adapt-target-r46500 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl delete pod c1adapt-target-r46500 -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1adapt-target-r46500-r41800 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target-r46500-r41800 -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl delete pod c1adapt-target-r46500-r41800 -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1adapt-target-r46500-r41800-r900 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl delete pod c1adapt-target-r46500-r41800-r900 -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1adapt-target-r46500-r41800-r900-r7900 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl exec -n amtd-attack-test c1adapt-target-r46500-r41800-r900-r7900 -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "adaptive re-strike foothold alive=false (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-randomequal",
+      "trial": 2,
+      "seed": -2661863772450090888,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-randomequal_t2.log",
+      "commands": [
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-reactive-only",
+      "trial": 0,
+      "seed": 7865630240282611773,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-reactive-only_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "adaptive re-strike foothold alive=true (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-reactive-only",
+      "trial": 1,
+      "seed": 5633314833315022364,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-reactive-only_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "kubectl exec -n amtd-attack-test c1adapt-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "adaptive re-strike foothold alive=true (deterministic LLM-adversary timing into predicted lull)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-llm-adaptive",
+      "defender": "d-reactive-only",
+      "trial": 2,
+      "seed": -6116483019491761025,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-llm-adaptive_d-reactive-only_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1adapt-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1adapt-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-nomtd",
+      "trial": 0,
+      "seed": 3617850810172756316,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-nomtd_t0.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "stealth dweller alive=true with 0 SecurityEvents (zero-detection survival=true)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-nomtd",
+      "trial": 1,
+      "seed": 5850166217140345725,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-nomtd_t1.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "stealth dweller alive=true with 0 SecurityEvents (zero-detection survival=true)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-nomtd",
+      "trial": 2,
+      "seed": 8082481624107935134,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-nomtd_t2.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-fullphoenix",
+      "trial": 0,
+      "seed": -4010810633962487630,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-fullphoenix_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "stealth dweller alive=true with 0 SecurityEvents (zero-detection survival=true)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-fullphoenix",
+      "trial": 1,
+      "seed": -1778495226994898221,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-fullphoenix_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "stealth dweller alive=true with 0 SecurityEvents (zero-detection survival=true)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-fullphoenix",
+      "trial": 2,
+      "seed": -8475441447897666448,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-fullphoenix_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test (PodSelector r6th.io/rotation-target=true; timed-\u003eRotate, panic-\u003eDelete)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kill phoenix operator process",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-phorvex",
+      "trial": 0,
+      "seed": 3475404167298885490,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-phorvex_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "stealth dweller alive=false with 1 SecurityEvents (zero-detection survival=false)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-phorvex",
+      "trial": 1,
+      "seed": 5707719574266474899,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-phorvex_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "stealth dweller alive=false with 0 SecurityEvents (zero-detection survival=false)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-phorvex",
+      "trial": 2,
+      "seed": -989226646636293328,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-phorvex_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\phorvex\\config\\crd\\bases\\phorvex.ai_phorvexpolicies.yaml --context kind-amtd-test",
+        "kubectl apply -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test   # PhorvexPolicy (active; selects r6th.io/rotation-target=true)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "c:\\Users\\moh87733\\Phorvex\\phorvex\\bin\\phorvex.exe [--engine=p1 --base-interval=4s --operator-namespace=amtd-attack-test --metrics-bind-address=:18080 --health-probe-bind-address=:18081]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kubectl delete -f c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\phorvexpolicy-harness-px.yaml --context kind-amtd-test --ignore-not-found",
+        "kubectl delete adaptivemovingtargetdefense -l app.kubernetes.io/managed-by=phorvex -n amtd-attack-test --context kind-amtd-test --ignore-not-found"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-r6blindtimer",
+      "trial": 0,
+      "seed": 6230477189216180358,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-r6blindtimer_t0.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "stealth dweller alive=false with 0 SecurityEvents (zero-detection survival=false)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-r6blindtimer",
+      "trial": 1,
+      "seed": 8462792596183769767,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-r6blindtimer_t1.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "stealth dweller alive=false with 0 SecurityEvents (zero-detection survival=false)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-r6blindtimer",
+      "trial": 2,
+      "seed": 1765846375281001540,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-r6blindtimer_t2.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-randomequal",
+      "trial": 0,
+      "seed": 7016510040902054301,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-randomequal_t0.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl delete pod c1sd-target -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1sd-target-r88500 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "stealth dweller alive=false with 0 SecurityEvents (zero-detection survival=false)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-randomequal",
+      "trial": 1,
+      "seed": 4784194633934464892,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-randomequal_t1.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl delete pod c1sd-target -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1sd-target-r29000 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl delete pod c1sd-target-r29000 -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1sd-target-r29000-r92000 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl delete pod c1sd-target-r29000-r92000 -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1sd-target-r29000-r92000-r28400 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "kubectl delete pod c1sd-target-r29000-r92000-r28400 -n amtd-attack-test --grace-period=0  # rotation",
+        "kubectl run c1sd-target-r29000-r92000-r28400-r91500 -n amtd-attack-test  # rotation replacement (fresh identity)",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 1,
+      "observedState": "stealth dweller alive=false with 0 SecurityEvents (zero-detection survival=false)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-randomequal",
+      "trial": 2,
+      "seed": -6965603218872318497,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-randomequal_t2.log",
+      "commands": [
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-reactive-only",
+      "trial": 0,
+      "seed": 9171040038714550898,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-reactive-only_t0.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "stealth dweller alive=true with 0 SecurityEvents (zero-detection survival=true)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-reactive-only",
+      "trial": 1,
+      "seed": -7043388628027411309,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-reactive-only_t1.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
+        "kubectl exec -n amtd-attack-test c1sd-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
+        "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "stealth dweller alive=true with 0 SecurityEvents (zero-detection survival=true)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "c1-stealth-dweller",
+      "defender": "d-reactive-only",
+      "trial": 2,
+      "seed": 4706409224779372080,
+      "rawLogPath": "c:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-p3-smoke\\raw\\c1-stealth-dweller_d-reactive-only_t2.log",
+      "commands": [
+        "kubectl apply --server-side --force-conflicts -f c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\config\\crd\\bases --context kind-amtd-test",
+        "kubectl apply AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test (REACTIVE ONLY: panic-\u003eDelete, policy-violation-\u003eDelete; NO timed rotate)",
+        "kubectl run c1sd-target --image=busybox:1.36 -n amtd-attack-test -l r6th.io/rotation-target=true  # target workload",
+        "c:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe [--leader-elect=false]   # pinned to kind-amtd-test",
+        "kubectl delete pods -n amtd-attack-test -l app=c1sd-target --grace-period=0",
+        "kubectl delete AdaptiveMovingTargetDefense/harness-amtd-reactive -n amtd-attack-test"
+      ],
+      "oracleAchieved": false,
+      "disruptionVsOracle": 0,
+      "observedState": "negative control (no attack performed)",
+      "negativeControl": true
+    }
+  ],
+  "howToReproduce": "go run ./cmd/harness -config \u003cconfig.yaml\u003e   # masterSeed=1337 + the fixed per-trial seeds reproduce this run exactly"
+}

@@ -1,0 +1,22 @@
+﻿==================== STAGE E: TEARDOWN + CLEANUP CONFIRMATION ====================
+Captured: 2026-05-31T03:19:56.9040263-05:00
+
+securityevent.amtd.r6security.com "live4-cutover-event" deleted
+securityevent.amtd.r6security.com "live4-block-event" deleted
+adaptivemovingtargetdefense.amtd.r6security.com "wis-cutover-amtd" deleted from phase4-verify namespace
+pod "cutover-trigger" deleted from phase4-verify namespace
+warminferenceset.amtd.r6security.com "wis-a" deleted from phase4-verify namespace
+
+--- Wait for owner-ref GC of WIS-owned pods + Service ---
+GC complete at iter 2: wis-pods=0 wis-leader-svc=0
+Stopped manager.exe PID(s): 23340
+manager.exe running after kill: False
+
+namespace "phase4-verify" deleted
+
+--- CRDs remain (control plane untouched) ---
+
+adaptivemovingtargetdefenses.amtd.r6security.com   2026-05-31T01:01:59Z
+contextmutationpolicies.amtd.r6security.com        2026-05-31T07:09:12Z
+securityevents.amtd.r6security.com                 2026-05-31T01:02:00Z
+warminferencesets.amtd.r6security.com              2026-05-31T07:55:48Z

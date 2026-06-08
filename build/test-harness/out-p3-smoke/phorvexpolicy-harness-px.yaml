@@ -1,0 +1,28 @@
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: harness-px
+  namespace: amtd-attack-test
+spec:
+  tenant: amtd-attack-test
+  selector:
+    matchLabels:
+      r6th.io/rotation-target: "true"
+  objective:
+    lambda: "0.5"
+    costWeights: {normSparsity: "0.4", flowDisruption: "0.6"}
+  budget:
+    maxMovesPerTick: 1
+    tickInterval: 4s
+    antiOverRotationWindow: 8s
+    proactiveFloor: 10s
+  slo:
+    minAvailableReplicas: 1
+  assetValue:
+    weightSecrets: "0.8"
+    blastRadiusFromGraph: true
+  triggers:
+    eventDriven: true
+  actions:
+    enabled: ["rotate", "quarantine"]
+  mode: active

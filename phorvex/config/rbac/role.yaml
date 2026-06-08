@@ -1,0 +1,57 @@
+---
+# Phorvex LEAST-PRIVILEGE ClusterRole (NFR4 / FR8). Phorvex writes ONLY its own
+# CRDs (phorvexpolicies) + Phoenix's SecurityEvent/AMTD CRs. It NEVER writes pods
+# (no create/delete/patch/update on pods) — actuation flows through Phoenix. All the
+# graph/context inputs (pods, namespaces, NetworkPolicy, RBAC) are READ-ONLY.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phorvex-manager-role
+rules:
+# --- READ-ONLY ingest: the K8s graph inputs (pods/labels/nodes/namespaces) ---
+- apiGroups: [""]
+  resources:
+  - pods
+  - namespaces
+  - nodes
+  verbs: ["get", "list", "watch"]
+# --- READ-ONLY: kill-switch ConfigMap (FR8) ---
+- apiGroups: [""]
+  resources:
+  - configmaps
+  verbs: ["get", "list", "watch"]
+# --- READ-ONLY: NetworkPolicy reachability (blast-radius graph) ---
+- apiGroups: ["networking.k8s.io"]
+  resources:
+  - networkpolicies
+  verbs: ["get", "list", "watch"]
+# --- READ-ONLY: RBAC lateral-movement reachability (blast-radius graph) ---
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources:
+  - roles
+  - clusterroles
+  - rolebindings
+  - clusterrolebindings
+  verbs: ["get", "list", "watch"]
+# --- Phoenix Seam 1: emit SecurityEvents + maintain the AMTD strategy ---
+- apiGroups: ["amtd.r6security.com"]
+  resources:
+  - securityevents
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources:
+  - adaptivemovingtargetdefenses
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+# --- Phorvex's own CRD (config surface) ---
+- apiGroups: ["phorvex.ai"]
+  resources:
+  - phorvexpolicies
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources:
+  - phorvexpolicies/status
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources:
+  - phorvexpolicies/finalizers
+  verbs: ["update"]

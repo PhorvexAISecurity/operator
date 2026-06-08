@@ -1,0 +1,838 @@
+﻿manager.exe : 2026-05-31T10:02:24-05:00	INFO	controller-runtime.webhook	Registering webhook	{"path": 
+"/validate-baseline-pod"}
+At line:1 char:52
++ ... be\config"; & "c:\Users\moh87733\Phorvex\build\phoenix-extended\bin\m ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026-05-31T10:0...-baseline-pod"}:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-05-31T10:02:24-05:00	INFO	setup	starting manager
+2026-05-31T10:02:24-05:00	INFO	controller-runtime.metrics	Starting metrics server
+2026-05-31T10:02:24-05:00	INFO	starting server	{"name": "health probe", "addr": "[::]:8081"}
+2026-05-31T10:02:24-05:00	INFO	controller-runtime.webhook	Starting webhook server
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "warminferenceset", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WarmInferenceSet", "source": "kind source: *v1.Service"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "nim-pod", "controllerGroup": "", "controllerKind": 
+"Pod", "source": "kind source: *v1.Pod"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "securityevent", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "SecurityEvent", "source": "kind source: *v1beta1.SecurityEvent"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "pod", "controllerGroup": "", "controllerKind": 
+"Pod", "source": "kind source: *v1.Pod"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "baselinedrift", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WorkloadBaseline", "source": "kind source: *v1beta1.WorkloadBaseline"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "warminferenceset", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WarmInferenceSet", "source": "kind source: *v1beta1.WarmInferenceSet"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "noderotation", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "NodeRotation", "source": "kind source: *v1beta1.NodeRotation"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "contextmutationpolicy", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "ContextMutationPolicy", "source": "kind source: 
+*v1beta1.ContextMutationPolicy"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "warminferenceset", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WarmInferenceSet", "source": "kind source: *v1.Pod"}
+2026-05-31T10:02:24-05:00	INFO	Starting EventSource	{"controller": "adaptivemovingtargetdefense", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "AdaptiveMovingTargetDefense", "source": "kind source: 
+*v1beta1.AdaptiveMovingTargetDefense"}
+2026-05-31T10:02:24-05:00	INFO	controller-runtime.certwatcher	Updated current TLS certificate
+2026-05-31T10:02:24-05:00	INFO	controller-runtime.webhook	Serving webhook server	{"host": "", "port": 9443}
+2026-05-31T10:02:24-05:00	INFO	controller-runtime.certwatcher	Starting certificate poll+watcher	{"interval": "10s"}
+2026-05-31T10:02:24-05:00	INFO	controller-runtime.metrics	Serving metrics server	{"bindAddress": ":8080", "secure": 
+true}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "contextmutationpolicy", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "ContextMutationPolicy"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "contextmutationpolicy", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "ContextMutationPolicy", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "noderotation", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "NodeRotation"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "noderotation", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "NodeRotation", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "adaptivemovingtargetdefense", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "AdaptiveMovingTargetDefense"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "adaptivemovingtargetdefense", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "AdaptiveMovingTargetDefense", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "warminferenceset", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WarmInferenceSet"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "warminferenceset", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WarmInferenceSet", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "nim-pod", "controllerGroup": "", "controllerKind": 
+"Pod"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "nim-pod", "controllerGroup": "", "controllerKind": 
+"Pod", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "25e5f52c-c870-4a20-b89a-bb606a6faeb8", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "25e5f52c-c870-4a20-b89a-bb606a6faeb8", "pod": "kindnet-t75lj"}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "pod", "controllerGroup": "", "controllerKind": 
+"Pod"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "pod", "controllerGroup": "", "controllerKind": "Pod", 
+"worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-scheduler-amtd-test-control-plane","namespace":"kube-system"}, 
+"namespace": "kube-system", "name": "kube-scheduler-amtd-test-control-plane", "reconcileID": 
+"dd2824fd-0491-412a-8234-5c088124ae3f", "pod": "kube-scheduler-amtd-test-control-plane", "namespace": "kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"kube-scheduler-amtd-test-control-plane","namespace":"kube-system"}, "namespace": "kube-system", "name": 
+"kube-scheduler-amtd-test-control-plane", "reconcileID": "dd2824fd-0491-412a-8234-5c088124ae3f", "pod": 
+"kube-scheduler-amtd-test-control-plane"}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"coredns-7d764666f9-hsjck","namespace":"kube-system"}, "namespace": 
+"kube-system", "name": "coredns-7d764666f9-hsjck", "reconcileID": "ebfa5ef2-fac5-41b1-b243-9d38ab5c5df0", "pod": 
+"coredns-7d764666f9-hsjck", "namespace": "kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "baselinedrift", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WorkloadBaseline"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "baselinedrift", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "WorkloadBaseline", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"coredns-7d764666f9-hsjck","namespace":"kube-system"}, "namespace": 
+"kube-system", "name": "coredns-7d764666f9-hsjck", "reconcileID": "ebfa5ef2-fac5-41b1-b243-9d38ab5c5df0", "pod": 
+"coredns-7d764666f9-hsjck"}
+2026-05-31T10:02:24-05:00	INFO	Starting Controller	{"controller": "securityevent", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "SecurityEvent"}
+2026-05-31T10:02:24-05:00	INFO	Starting workers	{"controller": "securityevent", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "SecurityEvent", "worker count": 1}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"coredns-7d764666f9-n5ffs","namespace":"kube-system"}, "namespace": 
+"kube-system", "name": "coredns-7d764666f9-n5ffs", "reconcileID": "8a2f9a1c-8788-446a-a4a8-fd34b350680f", "pod": 
+"coredns-7d764666f9-n5ffs", "namespace": "kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"coredns-7d764666f9-n5ffs","namespace":"kube-system"}, "namespace": 
+"kube-system", "name": "coredns-7d764666f9-n5ffs", "reconcileID": "8a2f9a1c-8788-446a-a4a8-fd34b350680f", "pod": 
+"coredns-7d764666f9-n5ffs"}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"etcd-amtd-test-control-plane","namespace":"kube-system"}, "namespace": 
+"kube-system", "name": "etcd-amtd-test-control-plane", "reconcileID": "c9e5dab4-5aae-4709-ad27-bf02e2bd5d27", "pod": 
+"etcd-amtd-test-control-plane", "namespace": "kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"etcd-amtd-test-control-plane","namespace":"kube-system"}, "namespace": "kube-system", "name": 
+"etcd-amtd-test-control-plane", "reconcileID": "c9e5dab4-5aae-4709-ad27-bf02e2bd5d27", "pod": 
+"etcd-amtd-test-control-plane"}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-apiserver-amtd-test-control-plane","namespace":"kube-system"}, 
+"namespace": "kube-system", "name": "kube-apiserver-amtd-test-control-plane", "reconcileID": 
+"6fa3c756-0196-417b-b9c8-ebd0e8ff1b4c", "pod": "kube-apiserver-amtd-test-control-plane", "namespace": "kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"kube-apiserver-amtd-test-control-plane","namespace":"kube-system"}, "namespace": "kube-system", "name": 
+"kube-apiserver-amtd-test-control-plane", "reconcileID": "6fa3c756-0196-417b-b9c8-ebd0e8ff1b4c", "pod": 
+"kube-apiserver-amtd-test-control-plane"}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-controller-manager-amtd-test-control-plane","namespace":"kube-system"}, 
+"namespace": "kube-system", "name": "kube-controller-manager-amtd-test-control-plane", "reconcileID": 
+"91f9d1d1-5cef-41b7-838d-5a4bd508903a", "pod": "kube-controller-manager-amtd-test-control-plane", "namespace": 
+"kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"kube-controller-manager-amtd-test-control-plane","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-controller-manager-amtd-test-control-plane", "reconcileID": "91f9d1d1-5cef-41b7-838d-5a4bd508903a", 
+"pod": "kube-controller-manager-amtd-test-control-plane"}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-kqcwc","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-kqcwc", "reconcileID": "19332702-071d-4f00-a5ee-315df2397272", "pod": "kube-proxy-kqcwc", 
+"namespace": "kube-system"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-kqcwc","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-kqcwc", "reconcileID": "19332702-071d-4f00-a5ee-315df2397272", "pod": "kube-proxy-kqcwc"}
+2026-05-31T10:02:24-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"local-path-provisioner-67b8995b4b-bp7sb","namespace":"local-path-storage"}, 
+"namespace": "local-path-storage", "name": "local-path-provisioner-67b8995b4b-bp7sb", "reconcileID": 
+"2bf11758-31a3-486b-a82d-5d425b07eef4", "pod": "local-path-provisioner-67b8995b4b-bp7sb", "namespace": 
+"local-path-storage"}
+2026-05-31T10:02:24-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"local-path-provisioner-67b8995b4b-bp7sb","namespace":"local-path-storage"}, 
+"namespace": "local-path-storage", "name": "local-path-provisioner-67b8995b4b-bp7sb", "reconcileID": 
+"2bf11758-31a3-486b-a82d-5d425b07eef4", "pod": "local-path-provisioner-67b8995b4b-bp7sb"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "05a57b48-5a78-41a1-be20-c453d843f270", "pod": "kube-proxy-rdpl8", 
+"namespace": "kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "05a57b48-5a78-41a1-be20-c453d843f270", "pod": "kube-proxy-rdpl8"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "8e7c6d2b-5e3e-483e-828a-3bbf3e155c13", "pod": "kindnet-fz7cr", "namespace": 
+"kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "8e7c6d2b-5e3e-483e-828a-3bbf3e155c13", "pod": "kindnet-fz7cr"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "07e7378d-24ee-4254-b264-1619cdebcc8f", "pod": "kube-proxy-89nmb", 
+"namespace": "kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "07e7378d-24ee-4254-b264-1619cdebcc8f", "pod": "kube-proxy-89nmb"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "2dbac8c5-8c7a-4e97-9da4-234fe9b28c85", "pod": "kindnet-xvzbn", "namespace": 
+"kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "2dbac8c5-8c7a-4e97-9da4-234fe9b28c85", "pod": "kindnet-xvzbn"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "bf838e57-4eca-4994-844c-71ca68556f03", "pod": "kindnet-fz7cr", "namespace": 
+"kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "bf838e57-4eca-4994-844c-71ca68556f03", "pod": "kindnet-fz7cr"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "112c82c1-7e72-44f5-a5b6-444f4b3f65aa", "pod": "kube-proxy-89nmb", 
+"namespace": "kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "112c82c1-7e72-44f5-a5b6-444f4b3f65aa", "pod": "kube-proxy-89nmb"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "4beef8d3-beb2-4c6a-aedb-e1decddd71e6", "pod": "kube-proxy-rdpl8", 
+"namespace": "kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "4beef8d3-beb2-4c6a-aedb-e1decddd71e6", "pod": "kube-proxy-rdpl8"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "b2d15132-8970-44d8-881c-29a3ff9bd49f", "pod": "kindnet-xvzbn", "namespace": 
+"kube-system"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "b2d15132-8970-44d8-881c-29a3ff9bd49f", "pod": "kindnet-xvzbn"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "fc1df085-4c3a-4329-b280-4e3f9fcb5390", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "fc1df085-4c3a-4329-b280-4e3f9fcb5390", "pod": "nim-demo"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "11ca54f6-58da-4554-b427-b72c7a7582f3", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "11ca54f6-58da-4554-b427-b72c7a7582f3", "pod": "nim-demo"}
+2026-05-31T10:03:01-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "d044bc87-6f6b-4ae7-bec1-7d3c72afdac5"}
+2026-05-31T10:03:01-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "a0f2c1fb-c271-4034-b7b5-b5bab8848417", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:01-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "a0f2c1fb-c271-4034-b7b5-b5bab8848417", "pod": "nim-demo"}
+2026-05-31T10:03:03-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "43fd64bd-94b2-444c-8742-ffc7f4cbf27f", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:03-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "43fd64bd-94b2-444c-8742-ffc7f4cbf27f", "pod": "nim-demo"}
+2026-05-31T10:03:11-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "77b23690-00e5-4e38-827d-c1f7f44e0553"}
+2026-05-31T10:03:18-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "f8d2abdc-6f9b-4c6c-b844-908a9068f527", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:03:18-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "f8d2abdc-6f9b-4c6c-b844-908a9068f527", "pod": "kindnet-t75lj"}
+2026-05-31T10:03:19-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "47f3ba34-0be3-4133-b4ea-b310c38cd7a7", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:03:19-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "47f3ba34-0be3-4133-b4ea-b310c38cd7a7", "pod": "kindnet-t75lj"}
+2026-05-31T10:03:21-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "894cce2a-0f07-49c8-8c01-3e88cef085f2"}
+2026-05-31T10:03:28-05:00	INFO	SecurityEvent found: "se-a-allowed-critical, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"b711033a-18e5-4a8f-be45-5c02d9933d0b"}
+2026-05-31T10:03:28-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "8789d826-170c-488c-93d7-797da7d7d7d2", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:28-05:00	INFO	Processing pod for NIM restart	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "8789d826-170c-488c-93d7-797da7d7d7d2", "pod": "nim-demo"}
+2026-05-31T10:03:28-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"b711033a-18e5-4a8f-be45-5c02d9933d0b"}
+2026-05-31T10:03:28-05:00	INFO	Pod has SecurityEvent annotation, processing for NIM	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "8789d826-170c-488c-93d7-797da7d7d7d2", "pod": "nim-demo", 
+"appliedEvents": "[{\"kind\":\"SecurityEvent\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"metadata\":{\"name\":\"
+se-a-allowed-critical\",\"uid\":\"2b1d916e-c43c-4bf7-8149-644afa907c29\",\"resourceVersion\":\"142063\",\"generation\":
+1,\"creationTimestamp\":\"2026-05-31T15:03:28Z\",\"annotations\":{\"kubectl.kubernetes.io/last-applied-configuration\":
+\"{\\\"apiVersion\\\":\\\"amtd.r6security.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEvent\\\",\\\"metadata\\\":{\\\"anno
+tations\\\":{},\\\"name\\\":\\\"se-a-allowed-critical\\\"},\\\"spec\\\":{\\\"description\\\":\\\"Scenario A - 
+allowlisted KubeArmor critical -\\\\u003e nodeRotate(Cordon)\\\",\\\"rule\\\":{\\\"source\\\":\\\"KubeArmorIntegrator\\
+\",\\\"threatLevel\\\":\\\"critical\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\\\":[\\\"phase6-verify/nim-demo\\\"]}
+}\\n\"},\"managedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\":\"Update\",\"apiVersion\":\"amtd.r6
+security.com/v1beta1\",\"time\":\"2026-05-31T15:03:28Z\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:
+annotations\":{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}},\"f:spec\":{\".\":{},\"f:descriptio
+n\":{},\"f:rule\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"f:targets\":{}}}}]},\"spec\":{\"targe
+ts\":[\"phase6-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\"critical\",\"source\":\"KubeArmorInt
+egrator\"},\"description\":\"Scenario A - allowlisted KubeArmor critical -\\u003e 
+nodeRotate(Cordon)\"},\"status\":{\"computedInterval\":\"0s\",\"processedAt\":null}}]"}
+2026-05-31T10:03:28-05:00	INFO	NodeRotate: created NodeRotation request (restart-safe drain; class-B continuation owns 
+progression)	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"SecurityEvent", "SecurityEvent": {"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", 
+"reconcileID": "b711033a-18e5-4a8f-be45-5c02d9933d0b", "nodeRotation": "nrot-se-a-allowed-critical-nim-demo", 
+"sourceNode": "amtd-test-control-plane", "strategy": "Cordon"}
+2026-05-31T10:03:28-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "bfcc77af-7148-4907-a1ad-31124f0233fd", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:28-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"bfcc77af-7148-4907-a1ad-31124f0233fd", "pod": "nim-demo"}
+2026-05-31T10:03:28-05:00	INFO	SecurityEvent found: "se-a-allowed-critical, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"2aa7c3aa-c5e7-4478-bb59-d2564cd1b1f2"}
+2026-05-31T10:03:28-05:00	INFO	This SecurityEvent ("se-a-allowed-critical") was already processed - ignore it	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"2aa7c3aa-c5e7-4478-bb59-d2564cd1b1f2"}
+2026-05-31T10:03:28-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "9c2ca862-34bb-4046-b168-849cc4a3c111"}
+2026-05-31T10:03:28-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"2aa7c3aa-c5e7-4478-bb59-d2564cd1b1f2"}
+2026-05-31T10:03:28-05:00	INFO	NodeRotate: a NodeRotation for this event already exists; idempotent no-op	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"2aa7c3aa-c5e7-4478-bb59-d2564cd1b1f2", "nodeRotation": "nrot-se-a-allowed-critical-nim-demo", "event": 
+"se-a-allowed-critical"}
+2026-05-31T10:03:28-05:00	INFO	NodeRotation: source node cordoned (relocate-before-dispose); draining targeted pod(s)	
+{"controller": "noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", 
+"NodeRotation": {"name":"nrot-se-a-allowed-critical-nim-demo"}, "namespace": "", "name": 
+"nrot-se-a-allowed-critical-nim-demo", "reconcileID": "db091732-9051-4ae8-adb5-fb116cbdf016", "nodeRotation": 
+"nrot-se-a-allowed-critical-nim-demo", "sourceNode": "amtd-test-control-plane", "strategy": "Cordon"}
+2026-05-31T10:03:28-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "437a1874-f574-4f37-be2d-d17186e53f90", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:28-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"437a1874-f574-4f37-be2d-d17186e53f90", "pod": "nim-demo"}
+2026-05-31T10:03:28-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "6eb6b72a-e140-4177-aff3-485a9c826342", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:28-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"6eb6b72a-e140-4177-aff3-485a9c826342", "pod": "nim-demo"}
+2026-05-31T10:03:28-05:00	INFO	NodeRotation: targeted pod(s) evicted off source; selecting a clean node	{"controller": 
+"noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", "NodeRotation": 
+{"name":"nrot-se-a-allowed-critical-nim-demo"}, "namespace": "", "name": "nrot-se-a-allowed-critical-nim-demo", 
+"reconcileID": "a3b26305-f4db-467b-907e-4770e9549904", "nodeRotation": "nrot-se-a-allowed-critical-nim-demo", 
+"evictedTargeted": 1, "evictedCoTenants": 0}
+2026-05-31T10:03:28-05:00	INFO	NodeRotation: clean node selected; pinning the replacement via nodeAffinity	
+{"controller": "noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", 
+"NodeRotation": {"name":"nrot-se-a-allowed-critical-nim-demo"}, "namespace": "", "name": 
+"nrot-se-a-allowed-critical-nim-demo", "reconcileID": "e047bb86-3f5b-4889-83a6-ccd01a331e4e", "nodeRotation": 
+"nrot-se-a-allowed-critical-nim-demo", "cleanNode": "fake-clean-1"}
+2026-05-31T10:03:28-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "e5084d46-3740-437c-9fd5-27e65f315a88"}
+2026-05-31T10:03:28-05:00	INFO	NodeRotation COMPLETE: targeted pod(s) relocated + pinned via nodeAffinity (true 
+relocation onto a different REAL clean node + node-rotation MTTR are REAL-NODE/GPU-PENDING)	{"controller": 
+"noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", "NodeRotation": 
+{"name":"nrot-se-a-allowed-critical-nim-demo"}, "namespace": "", "name": "nrot-se-a-allowed-critical-nim-demo", 
+"reconcileID": "35baacef-ce01-4200-896d-8f5702cc13a6", "nodeRotation": "nrot-se-a-allowed-critical-nim-demo", 
+"cleanNode": "fake-clean-1", "relocated": 1}
+2026-05-31T10:03:29-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "2d9a7d06-bc43-48c4-8b9c-73d46a698420", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:29-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"2d9a7d06-bc43-48c4-8b9c-73d46a698420", "pod": "nim-demo"}
+2026-05-31T10:03:29-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "c0ded6b1-1df5-4841-895b-6fd8b02f932c", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:29-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"c0ded6b1-1df5-4841-895b-6fd8b02f932c", "pod": "nim-demo"}
+2026-05-31T10:03:30-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "defb3a6e-4216-4611-a772-a5fd2fef53a9", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:03:30-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"defb3a6e-4216-4611-a772-a5fd2fef53a9", "pod": "nim-demo"}
+2026-05-31T10:03:42-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "5a555738-44a4-4763-ad83-d846339ae2e6", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:03:42-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "5a555738-44a4-4763-ad83-d846339ae2e6", "pod": "kindnet-t75lj"}
+2026-05-31T10:03:55-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "a93cb8ff-2941-4d6c-a40c-a248d2ef38b3", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:03:55-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "a93cb8ff-2941-4d6c-a40c-a248d2ef38b3", "pod": "kindnet-t75lj"}
+2026-05-31T10:03:56-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "84e8d070-84f0-4ac6-ac0d-2874f1e4612d", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:03:56-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "84e8d070-84f0-4ac6-ac0d-2874f1e4612d", "pod": "kindnet-t75lj"}
+2026-05-31T10:04:18-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "abbc8312-c7e1-4d52-bf4a-d61d37034a55", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:04:18-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "abbc8312-c7e1-4d52-bf4a-d61d37034a55", "pod": "kindnet-t75lj"}
+2026-05-31T10:04:22-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "ccc841ab-9f48-46aa-89b0-8c96a34b62f2", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:04:22-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "ccc841ab-9f48-46aa-89b0-8c96a34b62f2", "pod": "nim-demo"}
+2026-05-31T10:04:22-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "bd007075-cf85-4fb4-8575-c68f408c75b5", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:04:22-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "bd007075-cf85-4fb4-8575-c68f408c75b5", "pod": "nim-demo"}
+2026-05-31T10:04:23-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "bcc728ac-96c3-478a-b2ec-704d887beef8", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:04:23-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "bcc728ac-96c3-478a-b2ec-704d887beef8", "pod": "nim-demo"}
+2026-05-31T10:04:31-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "03ca0124-e76e-4403-9874-22f3f745189f"}
+2026-05-31T10:04:31-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "eab5a4b2-e53b-4fb1-9a50-a8fd61063f49", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:04:31-05:00	INFO	Pod has no SecurityEvent annotations, skipping	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "eab5a4b2-e53b-4fb1-9a50-a8fd61063f49", "pod": "nim-demo"}
+2026-05-31T10:04:41-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "84eab1e0-6c47-4aa2-9fb6-8ee899ccad20"}
+2026-05-31T10:04:42-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "e92b00f7-1f72-4013-a6ad-deba70a07ae4", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:04:42-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "e92b00f7-1f72-4013-a6ad-deba70a07ae4", "pod": "kindnet-t75lj"}
+2026-05-31T10:04:43-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "826b333b-c68f-44e4-95da-f8597bb09256", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:04:43-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "826b333b-c68f-44e4-95da-f8597bb09256", "pod": "kindnet-t75lj"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent found: "se-b1-evil-critical, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"55fcca1e-0c84-4041-9d90-8412b06a0336"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"55fcca1e-0c84-4041-9d90-8412b06a0336"}
+2026-05-31T10:04:46-05:00	INFO	NodeRotate GATED (D26): no NodeRotation created	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"55fcca1e-0c84-4041-9d90-8412b06a0336", "pod": "nim-demo", "source": "EvilWorkload", "threatLevel": "critical", 
+"strategy": "Cordon", "reason": "NodeRotateGatedSourceNotAllowed"}
+2026-05-31T10:04:46-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "3ec71e72-f313-45e2-962d-5e32414e751c", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:04:46-05:00	INFO	Processing pod for NIM restart	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "3ec71e72-f313-45e2-962d-5e32414e751c", "pod": "nim-demo"}
+2026-05-31T10:04:46-05:00	INFO	Pod has SecurityEvent annotation, processing for NIM	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "3ec71e72-f313-45e2-962d-5e32414e751c", "pod": "nim-demo", 
+"appliedEvents": "[{\"kind\":\"SecurityEvent\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"metadata\":{\"name\":\"
+se-b1-evil-critical\",\"uid\":\"98367272-8d2d-41e9-9373-64d7e3d4b099\",\"resourceVersion\":\"142226\",\"generation\":1,
+\"creationTimestamp\":\"2026-05-31T15:04:46Z\",\"annotations\":{\"kubectl.kubernetes.io/last-applied-configuration\":\"
+{\\\"apiVersion\\\":\\\"amtd.r6security.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEvent\\\",\\\"metadata\\\":{\\\"annota
+tions\\\":{},\\\"name\\\":\\\"se-b1-evil-critical\\\"},\\\"spec\\\":{\\\"description\\\":\\\"Scenario B1 - 
+NON-allowlisted Source EvilWorkload critical -\\\\u003e must be GATED\\\",\\\"rule\\\":{\\\"source\\\":\\\"EvilWorkload
+\\\",\\\"threatLevel\\\":\\\"critical\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\\\":[\\\"phase6-verify/nim-demo\\\"
+]}}\\n\"},\"managedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\":\"Update\",\"apiVersion\":\"amtd.
+r6security.com/v1beta1\",\"time\":\"2026-05-31T15:04:46Z\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"
+f:annotations\":{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}},\"f:spec\":{\".\":{},\"f:descript
+ion\":{},\"f:rule\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"f:targets\":{}}}}]},\"spec\":{\"tar
+gets\":[\"phase6-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\"critical\",\"source\":\"EvilWorklo
+ad\"},\"description\":\"Scenario B1 - NON-allowlisted Source EvilWorkload critical -\\u003e must be 
+GATED\"},\"status\":{\"computedInterval\":\"0s\",\"processedAt\":null}}]"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent found: "se-b1-evil-critical, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"59f64901-e2b1-4b00-8930-a73aa34a7aee"}
+2026-05-31T10:04:46-05:00	INFO	This SecurityEvent ("se-b1-evil-critical") was already processed - ignore it	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"59f64901-e2b1-4b00-8930-a73aa34a7aee"}
+2026-05-31T10:04:46-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "03b68e06-92c3-4e5e-be72-51582d078325"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"59f64901-e2b1-4b00-8930-a73aa34a7aee"}
+2026-05-31T10:04:46-05:00	INFO	NodeRotate GATED (D26): no NodeRotation created	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"59f64901-e2b1-4b00-8930-a73aa34a7aee", "pod": "nim-demo", "source": "EvilWorkload", "threatLevel": "critical", 
+"strategy": "Cordon", "reason": "NodeRotateGatedSourceNotAllowed"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent found: "se-b2-kubearmor-low, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"2eeac549-3639-489b-b0f6-495cbf7f2460"}
+2026-05-31T10:04:46-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "64ad200a-e67d-443c-83b7-3b607349a13c", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:04:46-05:00	INFO	Processing pod for NIM restart	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "64ad200a-e67d-443c-83b7-3b607349a13c", "pod": "nim-demo"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"2eeac549-3639-489b-b0f6-495cbf7f2460"}
+2026-05-31T10:04:46-05:00	INFO	NodeRotate GATED (D26): no NodeRotation created	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"2eeac549-3639-489b-b0f6-495cbf7f2460", "pod": "nim-demo", "source": "KubeArmorIntegrator", "threatLevel": "low", 
+"strategy": "Cordon", "reason": "NodeRotateGatedBelowFloor"}
+2026-05-31T10:04:46-05:00	INFO	Pod has SecurityEvent annotation, processing for NIM	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "64ad200a-e67d-443c-83b7-3b607349a13c", "pod": "nim-demo", 
+"appliedEvents": "[{\"kind\":\"SecurityEvent\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"metadata\":{\"name\":\"
+se-b1-evil-critical\",\"uid\":\"98367272-8d2d-41e9-9373-64d7e3d4b099\",\"resourceVersion\":\"142226\",\"generation\":1,
+\"creationTimestamp\":\"2026-05-31T15:04:46Z\",\"annotations\":{\"kubectl.kubernetes.io/last-applied-configuration\":\"
+{\\\"apiVersion\\\":\\\"amtd.r6security.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEvent\\\",\\\"metadata\\\":{\\\"annota
+tions\\\":{},\\\"name\\\":\\\"se-b1-evil-critical\\\"},\\\"spec\\\":{\\\"description\\\":\\\"Scenario B1 - 
+NON-allowlisted Source EvilWorkload critical -\\\\u003e must be GATED\\\",\\\"rule\\\":{\\\"source\\\":\\\"EvilWorkload
+\\\",\\\"threatLevel\\\":\\\"critical\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\\\":[\\\"phase6-verify/nim-demo\\\"
+]}}\\n\"},\"managedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\":\"Update\",\"apiVersion\":\"amtd.
+r6security.com/v1beta1\",\"time\":\"2026-05-31T15:04:46Z\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"
+f:annotations\":{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}},\"f:spec\":{\".\":{},\"f:descript
+ion\":{},\"f:rule\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"f:targets\":{}}}}]},\"spec\":{\"tar
+gets\":[\"phase6-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\"critical\",\"source\":\"EvilWorklo
+ad\"},\"description\":\"Scenario B1 - NON-allowlisted Source EvilWorkload critical -\\u003e must be GATED\"},\"status\"
+:{\"computedInterval\":\"0s\",\"processedAt\":null}},{\"kind\":\"SecurityEvent\",\"apiVersion\":\"amtd.r6security.com/v
+1beta1\",\"metadata\":{\"name\":\"se-b2-kubearmor-low\",\"uid\":\"22661f6e-4268-45d4-b10c-2a145fcafe3e\",\"resourceVers
+ion\":\"142230\",\"generation\":1,\"creationTimestamp\":\"2026-05-31T15:04:46Z\",\"annotations\":{\"kubectl.kubernetes.
+io/last-applied-configuration\":\"{\\\"apiVersion\\\":\\\"amtd.r6security.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEven
+t\\\",\\\"metadata\\\":{\\\"annotations\\\":{},\\\"name\\\":\\\"se-b2-kubearmor-low\\\"},\\\"spec\\\":{\\\"description\
+\\":\\\"Scenario B2 - allowlisted KubeArmor but ThreatLevel=low (below floor) -\\\\u003e must be GATED\\\",\\\"rule\\\"
+:{\\\"source\\\":\\\"KubeArmorIntegrator\\\",\\\"threatLevel\\\":\\\"low\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\
+\\":[\\\"phase6-verify/nim-demo\\\"]}}\\n\"},\"managedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\
+":\"Update\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"time\":\"2026-05-31T15:04:46Z\",\"fieldsType\":\"FieldsV1
+\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}
+},\"f:spec\":{\".\":{},\"f:description\":{},\"f:rule\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"
+f:targets\":{}}}}]},\"spec\":{\"targets\":[\"phase6-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\
+"low\",\"source\":\"KubeArmorIntegrator\"},\"description\":\"Scenario B2 - allowlisted KubeArmor but ThreatLevel=low 
+(below floor) -\\u003e must be GATED\"},\"status\":{\"computedInterval\":\"0s\",\"processedAt\":null}}]"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent found: "se-b2-kubearmor-low, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"5d94f5df-7391-4f91-8713-18eee555380e"}
+2026-05-31T10:04:46-05:00	INFO	This SecurityEvent ("se-b2-kubearmor-low") was already processed - ignore it	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"5d94f5df-7391-4f91-8713-18eee555380e"}
+2026-05-31T10:04:46-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"5d94f5df-7391-4f91-8713-18eee555380e"}
+2026-05-31T10:04:46-05:00	INFO	NodeRotate GATED (D26): no NodeRotation created	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"5d94f5df-7391-4f91-8713-18eee555380e", "pod": "nim-demo", "source": "KubeArmorIntegrator", "threatLevel": "low", 
+"strategy": "Cordon", "reason": "NodeRotateGatedBelowFloor"}
+2026-05-31T10:04:46-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "1f833804-13d1-4cc7-96ec-52f67386f2c1"}
+2026-05-31T10:04:52-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "116f54cf-887b-482a-9066-9ed7574dee55"}
+2026-05-31T10:05:02-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "71a02e84-dc77-45f3-acab-a44a1554ea45"}
+2026-05-31T10:05:03-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "5c1ae721-878b-44b1-bd2e-eaa7e79dfe11", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:05:03-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "5c1ae721-878b-44b1-bd2e-eaa7e79dfe11", "pod": "kindnet-t75lj"}
+2026-05-31T10:05:12-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "76fb5717-aebb-44f4-aff6-79fdbf039a19"}
+2026-05-31T10:05:22-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "173723f7-2a1b-4557-bc70-402634b89078"}
+2026-05-31T10:05:32-05:00	INFO	Pod: "nim-demo" was sucessfully updated with annotations	{"controller": 
+"adaptivemovingtargetdefense", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": {"name":"noderotate-demo","namespace":"phase6-verify"}, 
+"namespace": "phase6-verify", "name": "noderotate-demo", "reconcileID": "40a11ec2-c4b6-45b6-9898-2cb124d7c37f"}
+2026-05-31T10:05:34-05:00	INFO	SecurityEvent found: "se-c-noclean-critical, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"40af92c4-989e-4bef-8311-04b01e1b7c6d"}
+2026-05-31T10:05:34-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"40af92c4-989e-4bef-8311-04b01e1b7c6d"}
+2026-05-31T10:05:34-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "6b092407-04a6-45f4-8b3b-04a9e536b97e", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:34-05:00	INFO	Processing pod for NIM restart	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "6b092407-04a6-45f4-8b3b-04a9e536b97e", "pod": "nim-demo"}
+2026-05-31T10:05:34-05:00	INFO	Pod has SecurityEvent annotation, processing for NIM	{"controller": "nim-pod", 
+"controllerGroup": "", "controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": 
+"phase6-verify", "name": "nim-demo", "reconcileID": "6b092407-04a6-45f4-8b3b-04a9e536b97e", "pod": "nim-demo", 
+"appliedEvents": "[{\"kind\":\"SecurityEvent\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"metadata\":{\"name\":\"
+se-b1-evil-critical\",\"uid\":\"98367272-8d2d-41e9-9373-64d7e3d4b099\",\"resourceVersion\":\"142226\",\"generation\":1,
+\"creationTimestamp\":\"2026-05-31T15:04:46Z\",\"annotations\":{\"kubectl.kubernetes.io/last-applied-configuration\":\"
+{\\\"apiVersion\\\":\\\"amtd.r6security.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEvent\\\",\\\"metadata\\\":{\\\"annota
+tions\\\":{},\\\"name\\\":\\\"se-b1-evil-critical\\\"},\\\"spec\\\":{\\\"description\\\":\\\"Scenario B1 - 
+NON-allowlisted Source EvilWorkload critical -\\\\u003e must be GATED\\\",\\\"rule\\\":{\\\"source\\\":\\\"EvilWorkload
+\\\",\\\"threatLevel\\\":\\\"critical\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\\\":[\\\"phase6-verify/nim-demo\\\"
+]}}\\n\"},\"managedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\":\"Update\",\"apiVersion\":\"amtd.
+r6security.com/v1beta1\",\"time\":\"2026-05-31T15:04:46Z\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"
+f:annotations\":{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}},\"f:spec\":{\".\":{},\"f:descript
+ion\":{},\"f:rule\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"f:targets\":{}}}}]},\"spec\":{\"tar
+gets\":[\"phase6-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\"critical\",\"source\":\"EvilWorklo
+ad\"},\"description\":\"Scenario B1 - NON-allowlisted Source EvilWorkload critical -\\u003e must be GATED\"},\"status\"
+:{\"computedInterval\":\"0s\",\"processedAt\":null}},{\"kind\":\"SecurityEvent\",\"apiVersion\":\"amtd.r6security.com/v
+1beta1\",\"metadata\":{\"name\":\"se-b2-kubearmor-low\",\"uid\":\"22661f6e-4268-45d4-b10c-2a145fcafe3e\",\"resourceVers
+ion\":\"142230\",\"generation\":1,\"creationTimestamp\":\"2026-05-31T15:04:46Z\",\"annotations\":{\"kubectl.kubernetes.
+io/last-applied-configuration\":\"{\\\"apiVersion\\\":\\\"amtd.r6security.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEven
+t\\\",\\\"metadata\\\":{\\\"annotations\\\":{},\\\"name\\\":\\\"se-b2-kubearmor-low\\\"},\\\"spec\\\":{\\\"description\
+\\":\\\"Scenario B2 - allowlisted KubeArmor but ThreatLevel=low (below floor) -\\\\u003e must be GATED\\\",\\\"rule\\\"
+:{\\\"source\\\":\\\"KubeArmorIntegrator\\\",\\\"threatLevel\\\":\\\"low\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\
+\\":[\\\"phase6-verify/nim-demo\\\"]}}\\n\"},\"managedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\
+":\"Update\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"time\":\"2026-05-31T15:04:46Z\",\"fieldsType\":\"FieldsV1
+\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}
+},\"f:spec\":{\".\":{},\"f:description\":{},\"f:rule\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"
+f:targets\":{}}}}]},\"spec\":{\"targets\":[\"phase6-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\
+"low\",\"source\":\"KubeArmorIntegrator\"},\"description\":\"Scenario B2 - allowlisted KubeArmor but ThreatLevel=low 
+(below floor) -\\u003e must be GATED\"},\"status\":{\"computedInterval\":\"0s\",\"processedAt\":null}},{\"kind\":\"Secu
+rityEvent\",\"apiVersion\":\"amtd.r6security.com/v1beta1\",\"metadata\":{\"name\":\"se-c-noclean-critical\",\"uid\":\"e
+680557f-d3b7-4836-b1b6-c2e87ee9d1c6\",\"resourceVersion\":\"142301\",\"generation\":1,\"creationTimestamp\":\"2026-05-3
+1T15:05:34Z\",\"annotations\":{\"kubectl.kubernetes.io/last-applied-configuration\":\"{\\\"apiVersion\\\":\\\"amtd.r6se
+curity.com/v1beta1\\\",\\\"kind\\\":\\\"SecurityEvent\\\",\\\"metadata\\\":{\\\"annotations\\\":{},\\\"name\\\":\\\"se-
+c-noclean-critical\\\"},\\\"spec\\\":{\\\"description\\\":\\\"Scenario C - allowed KubeArmor critical but NO 
+clean-pool node -\\\\u003e NoCleanTarget abort\\\",\\\"rule\\\":{\\\"source\\\":\\\"KubeArmorIntegrator\\\",\\\"threatL
+evel\\\":\\\"critical\\\",\\\"type\\\":\\\"anomaly\\\"},\\\"targets\\\":[\\\"phase6-verify/nim-demo\\\"]}}\\n\"},\"mana
+gedFields\":[{\"manager\":\"kubectl-client-side-apply\",\"operation\":\"Update\",\"apiVersion\":\"amtd.r6security.com/v
+1beta1\",\"time\":\"2026-05-31T15:05:34Z\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":
+{\".\":{},\"f:kubectl.kubernetes.io/last-applied-configuration\":{}}},\"f:spec\":{\".\":{},\"f:description\":{},\"f:rul
+e\":{\".\":{},\"f:source\":{},\"f:threatLevel\":{},\"f:type\":{}},\"f:targets\":{}}}}]},\"spec\":{\"targets\":[\"phase6
+-verify/nim-demo\"],\"rule\":{\"type\":\"anomaly\",\"threatLevel\":\"critical\",\"source\":\"KubeArmorIntegrator\"},\"d
+escription\":\"Scenario C - allowed KubeArmor critical but NO clean-pool node -\\u003e NoCleanTarget 
+abort\"},\"status\":{\"computedInterval\":\"0s\",\"processedAt\":null}}]"}
+2026-05-31T10:05:34-05:00	INFO	NodeRotate: created NodeRotation request (restart-safe drain; class-B continuation owns 
+progression)	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": 
+"SecurityEvent", "SecurityEvent": {"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", 
+"reconcileID": "40af92c4-989e-4bef-8311-04b01e1b7c6d", "nodeRotation": "nrot-se-c-noclean-critical-nim-demo", 
+"sourceNode": "amtd-test-control-plane", "strategy": "Cordon"}
+2026-05-31T10:05:34-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "97d9b082-7ea0-4b63-81fd-995454b3e0aa", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:34-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"97d9b082-7ea0-4b63-81fd-995454b3e0aa", "pod": "nim-demo"}
+2026-05-31T10:05:34-05:00	INFO	NodeRotation: source node cordoned (relocate-before-dispose); draining targeted pod(s)	
+{"controller": "noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", 
+"NodeRotation": {"name":"nrot-se-c-noclean-critical-nim-demo"}, "namespace": "", "name": 
+"nrot-se-c-noclean-critical-nim-demo", "reconcileID": "b11cb40d-a7b6-4264-8781-7fa6483e605d", "nodeRotation": 
+"nrot-se-c-noclean-critical-nim-demo", "sourceNode": "amtd-test-control-plane", "strategy": "Cordon"}
+2026-05-31T10:05:34-05:00	INFO	SecurityEvent found: "se-c-noclean-critical, targets: [phase6-verify/nim-demo]"	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"bd189e04-8247-4c71-9930-6305fcc7a256"}
+2026-05-31T10:05:34-05:00	INFO	This SecurityEvent ("se-c-noclean-critical") was already processed - ignore it	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"bd189e04-8247-4c71-9930-6305fcc7a256"}
+2026-05-31T10:05:34-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", 
+"controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"bd189e04-8247-4c71-9930-6305fcc7a256"}
+2026-05-31T10:05:34-05:00	INFO	NodeRotate: a NodeRotation for this event already exists; idempotent no-op	
+{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", 
+"SecurityEvent": {"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"bd189e04-8247-4c71-9930-6305fcc7a256", "nodeRotation": "nrot-se-c-noclean-critical-nim-demo", "event": 
+"se-c-noclean-critical"}
+2026-05-31T10:05:34-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "45ea12ec-f6bc-481c-836f-88600d513f40", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:34-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"45ea12ec-f6bc-481c-836f-88600d513f40", "pod": "nim-demo"}
+2026-05-31T10:05:34-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "489a8e07-8636-4d37-a013-ede716809923", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:34-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"489a8e07-8636-4d37-a013-ede716809923", "pod": "nim-demo"}
+2026-05-31T10:05:34-05:00	INFO	NodeRotation: targeted pod(s) evicted off source; selecting a clean node	{"controller": 
+"noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", "NodeRotation": 
+{"name":"nrot-se-c-noclean-critical-nim-demo"}, "namespace": "", "name": "nrot-se-c-noclean-critical-nim-demo", 
+"reconcileID": "5f2069c6-1f64-460d-b3e8-62bcccef8265", "nodeRotation": "nrot-se-c-noclean-critical-nim-demo", 
+"evictedTargeted": 1, "evictedCoTenants": 0}
+2026-05-31T10:05:34-05:00	INFO	NodeRotation ABORTED: NoCleanTarget (no unschedulable pod landed)	{"controller": 
+"noderotation", "controllerGroup": "amtd.r6security.com", "controllerKind": "NodeRotation", "NodeRotation": 
+{"name":"nrot-se-c-noclean-critical-nim-demo"}, "namespace": "", "name": "nrot-se-c-noclean-critical-nim-demo", 
+"reconcileID": "ded6221e-6131-454b-bf20-07c550456d28", "nodeRotation": "nrot-se-c-noclean-critical-nim-demo", 
+"reason": "CleanPoolExhausted"}
+2026-05-31T10:05:36-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "d5e7327c-c729-41e3-bfc3-bbf45680cb53", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:36-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"d5e7327c-c729-41e3-bfc3-bbf45680cb53", "pod": "nim-demo"}
+2026-05-31T10:05:36-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "8250a34d-649b-4b87-a1a7-7372399d4b13", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:36-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"8250a34d-649b-4b87-a1a7-7372399d4b13", "pod": "nim-demo"}
+2026-05-31T10:05:37-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": 
+"nim-demo", "reconcileID": "389624dd-785c-4795-b0f2-9676c606332c", "pod": "nim-demo", "namespace": "phase6-verify"}
+2026-05-31T10:05:37-05:00	INFO	NIM early-return: rotation in progress for this pod (D22 in-progress lock)	
+{"controller": "nim-pod", "controllerGroup": "", "controllerKind": "Pod", "Pod": 
+{"name":"nim-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "nim-demo", "reconcileID": 
+"389624dd-785c-4795-b0f2-9676c606332c", "pod": "nim-demo"}
+2026-05-31T10:05:59-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "2b842f64-700c-400b-abab-eb75d1801f39", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:05:59-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "2b842f64-700c-400b-abab-eb75d1801f39", "pod": "kindnet-t75lj"}
+2026-05-31T10:05:59-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "23efc4f4-5868-427d-9cc3-663bdb421f0e", "pod": "kindnet-t75lj", "namespace": 
+"kube-system"}
+2026-05-31T10:05:59-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-t75lj","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-t75lj", "reconcileID": "23efc4f4-5868-427d-9cc3-663bdb421f0e", "pod": "kindnet-t75lj"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "d2cc0490-351d-4acc-aab4-54e9b0881688", "pod": "kube-proxy-rdpl8", 
+"namespace": "kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "d2cc0490-351d-4acc-aab4-54e9b0881688", "pod": "kube-proxy-rdpl8"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "37dbf38a-cfa5-4ef3-ade2-43e42d401fd3", "pod": "kube-proxy-rdpl8", 
+"namespace": "kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-rdpl8","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-rdpl8", "reconcileID": "37dbf38a-cfa5-4ef3-ade2-43e42d401fd3", "pod": "kube-proxy-rdpl8"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "4b02b024-73eb-4235-a133-1d22a58a68e8", "pod": "kindnet-fz7cr", "namespace": 
+"kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "4b02b024-73eb-4235-a133-1d22a58a68e8", "pod": "kindnet-fz7cr"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "6857bf42-3272-44fd-adbc-20d66a5834d0", "pod": "kindnet-fz7cr", "namespace": 
+"kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-fz7cr","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-fz7cr", "reconcileID": "6857bf42-3272-44fd-adbc-20d66a5834d0", "pod": "kindnet-fz7cr"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "d7f7b254-e895-4ade-b361-a8b5df77ef39", "pod": "kindnet-xvzbn", "namespace": 
+"kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "d7f7b254-e895-4ade-b361-a8b5df77ef39", "pod": "kindnet-xvzbn"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "52639990-3875-428c-9147-1db353dc61a0", "pod": "kindnet-xvzbn", "namespace": 
+"kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kindnet-xvzbn","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kindnet-xvzbn", "reconcileID": "52639990-3875-428c-9147-1db353dc61a0", "pod": "kindnet-xvzbn"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "03f4d185-14ab-4e6f-869e-ab9364f30a59", "pod": "kube-proxy-89nmb", 
+"namespace": "kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "03f4d185-14ab-4e6f-869e-ab9364f30a59", "pod": "kube-proxy-89nmb"}
+2026-05-31T10:06:17-05:00	INFO	NIM controller processing pod	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "b3ee6b6e-19e2-457b-8ea9-96b8a1340c6d", "pod": "kube-proxy-89nmb", 
+"namespace": "kube-system"}
+2026-05-31T10:06:17-05:00	INFO	Pod has no annotations, skipping	{"controller": "nim-pod", "controllerGroup": "", 
+"controllerKind": "Pod", "Pod": {"name":"kube-proxy-89nmb","namespace":"kube-system"}, "namespace": "kube-system", 
+"name": "kube-proxy-89nmb", "reconcileID": "b3ee6b6e-19e2-457b-8ea9-96b8a1340c6d", "pod": "kube-proxy-89nmb"}
+2026-05-31T10:07:33-05:00	INFO	SecurityEvent "se-a-allowed-critical" removed, no action is needed	{"controller": 
+"securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-a-allowed-critical"}, "namespace": "", "name": "se-a-allowed-critical", "reconcileID": 
+"f89b6f4e-28bb-401a-9968-ffa0b2dcf3fb"}
+2026-05-31T10:07:33-05:00	INFO	SecurityEvent "se-b1-evil-critical" removed, no action is needed	{"controller": 
+"securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b1-evil-critical"}, "namespace": "", "name": "se-b1-evil-critical", "reconcileID": 
+"0fe2e0d9-c781-4fe0-bdc0-02f9bcc40bb9"}
+2026-05-31T10:07:33-05:00	INFO	SecurityEvent "se-b2-kubearmor-low" removed, no action is needed	{"controller": 
+"securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-b2-kubearmor-low"}, "namespace": "", "name": "se-b2-kubearmor-low", "reconcileID": 
+"c2aa8ab8-58c0-4634-8bb7-fa903781b6f1"}
+2026-05-31T10:07:33-05:00	INFO	SecurityEvent "se-c-noclean-critical" removed, no action is needed	{"controller": 
+"securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"se-c-noclean-critical"}, "namespace": "", "name": "se-c-noclean-critical", "reconcileID": 
+"3b1b8119-90f7-4ce7-ab13-5f70cef22c39"}
+2026-05-31T10:07:33-05:00	INFO	Custom resource for AdaptiveMovingTargetDefense "phase6-verify/noderotate-demo" does 
+not exist, remove annotations from pods	{"controller": "adaptivemovingtargetdefense", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": 
+{"name":"noderotate-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "noderotate-demo", 
+"reconcileID": "0e436ae0-79dd-4ac6-b5a7-34d0462e000f"}
+2026-05-31T10:07:42-05:00	INFO	Custom resource for AdaptiveMovingTargetDefense "phase6-verify/noderotate-demo" does 
+not exist, remove annotations from pods	{"controller": "adaptivemovingtargetdefense", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "AdaptiveMovingTargetDefense", "AdaptiveMovingTargetDefense": 
+{"name":"noderotate-demo","namespace":"phase6-verify"}, "namespace": "phase6-verify", "name": "noderotate-demo", 
+"reconcileID": "c591a112-6c69-4216-ac6a-de8e8424b6c5"}

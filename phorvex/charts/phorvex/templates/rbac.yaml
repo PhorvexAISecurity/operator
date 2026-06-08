@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+---
+# LEAST-PRIVILEGE ClusterRole (NFR4): read-only ingest of the K8s graph; write ONLY
+# Phorvex's own CRDs + Phoenix SecurityEvent/AMTD. NEVER writes pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" . }}-manager-role
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "namespaces", "nodes", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["adaptivemovingtargetdefenses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies/finalizers"]
+  verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-manager-rolebinding
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" . }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}

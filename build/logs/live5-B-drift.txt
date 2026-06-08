@@ -1,0 +1,40 @@
+﻿=== STAGE B: DRIFT DETECTED 2026-05-31T08:54:56.5177748-05:00 ===
+
+--- BEFORE mutation: Deployment template image ---
+deployment.template.image (before) = busybox@sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a
+WB.driftDetections (before) = 
+
+--- MUTATE: patch Deployment to DRIFTED digest busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 ---
+mutation-introduced-ts = 2026-05-31T08:54:56.7867129-05:00
+kubectl : Error from server (BadRequest): error decoding patch: invalid character 's' looking for beginning of object 
+key string
+At line:17 char:6
++ $p = kubectl patch deployment nim-demo -n phase5-verify --type merge  ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error from serv...ject key string:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+--- MUTATE: patch Deployment to DRIFTED digest busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 ---
+mutation-introduced-ts = 2026-05-31T08:55:08.5747042-05:00
+deployment.apps/nim-demo patched
+
+--- drift SecurityEvent observed ---
+event name = drift-8461af30aa2166b0
+
+--- drift SecurityEvent spec ---
+rule.type        = drift
+rule.source      = FalcoIntegrator
+rule.threatLevel = high
+targets          = phase5-verify/nim-demo-54d457b5cd-m24xl
+evidence.observedDigest = sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+evidence.expectedDigest = sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a
+evidence.detail = image digest drift on container "app": running="sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662" expected="sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a" (repo busybox)
+description      = baseline drift detected by WorkloadBaseline "nim-baseline": image digest drift on container "app": running="sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662" expected="sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a" (repo busybox)
+
+--- WB driftDetections after detect ---
+WB.driftDetections = 1
+
+--- manager log: detect + EMIT (reconciler does NOT act) ---
+2026-05-31T08:55:08-05:00	INFO	BaselineDrift: emitted Type:'drift' SecurityEvent with Evidence (matcher routes it; reconciler does NOT act)	{"controller": "baselinedrift", "controllerGroup": "amtd.r6security.com", "controllerKind": "WorkloadBaseline", "WorkloadBaseline": {"name":"nim-baseline"}, "namespace": "", "name": "nim-baseline", "reconcileID": "e6ca030d-8c7a-49af-bb3a-ba0ded72965a", "event": "drift-8461af30aa2166b0", "pod": "nim-demo-54d457b5cd-m24xl", "observed": "sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662", "expected": "sha256:98ad9d1a2be345201bb0709b0d38655eb1b370145c7d94ca1fe9c421f76e245a"}
+2026-05-31T08:55:08-05:00	INFO	BaselineDrift reconciled (record+verify, detect+emit; does NOT act)	{"controller": "baselinedrift", "controllerGroup": "amtd.r6security.com", "controllerKind": "WorkloadBaseline", "WorkloadBaseline": {"name":"nim-baseline"}, "namespace": "", "name": "nim-baseline", "reconcileID": "e6ca030d-8c7a-49af-bb3a-ba0ded72965a", "workloadBaseline": "nim-baseline", "verified": true, "unavailable": false, "driftsEmitted": 1}

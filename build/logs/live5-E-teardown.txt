@@ -1,0 +1,24 @@
+﻿=== STAGE E: TEARDOWN 2026-05-31T08:59:57.2564263-05:00 ===
+
+--- delete SecurityEvent / AMTD / WorkloadBaseline ---
+securityevent.amtd.r6security.com "drift-8461af30aa2166b0" deleted
+adaptivemovingtargetdefense.amtd.r6security.com "amtd-drift" deleted from phase5-verify namespace
+workloadbaseline.amtd.r6security.com "nim-baseline" deleted
+
+--- delete Deployment / ConfigMap / namespace (removes pods + key ConfigMap) ---
+deployment.apps "nim-demo" deleted from phase5-verify namespace
+configmap "nim-cosign-pub" deleted from phase5-verify namespace
+namespace "phase5-verify" deleted
+
+--- kill manager (PID=36552) ---
+
+--- kill manager (PID=36032) ---
+
+--- confirm cleanup ---
+ns phase5-verify   : Error from server (NotFound): namespaces "phase5-verify" not found
+workloadbaselines  : No resources found
+securityevents     : No resources found
+manager.exe running: 0
+
+--- CRDs remain installed (cluster infra, not torn down) ---
+customresourcedefinition.apiextensions.k8s.io/adaptivemovingtargetdefenses.amtd.r6security.com; customresourcedefinition.apiextensions.k8s.io/contextmutationpolicies.amtd.r6security.com; customresourcedefinition.apiextensions.k8s.io/securityevents.amtd.r6security.com; customresourcedefinition.apiextensions.k8s.io/warminferencesets.amtd.r6security.com; customresourcedefinition.apiextensions.k8s.io/workloadbaselines.amtd.r6security.com

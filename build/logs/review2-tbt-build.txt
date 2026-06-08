@@ -1,0 +1,2 @@
+﻿=== go build -C C:\Users\moh87733\Phorvex\build\time-based-trigger-extended ./... ===
+EXIT CODE: 0

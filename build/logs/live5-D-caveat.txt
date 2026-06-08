@@ -1,0 +1,11 @@
+﻿=== STAGE D: SIGNING != BENIGNITY (caveat, documented live) 2026-05-31T08:59:41.5535600-05:00 ===
+
+--- live VerificationBenignityCaveat condition on the WorkloadBaseline ---
+type    = VerificationBenignityCaveat
+status  = True
+reason  = ProvenanceNotBenignity
+message = Signature verification proves PROVENANCE/INTEGRITY (the image was signed by the trusted key and the digest is pinned), NOT BENIGNITY: a validly-signed-but-backdoored upstream image (SolarWinds/SUNBURST shape) still passes. The WorkloadBaseline holds references only, so tampering the in-cluster object cannot make self-heal restore malicious state; default OnDrift=Quarantine (not auto-Regenerate).
+
+--- onDrift default + references-only framing (carried live) ---
+spec.driftPolicy.onDrift (this baseline, explicitly set) = Regenerate
+signature.publicKeyRef = ConfigMap 'nim-cosign-pub' (a REFERENCE; the WorkloadBaseline holds NO private/trust-root key material)

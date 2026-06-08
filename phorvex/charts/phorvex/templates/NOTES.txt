@@ -1,0 +1,25 @@
+Phorvex {{ .Chart.AppVersion }} installed in namespace "{{ .Release.Namespace }}".
+
+Phorvex is the deterministic intelligence layer on top of UNMODIFIED Phoenix. It
+ingests the K8s graph + SecurityEvents (+ optional Prometheus), scores per-pod risk
+and disruption cost, and — in active mode — drives Phoenix via SecurityEvent + AMTD
+CRs (Seam 1). It NEVER writes pods.
+
+1. Create a per-tenant policy (starts in dryRun: decide + log + metrics, no actuation):
+
+   kubectl apply -f https://example/phorvex_v1alpha1_phorvexpolicy.yaml
+   kubectl get phorvexpolicies -A
+
+2. Watch decisions (dry-run audit) in the operator log:
+
+   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "phorvex.fullname" . }} -f | grep phorvex
+
+3. Scrape metrics for the Grafana risk heatmap (source series: phorvex_pod_risk_score):
+
+   kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "phorvex.fullname" . }} 8080:8080
+   curl -s localhost:8080/metrics | grep phorvex_
+
+4. To enable actuation for a tenant, set spec.mode: active (requires a matchLabels
+   selector). The global kill-switch overrides everything:
+
+   kubectl -n {{ .Release.Namespace }} create configmap phorvex-killswitch --from-literal=engaged=true

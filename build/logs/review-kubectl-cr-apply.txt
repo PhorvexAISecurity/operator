@@ -1,0 +1,4 @@
+﻿CR1: adaptivemovingtargetdefense.amtd.r6security.com/review-cr1-legacy created (exit 0)
+CR2: adaptivemovingtargetdefense.amtd.r6security.com/review-cr2-rotate created (exit 0)
+CR3: adaptivemovingtargetdefense.amtd.r6security.com/review-cr3-scored created (exit 0)
+CR4: The AdaptiveMovingTargetDefense "review-cr4-twokeys" is invalid: spec.strategy[0].action: Too many: 2: must have at most 1 item (exit 1)

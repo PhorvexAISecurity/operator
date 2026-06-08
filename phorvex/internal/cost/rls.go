@@ -1,0 +1,133 @@
+/*
+ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (P1)
+ */
+
+package cost
+
+import "github.com/phorvex/phorvex/internal/model"
+
+// rls.go is the SELF-CALIBRATING C_flow model: C_flow is nonlinear in the raw pod
+// state but LINEAR in engineered features phi(view), so Recursive Least Squares gives
+// a closed-form ONLINE fit of a nonlinear cost surface from observed rotations
+// (METHOD-DECISION cost winner, RC-DD). The feature vector and the RLS recursion live
+// here; the RLS UPDATE runs on the telemetry-ingest cadence (offline w.r.t. the <1s
+// online tick), so the per-tick cost is just a dot product.
+
+// featureDim is the engineered C_flow feature dimension.
+const featureDim = 6
+
+// Features maps a workload view to the C_flow feature vector. The coefficients learned
+// over these reproduce, at the prior, today's phase-based flow cost and refine it as
+// real disruption is observed.
+func Features(view *model.WorkloadView) [featureDim]float64 {
+	var f [featureDim]float64
+	f[0] = 1 // bias
+	switch view.Phase {
+	case model.PhaseColdStarting:
+		f[1] = 1
+	case model.PhaseWarm:
+		f[2] = 1
+	case model.PhaseIdle:
+		f[3] = 1
+	}
+	if view.Pod.HasGPU {
+		f[4] = 1
+	}
+	if view.Telemetry.Present {
+		f[5] = satRLS(view.Telemetry.ReqRate / 200.0)
+	}
+	return f
+}
+
+// priorTheta reproduces the P0 phase-based flow prior so nil-data == today's behavior:
+// bias 0.15 (idle floor), +cold 0.85, +warm 0.55, idle 0, +gpu 0.45, +load 0.20.
+func priorTheta() [featureDim]float64 {
+	return [featureDim]float64{0.15, 0.85, 0.55, 0.0, 0.45, 0.20}
+}
+
+// RLS is a recursive-least-squares estimator with a forgetting factor.
+type RLS struct {
+	theta  [featureDim]float64
+	p      [featureDim][featureDim]float64
+	ff     float64 // forgetting factor in (0,1]
+	primed bool
+}
+
+// NewRLS returns an RLS seeded at the flow-cost prior with a diffuse covariance.
+func NewRLS() *RLS {
+	r := &RLS{ff: 0.99}
+	r.theta = priorTheta()
+	for i := 0; i < featureDim; i++ {
+		r.p[i][i] = 100 // diffuse prior covariance
+	}
+	return r
+}
+
+// Predict returns phi^T theta (the estimated C_flow), clamped to [0, 2].
+func (r *RLS) Predict(f [featureDim]float64) float64 {
+	s := 0.0
+	for i := 0; i < featureDim; i++ {
+		s += f[i] * r.theta[i]
+	}
+	if s < 0 {
+		return 0
+	}
+	if s > 2 {
+		return 2
+	}
+	return s
+}
+
+// Update folds one (features, observedCost) sample into theta via the RLS recursion.
+// Called when a real rotation's disruption has been measured (offline cadence).
+func (r *RLS) Update(f [featureDim]float64, y float64) {
+	// Pf = P f
+	var pf [featureDim]float64
+	for i := 0; i < featureDim; i++ {
+		s := 0.0
+		for j := 0; j < featureDim; j++ {
+			s += r.p[i][j] * f[j]
+		}
+		pf[i] = s
+	}
+	// denom = ff + f^T P f
+	denom := r.ff
+	for i := 0; i < featureDim; i++ {
+		denom += f[i] * pf[i]
+	}
+	if denom <= 0 {
+		return
+	}
+	// gain K = Pf / denom
+	var k [featureDim]float64
+	for i := 0; i < featureDim; i++ {
+		k[i] = pf[i] / denom
+	}
+	// innovation
+	pred := r.Predict(f)
+	e := y - pred
+	for i := 0; i < featureDim; i++ {
+		r.theta[i] += k[i] * e
+	}
+	// P = (P - K Pf^T) / ff
+	for i := 0; i < featureDim; i++ {
+		for j := 0; j < featureDim; j++ {
+			r.p[i][j] = (r.p[i][j] - k[i]*pf[j]) / r.ff
+		}
+	}
+	r.primed = true
+}
+
+// Primed reports whether at least one real observation has been folded in (else the
+// estimate is the prior — honest "uncalibrated" state).
+func (r *RLS) Primed() bool { return r.primed }
+
+func satRLS(x float64) float64 {
+	if x < 0 {
+		return 0
+	}
+	if x > 1 {
+		return 1
+	}
+	return x
+}

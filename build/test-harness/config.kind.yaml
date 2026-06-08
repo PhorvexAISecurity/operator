@@ -1,0 +1,41 @@
+# Per-target config for the LIVE kind smoke run.
+#
+# Environment: single-node kind cluster, context kind-amtd-test, node
+# amtd-test-control-plane (no GPU, no MIG, no real multi-node). The harness
+# verifies the live current-context AND the apiserver host match this named
+# context before ANY mutating call, and refuses otherwise.
+
+# Empty => standard KUBECONFIG / ~/.kube/config lookup (resolves the host that
+# the safety guard then asserts against the live connection).
+kubeconfig: ""
+
+# The ONLY kube-context this run is authorized to target.
+context: "kind-amtd-test"
+
+# Dedicated sandbox namespace. ALL attack behavior + every created object is
+# confined here; the sandbox guard refuses objects anywhere else.
+namespace: "amtd-attack-test"
+
+# REQUIRED owned/authorized acknowledgement. This asserts the operator OWNS /
+# is AUTHORIZED to attack this cluster. The harness REFUSES to run without it.
+ownedAck: true
+
+# SMOKE: 2 trials per (scenario, defender) arm. The SAME loop runs the full
+# >=20-trial benchmark by bumping this one knob; the CI math is kept either way.
+trialsPerArm: 2
+
+# Fixed master seed — every per-trial RNG derives deterministically from it, so
+# the whole run reproduces exactly.
+masterSeed: 1337
+
+# phoenix-extended source tree for the FullPhoenix arm to build bin/manager.exe
+# and install CRDs from config/crd/bases. Relative to the harness module root.
+phoenixSrcDir: "../phoenix-extended"
+
+# Output directory for metrics.jsonl, raw/<scenario>_<defender>_<trial>.log,
+# provenance.json, report.md, mitre_matrix.md.
+outDir: "out"
+
+# Empty => run every registered plugin (all scenarios x all defenders).
+defenderFilter: []
+scenarioFilter: []

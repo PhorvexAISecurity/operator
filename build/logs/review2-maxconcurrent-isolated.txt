@@ -1,0 +1,12 @@
+﻿=== ISOLATED re-run: MaxConcurrent + CountInFlight (go test -run) ===
+=== RUN   TestMaxConcurrentRotations_DefersAtCap
+--- PASS: TestMaxConcurrentRotations_DefersAtCap (0.00s)
+=== RUN   TestMaxConcurrentRotations_ProceedsUnderCap
+--- PASS: TestMaxConcurrentRotations_ProceedsUnderCap (0.00s)
+=== RUN   TestMaxConcurrentRotations_NilUnlimited
+--- PASS: TestMaxConcurrentRotations_NilUnlimited (0.00s)
+=== RUN   TestCountInFlightRotations_CountsOnlySelectorMatches
+--- PASS: TestCountInFlightRotations_CountsOnlySelectorMatches (0.00s)
+PASS
+ok  	github.com/r6security/phoenix/internal/controller	0.343s
+EXIT CODE: 0

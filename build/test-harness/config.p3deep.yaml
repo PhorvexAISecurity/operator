@@ -1,0 +1,28 @@
+# P3-DEEP — the STRUCTURAL zero-day suite. The interval-sweep (7 blind intervals
+# 3..60s + PX + no-MTD) across the CONSTRAINED (c2-stateful-training: rotate=destructive)
+# and UNCONSTRAINED (c1-heldout-cve: a clean fast interval is reachable + printed) classes,
+# plus the recon-validity-lifetime mechanism (B) and the fleet dilution (E). 20 trials/arm,
+# 95% CIs, masterSeed=1337. Additive plugins only; zero harness-core / zero Phoenix change.
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 20
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-p3deep"
+defenderFilter:
+  - d-nomtd
+  - d-blind-3s
+  - d-blind-6s
+  - d-blind-9s
+  - d-blind-12s
+  - d-r6blindtimer
+  - d-blind-30s
+  - d-blind-60s
+  - d-phorvex
+scenarioFilter:
+  - c2-stateful-training
+  - c1-heldout-cve
+  - b-recon-lifetime
+  - e-dilution-n9

@@ -1,0 +1,3 @@
+﻿=== go vet -C phoenix-extended ./... ===
+
+VET_EXIT=0

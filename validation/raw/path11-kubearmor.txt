@@ -1,0 +1,63 @@
+﻿==== PATH 11: KUBEARMOR normalized (synthetic canonical SecurityEvent consumed natively) ====
+Captured: 2026-05-31T14:24:55.6884188-05:00
+target pod: ka-demo-665d787748-4vf6z
+AMTD MatcherMode=Scored; rule {source:KubeArmorIntegrator, match:[threatLevel In high,critical]} -> quarantine
+NOTE: kubearmor-integrator is gRPC (no easy live inject). This applies the EXACT canonical
+SecurityEventSpec that buildKubeArmorSpec() emits (severity 9-10 -> critical, PolicyName ->
+policy-violation, proxy score 0.95). KubeArmor normalization table tests pass from Stage 1.
+NetworkPolicies BEFORE: networkpolicy.networking.k8s.io/e2e-verify-quar-demo-6fb5f969f5-95m69-policy
+
+--- Synthetic canonical KubeArmor SecurityEvent applied ---
+apiVersion: amtd.r6security.com/v1beta1
+kind: SecurityEvent
+metadata:
+  name: path11-kubearmor
+spec:
+  targets:
+    - e2e-verify/ka-demo-665d787748-4vf6z
+  description: 'Operation Process [kubearmor.policy="ksp-block-shell" kubearmor.severity="9"]'
+  rule:
+    type: policy-violation
+    threatLevel: critical
+    source: KubeArmorIntegrator
+  anomalyScore: "0.95"
+  metrics:
+    kubearmor.policy: ksp-block-shell
+    kubearmor.severity: "9"
+--- AFTER: quarantine NetworkPolicy created (native scored match consumed the KubeArmor event) ---
+NetworkPolicies AFTER: networkpolicy.networking.k8s.io/e2e-verify-ka-demo-665d787748-4vf6z-policy,networkpolicy.networking.k8s.io/e2e-verify-quar-demo-6fb5f969f5-95m69-policy
+
+--- OPERATOR LOG: native consumption + dispatch ---
+2026-05-31T14:24:55-05:00	INFO	SecurityEvent found: "path11-kubearmor, targets: [e2e-verify/ka-demo-665d787748-4vf6z]"	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": {"name":"path11-kubearmor"}, "namespace": "", "name": "path11-kubearmor", "reconcileID": "9b2a1d89-3184-4fc6-94b2-52180424a3a7"}
+2026-05-31T14:24:55-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": {"name":"path11-kubearmor"}, "namespace": "", "name": "path11-kubearmor", "reconcileID": "9b2a1d89-3184-4fc6-94b2-52180424a3a7"}
+2026-05-31T14:24:55-05:00	INFO	Pod ka-demo-665d787748-4vf6z was put in quarantine	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": {"name":"path11-kubearmor"}, "namespace": "", "name": "path11-kubearmor", "reconcileID": "9b2a1d89-3184-4fc6-94b2-52180424a3a7"}
+2026-05-31T14:24:57-05:00	INFO	SecurityEvent found: "path11-kubearmor, targets: [e2e-verify/ka-demo-665d787748-4vf6z]"	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": {"name":"path11-kubearmor"}, "namespace": "", "name": "path11-kubearmor", "reconcileID": "4b51ac6a-f53a-4900-9a9f-035c354340da"}
+2026-05-31T14:24:57-05:00	INFO	SecurityEvent was sucessfully applied to the pod	{"controller": "securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": {"name":"path11-kubearmor"}, "namespace": "", "name": "path11-kubearmor", "reconcileID": "4b51ac6a-f53a-4900-9a9f-035c354340da"}
+
+--- SecurityEvent path11-kubearmor (yaml) ---
+apiVersion: amtd.r6security.com/v1beta1
+kind: SecurityEvent
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"amtd.r6security.com/v1beta1","kind":"SecurityEvent","metadata":{"annotations":{},"name":"path11-kubearmor"},"spec":{"anomalyScore":"0.95","description":"Operation Process [kubearmor.policy=\"ksp-block-shell\" kubearmor.severity=\"9\"]","metrics":{"kubearmor.policy":"ksp-block-shell","kubearmor.severity":"9"},"rule":{"source":"KubeArmorIntegrator","threatLevel":"critical","type":"policy-violation"},"targets":["e2e-verify/ka-demo-665d787748-4vf6z"]}}
+  creationTimestamp: "2026-05-31T19:24:55Z"
+  generation: 1
+  name: path11-kubearmor
+  resourceVersion: "163545"
+  uid: 963b1239-4d2f-48ac-aa88-933f2b996cff
+spec:
+  anomalyScore: "0.95"
+  description: Operation Process [kubearmor.policy="ksp-block-shell" kubearmor.severity="9"]
+  metrics:
+    kubearmor.policy: ksp-block-shell
+    kubearmor.severity: "9"
+  rule:
+    source: KubeArmorIntegrator
+    threatLevel: critical
+    type: policy-violation
+  targets:
+  - e2e-verify/ka-demo-665d787748-4vf6z
+
+--- Stage-1 KubeArmor normalization table tests (reference) ---
+kubearmor-integrator: cmd RUN=5 PASS=5 FAIL=0 (NormalizeSeverity/NormalizePolicyType/buildKubeArmorSpec table tests). See build-test-all-trees.txt.

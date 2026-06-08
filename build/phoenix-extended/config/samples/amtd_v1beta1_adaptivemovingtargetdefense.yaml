@@ -1,0 +1,45 @@
+apiVersion: amtd.r6security.com/v1beta1
+kind: AdaptiveMovingTargetDefense
+metadata:
+  labels:
+    app.kubernetes.io/name: adaptivemovingtargetdefense
+    app.kubernetes.io/instance: adaptivemovingtargetdefense-sample
+    app.kubernetes.io/part-of: operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: operator
+  name: adaptivemovingtargetdefense-sample
+spec:
+  podSelector:
+    mtdSecured: "true"
+  strategy:
+    - rule:
+        type: default
+      action:
+        disable: {}
+    # Phase 0 / NIM dissolution (design rule #1): a timed rotation is now the
+    # authoritative {type:'timed', source:'TimeBasedTrigger'} -> {rotate:{}}
+    # strategy, routed by the relaxed matcher and executed one-shot by the
+    # SecurityEvent reconciler's Rotate branch (which in Phase 0 reproduces the
+    # old cold reschedule: annotate-then-delete). This replaces the previous
+    # {type:test, threatLevel:warning, source:TimerBackend} -> delete sample,
+    # which also carried a structural YAML typo (a stray "actions" token).
+    - rule:
+        type: timed
+        threatLevel: info
+        source: TimeBasedTrigger
+      action:
+        rotate: {}
+    - rule:
+        type: network-attack
+      action:
+        quarantine: {}
+    - rule:
+        type: filesystem-corruption
+        threatLevel: medium
+        source: falco
+      action:
+        quarantine: {}
+    - rule:
+        threatLevel: medium
+      action:
+        quarantine: {}

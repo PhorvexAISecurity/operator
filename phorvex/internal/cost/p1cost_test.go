@@ -1,0 +1,84 @@
+/*
+ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (P1)
+ */
+
+package cost
+
+import (
+	"math"
+	"testing"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
+
+func TestRLSConvergesToObservedCost(t *testing.T) {
+	r := NewRLS()
+	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p"}, Phase: model.PhaseIdle}
+	f := Features(v)
+	// True idle-rotation flow cost is, say, 0.05 (cheap); feed it repeatedly.
+	for i := 0; i < 50; i++ {
+		r.Update(f, 0.05)
+	}
+	got := r.Predict(f)
+	if math.Abs(got-0.05) > 0.05 {
+		t.Errorf("RLS should converge toward the observed 0.05, got %.3f", got)
+	}
+	if !r.Primed() {
+		t.Errorf("RLS should report primed after observations")
+	}
+}
+
+func TestDualLambdaRespondsToBudgetPressure(t *testing.T) {
+	d := NewDualSolver()
+	start := d.Lambda()
+	// Demand far exceeds budget => lambda must RISE (moves are scarce).
+	for i := 0; i < 20; i++ {
+		d.Step(10, 2, 2)
+	}
+	high := d.Lambda()
+	if !(high > start) {
+		t.Errorf("lambda must rise under over-demand: start=%.3f high=%.3f", start, high)
+	}
+	// Slack (demand < budget) => lambda must FALL.
+	for i := 0; i < 200; i++ {
+		d.Step(0, 0, 5)
+	}
+	low := d.Lambda()
+	if !(low < high) {
+		t.Errorf("lambda must fall under budget slack: high=%.3f low=%.3f", high, low)
+	}
+	if low < 0 {
+		t.Errorf("lambda must stay non-negative, got %.3f", low)
+	}
+}
+
+func TestCHiPrunesUncalibratedGPURotate(t *testing.T) {
+	c := NewP1Cost()
+	pol := model.Policy{NormSparsity: 0.4, FlowDisruption: 0.6}
+	ceiling := pol.NormSparsity + pol.FlowDisruption + 0.2
+
+	gpu := &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm}
+	cpu := &model.WorkloadView{Pod: model.Pod{}, Phase: model.PhaseWarm}
+	rot := model.Move{Action: model.ActionRotate}
+
+	if chi := c.CHi(gpu, rot, pol); chi <= ceiling {
+		t.Errorf("uncalibrated GPU rotate CHi (%.3f) should EXCEED ceiling (%.3f) [SP-0-PENDING envelope]", chi, ceiling)
+	}
+	if chi := c.CHi(cpu, rot, pol); chi > ceiling {
+		t.Errorf("non-GPU rotate CHi (%.3f) should be within ceiling (%.3f)", chi, ceiling)
+	}
+	// Quarantine is always within the ceiling (the safe fallback).
+	if chi := c.CHi(gpu, model.Move{Action: model.ActionQuarantine}, pol); chi > ceiling {
+		t.Errorf("GPU quarantine CHi (%.3f) should be within ceiling (%.3f)", chi, ceiling)
+	}
+}
+
+func TestConformalColdStartSlack(t *testing.T) {
+	c := NewConformalBound()
+	if q := c.Quantile(); q != ColdStartSlack {
+		t.Errorf("cold-start conformal slack should be %.2f, got %.3f", ColdStartSlack, q)
+	}
+	if c.Calibrated() {
+		t.Errorf("conformal bound should not report calibrated with zero residuals")
+	}
+}

@@ -1,0 +1,31 @@
+﻿==================== STAGE A: RECONCILE + STANDBY PROVISIONED ====================
+Captured: 2026-05-31T03:12:46.2460381-05:00
+
+--- WarmInferenceSet wis-a (printer columns) ---
+NAME    LEADER         READYSHADOWS   SWAPPHASE   LASTSWAPMILLIS   AGE
+wis-a   wis-a-warm-0                  Idle                         47s
+
+--- Pool pods (name, phase, ready, leader-label) ---
+NAME           READY   STATUS    RESTARTS   AGE   LEADER
+wis-a-warm-0   1/1     Running   0          47s   active
+wis-a-warm-1   1/1     Running   0          47s
+
+--- Leader-selecting Service wis-a-leader ---
+NAME           TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE   SELECTOR
+wis-a-leader   ClusterIP   10.96.74.152   <none>        8080/TCP   47s   amtd.r6security.com/leader=active,amtd.r6security.com/warm-inference-set=wis-a
+
+--- Service selector ---
+{"amtd.r6security.com/leader":"active","amtd.r6security.com/warm-inference-set":"wis-a"}
+
+--- Service Endpoints resolve to ONLY the leader pod ---
+leader wis-a-warm-0 IP = 10.244.0.73
+shadow wis-a-warm-1 IP = 10.244.0.74
+EndpointSlice targets for wis-a-leader:
+wis-a-warm-0 ready=true
+
+--- After annotating shadow wis-a-warm-1 amtd.r6security.com/model-loaded=true (readiness-gate signal) ---
+WIS status now:
+  activeLeader=wis-a-warm-0  readyShadows=1  currentReplicas=2  swapPhase=Idle
+
+--- WIS status.conditions ---
+

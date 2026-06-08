@@ -1,0 +1,419 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: workloadbaselines.amtd.r6security.com
+spec:
+  group: amtd.r6security.com
+  names:
+    kind: WorkloadBaseline
+    listKind: WorkloadBaselineList
+    plural: workloadbaselines
+    shortNames:
+    - wb
+    singular: workloadbaseline
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.lastVerifiedTime
+      name: LastVerified
+      type: date
+    - jsonPath: .status.driftDetections
+      name: Drifts
+      type: integer
+    - jsonPath: .status.lastRegeneration
+      name: LastRegeneration
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          WorkloadBaseline is the Schema for the workloadbaselines API (cap#6, D6/D6g).
+          Cluster-scoped, holds REFERENCES only (never trust-root secret material).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              WorkloadBaselineSpec is the desired state of a WorkloadBaseline. It embeds the
+              shared BaselineSpec (references only) so the standalone CRD and the embedded
+              AMTDSpec.Baseline share one shape (arch §2.4). It adds a Selector so the
+              reconciler can find the baseline-governed pods to detect drift on.
+            properties:
+              baselineRef:
+                description: |-
+                  BaselineRef points the embedded block at a standalone WorkloadBaseline (by
+                  name). When set on the embedded AMTDSpec.Baseline, the standalone CRD is the
+                  source of truth for the pinned digests + SignaturePolicy (references only); the
+                  embedded block then carries policy knobs (DriftPolicy). On a standalone
+                  WorkloadBaseline this is unused.
+                properties:
+                  name:
+                    type: string
+                required:
+                - name
+                type: object
+              driftPolicy:
+                description: DriftPolicy controls detection cadence + default response
+                  (D6g (d)).
+                properties:
+                  admissionEnforce:
+                    description: |-
+                      AdmissionEnforce gates whether the baselineAdmission webhook denies
+                      unsigned/unverifiable/un-pinned images (fail-CLOSED) for this baseline. Code
+                      default TRUE via EffectiveAdmissionEnforce() (D6g). nil => true.
+                    type: boolean
+                  detectInterval:
+                    description: |-
+                      DetectInterval is the OPTIONAL periodic re-verify/re-detect poll period. nil/0
+                      => poll disabled (off by default, D6g); detection then rides admission + Falco
+                      drift events. When set, the reconciler requeues after this interval.
+                    type: string
+                  onDrift:
+                    description: |-
+                      OnDrift is the DEFAULT response preference (Regenerate|Quarantine|AlertOnly|
+                      Block). Code default Quarantine via EffectiveOnDrift() (D6g: auto-Regenerate is
+                      restart-loop-DoS-weaponizable). The actual action is still a Strategy[] rule.
+                    enum:
+                    - Regenerate
+                    - Quarantine
+                    - AlertOnly
+                    - Block
+                    type: string
+                  resetHardeningProfile:
+                    description: |-
+                      ResetHardeningProfile bounds a Regenerate's hardening reset
+                      (PodProfileOnly|IncludeRBAC). Code default PodProfileOnly via
+                      EffectiveResetHardeningProfile() (D6g (e)).
+                    enum:
+                    - PodProfileOnly
+                    - IncludeRBAC
+                    type: string
+                type: object
+              imageDigests:
+                description: ImageDigests is the per-container pinned golden Repository@Digest
+                  set (D6g (a)).
+                items:
+                  description: |-
+                    ImageDigest pins one container's golden image to an immutable Repository@Digest
+                    (D6g (a)). It is a REFERENCE into the external signed registry; no image bytes
+                    or key material are stored.
+                  properties:
+                    containerName:
+                      description: |-
+                        ContainerName is the container the pin applies to (matches the running pod's
+                        container name and the owner template).
+                      type: string
+                    digest:
+                      description: |-
+                        Digest is the pinned content digest (e.g. sha256:abc...). The golden reference
+                        is Repository@Digest. The drift surface compares the running image digest to
+                        this (D6 digest+allowlist surface, NOT full PodSpec).
+                      type: string
+                    repository:
+                      description: Repository is the immutable image repository (e.g.
+                        nvcr.io/nim/secure-nim).
+                      type: string
+                    signature:
+                      description: |-
+                        Signature is the detached signature over the Digest the kind key-based verifier
+                        checks against the SignaturePolicy PublicKeyRef. Faithful to cosign key-based
+                        (a signature over the image digest), but carried inline on the pin so kind can
+                        verify WITHOUT a registry/Rekor. Base64-encoded (std encoding). Empty => the
+                        image is unsigned (RequireSignature rejects it).
+                      type: string
+                  required:
+                  - containerName
+                  - digest
+                  - repository
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              podSpecSnapshotRef:
+                description: |-
+                  PodSpecSnapshotRef references a Phoenix-owned PodSpec snapshot (e.g. a ConfigMap)
+                  used to restore curated non-image fields (D6g (b)). Reference only; the kind
+                  restorer restores the pinned image (the primary golden state).
+                properties:
+                  name:
+                    type: string
+                required:
+                - name
+                type: object
+              selector:
+                description: |-
+                  Selector matches the baseline-governed pods (by labels). The
+                  BaselineDriftReconciler detects drift on these. nil selects nothing (the
+                  reconciler verifies the pins + records Status but finds no pods to compare).
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                          type: string
+                        values:
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
+              signature:
+                description: |-
+                  Signature is the verification policy (cosign key-based default, D6). nil => no
+                  signature enforcement (digest-allowlist-only; the DigestUnpinnedWarning/benignity
+                  caveats still apply).
+                properties:
+                  keylessIdentity:
+                    description: KeylessIdentity reserves the cosign keyless (OIDC)
+                      production seam (see type).
+                    properties:
+                      issuer:
+                        description: Issuer is the expected OIDC issuer (e.g. https://token.actions.githubusercontent.com).
+                        type: string
+                      subjectRegexp:
+                        description: SubjectRegexp is the expected certificate-identity
+                          SAN regexp.
+                        type: string
+                    type: object
+                  publicKeyRef:
+                    description: |-
+                      PublicKeyRef references the verification public key (Secret/ConfigMap/inline
+                      PEM). nil + RequireSignature=true => verification is UNAVAILABLE (the kind
+                      verifier cannot key-verify without a key) and the baseline is treated
+                      fail-to-cached-last-good with a VerificationUnavailable condition.
+                    properties:
+                      configMapRef:
+                        description: |-
+                          ConfigMapRef names a ConfigMap (namespace/name) whose Key entry holds the PEM
+                          public key.
+                        properties:
+                          key:
+                            description: Key is the data key holding the PEM (default
+                              "cosign.pub").
+                            type: string
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      inlinePEM:
+                        description: |-
+                          InlinePEM is a PEM-encoded public key carried inline. This is a PUBLIC key
+                          (verification only), so inlining it does NOT embed trust-root secret material;
+                          it is the offline/air-gapped/test-friendly form. Takes precedence when set.
+                        type: string
+                      secretRef:
+                        description: |-
+                          SecretRef names a Secret (namespace/name) whose Key entry holds the PEM
+                          public key. Namespace empty => the operator namespace at resolve time.
+                        properties:
+                          key:
+                            description: Key is the data key holding the PEM (default
+                              "cosign.pub").
+                            type: string
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
+                        type: object
+                    type: object
+                  rekorURL:
+                    description: |-
+                      RekorURL is the transparency-log URL for keyless/online verification
+                      (production extension; the kind key-based path does not contact Rekor).
+                    type: string
+                  requireSignature:
+                    description: |-
+                      RequireSignature, when true, REJECTS an unsigned/unverifiable image (admission
+                      fail-CLOSED; verify-before-recreate refuses). Code default TRUE via
+                      EffectiveRequireSignature() (D6). nil => true.
+                    type: boolean
+                type: object
+            type: object
+          status:
+            description: |-
+              WorkloadBaselineStatus is the cap#6 verification/drift observability surface
+              (arch §2.4 item 3 + §2.3). All fields optional so a baseline created before this
+              stage has an empty-but-valid status.
+            properties:
+              conditions:
+                description: |-
+                  Conditions carries BaselineVerified, VerificationUnavailable, SignatureMismatch,
+                  DigestUnpinnedWarning and the always-present VerificationBenignityCaveat (D6/D11).
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              driftDetections:
+                description: DriftDetections is a monotonically increasing count of
+                  drift detections.
+                type: integer
+              effectiveHealer:
+                description: |-
+                  EffectiveHealer records the single healer (D6g (c) GitOps precedence) when a
+                  GitOps owner is detected; empty => Phoenix is the healer.
+                type: string
+              lastRegeneration:
+                description: |-
+                  LastRegeneration is when a Regenerate last restored a governed workload to the
+                  pinned digest. Drift MTTR = LastRegeneration - detection-ts (kind-measurable).
+                format: date-time
+                type: string
+              lastVerifiedTime:
+                description: |-
+                  LastVerifiedTime is when the pinned digests last verified against the
+                  SignaturePolicy. On a registry/Rekor/key blip this is NOT advanced (the prior
+                  LastVerifiedTime + PinnedDigests are reused = fail-to-cached-last-good).
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the .metadata.generation the Status
+                  reflects.
+                format: int64
+                type: integer
+              pinnedDigests:
+                description: |-
+                  PinnedDigests is the last VERIFIED set of Repository@Digest strings (the cached
+                  last-good the split fail mode reuses).
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              recentDriftDetections:
+                description: RecentDriftDetections is a BOUNDED recent-drift history
+                  (cap kept small).
+                items:
+                  description: |-
+                    DriftDetectionRecord is one bounded drift-detection history entry recorded on
+                    the WorkloadBaseline Status (audit; the long tail goes to k8s Events).
+                  properties:
+                    containerName:
+                      type: string
+                    expectedDigest:
+                      type: string
+                    observedDigest:
+                      type: string
+                    podName:
+                      type: string
+                    time:
+                      format: date-time
+                      type: string
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

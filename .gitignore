@@ -1,0 +1,23 @@
+# Dependencies
+**/node_modules/
+
+# Next.js build + static export output
+dashboard-web/.next/
+dashboard-web/out/
+**/.next/
+
+# Compiled binaries
+**/bin/*.exe
+*.exe
+
+# Go build/test cache
+*.test
+*.out
+
+# Runtime audit trail (generated)
+phorvex/bin/console-audit.jsonl
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

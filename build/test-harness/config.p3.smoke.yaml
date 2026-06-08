@@ -1,0 +1,17 @@
+# P3 SMOKE — prove the run-loop end-to-end across the six arms (incl. the new PX +
+# reactive-only) on the three decisive new scenarios. 2 trials/arm; the full
+# >=20-trial run bumps this one knob. Reproducible from masterSeed. Absolute paths so
+# the binary runs CWD-independently.
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 2
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-p3-smoke"
+defenderFilter: []
+scenarioFilter:
+  - c1-heldout-cve
+  - c1-stealth-dweller
+  - c1-llm-adaptive

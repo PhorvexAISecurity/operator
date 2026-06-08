@@ -1,0 +1,11 @@
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+phoenixSrcDir: "../phoenix-extended"
+outDir: "out-probe"
+defenderFilter: []
+scenarioFilter:
+  - "c2-persistence-evict"

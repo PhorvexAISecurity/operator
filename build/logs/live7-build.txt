@@ -1,0 +1,7 @@
+﻿=== STAGE 4 LIVE BUILD 2026-05-31T13:13:43.4859142-05:00 ===
+--- phoenix manager.exe ---
+phoenix exit=0
+--- falco.exe ---
+falco exit=0
+--- prom.exe ---
+prom exit=0

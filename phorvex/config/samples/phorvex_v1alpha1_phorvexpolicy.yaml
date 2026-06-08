@@ -1,0 +1,42 @@
+# Phorvex per-tenant policy — traces the PRD PART 7 example. Numeric [0,1] knobs are
+# decimal strings (Phoenix convention). Defaults to mode: dryRun (decide + log +
+# metrics, NO actuation), which is what P0 ships and runs.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: prod-inference
+  namespace: default
+spec:
+  # tenant defaults to the namespace; set explicitly for vcluster multi-tenancy.
+  tenant: default
+  selector:
+    matchLabels:
+      app: nim-inference
+  objective:
+    lambda: "0.6"
+    costWeights:
+      normSparsity: "0.4"
+      flowDisruption: "0.6"
+  budget:
+    maxMovesPerTick: 3
+    tickInterval: 20s
+    antiOverRotationWindow: 5m
+    proactiveFloor: 1h        # a.k.a. the hygiene floor (detection-independent)
+  slo:
+    p99Ms: 200
+    minTokensPerSec: 800
+    minAvailableReplicas: 2
+  assetValue:
+    fromLabels:
+      data-class:
+        restricted: "1.0"
+        internal: "0.4"
+        public: "0.1"
+    weightSecrets: "0.8"
+    blastRadiusFromGraph: true
+  triggers:
+    eventDriven: true
+    killChainSource: ["FalcoIntegrator", "prometheus"]
+  actions:
+    enabled: ["rotate", "quarantine"]
+  mode: dryRun

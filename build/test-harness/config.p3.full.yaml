@@ -1,0 +1,23 @@
+# P3 FULL >=20-trial benchmark (GATE #2). The curated DECISIVE scenario set covering
+# every comparison the showcase needs: fast-attacker (blind too late), held-out-CVE
+# (zero-day dwell), stealth-dweller (H3), llm-adaptive (learnability, needs adaptive
+# arm), stateful-training (LEAD DEMO + feasibility/harm), persistence-evict (emit path /
+# fair full-Phoenix). 20 trials/arm + the adaptive arm + negative control. Reproducible
+# from masterSeed. The exhaustive ~40-scenario sweep is a mechanical follow-on (adds
+# breadth, not conclusions). GPU/real-LLM scenarios stay GPU-PENDING (run on CoreWeave).
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 20
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-p3-full"
+defenderFilter: []
+scenarioFilter:
+  - c1-fast-attacker
+  - c1-heldout-cve
+  - c1-stealth-dweller
+  - c1-llm-adaptive
+  - c2-stateful-training
+  - c2-persistence-evict

@@ -1,0 +1,22 @@
+==================== STAGE D: DOWNTIME SLO = GPU-PENDING (explicit) ====================
+Captured on kind context kind-amtd-test (apiserver v1.35.0), NO GPU, NO real model server.
+
+WHAT WAS MEASURED ON KIND (control plane only):
+  - lastSwapDurationMillis observed values: 5122 ms and 5859 ms.
+  - These are the CONTROL-PLANE cutover time ONLY = (leader-label flip + DrainTimeoutSeconds drain),
+    with drainTimeoutSeconds=5 for these runs. They are NOT a model-load downtime.
+
+WHAT IS GPU-PENDING (NOT measured, NOT fabricated on kind):
+  - The 400s -> 15s warm-vs-cold inference downtime SLO. NO warm-vs-cold downtime number is asserted here.
+  - p50 <= 5s / p95 <= 15s end-to-end inference latency targets.
+  - zero non-2xx during cutover, and warm <= COLD/10 downtime ratio.
+  These require a real GPU + a real model server (weights resident, warm-up inference) and are deferred
+  to a real-GPU run. They were neither measured nor estimated on kind.
+
+  - RequireModelLoaded "weights GPU-resident + warm-up inference" verification is GPU-PENDING.
+    On kind it was realized via the documented proxy: pod Ready condition + MinWarmSeconds dwell
+    + the amtd.r6security.com/model-loaded=true annotation as the model-loaded SIGNAL. True
+    GPU-weights-resident verification is deferred to real GPU.
+
+CONCLUSION: kind verifies the CONTROL PLANE (reconcile, standby provisioning, readiness-gated
+leader-swap cutover, class-B no-self-swap, gate-block). The downtime SLO is GPU-PENDING.

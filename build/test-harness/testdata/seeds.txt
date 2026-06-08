@@ -1,0 +1,10 @@
+# Fixed seeds for reproducibility. The harness derives every per-trial RNG seed
+# deterministically from masterSeed via core.TrialSeed(masterSeed, scenario,
+# defender, trial) = FNV-1a(masterSeed || scenario || defender || trial). The SAME
+# masterSeed reproduces the entire run.
+#
+# Smoke run masterSeed:
+1337
+#
+# Full-benchmark masterSeed (>=20 trials/arm), kept distinct for a fresh draw:
+20240601

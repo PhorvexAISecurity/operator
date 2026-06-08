@@ -1,0 +1,30 @@
+# Pass-B AI benchmark — the 17 REMAINING kind scenarios in ONE batch (B2-B5 folded).
+# -resume APPENDS into out-ai-bench/ (which already holds B1's 4 scenarios at n=20),
+# same masterSeed=1337, trialsPerArm=20. Excludes B1's 4 (already done) AND the 6
+# GPU/multi-node capability-pending scenarios (run later on AWS/CoreWeave).
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-ai-test"
+ownedAck: true
+trialsPerArm: 20
+masterSeed: 1337
+phoenixSrcDir: "../phoenix-extended"
+outDir: "out-ai-bench"
+scenarioFilter:
+  - "ai1-inference-manipulation"
+  - "ai2-agent-excessive-agency"
+  - "ai2-agent-injection-to-persistence"
+  - "ai2-agent-memory-contamination"
+  - "ai2-agent-rogue-tool-persistence"
+  - "ai2-data-model-poisoning"
+  - "ai2-embedding-store-tampering"
+  - "ai2-embedding-vector-weakness"
+  - "ai2-excessive-agency"
+  - "ai2-malicious-model-artifact"
+  - "ai2-mcp-rogue-server"
+  - "ai2-mcp-tool-poisoning"
+  - "ai2-mcp-tool-response-injection"
+  - "ai2-rag-retrieval-poisoning"
+  - "ai2-sensitive-info-disclosure"
+  - "ai2-system-prompt-leakage"
+  - "ai2-tampered-inference-base-image"

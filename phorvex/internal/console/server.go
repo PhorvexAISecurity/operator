@@ -1,0 +1,346 @@
+/*
+ * Phorvex Console (P-DASHBOARD) — the HTTP API (read-only data + safe triggers).
+ *
+ * THREE auth scopes, enforced server-side (the lens is not a CSS toggle):
+ *   - vendor   (Investor): the full moat — effectiveness, frontier, the IP internals.
+ *   - operator (Operator): effectiveness, frontier, run-attack-agents — customer-safe.
+ *   - owner    (Customer-Owner): ONLY the IP-walled OwnerEvent list. The owner scope is
+ *     physically barred from the vendor/operator handlers and the trigger endpoints it may
+ *     not invoke. The owner payload is the whitelist DTO (owner.go) — never a Record.
+ */
+
+package console
+
+import (
+	"bufio"
+	"encoding/json"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/phorvex/phorvex/internal/audit"
+)
+
+// Server is the console API.
+type Server struct {
+	cfg  Config
+	runs *RunManager
+}
+
+func NewServer(cfg Config) *Server { return &Server{cfg: cfg, runs: NewRunManager(cfg)} }
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	// vendor + operator scope (full data).
+	mux.HandleFunc("/api/health", s.withCORS(s.health))
+	mux.HandleFunc("/api/effectiveness", s.withCORS(s.scoped("operator", s.effectiveness)))
+	mux.HandleFunc("/api/frontier", s.withCORS(s.scoped("operator", s.frontier)))
+	mux.HandleFunc("/api/suites", s.withCORS(s.scoped("operator", s.suites)))
+	mux.HandleFunc("/api/runs/start", s.withCORS(s.scoped("operator", s.startRun)))
+	mux.HandleFunc("/api/runs/scenario", s.withCORS(s.scoped("operator", s.startScenario)))
+	mux.HandleFunc("/api/runs/status", s.withCORS(s.scoped("operator", s.runStatus)))
+	mux.HandleFunc("/api/targets", s.withCORS(s.scoped("operator", s.targets)))
+	// EVIDENCE group (Wave 1) — operator/investor scope.
+	mux.HandleFunc("/api/catalog", s.withCORS(s.scoped("operator", s.catalog)))
+	mux.HandleFunc("/api/benchmarks", s.withCORS(s.scoped("operator", s.benchmarks)))
+	mux.HandleFunc("/api/threat-matrix", s.withCORS(s.scoped("operator", s.threatMatrix)))
+	mux.HandleFunc("/api/posture", s.withCORS(s.scoped("operator", s.posture)))
+	mux.HandleFunc("/api/rawlog", s.withCORS(s.scoped("operator", s.rawlog)))
+	// SUBSYSTEMS (Wave 3) — operator/investor scope (IP); exec EXISTING entrypoints read-only.
+	mux.HandleFunc("/api/scan", s.withCORS(s.scoped("operator", s.scan)))
+	mux.HandleFunc("/api/ablation", s.withCORS(s.scoped("operator", s.ablation)))
+	mux.HandleFunc("/api/cluster", s.withCORS(s.scoped("operator", s.cluster)))
+	mux.HandleFunc("/api/handlers", s.withCORS(s.scoped("operator", s.handlers)))
+	mux.HandleFunc("/api/matrix", s.withCORS(s.scoped("operator", s.matrix)))
+	mux.HandleFunc("/api/ai-surface", s.withCORS(s.scoped("operator", s.aiSurface)))
+	mux.HandleFunc("/api/metrics", s.withCORS(s.scoped("operator", s.metricsScrape)))
+	// LIVE group (Wave 2) — SSE, per-lens projected at the stream boundary.
+	mux.HandleFunc("/api/live", s.withCORS(s.live))
+	// owner scope (IP-walled — ONLY OwnerEvents + the owner-safe rollup).
+	mux.HandleFunc("/api/owner/events", s.withCORS(s.scoped("owner", s.ownerEvents)))
+	// Static SPA (the built Next.js export) served at / on the SAME port as /api — one
+	// process, one port, no proxy. SPA fallback to index.html for client-side routes.
+	mux.HandleFunc("/", s.spa)
+	return mux
+}
+
+// spa serves the built dashboard (cfg.Web). Unknown non-/api paths fall back to index.html
+// (client routing). If the build is absent, it returns a clear instruction (never a blank).
+func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Web == "" || !fileExists(filepath.Join(s.cfg.Web, "index.html")) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<!doctype html><html><body style="font-family:system-ui;background:#0a0d12;color:#dfe6ee;padding:48px;max-width:720px;margin:auto"><h2>Phorvex Console — API is up, web build not found</h2><p>The data API is serving on this port, but the built dashboard was not found at <code>dashboard-web/out</code>.</p><p>Build it once:</p><pre style="background:#11161d;padding:14px;border-radius:8px">cd dashboard-web
+npm install
+npm run build</pre><p>then restart this binary. (Or pass <code>--web &lt;path-to-out&gt;</code>.)</p></body></html>`))
+		return
+	}
+	p := filepath.Clean(r.URL.Path)
+	full := filepath.Join(s.cfg.Web, p)
+	if p == "/" || !fileExists(full) {
+		http.ServeFile(w, r, filepath.Join(s.cfg.Web, "index.html"))
+		return
+	}
+	http.ServeFile(w, r, full)
+}
+
+func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"items": s.cfg.Catalog()})
+}
+func (s *Server) benchmarks(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"groups": s.cfg.Benchmarks()})
+}
+func (s *Server) threatMatrix(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"techniques": s.cfg.ThreatMatrix()})
+}
+func (s *Server) posture(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, s.cfg.PostureScore())
+}
+func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, s.cfg.Scan(r.URL.Query().Get("ns")))
+}
+func (s *Server) ablation(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, s.cfg.Ablation(r.URL.Query().Get("ns")))
+}
+func (s *Server) handlers(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, HandlerRegistryView())
+}
+func (s *Server) matrix(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, s.cfg.Matrix())
+}
+func (s *Server) aiSurface(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, s.cfg.AISurfaceDecode())
+}
+func (s *Server) metricsScrape(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, s.cfg.MetricsScrape(r.URL.Query().Get("url")))
+}
+func (s *Server) cluster(w http.ResponseWriter, r *http.Request) {
+	pols, ok := s.cfg.ClusterPolicies()
+	writeJSON(w, 200, map[string]any{"policies": pols, "available": ok,
+		"note": "live PhorvexPolicy CRD spec + Status (operator control-plane). Editing from the UI is [PENDING-wire · write path]."})
+}
+
+func (s *Server) rawlog(w http.ResponseWriter, r *http.Request) {
+	body, ok := s.cfg.RawLog(r.URL.Query().Get("path"))
+	if !ok {
+		writeJSON(w, 404, map[string]string{"error": "log not found or outside the evidence corpus"})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"log": body})
+}
+
+// lensOf reads the request lens (header, then query for EventSource). Missing/unknown maps
+// to the LEAST-privileged lens ("owner") — default-deny, never "operator".
+func lensOf(r *http.Request) string {
+	l := r.Header.Get("X-Phorvex-Lens")
+	if l == "" {
+		l = r.URL.Query().Get("lens")
+	}
+	switch l {
+	case "investor", "operator", "owner":
+		return l
+	default:
+		return "owner" // DEFAULT-DENY: an unknown/missing lens cannot reach vendor data
+	}
+}
+
+// scoped enforces the auth scope SERVER-SIDE with DEFAULT-DENY. A vendor/operator endpoint
+// admits ONLY the investor/operator lens; a missing/unknown/owner lens is rejected (403) —
+// so vendor IP can never reach the owner path by an absent header. Owner endpoints are
+// reachable by any valid lens but ALWAYS return the redacted ToOwnerEvent DTO (they never
+// marshal a Record). (Real authn/SSO is [PENDING-P-VCLUSTER]; this is the redaction boundary.)
+func (s *Server) scoped(required string, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lens := lensOf(r)
+		if required == "operator" && lens != "investor" && lens != "operator" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "this data requires the investor or operator lens; the customer-owner lens is IP-walled"})
+			return
+		}
+		h(w, r)
+	}
+}
+
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{
+		"ok": true, "root": s.cfg.Root,
+		"hasP3Deep":    fileExists(s.harnessOutCfg("out-p3deep")),
+		"hasPactuator": fileExists(s.harnessOutCfg("out-pactuator")),
+		"phorvexBin":   fileExists(s.cfg.PhorvexBin),
+		"harnessBin":   fileExists(s.cfg.HarnessBin),
+	})
+}
+
+func (s *Server) effectiveness(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"stats": s.cfg.Effectiveness()})
+}
+
+func (s *Server) frontier(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"rows": s.cfg.Frontier()})
+}
+
+func (s *Server) suites(w http.ResponseWriter, r *http.Request) {
+	type item struct{ Name, Desc string }
+	var out []item
+	for name, su := range allowedConfigs {
+		out = append(out, item{name, su.Desc})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	writeJSON(w, 200, map[string]any{"suites": out})
+}
+
+func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Config         string `json:"config"`
+		NativeActuator bool   `json:"nativeActuator"`
+		StartedAt      string `json:"startedAt"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"id": id})
+}
+
+func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Scenario  string `json:"scenario"`
+		WithPX    bool   `json:"withPX"`
+		Target    string `json:"target"`
+		StartedAt string `json:"startedAt"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id, err := s.runs.StartScenario(body.Scenario, body.WithPX, body.Target, body.StartedAt)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"id": id})
+}
+
+func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"targets": s.runs.ClusterTargets()})
+}
+
+func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	st, ok := s.runs.Status(id)
+	if !ok {
+		writeJSON(w, 404, map[string]string{"error": "run not found"})
+		return
+	}
+	writeJSON(w, 200, st)
+}
+
+// ownerEvents returns the IP-walled OwnerEvent list. It reads a real decision audit JSONL
+// (audit.Record), projects EACH through ToOwnerEvent (the whitelist), and returns ONLY that.
+// It NEVER marshals a Record. If no audit trail exists yet, it returns an honest empty state.
+func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
+	tenant := r.URL.Query().Get("tenant")
+	recs := s.readAudit()
+	var events []OwnerEvent
+	for _, rec := range recs {
+		if !rec.Selected && !rec.Actuated {
+			continue // owners see ACTIONS, not every evaluated candidate
+		}
+		if tenant != "" && rec.Tenant != tenant {
+			continue
+		}
+		events = append(events, ToOwnerEvent(rec)) // <- the ONLY owner projection
+	}
+	prevented, preserved, sloKept := 0, 0, 0
+	for _, e := range events {
+		if e.AttackPrevented {
+			prevented++
+		}
+		if e.WorkPreserved {
+			preserved++
+		}
+		if e.SLOKept {
+			sloKept++
+		}
+	}
+	writeJSON(w, 200, map[string]any{
+		"events": events,
+		"empty":  len(events) == 0,
+		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept},
+		"note":   "kind-scale demo data; live real-cluster streaming is [PENDING-P4a]. Tenant scoping is by request param (demo-trust) until real authn [PENDING-P-VCLUSTER].",
+	})
+}
+
+// readAudit loads decision Records from the configured audit JSONL (or the newest one found
+// under the harness out dirs / a console-data dir). Read-only.
+func (s *Server) readAudit() []audit.Record {
+	path := s.cfg.AuditPath
+	if path == "" {
+		path = s.newestAudit()
+	}
+	if path == "" {
+		return nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var out []audit.Record
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
+	for sc.Scan() {
+		t := strings.TrimSpace(sc.Text())
+		if t == "" {
+			continue
+		}
+		var rec audit.Record
+		if json.Unmarshal([]byte(t), &rec) == nil && rec.Kind == "phorvex.decision" {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
+func (s *Server) newestAudit() string {
+	// look for a console audit trail first, then any audit*.jsonl under the harness tree.
+	candidates := []string{
+		filepath.Join(s.cfg.Root, "phorvex", "bin", "console-audit.jsonl"),
+		filepath.Join(s.cfg.HarnessDir, "console-audit.jsonl"),
+	}
+	for _, c := range candidates {
+		if fileExists(c) {
+			return c
+		}
+	}
+	return ""
+}
+
+func (s *Server) harnessOutCfg(name string) string {
+	return filepath.Join(s.cfg.HarnessDir, name, "metrics.jsonl")
+}
+
+// --- helpers ---
+
+func (s *Server) withCORS(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Phorvex-Lens")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(204)
+			return
+		}
+		h(w, r)
+	}
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}

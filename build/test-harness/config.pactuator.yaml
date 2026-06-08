@@ -1,0 +1,10 @@
+﻿kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 6
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-pactuator"
+defenderFilter: ["d-nomtd","d-phorvex","d-r6blindtimer"]
+scenarioFilter: ["c2-stateful-training"]

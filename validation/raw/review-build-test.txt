@@ -1,0 +1,77 @@
+﻿==== STAGE 4 REVIEW BUILD/VET/TEST RE-RUN ====
+timestamp: 2026-05-31T14:55:16.4476083-05:00
+go version: go version go1.26.3 windows/amd64
+
+################################################################
+## TREE: prometheus-integrator  (c:\Users\moh87733\Phorvex\build\prometheus-integrator-extended)
+################################################################
+----- go build ./... -----
+BUILD EXIT=0
+----- go vet ./... -----
+VET EXIT=0
+----- go test ./... -count=1 -----
+?   	github.com/r6security/prometheus-integrator/clients	[no test files]
+?   	github.com/r6security/prometheus-integrator/clients/securityevent	[no test files]
+ok  	github.com/r6security/prometheus-integrator/cmd	0.310s
+TEST EXIT=0
+SUMMARY[prometheus-integrator] build=0 vet=0 test=0
+
+################################################################
+## TREE: operator  (c:\Users\moh87733\Phorvex\build\phoenix-extended)
+################################################################
+----- go build ./... -----
+BUILD EXIT=0
+----- go vet ./... -----
+VET EXIT=0
+----- go test ./... -count=1 -----
+ok  	github.com/r6security/phoenix/api/v1beta1	1.080s
+?   	github.com/r6security/phoenix/cmd	[no test files]
+ok  	github.com/r6security/phoenix/internal/controller	0.429s
+ok  	github.com/r6security/phoenix/internal/scheduler	0.210s
+?   	github.com/r6security/phoenix/pkg/controllers	[no test files]
+TEST EXIT=0
+SUMMARY[operator] build=0 vet=0 test=0
+
+################################################################
+## TREE: falco-integrator  (c:\Users\moh87733\Phorvex\build\falco-integrator-extended)
+################################################################
+----- go build ./... -----
+BUILD EXIT=0
+----- go vet ./... -----
+VET EXIT=0
+----- go test ./... -count=1 -----
+?   	github.com/r6security/falco-integrator/clients	[no test files]
+?   	github.com/r6security/falco-integrator/clients/securityevent	[no test files]
+ok  	github.com/r6security/falco-integrator/cmd	0.272s
+TEST EXIT=0
+SUMMARY[falco-integrator] build=0 vet=0 test=0
+
+################################################################
+## TREE: kubearmor-integrator  (c:\Users\moh87733\Phorvex\build\kubearmor-integrator-extended)
+################################################################
+----- go build ./... -----
+BUILD EXIT=0
+----- go vet ./... -----
+VET EXIT=0
+----- go test ./... -count=1 -----
+?   	github.com/r6security/kubearmor-integrator/clients	[no test files]
+?   	github.com/r6security/kubearmor-integrator/clients/securityevent	[no test files]
+ok  	github.com/r6security/kubearmor-integrator/cmd	0.310s
+?   	github.com/r6security/kubearmor-integrator/kubearmorlog	[no test files]
+TEST EXIT=0
+SUMMARY[kubearmor-integrator] build=0 vet=0 test=0
+
+################################################################
+## TREE: time-based-trigger  (c:\Users\moh87733\Phorvex\build\time-based-trigger-extended)
+################################################################
+----- go build ./... -----
+BUILD EXIT=0
+----- go vet ./... -----
+VET EXIT=0
+----- go test ./... -count=1 -----
+?   	github.com/r6security/time-based-trigger/cmd	[no test files]
+ok  	github.com/r6security/time-based-trigger/internal/controller	0.341s
+TEST EXIT=0
+SUMMARY[time-based-trigger] build=0 vet=0 test=0
+
+==== DONE ====

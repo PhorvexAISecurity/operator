@@ -1,0 +1,38 @@
+STAGE 4 ADVERSARIAL REVIEW — INDEPENDENT LIVE RE-RUN EVIDENCE
+Cluster: kind-amtd-test (apiserver v1.35, node amtd-test-control-plane Ready)
+Namespace: review3b-verify  (FRESH objects, distinct from Stage-3 phase3b-verify)
+Manager: bin\manager.exe (Stage-4 rebuild, 77,897,216 bytes), PID 18304, run against kind, killed after.
+Manager log: review3b-live-manager-20260531-022438.txt
+
+PRE-STATE: all 3 CRDs installed (CMP Established=True, scope=Namespaced, short=cmp);
+           NO leftover CR objects (Stage-3 teardown independently confirmed clean).
+
+=== (1) CMP THIN RECONCILER — independently reproduced ===
+Applied CMP review-cmp (selector app=review-demo; mutations ContainerImageUpdate->busybox:1.37,
+ResourceAdjustment gpu "0" + cpu/mem requests, EnvPatch RUNTIME_MODE=SECURE; triggers
+PrometheusAlert high_gpu_usage + GatekeeperViolation disallowed-hostpath) + Deployment review-demo
+(container nim, busybox:1.35, 1 Running pod app=review-demo).
+CMP .status (kubectl jsonpath):
+  observedGeneration=1
+  selectedPodCount=1
+  resolvedMutationSummary=image=busybox:1.37; gpu=0; env=RUNTIME_MODE; container=nim (cpu/mem requests recognized, not applied)
+  GatekeeperViolationUnsupported = True / NoNativeEmitter
+Manager log: "ContextMutationPolicy reconciled (thin status; no rotation performed) ... selectedPods=1,
+  mutations=... (cpu/mem requests recognized, not applied), gatekeeperAdvisory=true".
+
+=== (2) INJECTED GatekeeperViolation -> CMP-resolved DURABLE rotation — independently reproduced ===
+INJECTION DISCLOSED: the gatekeeper-violation SecurityEvent was created MANUALLY (receiver convention
+Source=GatekeeperIntegrator, Type=gatekeeper-violation, Metrics[gatekeeper.constraint]=disallowed-hostpath).
+There is NO native OPA-Gatekeeper emitter in any of the 5 repos (paper-only/future-work, D7g).
+AMTD review-amtd matcherMode=Scored, rule metrics.gatekeeper.constraint Eq disallowed-hostpath
+  -> action.rotate.policyRef{kind:ContextMutationPolicy, name:review-cmp}.
+
+Deployment template BEFORE: image=busybox:1.35  env=[{RUNTIME_MODE,PERMISSIVE}]  gpu=(none)
+Deployment template AFTER:  image=busybox:1.37  env=[{RUNTIME_MODE,SECURE}]    gpu={"nvidia.com/gpu":"0"}
+New pod review-demo-7574bff76f-g84z5 (new RS hash) Running; old pod review-demo-7dcfc977d4-d6cmj Terminating.
+AMTD .status: rotationCount=1, effectiveSource=ContextMutationPolicy, rotationPathFired=Rotate, mutationDurable=true.
+SecurityEvent .status: appliedAction=rotate, processedAt=2026-05-31T07:25:58Z.
+Manager log: "Rotate route (a): patched top owner template (durable, all replicas) ... ownerKind=Deployment, owner=review-demo"
+  + "Pod successfully rotated ... rotationPathFired=Rotate, mutationDurable=true, effectiveSource=ContextMutationPolicy".
+
+VERDICT: both Stage-3 live asks INDEPENDENTLY REPRODUCED on fresh objects. Stage-3 evidence internally consistent.

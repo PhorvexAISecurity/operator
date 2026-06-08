@@ -1,0 +1,145 @@
+/*
+ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (P1)
+ */
+
+package actionset
+
+import (
+	"testing"
+	"time"
+
+	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/recon"
+)
+
+func testPolicy() model.Policy {
+	return model.Policy{
+		Tenant:                 "t",
+		NormSparsity:           0.4,
+		FlowDisruption:         0.6,
+		MinAvailableReplicas:   1,
+		P99Ms:                  200,
+		AntiOverRotationWindow: 5 * time.Minute,
+		EnabledActions:         map[model.Action]bool{model.ActionRotate: true, model.ActionQuarantine: true},
+	}
+}
+
+func baseView(name string) *model.WorkloadView {
+	return &model.WorkloadView{
+		Pod: model.Pod{
+			Namespace: "ns", Name: name, UID: "u-" + name,
+			DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
+		},
+		Phase:       model.PhaseWarm,
+		BlastRadius: 0.5,
+		ExposureByVariable: map[string]time.Duration{
+			model.VarPodIdentity: 2 * time.Hour, // past the anti-over-rotation window
+		},
+	}
+}
+
+func testDeps() Deps {
+	rp, _ := recon.Registry.Default()
+	pc := cost.NewP1Cost()
+	pol := testPolicy()
+	return Deps{
+		Recon: rp,
+		FactContext: func(v *model.WorkloadView) recon.FactContext {
+			return recon.FactContext{
+				AssetValue: 1.0, PHold: 0.8, StageUrgency: 0.5, BlastRadius: v.BlastRadius,
+				HasGPU: v.Pod.HasGPU, Stateful: v.Pod.Stateful,
+			}
+		},
+		ECost:       pc.ECost,
+		CHi:         pc.CHi,
+		CostCeiling: pol.NormSparsity + pol.FlowDisruption + 0.2,
+	}
+}
+
+func actionsFor(set ActionSet, key string) map[model.Action]bool {
+	out := map[model.Action]bool{}
+	for _, c := range set.Candidates {
+		if c.Key == key {
+			out[c.Action] = true
+		}
+	}
+	return out
+}
+
+// THE CORE-IP TEST: the generated feasible action set CHANGES with physics+context
+// state — it is computed live, not a static list.
+func TestDynamicActionSetChangesWithState(t *testing.T) {
+	d := testDeps()
+	pol := testPolicy()
+
+	// 1. Normal pod => both rotate + quarantine feasible.
+	normal := actionsFor(d.Generate([]*model.WorkloadView{baseView("normal")}, pol), "ns/normal")
+	if !normal[model.ActionRotate] || !normal[model.ActionQuarantine] {
+		t.Errorf("normal pod should offer rotate+quarantine, got %v", normal)
+	}
+
+	// 2. Stateful pod => rotate REMOVED (would destroy state), quarantine remains.
+	sf := baseView("state")
+	sf.Pod.Stateful = true
+	stateful := actionsFor(d.Generate([]*model.WorkloadView{sf}, pol), "ns/state")
+	if stateful[model.ActionRotate] {
+		t.Errorf("stateful pod must NOT offer rotate (set must drop it)")
+	}
+	if !stateful[model.ActionQuarantine] {
+		t.Errorf("stateful pod should still offer quarantine")
+	}
+
+	// 3. Freshly-moved pod (exposure < anti-over-rotation window) => BOTH removed.
+	fresh := baseView("fresh")
+	fresh.ExposureByVariable[model.VarPodIdentity] = 30 * time.Second
+	freshSet := actionsFor(d.Generate([]*model.WorkloadView{fresh}, pol), "ns/fresh")
+	if len(freshSet) != 0 {
+		t.Errorf("freshly-moved pod must have an EMPTY action set (anti-over-rotation), got %v", freshSet)
+	}
+
+	// 4. SLO-hot pod (p99 at ceiling) => BOTH removed (SLO hard gate).
+	hot := baseView("hot")
+	hot.Telemetry = model.Telemetry{Present: true, P99Ms: 250}
+	hotSet := actionsFor(d.Generate([]*model.WorkloadView{hot}, pol), "ns/hot")
+	if len(hotSet) != 0 {
+		t.Errorf("SLO-hot pod must have an EMPTY action set, got %v", hotSet)
+	}
+
+	// 5. GPU pod, uncalibrated cost => rotate pruned by the conformal SLO gate (worst-case
+	// GPU warm-load [SP-0-PENDING] exceeds the ceiling); quarantine remains (safe fallback).
+	gpu := baseView("gpu")
+	gpu.Pod.HasGPU = true
+	gpuSet := actionsFor(d.Generate([]*model.WorkloadView{gpu}, pol), "ns/gpu")
+	if gpuSet[model.ActionRotate] {
+		t.Errorf("uncalibrated GPU pod rotate must be pruned by the conformal SLO gate (safe-by-default)")
+	}
+	if !gpuSet[model.ActionQuarantine] {
+		t.Errorf("GPU pod should still offer quarantine")
+	}
+}
+
+// Inviolability at the generator layer: every excluded move carries a hard-constraint
+// reason and NEVER appears as a candidate.
+func TestExcludedMovesAreNeverCandidates(t *testing.T) {
+	d := testDeps()
+	pol := testPolicy()
+	sf := baseView("state")
+	sf.Pod.Stateful = true
+	set := d.Generate([]*model.WorkloadView{sf}, pol)
+	// rotate must be in Excluded with a reason, not in Candidates.
+	for _, c := range set.Candidates {
+		if c.Key == "ns/state" && c.Action == model.ActionRotate {
+			t.Fatalf("stateful rotate leaked into the candidate set")
+		}
+	}
+	found := false
+	for _, ex := range set.Excluded {
+		if ex.Key == "ns/state" && ex.Action == model.ActionRotate && ex.Reason != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("stateful rotate should be recorded in Excluded with a reason")
+	}
+}

@@ -1,0 +1,17 @@
+# Pass-B AI benchmark — BATCH 1 of 5 (>=20 trials). Accumulates into out-ai-bench
+# (same masterSeed across all batches). Batch 1 runs FRESH (creates out-ai-bench);
+# batches 2-5 add -resume to append. Skips the 6 GPU/multi-node capability-pending
+# scenarios. Representative first batch: one scenario per MTD-effect class.
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-ai-test"
+ownedAck: true
+trialsPerArm: 20
+masterSeed: 1337
+phoenixSrcDir: "../phoenix-extended"
+outDir: "out-ai-bench"
+scenarioFilter:
+  - "ai2-poisoned-model-registry"   # expect MTD-NEUTRALIZES (d-fullphoenix, injected trigger)
+  - "ai1-prompt-injection"          # expect MTD-BOUNDS-ONLY (rotating arms)
+  - "ai2-query-extraction"          # expect MTD-BOUNDS-ONLY + reuse-reduction
+  - "ai1-model-theft"               # expect MTD-CANNOT-HELP (out-of-pod endpoint)

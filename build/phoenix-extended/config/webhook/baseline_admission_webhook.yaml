@@ -1,0 +1,38 @@
+# baselineAdmission ValidatingWebhookConfiguration (cap#6, :9443, D6/D6g).
+#
+# FAIL-CLOSED (failurePolicy: Fail) — the SYNCHRONOUS half of the split fail mode:
+# an unsigned/unverifiable/un-pinned image governed by an enforced WorkloadBaseline
+# is DENIED at admission. (The poll/detect side — BaselineDriftReconciler — instead
+# fails-to-cached-last-good; see the controller.)
+#
+# LIVE REACHABILITY NOTE (honest): a LOCALLY-run manager's webhook is hard for a
+# kind apiserver to reach (host/WSL2 networking), so the live admission test is
+# BEST-EFFORT. The handler LOGIC is proven by unit tests (TestBaselineAdmission_*);
+# the PRIMARY live proof of cap#6 is the reconciler-detect + Regenerate-restore path
+# (which needs no webhook). The caBundle below is a placeholder injected by
+# cert-manager (config/certmanager) in a real deployment.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: amtd-baseline-admission
+  annotations:
+    cert-manager.io/inject-ca-from: system/amtd-serving-cert
+webhooks:
+  - name: baseline.amtd.r6security.com
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    # FAIL-CLOSED: deny on webhook unavailability for governed pods (the trust gate).
+    failurePolicy: Fail
+    timeoutSeconds: 5
+    clientConfig:
+      service:
+        name: amtd-webhook-service
+        namespace: system
+        path: /validate-baseline-pod
+        port: 443
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+        scope: "Namespaced"

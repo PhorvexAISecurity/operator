@@ -1,0 +1,16 @@
+# Quick LIVE verification that the mock-readiness fix anchors the two scenarios
+# whose positive control failed in the smoke (c3-imds-theft, c3-secrets-sprawl).
+# d-nomtd is the undefended positive control: the oracle MUST now be achieved.
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 2
+masterSeed: 1337
+phoenixSrcDir: "../phoenix-extended"
+outDir: "out-verify"
+defenderFilter:
+  - "d-nomtd"
+scenarioFilter:
+  - "c3-imds-theft"
+  - "c3-secrets-sprawl"

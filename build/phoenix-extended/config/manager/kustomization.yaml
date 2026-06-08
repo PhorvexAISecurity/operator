@@ -1,0 +1,11 @@
+resources:
+- manager.yaml
+- registry-secret.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+images:
+- name: controller
+  newName: phoenixop/amtd-operator
+  newTag: "0.2"
+patchesStrategicMerge:
+- manager-image-pull-secret-patch.yaml

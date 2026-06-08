@@ -1,0 +1,15 @@
+﻿=== live5 STAGE 4 setup 2026-05-31T08:52:55.3440388-05:00 ===
+context: kind-amtd-test
+
+--- apply CRDs (server-side) ---
+customresourcedefinition.apiextensions.k8s.io/adaptivemovingtargetdefenses.amtd.r6security.com serverside-applied
+customresourcedefinition.apiextensions.k8s.io/contextmutationpolicies.amtd.r6security.com serverside-applied
+customresourcedefinition.apiextensions.k8s.io/securityevents.amtd.r6security.com serverside-applied
+customresourcedefinition.apiextensions.k8s.io/warminferencesets.amtd.r6security.com serverside-applied
+customresourcedefinition.apiextensions.k8s.io/workloadbaselines.amtd.r6security.com serverside-applied
+
+--- workloadbaselines Established ---
+Established=True
+
+--- create namespace ---
+namespace/phase5-verify created

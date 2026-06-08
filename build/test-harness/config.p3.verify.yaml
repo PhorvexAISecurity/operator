@@ -1,0 +1,16 @@
+# P3 VERIFY — fast 1-trial check that the fixes work before the heavy run:
+# pod-race fix (real disruption, no "no running pod"), blind timer rotates+counts,
+# PX evicts/quarantines, survival markers stamped.
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-p3-verify"
+defenderFilter: []
+scenarioFilter:
+  - c1-heldout-cve
+  - c2-stateful-training
+  - c1-fast-attacker

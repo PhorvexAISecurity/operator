@@ -1,0 +1,26 @@
+apiVersion: amtd.r6security.com/v1beta1
+kind: AdaptiveMovingTargetDefense
+metadata:
+  labels:
+    app.kubernetes.io/name: adaptivemovingtargetdefense
+    app.kubernetes.io/instance: adaptivemovingtargetdefense-sample
+  name: amtd-demo
+  namespace: demo-page
+spec:
+  podSelector:
+    app: demo-page
+  strategy:
+    - rule: 
+        type: default
+      action:
+        disable: {}
+    # Phase 0 / NIM dissolution: a timed rotation is now the authoritative
+    # {type:'timed', source:'TimeBasedTrigger'} -> {rotate:{}} strategy, routed by
+    # the matcher and executed one-shot by the SecurityEvent Rotate branch (which
+    # in Phase 0 reproduces the old cold reschedule: annotate-then-delete).
+    - rule:
+        type: timed
+        threatLevel: info
+        source: TimeBasedTrigger
+      action:
+        rotate: {}

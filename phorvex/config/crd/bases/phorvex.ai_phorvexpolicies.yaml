@@ -1,0 +1,428 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: phorvexpolicies.phorvex.ai
+spec:
+  group: phorvex.ai
+  names:
+    kind: PhorvexPolicy
+    listKind: PhorvexPolicyList
+    plural: phorvexpolicies
+    shortNames:
+    - pxp
+    - phorvex
+    singular: phorvexpolicy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.tenant
+      name: Tenant
+      type: string
+    - jsonPath: .spec.mode
+      name: Mode
+      type: string
+    - jsonPath: .status.selectedPods
+      name: Selected
+      type: integer
+    - jsonPath: .status.decisionsTotal
+      name: Decisions
+      type: integer
+    - jsonPath: .status.lastTickTime
+      name: LastTick
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          PhorvexPolicy is the PER-TENANT configuration surface for the Phorvex MVP (P0).
+          It is NAMESPACE-SCOPED from line one: each tenant (a namespace, or a vcluster
+          projected as a namespace) owns its own PhorvexPolicy, so the decision engine,
+          exposure clocks, move budget, metrics and actuation are all keyed by tenant and
+          multi-tenancy is NOT a later retrofit.
+
+          The spec field STRUCTURE mirrors the PRD PART 7 CRD verbatim (selector /
+          objective / budget / slo / assetValue / triggers / actions / mode). The only
+          representation choice that departs from the PRD's illustrative YAML is that the
+          dimensionless [0,1] knobs (lambda, cost weights, asset weights) are DECIMAL
+          STRINGS rather than bare floats — this is the established Phoenix convention
+          (see Phoenix's AnomalyScore / EWMAAlpha / PanicThreshold, all *string) and it
+          avoids float canonicalization in the apiserver. The proactive-floor budget field
+          is named proactiveFloor per the PRD YAML (a.k.a. the "hygiene floor": the
+          detection-independent minimum rotation cadence).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PhorvexPolicySpec is the desired Phorvex behavior for one
+              tenant's workloads.
+            properties:
+              actions:
+                description: |-
+                  Actions is the enabled mutation vocabulary (a subset of {rotate,quarantine}).
+                  In P0 these map to Phoenix's Delete (rotate) and Quarantine actions. (PRD:
+                  actions{enabled}.)
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled is the subset of allowed actions. P0 supports rotate (Phoenix Delete)
+                      and quarantine (Phoenix Quarantine); noop is always implicitly available.
+                    items:
+                      description: |-
+                        ActionType is one enabled mutation. P0 maps rotate->Phoenix Delete,
+                        quarantine->Phoenix Quarantine.
+                      enum:
+                      - rotate
+                      - quarantine
+                      - noop
+                      type: string
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
+              assetValue:
+                description: |-
+                  AssetValue derives per-pod consequence weighting from labels, mounted secrets
+                  and the blast-radius graph. (PRD: assetValue{...}.)
+                properties:
+                  blastRadiusFromGraph:
+                    default: true
+                    description: |-
+                      BlastRadiusFromGraph folds the reachability/blast-radius graph score (over
+                      NetworkPolicy + RBAC) into asset value when true.
+                    type: boolean
+                  fromLabels:
+                    additionalProperties:
+                      additionalProperties:
+                        type: string
+                      description: LabelValueWeights maps a label value to a decimal-string
+                        asset weight.
+                      type: object
+                    description: |-
+                      FromLabels maps a label KEY to a map of label VALUE -> decimal-string weight,
+                      e.g. {data-class: {restricted: "1.0", internal: "0.4", public: "0.1"}}. A pod's
+                      label-derived value is the max matching weight across configured keys.
+                    type: object
+                  weightSecrets:
+                    description: |-
+                      WeightSecrets adds this decimal-string weight per distinct mounted Secret
+                      (read from the pod spec's volumes/envFrom — Phorvex never reads secret
+                      CONTENTS). Empty defaults to "0.8".
+                    type: string
+                type: object
+              budget:
+                description: |-
+                  Budget bounds availability impact: at most MaxMovesPerTick mutations per
+                  TickInterval, never the same pod faster than AntiOverRotationWindow, and a
+                  detection-independent ProactiveFloor on rotation cadence. (PRD: budget{...}.)
+                properties:
+                  antiOverRotationWindow:
+                    description: |-
+                      AntiOverRotationWindow is the minimum gap before the SAME pod may be mutated
+                      again — the forensic/evidence-retention guard (never wipe attack evidence
+                      faster than this window). Empty defaults to 5m in code.
+                    type: string
+                  maxMovesPerTick:
+                    default: 3
+                    description: MaxMovesPerTick is the per-tick mutation budget B
+                      (bounds availability impact).
+                    minimum: 0
+                    type: integer
+                  proactiveFloor:
+                    description: |-
+                      ProactiveFloor (a.k.a. the hygiene floor) is the detection-independent
+                      MAXIMUM exposure: a pod unchanged for longer than ProactiveFloor is eligible
+                      for a proactive rotation regardless of any detector. This is the thesis signal
+                      (FR5). Empty defaults to 1h in code.
+                    type: string
+                  tickInterval:
+                    description: TickInterval is the decision cadence. Empty defaults
+                      to 20s in code.
+                    type: string
+                type: object
+              mode:
+                default: dryRun
+                description: |-
+                  Mode is the safety gate. "dryRun" (the default) decides + logs + emits metrics
+                  but NEVER actuates; "active" additionally drives Phoenix. P0 ships and runs in
+                  dryRun. (PRD: mode: dryRun.)
+                enum:
+                - dryRun
+                - active
+                type: string
+              objective:
+                description: |-
+                  Objective is the cost-weighted optimization objective: maximize
+                  E[security] - lambda * E[switching-cost]. (PRD: objective{lambda,costWeights}.)
+                properties:
+                  costWeights:
+                    description: |-
+                      CostWeights splits the switching cost K = normSparsity*C_norm +
+                      flowDisruption*C_flow (PRD §5.1B). Decimal strings; empty defaults to
+                      {0.4,0.6} in code.
+                    properties:
+                      flowDisruption:
+                        description: |-
+                          FlowDisruption weights C_flow = restart seconds / dropped connections /
+                          (for GPU/LLM) KV-cache rebuild + warm-load. Decimal string; empty defaults
+                          to "0.6".
+                        type: string
+                      normSparsity:
+                        description: |-
+                          NormSparsity weights C_norm = "how many variables move" (move as little as
+                          possible). Decimal string; empty defaults to "0.4".
+                        type: string
+                    type: object
+                  lambda:
+                    description: |-
+                      Lambda is the cost weight in the objective E[security] - lambda*E[cost], as a
+                      decimal string in [0,inf) (PRD example "0.6"). Larger lambda = more
+                      cost-averse (rotate less). Empty defaults to "0.6" in code.
+                    type: string
+                type: object
+              selector:
+                description: |-
+                  Selector chooses the pods this policy protects (PRD: selector.matchLabels).
+                  Only pods in this policy's namespace (tenant) that match are considered.
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                          type: string
+                        values:
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
+              slo:
+                description: |-
+                  SLO is the hard availability envelope; a move that would breach it is infeasible
+                  and is never proposed. (PRD: slo{p99Ms,minTokensPerSec,minAvailableReplicas}.)
+                properties:
+                  minAvailableReplicas:
+                    default: 1
+                    description: |-
+                      MinAvailableReplicas is the availability floor (a PodDisruptionBudget analogue):
+                      a move that would drop readyReplicas below this is infeasible.
+                    minimum: 0
+                    type: integer
+                  minTokensPerSec:
+                    description: |-
+                      MinTokensPerSec is the throughput floor for GPU/LLM workloads. 0 =
+                      unconstrained (non-AI workloads).
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  p99Ms:
+                    description: |-
+                      P99Ms is the p99 latency ceiling in milliseconds; a move whose predicted
+                      post-move p99 exceeds this is infeasible. 0 = unconstrained.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                type: object
+              tenant:
+                description: |-
+                  Tenant is the explicit tenant identity this policy governs. Empty defaults to
+                  the policy's own namespace (the common single-namespace-per-tenant case). When
+                  a vcluster projects a tenant, set Tenant to the vcluster/tenant id so exposure
+                  clocks, the move budget and emitted CRs are partitioned by tenant rather than
+                  by raw namespace. PER-TENANT FROM LINE ONE — never a retrofit.
+                type: string
+              triggers:
+                description: |-
+                  Triggers selects the decision triggers: the event-driven path (consume the
+                  SecurityEvent stream) and the always-on proactive exposure floor. (PRD:
+                  triggers{eventDriven,killChainSource}.)
+                properties:
+                  eventDriven:
+                    default: true
+                    description: |-
+                      EventDriven consumes the SecurityEvent stream (Falco/KubeArmor/Prometheus
+                      integrators) as belief evidence when true.
+                    type: boolean
+                  killChainSource:
+                    description: |-
+                      KillChainSource is the allowlist of SecurityEvent .spec.rule.source values
+                      that feed the kill-chain belief (e.g. ["FalcoIntegrator","prometheus"]). Empty
+                      accepts all sources.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+            required:
+            - actions
+            - assetValue
+            - budget
+            - objective
+            - selector
+            - slo
+            - triggers
+            type: object
+          status:
+            description: PhorvexPolicyStatus is the observed Phorvex state for this
+              tenant.
+            properties:
+              actuated:
+                description: |-
+                  Actuated is true once at least one move was really emitted to Phoenix (only
+                  possible in active mode). Stays false for the whole P0 dry-run lifetime.
+                type: boolean
+              conditions:
+                description: Conditions includes Ready, DryRun, ValidationError, KillSwitch.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              decisionsTotal:
+                description: DecisionsTotal is the cumulative count of decided non-noop
+                  moves.
+                format: int64
+                type: integer
+              killSwitchEngaged:
+                description: |-
+                  KillSwitchEngaged reflects the global kill-switch (FR8): when engaged the
+                  engine decides + logs but suppresses all actuation regardless of Mode.
+                type: boolean
+              lastDecisionTime:
+                description: |-
+                  LastDecisionTime is when a non-noop move was last DECIDED (logged; in dryRun
+                  not actuated).
+                format: date-time
+                type: string
+              lastTickTime:
+                description: LastTickTime is the wall-clock time of the most recent
+                  decision tick.
+                format: date-time
+                type: string
+              movesThisWindow:
+                description: |-
+                  MovesThisWindow is the moves decided in the current AntiOverRotationWindow
+                  (budget accounting).
+                type: integer
+              observedGeneration:
+                format: int64
+                type: integer
+              selectedPods:
+                description: SelectedPods is the number of pods this policy currently
+                  protects.
+                type: integer
+              tenant:
+                description: Tenant echoes the effective tenant identity (Spec.Tenant
+                  or the namespace).
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

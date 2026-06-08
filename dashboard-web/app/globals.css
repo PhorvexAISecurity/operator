@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Phorvex Console design tokens — dark-sleek security console (Wiz/CrowdStrike-grade).
+ * A deliberate, restrained palette: near-black graphite canvas, one cyan-teal accent for
+ * Phorvex, semantic success/warning/danger. No gradients-for-the-sake-of-it; depth comes
+ * from layered surfaces + hairline borders + soft shadows.
+ */
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+
+  --background: 222 24% 5%;       /* graphite canvas */
+  --foreground: 210 20% 92%;
+  --panel: 222 22% 8%;            /* card surface */
+  --elevated: 222 20% 11%;        /* hover / raised */
+  --muted: 222 16% 16%;
+  --muted-foreground: 215 14% 58%;
+  --border: 222 18% 16%;
+  --input: 222 18% 18%;
+  --ring: 184 80% 45%;
+
+  --primary: 184 78% 46%;         /* Phorvex cyan-teal */
+  --primary-foreground: 200 50% 6%;
+  --accent: 184 70% 42%;
+  --accent-foreground: 210 20% 96%;
+
+  --success: 152 62% 45%;
+  --warning: 38 92% 56%;
+  --danger: 0 72% 56%;
+  --info: 212 80% 60%;
+
+  --radius: 0.7rem;
+}
+
+* { border-color: hsl(var(--border)); }
+
+body {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, hsl(184 60% 12% / 0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, hsl(222 40% 14% / 0.5), transparent 55%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+/* hairline grid texture for the canvas */
+.bg-grid {
+  background-image: linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* thin scrollbars */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted)); border-radius: 9px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(222 16% 22%); }
+::-webkit-scrollbar-track { background: transparent; }

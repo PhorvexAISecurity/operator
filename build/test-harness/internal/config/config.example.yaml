@@ -1,0 +1,43 @@
+# Phoenix / Phorvex attack-harness per-target config.
+#
+# NOTHING here is environment-specific in the code — swap these values to target
+# kind / EKS / CoreWeave / vcluster with the SAME binary and the SAME metric
+# schema. The harness verifies the LIVE context AND the apiserver host match the
+# named context below before ANY mutating call, and refuses otherwise.
+
+# Path to the kubeconfig. Empty => standard KUBECONFIG / ~/.kube/config lookup.
+kubeconfig: ""
+
+# The ONLY kube-context this run is authorized to target. The safety guard
+# refuses any other live context.
+context: "kind-amtd-test"
+
+# Sandbox namespace. ALL attack behavior and every created object is confined
+# here; the sandbox guard refuses objects anywhere else.
+namespace: "phorvex-harness"
+
+# REQUIRED owned/authorized acknowledgement. The harness REFUSES to run without
+# it. By setting this true you assert you OWN or are AUTHORIZED to attack the
+# target cluster.
+ownedAck: true
+
+# Trials per (scenario, defender) arm. Smoke = 2; full benchmark = 20+ (SAME
+# loop). The confidence-interval math is kept even though n=2 is wide.
+trialsPerArm: 2
+
+# Fixed master seed — every per-trial RNG derives from it, so the whole run is
+# reproducible.
+masterSeed: 1337
+
+# Path to the phoenix-extended source tree (for the FullPhoenix defender to build
+# bin/manager.exe and install CRDs from config/crd). Empty => FullPhoenix arm
+# skips-with-note.
+phoenixSrcDir: "../phoenix-extended"
+
+# Output directory for metrics.jsonl, raw/<scenario>_<defender>_<trial>.log,
+# provenance.json and report.md.
+outDir: "out"
+
+# Optional subset filters (empty => run every registered plugin).
+defenderFilter: []
+scenarioFilter: []

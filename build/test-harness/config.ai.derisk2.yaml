@@ -1,0 +1,18 @@
+# De-risk the FIXED binary: confirm the now-MEASURED MTD-effect tags correctly per
+# arm. poisoned-registry/d-fullphoenix must be NEUTRALIZES (genuine injected trigger
+# removes the foothold); model-theft must be CANNOT-HELP (out-of-pod endpoint, now
+# measured not hardcoded). 1 trial; nomtd (baseline) + fullphoenix (genuine arm).
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-ai-test"
+ownedAck: true
+trialsPerArm: 1
+masterSeed: 1337
+phoenixSrcDir: "../phoenix-extended"
+outDir: "out-ai-derisk2"
+defenderFilter:
+  - "d-nomtd"
+  - "d-fullphoenix"
+scenarioFilter:
+  - "ai1-model-theft"
+  - "ai2-poisoned-model-registry"

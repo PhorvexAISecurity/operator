@@ -1,0 +1,29 @@
+phorvex:
+  image:
+    repository: phorvex/phorvex
+    pullPolicy: IfNotPresent
+    tag: "0.1.0-p0"
+  # Base tick interval for the decision loop (per-tenant cadence honored on top).
+  baseInterval: 10s
+  # Prometheus base URL for telemetry ingest. Empty => K8s-only signals (no
+  # fabricated metrics).
+  prometheusUrl: ""
+  # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
+  # runtime via the phorvex-killswitch ConfigMap.
+  globalKillSwitch: false
+  # Leader election for HA (single active controller).
+  leaderElect: false
+  metricsBindAddress: ":8080"
+  healthProbeBindAddress: ":8081"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+# Install the PhorvexPolicy CRD with the chart (Helm crds/ dir installs it first).
+installCRD: true

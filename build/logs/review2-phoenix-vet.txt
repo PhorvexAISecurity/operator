@@ -1,0 +1,2 @@
+﻿=== go vet -C C:\Users\moh87733\Phorvex\build\phoenix-extended ./... ===
+EXIT CODE: 0

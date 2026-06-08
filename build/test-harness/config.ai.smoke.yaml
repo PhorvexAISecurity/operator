@@ -1,0 +1,82 @@
+# Per-target config for the LIVE Pass-B AI 2-trial SMOKE on the kind cluster.
+#
+# This config runs ONLY the Pass-B AI scenarios (ai1-*/ai2-*) — the scenarioFilter
+# below pins exactly the 27 AI scenarios so the Pass-A K8s scenarios (c1-*/c2-*/c3-*)
+# do NOT run. Same generic runner, same defender arms, same metric schema, same
+# safety guard + capability detection as Pass A. Single-node kind cluster, context
+# kind-amtd-test, node amtd-test-control-plane (no GPU, no MIG, no real multi-node),
+# so CapGPU/CapMIG/CapMultiNode-dependent scenarios SKIP-WITH-NOTE (never failures)
+# and are marked capability-pending for the AWS/CoreWeave GPU run.
+
+# Empty => standard KUBECONFIG / ~/.kube/config lookup. The safety guard then
+# asserts the live current-context AND apiserver host match the named context
+# below before ANY mutating call, and refuses otherwise.
+kubeconfig: ""
+
+# The ONLY kube-context this run is authorized to target.
+context: "kind-amtd-test"
+
+# Dedicated AI sandbox namespace (distinct from Pass A's amtd-attack-test). ALL
+# AI attack behavior + every created object is confined here; the sandbox guard
+# refuses objects anywhere else; full idempotent owned-label teardown.
+namespace: "amtd-ai-test"
+
+# REQUIRED owned/authorized acknowledgement. Asserts the operator OWNS / is
+# AUTHORIZED to attack this cluster. The harness REFUSES to run without it.
+ownedAck: true
+
+# SMOKE: 2 trials per (scenario, defender) arm, then STOP for review. The SAME
+# loop runs the full >=20-trial benchmark by bumping this one knob; the CI math
+# is kept either way.
+trialsPerArm: 2
+
+# Fixed master seed — every per-trial RNG derives deterministically from it, so
+# the whole run reproduces exactly. Same seed family as Pass A for comparability.
+masterSeed: 1337
+
+# phoenix-extended source tree for the FullPhoenix (d-fullphoenix) arm to build
+# bin/manager.exe and install the genuine CRDs from config/crd/bases, apply an
+# AMTD, and inject the trigger SecurityEvent where a scenario supplies it.
+phoenixSrcDir: "../phoenix-extended"
+
+# Separate output dir so the AI smoke artifacts are isolated from the Pass-A
+# out/out-bench artifacts: metrics.jsonl, raw/<scenario>_<defender>_<trial>.log,
+# operator_*.log, provenance.json, report.md, mitre_matrix.md, report-dollars.md.
+outDir: "out-ai-smoke"
+
+# Empty => all registered defender arms (d-nomtd baseline/positive-control,
+# d-r6blindtimer, d-randomequal, d-fullphoenix genuine operator, d-phorvex-slot
+# stub which skips-with-note).
+defenderFilter: []
+
+# ONLY the 27 Pass-B AI scenarios — pins out the Pass-A K8s scenarios entirely.
+scenarioFilter:
+  # ai1 — R6 Phoenix-for-AI product pillars (Group 1).
+  - "ai1-llm-jacking"
+  - "ai1-model-theft"
+  - "ai1-prompt-injection"
+  - "ai1-inference-manipulation"
+  - "ai1-pillar03-panic-mutation"
+  # ai2 — OWASP / MCP / Agentic / Extraction / KVCache / SupplyChain / RAG (Group 2).
+  - "ai2-sensitive-info-disclosure"
+  - "ai2-data-model-poisoning"
+  - "ai2-excessive-agency"
+  - "ai2-system-prompt-leakage"
+  - "ai2-embedding-vector-weakness"
+  - "ai2-unbounded-consumption"
+  - "ai2-mcp-tool-poisoning"
+  - "ai2-mcp-rogue-server"
+  - "ai2-mcp-tool-response-injection"
+  - "ai2-agent-memory-contamination"
+  - "ai2-agent-rogue-tool-persistence"
+  - "ai2-agent-excessive-agency"
+  - "ai2-agent-injection-to-persistence"
+  - "ai2-gpu-side-channel"
+  - "ai2-co-location-cross-tenant"
+  - "ai2-query-extraction"
+  - "ai2-kvcache-poisoning-cross-session-leak"
+  - "ai2-poisoned-model-registry"
+  - "ai2-malicious-model-artifact"
+  - "ai2-tampered-inference-base-image"
+  - "ai2-rag-retrieval-poisoning"
+  - "ai2-embedding-store-tampering"

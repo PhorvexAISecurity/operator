@@ -1,0 +1,69 @@
+﻿STAGE 3 LIVE kind VERIFICATION EVIDENCE  (context: kind-amtd-test, ns: phase3b-verify)
+Captured: 2026-05-31T02:19:09.4987035-05:00
+Manager log file: c:\Users\moh87733\Phorvex\build\logs\live3b-manager-20260531-021515.txt
+
+=== CLUSTER / CRD ===
+kind-amtd-test
+CMP CRD Established=True scope=Namespaced short=["cmp"]
+
+=== STEP A: CMP RECONCILES (thin status) ===
+CMP applied: nim-risk-based-mutation; Deployment nim-demo (container nim, busybox:1.35) with 1 running pod app=nim-demo.
+CMP Status (kubectl -o jsonpath):
+  observedGeneration=1
+  selectedPodCount=1
+  resolvedMutationSummary=image=busybox:1.37; gpu=0; env=RUNTIME_MODE; container=nim (cpu/mem requests recognized, not applied)
+  advisoryConditionType=GatekeeperViolationUnsupported
+  advisoryConditionStatus=True
+  advisoryConditionReason=NoNativeEmitter
+
+Manager log (CMP reconcile):
+
+2026-05-31T02:16:50-05:00	INFO	ContextMutationPolicy reconciled (thin status; no rotation performed)	{"controller": 
+"contextmutationpolicy", "controllerGroup": "amtd.r6security.com", "controllerKind": "ContextMutationPolicy", 
+"ContextMutationPolicy": {"name":"nim-risk-based-mutation","namespace":"phase3b-verify"}, "namespace": 
+"phase3b-verify", "name": "nim-risk-based-mutation", "reconcileID": "4a778cfa-7959-40d9-b685-e1607bd56db0", "cmp": 
+"nim-risk-based-mutation", "selectedPods": 1, "mutations": "image=busybox:1.37; gpu=0; env=RUNTIME_MODE; container=nim 
+(cpu/mem requests recognized, not applied)", "gatekeeperAdvisory": true}
+
+=== STEP B: INJECTED GatekeeperViolation -> ROTATION fires ===
+NOTE: The GatekeeperViolation SecurityEvent was INJECTED MANUALLY. There is NO native
+OPA-Gatekeeper-audit -> SecurityEvent emitter in any of the 5 repos; this manual injection
+stands in for the absent emitter (paper-only / documented future-work, D7g).
+
+Injected SecurityEvent (cluster-scoped) convention:
+  Source=GatekeeperIntegrator  Type=gatekeeper-violation  Metrics[gatekeeper.constraint]=disallowed-hostpath
+  Targets=[phase3b-verify/<pod>]
+AMTD nim-demo-amtd (matcherMode=Scored) rule matches metrics.gatekeeper.constraint Eq disallowed-hostpath
+  -> action.rotate.policyRef{kind:ContextMutationPolicy, name:nim-risk-based-mutation}
+
+Deployment template BEFORE injection:  image=busybox:1.35  env=RUNTIME_MODE=PERMISSIVE  gpu-limit=(none)
+Deployment template AFTER injection (kubectl -o jsonpath):
+  image=busybox:1.37
+  env=[{"name":"RUNTIME_MODE","value":"SECURE"}]
+  gpu-limits={"nvidia.com/gpu":"0"}
+
+New rotated-in pod (carries the mutation):
+  nim-demo-5c8bc944c8-65zgg  phase=Running  image=busybox:1.37  env0=RUNTIME_MODE=SECURE  gpu={"nvidia.com/gpu":"0"}
+
+AMTD Status AFTER:
+  rotationCount=1
+  effectiveSource=ContextMutationPolicy
+  rotationPathFired=Rotate
+  mutationDurable=true
+
+SecurityEvent Status AFTER:
+  appliedAction=rotate
+  processedAt=2026-05-31T07:17:42Z
+
+Manager log (durable rotation, CMP-resolved):
+2026-05-31T02:17:42-05:00	INFO	Rotate route (a): patched top owner template (durable, all replicas)	{"controller": 
+"securityevent", "controllerGroup": "amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": 
+{"name":"injected-gatekeeper-violation"}, "namespace": "", "name": "injected-gatekeeper-violation", "reconcileID": 
+"a95d7136-48c5-4edc-bf44-c0c958877a17", "ownerKind": "Deployment", "owner": "nim-demo"}
+2026-05-31T02:17:42-05:00	INFO	Pod successfully rotated	{"controller": "securityevent", "controllerGroup": 
+"amtd.r6security.com", "controllerKind": "SecurityEvent", "SecurityEvent": {"name":"injected-gatekeeper-violation"}, 
+"namespace": "", "name": "injected-gatekeeper-violation", "reconcileID": "a95d7136-48c5-4edc-bf44-c0c958877a17", 
+"pod": "nim-demo-7c947f9755-wkstq", "rotationPathFired": "Rotate", "mutationDurable": true, "effectiveSource": 
+"ContextMutationPolicy"}
+
+

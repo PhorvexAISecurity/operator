@@ -1,0 +1,8 @@
+/*
+ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD.
+ *
+ * Phorvex adds the BRAIN (decide which workload to move, when, and which action,
+ * by optimizing security gained against disruption cost) and reuses Phoenix's
+ * HANDS (delete/quarantine) over Seam 1 — emitting SecurityEvent + AMTD CRs to
+ * UNMODIFIED Phoenix. This file is part of the Phorvex MVP (P0).
+ */
