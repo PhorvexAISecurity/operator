@@ -13,6 +13,8 @@
 package feasibility
 
 import (
+	"fmt"
+
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/registry"
 )
@@ -38,14 +40,27 @@ type FeasibilityConstraint interface {
 // Registry holds the registered FeasibilityConstraints.
 var Registry = registry.New[FeasibilityConstraint]()
 
+// checkLaw runs one constraint with a fail-CLOSED recover: a panicking law vetoes the move
+// (infeasible) instead of crashing the tick — uncertainty must never become actuation (P4c
+// fail-closed sweep).
+func checkLaw(c FeasibilityConstraint, view *model.WorkloadView, move model.Move, pol model.Policy) (v Verdict) {
+	defer func() {
+		if r := recover(); r != nil {
+			v = Verdict{Feasible: false, Reason: fmt.Sprintf("feasibility law %q panicked: %v (fail-closed veto)", c.Name(), r)}
+		}
+	}()
+	return c.Check(view, move, pol)
+}
+
 // Evaluate runs ALL registered constraints in deterministic order and returns the
-// first veto, or a feasible verdict. A noop short-circuits to feasible.
+// first veto, or a feasible verdict. A noop short-circuits to feasible. FAIL-CLOSED: a
+// panicking law vetoes (checkLaw), so a malformed/adversarial input cannot crash-then-bypass.
 func Evaluate(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
 	if move.Action == model.ActionNoop {
 		return feasible
 	}
 	for _, c := range Registry.All() {
-		if v := c.Check(view, move, pol); !v.Feasible {
+		if v := checkLaw(c, view, move, pol); !v.Feasible {
 			return v
 		}
 	}

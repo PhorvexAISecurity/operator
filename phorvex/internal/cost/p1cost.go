@@ -80,6 +80,11 @@ func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy
 // cadence). measuredFlow is the real C_flow proxy (e.g. normalized time-to-Ready of
 // the replacement). A no-op if the measurement is unavailable (dry-run): the model
 // stays honestly at its prior.
+//
+// [SP-0-PENDING-P4a] UNWIRED: as of P4a this method has ZERO callers in the operator
+// loop, so the RLS C_flow calibrator never self-updates — C_flow stays a permanent PRIOR,
+// not a live-calibrated value. Wiring a post-actuation measured-flow callback is a P4a/P4b
+// follow-up; until then C_flow must NOT be presented as "self-calibrating today."
 func (c *P1Cost) ObserveRotation(view *model.WorkloadView, measuredFlow float64) {
 	f := Features(view)
 	pred := c.RLS.Predict(f)

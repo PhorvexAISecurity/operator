@@ -1,0 +1,16 @@
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 2
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-audit"
+defenderFilter: ["d-nomtd","d-phorvex","d-fullphoenix"]
+scenarioFilter:
+  - ai2-agent-injection-to-persistence
+  - ai2-agent-rogue-tool-persistence
+  - ai2-data-model-poisoning
+  - ai2-malicious-model-artifact
+  - ai2-poisoned-model-registry
+  - ai1-prompt-injection

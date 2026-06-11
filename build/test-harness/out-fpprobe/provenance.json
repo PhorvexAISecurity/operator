@@ -37,16 +37,17 @@
         "C:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
         "kubectl exec -n amtd-attack-test c2pe-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
         "kubectl create SecurityEvent {type:panic,level:high,source:R6THHarnessEmitter} targets amtd-attack-test/c2pe-target",
+        "kubectl exec -n amtd-attack-test c2pe-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
         "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
         "emit SecurityEvent{panic,high,emitter} -\u003e matcher -\u003e Delete",
         "kubectl delete pods -n amtd-attack-test -l app=c2pe-target --grace-period=0",
         "kill phoenix operator process",
         "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test",
-        "kubectl delete securityevent harness-evt-jlxrc  # cluster-scoped owned sweep"
+        "kubectl delete securityevent harness-evt-nm7kq  # cluster-scoped owned sweep"
       ],
-      "oracleAchieved": false,
-      "disruptionVsOracle": 1,
-      "observedState": "post-detection: backdoor alive=false, old pod replaced=true",
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "post-detection: backdoor alive=true, old pod replaced=false",
       "negativeControl": false
     },
     {
@@ -82,16 +83,17 @@
         "C:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended\\bin\\manager.exe --leader-elect=false   # phoenix operator (pinned to context kind-amtd-test)",
         "kubectl exec -n amtd-attack-test c2pe-target -c app -- [sh -c echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!]",
         "kubectl create SecurityEvent {type:panic,level:high,source:R6THHarnessEmitter} targets amtd-attack-test/c2pe-target",
+        "kubectl exec -n amtd-attack-test c2pe-target -c app -- [sh -c cat /tmp/.r6th_backdoor 2\u003e/dev/null]",
         "sh -c 'echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; (while true; do echo R6TH-BACKDOOR-SLEEPER \u003e /tmp/.r6th_backdoor; sleep 5; done) \u003c/dev/null \u003e/dev/null 2\u003e\u00261 \u0026 echo backdoor-pid=$!'",
         "emit SecurityEvent{panic,high,emitter} -\u003e matcher -\u003e Delete",
         "kubectl delete pods -n amtd-attack-test -l app=c2pe-target --grace-period=0",
         "kill phoenix operator process",
         "kubectl delete AdaptiveMovingTargetDefense/harness-amtd -n amtd-attack-test",
-        "kubectl delete securityevent harness-evt-tt5jr  # cluster-scoped owned sweep"
+        "kubectl delete securityevent harness-evt-w26cs  # cluster-scoped owned sweep"
       ],
-      "oracleAchieved": false,
-      "disruptionVsOracle": 1,
-      "observedState": "post-detection: backdoor alive=false, old pod replaced=true",
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "post-detection: backdoor alive=true, old pod replaced=false",
       "negativeControl": false
     }
   ],

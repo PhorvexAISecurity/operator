@@ -29,19 +29,24 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
   if (err) return <ErrorBox msg={err} />;
   if (loading || !scan) return <Loading label="Running phorvex --scan (live physics)…" rows={3} />;
 
+  // [P4-dash null-guard] NEVER read .length/.map on a possibly-null wire field.
+  const witness = scan.witness ?? [];
+  const killchain = scan.killchain ?? [];
+  const scope = ns ? `namespace "${ns}"` : "all namespaces";
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
         <Badge variant="accent">{scan.platform || "generic-k8s"}</Badge>
-        <span>{scan.nodes} node · {scan.pods} pods scanned</span>
+        <span>{scan.nodes} node · {scan.pods || witness.length} pods scanned</span>
         <Badge variant="real">K8s API · live</Badge>
         <Badge variant="pending">DCGM/GPU [SP-0-PENDING-P4a]</Badge>
       </div>
-      {scan.witness.length === 0 ? <Empty msg={`No pods in namespace "${ns}". Deploy a workload there, or scan another namespace.`} /> : (
+      {witness.length === 0 ? <Empty msg={`No pods discovered in ${scope}. Start Phorvex (Protect) or run a scenario, or check the cluster context.`} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <THead><TH>Pod</TH><TH>Image-rarity</TH><TH>Co-residency</TH><TH>Sched-slack</TH><TH>EPSS</TH><TH>MIG</TH><TH>GPU</TH></THead>
-            <tbody>{scan.witness.map((w) => (
+            <tbody>{witness.map((w) => (
               <TR key={w.pod}>
                 <TD className="font-mono text-[12px]">{w.pod}</TD>
                 <TD className="tabular"><Bar v={(w.imageRarity - 1)} max={1} tone="primary" label={w.imageRarity.toFixed(2)} /></TD>
@@ -49,7 +54,7 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
                 <TD className="tabular">{w.slack.toFixed(2)}</TD>
                 <TD className="tabular">{w.epss.toFixed(2)}</TD>
                 <TD>{w.migValid ? <Check className="h-3.5 w-3.5 text-success" /> : <X className="h-3.5 w-3.5 text-muted-foreground" />}</TD>
-                <TD><Badge variant="pending">SP-0</Badge></TD>
+                <TD>{w.gpuPresent ? <Badge variant="accent">GPU</Badge> : <span className="text-muted-foreground/50">none</span>}</TD>
               </TR>
             ))}</tbody>
           </Table>
@@ -65,7 +70,7 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
         {scan.emr.note && <div className="mt-1.5 text-[11px] text-muted-foreground">{scan.emr.note}</div>}
         <div className="mt-1 text-[10px] text-muted-foreground/60">EMR formula + per-asset scalar are IP — Investor/Operator only; the owner lens never sees this panel.</div>
       </CardContent></Card>
-      {scan.killchain.length > 0 && <><SectionLabel>Context · kill-chain stage + moved-before-next-stage horizon</SectionLabel><ContextDetail scan={scan} /></>}
+      {killchain.length > 0 && <><SectionLabel>Context · kill-chain stage + moved-before-next-stage horizon</SectionLabel><ContextDetail scan={scan} /></>}
     </div>
   );
 }
@@ -145,7 +150,7 @@ function ShapAndR6({ rec }: { rec: any }) {
       </CardContent></Card>
       <Card><CardContent className="p-4">
         <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">vs R6 (counterfactual)</div>
-        <div className="text-[13px] text-foreground/90">{rec.counterfactualNote || rec.r6Counterfactual || "A blind fixed-interval defense would have acted on a schedule, not on this specific threat."}</div>
+        <div className="text-[13px] text-foreground/90">{rec.counterfactualNote || rec.r6Counterfactual || <span className="text-muted-foreground">No R6 counterfactual recorded on this decision.</span>}</div>
       </CardContent></Card>
     </div>
   );
@@ -165,7 +170,7 @@ export function CostPanel({ lens }: { lens: Lens }) {
         <Mini label="λ shadow-price" value={lambda.toFixed(2)} />
         <Mini label="moves / tick" value={String(recs.filter((r) => r.selected).length)} />
         <Mini label="decisions" value={String(recs.length)} />
-        <Mini label="GPU $ / yr" value="—" pending />
+        <Mini label="actuated" value={String(recs.filter((r) => r.actuated).length)} />
       </div>
       <Card><CardContent className="p-4">
         <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Cost vs coverage · λ = the shadow-price slope (move fires when per-$ &gt; λ)</div>
@@ -201,7 +206,7 @@ export function ActuatorPanel({ lens }: { lens: Lens }) {
         <Card><CardContent className="p-4">
           <div className="mb-2.5 text-[11px] uppercase tracking-wider text-muted-foreground">{reg.count}-handler native registry (computed)</div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {reg.names.map((n) => {
+            {(reg.names ?? []).map((n) => {
               const ai = AI_HANDLERS.has(n);
               return (
                 <div key={n} className="rounded-md border border-border/60 bg-elevated/30 px-2.5 py-2">
@@ -221,7 +226,8 @@ export function ActuatorPanel({ lens }: { lens: Lens }) {
             <div key={i} className="flex flex-wrap items-center gap-2 text-[12px]">
               <span className="font-mono">{r.namespace}/{r.pod}</span><Badge variant="accent">{r.handler || r.action}</Badge>
               {r.mutationKind && <Badge variant="neutral">{r.mutationKind}</Badge>}
-              {(r.objectsTouched || []).length > 0 && <span className="text-muted-foreground">{(r.objectsTouched || []).join(", ")}</span>}
+              {(r.objectsTouched || []).length > 0 && <span className="text-muted-foreground">touched: {(r.objectsTouched || []).join(", ")}</span>}
+              {r.rollbackRef && <Badge variant="real">rollback: {r.rollbackRef}</Badge>}
             </div>
           ))}</div>
         </CardContent></Card>
@@ -276,9 +282,9 @@ export function HealthPanel({ lens }: { lens: Lens }) {
   return (
     <div className="space-y-3">
       {!d.available ? <ErrorBox msg="kubectl could not read PhorvexPolicy CRDs (no cluster access)." />
-        : d.policies.length === 0 ? <Empty msg="No PhorvexPolicy deployed. Apply a policy (or run a scenario) to see the live operator status: last-tick, decisions, kill-switch, conditions." />
+        : (d.policies ?? []).length === 0 ? <Empty msg="No PhorvexPolicy deployed. Apply a policy (or run a scenario) to see the live operator status: last-tick, decisions, kill-switch, conditions." />
         : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{d.policies.map((p) => (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{(d.policies ?? []).map((p) => (
             <Card key={p.namespace + p.name}><CardContent className="p-4">
               <div className="flex items-center justify-between"><span className="font-mono text-[13px]">{p.namespace}/{p.name}</span><Badge variant={p.mode === "active" ? "real" : "modeled"}>{p.mode || "—"}</Badge></div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">

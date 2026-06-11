@@ -1,0 +1,75 @@
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 20
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-fullbench"
+defenderFilter: ["d-nomtd", "d-r6blindtimer", "d-randomequal", "d-reactive-only", "d-fullphoenix", "d-phorvex"]
+scenarioFilter:
+  - ai1-inference-manipulation
+  - ai1-llm-jacking
+  - ai1-model-theft
+  - ai1-pillar03-panic-mutation
+  - ai1-prompt-injection
+  - ai2-agent-excessive-agency
+  - ai2-agent-injection-to-persistence
+  - ai2-agent-memory-contamination
+  - ai2-agent-rogue-tool-persistence
+  - ai2-co-location-cross-tenant
+  - ai2-data-model-poisoning
+  - ai2-embedding-store-tampering
+  - ai2-embedding-vector-weakness
+  - ai2-excessive-agency
+  - ai2-gpu-side-channel
+  - ai2-kvcache-poisoning-cross-session-leak
+  - ai2-malicious-model-artifact
+  - ai2-mcp-rogue-server
+  - ai2-mcp-tool-poisoning
+  - ai2-mcp-tool-response-injection
+  - ai2-poisoned-model-registry
+  - ai2-query-extraction
+  - ai2-rag-retrieval-poisoning
+  - ai2-sensitive-info-disclosure
+  - ai2-system-prompt-leakage
+  - ai2-tampered-inference-base-image
+  - ai2-unbounded-consumption
+  - b-recon-lifetime
+  - b-recon-lifetime-ai
+  - c1-c2-exfil
+  - c1-credtheft-rbac
+  - c1-escape-persist
+  - c1-fast-attacker
+  - c1-heldout-cve
+  - c1-lateral
+  - c1-llm-adaptive
+  - c1-stealth-dweller
+  - c2-c2-disrupt
+  - c2-dwell-rotation
+  - c2-lateral-disrupt
+  - c2-persistence-evict
+  - c2-recon-window
+  - c2-stateful-training
+  - c2-supplychain-foothold
+  - c3-admission-bypass
+  - c3-cicd
+  - c3-cryptomining
+  - c3-imds-theft
+  - c3-secrets-sprawl
+  - c3-sidecar-inject
+  - c3-supplychain
+  - d-blind-12s
+  - d-blind-30s
+  - d-blind-3s
+  - d-blind-60s
+  - d-blind-6s
+  - d-blind-9s
+  - d-fullphoenix
+  - d-nomtd
+  - d-phorvex
+  - d-phorvex-vuln-steer
+  - d-r6blindtimer
+  - d-randomequal
+  - d-reactive-only
+  - e-dilution-n9

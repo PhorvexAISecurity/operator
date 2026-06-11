@@ -403,7 +403,16 @@ func (r *Runner) applyPassBExtension(m *Metric, or OracleResult, dmeta DefenderM
 		}
 	}
 	detection := timeToAction
-	sch := ComputeSchwartau(dmeta.MeanRotationIntervalSeconds, detection, reaction, detectorAbsent)
+	// [P-AUDIT measurement-bug fix] Protection time P: the fixed-interval metadata for a periodic arm;
+	// but for an EMERGENT-rate arm (PX advertises MeanRotationIntervalSeconds=0 because its rate is a
+	// SOLVED decision variable) that ACTUALLY acted, use the OBSERVED time-to-first-rotation. Reporting
+	// P=0 wrongly classified PX as a STATIC arm ("the target never moves") — the same fixed-interval
+	// assumption that under-credited PX elsewhere. d-nomtd (no actions) correctly stays static (P=0).
+	protection := dmeta.MeanRotationIntervalSeconds
+	if protection <= 0 && actCount > 0 && timeToAction > 0 {
+		protection = timeToAction
+	}
+	sch := ComputeSchwartau(protection, detection, reaction, detectorAbsent)
 	m.Schwartau = &sch
 
 	// Attack-reusability: replay-success counts the scenario stamped (static

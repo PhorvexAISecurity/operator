@@ -11,7 +11,7 @@ import { ShieldAlert, Brain, Grid3x3, Flame, TrendingUp, Check, X } from "lucide
 export function UncoveredFrontier({ lens }: { lens: Lens }) {
   const [tech, setTech] = React.useState<CoverageTechnique[] | null>(null);
   const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.threatMatrix(lens).then((d) => setTech(d.techniques)).catch((e) => setErr(String(e.message || e))); }, [lens]);
+  React.useEffect(() => { api.threatMatrix(lens).then((d) => setTech(d.techniques ?? [])).catch((e) => setErr(String(e.message || e))); }, [lens]);
   if (err) return <ErrorBox msg={err} />;
   if (!tech) return <Loading label="Reading the threat-coverage map…" rows={3} />;
   const uncovered = tech.filter((t) => !t.covered);
@@ -47,7 +47,9 @@ export function AIBoundary({ lens }: { lens: Lens }) {
   React.useEffect(() => { api.aiSurface(lens).then(setA).catch((e) => setErr(String(e.message || e))); }, [lens]);
   if (err) return <ErrorBox msg={err} />;
   if (!a) return <Loading label="Decoding the AI attack-surface…" rows={3} />;
-  const mtdTotal = Object.values(a.mtdEffect).reduce((x, y) => x + y, 0) || 1;
+  // [P4-dash null-guard] Go marshals a nil map/slice as null; normalize before Object.entries/.length.
+  const mtdEffect = a.mtdEffect ?? {}, splitOracle = a.splitOracle ?? {}, atlasIds = a.atlasIds ?? [], owaspIds = a.owaspIds ?? [];
+  const mtdTotal = Object.values(mtdEffect).reduce((x, y) => x + y, 0) || 1;
   return (
     <div className="space-y-4">
       <Card><CardContent className="p-5">
@@ -67,7 +69,7 @@ export function AIBoundary({ lens }: { lens: Lens }) {
       <Card><CardContent className="p-5">
         <SectionLabel>What MTD can structurally do to the AI attack-surface (mtdEffect)</SectionLabel>
         <div className="mt-2 space-y-2">
-          {Object.entries(a.mtdEffect).sort((x, y) => y[1] - x[1]).map(([k, v]) => (
+          {Object.entries(mtdEffect).sort((x, y) => y[1] - x[1]).map(([k, v]) => (
             <div key={k} className="flex items-center gap-3">
               <span className="w-44 shrink-0 font-mono text-[12px]">{k}</span>
               <div className="h-2.5 flex-1 rounded-full bg-muted/40"><div className={cn("h-2.5 rounded-full", k.includes("CANNOT") ? "bg-warning/70" : k.includes("NEUTRAL") ? "bg-success/70" : "bg-info/60")} style={{ width: `${(v / mtdTotal) * 100}%` }} /></div>
@@ -80,14 +82,14 @@ export function AIBoundary({ lens }: { lens: Lens }) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Mini2 label="AI scenarios" value={String(a.scenarios)} />
-        <Mini2 label="ATLAS techniques" value={String(a.atlasIds.length)} />
-        <Mini2 label="OWASP-LLM tags" value={String(a.owaspIds.length)} />
+        <Mini2 label="ATLAS techniques" value={String(atlasIds.length)} />
+        <Mini2 label="OWASP-LLM tags" value={String(owaspIds.length)} />
         <Mini2 label="attack-surface rows" value={String(a.totalRows)} />
       </div>
       <Card><CardContent className="p-4">
         <SectionLabel>Split-oracle · Schwartau · reuse decode (attack-surface)</SectionLabel>
         <div className="mt-2 grid grid-cols-1 gap-2 text-[12px] sm:grid-cols-3">
-          <div className="rounded-md border border-border/60 px-3 py-2">split-oracle: {Object.entries(a.splitOracle).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</div>
+          <div className="rounded-md border border-border/60 px-3 py-2">split-oracle: {Object.entries(splitOracle).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</div>
           <div className="rounded-md border border-border/60 px-3 py-2">Schwartau P/D/R rows: <span className="tabular">{a.schwartauRows}</span></div>
           <div className="rounded-md border border-border/60 px-3 py-2">replay reuse: {a.replayReduced}</div>
         </div>
@@ -104,24 +106,27 @@ export function MatrixPanel({ lens }: { lens: Lens }) {
   React.useEffect(() => { api.matrix(lens).then(setM).catch((e) => setErr(String(e.message || e))); }, [lens]);
   if (err) return <ErrorBox msg={err} />;
   if (!m) return <Loading label="Computing the scenario×arm matrix…" rows={4} />;
-  const cellOf = (s: string, a: string) => m.cells.find((c) => c.scenario === s && c.arm === a);
+  // [P4-dash null-guard] normalize every wire array before .length/.map/.find.
+  const cells = m.cells ?? [], scenarios = m.scenarios ?? [], arms = m.arms ?? [], learnability = m.learnability ?? [];
+  if (scenarios.length === 0 || arms.length === 0) return <Empty msg="No scenario×arm matrix yet — run the benchmark suite (Prove) to populate it." />;
+  const cellOf = (s: string, a: string) => cells.find((c) => c.scenario === s && c.arm === a);
   const hue = (d: number) => d >= 0.8 ? "bg-success/70" : d >= 0.4 ? "bg-warning/60" : d > 0 ? "bg-warning/30" : "bg-muted/30";
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Mini2 label="False-positive rate (no-attack)" value={`${(m.fpRate * 100).toFixed(0)}%`} tone={m.fpRate === 0 ? "success" : "warning"} sub={`${m.fpViolations}/${m.fpRows} negative-control rows`} />
-        <Mini2 label="Scenarios × arms" value={`${m.scenarios.length}×${m.arms.length}`} sub={m.source} />
-        <Mini2 label="Matrix cells" value={String(m.cells.length)} />
+        <Mini2 label="Scenarios × arms" value={`${scenarios.length}×${arms.length}`} sub={m.source} />
+        <Mini2 label="Matrix cells" value={String(cells.length)} />
       </div>
 
       <Card><CardContent className="p-4 overflow-x-auto">
         <SectionLabel>Disruption matrix · scenario × defender arm (mean over trials)</SectionLabel>
         <table className="mt-2 w-full border-separate" style={{ borderSpacing: 2 }}>
-          <thead><tr><th className="sticky left-0 bg-background text-left text-[10px] font-medium uppercase text-muted-foreground"></th>{m.arms.map((a) => <th key={a} className="px-1 text-[10px] font-mono text-muted-foreground" title={a}>{a.replace("d-", "")}</th>)}</tr></thead>
-          <tbody>{m.scenarios.map((s) => (
+          <thead><tr><th className="sticky left-0 bg-background text-left text-[10px] font-medium uppercase text-muted-foreground"></th>{arms.map((a) => <th key={a} className="px-1 text-[10px] font-mono text-muted-foreground" title={a}>{a.replace("d-", "")}</th>)}</tr></thead>
+          <tbody>{scenarios.map((s) => (
             <tr key={s}>
               <td className="sticky left-0 bg-background pr-2 font-mono text-[11px] text-foreground/80">{s}</td>
-              {m.arms.map((a) => { const c = cellOf(s, a); return (
+              {arms.map((a) => { const c = cellOf(s, a); return (
                 <td key={a} className="p-0"><div className={cn("grid h-7 w-12 place-items-center rounded text-[10px] tabular", c ? hue(c.disruption) : "bg-muted/20")} title={c ? `${(c.disruption * 100).toFixed(0)}% (n=${c.n})` : "—"}>{c ? (c.disruption * 100).toFixed(0) : ""}</div></td>
               ); })}
             </tr>
@@ -129,10 +134,10 @@ export function MatrixPanel({ lens }: { lens: Lens }) {
         </table>
       </CardContent></Card>
 
-      {m.learnability.length > 0 && (
+      {learnability.length > 0 && (
         <Card><CardContent className="p-5">
           <div className="flex items-center gap-2 text-[13px] font-semibold"><TrendingUp className="h-4 w-4 text-primary" /> Learnability — does the defense survive an adaptive attacker? <span className="font-mono text-[11px] text-muted-foreground">({m.learnScenario})</span></div>
-          <div className="mt-3 space-y-2">{m.learnability.map((L) => (
+          <div className="mt-3 space-y-2">{learnability.map((L) => (
             <div key={L.arm} className="flex items-center gap-3 text-[12px]">
               <span className="w-32 shrink-0 font-mono">{L.arm.replace("d-", "")}</span>
               <span className="w-28 tabular text-muted-foreground">first {(L.firstHalf * 100).toFixed(0)}% → last {(L.secondHalf * 100).toFixed(0)}%</span>
@@ -155,7 +160,7 @@ export function RiskHeatmap({ lens }: { lens: Lens }) {
   React.useEffect(() => {
     let done = false;
     api.metrics(lens).then((m: MetricsResult) => {
-      if (m.available && m.pods.length) { setSource(`operator /metrics (${m.source})`); setPods(m.pods); done = true; }
+      if (m.available && (m.pods ?? []).length) { setSource(`operator /metrics (${m.source})`); setPods(m.pods ?? []); done = true; }
     }).catch(() => {}).finally(() => {
       if (done) return;
       // fallback: build the heatmap from the LIVE decision audit (real per-pod risk/blast).

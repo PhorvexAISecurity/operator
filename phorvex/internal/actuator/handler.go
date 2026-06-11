@@ -36,10 +36,17 @@ type Rollbacker interface {
 	Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error
 }
 
-// EnactCtx carries the cluster client + the dry-run guard into a handler.
+// EnactCtx carries the cluster client + the dry-run guard into a handler, plus the optional
+// serving-stack / GPU control-plane clients the AI handlers drive. VLLM/MIG default to the real
+// implementations when nil (production); tests inject mocks so the handler logic is exercised
+// without GPU hardware (see gpu_stack.go).
 type EnactCtx struct {
-	Client client.Client
-	DryRun bool
+	Client    client.Client
+	DryRun    bool
+	VLLM      vLLMClient          // serving-stack control plane; nil => real httpVLLM default
+	MIG       migController        // GPU MIG control plane; nil => real nvidia-smi default
+	Guardrail guardrailController  // safety/guardrail-tier control plane; nil => real default
+	KVXfer    kvTransferController // disaggregated KV-transfer control plane; nil => real default
 }
 
 // HandlerResult is the native effect record.

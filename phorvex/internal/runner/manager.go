@@ -53,7 +53,10 @@ type Manager struct {
 	Actuator      actuator.Actuator
 	KillSwitch    *KillSwitch
 	BaseInterval  time.Duration
-	Log           logr.Logger
+	// PerTickTimeout bounds one tick so a slow/hung API server cannot wedge the loop
+	// goroutine indefinitely (P4b livelock fix). 0 => defaulted in Start.
+	PerTickTimeout time.Duration
+	Log            logr.Logger
 
 	mu       sync.RWMutex
 	policies map[string]*policyEntry
@@ -131,15 +134,42 @@ func (m *Manager) Start(ctx context.Context) error {
 	if m.BaseInterval <= 0 {
 		m.BaseInterval = 10 * time.Second
 	}
+	if m.PerTickTimeout <= 0 {
+		// a tick must finish well within a few intervals; cap so a hung API can't wedge it.
+		m.PerTickTimeout = 4 * m.BaseInterval
+		if m.PerTickTimeout > 2*time.Minute {
+			m.PerTickTimeout = 2 * time.Minute
+		}
+	}
 	t := time.NewTicker(m.BaseInterval)
 	defer t.Stop()
-	m.Log.Info("phorvex tick loop started", "baseInterval", m.BaseInterval.String())
+	m.Log.Info("phorvex tick loop started", "baseInterval", m.BaseInterval.String(), "perTickTimeout", m.PerTickTimeout.String())
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			m.tick(ctx)
+			// [P4b livelock fix] bound each tick: a slow/hung API server makes the tick ctx
+			// expire, CollectSnapshot/Get return promptly, the tick SKIPS (and a timed-out
+			// kill-switch read fail-CLOSES per FIX 1) — the loop never wedges.
+			tctx, cancel := context.WithTimeout(ctx, m.PerTickTimeout)
+			m.tick(tctx)
+			cancel()
+		}
+	}
+}
+
+// reconcileWedged converges crash-wedged actuator state (a double-leader warm-swap; an
+// orphaned quarantine NetworkPolicy) for each managed namespace, idempotently. Runs every
+// tick INDEPENDENT of tenant cadence (a wedged double-leader must converge even if no policy
+// is "due" this tick).
+func (m *Manager) reconcileWedged(ctx context.Context, namespaces []string) {
+	for _, ns := range namespaces {
+		if n, err := actuator.ResumeWarmSwaps(ctx, m.Client, ns); err == nil && n > 0 {
+			m.Log.Info("warm-swap resume: converged wedged swap", "namespace", ns, "reaped", n)
+		}
+		if n, err := actuator.GCOrphanedQuarantineNPs(ctx, m.Client, ns); err == nil && n > 0 {
+			m.Log.Info("orphan-GC: reaped quarantine NetworkPolicy", "namespace", ns, "reaped", n)
 		}
 	}
 }
@@ -148,19 +178,35 @@ func (m *Manager) Start(ctx context.Context) error {
 func (m *Manager) tick(ctx context.Context) {
 	m.mu.RLock()
 	due := make([]*policyEntry, 0, len(m.policies))
+	nsSet := map[string]bool{}
 	now := time.Now()
 	for _, e := range m.policies {
+		if e.namespace != "" {
+			nsSet[e.namespace] = true
+		}
 		if now.Sub(e.lastTick) >= e.spec.EffectiveTickInterval() {
 			due = append(due, e)
 		}
 	}
 	m.mu.RUnlock()
-	if len(due) == 0 {
-		return
-	}
 
 	killEngaged := m.KillSwitch.Engaged(ctx)
 	metrics.SetKillSwitch(killEngaged)
+
+	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
+	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
+	// engaged (a deliberate global freeze) or actuation is unavailable.
+	if !killEngaged && m.Actuator != nil && len(nsSet) > 0 {
+		nss := make([]string, 0, len(nsSet))
+		for ns := range nsSet {
+			nss = append(nss, ns)
+		}
+		m.reconcileWedged(ctx, nss)
+	}
+
+	if len(due) == 0 {
+		return
+	}
 
 	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue)
 	if err != nil {
@@ -388,12 +434,21 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		// generator used, on live view state, immediately before enacting — never trust ONLY
 		// the cached Feasible bool. Action-agnostic (keys on Move{Action}), so it covers all
 		// native action types uniformly. A veto refuses the emit and shouts.
-		if v, ok := viewByKey[decisions[i].Namespace+"/"+decisions[i].Pod]; ok {
-			if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verdict.Feasible {
-				m.Log.Error(nil, "EMIT-BOUNDARY VETO: refusing infeasible move at actuate boundary",
-					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
-				continue
-			}
+		//
+		// [P4c D3/F5 FAIL-CLOSED FIX] A MISSING live view for the target is UNCERTAINTY, not a
+		// pass: previously the re-gate ran only inside `; ok {`, so a map-miss SKIPPED the gate
+		// (fail-OPEN) and actuated on the stale cached bool. Now a map-miss VETOES (fail-CLOSED):
+		// we never actuate a move whose target we cannot re-verify against live state.
+		v, ok := viewByKey[decisions[i].Namespace+"/"+decisions[i].Pod]
+		if !ok {
+			m.Log.Error(nil, "EMIT-BOUNDARY VETO (fail-closed): no live view for the target; refusing to actuate",
+				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
+			continue
+		}
+		if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verdict.Feasible {
+			m.Log.Error(nil, "EMIT-BOUNDARY VETO: refusing infeasible move at actuate boundary",
+				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
+			continue
 		}
 		score := decisions[i].Risk
 		if score > 1 {

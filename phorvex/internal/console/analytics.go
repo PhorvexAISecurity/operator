@@ -12,11 +12,9 @@ package console
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 )
 
 // --- 52×N matrix + learnability + false-positive (GET /api/matrix) ----------------------
@@ -249,10 +247,11 @@ func (c *Config) MetricsScrape(url string) MetricsResult {
 		url = "http://localhost:18080/metrics"
 	}
 	res := MetricsResult{Source: url, Pods: []PodRisk{}, Note: "live operator Prometheus scrape (phorvex_pod_* gauges)"}
-	cl := &http.Client{Timeout: 3 * time.Second}
-	resp, err := cl.Get(url)
+	// SSRF-hardened fetch (P4a MUST-FIX): blocks IMDS/link-local, loopback-or-allowlist only,
+	// dial-pinned. A caller-controlled url can NEVER reach cloud-metadata for credential theft.
+	resp, err := safeGet(url, c.MetricsAllow)
 	if err != nil {
-		res.Note = "[PENDING-wire] no operator /metrics reachable at " + url + " — start a Phorvex operator with --metrics-bind-address :18080. The audit stream is the live alternative."
+		res.Note = "metrics target rejected or unreachable: " + err.Error() + " — default is the operator's localhost /metrics; add private/remote hosts via --metrics-allow."
 		return res
 	}
 	defer resp.Body.Close()

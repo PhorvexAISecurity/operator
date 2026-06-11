@@ -1,0 +1,39 @@
+# eksctl ClusterConfig for the Phorvex stack.
+#
+# This is a CPU-only control-plane-grade cluster sized for the operators + dashboard
+# (the brain + executor are tiny; resources in values.yaml request 10m CPU each).
+# For the GPU benchmark scenarios, add a GPU nodegroup per DEPLOY-AWS-COREWEAVE.md —
+# that is a separate concern from running the stack itself.
+#
+# Apply with:  eksctl create cluster -f deploy/eks/cluster.yaml
+# Placeholders ${AWS_REGION} / ${CLUSTER_NAME} are substituted by 01-create-cluster.sh.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${CLUSTER_NAME}
+  region: ${AWS_REGION}
+  version: "1.31"
+
+iam:
+  withOIDC: true            # needed for IRSA / ALB controller / ECR pull roles
+
+managedNodeGroups:
+  - name: system
+    instanceType: t3.large
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 40
+    amiFamily: AmazonLinux2023
+    labels: { role: system }
+    iam:
+      withAddonPolicies:
+        ebs: true
+        cloudWatch: true
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver

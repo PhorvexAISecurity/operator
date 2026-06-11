@@ -1,0 +1,12 @@
+{
+  "dispersion-steer": {
+    "status": "accepted-risk",
+    "note": " reviewed via dashboard click-test",
+    "at": "2026-06-09 00:01:49Z"
+  },
+  "lambda-pump": {
+    "status": "addressed",
+    "note": "",
+    "at": "2026-06-09 06:10:03Z"
+  }
+}

@@ -71,7 +71,10 @@ var (
 	reEMRlift   = regexp.MustCompile(`lift\s*=\s*([\d.]+)x\s*(?:\(([^)]*)\))?`)
 )
 
-func (c *Config) Scan(ns string) ScanResult {
+// contextRe validates a kubeconfig context name (EKS ARNs carry :/@.-) for the exec arg.
+var contextRe = regexp.MustCompile(`^[a-zA-Z0-9._:@/-]{1,200}$`)
+
+func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	if !scenarioRe.MatchString(ns) { // reuse the safe-name guard for the namespace arg
 		ns = ""
 	}
@@ -79,7 +82,17 @@ func (c *Config) Scan(ns string) ScanResult {
 	if ns != "" {
 		args = append(args, "--scan-namespace", ns)
 	}
-	raw, _ := c.execText(60*time.Second, c.PhorvexBin, args...)
+	if kubeContext != "" && contextRe.MatchString(kubeContext) {
+		args = append(args, "--context", kubeContext) // DERIVED by the console, never hardcoded
+	}
+	if promURL != "" {
+		// SSRF-validate the caller-supplied Prometheus URL before phorvex fetches it
+		// (loopback/allowlist only; IMDS/link-local blocked). Unsafe => drop -> honest-absent telemetry.
+		if _, err := validateFetchTarget(promURL, c.MetricsAllow); err == nil {
+			args = append(args, "--prometheus-url", promURL)
+		}
+	}
+	raw, _ := c.execText(90*time.Second, c.PhorvexBin, args...)
 	res := ScanResult{Raw: raw}
 	for _, ln := range strings.Split(raw, "\n") {
 		if m := reWitness.FindStringSubmatch(ln); m != nil {
@@ -101,6 +114,14 @@ func (c *Config) Scan(ns string) ScanResult {
 			res.EMR.Lift = atof(m[1])
 			res.EMR.Note = m[2]
 		}
+	}
+	// [P4-dash null-crash FIX] NEVER return a nil slice — Go marshals nil as JSON `null`, and the
+	// frontend reads `.length`/`.map` on it. Emit `[]` so an empty scan renders a clean empty-state.
+	if res.Witness == nil {
+		res.Witness = []PhysWitness{}
+	}
+	if res.Killchain == nil {
+		res.Killchain = []KillchainRow{}
 	}
 	return res
 }

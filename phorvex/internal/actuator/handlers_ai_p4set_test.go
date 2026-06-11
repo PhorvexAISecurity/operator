@@ -1,0 +1,306 @@
+package actuator
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
+
+// handlers_ai_p4set_test.go — CI coverage for the 4 NEW actuators + the 3 build-completions. K8s
+// mechanics run for real (fake client); vLLM/guardrail/KV/MIG calls run through mocks. Fail-closed +
+// the premortem properties (no-poison-reload, distinct-variant, stop-admit-ordering, group-coherence)
+// are asserted without GPU.
+
+func bstr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// ===== adapter-rotate =====
+func adapterPod(ns, name string, clean bool) *corev1.Pod {
+	p := aiPod(ns, name, map[string]string{labelLoRAEnabled: "true"})
+	p.Annotations[annoLoRAAdapter] = "evil-adapter"
+	if clean {
+		p.Annotations[annoLoRACleanSource] = "s3://trusted/clean-v2"
+	}
+	return p
+}
+
+func TestAdapterRotateUnloadsPoisonedDegradeToBase(t *testing.T) {
+	c := fakeC(adapterPod("ns", "infer", false))
+	mv := &mockVLLM{}
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err != nil {
+		t.Fatalf("adapter-rotate: %v", err)
+	}
+	if mv.unloadCalls != 1 {
+		t.Errorf("must UNLOAD the poisoned adapter once, got %d", mv.unloadCalls)
+	}
+	if mv.loadCalls != 0 {
+		t.Errorf("no clean source => must NOT reload (degrade to base), got %d loads", mv.loadCalls)
+	}
+	if !containsStr(hr.Note, "degraded to base") {
+		t.Errorf("note: %q", hr.Note)
+	}
+}
+
+func TestAdapterRotateReloadsOnlyFromCleanSource(t *testing.T) {
+	c := fakeC(adapterPod("ns", "infer", true))
+	mv := &mockVLLM{}
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err != nil {
+		t.Fatalf("adapter-rotate: %v", err)
+	}
+	// PREMORTEM: reload ONLY from the declared trusted source (never re-pull the poison).
+	if mv.unloadCalls != 1 || mv.loadCalls != 1 {
+		t.Errorf("must unload(1)+reload-clean(1), got unload=%d load=%d", mv.unloadCalls, mv.loadCalls)
+	}
+}
+
+func TestAdapterRotateFailClosedNoAdapter(t *testing.T) {
+	c := fakeC(aiPod("ns", "infer", map[string]string{})) // no lora-enabled / no adapter
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err == nil {
+		t.Fatal("adapter-rotate must FAIL-CLOSED without a declared lora adapter")
+	}
+}
+
+func TestAdapterRotateUnreachableIsPending(t *testing.T) {
+	c := fakeC(adapterPod("ns", "infer", true))
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{unloadErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err != nil {
+		t.Fatalf("unreachable unload must not error: %v", err)
+	}
+	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+		t.Errorf("note must flag pending, %q", hr.Note)
+	}
+}
+
+func TestAdapterRotateReachableFailFailsClosed(t *testing.T) {
+	c := fakeC(adapterPod("ns", "infer", true))
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{unloadErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err == nil {
+		t.Fatal("adapter-rotate must FAIL-CLOSED on a reachable-but-failing unload")
+	}
+}
+
+// ===== request-drain =====
+func TestRequestDrainStopsAdmitsThenAborts(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
+	c := fakeC(pod)
+	mv := &mockVLLM{drained: 3}
+	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain})
+	if err != nil {
+		t.Fatalf("request-drain: %v", err)
+	}
+	// ORDERING premortem: admits stopped (label flipped) AND in-flight aborted.
+	var p corev1.Pod
+	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	if p.Labels[labelServing] != "drained" {
+		t.Errorf("admits must be stopped (serving=drained), got %q", p.Labels[labelServing])
+	}
+	if mv.drainCalls != 1 || !containsStr(hr.Note, "3 in-flight aborted") {
+		t.Errorf("must abort in-flight via the stack, calls=%d note=%q", mv.drainCalls, hr.Note)
+	}
+	if !containsStr(hr.Note, "does not block re-entry") {
+		t.Errorf("must disclose the re-entry limitation, %q", hr.Note)
+	}
+}
+
+func TestRequestDrainReachableFailRestoresAdmits(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
+	c := fakeC(pod)
+	_, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drainErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain})
+	if err == nil {
+		t.Fatal("request-drain must FAIL-CLOSED on a reachable-but-failing abort")
+	}
+	var p corev1.Pod
+	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	if p.Labels[labelServing] != "true" {
+		t.Errorf("a failed abort must RESTORE admits (not strand the pod unready), got %q", p.Labels[labelServing])
+	}
+}
+
+func TestRequestDrainUnreachableIsPending(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
+	c := fakeC(pod)
+	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drainErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain})
+	if err != nil {
+		t.Fatalf("unreachable drain must not error (K8s drain real): %v", err)
+	}
+	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+		t.Errorf("note: %q", hr.Note)
+	}
+}
+
+// ===== guardrail-rotate =====
+func guardrailPod(ns, name, cur, alts string) *corev1.Pod {
+	p := aiPod(ns, name, map[string]string{labelGuardrailTier: "true"})
+	p.Annotations[annoGuardrailVariant] = cur
+	p.Annotations[annoGuardrailAlts] = alts
+	return p
+}
+
+func TestGuardrailRotatePicksDistinctVariant(t *testing.T) {
+	c := fakeC(guardrailPod("ns", "guard", "v1", "v1,v2,v3"))
+	mg := &mockGuardrail{}
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: mg}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	if err != nil {
+		t.Fatalf("guardrail-rotate: %v", err)
+	}
+	// PREMORTEM: must pick a DISTINCT variant (v2, not v1).
+	if mg.lastVar != "v2" {
+		t.Errorf("must rotate to a DISTINCT variant, got %q", mg.lastVar)
+	}
+	var p corev1.Pod
+	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "guard"}, &p)
+	if p.Annotations[annoGuardrailVariant] != "v2" {
+		t.Errorf("variant annotation not re-keyed, got %q", p.Annotations[annoGuardrailVariant])
+	}
+}
+
+func TestGuardrailRotateFailClosedNoDistinctVariant(t *testing.T) {
+	c := fakeC(guardrailPod("ns", "guard", "v1", "v1")) // only the current variant declared
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	if err == nil {
+		t.Fatal("guardrail-rotate must FAIL-CLOSED when no DISTINCT variant exists (same blind spot = no MTD)")
+	}
+}
+
+func TestGuardrailRotateFailClosedNotTier(t *testing.T) {
+	c := fakeC(aiPod("ns", "x", map[string]string{}))
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{}}, Request{Namespace: "ns", Pod: "x", Action: model.ActionGuardrailRotate})
+	if err == nil {
+		t.Fatal("guardrail-rotate must FAIL-CLOSED on a non-guardrail pod")
+	}
+}
+
+func TestGuardrailRotateUnreachableRekeysInK8s(t *testing.T) {
+	c := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
+	hr, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{applyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	if err != nil {
+		t.Fatalf("unreachable guardrail must not error (K8s re-key real): %v", err)
+	}
+	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+		t.Errorf("note: %q", hr.Note)
+	}
+}
+
+// ===== kv-migrate-invalidate =====
+func TestKVMigrateInvalidatesLocalCrossWorkerDeferred(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
+	pod.Annotations[annoDisaggPeers] = "10.0.0.2:8000,10.0.0.3:8000"
+	c := fakeC(pod)
+	mk := &mockKVXfer{}
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, KVXfer: mk}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVMigrateInvalidate})
+	if err != nil {
+		t.Fatalf("kv-migrate-invalidate: %v", err)
+	}
+	if mk.invCalls != 1 {
+		t.Errorf("must invalidate LOCAL KV once, got %d", mk.invCalls)
+	}
+	// cross-worker is DEFERRED — must be recorded as pending, never claimed done.
+	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") || !containsStr(hr.Note, "cross-worker") {
+		t.Errorf("cross-worker migrate must be recorded as deferred/pending, %q", hr.Note)
+	}
+}
+
+func TestKVMigrateLocalUnreachablePending(t *testing.T) {
+	c := fakeC(aiPod("ns", "infer", map[string]string{"app": "infer"}))
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, KVXfer: &mockKVXfer{invErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVMigrateInvalidate})
+	if err != nil {
+		t.Fatalf("unreachable local invalidate must not error: %v", err)
+	}
+	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+		t.Errorf("note: %q", hr.Note)
+	}
+}
+
+// ===== build-completion: warm-swap REAL drain =====
+func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
+	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
+	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	c := fakeC(leader, shadow)
+	mv := &mockVLLM{loaded: true, drained: 2}
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "leader", Action: model.ActionWarmSwap})
+	if err != nil {
+		t.Fatalf("warm-swap: %v", err)
+	}
+	if mv.drainCalls < 1 {
+		t.Error("warm-swap must DRAIN the old leader's in-flight before retiring it (the :141 gap)")
+	}
+	if !containsStr(hr.Note, "drained") {
+		t.Errorf("note must record the drain, %q", hr.Note)
+	}
+}
+
+// ===== build-completion: model-shard-replace TP/PP coherence =====
+func tpPod(ns, name, group, rank, role string, loaded bool, size int) *corev1.Pod {
+	p := aiPod(ns, name, map[string]string{
+		labelParallelGroup: group, labelRank: rank, labelRole: role,
+		labelModelShard: "s", labelModelLoaded: bstr(loaded),
+	})
+	p.Annotations[annoParallelSize] = strconv.Itoa(size)
+	return p
+}
+
+func TestShardReplaceTPGroupFlipsCoherently(t *testing.T) {
+	// a 2-rank TP group: 2 leaders + a COMPLETE replacement shadow group (both ranks ready).
+	objs := []client.Object{
+		tpPod("ns", "l0", "g", "0", roleLeader, true, 2),
+		tpPod("ns", "l1", "g", "1", roleLeader, true, 2),
+		tpPod("ns", "s0", "g", "0", roleShadow, true, 2),
+		tpPod("ns", "s1", "g", "1", roleShadow, true, 2),
+	}
+	c := fakeC(objs...)
+	// readyErr=unreachable => shadowModelReady falls back to the labelModelLoaded gate (true here).
+	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "l0", Action: model.ActionModelShardReplace})
+	if err != nil {
+		t.Fatalf("shard-replace TP/PP: %v", err)
+	}
+	// both shadows promoted to leader; both old leaders retired (deleted).
+	for _, s := range []string{"s0", "s1"} {
+		var p corev1.Pod
+		_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: s}, &p)
+		if p.Labels[labelRole] != roleLeader {
+			t.Errorf("shadow %s not promoted, role=%q", s, p.Labels[labelRole])
+		}
+	}
+	for _, l := range []string{"l0", "l1"} {
+		var p corev1.Pod
+		if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: l}, &p); err == nil {
+			t.Errorf("old leader %s not retired (group must flip coherently)", l)
+		}
+	}
+	if !containsStr(hr.Note, "COHERENTLY") {
+		t.Errorf("note: %q", hr.Note)
+	}
+}
+
+func TestShardReplaceTPFailClosedIncompleteGroup(t *testing.T) {
+	// size 2 but only ONE ready shadow rank => must NEVER flip a partial parallel group.
+	objs := []client.Object{
+		tpPod("ns", "l0", "g", "0", roleLeader, true, 2),
+		tpPod("ns", "l1", "g", "1", roleLeader, true, 2),
+		tpPod("ns", "s0", "g", "0", roleShadow, true, 2),
+		tpPod("ns", "s1", "g", "1", roleShadow, false, 2), // rank 1 NOT ready
+	}
+	c := fakeC(objs...)
+	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "l0", Action: model.ActionModelShardReplace})
+	if err == nil {
+		t.Fatal("shard-replace TP/PP must FAIL-CLOSED on an incomplete replacement group")
+	}
+	// no flip happened: the old leaders survive.
+	var p corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "l0"}, &p); err != nil {
+		t.Error("fail-closed must NOT retire the old group")
+	}
+}

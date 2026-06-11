@@ -35,6 +35,19 @@ type ConjugateMemory struct {
 	// at nil-data (no Observe yet) a new tenant is byte-identical to the old constant. ---
 	gAlpha float64
 	gBeta  float64
+	// [P-VCLUSTER O3] crossTenantPrior gates the hierarchical fleet prior. DEFAULT OFF (zero value):
+	// no tenant's evidence ever feeds another's prior, and a cold tenant seeds from the fixed default
+	// base-rate (byte-identical to the pre-P-VCLUSTER nil-data behavior). Opt-in per trusted group.
+	crossTenantPrior bool
+}
+
+// SetCrossTenantPrior opts a (trusted) memory into the hierarchical fleet prior (cross-tenant
+// evidence sharing). Default OFF — tenants are isolated. Returns the memory for chaining.
+func (m *ConjugateMemory) SetCrossTenantPrior(on bool) *ConjugateMemory {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.crossTenantPrior = on
+	return m
 }
 
 type tenantState struct {
@@ -62,8 +75,11 @@ func (m *ConjugateMemory) get(tenant string) *tenantState {
 	s := m.tenants[tenant]
 	if s == nil {
 		mass := m.defAlpha + m.defBeta
-		gMean := 0.2
-		if m.gAlpha+m.gBeta > 0 {
+		// [P-VCLUSTER O3] DEFAULT: seed from the fixed default base-rate (no cross-tenant inheritance).
+		// At nil-data the fleet equals the defaults, so this is byte-identical to the prior behavior;
+		// the hierarchical fleet seed is used ONLY when crossTenantPrior is opted in for a trusted group.
+		gMean := m.defAlpha / mass
+		if m.crossTenantPrior && m.gAlpha+m.gBeta > 0 {
 			gMean = m.gAlpha / (m.gAlpha + m.gBeta)
 		}
 		s = &tenantState{alpha: gMean * mass, beta: (1 - gMean) * mass}
@@ -87,22 +103,32 @@ func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s := m.get(tenant)
+	// per-tenant belief (already isolated, keyed by tenant) — unchanged.
 	if heldEvidence > 0 {
 		s.alpha += heldEvidence
-		m.gAlpha += heldEvidence // feed the fleet prior
 	} else if heldEvidence < 0 {
 		s.beta += -heldEvidence
-		m.gBeta += -heldEvidence
 	}
 	if total := s.alpha + s.beta; total > m.maxMass {
 		scale := m.maxMass / total
 		s.alpha *= scale
 		s.beta *= scale
 	}
-	if gt := m.gAlpha + m.gBeta; gt > m.maxMass {
-		scale := m.maxMass / gt
-		m.gAlpha *= scale
-		m.gBeta *= scale
+	// [P-VCLUSTER O3/G3] The fleet hyperprior cross-feed is a SHARED WRITE across tenants — a cold
+	// tenant would inherit another tenant's evidence. It is GATED OFF by default: gAlpha/gBeta (and
+	// their rescale, G3) update ONLY when an operator opts a TRUSTED tenant-group into the hierarchical
+	// prior. With it off, a cold tenant seeds from the fixed default base-rate (see get) — byte-identical.
+	if m.crossTenantPrior {
+		if heldEvidence > 0 {
+			m.gAlpha += heldEvidence
+		} else if heldEvidence < 0 {
+			m.gBeta += -heldEvidence
+		}
+		if gt := m.gAlpha + m.gBeta; gt > m.maxMass {
+			scale := m.maxMass / gt
+			m.gAlpha *= scale
+			m.gBeta *= scale
+		}
 	}
 }
 

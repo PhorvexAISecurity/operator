@@ -15,6 +15,9 @@ type Config struct {
 	AuditPath  string // optional explicit audit JSONL (owner-view source)
 	Addr       string // http listen address
 	Web        string // static SPA dir (dashboard-web/out) served at / alongside /api
+	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
+	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
+	MetricsAllow []string
 }
 
 // DefaultConfig derives the standard in-repo layout from a root.

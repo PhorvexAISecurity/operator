@@ -48,12 +48,20 @@ type aiOracle struct {
 // result renders the aiOracle into a core.OracleResult with the standard evidence
 // keys populated.
 func (o aiOracle) result() core.OracleResult {
+	// [P-AUDIT measurement-bug fix] `neutralized` (the strongest MTD-effect: BOTH legs defeated) is
+	// DERIVED from the MEASURED outcome — the persistence foothold disrupted AND the in-request leg
+	// failed — NOT from arm identity. Several scenarios set `o.neutralized` via
+	// `armIsFullPhoenix(env) && X`, which both OVER-credited the reactive arm (claimed NEUTRALIZES
+	// even when the in-request payload fired) and UNDER-credited emergent-rate PX (never NEUTRALIZES).
+	// Recomputing it here arm-neutrally (consistent with the Condition-2 oracle-honesty scenarios)
+	// fixes every aiOracle caller at once; the per-scenario `o.neutralized` field is now informational.
+	neutralized := o.persistenceDisrupted && !o.inRequestAchieved
 	ev := map[string]string{
 		core.EvSplitOracle:           o.half,
 		core.EvInRequestAchieved:     b2s(o.inRequestAchieved),
 		core.EvPersistenceAchieved:   b2s(o.persistenceAchieved),
 		core.EvPersistenceDisrupted:  b2s(o.persistenceDisrupted),
-		core.EvNeutralized:           b2s(o.neutralized),
+		core.EvNeutralized:           b2s(neutralized),
 		core.EvTriggerAttribution:    o.triggerAttribution,
 		core.EvDetectorAbsent:        b2s(o.detectorAbsent),
 		core.EvCapabilityPending:     b2s(o.capabilityPending),
@@ -115,15 +123,19 @@ func emitGenuineTrigger(ctx context.Context, env *core.Env, targetPod, eventType
 	return true
 }
 
-// armRotates reports whether the active defender is a rotating arm (non-zero mean
-// rotation interval) — used to MEASURE whether a persistence foothold should have
-// been bounded by rotation (vs the static d-nomtd baseline).
+// armRotates reports whether the active defender is a rotating arm — i.e. an MTD
+// defender that takes rotation/replacement actions, vs the static no-MTD baseline.
+//
+// [P-REDTEAM measurement-bug fix #1] This used to gate on MeanRotationIntervalSeconds>0,
+// which is a FIXED-INTERVAL proxy. That STRUCTURALLY EXCLUDED PX (and any reactive/
+// emergent-rate arm), whose rate is a SOLVED decision variable (interval metadata = 0)
+// even though it genuinely rotates — so persistence-disruption credit was withheld from
+// exactly those arms. The honest test is "does this arm rotate at all": the ONLY arm
+// that never rotates is the no-MTD baseline. The ACTUAL per-trial outcome is still gated
+// by the measured !persisted in each oracle (the foothold must really be gone), so this
+// credits by observed outcome and never over-credits.
 func armRotates(env *core.Env) bool {
-	d, ok := core.LookupDefender(env.DefenderName)
-	if !ok {
-		return false
-	}
-	return d.Metadata().MeanRotationIntervalSeconds > 0
+	return env.DefenderName != "d-nomtd"
 }
 
 // armIsFullPhoenix reports whether the active arm is the genuine operator arm.

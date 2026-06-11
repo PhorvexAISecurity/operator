@@ -64,7 +64,7 @@ export function EffectivenessPanel({ lens }: { lens: Lens }) {
   const [stats, setStats] = React.useState<Stat[] | null>(null);
   const [err, setErr] = React.useState<string>("");
   React.useEffect(() => {
-    api.effectiveness(lens).then((d) => setStats(d.stats)).catch((e) => setErr(String(e.message || e)));
+    api.effectiveness(lens).then((d) => setStats(d.stats ?? [])).catch((e) => setErr(String(e.message || e)));
   }, [lens]);
 
   if (err) return <ErrorState msg={err} />;
@@ -81,7 +81,7 @@ export function EffectivenessPanel({ lens }: { lens: Lens }) {
         sub="The proven outcomes — every number traced to a real metrics file, with 95% confidence intervals. K8s is proven on kind; the AI product's defense is honestly pending."
       />
       <section>
-        <SectionLabel>Headline · the &gt;90% board</SectionLabel>
+        <SectionLabel>Headline · prevention / disruption board</SectionLabel>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {hero.map((s) => <StatTile key={s.key} s={s} hero />)}
         </div>
@@ -128,7 +128,7 @@ export function ErrorState({ msg }: { msg: string }) {
           <div>
             <div className="font-medium text-foreground">Data backend isn’t running.</div>
             <div className="mt-1 text-muted-foreground">Start the Phorvex console (it serves this app + the data on one port):</div>
-            <code className="mt-2 block rounded-md bg-elevated/60 px-3 py-2 font-mono text-[12px] text-foreground/90">phorvex\bin\phorvex-console.exe --root C:\Users\moh87733\Phorvex</code>
+            <code className="mt-2 block rounded-md bg-elevated/60 px-3 py-2 font-mono text-[12px] text-foreground/90">phorvex-console --root &lt;your Phorvex root&gt;</code>
             <div className="mt-1.5 text-[11px] text-muted-foreground/70">then refresh.</div>
           </div>
         ) : (

@@ -36,6 +36,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	if path == "" {
 		path = s.newestAudit()
 	}
+	ownerTenant := r.URL.Query().Get("tenant") // [P4c F4] owner stream is tenant-scoped
 	emit := func(rec audit.Record) {
 		if rec.Kind != "phorvex.decision" {
 			return
@@ -44,6 +45,11 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		if lens == "owner" {
 			if !rec.Selected && !rec.Actuated {
 				return // owners see actions, not every candidate
+			}
+			// [P4c D7/F4 cross-tenant FIX] FAIL-CLOSED: the owner SSE streams ONLY the caller's
+			// tenant; an absent/empty ?tenant= streams NOTHING (was: every tenant's actions).
+			if ownerTenant == "" || rec.Tenant != ownerTenant {
+				return
 			}
 			payload = ToOwnerEvent(rec) // <- the ONLY owner projection (never a raw Record)
 		} else {

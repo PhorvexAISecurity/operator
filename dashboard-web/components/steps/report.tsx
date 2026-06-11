@@ -2,9 +2,10 @@
 import * as React from "react";
 import { api, Lens, Stat, Posture, BenchGroup } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Loading, Pending, csvDownload } from "@/components/ui/more";
+import { Loading, csvDownload } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { MethodologyPanel } from "@/components/subsystems/panels";
+import { ReportsPanel } from "@/components/panels/reports";
 import { FileText, Download, Printer } from "lucide-react";
 
 export function ReportStep({ lens }: { lens: Lens }) {
@@ -35,7 +36,7 @@ export function ReportStep({ lens }: { lens: Lens }) {
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={exportCSV}><Download className="h-4 w-4" /> Export evidence CSV</Button>
         <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
-        <Pending stage="PENDING-wire · Phase 3" msg="A bundled PDF + a reports index (/api/reports over the on-disk *.md) are the Phase-3 wire. CSV + browser print are real now." />
+        {bench.length > 0 && <span className="text-[12px] text-muted-foreground">· {bench.length} benchmark scenarios in the pack</span>}
       </div>
 
       <Card><CardContent className="p-5">
@@ -60,6 +61,8 @@ export function ReportStep({ lens }: { lens: Lens }) {
           ))}
         </div>
       </CardContent></Card>
+
+      <div><div className="mb-3 mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Curated reports · served live from disk</div><ReportsPanel lens={lens} /></div>
 
       <div><div className="mb-3 mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Methodology &amp; honesty</div><MethodologyPanel lens={lens} /></div>
     </div>

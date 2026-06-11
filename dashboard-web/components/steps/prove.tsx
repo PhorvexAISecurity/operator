@@ -11,8 +11,10 @@ import { ThreatMatrixPanel, PosturePanel } from "@/components/panels/coverage";
 import { RunAttackPanel } from "@/components/panels/run-attack";
 import { AblationPanel } from "@/components/subsystems/panels";
 import { UncoveredFrontier, MatrixPanel, AIBoundary } from "@/components/subsystems/analytics";
+import { ReportsPanel } from "@/components/panels/reports";
+import { RedTeamPanel } from "@/components/panels/redteam";
 
-type Sub = "launch" | "run" | "effectiveness" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation";
+type Sub = "launch" | "run" | "effectiveness" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation" | "comparison" | "redteam";
 
 export function ProveStep({ lens }: { lens: Lens }) {
   const [sub, setSub] = React.useState<Sub>("launch");
@@ -23,12 +25,14 @@ export function ProveStep({ lens }: { lens: Lens }) {
     { id: "effectiveness", label: "Effectiveness" },
     { id: "frontier", label: "Zero-day frontier" },
     { id: "benchmarks", label: "Benchmarks" },
+    { id: "comparison", label: "vs R6" },
     { id: "coverage", label: "Threat coverage" },
     ...(owner ? [] : [
       { id: "gap", label: "Coverage gap" },
       { id: "matrix", label: "52×N matrix" },
       { id: "aiboundary", label: "AI boundary" },
       { id: "ablation", label: "Recon-per-$" },
+      { id: "redteam", label: "RL red-team" },
     ]),
     { id: "posture", label: "Posture" },
   ];
@@ -42,11 +46,13 @@ export function ProveStep({ lens }: { lens: Lens }) {
         {sub === "effectiveness" && <EffectivenessPanel lens={lens} />}
         {sub === "frontier" && <FrontierPanel lens={lens} />}
         {sub === "benchmarks" && <BenchmarksPanel lens={lens} />}
+        {sub === "comparison" && <ReportsPanel lens={lens} only="Comparison" intro="Phorvex vs R6 — the head-to-head, served live from COMPARISON.md." />}
         {sub === "coverage" && <ThreatMatrixPanel lens={lens} />}
         {sub === "gap" && <UncoveredFrontier lens={lens} />}
         {sub === "matrix" && <MatrixPanel lens={lens} />}
         {sub === "aiboundary" && <AIBoundary lens={lens} />}
         {sub === "ablation" && <AblationPanel lens={lens} />}
+        {sub === "redteam" && <RedTeamPanel lens={lens} />}
         {sub === "posture" && <PosturePanel lens={lens} />}
       </div>
     </div>

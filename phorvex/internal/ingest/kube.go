@@ -50,7 +50,8 @@ type NodeInfo struct {
 	AllocatableCPUMilli int64
 	AllocatableMemBytes int64
 	AllocatableGPU      int64
-	MIGResources        map[string]int64 // nvidia.com/mig-* -> count (legal-partition geometry)
+	MIGResources        map[string]int64  // nvidia.com/mig-* -> count (legal-partition geometry)
+	Labels              map[string]string // node labels (instance-type / cloud markers; within the existing `list nodes` RBAC — no privilege delta)
 }
 
 // PDBInfo is a live PodDisruptionBudget projection (Layer-A availability law, replacing
@@ -184,7 +185,7 @@ func collectNodes(ctx context.Context, c client.Client) []NodeInfo {
 	out := make([]NodeInfo, 0, len(nodeList.Items))
 	for i := range nodeList.Items {
 		n := &nodeList.Items[i]
-		ni := NodeInfo{Name: n.Name, MIGResources: map[string]int64{}}
+		ni := NodeInfo{Name: n.Name, MIGResources: map[string]int64{}, Labels: n.Labels}
 		alloc := n.Status.Allocatable
 		ni.AllocatableCPUMilli = alloc.Cpu().MilliValue()
 		ni.AllocatableMemBytes = alloc.Memory().Value()

@@ -1,0 +1,82 @@
+# Phorvex ACTUATOR RBAC (P4c F1/D2) — NAMESPACED least-privilege write scope.
+#
+# Replaces the privilege-widening defect: there was NO committed least-privilege write Role
+# (only unrendered kubebuilder markers), and the only write-capable binding was a CLUSTER-WIDE
+# ClusterRoleBinding sharing ONE token with the read scanner. This commits a per-managed-
+# namespace Role bound to a DEDICATED actuator ServiceAccount (distinct from the read/scanner
+# SA), with NO cluster-wide write, NO secrets, NO services/endpointslices, NO pods/patch.
+#
+# Apply ONE copy PER managed namespace (substitute <NS>). Bind Role B (code-exec) ONLY in
+# namespaces explicitly approved for ephemeral-container injection — it is OFF BY DEFAULT.
+#
+# `kubectl auth can-i` (as system:serviceaccount:<NS>:phorvex-actuator) MUST show:
+#   yes: delete/update/get/list pods; create/get/delete networkpolicies; get replicasets  (in <NS>)
+#   no : delete pods --all-namespaces; delete pod -n kube-system; get/delete secrets;
+#        update/patch services; update endpointslices; patch pods; delete nodes
+#
+# CODE-EXEC HONESTY (P4c, proven by running): an ephemeral-container injection (kubectl-debug
+# patch path) is FORBIDDEN for the Role-A SA — verified live ("cannot patch pods/
+# ephemeralcontainers"). Do NOT, however, rest the code-exec control on RBAC subresource
+# isolation alone (subresource authz is cluster-dependent and `can-i` over-reports). The REAL,
+# independently-proven code-exec gate is the LAYERED stack: (1) the ValidatingAdmissionPolicy
+# denies code-exec policies in system namespaces at ADMISSION; (2) the feasibility code-exec-
+# guard vetoes them at ACTUATION; (3) actions.enabled is OFF BY DEFAULT (the brain never
+# selects debugger/custom-inject unless explicitly enabled); (4) the handler hardcodes the
+# busybox image. Role B remains as belt-and-suspenders + the kubectl-debug close-proof.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phorvex-actuator           # DEDICATED — not the read/scanner SA, not controller-manager
+  namespace: <NS>
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role                          # NAMESPACED — never a ClusterRole; no cross-namespace write
+metadata:
+  name: phorvex-actuator-routine    # ROLE A — routine MTD moves (rotate/quarantine/identity/route/kv/endpoint/warm-swap)
+  namespace: <NS>
+rules:
+  # rotate=delete; quarantine/identity/route/kv/endpoint=update; warm-swap=list+update+delete.
+  # No "patch" (unused). No "create" on pods.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete", "update"]
+  # quarantine: create the deny-all NetworkPolicy + rollback deletes it.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "get", "delete"]
+  # LOAD-BEARING: quarantine reads the owning ReplicaSet selector to detach the pod out of the
+  # RS (preserving the stateful job — the lead demo). Read-only. MUST NOT be dropped.
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: phorvex-actuator-routine
+  namespace: <NS>
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: phorvex-actuator-routine }
+subjects:
+  - { kind: ServiceAccount, name: phorvex-actuator, namespace: <NS> }
+---
+# ROLE B — CODE-EXEC, SEPARATE + OFF BY DEFAULT. The pods/ephemeralcontainers write is the
+# irreversible in-pod RCE primitive (debugger/custom-inject). Bind this RoleBinding ONLY in a
+# namespace explicitly approved for code-exec, and NEVER in a system namespace. The actuator
+# also vetoes code-exec in system namespaces at the feasibility layer (defense-in-depth).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: phorvex-actuator-codeexec
+  namespace: <NS>
+rules:
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["update"]
+# --- Uncomment to OPT IN to code-exec in this namespace (default: keep unbound) ---
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata: { name: phorvex-actuator-codeexec, namespace: <NS> }
+# roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: phorvex-actuator-codeexec }
+# subjects: [ { kind: ServiceAccount, name: phorvex-actuator, namespace: <NS> } ]

@@ -145,7 +145,7 @@ func (m *MockInferenceServer) PlantSystemPromptSecret(ctx context.Context, env *
 // MarkerPresent reports whether a marker file inside the inference pod contains
 // the wanted marker (the generic in-pod oracle read).
 func (m *MockInferenceServer) MarkerPresent(ctx context.Context, env *core.Env, path, want string) bool {
-	return markerFilePresent(ctx, env, m.PodName, "server", path, want)
+	return markerPresentByApp(ctx, env, m.Name, "server", path, want) // robust to backend rotation
 }
 
 // ---- 2) MockMCPServer(s) ----
@@ -212,7 +212,7 @@ func (s *MockMCPServer) PlantToolResponseInjection(ctx context.Context, env *cor
 
 // ToolManifestContains reports whether the served tool manifest carries the marker.
 func (s *MockMCPServer) ToolManifestContains(ctx context.Context, env *core.Env, want string) bool {
-	return markerFilePresent(ctx, env, s.PodName, "server", "/tmp/tools_manifest", want)
+	return markerPresentByApp(ctx, env, s.Name, "server", "/tmp/tools_manifest", want) // robust to rotation
 }
 
 // ---- 3) MockModelRegistry ----
@@ -438,13 +438,13 @@ func (a *MockAgentRuntime) ToolsContain(ctx context.Context, env *core.Env, want
 
 // ActionLogContains reports whether the agent pod's action log carries the marker.
 func (a *MockAgentRuntime) ActionLogContains(ctx context.Context, env *core.Env, want string) bool {
-	return markerFilePresent(ctx, env, a.PodName, "agent", "/tmp/agent_actions", want)
+	return markerPresentByApp(ctx, env, a.PodName, "agent", "/tmp/agent_actions", want) // robust to rotation
 }
 
 // BackdoorPresent reports whether the agent backdoor marker survives in any
 // running agent pod (gone after an injected-panic eviction).
 func (a *MockAgentRuntime) BackdoorPresent(ctx context.Context, env *core.Env) bool {
-	return markerFilePresent(ctx, env, a.PodName, "agent", "/tmp/agent_backdoor", AgentBackdoorMarker)
+	return markerPresentByApp(ctx, env, a.PodName, "agent", "/tmp/agent_backdoor", AgentBackdoorMarker) // robust to rotation
 }
 
 // ---- shared deploy/exec/configmap helpers (reuse deployServer pattern) ----
@@ -544,7 +544,7 @@ func MarkerOnServer(ctx context.Context, env *core.Env, ms *MockServer, path, wa
 	if ms == nil {
 		return false
 	}
-	return markerFilePresent(ctx, env, ms.PodName, "server", path, want)
+	return markerPresentByApp(ctx, env, ms.Name, "server", path, want) // robust to rotation
 }
 
 // execMarker runs a small in-pod sh script (a marker write/mutation) and logs it.
@@ -561,6 +561,36 @@ func execMarker(ctx context.Context, env *core.Env, pod, container, script strin
 func markerFilePresent(ctx context.Context, env *core.Env, pod, container, path, want string) bool {
 	res := env.Exec(ctx, pod, container, []string{"sh", "-c", "cat " + path + " 2>/dev/null"})
 	return strings.Contains(res.Stdout, want)
+}
+
+// currentPodForApp returns a RUNNING, non-terminating pod carrying app=<app> in the sandbox (the
+// CURRENT foothold pod after any rotation), or "" if none.
+func currentPodForApp(ctx context.Context, env *core.Env, app string) string {
+	pods, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=" + app})
+	if err != nil {
+		return ""
+	}
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if p.DeletionTimestamp == nil && p.Status.Phase == corev1.PodRunning {
+			return p.Name
+		}
+	}
+	return ""
+}
+
+// markerPresentByApp checks the marker on the CURRENT pod for app — robust to rotation + emergent-
+// rate arms (PX). [P-REDTEAM measurement-bug fix #2] A FIXED-pod-name cat could not reflect a
+// rotation that replaced (or deleted) the foothold pod with a fresh one: a session/foothold marker
+// that lived only in the OLD pod must read as ABSENT after such a rotation. Resolving the CURRENT
+// app pod yields the honest post-rotation outcome (gone => false). An in-request marker checked
+// BEFORE the rotation window still finds the original pod (so genuine in-request ceilings stay true).
+func markerPresentByApp(ctx context.Context, env *core.Env, app, container, path, want string) bool {
+	pod := currentPodForApp(ctx, env, app)
+	if pod == "" {
+		return false // the foothold pod is gone (rotated away) => the marker is absent
+	}
+	return markerFilePresent(ctx, env, pod, container, path, want)
 }
 
 // readCounterFile reads an integer counter file from inside a pod.

@@ -27,9 +27,20 @@ import (
 type Server struct {
 	cfg  Config
 	runs *RunManager
+	// [P-VCLUSTER Pass 2] optional multi-tenant write-path components (nil => demo-trust dev mode):
+	oidc     *OIDCVerifier    // verified identity (replaces demo-trust as the authz boundary)
+	quota    *TenantQuota     // per-tenant DoS limiter on tenant-facing surfaces
+	applyfix *ApplyFixManager // the safe apply-fix write-path
 }
 
 func NewServer(cfg Config) *Server { return &Server{cfg: cfg, runs: NewRunManager(cfg)} }
+
+// EnableVCluster wires the Pass-2 production components (OIDC identity, per-tenant quota, safe apply-fix
+// write-path). Called by the deployment with a configured OIDC IdP; absent it, the console runs in
+// demo-trust dev mode (single-tenant, no write-path).
+func (s *Server) EnableVCluster(oidc *OIDCVerifier, quota *TenantQuota, applyfix *ApplyFixManager) {
+	s.oidc, s.quota, s.applyfix = oidc, quota, applyfix
+}
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -60,6 +71,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/live", s.withCORS(s.live))
 	// owner scope (IP-walled — ONLY OwnerEvents + the owner-safe rollup).
 	mux.HandleFunc("/api/owner/events", s.withCORS(s.scoped("owner", s.ownerEvents)))
+	mux.HandleFunc("/api/owner/tenants", s.withCORS(s.scoped("owner", s.ownerTenants)))
+	mux.HandleFunc("/api/reports", s.withCORS(s.scoped("operator", s.reports)))
+	// RED-TEAM CONTROL group (P-REDTEAM) — additive; reads real artifacts + execs the attacker tool.
+	mux.HandleFunc("/api/redteam/curves", s.withCORS(s.scoped("operator", s.redteamCurves)))
+	mux.HandleFunc("/api/redteam/campaigns", s.withCORS(s.scoped("operator", s.redteamCampaigns)))
+	mux.HandleFunc("/api/redteam/live", s.withCORS(s.scoped("operator", s.redteamLive)))
+	mux.HandleFunc("/api/redteam/findings", s.withCORS(s.scoped("operator", s.redteamFindings)))
+	mux.HandleFunc("/api/redteam/decision", s.withCORS(s.scoped("operator", s.redteamDecision)))
+	mux.HandleFunc("/api/redteam/gates", s.withCORS(s.scoped("operator", s.redteamGates)))
+	mux.HandleFunc("/api/redteam/run", s.withCORS(s.scoped("operator", s.redteamRun)))
+	mux.HandleFunc("/api/redteam/run-status", s.withCORS(s.scoped("operator", s.redteamRunStatus)))
+	mux.HandleFunc("/api/redteam/continuous", s.withCORS(s.scoped("operator", s.redteamContinuous)))
+	mux.HandleFunc("/redteam", s.withCORS(s.redteamPage))
+	// [P-VCLUSTER Pass 2] the safe apply-fix write-path (submit/approve) behind verified identity + quota.
+	s.registerVCluster(mux)
 	// Static SPA (the built Next.js export) served at / on the SAME port as /api — one
 	// process, one port, no proxy. SPA fallback to index.html for client-side routes.
 	mux.HandleFunc("/", s.spa)
@@ -98,7 +124,8 @@ func (s *Server) posture(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.cfg.PostureScore())
 }
 func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, s.cfg.Scan(r.URL.Query().Get("ns")))
+	q := r.URL.Query()
+	writeJSON(w, 200, s.cfg.Scan(q.Get("ns"), q.Get("context"), q.Get("prometheus-url")))
 }
 func (s *Server) ablation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.cfg.Ablation(r.URL.Query().Get("ns")))
@@ -245,7 +272,10 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		if !rec.Selected && !rec.Actuated {
 			continue // owners see ACTIONS, not every evaluated candidate
 		}
-		if tenant != "" && rec.Tenant != tenant {
+		// [P4c D7/F4 cross-tenant FIX] FAIL-CLOSED: an owner sees ONLY their own tenant. An
+		// empty/absent ?tenant= previously skipped the filter and returned ALL tenants; now it
+		// returns NOTHING. (Tenant identity is demo-trust until P-VCLUSTER; this stops the leak.)
+		if tenant == "" || rec.Tenant != tenant {
 			continue
 		}
 		events = append(events, ToOwnerEvent(rec)) // <- the ONLY owner projection
@@ -268,6 +298,38 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept},
 		"note":   "kind-scale demo data; live real-cluster streaming is [PENDING-P4a]. Tenant scoping is by request param (demo-trust) until real authn [PENDING-P-VCLUSTER].",
 	})
+}
+
+// ownerTenants lists the DISTINCT tenants present in the decision audit (demo-trust: the owner
+// view selects which customer's platform to show; real per-tenant authn is [PENDING-P-VCLUSTER]).
+// Lets the owner lens pass a concrete ?tenant= so its panels populate (the fail-closed empty-tenant
+// guard in ownerEvents otherwise returns nothing).
+func (s *Server) ownerTenants(w http.ResponseWriter, r *http.Request) {
+	recs := s.readAudit()
+	seen := map[string]bool{}
+	tenants := []string{}
+	for _, rec := range recs {
+		if (rec.Selected || rec.Actuated) && rec.Tenant != "" && !seen[rec.Tenant] {
+			seen[rec.Tenant] = true
+			tenants = append(tenants, rec.Tenant)
+		}
+	}
+	writeJSON(w, 200, map[string]any{"tenants": tenants})
+}
+
+// reports lists the curated evidence reports, or (with ?id=) returns one's live markdown.
+func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSON(w, 200, map[string]any{"reports": s.cfg.Reports()})
+		return
+	}
+	title, content, ok := s.cfg.ReportContent(id)
+	if !ok {
+		writeJSON(w, 404, map[string]any{"error": "report not found or unreadable: " + id})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"id": id, "title": title, "content": content})
 }
 
 // readAudit loads decision Records from the configured audit JSONL (or the newest one found

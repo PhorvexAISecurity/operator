@@ -11,7 +11,7 @@ export function ThreatMatrixPanel({ lens }: { lens: Lens }) {
   const [tech, setTech] = React.useState<CoverageTechnique[] | null>(null);
   const [err, setErr] = React.useState("");
   const [prod, setProd] = React.useState<"all" | "k8s" | "ai">("all");
-  React.useEffect(() => { api.threatMatrix(lens).then((d) => setTech(d.techniques)).catch((e) => setErr(String(e.message || e))); }, [lens]);
+  React.useEffect(() => { api.threatMatrix(lens).then((d) => setTech(d.techniques ?? [])).catch((e) => setErr(String(e.message || e))); }, [lens]);
   if (err) return <ErrorBox msg={err} />;
   if (!tech) return <Loading label="Building the threat-coverage matrix…" />;
 
@@ -65,7 +65,7 @@ export function PosturePanel({ lens }: { lens: Lens }) {
           <CardContent className="p-5">
             <SectionLabel>Sub-scores</SectionLabel>
             <div className="space-y-2.5">
-              {p.subs.map((s) => {
+              {(p.subs ?? []).map((s) => {
                 const pending = s.score < 0; // -1 = not-yet-computed / pending (excluded from grade)
                 const ai = /AI defense/i.test(s.label);
                 return (

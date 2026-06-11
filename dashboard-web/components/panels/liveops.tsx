@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { Lens, liveStream } from "@/lib/api";
+import { useOwnerTenant } from "@/lib/owner";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { Pending } from "@/components/ui/more";
@@ -10,14 +11,17 @@ import { Radio, Activity, Lock } from "lucide-react";
 export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [events, setEvents] = React.useState<any[]>([]);
   const [connected, setConnected] = React.useState(false);
+  const owner = lens === "owner";
+  const { tenant, tenants, setTenant } = useOwnerTenant(lens);
 
   React.useEffect(() => {
+    // owner stream is tenant-scoped: wait for a tenant before opening the SSE.
+    if (owner && !tenant) { setEvents([]); setConnected(false); return; }
     setEvents([]); setConnected(true);
-    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, 60)));
+    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, 60)), owner ? tenant : undefined);
     return () => { stop(); setConnected(false); };
-  }, [lens]);
+  }, [lens, owner, tenant]);
 
-  const owner = lens === "owner";
   const actuated = events.filter((e) => e.actuated || e.Actuated).length;
 
   return (
@@ -29,6 +33,14 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
           <span className={connected ? "text-foreground" : "text-muted-foreground"}>{connected ? "Streaming /api/live (SSE)" : "Disconnected"}</span>
         </div>
         <div className="text-[12px] text-muted-foreground">{events.length} decisions · {actuated} actuated</div>
+        {owner && tenants.length > 0 && (
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            platform:
+            <select value={tenant} onChange={(e) => setTenant(e.target.value)} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[11px] text-foreground">
+              {tenants.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+        )}
         {owner && <div className="flex items-center gap-1.5 text-[11px] text-primary"><Lock className="h-3 w-3" /> IP-walled stream (outcome only)</div>}
       </div>
 

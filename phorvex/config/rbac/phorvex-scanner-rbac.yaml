@@ -1,0 +1,60 @@
+# Phorvex SCANNER RBAC (P4a) — READ-ONLY, least-privilege, agentless scan scope.
+#
+# The customer applies this to grant Phorvex's read-only platform scan. It is PROVABLY
+# narrower than phorvex-manager-role (which carries create/update/patch) and DISJOINT from
+# the namespaced actuator write Role: a stolen scanner token can read cluster topology + the
+# RBAC reach graph and NOTHING else — it cannot mutate a pod, read a Secret's contents, exec,
+# port-forward, or impersonate. Every (apiGroup, resource, verb) below maps 1:1 to a
+# client.List call in internal/ingest (kube.go / events.go); there are NO write verbs.
+#
+# EKS: authenticate the scan with a standard exec-credential kubeconfig
+#   (`aws eks update-kubeconfig ...`) — Phorvex links NO AWS SDK; the AWS CLI mints the STS
+#   token out-of-process. To run the scanner IN-CLUSTER instead, uncomment the IRSA
+#   annotation and map the IAM role via an EKS access entry (or aws-auth).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phorvex-scanner
+  namespace: phorvex-system
+  # eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/phorvex-scanner-readonly
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phorvex-scanner-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/component: scanner
+# Cluster-wide READ is required: image-rarity / co-residency / blast-radius are inherently
+# fleet-wide. Verbs are {get,list,watch} ONLY — no create/update/delete/patch anywhere; no
+# secrets, no pods/exec, no pods/log, no impersonate.
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces", "nodes"]          # kube.go:72 / :76 / :181
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]                  # kube.go:208 (manager-role lacks PDBs)
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]                       # kube.go:80 (blast-radius edges)
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]             # kube.go:399-411 (RBAC reach graph)
+    resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  # OPTIONAL — only if the SecurityEvent CRD is installed (events.go:26). Omit otherwise.
+  # - apiGroups: ["amtd.r6security.com"]
+  #   resources: ["securityevents"]
+  #   verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: phorvex-scanner-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: phorvex-scanner-role
+subjects:
+  - kind: ServiceAccount
+    name: phorvex-scanner
+    namespace: phorvex-system

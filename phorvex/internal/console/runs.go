@@ -137,12 +137,18 @@ type ClusterTarget struct {
 	Note     string `json:"note"`
 }
 
+// ClusterTargets DERIVES the selectable targets from the operator's live kubeconfig contexts
+// (P4a — never a hardcoded context string). Each real context becomes a runnable read-only
+// scan target; EKS/CoreWeave are recognized for labeling but their GPU magnitudes stay
+// [SP-0-PENDING-P4]. If no kubeconfig resolves, the list is honestly empty (the UI shows a
+// "no clusters found — point KUBECONFIG at a cluster" state).
 func (rm *RunManager) ClusterTargets() []ClusterTarget {
-	return []ClusterTarget{
-		{ID: "kind", Context: "kind-amtd-test", Label: "kind (local)", Runnable: true, Note: "kind-scale, reproducible at seed 1337"},
-		{ID: "eks", Context: "", Label: "AWS EKS (GPU)", Runnable: false, Note: "[PENDING-P4a] — real-cluster execution validated at P4a/P4"},
-		{ID: "coreweave", Context: "", Label: "CoreWeave (GPU)", Runnable: false, Note: "[PENDING-P4] — GPU magnitudes calibrated at P4"},
+	ctxs := kubeContexts()
+	out := make([]ClusterTarget, 0, len(ctxs))
+	for _, c := range ctxs {
+		out = append(out, classifyContext(c))
 	}
+	return out
 }
 
 // StartScenario runs a SINGLE scenario (generated one-scenario config) against the chosen

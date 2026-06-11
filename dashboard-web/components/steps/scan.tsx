@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
-import { api, Lens } from "@/lib/api";
+import { api, Lens, ScanResult } from "@/lib/api";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Pending } from "@/components/ui/more";
+import { ErrorBox } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { cn } from "@/lib/utils";
 import { Radar, Check, Loader2, ArrowRight } from "lucide-react";
@@ -16,41 +16,59 @@ const PHASES = [
 ];
 
 export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
-  const [phase, setPhase] = React.useState(-1);
-  const [done, setDone] = React.useState(false);
-  const [hasCorpus, setHasCorpus] = React.useState(false);
-  React.useEffect(() => { api.health().then((h) => setHasCorpus(!!(h.hasP3Deep || h.hasPactuator))).catch(() => {}); }, []);
+  const [scanning, setScanning] = React.useState(false);
+  const [scan, setScan] = React.useState<ScanResult | null>(null);
+  const [err, setErr] = React.useState("");
+  const [at, setAt] = React.useState("");
+  const [ctxLabel, setCtxLabel] = React.useState("");
 
-  function run() {
-    setPhase(0); setDone(false);
-    let i = 0;
-    const t = setInterval(() => {
-      i++; setPhase(i);
-      if (i >= PHASES.length) { clearInterval(t); setDone(true); }
-    }, 650);
+  React.useEffect(() => {
+    if (typeof window !== "undefined") setCtxLabel(localStorage.getItem("phorvex-context") || "current kubeconfig context");
+  }, []);
+
+  // run() execs `phorvex --scan` LIVE via /api/scan (a fresh exec each click — not a cached corpus).
+  // The PHASES below are the real server-side pipeline this single exec runs; we show them all
+  // in-progress during the exec and done on completion — NOT a fake sequential per-phase timer.
+  async function run() {
+    setScanning(true); setErr(""); setScan(null);
+    const context = typeof window !== "undefined" ? localStorage.getItem("phorvex-context") || "" : "";
+    try {
+      const res = await api.scan("", lens, context); // ns="" => all namespaces; live exec
+      setScan(res);
+      setAt(new Date().toLocaleTimeString());
+    } catch (e: any) {
+      setErr(String(e?.message || e));
+    } finally {
+      setScanning(false);
+    }
   }
+
+  const witness = scan?.witness ?? [];
+  const done = !!scan && !scanning;
 
   return (
     <div className="animate-fade-up space-y-6">
       <StepHead n={2} title="Scan" sub="Derive the platform's real physics — the discovered, both-products signal Phorvex optimizes over. On a CPU/kind cluster the GPU half is honestly [SP-0-PENDING-P4]." />
 
-      <Pending stage="LIVE TRIGGER [PENDING-wire · Phase 3]" msg="A live POST /api/scan that execs `phorvex --scan` is the Phase-3 wire. Today this loads the latest discovered corpus from the real metrics + audit — never a fake animation over nothing." />
-
       <Card>
         <CardContent className="flex flex-col items-center gap-5 py-10">
-          <div className={cn("grid h-16 w-16 place-items-center rounded-2xl ring-1 transition-colors", phase < 0 ? "bg-primary/10 ring-primary/30" : done ? "bg-success/10 ring-success/30" : "bg-primary/15 ring-primary/40")}>
-            {phase < 0 ? <Radar className="h-7 w-7 text-primary" /> : done ? <Check className="h-7 w-7 text-success" /> : <Loader2 className="h-7 w-7 animate-spin text-primary" />}
+          <div className={cn("grid h-16 w-16 place-items-center rounded-2xl ring-1 transition-colors", !scanning && !done ? "bg-primary/10 ring-primary/30" : done ? "bg-success/10 ring-success/30" : "bg-primary/15 ring-primary/40")}>
+            {scanning ? <Loader2 className="h-7 w-7 animate-spin text-primary" /> : done ? <Check className="h-7 w-7 text-success" /> : <Radar className="h-7 w-7 text-primary" />}
           </div>
-          {phase < 0 ? (
+
+          {!scanning && !done ? (
             <>
-              <div className="text-center text-sm text-muted-foreground">Run the platform-physics scan to map this environment.</div>
-              <Button onClick={run} disabled={!hasCorpus}>{hasCorpus ? "Run platform-physics scan" : "No scan corpus found"}</Button>
-              {!hasCorpus && <div className="text-[12px] text-warning">No metrics corpus on disk yet — run an attack/benchmark first (Prove step).</div>}
+              <div className="text-center text-sm text-muted-foreground">
+                Run a <span className="text-foreground">live</span> platform-physics scan — execs <span className="font-mono text-foreground/80">phorvex --scan</span> against
+                <span className="font-mono text-foreground/80"> {ctxLabel}</span> and returns fresh results.
+              </div>
+              <Button onClick={run}><Radar className="h-4 w-4" /> Run live scan</Button>
+              {err && <div className="w-full max-w-md"><ErrorBox msg={err} /></div>}
             </>
           ) : (
             <div className="w-full max-w-md space-y-2.5">
-              {PHASES.map((p, i) => {
-                const st = i < phase ? "done" : i === phase ? "run" : "wait";
+              {PHASES.map((p) => {
+                const st = scanning ? "run" : "done"; // all server-side stages of the one exec
                 return (
                   <div key={p.k} className={cn("flex items-center gap-3 rounded-md border px-3 py-2", st === "done" ? "border-success/20 bg-success/[0.04]" : st === "run" ? "border-primary/30 bg-primary/[0.05]" : "border-border/50 opacity-50")}>
                     {st === "done" ? <Check className="h-4 w-4 text-success" /> : st === "run" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <span className="h-4 w-4 rounded-full border border-border" />}
@@ -60,7 +78,43 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
               })}
             </div>
           )}
-          {done && <Button onClick={() => go("discovered")}>See what was discovered <ArrowRight className="h-4 w-4" /></Button>}
+
+          {done && (
+            <div className="w-full max-w-lg space-y-3">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-[12px] text-muted-foreground">
+                <Badge variant="real"><Check className="h-2.5 w-2.5" /> live exec</Badge>
+                <Badge variant="accent">{scan?.platform || "generic-k8s"}</Badge>
+                <span>{scan?.nodes ?? 0} node · <span className="tabular text-foreground">{scan?.pods ?? witness.length}</span> pods · {witness.length} physics rows</span>
+                <span className="text-muted-foreground/60">scanned {at}</span>
+              </div>
+              {witness.length === 0 ? (
+                <div className="rounded-md border border-warning/30 bg-warning/[0.05] px-3 py-2 text-center text-[12px] text-muted-foreground">
+                  The scan ran but found no pods on <span className="font-mono">{ctxLabel}</span>. Check the cluster context / that workloads exist.
+                </div>
+              ) : (
+                <Card><CardContent className="p-0">
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-[12px]">
+                      <thead className="sticky top-0 bg-panel"><tr className="text-left text-[10px] uppercase text-muted-foreground"><th className="px-3 py-1.5">Pod</th><th className="px-3 py-1.5">imgRarity</th><th className="px-3 py-1.5">coRes</th><th className="px-3 py-1.5">slack</th><th className="px-3 py-1.5">EPSS</th></tr></thead>
+                      <tbody>{witness.map((w) => (
+                        <tr key={w.pod} className="border-t border-border/40">
+                          <td className="px-3 py-1.5 font-mono">{w.pod}</td>
+                          <td className="px-3 py-1.5 tabular">{w.imageRarity.toFixed(2)}</td>
+                          <td className="px-3 py-1.5 tabular">{w.coResidency.toFixed(2)}</td>
+                          <td className="px-3 py-1.5 tabular">{w.slack.toFixed(2)}</td>
+                          <td className="px-3 py-1.5 tabular">{w.epss.toFixed(2)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </CardContent></Card>
+              )}
+              <div className="flex items-center justify-center gap-3">
+                <Button onClick={run} disabled={scanning}><Radar className="h-4 w-4" /> Re-scan (fresh)</Button>
+                <Button onClick={() => go("discovered")}>See what was discovered <ArrowRight className="h-4 w-4" /></Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

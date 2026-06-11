@@ -12,7 +12,7 @@ Confidence level: 95%. Disruption is measured STRICTLY against each scenario's c
 
 | Scenario | Category | R6 | Defender | Trials | Disruption% (CI) | OracleHit% | Dwell s (CI) | TimeToAction s | Sec/Cost | EvidRetain | NegFalseMoves |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| c2-persistence-evict | R6Claimed | R6Covers | d-fullphoenix | 2 | 100% [100,100] | 0% | 6.1 [6.1,6.1] | 0.0 [0.0,0.0] | 1.00 | 0.75 | 0 |
+| c2-persistence-evict | R6Claimed | R6Covers | d-fullphoenix | 2 | 0% [0,0] | 100% | 6.2 [6.1,6.2] | 0.0 [0.0,0.0] | 0.00 | 0.75 | 0 |
 
 ## Controls
 

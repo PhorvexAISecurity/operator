@@ -33,8 +33,12 @@ var validCategories = map[core.Category]bool{
 	core.CategoryModernUnsupported: true,
 }
 
-// attackIDRe matches a MITRE ATT&CK for Containers technique id (Txxxx[.yyy]).
-var attackIDRe = regexp.MustCompile(`^T\d{4}(\.\d{3})?$`)
+// attackIDRe matches a MITRE ATT&CK for Containers technique id (Txxxx[.yyy]) OR a MITRE ATLAS id
+// (AML.Txxxx[.yyy]). [P-AUDIT fix] The prior ATT&CK-ONLY regex was an over-narrow assumption — true
+// for K8s scenarios, FALSE for AI scenarios, which legitimately carry ATLAS techniques in
+// AttackTechniqueIDs (the same assumption-bug class as the armRotates fixed-interval gate). This was
+// the root cause of the pre-existing TestScenarioMetadataComplete failures on the -apt/-agent AI scenarios.
+var attackIDRe = regexp.MustCompile(`^(T\d{4}(\.\d{3})?|AML\.T\d{4}(\.\d{3})?)$`)
 
 // TestCategory1And2Registered asserts that every Category-1 (classic chain) and
 // Category-2 (R6-claimed) scenario this task implements self-registered. Adding a

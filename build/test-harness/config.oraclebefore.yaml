@@ -1,0 +1,37 @@
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 2
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-oraclebefore"
+defenderFilter: ["d-nomtd","d-phorvex"]
+scenarioFilter:
+  - ai1-inference-manipulation
+  - ai1-llm-jacking
+  - ai1-model-theft
+  - ai1-pillar03-panic-mutation
+  - ai1-prompt-injection
+  - ai2-agent-excessive-agency
+  - ai2-agent-injection-to-persistence
+  - ai2-agent-memory-contamination
+  - ai2-agent-rogue-tool-persistence
+  - ai2-co-location-cross-tenant
+  - ai2-data-model-poisoning
+  - ai2-embedding-store-tampering
+  - ai2-embedding-vector-weakness
+  - ai2-excessive-agency
+  - ai2-gpu-side-channel
+  - ai2-kvcache-poisoning-cross-session-leak
+  - ai2-malicious-model-artifact
+  - ai2-mcp-rogue-server
+  - ai2-mcp-tool-poisoning
+  - ai2-mcp-tool-response-injection
+  - ai2-poisoned-model-registry
+  - ai2-query-extraction
+  - ai2-rag-retrieval-poisoning
+  - ai2-sensitive-info-disclosure
+  - ai2-system-prompt-leakage
+  - ai2-tampered-inference-base-image
+  - ai2-unbounded-consumption

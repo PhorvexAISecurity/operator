@@ -5,6 +5,8 @@
 package platform
 
 import (
+	"strings"
+
 	"github.com/phorvex/phorvex/internal/ingest"
 )
 
@@ -29,8 +31,14 @@ import (
 // projected.
 type eksGPU struct{ genericK8s }
 
-func (eksGPU) Name() string                      { return "eks-gpu" }
-func (eksGPU) Detected(s *ingest.Snapshot) bool  { return hasGPUNode(s) }
+func (eksGPU) Name() string { return "eks-gpu" }
+
+// Detected: a GPU-advertising node carrying an EKS-specific node label (eks.amazonaws.com/*,
+// e.g. eks.amazonaws.com/nodegroup or .../compute-type). LABEL-DRIVEN, not registration order,
+// so it never mis-fires on kind/CoreWeave. On kind there are no eks.amazonaws.com labels => false.
+func (eksGPU) Detected(s *ingest.Snapshot) bool {
+	return hasGPUNode(s) && nodeLabelKeyPrefix(s, "eks.amazonaws.com/")
+}
 
 // coreWeave is the CoreWeave GPU-cluster adapter. SOURCE for the GPU half (SP-0 until
 // wired): nvidia.com/gpu.product + gpu-feature-discovery node labels for topology, DCGM
@@ -38,8 +46,26 @@ func (eksGPU) Detected(s *ingest.Snapshot) bool  { return hasGPUNode(s) }
 // already in the PromQL seam) for KV/cold-load. Detected by GPU-advertising nodes.
 type coreWeave struct{ genericK8s }
 
-func (coreWeave) Name() string                     { return "coreweave" }
-func (coreWeave) Detected(s *ingest.Snapshot) bool { return hasGPUNode(s) }
+func (coreWeave) Name() string { return "coreweave" }
+
+// Detected: a GPU node carrying a CoreWeave-specific label. [PENDING-P4] — the exact label
+// keys are confirmed on real CoreWeave hardware at P4; false on kind/EKS today.
+func (coreWeave) Detected(s *ingest.Snapshot) bool {
+	return hasGPUNode(s) && nodeLabelKeyPrefix(s, "node.coreweave.cloud/")
+}
+
+// nodeLabelKeyPrefix reports whether any scanned node carries a label whose KEY starts with
+// prefix (the cloud-platform marker). Reads NodeInfo.Labels (collected within `list nodes`).
+func nodeLabelKeyPrefix(s *ingest.Snapshot, prefix string) bool {
+	for i := range s.Nodes {
+		for k := range s.Nodes[i].Labels {
+			if strings.HasPrefix(k, prefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // gpuMarketplace is the generic GPU-marketplace adapter (e.g. rented bare-metal/MIG).
 // SOURCE for the GPU half (SP-0 until wired): the marketplace's own capacity API /

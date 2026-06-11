@@ -110,15 +110,28 @@ func TestNegativeEvidenceFallsPrior(t *testing.T) {
 
 // TestHierarchicalColdTenant: a cold tenant inherits the FLEET base-rate, not the fixed
 // 0.2 — after the fleet has learned footholds-persist, a brand-new tenant starts higher.
+// TestHierarchicalColdTenant — [P-VCLUSTER O3] the cross-tenant prior is OFF by default (a cold tenant
+// must NOT inherit another tenant's evidence — exact isolation), and ON only when opted in.
 func TestHierarchicalColdTenant(t *testing.T) {
+	// DEFAULT (cross-feed OFF): a busy tenant's evidence must NOT move a cold tenant's prior at all.
 	mem := NewConjugateMemory()
-	cold0 := mem.PriorMean("brand-new-0") // fleet empty => default 0.2
-	// the fleet observes a tenant whose footholds strongly persist
+	cold0 := mem.PriorMean("brand-new-0")
 	for i := 0; i < 20; i++ {
 		mem.Observe("busy-tenant", 1.0)
 	}
-	cold1 := mem.PriorMean("brand-new-1") // now inherits the elevated fleet base-rate
-	if cold1 <= cold0 {
-		t.Fatalf("cold tenant must inherit the elevated fleet base-rate: empty=%.3f after-fleet=%.3f", cold0, cold1)
+	cold1 := mem.PriorMean("brand-new-1")
+	if cold1 != cold0 {
+		t.Fatalf("O3 LEAK: a cold tenant inherited another tenant's evidence by default: empty=%.6f after-fleet=%.6f (must be EXACTLY equal — isolated)", cold0, cold1)
+	}
+
+	// OPT-IN (a trusted tenant-group): the hierarchical fleet prior inheritance still works.
+	shared := NewConjugateMemory().SetCrossTenantPrior(true)
+	c0 := shared.PriorMean("nb-0")
+	for i := 0; i < 20; i++ {
+		shared.Observe("busy", 1.0)
+	}
+	c1 := shared.PriorMean("nb-1")
+	if c1 <= c0 {
+		t.Fatalf("opt-in hierarchical prior must inherit the elevated fleet base-rate: empty=%.3f after=%.3f", c0, c1)
 	}
 }

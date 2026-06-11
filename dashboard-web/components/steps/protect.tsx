@@ -3,38 +3,42 @@ import * as React from "react";
 import { Lens } from "@/lib/api";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
-import { Pending, Segmented } from "@/components/ui/more";
+import { Segmented } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { LiveOpsPanel } from "@/components/panels/liveops";
 import { OptimizationPanel, CostPanel, ActuatorPanel, HealthPanel } from "@/components/subsystems/panels";
 import { RiskHeatmap } from "@/components/subsystems/analytics";
+import { ApplyFixPanel } from "@/components/panels/apply-fix";
 import { cn } from "@/lib/utils";
 import { Play, Pause, Radar, Swords, Hand } from "lucide-react";
 
 export function ProtectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
-  const [mode, setMode] = React.useState<"active" | "dryrun">("dryrun");
-  const [sub, setSub] = React.useState<"live" | "mtd" | "cost" | "actuator" | "health" | "risk">("live");
+  const [sub, setSub] = React.useState<"live" | "mtd" | "cost" | "actuator" | "health" | "risk" | "applyfix">("live");
   const owner = lens === "owner";
   return (
     <div className="animate-fade-up space-y-6">
       <StepHead n={4} title="Protect / Run" sub={owner ? "Phorvex protecting your platform, in plain language — what it did and that it helped." : "The home for every method. Start Phorvex, watch the optimizer DECIDE and the actuator ACTUATE in real time, and drill into the action set, the coverage−λ·cost scoring, and why each move was chosen."} lens={lens} />
-      {!owner && <Segmented value={sub} onChange={setSub} tabs={[{ id: "live", label: "Live theatre" }, { id: "mtd", label: "MTD / Optimization" }, { id: "cost", label: "Cost" }, { id: "actuator", label: "Actuator" }, { id: "risk", label: "Risk heatmap" }, { id: "health", label: "Health" }]} />}
+      {!owner && <Segmented value={sub} onChange={setSub} tabs={[{ id: "live", label: "Live theatre" }, { id: "mtd", label: "MTD / Optimization" }, { id: "cost", label: "Cost" }, { id: "actuator", label: "Actuator" }, { id: "applyfix", label: "Apply-fix" }, { id: "risk", label: "Risk heatmap" }, { id: "health", label: "Health" }]} />}
 
       {owner || sub === "live" ? (
         <>
           {!owner && (
             <Card><CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 rounded-lg border border-border bg-panel/60 p-1">
-                  <button onClick={() => setMode("active")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium", mode === "active" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}><Play className="h-3 w-3" /> Active</button>
-                  <button onClick={() => setMode("dryrun")} className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium", mode === "dryrun" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}><Pause className="h-3 w-3" /> Dry-run</button>
+                {/* [P2 #2] The operator MODE control is a cluster WRITE (patch the PhorvexPolicy mode /
+                    start-stop the operator). The console is read-only + safe-triggers only, so this is
+                    HONESTLY DISABLED ([coming]) rather than a dead button that looks live. The operator
+                    is controlled out-of-band (kubectl/Helm); the dashboard streams its real audit. */}
+                <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-panel/40 p-1 opacity-60">
+                  <span className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-muted-foreground"><Play className="h-3 w-3" /> Active</span>
+                  <span className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-muted-foreground"><Pause className="h-3 w-3" /> Dry-run</span>
                 </div>
-                <span className="text-[12px] text-muted-foreground">{mode === "active" ? "Phorvex actuates real moves" : "decides + audits, never actuates (safe)"}</span>
+                <Badge variant="pending">operator control · coming</Badge>
+                <span className="text-[12px] text-muted-foreground">start/stop &amp; mode are an out-of-band cluster write (kubectl/Helm); this view streams the operator's real decision audit.</span>
               </div>
               <div className="flex items-center gap-2"><span className="flex items-center gap-1.5 text-[12px] text-muted-foreground"><Hand className="h-3.5 w-3.5" /> native actuator</span><Badge variant="real">streaming the live decision audit</Badge></div>
             </CardContent></Card>
           )}
-          {!owner && <Pending stage="PENDING-wire · Phase 3" msg="Operator start/stop from the dashboard is the Phase-3 wire (POST /api/operator/{start,stop}). The live theatre streams the real audit; Dry-run is fully safe." />}
           <LiveOpsPanel lens={lens} />
           {!owner && (
             <Card><CardContent className="p-4">
@@ -50,6 +54,7 @@ export function ProtectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void 
       ) : sub === "mtd" ? <OptimizationPanel lens={lens} />
         : sub === "cost" ? <CostPanel lens={lens} />
         : sub === "actuator" ? <ActuatorPanel lens={lens} />
+        : sub === "applyfix" ? <ApplyFixPanel lens={lens} />
         : sub === "risk" ? <RiskHeatmap lens={lens} />
         : <HealthPanel lens={lens} />}
     </div>

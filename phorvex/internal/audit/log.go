@@ -80,10 +80,23 @@ type Record struct {
 type Logger struct {
 	log     logr.Logger
 	mu      sync.Mutex
-	jsonOut io.Writer // optional JSON-Lines sink
+	jsonOut io.Writer // optional JSON-Lines sink (the single shared / single-tenant sink)
+	// [P-VCLUSTER O10] sinkFor, when set, routes each record to a PER-TENANT sink (by rec.Tenant) so a
+	// noisy tenant's rotation cannot evict another tenant's audit history. nil => the single jsonOut
+	// (byte-identical single-tenant path).
+	sinkFor func(tenant string) io.Writer
 	// OnlySelected, when true, logs only Selected (non-noop) decisions to the logger
 	// to keep operator logs quiet; the JSON sink (if set) always gets every record.
 	OnlySelected bool
+}
+
+// SetTenantSink installs a per-tenant JSON-Lines sink router (O10 audit isolation): each tenant's
+// records go to its OWN writer, so one tenant's volume/rotation never evicts another's history. Pass
+// nil to revert to the single shared sink.
+func (l *Logger) SetTenantSink(router func(tenant string) io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sinkFor = router
 }
 
 // New constructs a Logger. jsonOut may be nil.
@@ -144,13 +157,19 @@ func ToRecord(d model.Decision) Record {
 // Record logs one decision.
 func (l *Logger) Record(d model.Decision) {
 	rec := ToRecord(d)
-	if l.jsonOut != nil {
-		l.mu.Lock()
-		if b, err := json.Marshal(rec); err == nil {
-			_, _ = l.jsonOut.Write(append(b, '\n'))
+	l.mu.Lock()
+	out := l.jsonOut
+	if l.sinkFor != nil { // [P-VCLUSTER O10] route to the tenant's own sink (default-off => byte-identical)
+		if w := l.sinkFor(rec.Tenant); w != nil {
+			out = w
 		}
-		l.mu.Unlock()
 	}
+	if out != nil {
+		if b, err := json.Marshal(rec); err == nil {
+			_, _ = out.Write(append(b, '\n'))
+		}
+	}
+	l.mu.Unlock()
 	if l.OnlySelected && !d.Selected {
 		return
 	}

@@ -14,7 +14,13 @@ import (
 	"github.com/r6security/phoenix-test-harness/internal/core"
 )
 
-func init() { core.RegisterDefender(&phorvexArm{}) }
+func init() {
+	core.RegisterDefender(&phorvexArm{}) // d-phorvex: the SHIPPED brain (both fixes on)
+	// d-phorvex-vuln-steer: the SAME shipped binary but a policy with proactiveFloor=0, which (by
+	// coverage.go: floorSec<=0 => prov=1) DISABLES the dispersion-steer provenance discount — the
+	// pre-fix state, used to confirm the RL's decoy crowd-out WOULD suppress the actuation.
+	core.RegisterDefender(&phorvexArm{armName: "d-phorvex-vuln-steer", floor: "0s"})
+}
 
 // phorvexArm is the PX arm: the Phorvex P1/P2 stack (the DETERMINISTIC submodular
 // recon-coverage brain) driving UNMODIFIED extended Phoenix over Seam 1. It runs TWO
@@ -31,6 +37,9 @@ func init() { core.RegisterDefender(&phorvexArm{}) }
 // This is the file that FILLS the reserved d-phorvex-slot: it drops in as one
 // self-registering arm with ZERO harness-core / extended-Phoenix changes.
 type phorvexArm struct {
+	armName     string // "" => "d-phorvex"; the vuln variant overrides this
+	floor       string // proactiveFloor override; "" => "6s". "0s" disables the steer-prov fix
+	auditPath   string // where this arm's --audit-json decision trail is written
 	mu          sync.Mutex
 	phoenixProc *exec.Cmd
 	phorvexProc *exec.Cmd
@@ -43,9 +52,22 @@ type phorvexArm struct {
 	skipMsg     string
 }
 
+func (p *phorvexArm) name() string {
+	if p.armName != "" {
+		return p.armName
+	}
+	return "d-phorvex"
+}
+func (p *phorvexArm) proactiveFloor() string {
+	if p.floor != "" {
+		return p.floor
+	}
+	return "6s"
+}
+
 func (p *phorvexArm) Metadata() core.DefenderMeta {
 	return core.DefenderMeta{
-		Name: "d-phorvex",
+		Name:        p.name(),
 		Description: "PX: the Phorvex deterministic submodular recon-coverage brain (P1/P2) driving UNMODIFIED extended Phoenix over Seam 1. Runs the real Phoenix operator + the Phorvex operator (active); Phorvex decides which/when/which-action under hard SLO+budget and emits SecurityEvents Phoenix actuates. NOT a fixed cadence — the rotation rate is a solved decision variable.",
 		// 0 = no fixed nominal interval: PX's rate is an emergent decision variable
 		// (the adaptive learner reads its OBSERVED gaps, which carry no fixed period).
@@ -138,7 +160,7 @@ func (p *phorvexArm) applyPolicy(ctx context.Context, env *core.Env) string {
 	policy := fmt.Sprintf(`apiVersion: phorvex.ai/v1alpha1
 kind: PhorvexPolicy
 metadata:
-  name: harness-px
+  name: %s
   namespace: %s
 spec:
   tenant: %s
@@ -152,7 +174,7 @@ spec:
     maxMovesPerTick: 1
     tickInterval: 3s
     antiOverRotationWindow: 8s
-    proactiveFloor: 6s
+    proactiveFloor: %s
   slo:
     minAvailableReplicas: 1
   assetValue:
@@ -165,13 +187,13 @@ spec:
   actions:
     enabled: ["rotate", "quarantine"]
   mode: active
-`, ns, ns, RotationTargetLabel)
+`, "harness-"+p.name(), ns, ns, RotationTargetLabel, p.proactiveFloor())
 	outDir := env.Config.OutDir
 	if outDir == "" {
 		outDir = "out"
 	}
 	_ = os.MkdirAll(outDir, 0o755)
-	p.policyFile = filepath.Join(outDir, "phorvexpolicy-harness-px.yaml")
+	p.policyFile = filepath.Join(outDir, "phorvexpolicy-"+p.name()+".yaml")
 	if err := os.WriteFile(p.policyFile, []byte(policy), 0o644); err != nil {
 		return "write PhorvexPolicy: " + err.Error()
 	}
@@ -203,10 +225,17 @@ func (p *phorvexArm) Start(ctx context.Context, env *core.Env) error {
 		return nil
 	}
 	// Start the Phorvex operator (the brain) in ACTIVE mode. Distinct metrics/health
-	// ports so it never collides with the Phoenix operator's :8080/:8081.
+	// ports so it never collides with the Phoenix operator's :8080/:8081. --audit-json captures
+	// the JSON-Lines decision trail (selected/actuated/objectsTouched/perDollar/λ) as ground truth.
+	outDir := env.Config.OutDir
+	if outDir == "" {
+		outDir = "out"
+	}
+	p.auditPath = filepath.Join(outDir, "phorvex-audit-"+p.name()+".jsonl")
 	if cmd, lf, pin, err := startPinnedProc(ctx, env, phorvexBin, pxDir,
 		[]string{"--engine=p1", "--base-interval=4s",
 			"--operator-namespace=" + env.Config.Namespace,
+			"--audit-json=" + p.auditPath,
 			"--metrics-bind-address=:18080", "--health-probe-bind-address=:18081"},
 		"phorvex", "px-phorvex"); err == nil {
 		p.phorvexProc, p.phorvexLog, p.phorvexPin = cmd, lf, pin

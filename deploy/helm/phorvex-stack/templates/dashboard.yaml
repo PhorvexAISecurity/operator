@@ -1,0 +1,96 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phorvex-stack.dashboardName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-stack.dashboardLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dashboard.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex-console
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "phorvex-stack.dashboardLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: console
+          image: "{{ include "phorvex-stack.dashboardImage" . }}"
+          imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+          # The console image bakes its data snapshot at /data and the SPA at /app/web
+          # (see deploy/docker/console.Dockerfile CMD). It is a READ-ONLY report viewer.
+          ports:
+            - name: http
+              containerPort: {{ .Values.dashboard.port }}
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.dashboard.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "phorvex-stack.dashboardName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-stack.dashboardLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.dashboard.service.type }}
+  selector:
+    app.kubernetes.io/name: phorvex-console
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.dashboard.service.port }}
+      targetPort: http
+{{- if .Values.dashboard.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "phorvex-stack.dashboardName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-stack.dashboardLabels" . | nindent 4 }}
+  {{- with .Values.dashboard.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.dashboard.ingress.className }}
+  rules:
+    - host: {{ .Values.dashboard.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "phorvex-stack.dashboardName" . }}
+                port:
+                  number: {{ .Values.dashboard.service.port }}
+  {{- if .Values.dashboard.ingress.tls }}
+  tls:
+    - hosts: [{{ .Values.dashboard.ingress.host | quote }}]
+      secretName: {{ include "phorvex-stack.dashboardName" . }}-tls
+  {{- end }}
+{{- end }}
+{{- end }}

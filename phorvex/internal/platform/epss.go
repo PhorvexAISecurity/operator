@@ -31,6 +31,11 @@ type epssEntry struct {
 
 // SeedEPSS replaces the offline exploitability cache (from a scanner export or a config
 // file). Deterministic; no network in the decision path. Empty map => all lookups 1.0.
+//
+// [SP-0-PENDING-P4a] UNWIRED: as of P4a SeedEPSS has ZERO callers, so epssCache is empty and
+// epssMultiplier returns 1.0 for EVERY image — one of the three EMR dispersion legs is inert.
+// Wiring a scanner/NVD-FIRST export feed is a P4a follow-up; until then EPSS must NOT be
+// presented as "live today."
 func SeedEPSS(m map[string]struct {
 	EPSS float64
 	CVSS float64

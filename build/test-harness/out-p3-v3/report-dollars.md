@@ -16,12 +16,12 @@ Pure post-processing over the SAME extended Metric schema (ZERO re-execution). R
 | Scenario | Defender | Disrupt% | MTDEffect | Trigger | SecPerCost($) | DefenseCost$/yr | Schwartau P/D/R (s) | P>D+R | Replay succ | ReuseRedux% | CapPending |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | c1-heldout-cve | d-nomtd | 0% | - | MISSING-TRIGGER:detector-absent | $0 | $8 | 0/ABSENT/0.0 | false | 0 | 0% | false |
-| c1-heldout-cve | d-phorvex | 100% | - | MISSING-TRIGGER:detector-absent | $610000 | $8 | 0/ABSENT/0.0 | false | 0 | 0% | false |
-| c1-heldout-cve | d-r6blindtimer | 100% | - | MISSING-TRIGGER:detector-absent | $585600 | $8 | 15/ABSENT/15.0 | false | 0 | 0% | false |
+| c1-heldout-cve | d-phorvex | 0% | - | MISSING-TRIGGER:detector-absent | $0 | $8 | 0/ABSENT/0.0 | false | 0 | 0% | false |
+| c1-heldout-cve | d-r6blindtimer | 0% | - | MISSING-TRIGGER:detector-absent | $0 | $8 | 15/ABSENT/15.0 | false | 0 | 0% | false |
 
 ## Hypotheses H1 / H2 / H3 (PHORVEX Part 9 -- defined transparently from the rotation-vs-static thesis; no pre-registered doc exists in the repo)
 
-- **H1 (Dwell-bound)**: rotating arms' mean persistence-disruption = 100% (95% CI [100, 100]) vs static 0%. PASS iff CI lower-bound > 0 -> **PASS**.
+- **H1 (Dwell-bound)**: rotating arms' mean persistence-disruption = 0% (95% CI [0, 0]) vs static 0%. PASS iff CI lower-bound > 0 -> **FAIL**.
 - **H2 (In-request invariance)**: 1/1 rotating-arm rows are attributed detector-absent/receiver-only (MTD-CANNOT-HELP in-request). PASS iff in-request disruption brackets 0 AND attribution is detector-absent/receiver-only/capability-pending -> **PASS** (the honest negative the AI-MTD-AUDIT predicts).
 - **H3 (Trigger-gated neutralization + reuse)**: for trigger-supplied scenarios, d-fullphoenix persistence-disruption = 0% (CI [0, 0]); rotating-arm reuse-reduction mean = 0%. PASS iff fullphoenix CI>0 AND reuse-reduction>0 -> **FAIL**.
 

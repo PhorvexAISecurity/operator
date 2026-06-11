@@ -6,6 +6,7 @@ package actuator
 
 import (
 	"context"
+	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -26,6 +27,14 @@ type NativeActuator struct {
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
+
+	// [P-VCLUSTER O7] tenantNS records each tenant's declared namespaces (via EnsurePolicy). Actuate
+	// fail-fast REJECTS a Request whose Namespace is not bound to its Tenant — an explicit Phorvex-layer
+	// cross-tenant-actuation control (defense-in-depth above the per-namespace K8s RBAC backstop).
+	tenantNS map[string]map[string]bool
+	// StrictTenantNamespace fail-CLOSES on a Request whose Tenant has NO binding at all (production
+	// posture once every tenant is bound). Default false preserves the legacy single-tenant path.
+	StrictTenantNamespace bool
 }
 
 // NewNativeActuator constructs the native actuator over a controller-runtime client.
@@ -34,14 +43,42 @@ func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator
 // Name implements Actuator.
 func (*NativeActuator) Name() string { return "native" }
 
-// EnsurePolicy pre-stages per-tenant native state where a handler needs it (warm-swap
-// pre-stages the warm pool via its handler on first use). The base K8s moves
-// (rotate/quarantine/inject/identity/route) need NO standing policy, so this is a no-op
-// today — native carries no Phoenix CR. Implements Actuator.
-func (n *NativeActuator) EnsurePolicy(_ context.Context, _ TenantTarget) error { return nil }
+// EnsurePolicy records the tenant→namespace binding (O7) and pre-stages per-tenant native state where a
+// handler needs it. The base K8s moves need no standing CR, so beyond the binding this is a no-op.
+func (n *NativeActuator) EnsurePolicy(_ context.Context, target TenantTarget) error {
+	if target.Tenant == "" || target.Namespace == "" {
+		return nil
+	}
+	if n.tenantNS == nil {
+		n.tenantNS = map[string]map[string]bool{}
+	}
+	if n.tenantNS[target.Tenant] == nil {
+		n.tenantNS[target.Tenant] = map[string]bool{}
+	}
+	n.tenantNS[target.Tenant][target.Namespace] = true
+	return nil
+}
+
+// assertTenantNamespace is the O7 fail-fast: a Request may only act in a namespace bound to its tenant.
+func (n *NativeActuator) assertTenantNamespace(req Request) error {
+	allowed, bound := n.tenantNS[req.Tenant]
+	if !bound {
+		if n.StrictTenantNamespace {
+			return fmt.Errorf("native actuate DENIED (O7 strict): tenant %q has no namespace binding for %s/%s", req.Tenant, req.Namespace, req.Pod)
+		}
+		return nil // legacy/single-tenant: unbound tenant allowed; K8s per-namespace RBAC is the backstop
+	}
+	if !allowed[req.Namespace] {
+		return fmt.Errorf("native actuate DENIED (O7): tenant %q is not bound to namespace %q — cross-tenant actuation refused (%s/%s)", req.Tenant, req.Namespace, req.Namespace, req.Pod)
+	}
+	return nil
+}
 
 // Actuate dispatches the move to its native handler. Implements Actuator.
 func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, error) {
+	if err := n.assertTenantNamespace(req); err != nil {
+		return Result{}, err
+	}
 	return dispatch(ctx, EnactCtx{Client: n.Client, DryRun: n.DryRun}, req)
 }
 

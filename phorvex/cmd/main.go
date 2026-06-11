@@ -25,6 +25,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -78,13 +79,17 @@ func main() {
 		ablationSeeds    int
 		scan             bool
 		scanNS           string
+		kubeContext      string
 		nativeDemo       bool
 		nativeDemoNS     string
+		auditMaxBytes    int64
+		auditMaxBackups  int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
+	flag.StringVar(&kubeContext, "context", "", "[scan] kubeconfig context to scan (empty = current-context; the console derives this from your kubeconfig, never hardcoded).")
 	flag.StringVar(&engineName, "engine", "p1", "Decision brain: p1 (submodular recon-coverage) | p0 (greedy baseline).")
 	flag.BoolVar(&ablation, "ablation", false, "One-shot: run the STEP-3 IP ablation (P1 vs random per-dollar) live, print, exit.")
 	flag.StringVar(&ablationNS, "ablation-namespace", "", "[ablation] namespace to evaluate.")
@@ -98,6 +103,8 @@ func main() {
 	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
+	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", 256<<20, "[audit-json] rotate when the live file exceeds this many bytes (0 = unbounded). Default 256 MiB.")
+	flag.IntVar(&auditMaxBackups, "audit-max-backups", 4, "[audit-json] number of rotated segments to keep (total disk <= max-bytes*(backups+1)).")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
@@ -137,7 +144,7 @@ func main() {
 	}
 
 	if scan {
-		if err := runScan(scanNS); err != nil {
+		if err := runScan(scanNS, promURL, kubeContext); err != nil {
 			setupLog.Error(err, "scan failed")
 			os.Exit(1)
 		}
@@ -176,12 +183,14 @@ func main() {
 
 	// Optional JSON audit sink.
 	if auditJSON != "" {
-		f, ferr := os.OpenFile(auditJSON, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		// [P4b fix] size-capped rotation bounds the audit JSONL (was unbounded append).
+		// 256 MiB x (4+1) backups = ~1.25 GiB max on disk; tune via the flags.
+		f, ferr := audit.NewRotatingWriter(auditJSON, auditMaxBytes, auditMaxBackups)
 		if ferr != nil {
 			setupLog.Error(ferr, "cannot open audit-json; continuing with logger-only audit")
 		} else {
 			rmgr.Audit = audit.New(ctrl.Log, f)
-			setupLog.Info("audit JSON sink", "path", auditJSON)
+			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
 		}
 	}
 
@@ -268,8 +277,15 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 // runScan is the P-PHYSICS proof: scan the live cluster, derive the both-products
 // PhysicsWitness per pod (K8s values live; AI/GPU honestly [SP-0-PENDING] until a DCGM
 // adapter answers), and run the separately-ablated scarcity A/B. Read-only.
-func runScan(namespace string) error {
-	c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
+func runScan(namespace, promURL, kubeContext string) error {
+	// Honor an explicit kubeconfig context (DERIVED by the console from the operator's
+	// kubeconfig — never hardcoded); empty => current-context. EKS auth is the exec-credential
+	// kubeconfig (zero AWS SDK linked).
+	restCfg, err := ctrlconfig.GetConfigWithContext(kubeContext)
+	if err != nil {
+		return err
+	}
+	c, err := client.New(restCfg, client.Options{Scheme: scheme})
 	if err != nil {
 		return err
 	}
@@ -309,6 +325,35 @@ func runScan(namespace string) error {
 
 	if namespace != "" {
 		rmgr := runner.NewManager(c, ctrl.Log)
+
+		// P4a: wire live telemetry (no longer telemetry-blind). The operator-supplied
+		// --prometheus-url feeds cost/continuity/feasibility/context (the platform K8s-half
+		// PhysicsWitness is telemetry-INDEPENDENT by design). Empty => honest nil source.
+		if promURL != "" {
+			rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)
+			names := make([]string, 0, len(snap.Pods))
+			for i := range snap.Pods {
+				if snap.Pods[i].Namespace == namespace {
+					names = append(names, snap.Pods[i].Name)
+				}
+			}
+			if tel, terr := rmgr.MetricsSource.PodMetrics(ctx, namespace, names); terr == nil {
+				fmt.Printf("\n=== live telemetry (Prometheus: %s) — feeds cost/continuity/feasibility/context ===\n", promURL)
+				any := false
+				for _, n := range names {
+					t, ok := tel[n]
+					if !ok || !t.Present {
+						continue
+					}
+					any = true
+					fmt.Printf("  %-34s reqRate=%.2f p99Ms=%.1f gpuUtil=%.2f tokensPerSec=%.1f connCount=%.0f\n",
+						namespace+"/"+n, t.ReqRate, t.P99Ms, t.GPUUtil, t.TokensPerSec, t.ConnCount)
+				}
+				if !any {
+					fmt.Printf("  (no pod reported telemetry — honest-absent; Present=false, never fabricated)\n")
+				}
+			}
+		}
 
 		// P-CONTEXT: live kill-chain context (AI-stage classification + predictive horizon).
 		rows, cerr := rmgr.ContextScan(ctx, namespace, labels.Everything())

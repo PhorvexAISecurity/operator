@@ -1,0 +1,21 @@
+apiVersion: v2
+name: phorvex-stack
+description: >-
+  Full Phorvex stack — the deterministic intelligence layer (Phorvex, the brain)
+  on top of UNMODIFIED extended Phoenix (the AMTD executor), plus the read-only
+  console/dashboard. Installs in dependency order: Phoenix CRDs (SecurityEvent +
+  AdaptiveMovingTargetDefense) and operator first, then the Phorvex CRD + operator,
+  then the dashboard.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: phoenix
+    version: "0.1.4"
+    repository: "file://../../../build/phoenix-extended/charts/phoenix"
+    condition: phoenix.enabled
+  - name: phorvex
+    version: "0.1.0"
+    repository: "file://../../../phorvex/charts/phorvex"
+    condition: phorvex.enabled

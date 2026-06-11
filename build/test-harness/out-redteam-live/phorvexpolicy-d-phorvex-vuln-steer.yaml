@@ -1,0 +1,30 @@
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: harness-d-phorvex-vuln-steer
+  namespace: amtd-attack-test
+spec:
+  tenant: amtd-attack-test
+  selector:
+    matchLabels:
+      r6th.io/rotation-target: "true"
+  objective:
+    lambda: "0.4"
+    costWeights: {normSparsity: "0.4", flowDisruption: "0.6"}
+  budget:
+    maxMovesPerTick: 1
+    tickInterval: 3s
+    antiOverRotationWindow: 8s
+    proactiveFloor: 0s
+  slo:
+    minAvailableReplicas: 1
+  assetValue:
+    fromLabels:
+      data-class: {restricted: "1.0", internal: "0.4", public: "0.1"}
+    weightSecrets: "0.8"
+    blastRadiusFromGraph: true
+  triggers:
+    eventDriven: true
+  actions:
+    enabled: ["rotate", "quarantine"]
+  mode: active

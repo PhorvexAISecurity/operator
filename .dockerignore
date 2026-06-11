@@ -1,0 +1,35 @@
+# Docker build context = repo root (the operator and console images both need
+# multiple modules: phorvex/ + build/phoenix-extended/, and the console also needs
+# dashboard-web/ + the build/test-harness/out-* report snapshots). Keep the context
+# lean by dropping everything that no image build reads.
+
+.git
+.gitignore
+**/node_modules
+**/.next
+
+# Prebuilt local binaries — images compile from source.
+**/*.exe
+**/*.exe~
+phorvex/bin/console.exe
+phorvex/bin/*.exe
+redteam-rl.exe
+
+# Research corpus + vendored upstream repos (not part of any image).
+papers/
+products/
+tools/
+validation/
+repos/
+
+# Large narrative docs (images don't read these).
+PHORVEX_PRD.md
+PHORVEX_V1_MVP.md
+
+# Harness run logs (the dashboard reads metrics.jsonl, not the *-run.log files).
+build/test-harness/**/*-run.log
+build/test-harness/**/*.log
+
+# Local dev artifacts.
+**/tsconfig.tsbuildinfo
+dashboard-web/out

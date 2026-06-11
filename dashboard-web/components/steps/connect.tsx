@@ -10,19 +10,30 @@ import { Server, ArrowRight, Check, Lock } from "lucide-react";
 
 export function ConnectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
   const [targets, setTargets] = React.useState<ClusterTarget[] | null>(null);
-  const [sel, setSel] = React.useState("kind");
+  const [sel, setSel] = React.useState("");
   const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.targets(lens).then((d) => setTargets(d.targets)).catch((e) => setErr(String(e.message || e))); }, [lens]);
+  React.useEffect(() => {
+    api.targets(lens).then((d) => {
+      const ts = d.targets ?? [];
+      setTargets(ts);
+      // default to the runnable LOCAL (kind) cluster, else the first runnable target — NOT just
+      // targets[0] (which may be an unreachable cloud context). Persist its kubeconfig context so
+      // the Scan step execs `phorvex --scan --context <that>`.
+      const def = ts.find((t) => t.runnable && /kind/i.test(t.context || t.id)) ?? ts.find((t) => t.runnable) ?? ts[0];
+      if (def) { setSel(def.id); if (typeof window !== "undefined") localStorage.setItem("phorvex-context", def.context || ""); }
+    }).catch((e) => setErr(String(e.message || e)));
+  }, [lens]); // eslint-disable-line
   if (err) return <ErrorBox msg={err} />;
   if (!targets) return <Loading label="Reading available environments…" rows={3} />;
   const selT = targets.find((t) => t.id === sel);
+  const pick = (t: ClusterTarget) => { if (!t.runnable) return; setSel(t.id); if (typeof window !== "undefined") localStorage.setItem("phorvex-context", t.context || ""); };
 
   return (
     <div className="animate-fade-up space-y-6">
       <StepHead n={1} title="Connect" sub="Pick the environment Phorvex will defend. kind runs live now; cloud GPU targets are wired and honestly pending real-cluster execution." />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {targets.map((t) => (
-          <button key={t.id} onClick={() => t.runnable && setSel(t.id)} disabled={!t.runnable}
+          <button key={t.id} onClick={() => pick(t)} disabled={!t.runnable}
             className={cn("rounded-lg border p-4 text-left transition-all", sel === t.id ? "border-primary/50 bg-primary/[0.06]" : "border-border bg-panel/60", !t.runnable && "opacity-60")}>
             <div className="flex items-center justify-between">
               <Server className={cn("h-4 w-4", t.runnable ? "text-primary" : "text-muted-foreground")} />

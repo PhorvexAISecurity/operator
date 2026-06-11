@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Phorvex stack values.
+#
+# Set `global.registry` to your ECR registry (e.g.
+# 123456789012.dkr.ecr.us-east-1.amazonaws.com) and the per-image tags. The deploy
+# script (deploy/eks/03-deploy.sh) passes --set global.registry=... for you.
+# ─────────────────────────────────────────────────────────────────────────────
+global:
+  # ECR (or any) registry host that holds the three built images. Empty => the
+  # subchart/dashboard defaults below are used verbatim (handy for local kind where
+  # images are side-loaded).
+  registry: ""
+
+# ── Phoenix (the AMTD executor) ──────────────────────────────────────────────
+# Phoenix is UNMODIFIED upstream; you may keep its public ghcr image or push the
+# extended build to your registry. If global.registry is set, point amtd.image
+# .repository at it explicitly here.
+phoenix:
+  enabled: true
+  amtd:
+    image:
+      repository: ghcr.io/r6security/phoenix/amtd-operator
+      tag: "v0.2.3"
+      pullPolicy: IfNotPresent
+
+# ── Phorvex (the brain) ──────────────────────────────────────────────────────
+# Subchart name is "phorvex"; its own values live one level deeper under .phorvex.
+phorvex:
+  enabled: true
+  installCRD: true
+  phorvex:
+    image:
+      # OVERRIDDEN by the deploy script to <registry>/phorvex when global.registry set.
+      repository: phorvex/phorvex
+      tag: "0.1.0"
+      pullPolicy: IfNotPresent
+    baseInterval: 10s
+    leaderElect: true            # HA-safe default for a real cluster
+    globalKillSwitch: false      # start actuating; flip on for a dry-run install
+    prometheusUrl: ""            # e.g. http://prometheus-server.monitoring.svc:80
+    resources:
+      limits: { cpu: 500m, memory: 256Mi }
+      requests: { cpu: 10m, memory: 64Mi }
+
+# ── Dashboard / console (read-only) ──────────────────────────────────────────
+dashboard:
+  enabled: true
+  image:
+    repository: phorvex/phorvex-console   # OVERRIDDEN to <registry>/phorvex-console
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 8090
+  resources:
+    limits: { cpu: 500m, memory: 256Mi }
+    requests: { cpu: 10m, memory: 64Mi }
+  service:
+    type: ClusterIP            # set LoadBalancer for a quick external IP on EKS
+    port: 80
+  ingress:
+    enabled: false
+    className: alb            # EKS ALB ingress controller; or nginx
+    host: ""                  # e.g. console.phorvex.example.com
+    annotations: {}
+    tls: false

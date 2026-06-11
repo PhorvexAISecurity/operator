@@ -73,7 +73,7 @@ func (s *ai1InferenceManipulation) SuccessOracle(ctx context.Context, env *core.
 		inRequestAchieved:    inReq,
 		persistenceAchieved:  pathStable,
 		persistenceDisrupted: armRotates(env) && !pathStable, // MEASURED per-arm (audit #3: the static path persists, so this measures false)
-		neutralized:          false, // no detector + no genuine trigger -> bound only, never neutralize (measured-as-false by construction)
+		neutralized:          (armRotates(env) && !pathStable) && !inReq, // [P-REDTEAM oracle-honesty] DERIVED, not a constant: neutralized iff a real rotation broke the intercept path (armRotates && !pathStable) AND the in-request tamper (MarkerPresent) also failed. Derives false while the static path persists; flips true only on a real per-arm denial of both legs.
 		triggerAttribution:   core.TriggerDetectorAbsent,
 		detectorAbsent:       true,
 		replaySuccess:        replays,

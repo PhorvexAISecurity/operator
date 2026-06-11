@@ -29,6 +29,31 @@ type CoverageEngine struct {
 	Killchain *killchain.Model
 	Cost      *cost.P1Cost
 	Now       func() time.Time
+
+	// [P-VCLUSTER O2/O4] per-tenant cost buckets (one DualSolver λ + RLS + Conformal PER TENANT) so a
+	// tenant's budget pressure / calibration NEVER re-prices another's decisions. Lazily created; the
+	// FIRST (single-tenant default) bucket reuses the original `Cost` singleton → bit-identical
+	// single-tenant path. No cross-tenant feed (each bucket integrates only its own tenant's evidence).
+	costByTenant map[string]*cost.P1Cost
+}
+
+// costFor resolves the per-tenant cost bucket (DEFAULT-TO-OLD-SCALAR: the first tenant IS the original
+// singleton; additional tenants get a fresh, identically-seeded, fully-isolated bucket).
+func (e *CoverageEngine) costFor(tenant string) *cost.P1Cost {
+	if e.costByTenant == nil {
+		e.costByTenant = map[string]*cost.P1Cost{}
+	}
+	if c := e.costByTenant[tenant]; c != nil {
+		return c
+	}
+	var c *cost.P1Cost
+	if len(e.costByTenant) == 0 && e.Cost != nil {
+		c = e.Cost // bit-identical single-tenant default
+	} else {
+		c = cost.NewP1Cost() // isolated per-tenant bucket, zero cross-feed
+	}
+	e.costByTenant[tenant] = c
+	return c
 }
 
 // NewCoverageEngine builds the engine from the registered defaults + fresh stateful
@@ -105,7 +130,7 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 		Recon:       e.Recon,
 		FactContext: factCtx,
 		ECost:       e.Cost.ECost,
-		CHi:         e.Cost.CHi,
+		CHi:         e.costFor(pol.Tenant).CHi,
 		CostCeiling: costCeiling,
 	}
 	return deps.Generate(views, pol), ctxByKey
@@ -114,7 +139,8 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 // Decide runs the per-tick coverage optimization and returns one Decision per pod.
 func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) []model.Decision {
 	now := e.now()
-	lambda := e.Cost.Dual.Lambda()
+	tcost := e.costFor(pol.Tenant)
+	lambda := tcost.Dual.Lambda()
 
 	set, ctxByKey := e.AssembleSet(views, pol)
 
@@ -138,6 +164,34 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		return s
 	}
 
+	// [P-REDTEAM DISPERSION-STEER FIX — explicitly-gated brain change] A SELECTION-PATH defence the
+	// λ-fix (a PRICE fix) does not cover: the production RL adversary discovered that a few freshly-
+	// spawned, MANUFACTURED-high-coverage DECOYS out-gain a genuinely-due real foothold and crowd it
+	// out of the B-move budget (the foothold is never SELECTED, so never rotated — zero detector
+	// signal). The fix weights a candidate's SELECTION gain by a PROVENANCE factor a decoy cannot
+	// manufacture: a GENUINE threat — overdue for the hygiene floor (aged exposure ≥ proactiveFloor)
+	// OR carrying real kill-chain evidence (StageUrgency>0, i.e. real recon/events) — keeps prov=1 so
+	// its gain (and the SELECTION) is BYTE-IDENTICAL. A FRESH, evidence-less candidate (a manufactured
+	// decoy) is down-weighted toward provFloor, so it can no longer displace a real asset from the
+	// slot. The reported coverage/marginal is the UN-discounted value (reporting unchanged). NO
+	// learning enters Decide — prov is a deterministic function of the real exposure/assessment.
+	floorSec := pol.ProactiveFloor.Seconds()
+	const provFloor = 0.34
+	prov := func(key string) float64 {
+		if floorSec <= 0 {
+			return 1
+		}
+		ac := ctxByKey[key]
+		if ac.exposure >= floorSec || ac.assess.StageUrgency > 0 {
+			return 1 // genuinely due, or backed by real recon/event evidence => full weight (legit path unchanged)
+		}
+		r := ac.exposure / floorSec
+		if r < 0 {
+			r = 0
+		}
+		return provFloor + (1-provFloor)*r // a fresh, evidence-less decoy competes at <= provFloor
+	}
+
 	// --- submodular greedy under partition (one move/asset) + budget B ---
 	covered := map[string]bool{}
 	selectedAsset := map[string]bool{}
@@ -159,7 +213,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 					marginal += set.FactWeights[k]
 				}
 			}
-			gain := marginal - lambda*c.ECost
+			gain := marginal*prov(c.Key) - lambda*c.ECost
 			if gain > bestGain {
 				bestGain = gain
 				bestIdx = i
@@ -301,7 +355,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 	}
 
 	// --- persist stateful learning (dual price + conjugate memory) ---
-	e.Cost.Dual.Step(demand, len(selectedAsset), B)
+	tcost.Dual.Step(demand, len(selectedAsset), B)
 	for key := range selectedAsset {
 		if ac, ok := ctxByKey[key]; ok {
 			// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is

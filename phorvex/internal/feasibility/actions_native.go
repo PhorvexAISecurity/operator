@@ -60,7 +60,44 @@ func (migDeviceRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 	return feasible
 }
 
+// isCodeExecMove reports whether an action injects an ephemeral container — an IRREVERSIBLE
+// in-pod CODE-EXECUTION primitive (a shell sharing the victim pod's SA token/network/volumes).
+func isCodeExecMove(a model.Action) bool {
+	switch a {
+	case model.ActionDebugger, model.ActionCustomInject:
+		return true
+	}
+	return false
+}
+
+// systemNamespaces are the control-plane namespaces an autonomous actuator must NEVER inject
+// code into (the highest-blast-radius weaponization target).
+var systemNamespaces = map[string]bool{
+	"kube-system": true, "kube-public": true, "kube-node-lease": true, "kube-apiserver": true,
+}
+
+// codeExecGuard (P4c D1/F2) is the action-SPECIFIC HARD law that ephemeral-container injection
+// (debugger/custom-inject — the in-pod RCE primitive) previously LACKED: it was gated only by
+// the action-agnostic defaults, so it passed on ANY pod once enabled. This vetoes code-exec in
+// a system namespace outright (defense-in-depth alongside the SEPARATE opt-in RBAC Role for
+// pods/ephemeralcontainers and the busybox-only image hardcoded in the handler). Non-code-exec
+// moves are unaffected, so {rotate,quarantine}/AI parity is byte-identical.
+type codeExecGuard struct{}
+
+func (codeExecGuard) Name() string { return "code-exec-guard" }
+
+func (codeExecGuard) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if !isCodeExecMove(move.Action) {
+		return feasible
+	}
+	if systemNamespaces[view.Pod.Namespace] {
+		return Verdict{Feasible: false, Reason: "code-exec-guard: ephemeral-container injection (" + string(move.Action) + ") DENIED in system namespace " + view.Pod.Namespace + " (in-pod RCE blast-radius)"}
+	}
+	return feasible
+}
+
 func init() {
 	Registry.Register(aiContextRequired{})
 	Registry.Register(migDeviceRequired{})
+	Registry.Register(codeExecGuard{})
 }

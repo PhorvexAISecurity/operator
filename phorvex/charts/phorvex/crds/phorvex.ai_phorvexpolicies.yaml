@@ -95,6 +95,16 @@ spec:
                       - rotate
                       - quarantine
                       - noop
+                      - debugger
+                      - custom-inject
+                      - disable
+                      - identity-rotate
+                      - route-rotate
+                      - endpoint-rotate
+                      - warm-swap
+                      - mig-rebind
+                      - kv-reset
+                      - model-shard-replace
                       type: string
                     minItems: 1
                     type: array

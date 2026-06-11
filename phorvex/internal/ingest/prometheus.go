@@ -56,6 +56,37 @@ func DefaultPromQueries() map[string]string {
 	}
 }
 
+// Signal keys for the GPU PhysicsWitness half (DCGM-via-Prometheus). A GPU platform adapter
+// (eksGPU/coreWeave) wires these in a Derive() override to STAMP the witness GPU floats.
+const (
+	SigVRAMUsedMiB = "vramUsedMiB"
+	SigVRAMFreeMiB = "vramFreeMiB"
+	SigSMActive    = "smActive"    // PROF_SM_ACTIVE — TRUE occupancy (needs DCP profiling)
+	SigSMUtilFb    = "smUtilFb"    // GPU_UTIL fallback — DUTY-CYCLE, must be source-labeled, NOT occupancy
+	SigNVLinkBytes = "nvlinkBytes"
+)
+
+// DCGMWitnessQueries are the DESIGNED DCGM-via-Prometheus templates for the GPU witness half.
+// VALUES are [SP-0-PENDING-P4] — these are query STRINGS only; NO DCGM value is hardcoded into
+// any witness float, and no adapter wires them until a real GPU run at P4. Scraped through
+// Prometheus (read-only HTTP), so the GPU half adds ZERO additional Kubernetes RBAC verb.
+//
+// HONESTY (red-team, load-bearing): SMOccupancy must prefer PROF_SM_ACTIVE (true occupancy);
+// the GPU_UTIL duty-cycle is only a labeled FALLBACK — conflating them would overstate the AI
+// kill-chain model-theft leakage gate. A wiring adapter MUST record which source fed SMOccupancy.
+func DCGMWitnessQueries() map[string]string {
+	return map[string]string{
+		// VRAMFraction = used / (used + free).
+		SigVRAMUsedMiB: `sum by (pod) (DCGM_FI_DEV_FB_USED{namespace="{namespace}"})`,
+		SigVRAMFreeMiB: `sum by (pod) (DCGM_FI_DEV_FB_FREE{namespace="{namespace}"})`,
+		// SMOccupancy: prefer the profiling signal; fall back to duty-cycle ONLY if absent.
+		SigSMActive: `avg by (pod) (DCGM_FI_PROF_SM_ACTIVE{namespace="{namespace}"})`,
+		SigSMUtilFb: `avg by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace="{namespace}"}) / 100`,
+		// LinkBandwidth = NVLink TX+RX byte-rate (interconnect saturation).
+		SigNVLinkBytes: `sum by (pod) (rate(DCGM_FI_PROF_NVLINK_TX_BYTES{namespace="{namespace}"}[1m]) + rate(DCGM_FI_PROF_NVLINK_RX_BYTES{namespace="{namespace}"}[1m]))`,
+	}
+}
+
 // NewPromHTTP builds a PromHTTP with sensible defaults.
 func NewPromHTTP(baseURL string, queries map[string]string) *PromHTTP {
 	if queries == nil {

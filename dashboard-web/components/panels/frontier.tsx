@@ -14,11 +14,25 @@ function WinBadge({ win }: { win: string }) {
   return <Badge variant="neutral">{win}</Badge>;
 }
 
+// readingCards derives the narrative from the LIVE rows (not hardcoded "100%/0%/0%"): the most
+// harmful blind arm, the too-late (low-prevention) blind arm, and the Phorvex row — all real.
+function readingCards(rows: FrontierRow[]): [string, string, string][] {
+  const px = rows.find((r) => r.arm === "d-phorvex");
+  const blinds = rows.filter((r) => r.arm !== "d-phorvex" && r.arm !== "d-nomtd");
+  const harmful = [...blinds].filter((r) => r.harm.mean > 0 || r.infeasible.mean > 0).sort((a, b) => b.harm.mean - a.harm.mean)[0];
+  const tooLate = [...blinds].filter((r) => r.prevention.mean < 0.5).sort((a, b) => a.prevention.mean - b.prevention.mean)[0];
+  const out: [string, string, string][] = [];
+  if (harmful) out.push([`Fast blind (${harmful.interval})`, `Prevents ${pct(harmful.prevention)} — but harm ${pct(harmful.harm)} + infeasible ${pct(harmful.infeasible)}. It destroys the stateful workload.`, "text-danger"]);
+  if (tooLate && tooLate !== harmful) out.push([`Slow blind (${tooLate.interval})`, `Harm ${pct(tooLate.harm)} — but prevention ${pct(tooLate.prevention)}. Too late: the attacker reaches the objective first.`, "text-warning"]);
+  if (px) out.push([`Phorvex (${px.interval})`, `${pct(px.prevention)} prevent, ${pct(px.harm)} harm, ${pct(px.infeasible)} infeasible — ${px.win === "WIN" ? "the unique WIN" : px.win}, targeted + harm-free via quarantine.`, "text-success"]);
+  return out;
+}
+
 export function FrontierPanel({ lens }: { lens: Lens }) {
   const [rows, setRows] = React.useState<FrontierRow[] | null>(null);
   const [err, setErr] = React.useState("");
   React.useEffect(() => {
-    api.frontier(lens).then((d) => setRows(d.rows)).catch((e) => setErr(String(e.message || e)));
+    api.frontier(lens).then((d) => setRows(d.rows ?? [])).catch((e) => setErr(String(e.message || e)));
   }, [lens]);
   if (err) return <ErrorState msg={err} />;
   if (!rows) return <Skeleton rows={4} />;
@@ -32,7 +46,7 @@ export function FrontierPanel({ lens }: { lens: Lens }) {
       <Card>
         <CardContent className="p-0">
           <div className="border-b border-border px-5 py-3 text-[11px] uppercase tracking-wider text-muted-foreground">
-            constrained class · stateful workload · out-p3deep/metrics.jsonl (792 rows, seed 1337)
+            constrained class · stateful workload · source: out-p3deep/metrics.jsonl · {rows.length} arms · seed 1337
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -65,13 +79,9 @@ export function FrontierPanel({ lens }: { lens: Lens }) {
           </div>
         </CardContent>
       </Card>
-      <SectionLabel>Reading</SectionLabel>
+      <SectionLabel>Reading · computed from the rows above</SectionLabel>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
-        {[
-          ["Fast blind (3–15s)", "Prevents — but harm 100% + infeasible 100%. It destroys the stateful workload at any fast rate.", "text-danger"],
-          ["Slow blind (30–60s)", "Harm-free — but prevention 0%. Too late: the attacker reaches the objective first.", "text-warning"],
-          ["Phorvex (solved rate)", "100% prevent, 0% harm, 0% infeasible — the unique WIN, targeted + harm-free via quarantine.", "text-success"],
-        ].map(([t, d, c]) => (
+        {readingCards(rows).map(([t, d, c]) => (
           <Card key={t}><CardContent className="p-4">
             <div className={cn("text-[13px] font-semibold", c)}>{t}</div>
             <div className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{d}</div>

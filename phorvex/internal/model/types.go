@@ -58,6 +58,20 @@ const (
 	// ActionModelShardReplace warm-replaces a model shard on a target id/version.
 	// [SP-0-PENDING] magnitude=ColdLoadSec/ModelRarity.
 	ActionModelShardReplace Action = "model-shard-replace"
+	// ActionAdapterRotate unloads + (optionally) reloads a clean LoRA/adapter — the ONLY
+	// move that evicts a poisoned adapter (survives warm-swap/kv-reset/shard-replace).
+	// [PENDING-GPU-VALIDATION] (vLLM /v1/{unload,load}_lora_adapter; Triton/TGI equivalents).
+	ActionAdapterRotate Action = "adapter-rotate"
+	// ActionRequestDrain drains/aborts in-flight requests against a foothold (request-
+	// granular eviction; also supplies warm-swap's drain). [PENDING-GPU-VALIDATION].
+	ActionRequestDrain Action = "request-drain"
+	// ActionGuardrailRotate rotates the safety/guardrail tier (variant/ruleset) to stale a
+	// found jailbreak/filter-bypass — MTD for the filter. [PENDING-GPU-VALIDATION].
+	ActionGuardrailRotate Action = "guardrail-rotate"
+	// ActionKVMigrateInvalidate invalidates/migrates KV across disaggregated prefill/decode
+	// (kv-reset is local-only). Local invalidate is real; cross-worker migrate is DEFERRED
+	// [PENDING-GPU-VALIDATION] (needs a disaggregated P/D deployment).
+	ActionKVMigrateInvalidate Action = "kv-migrate-invalidate"
 )
 
 // MutatingActions is the SINGLE SOURCE OF TRUTH for every action a policy may enable and
@@ -72,6 +86,10 @@ var MutatingActions = []Action{
 	ActionDebugger, ActionCustomInject,
 	ActionIdentityRotate, ActionRouteRotate,
 	ActionWarmSwap, ActionMIGRebind, ActionKVReset, ActionEndpointRotate, ActionModelShardReplace,
+	// P-ACTUATOR-SET-COMPLETE additions (opt-in; ActionEnabled with a nil policy still permits ONLY
+	// rotate+quarantine, so default decisions stay byte-identical — 1.62x/P3/lead-demo parity).
+	// Appended AFTER the existing set so the engine's strict-`>` tie-break order is unchanged.
+	ActionAdapterRotate, ActionRequestDrain, ActionGuardrailRotate, ActionKVMigrateInvalidate,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map

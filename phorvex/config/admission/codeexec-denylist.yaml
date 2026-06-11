@@ -1,0 +1,37 @@
+# Phorvex ADMISSION barrier (P4c F3/D1/D6) — deny a PhorvexPolicy that enables ephemeral-
+# container code-exec (debugger/custom-inject) in a control-plane/system namespace.
+#
+# A native ValidatingAdmissionPolicy (no webhook pod). Unlike a CRD x-kubernetes-validations
+# rule (which cannot see metadata.namespace), a VAP's CEL has the full request object incl.
+# `object.metadata.namespace`. This is the DESIGNED admission barrier that replaces the
+# previously-ACCIDENTAL stale-enum block; the feasibility code-exec-guard (actuation-time veto)
+# and the opt-in RBAC Role B remain the primary, defense-in-depth enforcement.
+#
+# Requires ValidatingAdmissionPolicy (GA in k8s 1.30; beta 1.28+ with the feature gate).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: phorvex-codeexec-denylist
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["phorvex.ai"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["phorvexpolicies"]
+  validations:
+    - expression: >-
+        !(object.metadata.namespace in ['kube-system','kube-public','kube-node-lease','kube-apiserver'])
+        || !has(object.spec.actions) || !has(object.spec.actions.enabled)
+        || !object.spec.actions.enabled.exists(a, a == 'debugger' || a == 'custom-inject')
+      message: "code-exec actions (debugger/custom-inject) are not permitted on a PhorvexPolicy in a system namespace"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: phorvex-codeexec-denylist
+spec:
+  policyName: phorvex-codeexec-denylist
+  validationActions: ["Deny"]

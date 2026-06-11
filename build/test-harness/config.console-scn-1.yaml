@@ -1,0 +1,10 @@
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: amtd-attack-test
+ownedAck: true
+trialsPerArm: 3
+masterSeed: 1337
+phoenixSrcDir: "C:\\Users\\moh87733\\Phorvex\\build\\phoenix-extended"
+outDir: "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-1"
+defenderFilter: [d-phorvex, d-nomtd]
+scenarioFilter: [ai1-inference-manipulation]

@@ -63,6 +63,8 @@ type AblationResult struct {
 	RandomCost      float64 `json:"randomCost"`
 	RandomPerDollar float64 `json:"randomPerDollar"`
 	Ratio           float64 `json:"ratio"` // P1PerDollar / RandomPerDollar (>1 => P1 wins)
+	// [P-OPTIMIZE-RATIO Step 1] greedy-vs-exact optimality (benchmark; no decision-path change).
+	OptimalityOut
 }
 
 // Ablate runs the IP ablation: the P1 arm is the real coverage optimizer; the random
@@ -81,7 +83,7 @@ func (e *CoverageEngine) Ablate(views []*model.WorkloadView, pol model.Policy, s
 	}
 
 	// Random arm over the identical substrate.
-	set, _ := e.AssembleSet(views, pol)
+	set, ctxByKey := e.AssembleSet(views, pol)
 	assets := map[string]bool{}
 	for _, c := range set.Candidates {
 		assets[c.Key] = true
@@ -113,6 +115,8 @@ func (e *CoverageEngine) Ablate(views []*model.WorkloadView, pol model.Policy, s
 	if res.RandomPerDollar > 0 {
 		res.Ratio = res.P1PerDollar / res.RandomPerDollar
 	}
+	// [P-OPTIMIZE-RATIO Step 1] measure greedy vs brute-force exact on the SAME substrate + frozen λ.
+	res.OptimalityOut = e.computeOptimality(decs, set, ctxByKey, pol)
 	return res
 }
 

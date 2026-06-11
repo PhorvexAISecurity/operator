@@ -82,7 +82,7 @@ func (s *ai1ModelTheft) SuccessOracle(ctx context.Context, env *core.Env) (core.
 		inRequestAchieved:    extracted,
 		persistenceAchieved:  endpointStable,
 		persistenceDisrupted: armRotates(env) && !endpointStable, // MEASURED per-arm: disrupted only if a rotating arm made the held endpoint stop serving (audit #3 keeps the external name stable, so this measures false)
-		neutralized:          false, // no scraping detector + no genuine trigger -> rotation can only bound, never neutralize (measured-as-false by construction)
+		neutralized:          (armRotates(env) && !endpointStable) && !extracted, // [P-REDTEAM oracle-honesty] DERIVED, not a constant: neutralized iff a rotating arm killed the held endpoint AND the weights were not extracted (the digest-match measurement). Derives false while the external endpoint stays stable / weights leaked; flips true only on a real per-arm denial.
 		triggerAttribution:   core.TriggerDetectorAbsent,
 		detectorAbsent:       true,
 		replaySuccess:        replays,

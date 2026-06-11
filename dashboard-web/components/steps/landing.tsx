@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, Stat, Posture, OwnerRollup } from "@/lib/api";
+import { useOwnerTenant } from "@/lib/owner";
 import { STEPS, StepId, JourneySignals, stepState } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
@@ -12,11 +13,15 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
   const [stats, setStats] = React.useState<Stat[]>([]);
   const [posture, setPosture] = React.useState<Posture | null>(null);
   const [rollup, setRollup] = React.useState<OwnerRollup | null>(null);
+  const { tenant } = useOwnerTenant(lens);
   React.useEffect(() => {
-    if (lens === "owner") { api.ownerEvents(lens).then((d) => setRollup(d.rollup)).catch(() => {}); return; }
-    api.effectiveness(lens).then((d) => setStats(d.stats)).catch(() => {});
+    if (lens === "owner") {
+      if (tenant) api.ownerEvents(lens, tenant).then((d) => setRollup(d.rollup)).catch(() => {});
+      return;
+    }
+    api.effectiveness(lens).then((d) => setStats(d.stats ?? [])).catch(() => {});
     api.posture(lens).then(setPosture).catch(() => {});
-  }, [lens]);
+  }, [lens, tenant]);
 
   const hero = stats.filter((s) => ["disruption", "work-preserved", "prevention", "explainability"].includes(s.key));
 
@@ -74,7 +79,7 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
             <ProofTile label="Protective actions" value={rollup ? String(rollup.actions) : "—"} />
             <ProofTile label="Attacks evicted" value={rollup ? String(rollup.attacksPrevented) : "—"} tone="success" />
             <ProofTile label="Workloads preserved" value={rollup ? String(rollup.workPreserved) : "—"} tone="success" />
-            <ProofTile label="SLO kept" value={rollup ? "Yes" : "—"} tone="success" />
+            <ProofTile label="SLO kept" value={!rollup || rollup.actions === 0 ? "—" : rollup.sloKept === rollup.actions ? "Yes" : `${rollup.sloKept}/${rollup.actions}`} tone="success" />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">

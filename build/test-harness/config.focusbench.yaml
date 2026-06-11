@@ -1,0 +1,22 @@
+kubeconfig: ""
+context: "kind-amtd-test"
+namespace: "amtd-attack-test"
+ownedAck: true
+trialsPerArm: 20
+masterSeed: 1337
+phoenixSrcDir: "c:/Users/moh87733/Phorvex/build/phoenix-extended"
+outDir: "c:/Users/moh87733/Phorvex/build/test-harness/out-focusbench"
+defenderFilter: ["d-nomtd","d-r6blindtimer","d-randomequal","d-reactive-only","d-fullphoenix","d-phorvex"]
+scenarioFilter:
+  - c2-stateful-training
+  - c2-persistence-evict
+  - c2-dwell-rotation
+  - c1-heldout-cve
+  - c1-fast-attacker
+  - c1-escape-persist
+  - c1-lateral
+  - c3-imds-theft
+  - c1-credtheft-rbac
+  - ai1-prompt-injection
+  - ai1-model-theft
+  - ai2-rag-retrieval-poisoning

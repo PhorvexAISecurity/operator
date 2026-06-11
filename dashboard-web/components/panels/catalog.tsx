@@ -19,8 +19,8 @@ export function CatalogPanel({ lens }: { lens: Lens }) {
   const [sel, setSel] = React.useState<CatalogItem | null>(null);
 
   React.useEffect(() => {
-    api.catalog(lens).then((d) => setItems(d.items)).catch((e) => setErr(String(e.message || e)));
-    api.targets(lens).then((d) => setTargets(d.targets)).catch(() => {});
+    api.catalog(lens).then((d) => setItems(d.items ?? [])).catch((e) => setErr(String(e.message || e)));
+    api.targets(lens).then((d) => setTargets(d.targets ?? [])).catch(() => {});
   }, [lens]);
 
   if (err) return <ErrorBox msg={err} />;

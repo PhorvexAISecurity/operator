@@ -1,0 +1,124 @@
+{
+  "masterSeed": 1337,
+  "trialsPerArm": 3,
+  "context": "kind-amtd-test",
+  "namespace": "amtd-attack-test",
+  "metricsFile": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\metrics.jsonl",
+  "entries": [
+    {
+      "scenario": "ai1-inference-manipulation",
+      "defender": "d-nomtd",
+      "trial": 0,
+      "seed": 7741838097777630017,
+      "rawLogPath": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\raw\\ai1-inference-manipulation_d-nomtd_t0.log",
+      "commands": [
+        "kubectl run mock-infer-pod --image=busybox:1.36 -n amtd-attack-test  # mock mock-infer :9000 (leader=a)",
+        "kubectl expose --selector=r6th.io/infer-leader=a --name=mock-infer-svc --port=9000 -n amtd-attack-test  # EXTERNAL svc (stable name, backend leader rotates)",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c echo R6TH-INFERENCE-TAMPERED \u003e /tmp/tamper; echo R6TH-INFERENCE-TAMPERED \u003e /tmp/inject]",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c cat /tmp/tamper 2\u003e/dev/null]",
+        "in-path proxy on stable path -\u003e tampered completion",
+        "kubectl delete pods -n amtd-attack-test -l app=mock-infer --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "in-request output tampered=true; static path intercept-able after rotation=true (URL/path rotation absent)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "ai1-inference-manipulation",
+      "defender": "d-nomtd",
+      "trial": 1,
+      "seed": 5509522690810040608,
+      "rawLogPath": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\raw\\ai1-inference-manipulation_d-nomtd_t1.log",
+      "commands": [
+        "kubectl run mock-infer-pod --image=busybox:1.36 -n amtd-attack-test  # mock mock-infer :9000 (leader=a)",
+        "kubectl expose --selector=r6th.io/infer-leader=a --name=mock-infer-svc --port=9000 -n amtd-attack-test  # EXTERNAL svc (stable name, backend leader rotates)",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c echo R6TH-INFERENCE-TAMPERED \u003e /tmp/tamper; echo R6TH-INFERENCE-TAMPERED \u003e /tmp/inject]",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c cat /tmp/tamper 2\u003e/dev/null]",
+        "in-path proxy on stable path -\u003e tampered completion",
+        "kubectl delete pods -n amtd-attack-test -l app=mock-infer --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "in-request output tampered=true; static path intercept-able after rotation=true (URL/path rotation absent)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "ai1-inference-manipulation",
+      "defender": "d-nomtd",
+      "trial": 2,
+      "seed": -6240275161996742781,
+      "rawLogPath": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\raw\\ai1-inference-manipulation_d-nomtd_t2.log",
+      "commands": [
+        "kubectl run mock-infer-pod --image=busybox:1.36 -n amtd-attack-test  # mock mock-infer :9000 (leader=a)",
+        "kubectl expose --selector=r6th.io/infer-leader=a --name=mock-infer-svc --port=9000 -n amtd-attack-test  # EXTERNAL svc (stable name, backend leader rotates)",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c echo R6TH-INFERENCE-TAMPERED \u003e /tmp/tamper; echo R6TH-INFERENCE-TAMPERED \u003e /tmp/inject]",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c cat /tmp/tamper 2\u003e/dev/null]",
+        "in-path proxy on stable path -\u003e tampered completion",
+        "kubectl delete pods -n amtd-attack-test -l app=mock-infer --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "in-request output tampered=true; static path intercept-able after rotation=true (URL/path rotation absent)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "ai1-inference-manipulation",
+      "defender": "d-r6blindtimer",
+      "trial": 0,
+      "seed": -8821687958369473227,
+      "rawLogPath": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\raw\\ai1-inference-manipulation_d-r6blindtimer_t0.log",
+      "commands": [
+        "kubectl run mock-infer-pod --image=busybox:1.36 -n amtd-attack-test  # mock mock-infer :9000 (leader=a)",
+        "kubectl expose --selector=r6th.io/infer-leader=a --name=mock-infer-svc --port=9000 -n amtd-attack-test  # EXTERNAL svc (stable name, backend leader rotates)",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c echo R6TH-INFERENCE-TAMPERED \u003e /tmp/tamper; echo R6TH-INFERENCE-TAMPERED \u003e /tmp/inject]",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c cat /tmp/tamper 2\u003e/dev/null]",
+        "in-path proxy on stable path -\u003e tampered completion",
+        "kubectl delete pods -n amtd-attack-test -l app=mock-infer --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "in-request output tampered=true; static path intercept-able after rotation=true (URL/path rotation absent)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "ai1-inference-manipulation",
+      "defender": "d-r6blindtimer",
+      "trial": 1,
+      "seed": 7392740708372488980,
+      "rawLogPath": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\raw\\ai1-inference-manipulation_d-r6blindtimer_t1.log",
+      "commands": [
+        "kubectl run mock-infer-pod --image=busybox:1.36 -n amtd-attack-test  # mock mock-infer :9000 (leader=a)",
+        "kubectl expose --selector=r6th.io/infer-leader=a --name=mock-infer-svc --port=9000 -n amtd-attack-test  # EXTERNAL svc (stable name, backend leader rotates)",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c echo R6TH-INFERENCE-TAMPERED \u003e /tmp/tamper; echo R6TH-INFERENCE-TAMPERED \u003e /tmp/inject]",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c cat /tmp/tamper 2\u003e/dev/null]",
+        "in-path proxy on stable path -\u003e tampered completion",
+        "kubectl delete pods -n amtd-attack-test -l app=mock-infer --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "in-request output tampered=true; static path intercept-able after rotation=true (URL/path rotation absent)",
+      "negativeControl": false
+    },
+    {
+      "scenario": "ai1-inference-manipulation",
+      "defender": "d-r6blindtimer",
+      "trial": 2,
+      "seed": -4357057144434294409,
+      "rawLogPath": "C:\\Users\\moh87733\\Phorvex\\build\\test-harness\\out-console-scn-2\\raw\\ai1-inference-manipulation_d-r6blindtimer_t2.log",
+      "commands": [
+        "kubectl run mock-infer-pod --image=busybox:1.36 -n amtd-attack-test  # mock mock-infer :9000 (leader=a)",
+        "kubectl expose --selector=r6th.io/infer-leader=a --name=mock-infer-svc --port=9000 -n amtd-attack-test  # EXTERNAL svc (stable name, backend leader rotates)",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c echo R6TH-INFERENCE-TAMPERED \u003e /tmp/tamper; echo R6TH-INFERENCE-TAMPERED \u003e /tmp/inject]",
+        "kubectl exec -n amtd-attack-test mock-infer-pod -c server -- [sh -c cat /tmp/tamper 2\u003e/dev/null]",
+        "in-path proxy on stable path -\u003e tampered completion",
+        "kubectl delete pods -n amtd-attack-test -l app=mock-infer --grace-period=0"
+      ],
+      "oracleAchieved": true,
+      "disruptionVsOracle": 0,
+      "observedState": "in-request output tampered=true; static path intercept-able after rotation=true (URL/path rotation absent)",
+      "negativeControl": false
+    }
+  ],
+  "howToReproduce": "go run ./cmd/harness -config \u003cconfig.yaml\u003e   # masterSeed=1337 + the fixed per-trial seeds reproduce this run exactly"
+}

@@ -59,7 +59,10 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
           {tab === "graph" && <BlastGraph pods={pods} />}
           {tab === "jewels" && <CrownJewels jewels={jewels} />}
           {tab === "killchain" && <KillChain pods={pods} />}
-          {tab === "physics" && <PhysicsPanel lens={lens} ns={pods[0]?.ns || "scandemo"} />}
+          {/* Physics is the PLATFORM scan — always all namespaces (ns="") so it shows the real
+              per-pod physics from `phorvex --scan`, independent of the (possibly stale/demo) live
+              decision stream. */}
+          {tab === "physics" && <PhysicsPanel lens={lens} ns="" />}
           <Pending stage="PENDING-wire · Phase 3" msg="The full reachability edge set (network + RBAC + co-location) comes from the live `phorvex --scan` graph endpoint, wired in Phase 3. Node value/blast/stage shown here are real." />
         </>
       )}

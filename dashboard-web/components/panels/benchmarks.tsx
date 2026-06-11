@@ -14,7 +14,7 @@ const fmtS = (c: any) => c && c.n ? `${c.mean.toFixed(1)}s [${c.lo.toFixed(1)},$
 export function BenchmarksPanel({ lens }: { lens: Lens }) {
   const [groups, setGroups] = React.useState<BenchGroup[] | null>(null);
   const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.benchmarks(lens).then((d) => setGroups(d.groups)).catch((e) => setErr(String(e.message || e))); }, [lens]);
+  React.useEffect(() => { api.benchmarks(lens).then((d) => setGroups(d.groups ?? [])).catch((e) => setErr(String(e.message || e))); }, [lens]);
   if (err) return <ErrorBox msg={err} />;
   if (!groups) return <Loading label="Aggregating the benchmark corpus…" />;
 
