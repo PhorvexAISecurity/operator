@@ -32,7 +32,7 @@ WORKDIR /workspace/phorvex
 # Static, stripped manager binary. GOARCH left to BuildKit so the binary matches the
 # image platform (amd64 on x86 EKS nodes, arm64 on Graviton).
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /manager cmd/main.go
+    go build -trimpath -ldflags="-s -w" -a -o /manager ./cmd
 
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot
