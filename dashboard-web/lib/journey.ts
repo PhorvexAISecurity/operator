@@ -3,7 +3,7 @@
 import * as React from "react";
 import { api, Lens, API_BASE } from "./api";
 
-export type StepId = "landing" | "connect" | "scan" | "discovered" | "protect" | "prove" | "report";
+export type StepId = "landing" | "connect" | "scan" | "discovered" | "attacklab" | "protect" | "prove" | "report";
 export type NodeState = "done" | "active" | "ready" | "locked";
 
 export interface StepDef { id: StepId; n: number; label: string; tagline: string }
@@ -12,9 +12,10 @@ export const STEPS: StepDef[] = [
   { id: "connect", n: 1, label: "Connect", tagline: "pick the environment to defend" },
   { id: "scan", n: 2, label: "Scan", tagline: "derive the platform physics" },
   { id: "discovered", n: 3, label: "Discovered", tagline: "what the scan found" },
-  { id: "protect", n: 4, label: "Protect / Run", tagline: "run Phorvex — where every method lives" },
-  { id: "prove", n: 5, label: "Prove", tagline: "attack it, with & without Phorvex" },
-  { id: "report", n: 6, label: "Report", tagline: "generate the evidence pack" },
+  { id: "attacklab", n: 4, label: "Attack Lab", tagline: "launch the attacker on a live workload, watch it" },
+  { id: "protect", n: 5, label: "Protect / Run", tagline: "run Phorvex — where every method lives" },
+  { id: "prove", n: 6, label: "Prove", tagline: "attack it, with & without Phorvex" },
+  { id: "report", n: 7, label: "Report", tagline: "generate the evidence pack" },
 ];
 
 export interface JourneySignals {
@@ -54,6 +55,7 @@ export function stepState(id: StepId, sig: JourneySignals, active: StepId): Node
     case "connect": return sig.connected ? "done" : "ready";
     case "scan": return sig.hasCorpus ? "done" : sig.connected ? "ready" : "locked";
     case "discovered": return sig.hasCorpus ? "ready" : "locked";
+    case "attacklab": return sig.connected ? "ready" : "locked";
     case "protect": return sig.hasAudit ? "done" : sig.hasCorpus ? "ready" : "locked";
     case "prove": return sig.hasBench ? "done" : sig.connected ? "ready" : "locked";
     case "report": return sig.hasBench ? "ready" : "locked";

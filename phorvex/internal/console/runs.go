@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"k8s.io/client-go/rest"
 )
 
 // envBase is the inherited process environment (so KUBECONFIG etc. reach the harness).
@@ -46,6 +48,8 @@ type RunStatus struct {
 	Arms      []ArmResult `json:"arms,omitempty"`
 	Error     string      `json:"error,omitempty"`
 	NativeActuator bool   `json:"nativeActuator"`
+	Namespace string      `json:"namespace,omitempty"` // the sandbox the scenario ran in
+	Target    string      `json:"target,omitempty"`    // the kubeconfig context targeted
 }
 
 // ArmResult is a per-defender live summary as the run streams in.
@@ -91,6 +95,9 @@ func (rm *RunManager) guard(nowMonotonic time.Time) error {
 // validScenario allows only the harness scenario-name charset (defense against injection into
 // the generated config / exec args).
 var scenarioRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,60}$`)
+
+// nsRe is the K8s namespace charset (RFC-1123 label) — guards the generated config's namespace.
+var nsRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // AllowedConfigs returns the triggerable suite names (for the UI).
 func (rm *RunManager) AllowedConfigs() []string {
@@ -148,14 +155,35 @@ func (rm *RunManager) ClusterTargets() []ClusterTarget {
 	for _, c := range ctxs {
 		out = append(out, classifyContext(c))
 	}
+	// In-cluster (Deployment) fallback: no kubeconfig contexts resolve, but the pod has a mounted
+	// ServiceAccount — surface THIS cluster as a runnable read-only target so the live workload
+	// view works at the public console URL without any kubeconfig.
+	if len(out) == 0 {
+		if _, err := rest.InClusterConfig(); err == nil {
+			out = append(out, ClusterTarget{
+				ID: "in-cluster", Context: "in-cluster", Runnable: true,
+				Label: "This cluster (in-cluster)",
+				Note:  "DERIVED from the pod ServiceAccount — read-only live view",
+			})
+		}
+	}
 	return out
 }
 
 // StartScenario runs a SINGLE scenario (generated one-scenario config) against the chosen
-// arms, on the chosen cluster target. withPX selects d-phorvex; otherwise the non-PX arms.
-func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, startedAt string) (string, error) {
+// arms, on the chosen cluster target, confined to the chosen sandbox namespace. withPX selects
+// d-phorvex (compared against no-MTD); otherwise the non-PX baselines. The harness deploys its
+// own synthetic attacker + victim into `namespace` and confines every object there — it does
+// not touch pre-existing workloads in other namespaces.
+func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, namespace, startedAt string) (string, error) {
 	if !scenarioRe.MatchString(scenario) {
 		return "", fmt.Errorf("invalid scenario name")
+	}
+	if namespace == "" {
+		namespace = "amtd-attack-test"
+	}
+	if !nsRe.MatchString(namespace) {
+		return "", fmt.Errorf("invalid namespace name")
 	}
 	target := "kind-amtd-test"
 	for _, t := range rm.ClusterTargets() {
@@ -181,14 +209,14 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, star
 	id := fmt.Sprintf("scn-%d", rm.seq)
 	outDir := "out-console-" + id
 	rm.mu.Unlock()
-	cfg := fmt.Sprintf("kubeconfig: \"\"\ncontext: %q\nnamespace: amtd-attack-test\nownedAck: true\ntrialsPerArm: 3\nmasterSeed: 1337\nphoenixSrcDir: %q\noutDir: %q\ndefenderFilter: %s\nscenarioFilter: [%s]\n",
-		target, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), filepath.Join(rm.cfg.HarnessDir, outDir), arms, scenario)
+	cfg := fmt.Sprintf("kubeconfig: \"\"\ncontext: %q\nnamespace: %q\nownedAck: true\ntrialsPerArm: 3\nmasterSeed: 1337\nphoenixSrcDir: %q\noutDir: %q\ndefenderFilter: %s\nscenarioFilter: [%s]\n",
+		target, namespace, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), filepath.Join(rm.cfg.HarnessDir, outDir), arms, scenario)
 	cfgPath := filepath.Join(rm.cfg.HarnessDir, "config.console-"+id+".yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		return "", err
 	}
 	rm.mu.Lock()
-	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, NativeActuator: withPX}
+	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, NativeActuator: withPX, Namespace: namespace, Target: target}
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
 	rm.mu.Unlock()
@@ -225,6 +253,14 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if native {
 		cmd.Env = append(cmd.Env, "PHORVEX_ACTUATOR=native")
 	}
+	// Capture the harness's live stdout/stderr to a per-run log the timeline SSE tails (the
+	// "=== scenario=… defender=… trial=N ===" stage headers stream from here in real time).
+	outAbs := filepath.Join(rm.cfg.HarnessDir, su.OutDir)
+	_ = os.MkdirAll(outAbs, 0o755)
+	if lf, lerr := os.Create(filepath.Join(outAbs, "console-run.log")); lerr == nil {
+		cmd.Stdout, cmd.Stderr = lf, lf
+		defer lf.Close()
+	}
 	err := cmd.Run()
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
@@ -242,6 +278,25 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		return
 	}
 	st.State = "done"
+}
+
+// streamRef returns the run's out dir (relative to HarnessDir) for tailing its metrics.jsonl +
+// console-run.log. ok=false for an unknown id.
+func (rm *RunManager) streamRef(id string) (string, bool) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	out, ok := rm.runOut[id]
+	return out, ok
+}
+
+// runState returns the current run state (running|done|error|"") — the timeline SSE's end signal.
+func (rm *RunManager) runState(id string) string {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if st, ok := rm.runs[id]; ok {
+		return st.State
+	}
+	return ""
 }
 
 func summarizeArms(rows []metricRow) ([]ArmResult, int) {

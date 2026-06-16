@@ -14,6 +14,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 )
 
 func (c *Config) execText(timeout time.Duration, bin string, args ...string) (string, error) {
@@ -163,8 +167,9 @@ func (c *Config) Ablation(ns string) AblationResult {
 }
 
 // --- Cluster status + configs (GET /api/cluster) ----------------------------------------
-// Reads the PhorvexPolicy CRDs (spec + Status) via kubectl — the real operator control-plane
-// state (HEALTH) and the editable policy surface (CONFIGS, read-only here).
+// Reads the PhorvexPolicy CRDs (spec + Status) via the Kubernetes API (dynamic client) — the
+// real operator control-plane state. Works identically on a dev box (kubeconfig) and as an
+// in-cluster Deployment (the pod ServiceAccount), so the live policy view needs no kubectl.
 
 type PolicyView struct {
 	Name      string          `json:"name"`
@@ -175,30 +180,37 @@ type PolicyView struct {
 	Status    json.RawMessage `json:"status"`
 }
 
+// phorvexPolicyGVR is the PhorvexPolicy custom resource (phorvex.ai/v1alpha1).
+var phorvexPolicyGVR = schema.GroupVersionResource{Group: "phorvex.ai", Version: "v1alpha1", Resource: "phorvexpolicies"}
+
 func (c *Config) ClusterPolicies() ([]PolicyView, bool) {
-	raw, err := c.execText(15*time.Second, "kubectl", "get", "phorvexpolicy.phorvex.ai", "-A", "-o", "json")
-	if err != nil || !strings.Contains(raw, "items") {
+	rc, err := restConfigFor("")
+	if err != nil {
 		return nil, false
 	}
-	var list struct {
-		Items []struct {
-			Metadata struct {
-				Name, Namespace string
-			} `json:"metadata"`
-			Spec   json.RawMessage `json:"spec"`
-			Status json.RawMessage `json:"status"`
-		} `json:"items"`
-	}
-	if json.Unmarshal([]byte(raw), &list) != nil {
+	dyn, err := dynamic.NewForConfig(rc)
+	if err != nil {
 		return nil, false
 	}
-	var out []PolicyView
-	for _, it := range list.Items {
-		var sp struct {
-			Tenant, Mode string
-		}
-		_ = json.Unmarshal(it.Spec, &sp)
-		out = append(out, PolicyView{Name: it.Metadata.Name, Namespace: it.Metadata.Namespace, Tenant: sp.Tenant, Mode: sp.Mode, Spec: it.Spec, Status: it.Status})
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	list, err := dyn.Resource(phorvexPolicyGVR).Namespace("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, false // CRD absent or no API access => honestly unavailable
+	}
+	out := []PolicyView{}
+	for i := range list.Items {
+		obj := list.Items[i].Object
+		spec, _ := obj["spec"].(map[string]any)
+		status, _ := obj["status"].(map[string]any)
+		specRaw, _ := json.Marshal(spec)
+		statusRaw, _ := json.Marshal(status)
+		tenant, _ := spec["tenant"].(string)
+		mode, _ := spec["mode"].(string)
+		out = append(out, PolicyView{
+			Name: list.Items[i].GetName(), Namespace: list.Items[i].GetNamespace(),
+			Tenant: tenant, Mode: mode, Spec: specRaw, Status: statusRaw,
+		})
 	}
 	return out, true
 }

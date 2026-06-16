@@ -52,7 +52,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/runs/start", s.withCORS(s.scoped("operator", s.startRun)))
 	mux.HandleFunc("/api/runs/scenario", s.withCORS(s.scoped("operator", s.startScenario)))
 	mux.HandleFunc("/api/runs/status", s.withCORS(s.scoped("operator", s.runStatus)))
+	mux.HandleFunc("/api/runs/stream", s.withCORS(s.scoped("operator", s.runStream)))
 	mux.HandleFunc("/api/targets", s.withCORS(s.scoped("operator", s.targets)))
+	// LIVE WORKLOADS (P-DASHBOARD-LIVE) — enumerate the real workloads on the selected cluster.
+	mux.HandleFunc("/api/workloads", s.withCORS(s.scoped("operator", s.workloads)))
 	// EVIDENCE group (Wave 1) — operator/investor scope.
 	mux.HandleFunc("/api/catalog", s.withCORS(s.scoped("operator", s.catalog)))
 	mux.HandleFunc("/api/benchmarks", s.withCORS(s.scoped("operator", s.benchmarks)))
@@ -236,10 +239,11 @@ func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 		Scenario  string `json:"scenario"`
 		WithPX    bool   `json:"withPX"`
 		Target    string `json:"target"`
+		Namespace string `json:"namespace"`
 		StartedAt string `json:"startedAt"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	id, err := s.runs.StartScenario(body.Scenario, body.WithPX, body.Target, body.StartedAt)
+	id, err := s.runs.StartScenario(body.Scenario, body.WithPX, body.Target, body.Namespace, body.StartedAt)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return

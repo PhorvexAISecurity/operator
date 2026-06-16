@@ -88,7 +88,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
   if (!item) return null;
   async function run(withPX: boolean) {
     setRunning(withPX ? "px" : "nopx"); setMsg("");
-    try { const { id } = await api.startScenario(item!.name, withPX, target, lens); setMsg(`Launched ${id} on ${target} — watch Run Attack Agents / Live Operations.`); }
+    try { const { id } = await api.startScenario(item!.name, withPX, target, "", lens); setMsg(`Launched ${id} on ${target} — watch Run Attack Agents / Live Operations.`); }
     catch (e: any) { setMsg(String(e.message || e)); }
     finally { setRunning(""); }
   }

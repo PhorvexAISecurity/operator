@@ -7,6 +7,7 @@ import { Landing } from "@/components/steps/landing";
 import { ConnectStep } from "@/components/steps/connect";
 import { ScanStep } from "@/components/steps/scan";
 import { DiscoveredStep } from "@/components/steps/discovered";
+import { AttackLab } from "@/components/steps/attacklab";
 import { ProtectStep } from "@/components/steps/protect";
 import { ProveStep } from "@/components/steps/prove";
 import { ReportStep } from "@/components/steps/report";
@@ -36,6 +37,7 @@ export default function Page() {
         {active === "connect" && <ConnectStep lens={lens} go={go} />}
         {active === "scan" && <ScanStep lens={lens} go={go} />}
         {active === "discovered" && <DiscoveredStep lens={lens} go={go} />}
+        {active === "attacklab" && <AttackLab lens={lens} />}
         {active === "protect" && <ProtectStep lens={lens} go={go} />}
         {active === "prove" && <ProveStep lens={lens} />}
         {active === "report" && <ReportStep lens={lens} />}

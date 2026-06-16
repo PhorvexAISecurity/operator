@@ -126,8 +126,11 @@ export const api = {
   posture: (lens: Lens) => get<Posture>("/api/posture", lens),
   rawlog: (path: string, lens: Lens) => get<{ log: string }>(`/api/rawlog?path=${encodeURIComponent(path)}`, lens),
   targets: (lens: Lens) => get<{ targets: ClusterTarget[] }>("/api/targets", lens),
-  startScenario: (scenario: string, withPX: boolean, target: string, lens: Lens) =>
-    post<{ id: string }>("/api/runs/scenario", { scenario, withPX, target, startedAt: new Date().toLocaleTimeString() }, lens),
+  // workloads enumerates the REAL workloads on the selected cluster (live get/list — read-only).
+  workloads: (target: string, lens: Lens) =>
+    get<{ context: string; namespaces: WorkloadNS[] }>(`/api/workloads${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
+  startScenario: (scenario: string, withPX: boolean, target: string, namespace: string, lens: Lens) =>
+    post<{ id: string }>("/api/runs/scenario", { scenario, withPX, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
   // scan execs `phorvex --scan` LIVE (fresh exec each call — not a cached corpus). ns="" scans all
   // namespaces; context targets a specific kubeconfig context (the selected environment).
   scan: (ns: string, lens: Lens, context?: string) => {
@@ -166,6 +169,17 @@ export interface KillchainRow { pod: string; stage: string; ai: boolean; pHold: 
 export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 export interface ClusterTarget { id: string; context: string; label: string; runnable: boolean; note: string }
+// Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
+export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }
+export interface WorkloadNS { namespace: string; system: boolean; podCount: number; workloads: Workload[] }
+// Attack-timeline SSE event (one per harness stage header / completed trial / run end).
+export interface TimelineEvent {
+  type: "meta" | "stage" | "trial" | "end";
+  id?: string; state?: string;
+  scenario?: string; defender?: string; trial?: number;
+  oracleAchieved?: boolean; disruption?: number; dwellSeconds?: number;
+  mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
+}
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
 
 // liveStream opens the SSE decision stream (per-lens projected server-side). Returns a
@@ -175,6 +189,14 @@ export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: st
   const es = new EventSource(`${API_BASE}/api/live?lens=${lens}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}`);
   // NOTE: EventSource cannot send headers; the lens is passed as a query param the backend
   // also honors. (Demo-trust; real authn is [PENDING-P-VCLUSTER].)
+  es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
+  return () => es.close();
+}
+
+// runStream opens the per-run attack-timeline SSE: stage headers, completed trials (with the
+// attacker's command steps + outcome), and a final "end" event. Returns a cleanup fn.
+export function runStream(id: string, lens: Lens, onEvent: (e: TimelineEvent) => void): () => void {
+  const es = new EventSource(`${API_BASE}/api/runs/stream?id=${encodeURIComponent(id)}&lens=${lens}`);
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
   return () => es.close();
 }
