@@ -33,14 +33,17 @@ func (c *Config) execText(timeout time.Duration, bin string, args ...string) (st
 // --- Physics scan (POST/GET /api/scan?ns=) ----------------------------------------------
 
 type PhysWitness struct {
-	Pod       string  `json:"pod"`
-	ImageRare float64 `json:"imageRarity"`
-	CoRes     float64 `json:"coResidency"`
-	Slack     float64 `json:"slack"`
-	PDBMin    int     `json:"pdbMinAvail"`
-	MIGValid  bool    `json:"migValid"`
-	EPSS      float64 `json:"epss"`
-	GPU       bool    `json:"gpuPresent"`
+	Pod          string  `json:"pod"`
+	ImageRare    float64 `json:"imageRarity"`
+	CoRes        float64 `json:"coResidency"`
+	Slack        float64 `json:"slack"`
+	PDBMin       int     `json:"pdbMinAvail"`
+	MIGValid     bool    `json:"migValid"`
+	EPSS         float64 `json:"epss"`
+	GPU          bool    `json:"gpuPresent"`
+	VRAMFraction float64 `json:"vramFraction"` // live DCGM GPU half (0 when GPUPresent=false)
+	SMOccupancy  float64 `json:"smOccupancy"`
+	LinkBW       float64 `json:"linkBandwidth"`
 }
 type KillchainRow struct {
 	Pod          string  `json:"pod"`
@@ -57,7 +60,11 @@ type ScanResult struct {
 	Pods      int            `json:"pods"`
 	Witness   []PhysWitness  `json:"witness"`
 	Killchain []KillchainRow `json:"killchain"`
-	EMR       struct {
+	// GraphNodes + GraphEdges are the live reachability graph (P-GRAPH) the Discovered
+	// blast-radius map renders: directed lateral-movement edges (network + RBAC + co-location).
+	GraphNodes []GraphNode `json:"graphNodes"`
+	GraphEdges []GraphEdge `json:"graphEdges"`
+	EMR        struct {
 		Baseline float64 `json:"baseline"`
 		Scarcity float64 `json:"scarcity"`
 		Lift     float64 `json:"lift"`
@@ -66,9 +73,25 @@ type ScanResult struct {
 	Raw string `json:"raw"`
 }
 
+// GraphNode is one workload in the reachability graph (key = "ns/pod").
+type GraphNode struct {
+	Key   string  `json:"key"`
+	Blast float64 `json:"blast"`
+	AI    bool    `json:"ai"`
+}
+
+// GraphEdge is a directed lateral-movement path src -> dst (keys "ns/pod").
+type GraphEdge struct {
+	Src string `json:"src"`
+	Dst string `json:"dst"`
+}
+
 var (
 	reWitness   = regexp.MustCompile(`^\s*(\S+/\S+)\s+K8s:\s+imgRarity=([\d.]+)\s+coRes=([\d.]+)\s+slack=([\d.]+)\s+pdbMinAvail=(-?\d+)\s+migValid=(\w+)\s+epss=([\d.]+)`)
 	reKill      = regexp.MustCompile(`^\s*(\S+/\S+)\s+stage=(\S+)\s+\[([^\]]+)\]\s+PHold=([\d.]+)\s+PreemptMargin=([\d.]+)\s+ProjNextStage=([\d.]+)s\s+infectionFrontier=([\d.]+)`)
+	reNode      = regexp.MustCompile(`^\s*NODE\s+(\S+/\S+)\s+blast=([\d.]+)\s+ai=([01])`)
+	reEdge      = regexp.MustCompile(`^\s*EDGE\s+(\S+/\S+)\s+->\s+(\S+/\S+)`)
+	reAI        = regexp.MustCompile(`AI:\s*VRAMfrac=([\d.]+)\s+SM=([\d.]+)\s+link=([\d.]+)\s+modelRarity=([\d.]+)`)
 	rePlatform  = regexp.MustCompile(`platform-adapter:\s*(\S+)`)
 	reNodesPods = regexp.MustCompile(`nodes:\s*(\d+)\s+pods:\s*(\d+)`)
 	reEMRline   = regexp.MustCompile(`(baseline|scarcity).*ratio\s*=\s*([\d.]+)`)
@@ -100,9 +123,18 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	res := ScanResult{Raw: raw}
 	for _, ln := range strings.Split(raw, "\n") {
 		if m := reWitness.FindStringSubmatch(ln); m != nil {
-			res.Witness = append(res.Witness, PhysWitness{Pod: m[1], ImageRare: atof(m[2]), CoRes: atof(m[3]), Slack: atof(m[4]), PDBMin: int(atof(m[5])), MIGValid: m[6] == "true", EPSS: atof(m[7])})
+			pw := PhysWitness{Pod: m[1], ImageRare: atof(m[2]), CoRes: atof(m[3]), Slack: atof(m[4]), PDBMin: int(atof(m[5])), MIGValid: m[6] == "true", EPSS: atof(m[7])}
+			// the same scan line carries the GPU half when a DCGM feed answered for this pod.
+			if a := reAI.FindStringSubmatch(ln); a != nil {
+				pw.GPU, pw.VRAMFraction, pw.SMOccupancy, pw.LinkBW = true, atof(a[1]), atof(a[2]), atof(a[3])
+			}
+			res.Witness = append(res.Witness, pw)
 		} else if m := reKill.FindStringSubmatch(ln); m != nil {
 			res.Killchain = append(res.Killchain, KillchainRow{Pod: m[1], Stage: m[2], AI: strings.Contains(m[3], "AI"), PHold: atof(m[4]), PreemptMargin: atof(m[5]), ProjNextSec: atof(m[6]), Frontier: atof(m[7])})
+		} else if m := reNode.FindStringSubmatch(ln); m != nil {
+			res.GraphNodes = append(res.GraphNodes, GraphNode{Key: m[1], Blast: atof(m[2]), AI: m[3] == "1"})
+		} else if m := reEdge.FindStringSubmatch(ln); m != nil {
+			res.GraphEdges = append(res.GraphEdges, GraphEdge{Src: m[1], Dst: m[2]})
 		} else if m := rePlatform.FindStringSubmatch(ln); m != nil {
 			res.Platform = m[1]
 		} else if m := reNodesPods.FindStringSubmatch(ln); m != nil {
@@ -126,6 +158,12 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	}
 	if res.Killchain == nil {
 		res.Killchain = []KillchainRow{}
+	}
+	if res.GraphNodes == nil {
+		res.GraphNodes = []GraphNode{}
+	}
+	if res.GraphEdges == nil {
+		res.GraphEdges = []GraphEdge{}
 	}
 	return res
 }

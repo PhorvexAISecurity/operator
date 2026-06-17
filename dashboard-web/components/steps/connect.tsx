@@ -16,10 +16,10 @@ export function ConnectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void 
     api.targets(lens).then((d) => {
       const ts = d.targets ?? [];
       setTargets(ts);
-      // default to the runnable LOCAL (kind) cluster, else the first runnable target — NOT just
+      // default to the runnable AWS EKS cluster, else the first runnable target — NOT just
       // targets[0] (which may be an unreachable cloud context). Persist its kubeconfig context so
       // the Scan step execs `phorvex --scan --context <that>`.
-      const def = ts.find((t) => t.runnable && /kind/i.test(t.context || t.id)) ?? ts.find((t) => t.runnable) ?? ts[0];
+      const def = ts.find((t) => t.runnable && /eks|arn:aws/i.test(t.context || t.id)) ?? ts.find((t) => t.runnable) ?? ts[0];
       if (def) { setSel(def.id); if (typeof window !== "undefined") localStorage.setItem("phorvex-context", def.context || ""); }
     }).catch((e) => setErr(String(e.message || e)));
   }, [lens]); // eslint-disable-line
@@ -30,7 +30,7 @@ export function ConnectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void 
 
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={1} title="Connect" sub="Pick the environment Phorvex will defend. kind runs live now; cloud GPU targets are wired and honestly pending real-cluster execution." />
+      <StepHead n={1} title="Connect" sub="Pick the environment Phorvex will defend. AWS EKS runs live now; GPU magnitudes are honestly pending a GPU node pool." />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {targets.map((t) => (
           <button key={t.id} onClick={() => pick(t)} disabled={!t.runnable}

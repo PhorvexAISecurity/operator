@@ -19,8 +19,9 @@ export interface OwnerEvent {
 }
 export interface ArmResult { defender: string; trials: number; disruption: number; dwellMean: number }
 export interface RunStatus {
-  id: string; config: string; state: "running" | "done" | "error"; started: string;
-  trials: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean;
+  id: string; config: string; state: "running" | "done" | "error" | "stopped"; started: string;
+  date?: string; finished?: string; namespace?: string; target?: string;
+  trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean;
 }
 export interface Suite { Name: string; Desc: string }
 
@@ -116,10 +117,14 @@ export const api = {
   ownerEvents: (lens: Lens, tenant?: string) => get<{ events: OwnerEvent[]; empty: boolean; rollup: OwnerRollup; note: string }>(`/api/owner/events${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`, lens),
   ownerTenants: (lens: Lens) => get<{ tenants: string[] }>("/api/owner/tenants", lens),
   reports: (lens: Lens) => get<{ reports: ReportMeta[] }>("/api/reports", lens),
+  cost: (lens: Lens) => get<CostResult>("/api/cost", lens),
   report: (id: string, lens: Lens) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
   runStatus: (id: string, lens: Lens) => get<RunStatus>(`/api/runs/status?id=${id}`, lens),
+  runsList: (lens: Lens) => get<{ runs: RunStatus[] }>("/api/runs/list", lens),
+  stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
+  runEvidence: (id: string, lens: Lens) => get<RunEvidence>(`/api/runs/evidence?id=${encodeURIComponent(id)}`, lens),
   catalog: (lens: Lens) => get<{ items: CatalogItem[] }>("/api/catalog", lens),
   benchmarks: (lens: Lens) => get<{ groups: BenchGroup[] }>("/api/benchmarks", lens),
   threatMatrix: (lens: Lens) => get<{ techniques: CoverageTechnique[] }>("/api/threat-matrix", lens),
@@ -129,6 +134,9 @@ export const api = {
   // workloads enumerates the REAL workloads on the selected cluster (live get/list — read-only).
   workloads: (target: string, lens: Lens) =>
     get<{ context: string; namespaces: WorkloadNS[] }>(`/api/workloads${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
+  // capabilities reports live cluster GPU/MIG/multi-node so the UI gates only genuinely-unmet scenarios.
+  capabilities: (target: string, lens: Lens) =>
+    get<{ gpu: boolean; mig: boolean; multiNode: boolean; nodes: number; gpuCount: number }>(`/api/capabilities${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
   startScenario: (scenario: string, withPX: boolean, target: string, namespace: string, lens: Lens) =>
     post<{ id: string }>("/api/runs/scenario", { scenario, withPX, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
   // scan execs `phorvex --scan` LIVE (fresh exec each call — not a cached corpus). ns="" scans all
@@ -164,9 +172,11 @@ export interface PodRisk { namespace: string; pod: string; risk: number; blast: 
 export interface MetricsResult { available: boolean; source: string; pods: PodRisk[]; note: string }
 export interface RegistryView { names: string[]; generatable: string[]; missing: string[]; orphans: string[]; count: number; generatables: number; complete: boolean }
 export interface AblationResult { ratio: number; p1PerDollar: number; randomPerDollar: number; ran: boolean; note: string; raw: string }
-export interface PhysWitness { pod: string; imageRarity: number; coResidency: number; slack: number; pdbMinAvail: number; migValid: boolean; epss: number; gpuPresent: boolean }
+export interface PhysWitness { pod: string; imageRarity: number; coResidency: number; slack: number; pdbMinAvail: number; migValid: boolean; epss: number; gpuPresent: boolean; vramFraction: number; smOccupancy: number; linkBandwidth: number }
 export interface KillchainRow { pod: string; stage: string; ai: boolean; pHold: number; preemptMargin: number; projNextStageSec: number; infectionFrontier: number }
-export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
+export interface GraphNode { key: string; blast: number; ai: boolean }
+export interface GraphEdge { src: string; dst: string }
+export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 export interface ClusterTarget { id: string; context: string; label: string; runnable: boolean; note: string }
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
@@ -175,12 +185,19 @@ export interface WorkloadNS { namespace: string; system: boolean; podCount: numb
 // Attack-timeline SSE event (one per harness stage header / completed trial / run end).
 export interface TimelineEvent {
   type: "meta" | "stage" | "trial" | "end";
-  id?: string; state?: string;
+  id?: string; state?: string; expectedTrials?: number;
   scenario?: string; defender?: string; trial?: number;
   oracleAchieved?: boolean; disruption?: number; dwellSeconds?: number;
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
 }
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
+export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptWith: number; defenseCost: number; costWithout: number; costWith: number; savings: number; helps: boolean }
+export interface NodePrice { instanceType: string; count: number; gpu: boolean; pricePerHr: number; estimated: boolean }
+export interface ClusterPricing { provider: string; region: string; nodes: NodePrice[]; totalPerHr: number; totalPerYear: number; gpuPricePerHr: number; gpuCount: number; source: string; available: boolean }
+export interface CostResult { available: boolean; scenarios: CostScenario[]; totalWithout: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; overheadPercent?: number; note: string }
+export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
+export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }
 
 // liveStream opens the SSE decision stream (per-lens projected server-side). Returns a
 // cleanup fn. Each message is the per-lens payload (full Record for investor/operator;

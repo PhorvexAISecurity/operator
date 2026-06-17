@@ -6,6 +6,7 @@ import { Loading, csvDownload } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { MethodologyPanel } from "@/components/subsystems/panels";
 import { ReportsPanel } from "@/components/panels/reports";
+import { RunHistoryPanel } from "@/components/panels/run-history";
 import { FileText, Download, Printer } from "lucide-react";
 
 export function ReportStep({ lens }: { lens: Lens }) {
@@ -38,6 +39,9 @@ export function ReportStep({ lens }: { lens: Lens }) {
         <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
         {bench.length > 0 && <span className="text-[12px] text-muted-foreground">· {bench.length} benchmark scenarios in the pack</span>}
       </div>
+
+      {/* Post-attack reports — updates live as Attack Lab runs finish (date + real metrics). */}
+      <RunHistoryPanel lens={lens} />
 
       <Card><CardContent className="p-5">
         <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold"><FileText className="h-4 w-4 text-primary" /> Executive summary</div>

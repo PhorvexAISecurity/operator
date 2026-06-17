@@ -6,13 +6,21 @@ import { PageHead, SectionLabel, ErrorState } from "@/components/panels/effectiv
 import { cn } from "@/lib/utils";
 import {
   Server, Boxes, Swords, Play, Loader2, ShieldCheck, ShieldOff, Crosshair,
-  Radio, Terminal, AlertTriangle, CheckCircle2, Skull,
+  Radio, Terminal, AlertTriangle, CheckCircle2, Skull, StopCircle, FileText,
 } from "lucide-react";
 
 // one streamed trial outcome (a completed attack attempt under one defender arm).
 interface Trial extends TimelineEvent { key: string }
 
-const GPU_CAPS = new Set(["CapGPU", "CapMIG", "CapMultiNode"]);
+// live cluster capabilities — a scenario is gated ONLY if a required cap is genuinely unmet.
+interface Caps { gpu: boolean; mig: boolean; multiNode: boolean }
+function capUnmet(cap: string, caps: Caps): boolean {
+  if (cap === "CapGPU") return !caps.gpu;
+  if (cap === "CapMIG") return !caps.mig;
+  if (cap === "CapMultiNode") return !caps.multiNode;
+  return false;
+}
+const scenarioGated = (scenarioCaps: string[], caps: Caps) => (scenarioCaps || []).some((c) => capUnmet(c, caps));
 
 export function AttackLab({ lens }: { lens: Lens }) {
   const [targets, setTargets] = React.useState<ClusterTarget[]>([]);
@@ -30,6 +38,12 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState("");
   const [toolchain, setToolchain] = React.useState(true); // harness present? (false on the slim in-cluster pod)
+  const [caps, setCaps] = React.useState<Caps>({ gpu: false, mig: false, multiNode: false });
+  const [expectedTrials, setExpectedTrials] = React.useState(6);
+  const [startedMs, setStartedMs] = React.useState(0);
+  const [nowMs, setNowMs] = React.useState(0);
+  const [stopping, setStopping] = React.useState(false);
+  const [ended, setEnded] = React.useState<string>(""); // "" | "done" | "stopped"
 
   // load the live clusters + the scenario catalog once.
   React.useEffect(() => {
@@ -42,10 +56,15 @@ export function AttackLab({ lens }: { lens: Lens }) {
     api.catalog(lens).then((d) => {
       const items = (d.items || []).filter((i) => !i.name.endsWith("-apt"));
       setScenarios(items);
-      const first = items.find((i) => !i.caps.some((c) => GPU_CAPS.has(c)));
-      if (first) setScenario(first.name);
+      if (items.length) setScenario(items[0].name);
     }).catch(() => {});
   }, [lens]);
+
+  // live cluster capabilities (GPU/MIG/multi-node) — drives scenario gating.
+  React.useEffect(() => {
+    if (!target) return;
+    api.capabilities(target, lens).then((c) => setCaps({ gpu: !!c.gpu, mig: !!c.mig, multiNode: !!c.multiNode })).catch(() => {});
+  }, [target, lens]);
 
   // load the live workloads whenever the target cluster changes.
   React.useEffect(() => {
@@ -60,14 +79,34 @@ export function AttackLab({ lens }: { lens: Lens }) {
   // subscribe to the attack timeline while a run is live.
   React.useEffect(() => {
     if (!runId) return;
-    setEvents([]); setStage(null); setRunning(true);
+    setEvents([]); setStage(null); setRunning(true); setStopping(false); setEnded("");
+    setStartedMs(Date.now()); setNowMs(Date.now());
     const close = runStream(runId, lens, (e) => {
-      if (e.type === "stage") setStage(e);
-      else if (e.type === "trial") setEvents((prev) => [...prev, e]);
-      else if (e.type === "end") { setRunning(false); setStage(null); }
+      if (e.type === "meta") { if (e.expectedTrials) setExpectedTrials(e.expectedTrials); }
+      else if (e.type === "stage") setStage(e);
+      else if (e.type === "trial") setEvents((prev) => {
+        // de-dupe by (defender,trial) — the SSE replays the file on every reconnect, so the
+        // same trial can arrive multiple times; counting dupes inflated the progress bar.
+        const k = `${e.defender}-${e.trial}`;
+        return prev.some((p) => `${p.defender}-${p.trial}` === k) ? prev : [...prev, e];
+      });
+      else if (e.type === "end") { setRunning(false); setStage(null); setEnded(e.state || "done"); }
     });
     return close;
   }, [runId, lens]);
+
+  // tick the elapsed clock while running (for the ETA / progress bar).
+  React.useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  async function stop() {
+    if (!runId) return;
+    setStopping(true);
+    try { await api.stopRun(runId, lens); } catch (e: any) { setErr(String(e.message || e)); setStopping(false); }
+  }
 
   async function launch() {
     if (!scenario || !target) return;
@@ -167,7 +206,9 @@ export function AttackLab({ lens }: { lens: Lens }) {
             <div className="mb-2 text-[12px] text-muted-foreground">Attack scenario</div>
             <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
               {scenarios.map((s) => {
-                const gated = s.caps.some((c) => GPU_CAPS.has(c));
+                const gated = scenarioGated(s.caps, caps);
+                const unmet = (s.caps || []).filter((c) => capUnmet(c, caps)).map((c) => c.replace("Cap", "")).join("+");
+                const isGpu = (s.caps || []).includes("CapGPU");
                 return (
                   <button key={s.name} disabled={gated} onClick={() => setScenario(s.name)}
                     className={cn("rounded-lg border p-2.5 text-left transition-colors",
@@ -179,7 +220,8 @@ export function AttackLab({ lens }: { lens: Lens }) {
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       <span className="rounded bg-muted/40 px-1 text-[9px] uppercase text-muted-foreground">{s.product}</span>
                       <span className="text-[10px] text-muted-foreground/80">{s.r6Tag}</span>
-                      {gated && <span className="text-[10px] text-warning">GPU-only</span>}
+                      {isGpu && !gated && <span className="text-[10px] text-success">GPU ✓</span>}
+                      {gated && <span className="text-[10px] text-warning">needs {unmet}</span>}
                     </div>
                   </button>
                 );
@@ -214,14 +256,47 @@ export function AttackLab({ lens }: { lens: Lens }) {
       {runId && (
         <Card className="animate-fade-up">
           <CardContent className="space-y-4 p-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <SectionLabel>3 · Live attack timeline</SectionLabel>
-              {running ? (
-                <Badge variant="accent"><Radio className="h-3 w-3 animate-pulse" /> live</Badge>
-              ) : (
-                <Badge variant="real"><CheckCircle2 className="h-3 w-3" /> complete</Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {running ? <Badge variant="accent"><Radio className="h-3 w-3 animate-pulse" /> running</Badge>
+                  : ended === "stopped" ? <Badge variant="danger"><StopCircle className="h-3 w-3" /> stopped</Badge>
+                  : <Badge variant="real"><CheckCircle2 className="h-3 w-3" /> complete · report ready</Badge>}
+                {running && (
+                  <Button variant="outline" size="sm" onClick={stop} disabled={stopping}>
+                    {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <StopCircle className="h-3.5 w-3.5" />} {stopping ? "stopping…" : "Stop attack"}
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {/* progress bar + ETA — trial-based (accurate), with an explicit finalize phase */}
+            {(() => {
+              const done = trials.length;
+              const total = Math.max(expectedTrials, done, 1);
+              const elapsed = startedMs ? Math.round((nowMs - startedMs) / 1000) : 0;
+              const finalizing = running && done >= total; // trials done, harness still tearing down operators
+              const frac = !running ? 1 : finalizing ? 0.97 : done / total;
+              // ETA from the measured per-trial pace (each PX trial rebuilds operators → ~30-45s).
+              const perTrial = done > 0 ? elapsed / done : 45;
+              const eta = running && !finalizing ? Math.max(5, Math.round((total - done) * perTrial)) : 0;
+              return (
+                <div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/50">
+                    <div className={cn("h-2 rounded-full transition-all", running ? "bg-primary" : ended === "stopped" ? "bg-danger/60" : "bg-success")} style={{ width: `${Math.round(frac * 100)}%` }} />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>{done}/{total} trials{stage ? ` · now: ${stage.scenario} (${stage.defender?.replace("d-", "")})` : ""}</span>
+                    <span className="tabular">
+                      {finalizing ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> finalizing — tearing down operators…</span>
+                        : running ? `elapsed ${elapsed}s · ~${eta}s left`
+                        : ended === "stopped" ? "stopped by you"
+                        : <span className="inline-flex items-center gap-1 text-success"><FileText className="h-3 w-3" /> report ready in the Report tab</span>}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {stage && (
               <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/[0.05] px-3 py-2 text-[12px]">

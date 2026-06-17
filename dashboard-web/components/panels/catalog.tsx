@@ -12,7 +12,7 @@ const r6Variant = (t: string) => (t.includes("Covers") ? "real" : t.includes("Pa
 export function CatalogPanel({ lens }: { lens: Lens }) {
   const [items, setItems] = React.useState<CatalogItem[] | null>(null);
   const [targets, setTargets] = React.useState<ClusterTarget[]>([]);
-  const [target, setTarget] = React.useState("kind");
+  const [target, setTarget] = React.useState("");
   const [err, setErr] = React.useState("");
   const [prod, setProd] = React.useState<"all" | "k8s" | "ai" | "structural">("all");
   const [q, setQ] = React.useState("");
@@ -97,7 +97,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="neutral">{item.category}</Badge>
-          <Badge variant={r6Variant(item.r6Tag) as any}>R6 {item.r6Tag.replace("R6", "")}</Badge>
+          <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>
           <Badge variant={item.product === "ai" ? "modeled" : "accent"}>{item.product.toUpperCase()}</Badge>
         </div>
         <div>

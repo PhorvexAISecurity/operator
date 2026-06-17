@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/hami/Downloads/Phorvex/phorvex *)",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -o ConnectTimeout=25 -p 22 hami@87.106.63.105 'bash -lc \" *)",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'echo \"pf alive: $\\(pgrep -f run_prompf >/dev/null && echo yes || echo no\\)\"; sleep 2; curl -s --max-time 8 http://localhost:9090/-/healthy 2>&1 | head -1')",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 90 -H \"X-Phorvex-Lens:operator\" \"http://localhost:8095/api/scan?context=arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks&ns=mock-rag-chatbot\" | python3 -c \" *)",
+      "Bash(node node_modules/next/dist/bin/next build)",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -o ConnectTimeout=25 -p 22 hami@87.106.63.105 'pkill -x kubectl 2>/dev/null; pkill -f run_prompf 2>/dev/null; sleep 1; echo cleaned')",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'bash -lc \" *)",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 10 -H \"X-Phorvex-Lens:operator\" http://localhost:8095/api/effectiveness | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(s[\\\\\"label\\\\\"],\\\\\"=\\\\\",s[\\\\\"value\\\\\"],s.get\\(\\\\\"unit\\\\\",\\\\\"\\\\\"\\),\\\\\"|\\\\\",s[\\\\\"status\\\\\"]\\) for s in d.get\\(\\\\\"stats\\\\\",[]\\)]\"')",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 10 -H \"X-Phorvex-Lens:operator\" http://localhost:8095/api/benchmarks | python3 -c \" *)",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 6 http://localhost:8095/api/health')",
+      "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 12 -H '\\\\''X-Phorvex-Lens:operator'\\\\'' http://acea4b96735444434bc63e1c3833af84-1075391860.us-east-2.elb.amazonaws.com/api/effectiveness | python3 -c '\\\\''import sys,json; d=json.load\\(sys.stdin\\); [print\\(s[\"label\"],\"=\",s[\"value\"],s.get\\(\"unit\",\"\"\\),\"|\",s[\"status\"]\\) for s in d.get\\(\"stats\",[]\\)]'\\\\''')",
+      "Bash(grep -n \"go rm.run\\(id, suite{File: \\\\\"config.console-\\\\\"\" runs.go)"
+    ],
+    "additionalDirectories": [
+      "/Users/hami/Downloads/Phorvex/phorvex/internal/model"
+    ]
+  }
+}

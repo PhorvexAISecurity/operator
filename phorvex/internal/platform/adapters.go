@@ -8,7 +8,25 @@ import (
 	"strings"
 
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/model"
 )
+
+// stampGPU fills the GPU half of the witness from the live DCGM feed (snap.GPUWitness, populated
+// by ingest.PopulateGPUWitness). It is the Derive() override the GPU adapters share: the K8s half
+// is inherited from genericK8s; the GPU floats are stamped ONLY for pods DCGM actually reported a
+// GPU for — so with no DCGM feed the GPU half stays [SP-0-PENDING] (GPUPresent=false), never faked.
+func stampGPU(base genericK8s, snap *ingest.Snapshot) map[string]model.PhysicsWitness {
+	out := base.Derive(snap)
+	for key, gw := range snap.GPUWitness {
+		w := out[key]
+		w.GPUPresent = true
+		w.VRAMFraction = gw.VRAMFraction
+		w.SMOccupancy = gw.SMOccupancy
+		w.LinkBandwidth = gw.LinkBandwidth
+		out[key] = w
+	}
+	return out
+}
 
 // This file is the EXTENSIBILITY PROOF: each per-platform adapter is ONE self-
 // registering module. The platform-INVARIANT K8s half is inherited from genericK8s
@@ -33,6 +51,11 @@ type eksGPU struct{ genericK8s }
 
 func (eksGPU) Name() string { return "eks-gpu" }
 
+// Derive: K8s half (inherited) + the live DCGM GPU half stamped from snap.GPUWitness.
+func (e eksGPU) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness {
+	return stampGPU(e.genericK8s, snap)
+}
+
 // Detected: a GPU-advertising node carrying an EKS-specific node label (eks.amazonaws.com/*,
 // e.g. eks.amazonaws.com/nodegroup or .../compute-type). LABEL-DRIVEN, not registration order,
 // so it never mis-fires on kind/CoreWeave. On kind there are no eks.amazonaws.com labels => false.
@@ -47,6 +70,10 @@ func (eksGPU) Detected(s *ingest.Snapshot) bool {
 type coreWeave struct{ genericK8s }
 
 func (coreWeave) Name() string { return "coreweave" }
+
+func (c coreWeave) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness {
+	return stampGPU(c.genericK8s, snap)
+}
 
 // Detected: a GPU node carrying a CoreWeave-specific label. [PENDING-P4] — the exact label
 // keys are confirmed on real CoreWeave hardware at P4; false on kind/EKS today.
@@ -75,6 +102,9 @@ type gpuMarketplace struct{ genericK8s }
 
 func (gpuMarketplace) Name() string                     { return "gpu-marketplace" }
 func (gpuMarketplace) Detected(s *ingest.Snapshot) bool { return hasGPUNode(s) }
+func (g gpuMarketplace) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness {
+	return stampGPU(g.genericK8s, snap)
+}
 
 func init() {
 	Registry.Register(eksGPU{})

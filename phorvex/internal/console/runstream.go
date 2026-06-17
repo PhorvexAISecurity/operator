@@ -82,7 +82,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("data: " + string(b) + "\n\n"))
 		flusher.Flush()
 	}
-	send(map[string]any{"type": "meta", "id": id, "state": s.runs.runState(id)})
+	send(map[string]any{"type": "meta", "id": id, "state": s.runs.runState(id), "expectedTrials": s.runs.expectedTrials(id)})
 
 	var mOff, lOff int64
 	ctx := r.Context()
@@ -111,7 +111,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 				Observed: row.ObservedState, Commands: row.Commands, DefensiveActions: row.DefensiveActions,
 			})
 		})
-		if st := s.runs.runState(id); st == "done" || st == "error" {
+		if st := s.runs.runState(id); st == "done" || st == "error" || st == "stopped" {
 			drain++ // one more pass to flush the final rows, then end cleanly.
 			if drain >= 2 {
 				send(map[string]any{"type": "end", "state": st})

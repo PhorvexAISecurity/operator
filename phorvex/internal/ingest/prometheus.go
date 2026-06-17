@@ -197,3 +197,111 @@ func (p *PromHTTP) instantQuery(ctx context.Context, query string) (map[string]f
 	}
 	return out, nil
 }
+
+// instantQueryNsPod runs query and keys results by "namespace/pod" (DCGM series carry both
+// labels). Series missing either label are skipped.
+func (p *PromHTTP) instantQueryNsPod(ctx context.Context, query string) (map[string]float64, error) {
+	u := fmt.Sprintf("%s/api/v1/query?query=%s", p.BaseURL, url.QueryEscape(query))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("prometheus query status %d", resp.StatusCode)
+	}
+	var pr promResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
+		return nil, err
+	}
+	if pr.Status != "success" {
+		return nil, fmt.Errorf("prometheus query status %q", pr.Status)
+	}
+	out := map[string]float64{}
+	for _, r := range pr.Data.Result {
+		ns, pod := r.Metric["namespace"], r.Metric["pod"]
+		if ns == "" || pod == "" {
+			continue
+		}
+		s, ok := r.Value[1].(string)
+		if !ok {
+			continue
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			out[ns+"/"+pod] = f
+		}
+	}
+	return out, nil
+}
+
+// clusterWide strips the per-namespace selector so a DCGM witness query matches every GPU pod
+// cluster-wide (the physics scan is not tenant-scoped), and widens the aggregation to keep the
+// namespace label (the default `by (pod)` would drop it, so the ns/pod key could not be built).
+func clusterWide(q string) string {
+	q = strings.ReplaceAll(q, `{namespace="{namespace}"}`, "")
+	q = strings.ReplaceAll(q, "{namespace}", "")
+	q = strings.ReplaceAll(q, "by (pod)", "by (namespace, pod)")
+	return q
+}
+
+const nvlinkCeilingBytesPerSec = 25e9 // ~25 GB/s order-of-magnitude per-link ceiling for [0,1] normalization
+
+func clampUnit(x float64) float64 {
+	if x < 0 {
+		return 0
+	}
+	if x > 1 {
+		return 1
+	}
+	return x
+}
+
+// PopulateGPUWitness fills snap.GPUWitness from a live dcgm-exporter feed via Prometheus
+// (read-only HTTP; zero extra K8s RBAC). For each pod DCGM reports a GPU for, it stamps
+// GPUPresent + VRAMFraction (FB_USED/(USED+FREE)) + SMOccupancy (PROF_SM_ACTIVE true occupancy,
+// falling back to the GPU_UTIL duty-cycle) + LinkBandwidth (NVLink rate, normalized). An empty
+// promURL or no DCGM data leaves GPUWitness empty => the GPU half stays honest-absent
+// ([SP-0-PENDING]); no GPU float is ever fabricated.
+func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) {
+	if snap == nil || promURL == "" {
+		return
+	}
+	p := NewPromHTTP(promURL, nil)
+	q := DCGMWitnessQueries()
+	used, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMUsedMiB]))
+	free, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMFreeMiB]))
+	smActive, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigSMActive]))
+	smUtil, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigSMUtilFb]))
+	nvlink, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigNVLinkBytes]))
+
+	keys := map[string]struct{}{}
+	for _, m := range []map[string]float64{used, free, smActive, smUtil} {
+		for k := range m {
+			keys[k] = struct{}{}
+		}
+	}
+	if len(keys) == 0 {
+		return
+	}
+	wit := make(map[string]model.PhysicsWitness, len(keys))
+	for k := range keys {
+		w := model.PhysicsWitness{GPUPresent: true, ModelRarity: 1}
+		if u, f := used[k], free[k]; u+f > 0 {
+			w.VRAMFraction = clampUnit(u / (u + f))
+		}
+		if v, ok := smActive[k]; ok {
+			w.SMOccupancy = clampUnit(v) // PROF_SM_ACTIVE is a [0,1] occupancy fraction
+		} else {
+			w.SMOccupancy = clampUnit(smUtil[k]) // duty-cycle fallback (query already /100)
+		}
+		if b, ok := nvlink[k]; ok && b > 0 {
+			w.LinkBandwidth = clampUnit(b / nvlinkCeilingBytesPerSec)
+		}
+		wit[k] = w
+	}
+	snap.GPUWitness = wit
+}

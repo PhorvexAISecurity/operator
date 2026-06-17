@@ -7,7 +7,7 @@ import { PageHead } from "./effectiveness";
 import { cn } from "@/lib/utils";
 import { Download } from "lucide-react";
 
-const armLabel = (d: string) => d === "d-phorvex" ? "Phorvex" : d === "d-nomtd" ? "No MTD" : d.replace("d-r6blindtimer", "R6 blind (15s)").replace("d-blind-", "Blind ");
+const armLabel = (d: string) => d === "d-phorvex" ? "Phorvex" : d === "d-nomtd" ? "No MTD" : d.replace("d-r6blindtimer", "Without Phorvex (blind 15s)").replace("d-blind-", "Blind ");
 const fmtPct = (c: any) => c && c.n ? `${(c.mean * 100).toFixed(0)}% [${(c.lo * 100).toFixed(0)},${(c.hi * 100).toFixed(0)}]` : "—";
 const fmtS = (c: any) => c && c.n ? `${c.mean.toFixed(1)}s [${c.lo.toFixed(1)},${c.hi.toFixed(1)}]` : "—";
 

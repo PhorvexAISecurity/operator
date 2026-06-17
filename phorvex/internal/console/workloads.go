@@ -14,6 +14,7 @@ import (
 	"context"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -89,6 +90,47 @@ func containerImages(cs []corev1.Container) []string {
 		out = append(out, c.Image)
 	}
 	return out
+}
+
+// capabilities reports the LIVE cluster capabilities (GPU / MIG / multi-node) so the UI gates
+// only the scenarios whose hardware requirement is genuinely unmet — read live from node
+// allocatable resources (the same signal the harness's CapGPU/CapMIG/CapMultiNode detection uses).
+func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
+	ctxName := r.URL.Query().Get("target")
+	if ctxName != "" && !contextRe.MatchString(ctxName) {
+		writeJSON(w, 400, map[string]string{"error": "invalid target context"})
+		return
+	}
+	cs, err := clientForContext(ctxName)
+	if err != nil {
+		writeJSON(w, 502, map[string]string{"error": "cannot build cluster client: " + err.Error()})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		writeJSON(w, 502, map[string]string{"error": "cannot list nodes: " + err.Error()})
+		return
+	}
+	gpu, mig := false, false
+	gpuCount := int64(0)
+	for i := range nodes.Items {
+		for res, q := range nodes.Items[i].Status.Allocatable {
+			rs := string(res)
+			if rs == "nvidia.com/gpu" && q.Value() > 0 {
+				gpu = true
+				gpuCount += q.Value()
+			}
+			if strings.HasPrefix(rs, "nvidia.com/mig-") && q.Value() > 0 {
+				mig = true
+			}
+		}
+	}
+	writeJSON(w, 200, map[string]any{
+		"gpu": gpu, "mig": mig, "multiNode": len(nodes.Items) > 1,
+		"nodes": len(nodes.Items), "gpuCount": gpuCount,
+	})
 }
 
 func (s *Server) workloads(w http.ResponseWriter, r *http.Request) {

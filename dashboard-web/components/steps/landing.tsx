@@ -36,7 +36,7 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
           Phorvex watches your platform and <span className="text-primary">evicts attackers</span> before they reach their objective.
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          A deterministic intelligence layer — no LLM in the decision path. K8s is proven on kind; the AI/inference product is structurally first-class with defense efficacy honestly <span className="text-warning">[SP-0-PENDING-P4]</span>.
+          A deterministic intelligence layer — no LLM in the decision path. K8s is proven on AWS EKS; the AI/inference product is structurally first-class with defense efficacy honestly <span className="text-warning">[SP-0-PENDING-P4]</span>.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Button onClick={() => go("connect")}>Start the journey <ArrowRight className="h-4 w-4" /></Button>

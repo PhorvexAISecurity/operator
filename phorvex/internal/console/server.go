@@ -53,9 +53,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/runs/scenario", s.withCORS(s.scoped("operator", s.startScenario)))
 	mux.HandleFunc("/api/runs/status", s.withCORS(s.scoped("operator", s.runStatus)))
 	mux.HandleFunc("/api/runs/stream", s.withCORS(s.scoped("operator", s.runStream)))
+	mux.HandleFunc("/api/runs/list", s.withCORS(s.scoped("operator", s.runsList)))
+	mux.HandleFunc("/api/runs/stop", s.withCORS(s.scoped("operator", s.runStop)))
+	mux.HandleFunc("/api/runs/evidence", s.withCORS(s.scoped("operator", s.runEvidence)))
 	mux.HandleFunc("/api/targets", s.withCORS(s.scoped("operator", s.targets)))
 	// LIVE WORKLOADS (P-DASHBOARD-LIVE) — enumerate the real workloads on the selected cluster.
 	mux.HandleFunc("/api/workloads", s.withCORS(s.scoped("operator", s.workloads)))
+	mux.HandleFunc("/api/capabilities", s.withCORS(s.scoped("operator", s.capabilities)))
 	// EVIDENCE group (Wave 1) — operator/investor scope.
 	mux.HandleFunc("/api/catalog", s.withCORS(s.scoped("operator", s.catalog)))
 	mux.HandleFunc("/api/benchmarks", s.withCORS(s.scoped("operator", s.benchmarks)))
@@ -76,6 +80,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/owner/events", s.withCORS(s.scoped("owner", s.ownerEvents)))
 	mux.HandleFunc("/api/owner/tenants", s.withCORS(s.scoped("owner", s.ownerTenants)))
 	mux.HandleFunc("/api/reports", s.withCORS(s.scoped("operator", s.reports)))
+	mux.HandleFunc("/api/cost", s.withCORS(s.scoped("operator", s.cost)))
+	mux.HandleFunc("/api/pricing", s.withCORS(s.scoped("operator", s.pricing)))
 	// RED-TEAM CONTROL group (P-REDTEAM) — additive; reads real artifacts + execs the attacker tool.
 	mux.HandleFunc("/api/redteam/curves", s.withCORS(s.scoped("operator", s.redteamCurves)))
 	mux.HandleFunc("/api/redteam/campaigns", s.withCORS(s.scoped("operator", s.redteamCampaigns)))
@@ -128,7 +134,11 @@ func (s *Server) posture(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	writeJSON(w, 200, s.cfg.Scan(q.Get("ns"), q.Get("context"), q.Get("prometheus-url")))
+	prom := q.Get("prometheus-url")
+	if prom == "" {
+		prom = os.Getenv("PHORVEX_PROM_URL") // console-default DCGM/GPU telemetry feed (live GPU physics)
+	}
+	writeJSON(w, 200, s.cfg.Scan(q.Get("ns"), q.Get("context"), prom))
 }
 func (s *Server) ablation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.cfg.Ablation(r.URL.Query().Get("ns")))
@@ -205,6 +215,30 @@ func (s *Server) effectiveness(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"stats": s.cfg.Effectiveness()})
 }
 
+func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
+	target := r.URL.Query().Get("target")
+	if target == "" {
+		for _, t := range s.runs.ClusterTargets() {
+			if t.Runnable {
+				target = t.ID
+				break
+			}
+		}
+	}
+	// DYNAMIC: the defense overhead is the REAL rotation compute cost — overheadPercent of the
+	// live cloud-priced infrastructure of the detected cluster (not a flat placeholder).
+	pricing := s.clusterPricing(target)
+	const overheadPercent = 0.015
+	overhead := pricing.TotalPerYear * overheadPercent
+	scen, totWithout, totWith, totSavings, ok := s.cfg.CostComparison(overhead)
+	writeJSON(w, 200, map[string]any{
+		"available": ok, "scenarios": scen,
+		"totalWithout": totWithout, "totalWith": totWith, "totalSavings": totSavings,
+		"pricing": pricing, "overheadPercent": overheadPercent,
+		"note": "Defense overhead = " + pricing.Provider + " on-demand infra cost × " + "1.5% rotation overhead (live, from your cluster's instance types). Phorvex OFF = residual breach exposure (your breach-value estimate); ON = residual breach + this overhead.",
+	})
+}
+
 func (s *Server) frontier(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"rows": s.cfg.Frontier()})
 }
@@ -253,6 +287,41 @@ func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"targets": s.runs.ClusterTargets()})
+}
+
+// runsList returns the post-attack report history (every triggered run, newest first, with
+// date + per-arm with/without-Phorvex metrics). Updates after each live attack finishes.
+func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"runs": s.runs.List()})
+}
+
+// runEvidence returns the full per-arm + per-trial metric ledger for one run (evidence view).
+func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
+	arms, trials, st, ok := s.runs.RunEvidence(r.URL.Query().Get("id"))
+	if !ok {
+		writeJSON(w, 404, map[string]string{"error": "run not found"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished,
+		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials,
+		"note": "Full measured evidence for this attack. Disruption/dwell carry a 95% CI; $ figures use the swappable ROI knobs; AI in-request legs are honestly MTD-CANNOT-HELP.",
+	})
+}
+
+func (s *Server) runStop(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.ID == "" {
+		body.ID = r.URL.Query().Get("id")
+	}
+	if err := s.runs.Stop(body.ID); err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "stopping", "id": body.ID})
 }
 
 func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {

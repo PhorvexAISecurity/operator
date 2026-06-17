@@ -40,6 +40,12 @@ type Snapshot struct {
 	// the substrate the platform scanner turns into PhysicsWitness. ---
 	Nodes []NodeInfo
 	PDBs  []PDBInfo
+
+	// GPUWitness is the live DCGM-via-Prometheus GPU half ("ns/pod" -> witness GPU fields:
+	// GPUPresent + VRAMFraction/SMOccupancy/LinkBandwidth). Populated by PopulateGPUWitness when
+	// a Prometheus/dcgm-exporter feed is configured; nil/empty => the GPU half stays
+	// [SP-0-PENDING] (honest-absent) and a GPU platform adapter leaves those floats at 0.
+	GPUWitness map[string]model.PhysicsWitness
 }
 
 // NodeInfo is the conservation-law substrate per node (allocatable vs the pods bound to

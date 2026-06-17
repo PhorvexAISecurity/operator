@@ -65,7 +65,7 @@ export function FrontierPanel({ lens }: { lens: Lens }) {
                   const px = r.arm === "d-phorvex";
                   return (
                     <tr key={r.arm} className={cn("border-b border-border/50 transition-colors hover:bg-elevated/40", px && "bg-primary/[0.04]")}>
-                      <td className="px-5 py-3 font-medium">{px ? "Phorvex" : r.arm === "d-nomtd" ? "No MTD" : r.arm.replace("d-r6blindtimer", "R6 blind").replace("d-blind-", "Blind ")}</td>
+                      <td className="px-5 py-3 font-medium">{px ? "Phorvex" : r.arm === "d-nomtd" ? "No MTD" : r.arm.replace("d-r6blindtimer", "Without Phorvex (blind)").replace("d-blind-", "Blind ")}</td>
                       <td className="px-5 py-3 font-mono text-[13px] text-muted-foreground">{r.interval}</td>
                       <td className="px-5 py-3 tabular">{pct(r.prevention)}</td>
                       <td className={cn("px-5 py-3 tabular", r.harm.mean > 0 ? "text-danger" : "text-success")}>{pct(r.harm)}</td>

@@ -48,7 +48,7 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
 
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={2} title="Scan" sub="Derive the platform's real physics — the discovered, both-products signal Phorvex optimizes over. On a CPU/kind cluster the GPU half is honestly [SP-0-PENDING-P4]." />
+      <StepHead n={2} title="Scan" sub="Derive the platform's real physics — the discovered, both-products signal Phorvex optimizes over. On a CPU-only AWS EKS cluster the GPU half is honestly [SP-0-PENDING-P4]." />
 
       <Card>
         <CardContent className="flex flex-col items-center gap-5 py-10">

@@ -8,7 +8,7 @@ import { Info, FileText } from "lucide-react";
 const HERO = ["disruption", "work-preserved", "prevention", "explainability"];
 
 function statusBadge(s: Stat["status"]) {
-  if (s === "real") return <Badge variant="real">REAL · kind</Badge>;
+  if (s === "real") return <Badge variant="real">REAL · EKS</Badge>;
   if (s === "modeled") return <Badge variant="modeled">MODELED</Badge>;
   return <Badge variant="pending">SP-0-PENDING-P4</Badge>;
 }
@@ -78,7 +78,7 @@ export function EffectivenessPanel({ lens }: { lens: Lens }) {
     <div className="animate-fade-up space-y-7">
       <PageHead
         title="Effectiveness"
-        sub="The proven outcomes — every number traced to a real metrics file, with 95% confidence intervals. K8s is proven on kind; the AI product's defense is honestly pending."
+        sub="The proven outcomes — every number traced to a real metrics file, with 95% confidence intervals. K8s is proven on AWS EKS; the AI product's defense is honestly GPU-pending."
       />
       <section>
         <SectionLabel>Headline · prevention / disruption board</SectionLabel>

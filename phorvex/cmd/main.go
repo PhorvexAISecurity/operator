@@ -296,6 +296,9 @@ func runScan(namespace, promURL, kubeContext string) error {
 	if err != nil {
 		return err
 	}
+	// Live GPU half: when a Prometheus/dcgm-exporter feed is configured, stamp the per-pod GPU
+	// witness (VRAM/SM/NVLink) so the eks-gpu adapter fills it instead of [SP-0-PENDING].
+	ingest.PopulateGPUWitness(ctx, snap, promURL)
 	platformName, phys := platform.Derive(snap)
 	fmt.Printf("=== P-PHYSICS live scan ===\nplatform-adapter: %s\nnodes: %d   pods: %d   PDBs: %d\n",
 		platformName, len(snap.Nodes), len(snap.Pods), len(snap.PDBs))
@@ -321,7 +324,34 @@ func runScan(namespace, promURL, kubeContext string) error {
 			p.Namespace+"/"+p.Name, w.ImageRarity, w.CoResidency, w.SchedulerSlack, w.PDBMinAvailable, w.MIGGeometryValid, w.EPSS, ai)
 		shown++
 	}
-	fmt.Printf("(%d pods shown; GPU/AI values measured: %v — honest [SP-0-PENDING] on a CPU-only cluster)\n", shown, gpuPresent)
+	gpuNote := "honest [SP-0-PENDING] (no GPU/DCGM feed)"
+	if gpuPresent {
+		gpuNote = "live GPU/AI physics from DCGM"
+	}
+	fmt.Printf("(%d pods shown; GPU/AI values measured: %v — %s)\n", shown, gpuPresent, gpuNote)
+
+	// P-GRAPH: emit the live reachability graph (nodes + directed edges) the console renders in
+	// the Discovered blast-radius map. The edges are the three real lateral paths (NetworkPolicy
+	// + RBAC + co-location); blast = the normalized blast-radius score. This is the wiring the
+	// dashboard's [PENDING-wire] note referred to — now live from the same snapshot graph.
+	if snap.Graph != nil {
+		fmt.Printf("\n=== P-GRAPH reachability (nodes + edges: network + RBAC + co-location) ===\n")
+		for i := range snap.Pods {
+			p := &snap.Pods[i]
+			if namespace != "" && p.Namespace != namespace {
+				continue
+			}
+			key := p.Namespace + "/" + p.Name
+			ai := 0
+			if phys[key].GPUPresent {
+				ai = 1
+			}
+			fmt.Printf("  NODE %s blast=%.3f ai=%d\n", key, snap.Graph.BlastRadius(p.Namespace, p.Name), ai)
+			for _, nb := range snap.Graph.Neighbors(p.Namespace, p.Name) {
+				fmt.Printf("  EDGE %s -> %s\n", key, nb)
+			}
+		}
+	}
 
 	if namespace != "" {
 		rmgr := runner.NewManager(c, ctrl.Log)

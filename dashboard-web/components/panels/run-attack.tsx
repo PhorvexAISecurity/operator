@@ -40,7 +40,7 @@ export function RunAttackPanel({ lens }: { lens: Lens }) {
     <div className="animate-fade-up space-y-6">
       <PageHead
         title="Run Attack Agents"
-        sub="Trigger a real attack-scenario suite against the live kind cluster and watch Phorvex defend in real time. This invokes the existing harness — no fabricated results."
+        sub="Trigger a real attack-scenario suite against the live AWS EKS cluster and watch Phorvex defend in real time. This invokes the existing harness — no fabricated results."
       />
       <Card>
         <CardContent className="space-y-4 p-5">

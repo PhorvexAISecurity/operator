@@ -13,8 +13,9 @@ import { AblationPanel } from "@/components/subsystems/panels";
 import { UncoveredFrontier, MatrixPanel, AIBoundary } from "@/components/subsystems/analytics";
 import { ReportsPanel } from "@/components/panels/reports";
 import { RedTeamPanel } from "@/components/panels/redteam";
+import { CostPanel } from "@/components/panels/cost";
 
-type Sub = "launch" | "run" | "effectiveness" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation" | "comparison" | "redteam";
+type Sub = "launch" | "run" | "effectiveness" | "cost" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation" | "comparison" | "redteam";
 
 export function ProveStep({ lens }: { lens: Lens }) {
   const [sub, setSub] = React.useState<Sub>("launch");
@@ -23,9 +24,10 @@ export function ProveStep({ lens }: { lens: Lens }) {
     { id: "launch", label: "Attack catalog" },
     { id: "run", label: "Live run" },
     { id: "effectiveness", label: "Effectiveness" },
+    { id: "cost", label: "Cost (with/without)" },
     { id: "frontier", label: "Zero-day frontier" },
     { id: "benchmarks", label: "Benchmarks" },
-    { id: "comparison", label: "vs R6" },
+    { id: "comparison", label: "vs Without-Phorvex" },
     { id: "coverage", label: "Threat coverage" },
     ...(owner ? [] : [
       { id: "gap", label: "Coverage gap" },
@@ -44,9 +46,10 @@ export function ProveStep({ lens }: { lens: Lens }) {
         {sub === "launch" && <CatalogPanel lens={lens} />}
         {sub === "run" && <RunAttackPanel lens={lens} />}
         {sub === "effectiveness" && <EffectivenessPanel lens={lens} />}
+        {sub === "cost" && <CostPanel lens={lens} />}
         {sub === "frontier" && <FrontierPanel lens={lens} />}
         {sub === "benchmarks" && <BenchmarksPanel lens={lens} />}
-        {sub === "comparison" && <ReportsPanel lens={lens} only="Comparison" intro="Phorvex vs R6 — the head-to-head, served live from COMPARISON.md." />}
+        {sub === "comparison" && <ReportsPanel lens={lens} only="Comparison" intro="Phorvex vs Without-Phorvex (baseline Phoenix) — the head-to-head, served live from COMPARISON.md." />}
         {sub === "coverage" && <ThreatMatrixPanel lens={lens} />}
         {sub === "gap" && <UncoveredFrontier lens={lens} />}
         {sub === "matrix" && <MatrixPanel lens={lens} />}

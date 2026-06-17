@@ -22,7 +22,7 @@ type reportMeta struct {
 func (c *Config) reportRegistry() []reportMeta {
 	j := filepath.Join
 	return []reportMeta{
-		{"comparison", "Phorvex vs R6 — head-to-head", "Comparison", "COMPARISON.md"},
+		{"comparison", "Phorvex vs Without-Phorvex — head-to-head", "Comparison", "COMPARISON.md"},
 		{"effectiveness", "Effectiveness — Phorvex (full evidence)", "Effectiveness", j("phorvex", "EFFECTIVENESS-PHORVEX.md")},
 		{"bench-k8s", "Benchmark — K8s attack suite", "Benchmarks", j("build", "test-harness", "out-bench", "report.md")},
 		{"bench-ai", "Benchmark — AI / inference suite", "Benchmarks", j("build", "test-harness", "out-ai-bench", "report.md")},

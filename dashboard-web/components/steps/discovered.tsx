@@ -1,12 +1,11 @@
 "use client";
 import * as React from "react";
-import { Lens, liveStream } from "@/lib/api";
+import { api, Lens, liveStream, GraphEdge } from "@/lib/api";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
-import { Segmented, Pending, Empty } from "@/components/ui/more";
+import { Segmented, Empty } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { PhysicsPanel } from "@/components/subsystems/panels";
-import { cn } from "@/lib/utils";
 import { Gem, Network, GitBranch, ArrowRight, Loader2 } from "lucide-react";
 
 interface PodNode { key: string; ns: string; pod: string; stage: string; asset: number; blast: number; ai: boolean }
@@ -27,8 +26,28 @@ function collect(lens: Lens, ms: number, cb: (pods: PodNode[]) => void) {
 
 export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
   const [pods, setPods] = React.useState<PodNode[] | null>(null);
+  const [edges, setEdges] = React.useState<GraphEdge[]>([]);
   const [tab, setTab] = React.useState<"graph" | "jewels" | "killchain" | "physics">("graph");
   React.useEffect(() => { const s = collect(lens, 2500, setPods); return s; }, [lens]);
+  // Live reachability graph (nodes + network/RBAC/co-location edges) from `phorvex --scan`.
+  // Best-effort: on a console without the scan toolchain it stays empty (graph still renders nodes).
+  React.useEffect(() => {
+    api.scan("", lens).then((s) => {
+      setEdges(s.graphEdges || []);
+      setPods((prev) => {
+        const map = new Map<string, PodNode>();
+        (prev || []).forEach((p) => map.set(p.key, p));
+        (s.graphNodes || []).forEach((n) => {
+          const [ns, ...rest] = n.key.split("/");
+          const pod = rest.join("/");
+          const ex = map.get(n.key);
+          if (ex) { ex.blast = ex.blast || n.blast; ex.ai = ex.ai || n.ai; }
+          else map.set(n.key, { key: n.key, ns, pod, stage: "recon", asset: n.blast, blast: n.blast, ai: n.ai });
+        });
+        return Array.from(map.values());
+      });
+    }).catch(() => {});
+  }, [lens]);
 
   if (!pods) return (
     <div className="animate-fade-up space-y-6">
@@ -42,7 +61,7 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
 
   return (
     <div className="animate-fade-up space-y-6">
-      <StepHead n={3} title="Discovered" sub={owner ? "The workloads in your platform that Phorvex is protecting." : "What the scan found — the physics/context graph, your crown jewels, and the kill-chain. Full network/RBAC/co-location edges from the live scan are [PENDING-wire · Phase 3]; the per-pod context here is real from the decision stream."} lens={lens} />
+      <StepHead n={3} title="Discovered" sub={owner ? "The workloads in your platform that Phorvex is protecting." : "What the live AWS EKS scan found — the physics/context graph, your crown jewels, and the kill-chain. Reachability edges (network + RBAC + co-location) and per-pod blast/value/stage are all live from `phorvex --scan`."} lens={lens} />
 
       {pods.length === 0 ? (
         <Empty msg="No discovered workloads yet — start Phorvex in the Protect step (or run a scenario) to populate the platform map." />
@@ -56,14 +75,13 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
       ) : (
         <>
           <Segmented value={tab} onChange={setTab} tabs={[{ id: "graph", label: "Blast-radius graph" }, { id: "jewels", label: "Crown jewels", count: jewels.filter(j => j.asset > 0).length }, { id: "killchain", label: "Kill-chain" }, { id: "physics", label: "Physics (scan)" }]} />
-          {tab === "graph" && <BlastGraph pods={pods} />}
+          {tab === "graph" && <BlastGraph pods={pods} edges={edges} />}
           {tab === "jewels" && <CrownJewels jewels={jewels} />}
           {tab === "killchain" && <KillChain pods={pods} />}
           {/* Physics is the PLATFORM scan — always all namespaces (ns="") so it shows the real
               per-pod physics from `phorvex --scan`, independent of the (possibly stale/demo) live
               decision stream. */}
           {tab === "physics" && <PhysicsPanel lens={lens} ns="" />}
-          <Pending stage="PENDING-wire · Phase 3" msg="The full reachability edge set (network + RBAC + co-location) comes from the live `phorvex --scan` graph endpoint, wired in Phase 3. Node value/blast/stage shown here are real." />
         </>
       )}
       {pods.length > 0 && <div className="pt-1"><button onClick={() => go("protect")} className="inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline">Now protect these workloads <ArrowRight className="h-3.5 w-3.5" /></button></div>}
@@ -71,37 +89,59 @@ export function DiscoveredStep({ lens, go }: { lens: Lens; go: (s: StepId) => vo
   );
 }
 
-function BlastGraph({ pods }: { pods: PodNode[] }) {
+function BlastGraph({ pods, edges }: { pods: PodNode[]; edges: GraphEdge[] }) {
   const cols = ["recon", "exploit", "lateral", "impact"];
   const W = 880, H = 380, colW = W / cols.length;
-  const placed = pods.map((p, i) => {
+  // Grid-pack nodes WITHIN each kill-chain column (idle workloads cluster at "recon"; a column
+  // can hold the whole platform without overlap). Sub-columns × rows scale with the count.
+  const placed = pods.map((p) => {
     const c = STAGE_COL[p.stage] ?? 0;
     const inCol = pods.filter((q) => (STAGE_COL[q.stage] ?? 0) === c);
     const idx = inCol.indexOf(p);
-    const x = colW * c + colW / 2;
-    const y = 60 + (idx + 1) * (H - 80) / (inCol.length + 1);
-    return { ...p, x, y, r: 10 + Math.min(22, p.asset * 9) };
+    const n = inCol.length;
+    const rows = Math.max(1, Math.ceil(Math.sqrt(n * (H - 70) / colW)));
+    const subCols = Math.ceil(n / rows);
+    const r0 = idx % rows, c0 = Math.floor(idx / rows);
+    const x = colW * c + (colW / (subCols + 1)) * (c0 + 1);
+    const y = 48 + ((H - 64) / (rows + 1)) * (r0 + 1);
+    const r = n > 8 ? 5 + Math.min(9, p.asset * 7) : 10 + Math.min(22, p.asset * 9);
+    return { ...p, x, y, r };
   });
+  const pos = new Map(placed.map((p) => [p.key, p]));
+  // only draw edges whose BOTH endpoints are placed nodes (the visible reachability set).
+  const drawn = edges.filter((e) => pos.has(e.src) && pos.has(e.dst) && e.src !== e.dst);
   return (
     <Card><CardContent className="p-2">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        <defs>
+          <marker id="px-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="hsl(184 78% 46% / 0.55)" />
+          </marker>
+        </defs>
         {cols.map((c, i) => (
           <g key={c}>
             <text x={colW * i + colW / 2} y={24} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>{c}</text>
             <line x1={colW * (i + 1)} y1={40} x2={colW * (i + 1)} y2={H - 20} stroke="hsl(222 18% 16%)" strokeDasharray="3 5" />
           </g>
         ))}
+        {/* reachability edges (network + RBAC + co-location), drawn under the nodes */}
+        {drawn.map((e, i) => {
+          const a = pos.get(e.src)!, b = pos.get(e.dst)!;
+          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="hsl(184 78% 46% / 0.28)" strokeWidth={1} markerEnd="url(#px-arrow)" />;
+        })}
         {placed.map((p) => (
           <g key={p.key}>
-            <circle cx={p.x} cy={p.y} r={p.r + 8 + p.blast * 10} fill="hsl(184 78% 46% / 0.06)" />
+            <title>{p.key} · blast {p.blast.toFixed(2)}{p.ai ? " · AI" : ""}</title>
+            <circle cx={p.x} cy={p.y} r={p.r + (placed.length > 8 ? 4 : 8) + p.blast * (placed.length > 8 ? 6 : 10)} fill="hsl(184 78% 46% / 0.06)" />
             <circle cx={p.x} cy={p.y} r={p.r} fill={p.ai ? "hsl(212 80% 60% / 0.25)" : "hsl(184 78% 46% / 0.22)"} stroke={p.ai ? "hsl(212 80% 60%)" : "hsl(184 78% 46%)"} strokeWidth={1.5} />
-            <text x={p.x} y={p.y + p.r + 13} textAnchor="middle" className="fill-foreground/70" style={{ fontSize: 10, fontFamily: "monospace" }}>{p.pod}</text>
+            {placed.length <= 8 && <text x={p.x} y={p.y + p.r + 13} textAnchor="middle" className="fill-foreground/70" style={{ fontSize: 10, fontFamily: "monospace" }}>{p.pod}</text>}
           </g>
         ))}
       </svg>
-      <div className="flex items-center gap-4 px-3 pb-2 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-4 px-3 pb-2 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary/40 ring-1 ring-primary" /> node size = asset value · halo = blast radius</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-info/40 ring-1 ring-info" /> AI/inference workload</span>
+        <span>→ = lateral reach (network + RBAC + co-location)</span>
         <span>column = current kill-chain stage</span>
       </div>
     </CardContent></Card>

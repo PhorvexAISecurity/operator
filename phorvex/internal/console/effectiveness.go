@@ -89,7 +89,7 @@ func (c *Config) Effectiveness() []Stat {
 	}
 	// 4. Dwell-to-eviction PX vs blind vs no-MTD — out-p3deep c1-heldout-cve survival.
 	if hasDeep {
-		for _, arm := range []struct{ def, label string }{{"d-phorvex", "Dwell — PX"}, {"d-r6blindtimer", "Dwell — R6 blind (15s)"}, {"d-nomtd", "Dwell — no-MTD"}} {
+		for _, arm := range []struct{ def, label string }{{"d-phorvex", "Dwell — PX"}, {"d-r6blindtimer", "Dwell — Without Phorvex (blind 15s)"}, {"d-nomtd", "Dwell — no-MTD"}} {
 			d := dwell(deep, "c1-heldout-cve", arm.def)
 			if d.N > 0 {
 				out = append(out, Stat{Key: "dwell-" + arm.def, Label: arm.label, Value: fmt.Sprintf("%.1f", d.Mean), Unit: "s",

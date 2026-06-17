@@ -40,12 +40,12 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
         <Badge variant="accent">{scan.platform || "generic-k8s"}</Badge>
         <span>{scan.nodes} node · {scan.pods || witness.length} pods scanned</span>
         <Badge variant="real">K8s API · live</Badge>
-        <Badge variant="pending">DCGM/GPU [SP-0-PENDING-P4a]</Badge>
+        {witness.some((w) => w.gpuPresent) ? <Badge variant="real">DCGM/GPU · live</Badge> : <Badge variant="pending">DCGM/GPU [SP-0-PENDING-P4a]</Badge>}
       </div>
       {witness.length === 0 ? <Empty msg={`No pods discovered in ${scope}. Start Phorvex (Protect) or run a scenario, or check the cluster context.`} /> : (
         <Card><CardContent className="p-0">
           <Table>
-            <THead><TH>Pod</TH><TH>Image-rarity</TH><TH>Co-residency</TH><TH>Sched-slack</TH><TH>EPSS</TH><TH>MIG</TH><TH>GPU</TH></THead>
+            <THead><TH>Pod</TH><TH>Image-rarity</TH><TH>Co-residency</TH><TH>Sched-slack</TH><TH>EPSS</TH><TH>MIG</TH><TH>GPU VRAM</TH><TH>GPU SM</TH></THead>
             <tbody>{witness.map((w) => (
               <TR key={w.pod}>
                 <TD className="font-mono text-[12px]">{w.pod}</TD>
@@ -54,7 +54,8 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
                 <TD className="tabular">{w.slack.toFixed(2)}</TD>
                 <TD className="tabular">{w.epss.toFixed(2)}</TD>
                 <TD>{w.migValid ? <Check className="h-3.5 w-3.5 text-success" /> : <X className="h-3.5 w-3.5 text-muted-foreground" />}</TD>
-                <TD>{w.gpuPresent ? <Badge variant="accent">GPU</Badge> : <span className="text-muted-foreground/50">none</span>}</TD>
+                <TD className="tabular">{w.gpuPresent ? <Bar v={w.vramFraction} max={1} tone="accent" label={`${Math.round(w.vramFraction * 100)}%`} /> : <span className="text-muted-foreground/40">—</span>}</TD>
+                <TD className="tabular">{w.gpuPresent ? <Bar v={w.smOccupancy} max={1} tone="accent" label={`${Math.round(w.smOccupancy * 100)}%`} /> : <span className="text-muted-foreground/40">—</span>}</TD>
               </TR>
             ))}</tbody>
           </Table>
@@ -149,8 +150,8 @@ function ShapAndR6({ rec }: { rec: any }) {
         )}
       </CardContent></Card>
       <Card><CardContent className="p-4">
-        <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">vs R6 (counterfactual)</div>
-        <div className="text-[13px] text-foreground/90">{rec.counterfactualNote || rec.r6Counterfactual || <span className="text-muted-foreground">No R6 counterfactual recorded on this decision.</span>}</div>
+        <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">vs Without Phorvex (counterfactual)</div>
+        <div className="text-[13px] text-foreground/90">{rec.counterfactualNote || rec.r6Counterfactual || <span className="text-muted-foreground">No without-Phorvex counterfactual recorded on this decision.</span>}</div>
       </CardContent></Card>
     </div>
   );
@@ -318,7 +319,7 @@ export function MethodologyPanel({ lens }: { lens: Lens }) {
       <Card><CardContent className="p-5">
         <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">How to read the numbers (honesty legend)</div>
         <div className="space-y-2 text-[12.5px] text-muted-foreground">
-          <div><Badge variant="real">REAL</Badge> measured on kind with a 95% CI (Wilson z=1.96 on rates; Student-t 2.093 n≥20 / 2.262 small-n on continuous).</div>
+          <div><Badge variant="real">REAL</Badge> measured on AWS EKS with a 95% CI (Wilson z=1.96 on rates; Student-t 2.093 n≥20 / 2.262 small-n on continuous).</div>
           <div><Badge variant="modeled">MODELED</Badge> a scenario-config assumption (e.g. ROI $), labeled — never measured production savings.</div>
           <div><Badge variant="pending">SP-0-PENDING-P4</Badge> defined-now, magnitude on real GPU; never implied proven.</div>
           <div className="border-t border-border/50 pt-2"><span className="font-medium text-foreground">Two disclosures the code makes honestly:</span> "SLO kept" in the owner view is an <span className="text-foreground/80">invariant by construction</span> (feasibility-gated), not a per-decision measurement; "attack prevented" is derived from <span className="text-foreground/80">Phorvex having acted on the selected target</span>, not a measured attacker-objective-denied signal on the live cluster.</div>

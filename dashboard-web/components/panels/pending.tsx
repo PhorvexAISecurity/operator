@@ -7,7 +7,7 @@ import { Lock } from "lucide-react";
 const SLOTS: Record<string, { title: string; sub: string; stage: string; bullets: string[] }> = {
   actuator: {
     title: "Native Actuator", stage: "wired now · live detail at P-DASHBOARD-2",
-    sub: "Phorvex's own 12-handler native actuator — proven 13 PASS / 0 FAIL on kind.",
+    sub: "Phorvex's own 12-handler native actuator — proven 13 PASS / 0 FAIL on AWS EKS.",
     bullets: ["7 K8s handlers live (rotate, quarantine, identity/route-rotate, inject)", "5 AI/GPU state machines present; magnitudes [SP-0-PENDING-P4]", "Completeness is a CI + startup-enforced invariant"],
   },
   physics: {
@@ -22,12 +22,12 @@ const SLOTS: Record<string, { title: string; sub: string; stage: string; bullets
   },
   mtd: {
     title: "MTD / Decisions", stage: "Wave 3 · vendor scope",
-    sub: "The dynamic action-set generation, the coverage-minus-lambda-cost scoring, the optimizer's choices, SHAP attribution, and the R6 counterfactual.",
+    sub: "The dynamic action-set generation, the coverage-minus-lambda-cost scoring, the optimizer's choices, SHAP attribution, and the without-Phorvex counterfactual.",
     bullets: ["Investor/vendor scope only (the moat math)", "Source: phorvex --audit-json + --ablation", "Owner sees the sanitized outcome only"],
   },
   decisions: {
     title: "Decisions / Audit", stage: "vendor-scope · docks next",
-    sub: "The full per-decision rationale stream — SHAP attribution, the R6 counterfactual, the predictive horizon.",
+    sub: "The full per-decision rationale stream — SHAP attribution, the without-Phorvex counterfactual, the predictive horizon.",
     bullets: ["Investor/vendor scope only (IP)", "Source: phorvex --audit-json", "moved-before-next-stage [PENDING-serialize]"],
   },
   redteam: {

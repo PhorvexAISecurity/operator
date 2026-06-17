@@ -34,7 +34,7 @@ export function Shell({
         </button>
         <div className="hidden items-center gap-2 text-[12px] text-muted-foreground md:flex">
           <ShieldCheck className="h-4 w-4 text-success" />
-          <span className="font-medium text-foreground">K8s proven on kind</span>
+          <span className="font-medium text-foreground">Live on AWS EKS</span>
           <span className="text-muted-foreground/50">·</span>
           <span>AI defense <span className="text-warning">[SP-0-PENDING-P4]</span></span>
         </div>

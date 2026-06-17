@@ -16,7 +16,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -44,13 +47,19 @@ type RunStatus struct {
 	Config    string      `json:"config"`
 	State     string      `json:"state"` // running | done | error
 	Started   string      `json:"started"`
+	Date      string      `json:"date"`     // server-side full timestamp the run started (UTC)
+	Finished  string      `json:"finished"` // server-side full timestamp the run finished (UTC)
 	Trials    int         `json:"trials"`
 	Arms      []ArmResult `json:"arms,omitempty"`
 	Error     string      `json:"error,omitempty"`
 	NativeActuator bool   `json:"nativeActuator"`
 	Namespace string      `json:"namespace,omitempty"` // the sandbox the scenario ran in
 	Target    string      `json:"target,omitempty"`    // the kubeconfig context targeted
+	ExpectedTrials int    `json:"expectedTrials"`      // trialsPerArm × arms — drives the progress bar
 }
+
+// tsNow is the canonical run timestamp format (UTC) used for the report history.
+func tsNow() string { return time.Now().UTC().Format("2006-01-02 15:04:05 MST") }
 
 // ArmResult is a per-defender live summary as the run streams in.
 type ArmResult struct {
@@ -65,14 +74,16 @@ type RunManager struct {
 	cfg       Config
 	mu        sync.Mutex
 	runs      map[string]*RunStatus
-	runOut    map[string]string // run id -> the out dir its config writes to
+	runOut    map[string]string   // run id -> the out dir its config writes to
+	procs     map[string]*exec.Cmd // run id -> the live harness process (for Stop)
+	stopping  map[string]bool     // run id -> a user Stop was requested
 	seq       int
 	active    int       // currently-running exec count
 	lastStart time.Time // for the min-interval rate limit
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	return &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}}
+	return &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}}
 }
 
 const (
@@ -124,13 +135,36 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt string) 
 	rm.active++
 	rm.lastStart = time.Now()
 	id := fmt.Sprintf("run-%d", rm.seq)
-	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, NativeActuator: nativeActuator}
+	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator}
 	rm.runs[id] = st
 	rm.runOut[id] = su.OutDir
 	rm.mu.Unlock()
 
 	go rm.run(id, su, nativeActuator)
 	return id, nil
+}
+
+// Stop terminates a running attack: it kills the harness AND the operator children it spawned
+// (one signal to the whole process group), and marks the run "stopped". No-op-with-error if the
+// run isn't running.
+func (rm *RunManager) Stop(id string) error {
+	rm.mu.Lock()
+	st, ok := rm.runs[id]
+	if !ok {
+		rm.mu.Unlock()
+		return fmt.Errorf("run %q not found", id)
+	}
+	if st.State != "running" {
+		rm.mu.Unlock()
+		return fmt.Errorf("run %q is not running (state=%s)", id, st.State)
+	}
+	rm.stopping[id] = true
+	cmd := rm.procs[id]
+	rm.mu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) // negative pid = the whole process group
+	}
+	return nil
 }
 
 // ClusterTargets returns the selectable run targets. kind is executable now; real clusters
@@ -209,18 +243,18 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, name
 	id := fmt.Sprintf("scn-%d", rm.seq)
 	outDir := "out-console-" + id
 	rm.mu.Unlock()
-	cfg := fmt.Sprintf("kubeconfig: \"\"\ncontext: %q\nnamespace: %q\nownedAck: true\ntrialsPerArm: 3\nmasterSeed: 1337\nphoenixSrcDir: %q\noutDir: %q\ndefenderFilter: %s\nscenarioFilter: [%s]\n",
+	cfg := fmt.Sprintf("kubeconfig: \"\"\ncontext: %q\nnamespace: %q\nownedAck: true\ntrialsPerArm: 2\nmasterSeed: 1337\nphoenixSrcDir: %q\noutDir: %q\ndefenderFilter: %s\nscenarioFilter: [%s]\n",
 		target, namespace, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), filepath.Join(rm.cfg.HarnessDir, outDir), arms, scenario)
 	cfgPath := filepath.Join(rm.cfg.HarnessDir, "config.console-"+id+".yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		return "", err
 	}
 	rm.mu.Lock()
-	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, NativeActuator: withPX, Namespace: namespace, Target: target}
+	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Namespace: namespace, Target: target, ExpectedTrials: 4} // trialsPerArm(2) × arms(2)
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
 	rm.mu.Unlock()
-	go rm.run(id, suite{File: "config.console-" + id + ".yaml", OutDir: outDir}, withPX)
+	go rm.run(id, suite{File: "config.console-" + id + ".yaml", OutDir: outDir}, false) // Seam-1 actuator (matches the benchmark); native is a separate opt-in
 	return id, nil
 }
 
@@ -241,6 +275,37 @@ func (rm *RunManager) Status(id string) (*RunStatus, bool) {
 	return &cp, true
 }
 
+// List returns every triggered run (newest first), each with its date + refreshed per-arm
+// metrics — the post-attack report history the dashboard shows after live attacks.
+func (rm *RunManager) List() []RunStatus {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	out := make([]RunStatus, 0, len(rm.runs))
+	for id, st := range rm.runs {
+		if rows, ok := readMetrics(filepath.Join(rm.cfg.HarnessDir, rm.runOut[id], "metrics.jsonl")); ok {
+			st.Arms, st.Trials = summarizeArms(rows)
+		}
+		out = append(out, *st)
+	}
+	// newest first (run ids are run-N / scn-N; sort by the trailing sequence number desc).
+	sort.Slice(out, func(i, j int) bool { return seqOf(out[i].ID) > seqOf(out[j].ID) })
+	return out
+}
+
+// seqOf extracts the trailing integer of a run id ("scn-12" -> 12) for recency sorting.
+func seqOf(id string) int {
+	n := 0
+	if k := strings.LastIndexByte(id, '-'); k >= 0 {
+		for _, c := range id[k+1:] {
+			if c < '0' || c > '9' {
+				return n
+			}
+			n = n*10 + int(c-'0')
+		}
+	}
+	return n
+}
+
 func (rm *RunManager) run(id string, su suite, native bool) {
 	// 5-minute cap so a triggered run can never hang the console.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -253,6 +318,9 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if native {
 		cmd.Env = append(cmd.Env, "PHORVEX_ACTUATOR=native")
 	}
+	// Own process group so Stop can kill the WHOLE tree (the harness + the operator children it
+	// spawns, which inherit this pgid) in one signal.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// Capture the harness's live stdout/stderr to a per-run log the timeline SSE tails (the
 	// "=== scenario=… defender=… trial=N ===" stage headers stream from here in real time).
 	outAbs := filepath.Join(rm.cfg.HarnessDir, su.OutDir)
@@ -261,9 +329,18 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		cmd.Stdout, cmd.Stderr = lf, lf
 		defer lf.Close()
 	}
-	err := cmd.Run()
+	var err error
+	if serr := cmd.Start(); serr != nil {
+		err = serr
+	} else {
+		rm.mu.Lock()
+		rm.procs[id] = cmd
+		rm.mu.Unlock()
+		err = cmd.Wait()
+	}
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
+	delete(rm.procs, id)
 	if rm.active > 0 {
 		rm.active--
 	}
@@ -271,13 +348,36 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if st == nil {
 		return
 	}
+	if rm.stopping[id] {
+		delete(rm.stopping, id)
+		st.State = "stopped"
+		st.Finished = tsNow()
+		st.Error = "stopped by user"
+		return
+	}
 	if err != nil && ctx.Err() == nil {
 		// non-timeout error; still surface any partial rows.
 		st.State = "error"
+		st.Finished = tsNow()
 		st.Error = err.Error()
 		return
 	}
 	st.State = "done"
+	st.Finished = tsNow()
+	// Regenerate the cost/ROI report for THIS run so the Report tab updates after an attack
+	// finishes (no cluster, no re-run — pure post-processing of the run's metrics.jsonl).
+	go func(out string) {
+		metrics := filepath.Join(rm.cfg.HarnessDir, out, "metrics.jsonl")
+		if _, e := os.Stat(metrics); e != nil {
+			return
+		}
+		rc, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		dc := exec.CommandContext(rc, rm.cfg.HarnessBin, "-dollars-from", metrics)
+		dc.Dir = rm.cfg.HarnessDir
+		dc.Env = envBase()
+		_ = dc.Run()
+	}(su.OutDir)
 }
 
 // streamRef returns the run's out dir (relative to HarnessDir) for tailing its metrics.jsonl +
@@ -287,6 +387,16 @@ func (rm *RunManager) streamRef(id string) (string, bool) {
 	defer rm.mu.Unlock()
 	out, ok := rm.runOut[id]
 	return out, ok
+}
+
+// expectedTrials returns the total trial count the run will produce (drives the progress bar).
+func (rm *RunManager) expectedTrials(id string) int {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if st, ok := rm.runs[id]; ok {
+		return st.ExpectedTrials
+	}
+	return 0
 }
 
 // runState returns the current run state (running|done|error|"") — the timeline SSE's end signal.
