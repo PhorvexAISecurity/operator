@@ -114,6 +114,14 @@ func pinnedKubeconfigShared(ctx context.Context, env *core.Env, tag string) (str
 	}
 	_ = os.MkdirAll(outDir, 0o755)
 	path := filepath.Join(outDir, "kubeconfig-pinned-"+safeFileName(env.Config.Context+"-"+tag)+".yaml")
+	// The operator process runs with cmd.Dir = the operator's repo dir (NOT the harness CWD),
+	// so a RELATIVE KUBECONFIG would not resolve from there. On kind, client-go silently fell
+	// back to ~/.kube/config (current-context matched); on EKS that fallback yields "no
+	// configuration provided" and the operator never connects. Pin an ABSOLUTE path so the
+	// operator loads exactly this minified kubeconfig regardless of its working directory.
+	if abs, aerr := filepath.Abs(path); aerr == nil {
+		path = abs
+	}
 	if err := os.WriteFile(path, out, 0o600); err != nil {
 		return "", err
 	}
