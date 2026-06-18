@@ -27,7 +27,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const [target, setTarget] = React.useState("");
   const [nss, setNss] = React.useState<WorkloadNS[]>([]);
   const [nsLoading, setNsLoading] = React.useState(false);
-  const [ns, setNs] = React.useState("amtd-attack-test");
+  const ns = "amtd-attack-test"; // attacks always run in a dedicated disposable sandbox (backend-enforced)
   const [scenarios, setScenarios] = React.useState<CatalogItem[]>([]);
   const [scenario, setScenario] = React.useState("");
   const [withPX, setWithPX] = React.useState(true);
@@ -119,7 +119,6 @@ export function AttackLab({ lens }: { lens: Lens }) {
   }
 
   const targetObj = targets.find((t) => t.id === target);
-  const isSandbox = ns === "amtd-attack-test";
   const trials = events.filter((e) => e.type === "trial") as Trial[];
 
   if (err && !targets.length) return <ErrorState msg={err} />;
@@ -186,19 +185,13 @@ export function AttackLab({ lens }: { lens: Lens }) {
           <SectionLabel>2 · Arm the attacker</SectionLabel>
 
           <div>
-            <div className="mb-2 flex items-center gap-1.5 text-[12px] text-muted-foreground"><Crosshair className="h-3.5 w-3.5" /> Run the attack inside namespace</div>
-            <div className="flex flex-wrap gap-2">
-              {["amtd-attack-test", ...nss.map((g) => g.namespace)].filter((n, i, a) => a.indexOf(n) === i).map((name) => (
-                <button key={name} onClick={() => setNs(name)}
-                  className={cn("rounded-md border px-3 py-1.5 font-mono text-[12px] transition-colors",
-                    ns === name ? "border-primary/50 bg-primary/[0.06] text-foreground" : "border-border text-muted-foreground hover:bg-elevated")}>
-                  {name}{name === "amtd-attack-test" && " (sandbox)"}
-                </button>
-              ))}
+            <div className="mb-2 flex items-center gap-1.5 text-[12px] text-muted-foreground"><Crosshair className="h-3.5 w-3.5" /> Attack sandbox</div>
+            <div className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/[0.06] px-3 py-1.5 font-mono text-[12px] text-foreground">
+              <Boxes className="h-3.5 w-3.5 text-primary" /> amtd-attack-test <span className="text-[10px] text-muted-foreground">(dedicated · disposable)</span>
             </div>
-            <div className={cn("mt-2 flex items-start gap-1.5 text-[11px]", isSandbox ? "text-muted-foreground" : "text-warning")}>
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-              <span>The harness deploys its own synthetic attacker + victim pods into this namespace and confines every object here. {isSandbox ? "The dedicated sandbox is recommended." : "This is NOT the dedicated sandbox — synthetic test pods will appear alongside your real workloads here."}</span>
+            <div className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground">
+              <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-success" />
+              <span>The attack runs in a <span className="text-foreground">dedicated disposable sandbox</span> — the harness creates its own synthetic attacker + victim there and deletes the whole namespace on teardown. <span className="text-foreground">Your real workloads are never touched or deleted.</span> (Pick a workload above only to see its context; the attack does not run inside it.)</span>
             </div>
           </div>
 

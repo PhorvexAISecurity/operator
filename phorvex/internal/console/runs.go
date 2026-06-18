@@ -213,12 +213,11 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, name
 	if !scenarioRe.MatchString(scenario) {
 		return "", fmt.Errorf("invalid scenario name")
 	}
-	if namespace == "" {
-		namespace = "amtd-attack-test"
-	}
-	if !nsRe.MatchString(namespace) {
-		return "", fmt.Errorf("invalid namespace name")
-	}
+	// SAFETY (load-bearing): the harness DELETES its run namespace at final teardown
+	// (core.Env.CleanupOwned deleteNamespace=true). So an attack MUST run only in a dedicated,
+	// disposable sandbox — NEVER a real workload namespace, or that namespace + its app get
+	// destroyed. We therefore IGNORE any caller-supplied namespace and always use the sandbox.
+	namespace = "amtd-attack-test"
 	target := "kind-amtd-test"
 	for _, t := range rm.ClusterTargets() {
 		if t.ID == targetID {
