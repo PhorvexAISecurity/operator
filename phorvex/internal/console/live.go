@@ -78,6 +78,30 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// liveClear truncates the live decision-audit JSONL (operator-only). The SSE replays this
+// file on connect, so emptying it clears the decision history; a still-running operator
+// simply starts appending fresh records again. Honest: this deletes real audit data, so it
+// is a deliberate operator action, never automatic.
+func (s *Server) liveClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, 405, map[string]string{"error": "POST only"})
+		return
+	}
+	path := s.cfg.AuditPath
+	if path == "" {
+		path = s.newestAudit()
+	}
+	if path == "" {
+		writeJSON(w, 200, map[string]any{"cleared": false, "note": "no audit file configured"})
+		return
+	}
+	if err := os.Truncate(path, 0); err != nil {
+		writeJSON(w, 500, map[string]string{"error": "could not clear audit: " + err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"cleared": true})
+}
+
 // streamNew reads any records appended past offset and returns the new offset.
 func streamNew(path string, offset int64, emit func(audit.Record)) int64 {
 	if path == "" {

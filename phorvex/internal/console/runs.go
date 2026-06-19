@@ -55,6 +55,8 @@ type RunStatus struct {
 	NativeActuator bool   `json:"nativeActuator"`
 	Namespace string      `json:"namespace,omitempty"` // the sandbox the scenario ran in
 	Target    string      `json:"target,omitempty"`    // the kubeconfig context targeted
+	Provider    string    `json:"provider,omitempty"`    // which provider this attack ran on: "AWS EKS" | "vCluster" | ...
+	TargetLabel string    `json:"targetLabel,omitempty"` // human label of the target cluster
 	ExpectedTrials int    `json:"expectedTrials"`      // trialsPerArm × arms — drives the progress bar
 }
 
@@ -174,6 +176,7 @@ type ClusterTarget struct {
 	ID       string `json:"id"`
 	Context  string `json:"context"`
 	Label    string `json:"label"`
+	Provider string `json:"provider"` // short provider name: "AWS EKS" | "vCluster" | "kind" | "CoreWeave" | "Kubernetes"
 	Runnable bool   `json:"runnable"`
 	Note     string `json:"note"`
 }
@@ -219,12 +222,15 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, name
 	// destroyed. We therefore IGNORE any caller-supplied namespace and always use the sandbox.
 	namespace = "amtd-attack-test"
 	target := "kind-amtd-test"
+	provider, targetLabel := "Kubernetes", target
 	for _, t := range rm.ClusterTargets() {
 		if t.ID == targetID {
 			if !t.Runnable {
 				return "", fmt.Errorf("cluster target %q execution is %s", t.Label, t.Note)
 			}
 			target = t.Context
+			provider = t.Provider
+			targetLabel = t.Label
 		}
 	}
 	arms := "[d-nomtd, d-r6blindtimer]"
@@ -249,7 +255,7 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, name
 		return "", err
 	}
 	rm.mu.Lock()
-	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Namespace: namespace, Target: target, ExpectedTrials: 4} // trialsPerArm(2) × arms(2)
+	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: 4} // trialsPerArm(2) × arms(2)
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
 	rm.mu.Unlock()
@@ -396,6 +402,17 @@ func (rm *RunManager) expectedTrials(id string) int {
 		return st.ExpectedTrials
 	}
 	return 0
+}
+
+// runMeta returns the provider + human target label for a run (so the live timeline can show
+// WHICH provider — EKS vs vCluster — the attack is running against).
+func (rm *RunManager) runMeta(id string) (provider, label string) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if st, ok := rm.runs[id]; ok {
+		return st.Provider, st.TargetLabel
+	}
+	return "", ""
 }
 
 // runState returns the current run state (running|done|error|"") — the timeline SSE's end signal.

@@ -76,6 +76,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/metrics", s.withCORS(s.scoped("operator", s.metricsScrape)))
 	// LIVE group (Wave 2) — SSE, per-lens projected at the stream boundary.
 	mux.HandleFunc("/api/live", s.withCORS(s.live))
+	// clear the live decision audit (operator-only write; truncates the JSONL the SSE replays).
+	mux.HandleFunc("/api/live/clear", s.withCORS(s.scoped("operator", s.liveClear)))
 	// owner scope (IP-walled — ONLY OwnerEvents + the owner-safe rollup).
 	mux.HandleFunc("/api/owner/events", s.withCORS(s.scoped("owner", s.ownerEvents)))
 	mux.HandleFunc("/api/owner/tenants", s.withCORS(s.scoped("owner", s.ownerTenants)))

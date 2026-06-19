@@ -82,7 +82,8 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("data: " + string(b) + "\n\n"))
 		flusher.Flush()
 	}
-	send(map[string]any{"type": "meta", "id": id, "state": s.runs.runState(id), "expectedTrials": s.runs.expectedTrials(id)})
+	provider, targetLabel := s.runs.runMeta(id)
+	send(map[string]any{"type": "meta", "id": id, "state": s.runs.runState(id), "expectedTrials": s.runs.expectedTrials(id), "provider": provider, "targetLabel": targetLabel})
 
 	var mOff, lOff int64
 	ctx := r.Context()

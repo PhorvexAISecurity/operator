@@ -4,10 +4,26 @@ import { api, Lens, RunStatus, ArmResult, RunEvidence } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
-import { Loader2, CheckCircle2, ShieldCheck, ShieldOff, Clock, FileText, Terminal } from "lucide-react";
+import { Loader2, CheckCircle2, ShieldCheck, ShieldOff, Clock, FileText, Terminal, Server, Boxes } from "lucide-react";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
+
+// which provider a run targeted (EKS / vCluster / …) — color-coded so it reads at a glance.
+function ProviderTag({ provider, label }: { provider?: string; label?: string }) {
+  const p = provider || (label || "").split(" ")[0] || "—";
+  const isVC = p === "vCluster", isEKS = p === "AWS EKS";
+  const Icon = isVC ? Boxes : Server;
+  if (!provider && !label) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium",
+      isVC ? "border-violet-400/40 bg-violet-400/[0.08] text-violet-300"
+      : isEKS ? "border-amber-400/40 bg-amber-400/[0.08] text-amber-300"
+      : "border-border text-foreground")}>
+      <Icon className="h-3 w-3" />{p}
+    </span>
+  );
+}
 
 // Full per-run evidence ledger (per-arm aggregates + per-trial rows with attack command steps).
 function EvidenceDetail({ id, lens, runErr }: { id: string; lens: Lens; runErr?: string }) {
@@ -123,6 +139,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
               <thead><tr className="text-left text-muted-foreground">
                 <th className="px-2 py-1.5">Date (UTC)</th>
                 <th className="px-2 py-1.5">Scenario</th>
+                <th className="px-2 py-1.5">Provider</th>
                 <th className="px-2 py-1.5">Namespace</th>
                 <th className="px-2 py-1.5">State</th>
                 <th className="px-2 py-1.5">Without Phorvex</th>
@@ -139,6 +156,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                       <tr className="cursor-pointer border-t border-border/40 hover:bg-elevated/40" onClick={() => setOpen(open === r.id ? "" : r.id)}>
                         <td className="px-2 py-2 tabular text-muted-foreground"><span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{r.date || r.started}</span></td>
                         <td className="px-2 py-2 font-mono text-foreground/90">{r.config}</td>
+                        <td className="px-2 py-2"><ProviderTag provider={r.provider} label={r.targetLabel || r.target} /></td>
                         <td className="px-2 py-2 font-mono text-muted-foreground">{r.namespace || "—"}</td>
                         <td className="px-2 py-2">
                           {r.state === "running" ? <Badge variant="accent"><Loader2 className="h-3 w-3 animate-spin" />running</Badge>
@@ -151,7 +169,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                       </tr>
                       {open === r.id && (
                         <tr className="border-t border-border/20 bg-elevated/20">
-                          <td colSpan={7} className="px-4 py-3">
+                          <td colSpan={8} className="px-4 py-3">
                             <EvidenceDetail id={r.id} lens={lens} runErr={r.error} />
                           </td>
                         </tr>

@@ -20,7 +20,7 @@ export interface OwnerEvent {
 export interface ArmResult { defender: string; trials: number; disruption: number; dwellMean: number }
 export interface RunStatus {
   id: string; config: string; state: "running" | "done" | "error" | "stopped"; started: string;
-  date?: string; finished?: string; namespace?: string; target?: string;
+  date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
   trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean;
 }
 export interface Suite { Name: string; Desc: string }
@@ -159,6 +159,8 @@ export const api = {
   redteamFindings: (lens: Lens) => get<{ findings: RTFinding[] }>("/api/redteam/findings", lens),
   redteamGates: (lens: Lens) => get<{ gates: RTGate[]; allPass: boolean; ranAt: string }>("/api/redteam/gates", lens),
   redteamCampaigns: (lens: Lens) => get<{ campaigns: RTCampaign[] }>("/api/redteam/campaigns", lens),
+  // clearLive empties the live decision-audit the SSE replays (operator-only write).
+  clearLive: (lens: Lens) => post<{ cleared: boolean; note?: string }>("/api/live/clear", {}, lens),
 };
 export interface RTFinding { id: string; title: string; product: string; category: string; source: string; reasoning: string; cycle: string; fix: string; fixFile: string; status?: string; applyNote?: string }
 export interface RTGate { label: string; pass: boolean; out: string }
@@ -178,14 +180,14 @@ export interface GraphNode { key: string; blast: number; ai: boolean }
 export interface GraphEdge { src: string; dst: string }
 export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
-export interface ClusterTarget { id: string; context: string; label: string; runnable: boolean; note: string }
+export interface ClusterTarget { id: string; context: string; label: string; provider: string; runnable: boolean; note: string }
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
 export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }
 export interface WorkloadNS { namespace: string; system: boolean; podCount: number; workloads: Workload[] }
 // Attack-timeline SSE event (one per harness stage header / completed trial / run end).
 export interface TimelineEvent {
   type: "meta" | "stage" | "trial" | "end";
-  id?: string; state?: string; expectedTrials?: number;
+  id?: string; state?: string; expectedTrials?: number; provider?: string; targetLabel?: string;
   scenario?: string; defender?: string; trial?: number;
   oracleAchieved?: boolean; disruption?: number; dwellSeconds?: number;
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;

@@ -222,6 +222,16 @@ export function AttackLab({ lens }: { lens: Lens }) {
             </div>
           </div>
 
+          {/* WHICH PROVIDER this attack will hit — explicit so EKS vs vCluster is never ambiguous */}
+          {targetObj && (
+            <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/[0.05] px-3 py-2 text-[12px]">
+              <Crosshair className="h-3.5 w-3.5 text-accent" />
+              <span className="text-muted-foreground">This attack will run on</span>
+              <ProviderChip provider={targetObj.provider} label={targetObj.label} />
+              <span className="text-muted-foreground">· sandbox <span className="font-mono text-foreground/80">amtd-attack-test</span></span>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
             <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted-foreground">
               <button onClick={() => setWithPX((v) => !v)} className={cn("relative h-5 w-9 rounded-full transition-colors", withPX ? "bg-primary" : "bg-muted")}>
@@ -232,7 +242,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
             </label>
             <Button onClick={launch} disabled={busy || running || !scenario || !toolchain}>
               {busy || running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {running ? "Attack running…" : "Launch attack"}
+              {running ? "Attack running…" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
             </Button>
           </div>
           {!toolchain && (
@@ -249,8 +259,11 @@ export function AttackLab({ lens }: { lens: Lens }) {
       {runId && (
         <Card className="animate-fade-up">
           <CardContent className="space-y-4 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <SectionLabel>3 · Live attack timeline</SectionLabel>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <SectionLabel>3 · Live attack timeline</SectionLabel>
+                {targetObj && <ProviderChip provider={targetObj.provider} label={targetObj.label} />}
+              </div>
               <div className="flex items-center gap-2">
                 {running ? <Badge variant="accent"><Radio className="h-3 w-3 animate-pulse" /> running</Badge>
                   : ended === "stopped" ? <Badge variant="danger"><StopCircle className="h-3 w-3" /> stopped</Badge>
@@ -314,6 +327,25 @@ export function AttackLab({ lens }: { lens: Lens }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// ProviderChip makes the attack target unmistakable: which provider (EKS / vCluster / …) and
+// the specific cluster. Color-coded per provider so EKS vs vCluster reads at a glance.
+function ProviderChip({ provider, label }: { provider?: string; label?: string }) {
+  const p = provider || "Kubernetes";
+  const isVC = p === "vCluster";
+  const isEKS = p === "AWS EKS";
+  const Icon = isVC ? Boxes : Server;
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium",
+      isVC ? "border-violet-400/40 bg-violet-400/[0.08] text-violet-300"
+      : isEKS ? "border-amber-400/40 bg-amber-400/[0.08] text-amber-300"
+      : "border-border bg-elevated/40 text-foreground")}>
+      <Icon className="h-3.5 w-3.5" />
+      <span className="uppercase tracking-wide">{p}</span>
+      {label && <span className="font-mono normal-case text-muted-foreground">· {label.replace(/^.*· /, "")}</span>}
+    </span>
   );
 }
 

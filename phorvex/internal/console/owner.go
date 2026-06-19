@@ -17,6 +17,8 @@
 package console
 
 import (
+	"time"
+
 	"github.com/phorvex/phorvex/internal/audit"
 )
 
@@ -26,6 +28,7 @@ import (
 // hazard / pHold / attribution / raw-risk field appears, by design.
 type OwnerEvent struct {
 	Tenant         string   `json:"tenant"`
+	Time           string   `json:"time,omitempty"` // RFC3339 decision timestamp (owner-safe: when, not score)
 	Namespace      string   `json:"namespace"`
 	Pod            string   `json:"pod"`
 	Action         string   `json:"action"`
@@ -100,6 +103,7 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 	}
 	return OwnerEvent{
 		Tenant:          rec.Tenant,
+		Time:            rec.Time.Format(time.RFC3339),
 		Namespace:       rec.Namespace,
 		Pod:             rec.Pod,
 		Action:          rec.Action,

@@ -37,16 +37,24 @@ func classifyContext(ctx string) ClusterTarget {
 	lc := strings.ToLower(ctx)
 	t := ClusterTarget{ID: ctx, Context: ctx, Runnable: true}
 	switch {
+	case strings.Contains(lc, "vcluster") || strings.Contains(lc, "vc-"):
+		t.Provider = "vCluster"
+		t.Label = "vCluster · " + shortContext(ctx)
+		t.Note = "virtual cluster (vCluster) on the host platform — full scan/operate/attack, same pipeline as the physical providers"
 	case strings.Contains(lc, "kind"):
+		t.Provider = "kind"
 		t.Label = "kind (local) · " + ctx
 		t.Note = "local kind cluster (read-only scan; reproducible at seed 1337)"
 	case strings.Contains(lc, "eks") || strings.Contains(lc, "arn:aws"):
+		t.Provider = "AWS EKS"
 		t.Label = "AWS EKS · " + shortContext(ctx)
 		t.Note = "DERIVED from your kubeconfig — read-only least-privilege scan; GPU magnitudes [SP-0-PENDING-P4]"
 	case strings.Contains(lc, "coreweave"):
+		t.Provider = "CoreWeave"
 		t.Label = "CoreWeave · " + shortContext(ctx)
 		t.Note = "DERIVED from your kubeconfig; GPU magnitudes [SP-0-PENDING-P4]"
 	default:
+		t.Provider = "Kubernetes"
 		t.Label = ctx
 		t.Note = "DERIVED from your kubeconfig — read-only scan"
 	}
