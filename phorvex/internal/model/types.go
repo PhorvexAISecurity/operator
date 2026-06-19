@@ -342,6 +342,7 @@ type Decision struct {
 	Reason         string // short human explanation (attribution)
 	R6Counterfactual Action // what R6's blind timer/exact-match would have done
 	CounterfactualNote string // why Phorvex's choice differs from R6's blind action
+	BlindCost      float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
 	DryRun         bool
 	Actuated       bool
 	DecidedAt      time.Time

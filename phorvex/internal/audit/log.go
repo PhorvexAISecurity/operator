@@ -48,6 +48,7 @@ type Record struct {
 	Reason             string `json:"reason"`
 	R6Counterfactual   string `json:"r6Counterfactual"`
 	CounterfactualNote string `json:"counterfactualNote,omitempty"`
+	BlindCost          float64 `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
 
 	// P1 (coverage engine) fields — present only under the p1-coverage brain.
 	Engine        string                  `json:"engine,omitempty"`
@@ -133,6 +134,7 @@ func ToRecord(d model.Decision) Record {
 		Reason:             d.Reason,
 		R6Counterfactual:   string(d.R6Counterfactual),
 		CounterfactualNote: d.CounterfactualNote,
+		BlindCost:          round4(d.BlindCost),
 		Engine:             d.Engine,
 		PerDollar:        round4(d.PerDollar),
 		CoveredWeight:    round4(d.CoveredWeight),

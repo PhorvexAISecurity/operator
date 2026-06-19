@@ -286,6 +286,18 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 			}
 		}
 
+		// Blind-timer cost: R6 rotates on a fixed cadence REGARDLESS of value, so its
+		// per-cycle cost is the rotate candidate's ECost for this pod — available even when
+		// Phorvex chooses noop (it's the cost Phorvex declined to pay). Drives the per-decision
+		// "Phorvex vs blind" cost comparison in the dashboard.
+		blindCost := 0.0
+		for _, i := range idxs {
+			if set.Candidates[i].Action == model.ActionRotate {
+				blindCost = set.Candidates[i].ECost
+				break
+			}
+		}
+
 		cov, ecost, perDollar, marginal := 0.0, 0.0, 0.0, 0.0
 		var attribution []model.AttributionTerm
 		coveredFacts := 0
@@ -335,6 +347,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 			Reason:             coverageReason(action, ac.assess, cov, ecost, perDollar, lambda),
 			R6Counterfactual:   model.ActionRotate,
 			CounterfactualNote: counterfactualNote(action, v, perDollar, lambda),
+			BlindCost:          blindCost,
 			DryRun:             pol.DryRun,
 			DecidedAt:        now,
 			Engine:           "p1-coverage",

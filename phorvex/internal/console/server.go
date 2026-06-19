@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
 )
@@ -83,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/owner/tenants", s.withCORS(s.scoped("owner", s.ownerTenants)))
 	mux.HandleFunc("/api/reports", s.withCORS(s.scoped("operator", s.reports)))
 	mux.HandleFunc("/api/cost", s.withCORS(s.scoped("operator", s.cost)))
+	mux.HandleFunc("/api/cost-timeseries", s.withCORS(s.scoped("operator", s.costTimeseries)))
 	mux.HandleFunc("/api/pricing", s.withCORS(s.scoped("operator", s.pricing)))
 	// RED-TEAM CONTROL group (P-REDTEAM) — additive; reads real artifacts + execs the attacker tool.
 	mux.HandleFunc("/api/redteam/curves", s.withCORS(s.scoped("operator", s.redteamCurves)))
@@ -238,6 +240,65 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 		"totalWithout": totWithout, "totalWith": totWith, "totalSavings": totSavings,
 		"pricing": pricing, "overheadPercent": overheadPercent,
 		"note": "Defense overhead = " + pricing.Provider + " on-demand infra cost × " + "1.5% rotation overhead (live, from your cluster's instance types). Phorvex OFF = residual breach exposure (your breach-value estimate); ON = residual breach + this overhead.",
+	})
+}
+
+// CostTimePoint is one cumulative sample for the cost-over-time chart: at time T, the running
+// total Phorvex has incurred vs the running total a blind R6 fixed-timer would have incurred
+// (always-rotate). Savings = blind − phorvex — the controlled gap that widens while Phorvex runs.
+type CostTimePoint struct {
+	Time       time.Time `json:"time"`
+	UnixMillis int64     `json:"unixMillis"`
+	Phorvex    float64   `json:"phorvexCost"` // cumulative sum of decision Cost
+	Blind      float64   `json:"blindCost"`   // cumulative sum of decision BlindCost (R6 always-rotate)
+	Savings    float64   `json:"savings"`     // Blind − Phorvex (cumulative)
+	Decisions  int       `json:"decisions"`   // count of decisions folded into this point
+}
+
+// costTimeseries builds the cumulative Phorvex-vs-blind-R6 cost series from the live decision
+// audit. Read-only. readAudit already filters kind=="phorvex.decision". We include BOTH dry-run
+// and active decisions: each record carries its MODELED cost (Cost) and the blind R6 per-cycle
+// rotate cost (BlindCost) — the comparison is the decision-implied cost, valid whether or not the
+// action was actuated. Downsampled to <=120 points so the chart stays sane.
+func (s *Server) costTimeseries(w http.ResponseWriter, r *http.Request) {
+	const maxPoints = 120
+	live := s.readAudit()
+	// defensive: the file is append-only/chronological, but resilient to clock skew / merged files.
+	sort.Slice(live, func(i, j int) bool { return live[i].Time.Before(live[j].Time) })
+
+	points := make([]CostTimePoint, 0, maxPoints)
+	if len(live) == 0 {
+		writeJSON(w, 200, map[string]any{
+			"available": false, "points": points,
+			"totalPhorvex": 0.0, "totalBlind": 0.0, "totalSavings": 0.0, "decisions": 0,
+			"note": "No live operator decisions in the audit yet — run a live operator (or an Attack Lab scenario) to populate the cost-over-time trend.",
+		})
+		return
+	}
+
+	bucketSize := 1
+	if len(live) > maxPoints {
+		bucketSize = (len(live) + maxPoints - 1) / maxPoints // ceil division → <=120 points
+	}
+	var cumP, cumB float64
+	bucketCount := 0
+	for i, rec := range live {
+		cumP += rec.Cost
+		cumB += rec.BlindCost
+		bucketCount++
+		// emit at every bucket boundary AND at the final record (so the last point == grand total).
+		if (i+1)%bucketSize == 0 || i == len(live)-1 {
+			points = append(points, CostTimePoint{
+				Time: rec.Time, UnixMillis: rec.Time.UnixMilli(),
+				Phorvex: cumP, Blind: cumB, Savings: cumB - cumP, Decisions: bucketCount,
+			})
+			bucketCount = 0
+		}
+	}
+	writeJSON(w, 200, map[string]any{
+		"available": true, "points": points,
+		"totalPhorvex": cumP, "totalBlind": cumB, "totalSavings": cumB - cumP, "decisions": len(live),
+		"note": "Cumulative cost from the live decision audit: each decision's actual Phorvex cost vs the blind R6 fixed-timer's per-cycle rotate cost, summed over time. The blind line climbs every cycle; Phorvex pays only when net-positive.",
 	})
 }
 

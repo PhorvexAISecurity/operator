@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, Lens, CostResult } from "@/lib/api";
+import { api, Lens, CostResult, CostTimeseries } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
@@ -12,10 +12,63 @@ function usd(n: number): string {
   return `$${Math.round(n)}`;
 }
 
+// fmtCost renders the unit-less per-decision cost (sum of Cost/BlindCost) WITHOUT a currency
+// symbol — these are rotation-cost units, not dollars (matches the Live Ops cards).
+function fmtCost(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  if (n >= 100) return n.toFixed(0);
+  return n.toFixed(2);
+}
+
+// CostOverTimeChart — self-contained inline SVG (no chart lib; matches the BlastGraph pattern).
+// Two cumulative lines from the live decision audit: the blind R6 timer (climbs every cycle) vs
+// Phorvex (pays only when net-positive), with the savings gap shaded between them.
+function CostOverTimeChart({ ts }: { ts: CostTimeseries }) {
+  const pts = ts.points;
+  if (!pts || pts.length < 2) return null; // self-guard: needs >=2 points to plot a line (caller also routes 1-point to a text summary)
+  const W = 720, H = 240, padL = 52, padR = 16, padT = 16, padB = 28;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const t0 = pts[0].unixMillis;
+  const tN = pts[pts.length - 1].unixMillis;
+  const tSpan = Math.max(1, tN - t0);
+  const yMax = Math.max(1e-6, ...pts.map((p) => p.blindCost)); // blind is the upper envelope
+  const x = (p: { unixMillis: number }) => padL + ((p.unixMillis - t0) / tSpan) * innerW;
+  const y = (v: number) => padT + innerH - (v / yMax) * innerH;
+  const blindLine = pts.map((p) => `${x(p).toFixed(1)},${y(p.blindCost).toFixed(1)}`).join(" ");
+  const pxLine = pts.map((p) => `${x(p).toFixed(1)},${y(p.phorvexCost).toFixed(1)}`).join(" ");
+  const band = [
+    ...pts.map((p) => `${x(p).toFixed(1)},${y(p.blindCost).toFixed(1)}`),
+    ...pts.slice().reverse().map((p) => `${x(p).toFixed(1)},${y(p.phorvexCost).toFixed(1)}`),
+  ].join(" ");
+  const ticks = [0, 0.5, 1].map((f) => ({ v: yMax * f, yPos: y(yMax * f) }));
+  const last = pts[pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cumulative cost over time: Phorvex vs blind R6 timer">
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={padL} y1={t.yPos} x2={W - padR} y2={t.yPos} stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="2 3" />
+          <text x={padL - 8} y={t.yPos + 3} textAnchor="end" fontSize={10} fill="hsl(var(--muted-foreground))">{fmtCost(t.v)}</text>
+        </g>
+      ))}
+      <polygon points={band} fill="hsl(var(--success))" fillOpacity={0.12} />
+      <polyline points={blindLine} fill="none" stroke="hsl(var(--danger))" strokeWidth={2} />
+      <polyline points={pxLine} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} />
+      <circle cx={x(last)} cy={y(last.blindCost)} r={3} fill="hsl(var(--danger))" />
+      <circle cx={x(last)} cy={y(last.phorvexCost)} r={3} fill="hsl(var(--primary))" />
+      <text x={padL} y={H - 8} textAnchor="start" fontSize={10} fill="hsl(var(--muted-foreground))">{new Date(t0).toLocaleTimeString()}</text>
+      <text x={W - padR} y={H - 8} textAnchor="end" fontSize={10} fill="hsl(var(--muted-foreground))">{new Date(tN).toLocaleTimeString()}</text>
+    </svg>
+  );
+}
+
 export function CostPanel({ lens }: { lens: Lens }) {
   const [d, setD] = React.useState<CostResult | null>(null);
+  const [ts, setTs] = React.useState<CostTimeseries | null>(null);
   const [err, setErr] = React.useState("");
-  React.useEffect(() => { api.cost(lens).then(setD).catch((e) => setErr(String(e.message || e))); }, [lens]);
+  React.useEffect(() => {
+    api.cost(lens).then(setD).catch((e) => setErr(String(e.message || e)));
+    api.costTimeseries(lens).then(setTs).catch(() => setTs(null)); // optional — never blocks the panel
+  }, [lens]);
 
   if (err) return <ErrorState msg={err} />;
   if (!d) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> computing cost…</CardContent></Card>;
@@ -108,6 +161,45 @@ export function CostPanel({ lens }: { lens: Lens }) {
         </div>
         <div className="px-4 pb-3 text-[11px] text-muted-foreground">{d.note}</div>
       </CardContent></Card>
+
+      {/* COST OVER TIME — cumulative Phorvex vs blind R6 timer, from the live decision audit */}
+      {ts && ts.available && ts.points.length > 0 && (
+        <Card><CardContent className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SectionLabel>Cost over time — while Phorvex is active</SectionLabel>
+            <div className="flex items-center gap-4 text-[11px]">
+              <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 bg-danger" /> blind R6 timer</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 bg-primary" /> Phorvex</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm bg-success/20" /> savings</span>
+            </div>
+          </div>
+          {ts.points.length === 1 ? (
+            <div className="rounded-md border border-border bg-elevated/40 p-4 text-center text-[12px] text-muted-foreground">
+              Only one decision so far — cumulative cost: Phorvex <span className="text-primary">{fmtCost(ts.totalPhorvex)}</span> vs blind R6 <span className="text-danger">{fmtCost(ts.totalBlind)}</span> (saving <span className="text-success">{fmtCost(ts.totalSavings)}</span>). The trend line appears once more decisions land.
+            </div>
+          ) : (
+            <CostOverTimeChart ts={ts} />
+          )}
+          {/* headline cumulative totals */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-md border border-primary/30 bg-primary/[0.04] p-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Phorvex (cumulative)</div>
+              <div className="text-lg font-semibold tabular text-primary">{fmtCost(ts.totalPhorvex)}</div>
+            </div>
+            <div className="rounded-md border border-danger/30 bg-danger/[0.04] p-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Blind R6 (cumulative)</div>
+              <div className="text-lg font-semibold tabular text-danger">{fmtCost(ts.totalBlind)}</div>
+            </div>
+            <div className="rounded-md border border-success/30 bg-success/[0.04] p-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Saved by Phorvex</div>
+              <div className="text-lg font-semibold tabular text-success">{fmtCost(ts.totalSavings)}</div>
+            </div>
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Over {ts.decisions} live decision{ts.decisions === 1 ? "" : "s"}, Phorvex incurred a cumulative cost of <span className="font-medium text-primary">{fmtCost(ts.totalPhorvex)}</span> while a blind fixed-timer (R6) — which rotates every cycle regardless of value — would have incurred <span className="font-medium text-danger">{fmtCost(ts.totalBlind)}</span>. The gap (<span className="font-medium text-success">{fmtCost(ts.totalSavings)}</span>) is what Phorvex's value-targeted decisions save, and it widens the longer Phorvex runs. Costs are unit-less rotation-cost units (the same scale as each decision card), not dollars. {ts.note}
+          </div>
+        </CardContent></Card>
+      )}
 
       {/* HOW THIS IS CALCULATED — full transparency */}
       <Card className="border-info/30">

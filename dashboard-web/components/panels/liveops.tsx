@@ -6,7 +6,7 @@ import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { Pending } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
-import { Radio, Activity, Lock, Trash2, ChevronDown } from "lucide-react";
+import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff } from "lucide-react";
 
 // format the decision timestamp as a readable local date + time.
 function fmtTime(t?: string): { date: string; time: string } {
@@ -90,6 +90,50 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   );
 }
 
+// CostCompare contrasts what Phorvex pays for THIS decision against what the blind timer (R6)
+// would pay. Phorvex acts only when net-positive (cost 0 when it skips); the blind timer rotates
+// every cycle regardless of value, so it always pays the rotate cost. Numbers are unit-less
+// cost (no currency symbol) — same scale as the decision ledger.
+function CostCompare({ e }: { e: any }) {
+  const phorvexCost = typeof e.cost === "number" ? e.cost : null;
+  const blindCost = typeof e.blindCost === "number" ? e.blindCost : null;
+  if (phorvexCost === null && blindCost === null) return null;
+  const acted = e.selected || e.actuated;
+  const savings = phorvexCost !== null && blindCost !== null ? blindCost - phorvexCost : null;
+  const f = (n: number | null) => (n === null ? "—" : n.toFixed(4));
+  return (
+    <div>
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Cost · Phorvex vs blind timer</div>
+      <div className="grid grid-cols-2 gap-2">
+        {/* Phorvex — value-targeted */}
+        <div className="rounded-md border border-primary/30 bg-primary/[0.05] p-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-primary"><ShieldCheck className="h-3.5 w-3.5" /> Phorvex</div>
+          <div className="mt-1 font-mono text-[12px] text-foreground/90">{e.action || "noop"}</div>
+          <div className="mt-1 text-[18px] font-semibold tabular text-foreground">{f(phorvexCost)}</div>
+          <div className="text-[10px] text-muted-foreground">
+            {acted ? <>acts only when net-positive{typeof e.net === "number" ? <> · net +{e.net.toFixed(2)}</> : null}</> : "skipped — not worth the disruption this cycle"}
+          </div>
+        </div>
+        {/* Blind timer — fixed cadence, no value targeting */}
+        <div className="rounded-md border border-warning/30 bg-warning/[0.05] p-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-warning"><ShieldOff className="h-3.5 w-3.5" /> Blind timer (R6)</div>
+          <div className="mt-1 font-mono text-[12px] text-foreground/90">rotate</div>
+          <div className="mt-1 text-[18px] font-semibold tabular text-foreground">{f(blindCost)}</div>
+          <div className="text-[10px] text-muted-foreground">rotates every cycle regardless of value</div>
+        </div>
+      </div>
+      {savings !== null && (
+        <div className={cn("mt-1.5 rounded-md border px-2.5 py-1.5 text-[11px]",
+          savings > 0.0001 ? "border-success/30 bg-success/[0.05] text-success" : "border-border bg-elevated/30 text-muted-foreground")}>
+          {savings > 0.0001
+            ? <>This cycle Phorvex paid <span className="font-mono">{f(phorvexCost)}</span> vs the blind timer’s <span className="font-mono">{f(blindCost)}</span> — <span className="font-medium">saved {savings.toFixed(4)}</span> by not blindly rotating.</>
+            : <>Both act this cycle (cost <span className="font-mono">{f(phorvexCost)}</span> vs <span className="font-mono">{f(blindCost)}</span>) — but Phorvex’s is value-justified{typeof e.net === "number" ? <> (net +{e.net.toFixed(2)})</> : null}, the blind timer’s is not.</>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // a labeled metric cell in the expanded detail grid.
 function Metric({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
@@ -143,6 +187,9 @@ function DecisionCard({ e }: { e: any }) {
             </div>
           )}
 
+          {/* COST: Phorvex (value-targeted) vs the blind timer (fixed cadence) — the core $ story */}
+          <CostCompare e={e} />
+
           {/* R6 counterfactual — what a static rule engine would (not) have done */}
           {(e.r6Counterfactual || e.counterfactualNote) && (
             <div>
@@ -174,7 +221,7 @@ function DecisionCard({ e }: { e: any }) {
             <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Decision ledger</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {num(e.risk) != null && <Metric label="risk" value={num(e.risk)} />}
-              {num(e.cost) != null && <Metric label="cost" value={`$${num(e.cost, 4)}`} />}
+              {num(e.cost) != null && <Metric label="cost" value={num(e.cost, 4)} />}
               {num(e.net) != null && <Metric label="net value" value={num(e.net)} />}
               {num(e.perDollar) != null && e.perDollar > 0 && <Metric label="per-$ coverage" value={num(e.perDollar)} />}
               {typeof e.coveredFacts === "number" && e.coveredFacts > 0 && <Metric label="covered facts" value={e.coveredFacts} />}
