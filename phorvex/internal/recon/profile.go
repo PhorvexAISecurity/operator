@@ -61,7 +61,19 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	if fctx.HasGPU || fctx.Stateful {
 		sessionW = base * urg
 	}
-	addRotate(FactSession, sessionW)
+	// FALSIFIABILITY-GATE CROSSING (deliberate, opt-in): the KV-cache/session fact is
+	// invalidated by ROTATE and — on an inference workload with a REACHABLE serving
+	// control plane — also by KV-RESET (the in-process prefix/KV flush genuinely evicts
+	// injected session/cache state WITHOUT killing the pod). The gate held these AI
+	// reset actions audit-only "until those actions ship + are validated"; kv-reset is
+	// now validated end-to-end on the real vLLM-shaped control plane, so we let the
+	// engine select the gentler kv-reset over a full rotate on GPU/LLM assets.
+	sessFact := Fact{Asset: asset, Kind: FactSession, Weight: sessionW}
+	facts = append(facts, sessFact)
+	cover[model.ActionRotate] = append(cover[model.ActionRotate], sessFact.Key())
+	if fctx.HasGPU || fctx.Stateful {
+		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
+	}
 
 	// Network facts — invalidated by QUARANTINE.
 	addQuarantine(FactNetworkIdentity, "", base*urg*0.8)
