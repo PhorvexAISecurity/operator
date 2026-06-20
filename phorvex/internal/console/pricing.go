@@ -12,11 +12,13 @@ package console
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -148,6 +150,82 @@ func (s *Server) clusterPricing(ctxName string) ClusterPricing {
 	out.TotalPerYear = out.TotalPerHr * 8760
 	out.Available = len(out.Nodes) > 0
 	return out
+}
+
+// phorvexOperatorCost computes the REAL annual cost of running Phorvex on the cluster — NOT a
+// magic percentage. It finds the live operator pod(s), takes each pod's resource footprint (the
+// larger of its CPU or memory request as a fraction of the node it actually runs on) and prices
+// that fraction at the node's on-demand $/yr. This is literally what the operator reserves on real
+// AWS hardware. Returns (0, "") when no operator pod is found (then the caller shows $0 — honest:
+// nothing extra is running here).
+func (s *Server) phorvexOperatorCost(ctxName string) (costPerYear float64, detail string) {
+	cs, err := clientForContext(ctxName)
+	if err != nil {
+		return 0, ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// the in-cluster operator carries this label; fall back to the controller label.
+	var pods *corev1.PodList
+	for _, sel := range []string{"app.kubernetes.io/name=phorvex", "control-plane=phorvex", "app=phorvex"} {
+		if pl, e := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{LabelSelector: sel}); e == nil && len(pl.Items) > 0 {
+			pods = pl
+			break
+		}
+	}
+	if pods == nil {
+		return 0, ""
+	}
+	nodeCache := map[string]*corev1.Node{}
+	var cpuM, memMi int64
+	instType := ""
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if p.Status.Phase != corev1.PodRunning || p.Spec.NodeName == "" {
+			continue
+		}
+		var cpuReq, memReq int64 // milli-cpu, bytes
+		for _, c := range p.Spec.Containers {
+			if q, ok := c.Resources.Requests[corev1.ResourceCPU]; ok {
+				cpuReq += q.MilliValue()
+			}
+			if q, ok := c.Resources.Requests[corev1.ResourceMemory]; ok {
+				memReq += q.Value()
+			}
+		}
+		node := nodeCache[p.Spec.NodeName]
+		if node == nil {
+			n, e := cs.CoreV1().Nodes().Get(ctx, p.Spec.NodeName, metav1.GetOptions{})
+			if e != nil {
+				continue
+			}
+			node = n
+			nodeCache[p.Spec.NodeName] = n
+		}
+		it := node.Labels["node.kubernetes.io/instance-type"]
+		price, _ := priceForType(it)
+		nodeCPU := node.Status.Capacity.Cpu().MilliValue()
+		nodeMem := node.Status.Capacity.Memory().Value()
+		cpuFrac, memFrac := 0.0, 0.0
+		if nodeCPU > 0 {
+			cpuFrac = float64(cpuReq) / float64(nodeCPU)
+		}
+		if nodeMem > 0 {
+			memFrac = float64(memReq) / float64(nodeMem)
+		}
+		frac := cpuFrac
+		if memFrac > frac {
+			frac = memFrac // the binding dimension — what the operator actually ties up on the node
+		}
+		costPerYear += frac * price * 8760
+		cpuM += cpuReq
+		memMi += memReq >> 20
+		instType = it
+	}
+	if costPerYear > 0 {
+		detail = fmt.Sprintf("Phorvex operator footprint %dm CPU / %dMi on %s", cpuM, memMi, instType)
+	}
+	return costPerYear, detail
 }
 
 // pricing is GET /api/pricing?target=<ctx> — the live cloud-priced infrastructure cost.

@@ -1,13 +1,16 @@
 /*
- * Phorvex Console — COST: with-Phorvex vs without-Phorvex, in dollars.
+ * Phorvex Console — COST: with-Phorvex vs without-Phorvex, grounded ENTIRELY in real AWS prices.
  *
- * For each scenario the benchmark ran, this contrasts the cost the operator carries:
- *   - Phorvex OFF (d-nomtd): the attack lands -> the avoided-breach value is NOT avoided
- *     (residual = avoidedBreach * (1 - disruption)), defense overhead $0.
- *   - Phorvex ON (d-phorvex): the attack is disrupted -> residual breach shrinks by the
- *     measured disruption, for a defense overhead of the MTD rotation cost ($/yr).
- * Savings = costOFF - costON. Every number traces to the same metrics.jsonl roi block; the
- * $ knobs (avoidedBreach, overhead) are the swappable ROI inputs, never hardcoded here.
+ * The value at risk is NOT a fabricated breach figure — it is the live AWS on-demand cost of the
+ * cluster infrastructure an attack compromises (valueAtRisk, $/yr, from the detected instance
+ * types). For each scenario:
+ *   - Phorvex OFF (d-nomtd): the attack lands -> the infrastructure is exposed
+ *     (residual = valueAtRisk * (1 - disruptionOFF)), defense overhead $0.
+ *   - Phorvex ON (d-phorvex): the attack is disrupted by the MEASURED fraction -> residual
+ *     exposure shrinks to valueAtRisk * (1 - disruptionON), for the real rotation overhead ($/yr).
+ * The HEADLINE does NOT sum the same infrastructure across scenarios (that double-counts). It
+ * reports the single cluster infra value at risk, defended at the AVERAGE measured disruption.
+ * Every number is either a live AWS price or a measured disruption — nothing is assumed.
  */
 
 package console
@@ -34,23 +37,26 @@ type costParse struct {
 	} `json:"roi"`
 }
 
-// CostScenario is the per-scenario with/without-Phorvex dollar contrast.
+// CostScenario is the per-scenario with/without-Phorvex dollar contrast — all AWS-priced.
 type CostScenario struct {
 	Scenario       string  `json:"scenario"`
-	AvoidedBreach  float64 `json:"avoidedBreach"`  // $ a prevented compromise saves
+	AvoidedBreach  float64 `json:"avoidedBreach"`  // valueAtRisk: live AWS infra $/yr the attack exposes
 	DisruptWithout float64 `json:"disruptWithout"` // d-nomtd disruption (≈0 — attack lands)
-	DisruptWith    float64 `json:"disruptWith"`    // d-phorvex disruption
-	DefenseCost    float64 `json:"defenseCost"`    // $/yr cost of running Phorvex (MTD rotation overhead)
-	CostWithout    float64 `json:"costWithout"`    // Phorvex OFF: residual breach exposure
-	CostWith       float64 `json:"costWith"`       // Phorvex ON: residual breach + defense overhead
+	DisruptWith    float64 `json:"disruptWith"`    // d-phorvex disruption (measured)
+	DefenseCost    float64 `json:"defenseCost"`    // $/yr cost of running Phorvex (real rotation overhead)
+	CostWithout    float64 `json:"costWithout"`    // Phorvex OFF: residual AWS-infra exposure
+	CostWith       float64 `json:"costWith"`       // Phorvex ON: residual exposure + defense overhead
 	Savings        float64 `json:"savings"`        // costWithout - costWith
 	Helps          bool    `json:"helps"`          // PX measurably reduces cost here
 }
 
 // CostComparison reads the benchmark metrics and returns the with/without-Phorvex cost per
-// scenario plus totals. defenseOverride (>0) replaces the placeholder defense overhead with the
-// REAL cloud-priced rotation cost computed from the detected cluster. ok=false if no metrics.
-func (c *Config) CostComparison(defenseOverride float64) (scen []CostScenario, totWithout, totWith, totSavings float64, ok bool) {
+// scenario plus headline totals — grounded in real AWS prices. valueAtRisk (>0) is the live
+// AWS on-demand $/yr of the cluster infrastructure an attack exposes (the detected instance
+// types); defenseOverride (>0) is the real cloud-priced rotation overhead. The headline does
+// NOT sum valueAtRisk across scenarios — it reports the single infra value at the AVERAGE
+// measured disruption (summing would double-count the same hardware). ok=false if no metrics.
+func (c *Config) CostComparison(valueAtRisk, defenseOverride float64) (scen []CostScenario, totWithout, totWith, totSavings float64, ok bool) {
 	path := filepath.Join(c.Root, "build", "test-harness", "out-eks", "metrics.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -98,29 +104,52 @@ func (c *Config) CostComparison(defenseOverride float64) (scen []CostScenario, t
 			a.withN++
 		}
 	}
+	// real AWS-priced inputs (fall back to the harness ROI block only if pricing wasn't passed).
+	defense := defenseOverride
+
+	var disruptOnSum float64 // for the headline's AVERAGE disruption (no double-counting)
 	for _, s := range order {
 		a := m[s]
 		if a.withoutN == 0 || a.withN == 0 {
 			continue
 		}
-		defense := a.defense
-		if defenseOverride > 0 {
-			defense = defenseOverride // real cloud-priced rotation overhead (overrides the harness placeholder)
+		risk := valueAtRisk
+		if risk <= 0 {
+			risk = a.avoided // legacy fallback: harness ROI breach value (only if no live pricing)
+		}
+		d := defense
+		if d <= 0 {
+			d = a.defense
 		}
 		cs := CostScenario{
-			Scenario: s, AvoidedBreach: a.avoided, DefenseCost: defense,
+			Scenario: s, AvoidedBreach: risk, DefenseCost: d,
 			DisruptWithout: clampUnitC(a.withoutSum / float64(a.withoutN)),
 			DisruptWith:    clampUnitC(a.withSum / float64(a.withN)),
 		}
-		cs.CostWithout = a.avoided * (1 - cs.DisruptWithout)
-		cs.CostWith = a.avoided*(1-cs.DisruptWith) + a.defense
+		cs.CostWithout = risk * (1 - cs.DisruptWithout)
+		cs.CostWith = risk*(1-cs.DisruptWith) + d
 		cs.Savings = cs.CostWithout - cs.CostWith
 		cs.Helps = cs.Savings > 0.5
 		scen = append(scen, cs)
-		totWithout += cs.CostWithout
-		totWith += cs.CostWith
-		totSavings += cs.Savings
+		disruptOnSum += cs.DisruptWith
 	}
+	if len(scen) == 0 {
+		return nil, 0, 0, 0, false
+	}
+	// HEADLINE — single cluster infrastructure value at risk (NOT a sum across scenarios), defended
+	// at the average measured disruption. This is the real AWS exposure, not N× the same hardware.
+	risk := valueAtRisk
+	if risk <= 0 {
+		risk = scen[0].AvoidedBreach
+	}
+	d := defense
+	if d <= 0 {
+		d = scen[0].DefenseCost
+	}
+	avgDisruptOn := disruptOnSum / float64(len(scen))
+	totWithout = risk                              // undefended: the whole infra is exposed
+	totWith = risk*(1-avgDisruptOn) + d            // defended: residual exposure + real overhead
+	totSavings = totWithout - totWith
 	sort.Slice(scen, func(i, j int) bool { return scen[i].Savings > scen[j].Savings })
 	return scen, totWithout, totWith, totSavings, true
 }

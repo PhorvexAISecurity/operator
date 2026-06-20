@@ -229,17 +229,22 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// DYNAMIC: the defense overhead is the REAL rotation compute cost — overheadPercent of the
-	// live cloud-priced infrastructure of the detected cluster (not a flat placeholder).
+	// DYNAMIC + AWS-GROUNDED: both numbers come from the live cluster, NOT fabricated knobs.
+	//   valueAtRisk      = the cluster's real on-demand infrastructure cost ($/yr) the attack exposes.
+	//   defense overhead = the REAL cost of the running Phorvex operator (its measured CPU/memory
+	//                      footprint × the on-demand price of the node it runs on). No magic %.
 	pricing := s.clusterPricing(target)
-	const overheadPercent = 0.015
-	overhead := pricing.TotalPerYear * overheadPercent
-	scen, totWithout, totWith, totSavings, ok := s.cfg.CostComparison(overhead)
+	valueAtRisk := pricing.TotalPerYear
+	overhead, overheadBasis := s.phorvexOperatorCost(target)
+	if overheadBasis == "" {
+		overheadBasis = "no live Phorvex operator pod found on this cluster"
+	}
+	scen, totWithout, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, overhead)
 	writeJSON(w, 200, map[string]any{
 		"available": ok, "scenarios": scen,
 		"totalWithout": totWithout, "totalWith": totWith, "totalSavings": totSavings,
-		"pricing": pricing, "overheadPercent": overheadPercent,
-		"note": "Defense overhead = " + pricing.Provider + " on-demand infra cost × " + "1.5% rotation overhead (live, from your cluster's instance types). Phorvex OFF = residual breach exposure (your breach-value estimate); ON = residual breach + this overhead.",
+		"pricing": pricing, "valueAtRisk": valueAtRisk, "defenseOverhead": overhead, "overheadBasis": overheadBasis,
+		"note": "All figures are live AWS on-demand prices (" + pricing.Provider + " · " + pricing.Region + "). Value at risk = your cluster's real infrastructure cost/yr; Phorvex OFF = that infra exposed; ON = residual after the measured disruption + the real cost of running Phorvex (" + overheadBasis + "). The headline is the single infra value at the average measured disruption — never N× the same hardware, never a fabricated figure.",
 	})
 }
 

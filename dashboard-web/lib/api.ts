@@ -197,7 +197,7 @@ export interface ReportMeta { id: string; title: string; group: string; exists: 
 export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptWith: number; defenseCost: number; costWithout: number; costWith: number; savings: number; helps: boolean }
 export interface NodePrice { instanceType: string; count: number; gpu: boolean; pricePerHr: number; estimated: boolean }
 export interface ClusterPricing { provider: string; region: string; nodes: NodePrice[]; totalPerHr: number; totalPerYear: number; gpuPricePerHr: number; gpuCount: number; source: string; available: boolean }
-export interface CostResult { available: boolean; scenarios: CostScenario[]; totalWithout: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; overheadPercent?: number; note: string }
+export interface CostResult { available: boolean; scenarios: CostScenario[]; totalWithout: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; valueAtRisk?: number; defenseOverhead?: number; overheadBasis?: string; note: string }
 export interface CostTimePoint { time: string; unixMillis: number; phorvexCost: number; blindCost: number; savings: number; decisions: number }
 export interface CostTimeseries { available: boolean; points: CostTimePoint[]; totalPhorvex: number; totalBlind: number; totalSavings: number; decisions: number; note: string }
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
