@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # ── Cluster / region ─────────────────────────────────────────────────────────
-export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_REGION="${AWS_REGION:-us-east-2}"
 export CLUSTER_NAME="${CLUSTER_NAME:-phorvex}"
 export K8S_NAMESPACE="${K8S_NAMESPACE:-phorvex-system}"
 export HELM_RELEASE="${HELM_RELEASE:-phorvex}"

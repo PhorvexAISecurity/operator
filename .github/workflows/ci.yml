@@ -1,0 +1,209 @@
+name: CI — Build & Push to ECR
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+# Required for GitHub OIDC token so aws-actions can assume the IAM role
+# without any long-lived credentials stored as secrets.
+permissions:
+  id-token:  write   # request OIDC JWT
+  contents:  read    # checkout
+
+env:
+  AWS_REGION: us-east-2
+
+# ── Required GitHub secret ────────────────────────────────────────────────────
+# AWS_ROLE_ARN  — ARN of the IAM role GitHub Actions will assume via OIDC.
+#                 Example: arn:aws:iam::753556437180:role/github-actions-phorvex
+#
+# One-time AWS setup (see deploy/eks/iam-oidc-setup.sh for the exact commands):
+#   1. Create the GitHub OIDC identity provider in IAM (once per account).
+#   2. Create the role with the trust policy in deploy/eks/iam-oidc-trust.json.
+#   3. Attach the ECR permissions policy (deploy/eks/iam-ecr-policy.json).
+#   4. Add the role ARN as the AWS_ROLE_ARN secret in this repo.
+#
+# Optional repository variable:
+#   BUILD_PHOENIX = true   — enable the extended Phoenix operator build job.
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ── 1. Detect which parts of the monorepo changed ──────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      operator: ${{ steps.filter.outputs.operator }}
+      console:  ${{ steps.filter.outputs.console }}
+      phoenix:  ${{ steps.filter.outputs.phoenix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            operator:
+              - 'phorvex/**'
+              - 'build/phoenix-extended/**'
+              - 'deploy/docker/operator.Dockerfile'
+            console:
+              - 'dashboard-web/**'
+              - 'phorvex/**'
+              - 'build/phoenix-extended/**'
+              - 'deploy/docker/console.Dockerfile'
+            phoenix:
+              - 'build/phoenix-extended/**'
+
+  # ── 2. Phorvex operator ────────────────────────────────────────────────────
+  build-operator:
+    needs: changes
+    # Always build on version tags so ECR has a clean semver image on every release.
+    if: needs.changes.outputs.operator == 'true' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/phorvex
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Ensure ECR repo
+        run: |
+          aws ecr describe-repositories --repository-names phorvex \
+            >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name phorvex \
+            --image-scanning-configuration scanOnPush=true >/dev/null
+
+      - uses: docker/build-push-action@v6
+        with:
+          context:    .
+          file:       deploy/docker/operator.Dockerfile
+          platforms:  linux/amd64
+          push:       ${{ github.event_name != 'pull_request' }}
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ── 3. Phorvex console (Next.js + Go backend) ─────────────────────────────
+  build-console:
+    needs: changes
+    if: needs.changes.outputs.console == 'true' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/phorvex-console
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Ensure ECR repo
+        run: |
+          aws ecr describe-repositories --repository-names phorvex-console \
+            >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name phorvex-console \
+            --image-scanning-configuration scanOnPush=true >/dev/null
+
+      - uses: docker/build-push-action@v6
+        with:
+          context:    .
+          file:       deploy/docker/console.Dockerfile
+          platforms:  linux/amd64
+          push:       ${{ github.event_name != 'pull_request' }}
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ── 4. Extended Phoenix operator (optional — BUILD_PHOENIX gate) ───────────
+  build-phoenix:
+    needs: changes
+    if: needs.changes.outputs.phoenix == 'true' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      BUILD_PHOENIX: ${{ vars.BUILD_PHOENIX || 'false' }}
+    steps:
+      - name: Skip if BUILD_PHOENIX != true
+        if: env.BUILD_PHOENIX != 'true'
+        run: |
+          echo "BUILD_PHOENIX is not 'true' — skipping extended Phoenix build."
+          echo "Set the BUILD_PHOENIX repository variable to 'true' to enable."
+
+      - uses: actions/checkout@v4
+        if: env.BUILD_PHOENIX == 'true'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: env.BUILD_PHOENIX == 'true'
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        if: env.BUILD_PHOENIX == 'true'
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+        if: env.BUILD_PHOENIX == 'true'
+
+      - uses: docker/metadata-action@v5
+        if: env.BUILD_PHOENIX == 'true'
+        id: meta
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/phoenix-amtd-operator
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Ensure ECR repo
+        if: env.BUILD_PHOENIX == 'true'
+        run: |
+          aws ecr describe-repositories --repository-names phoenix-amtd-operator \
+            >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name phoenix-amtd-operator \
+            --image-scanning-configuration scanOnPush=true >/dev/null
+
+      - uses: docker/build-push-action@v6
+        if: env.BUILD_PHOENIX == 'true'
+        with:
+          context:    build/phoenix-extended
+          file:       build/phoenix-extended/Dockerfile
+          platforms:  linux/amd64
+          push:       ${{ github.event_name != 'pull_request' }}
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
