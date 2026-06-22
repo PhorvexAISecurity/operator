@@ -175,7 +175,7 @@ export interface PodRisk { namespace: string; pod: string; risk: number; blast: 
 export interface MetricsResult { available: boolean; source: string; pods: PodRisk[]; note: string }
 export interface RegistryView { names: string[]; generatable: string[]; missing: string[]; orphans: string[]; count: number; generatables: number; complete: boolean }
 export interface AblationResult { ratio: number; p1PerDollar: number; randomPerDollar: number; ran: boolean; note: string; raw: string }
-export interface PhysWitness { pod: string; imageRarity: number; coResidency: number; slack: number; pdbMinAvail: number; migValid: boolean; epss: number; gpuPresent: boolean; vramFraction: number; smOccupancy: number; linkBandwidth: number }
+export interface PhysWitness { pod: string; imageRarity: number; coResidency: number; slack: number; pdbMinAvail: number; migValid: boolean; epss: number; stateful: boolean; gpuPresent: boolean; vramFraction: number; smOccupancy: number; linkBandwidth: number }
 export interface KillchainRow { pod: string; stage: string; ai: boolean; pHold: number; preemptMargin: number; projNextStageSec: number; infectionFrontier: number }
 export interface GraphNode { key: string; blast: number; ai: boolean }
 export interface GraphEdge { src: string; dst: string }
@@ -207,8 +207,10 @@ export interface RunEvidence { id: string; scenario: string; date: string; finis
 // liveStream opens the SSE decision stream (per-lens projected server-side). Returns a
 // cleanup fn. Each message is the per-lens payload (full Record for investor/operator;
 // OwnerEvent for owner).
-export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: string): () => void {
-  const es = new EventSource(`${API_BASE}/api/live?lens=${lens}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}`);
+export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: string, tail = 80): () => void {
+  // tail=N: replay only the last N decisions on connect (avoids the "fast train" flood after the
+  // operator has run for hours), then tail live. tail=0 replays the whole audit (opt-in).
+  const es = new EventSource(`${API_BASE}/api/live?lens=${lens}&tail=${tail}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}`);
   // NOTE: EventSource cannot send headers; the lens is passed as a query param the backend
   // also honors. (Demo-trust; real authn is [PENDING-P-VCLUSTER].)
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };

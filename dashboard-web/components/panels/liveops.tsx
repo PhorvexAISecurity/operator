@@ -6,7 +6,10 @@ import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { Pending } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
-import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff } from "lucide-react";
+import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
+
+const PAGE_SIZE = 15;       // decisions per page
+const BUFFER_CAP = 400;     // how many recent decisions we keep client-side for paging/filtering
 
 // format the decision timestamp as a readable local date + time.
 function fmtTime(t?: string): { date: string; time: string } {
@@ -24,6 +27,9 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [connected, setConnected] = React.useState(false);
   const [clearing, setClearing] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [actionFilter, setActionFilter] = React.useState("");  // "" = all actuator types
+  const [query, setQuery] = React.useState("");                // pod / namespace text search
+  const [page, setPage] = React.useState(0);                   // 0-indexed page (0 = newest/live)
   const owner = lens === "owner";
   const { tenant, tenants, setTenant } = useOwnerTenant(lens);
 
@@ -31,30 +37,52 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     // owner stream is tenant-scoped: wait for a tenant before opening the SSE.
     if (owner && !tenant) { setEvents([]); setConnected(false); return; }
     setEvents([]); setConnected(true);
-    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, 60)), owner ? tenant : undefined);
+    // tail=80: the server replays only the last 80 decisions on connect (no "fast train" flood
+    // after hours of running), then tails live; we keep up to BUFFER_CAP client-side for paging.
+    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, BUFFER_CAP)), owner ? tenant : undefined, 80);
     return () => { stop(); setConnected(false); };
   }, [lens, owner, tenant, reloadKey]);
 
-  // clear the persisted decision audit, then reconnect the SSE so the server restarts at offset 0.
+  // clear the persisted decision audit, then reconnect the SSE so the server restarts fresh.
   async function clearDecisions() {
     setClearing(true);
     try { await api.clearLive(lens); } catch { /* ignore — best-effort */ }
-    setEvents([]);
+    setEvents([]); setPage(0);
     setReloadKey((k) => k + 1); // forces the SSE to close + reopen with a fresh offset
     setClearing(false);
   }
 
   const actuated = events.filter((e) => e.actuated || e.Actuated).length;
+  // distinct actuator types present in the buffer (for the filter dropdown).
+  const actions = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const e of events) if (e.action) s.add(e.action);
+    return Array.from(s).sort();
+  }, [events]);
+
+  // filter by actuator type + free-text (pod / namespace / tenant).
+  const q = query.trim().toLowerCase();
+  const filtered = React.useMemo(() => events.filter((e) => {
+    if (actionFilter && e.action !== actionFilter) return false;
+    if (q && !`${e.namespace || ""}/${e.pod || ""} ${e.tenant || ""}`.toLowerCase().includes(q)) return false;
+    return true;
+  }), [events, actionFilter, q]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, pageCount - 1);
+  const pageEvents = filtered.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
+  // reset to the first (live) page whenever the filter/search/lens changes.
+  React.useEffect(() => { setPage(0); }, [actionFilter, query, lens, tenant]);
 
   return (
     <div className="animate-fade-up space-y-6">
-      <PageHead title="Live Operations" sub="Phorvex deciding in real time — streamed from the decision audit. Investor/Operator see the full per-decision internals; the Customer-Owner stream is projected through the IP-wall (outcome only). Click any decision to see its date + full reasoning." />
+      <PageHead title="Live Operations" sub="Phorvex deciding in real time — streamed from the decision audit. Investor/Operator see the full per-decision internals; the Customer-Owner stream is projected through the IP-wall (outcome only). Click any decision to see its date + full reasoning. Filter by actuator, search by pod, and page through the history." />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 rounded-md border border-border bg-panel/60 px-3 py-1.5 text-[12px]">
           <Radio className={cn("h-3.5 w-3.5", connected ? "animate-pulse-soft text-success" : "text-muted-foreground")} />
           <span className={connected ? "text-foreground" : "text-muted-foreground"}>{connected ? "Streaming /api/live (SSE)" : "Disconnected"}</span>
         </div>
-        <div className="text-[12px] text-muted-foreground">{events.length} decisions · {actuated} actuated</div>
+        <div className="text-[12px] text-muted-foreground">{events.length} buffered · {actuated} actuated</div>
         {owner && tenants.length > 0 && (
           <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             platform:
@@ -64,7 +92,6 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
           </label>
         )}
         {owner && <div className="flex items-center gap-1.5 text-[11px] text-primary"><Lock className="h-3 w-3" /> IP-walled stream (outcome only)</div>}
-        {/* clearing the audit is an operator write — hidden from the owner lens */}
         {!owner && (
           <Button variant="outline" size="sm" onClick={clearDecisions} disabled={clearing || events.length === 0} className="ml-auto gap-1.5">
             <Trash2 className="h-3.5 w-3.5" /> {clearing ? "Clearing…" : "Clear decisions"}
@@ -72,20 +99,72 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
         )}
       </div>
 
+      {/* FILTER BAR — by actuator type + free-text pod/namespace search */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
+          <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground">actuator</span>
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[12px] text-foreground">
+            <option value="">all</option>
+            {actions.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5">
+          <Search className="h-3.5 w-3.5 text-muted-foreground" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="search pod / namespace / tenant…"
+            className="w-56 bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none" />
+          {query && <button onClick={() => setQuery("")} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>}
+        </div>
+        {/* quick actuator chips */}
+        <div className="flex flex-wrap items-center gap-1">
+          {actions.slice(0, 6).map((a) => (
+            <button key={a} onClick={() => setActionFilter(actionFilter === a ? "" : a)}
+              className={cn("rounded-full border px-2 py-0.5 font-mono text-[11px] transition-colors",
+                actionFilter === a ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
+              {a}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto text-[12px] text-muted-foreground">{filtered.length} match{filtered.length === 1 ? "" : "es"}</div>
+      </div>
+
       {events.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
           <Activity className="h-5 w-5 animate-pulse-soft" />
           No live decisions yet. Start the Phorvex operator with <span className="font-mono text-foreground/80">--audit-json</span> and apply a <span className="font-mono text-foreground/80">PhorvexPolicy</span> selecting some pods — decisions appear here as they happen.
-          <Pending stage="REAL-NOW" msg="The stream is connected; it replays the latest audit trail + tails new decisions." />
+          <Pending stage="REAL-NOW" msg="The stream is connected; it replays the latest 80 decisions + tails new ones." />
         </CardContent></Card>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No decisions match the current filter. <button onClick={() => { setActionFilter(""); setQuery(""); }} className="text-primary hover:underline">reset</button></CardContent></Card>
       ) : (
-        <section>
-          <SectionLabel>Decision stream {owner ? "(owner projection)" : "(full internals)"}</SectionLabel>
-          <div className="space-y-2">
-            {events.map((e, i) => owner ? <OwnerCard key={i} e={e} /> : <DecisionCard key={i} e={e} />)}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Decision stream {owner ? "(owner projection)" : "(full internals)"}{pageSafe === 0 ? <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-normal text-success"><span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> live</span> : <span className="ml-2 text-[10px] font-normal text-muted-foreground">history · page {pageSafe + 1}</span>}</SectionLabel>
+            <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
           </div>
+          <div className="space-y-2">
+            {pageEvents.map((e, i) => owner ? <OwnerCard key={`${pageSafe}-${i}`} e={e} /> : <DecisionCard key={`${pageSafe}-${i}`} e={e} />)}
+          </div>
+          {pageCount > 1 && (
+            <div className="flex justify-center pt-1"><Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} /></div>
+          )}
         </section>
       )}
+    </div>
+  );
+}
+
+// Pagination — Prev / page-of / Next. Page 0 is the newest (live) page.
+function Pagination({ page, pageCount, onPage }: { page: number; pageCount: number; onPage: (p: number) => void }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[12px]">
+      <Button variant="outline" size="sm" className="h-7 px-2" disabled={page <= 0} onClick={() => onPage(Math.max(0, page - 1))} aria-label="newer">
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </Button>
+      <span className="tabular text-muted-foreground">{page + 1} / {pageCount}</span>
+      <Button variant="outline" size="sm" className="h-7 px-2" disabled={page >= pageCount - 1} onClick={() => onPage(Math.min(pageCount - 1, page + 1))} aria-label="older">
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

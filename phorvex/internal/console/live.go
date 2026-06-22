@@ -13,9 +13,12 @@ package console
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
@@ -64,7 +67,20 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(": connected\n\n"))
 	flusher.Flush()
 
-	var offset int64
+	// TAIL-ONLY initial replay: after the operator has run for hours the audit can hold tens of
+	// thousands of records — replaying ALL of them on connect floods the page ("fast train").
+	// Instead we replay only the last ?tail=N decisions (default 80), then tail live. tail=0 or
+	// tail=all replays everything (opt-in).
+	tail := 80
+	if v := r.URL.Query().Get("tail"); v != "" {
+		if v == "all" || v == "0" {
+			tail = 0
+		} else if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			tail = n
+		}
+	}
+	offset := tailReplay(path, tail, emit) // emits the last N decisions, returns the EOF offset
+
 	ctx := r.Context()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -76,6 +92,61 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 		}
 	}
+}
+
+// tailReplay emits only the last n phorvex.decision records from the audit and returns the byte
+// offset at end-of-file so the caller can tail from there. It reads ONLY the tail chunk of the
+// file (not the whole thing) — on a multi-hundred-MB audit this is the difference between an
+// instant page load and a multi-second flood. n<=0 replays everything (opt-in, slow path).
+func tailReplay(path string, n int, emit func(audit.Record)) int64 {
+	if path == "" {
+		return 0
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return 0
+	}
+	size := st.Size()
+	if n <= 0 {
+		return streamNew(path, 0, emit) // opt-in: replay the entire audit
+	}
+	// read a tail window large enough to hold ~n records (records are ~1-2KB; budget 4KB each + margin).
+	chunk := int64(n)*4096 + 65536
+	if chunk > size {
+		chunk = size
+	}
+	buf := make([]byte, chunk)
+	start := size - chunk
+	if _, err := f.ReadAt(buf, start); err != nil && err != io.EOF {
+		return size
+	}
+	lines := bytes.Split(buf, []byte("\n"))
+	if start > 0 && len(lines) > 0 {
+		lines = lines[1:] // we started mid-file: the first line is partial — drop it
+	}
+	var recs []audit.Record
+	for _, ln := range lines {
+		ln = bytes.TrimSpace(ln)
+		if len(ln) == 0 {
+			continue
+		}
+		var rec audit.Record
+		if json.Unmarshal(ln, &rec) == nil && rec.Kind == "phorvex.decision" {
+			recs = append(recs, rec)
+		}
+	}
+	if len(recs) > n {
+		recs = recs[len(recs)-n:]
+	}
+	for i := range recs {
+		emit(recs[i])
+	}
+	return size
 }
 
 // liveClear truncates the live decision-audit JSONL (operator-only). The SSE replays this

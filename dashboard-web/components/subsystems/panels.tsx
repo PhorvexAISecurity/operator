@@ -45,7 +45,7 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
       {witness.length === 0 ? <Empty msg={`No pods discovered in ${scope}. Start Phorvex (Protect) or run a scenario, or check the cluster context.`} /> : (
         <Card><CardContent className="p-0">
           <Table>
-            <THead><TH>Pod</TH><TH>Image-rarity</TH><TH>Co-residency</TH><TH>Sched-slack</TH><TH>EPSS</TH><TH>MIG</TH><TH>GPU VRAM</TH><TH>GPU SM</TH></THead>
+            <THead><TH>Pod</TH><TH>Image-rarity</TH><TH>Co-residency</TH><TH>Sched-slack</TH><TH>EPSS</TH><TH>Stateful</TH><TH>MIG</TH><TH>GPU VRAM</TH><TH>GPU SM</TH></THead>
             <tbody>{witness.map((w) => (
               <TR key={w.pod}>
                 <TD className="font-mono text-[12px]">{w.pod}</TD>
@@ -53,6 +53,7 @@ export function PhysicsPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: strin
                 <TD className="tabular"><Bar v={(w.coResidency - 1)} max={1} tone="warning" label={w.coResidency.toFixed(2)} /></TD>
                 <TD className="tabular">{w.slack.toFixed(2)}</TD>
                 <TD className="tabular">{w.epss.toFixed(2)}</TD>
+                <TD>{w.stateful ? <span className="inline-flex items-center gap-1 rounded border border-warning/40 bg-warning/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-warning" title="StatefulSet/Job-owned or PVC-backed — rotate is auto-vetoed (statefulIntegrity); Phorvex quarantines to preserve state">stateful</span> : <span className="text-muted-foreground/40">—</span>}</TD>
                 <TD>{w.migValid ? <Check className="h-3.5 w-3.5 text-success" /> : <X className="h-3.5 w-3.5 text-muted-foreground" />}</TD>
                 <TD className="tabular">{w.gpuPresent ? <Bar v={w.vramFraction} max={1} tone="accent" label={`${Math.round(w.vramFraction * 100)}%`} /> : <span className="text-muted-foreground/40">—</span>}</TD>
                 <TD className="tabular">{w.gpuPresent ? <Bar v={w.smOccupancy} max={1} tone="accent" label={`${Math.round(w.smOccupancy * 100)}%`} /> : <span className="text-muted-foreground/40">—</span>}</TD>

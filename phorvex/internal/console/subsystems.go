@@ -40,6 +40,7 @@ type PhysWitness struct {
 	PDBMin       int     `json:"pdbMinAvail"`
 	MIGValid     bool    `json:"migValid"`
 	EPSS         float64 `json:"epss"`
+	Stateful     bool    `json:"stateful"` // StatefulSet/Job-owned or PVC-backed — rotate is auto-vetoed, quarantine preserves state
 	GPU          bool    `json:"gpuPresent"`
 	VRAMFraction float64 `json:"vramFraction"` // live DCGM GPU half (0 when GPUPresent=false)
 	SMOccupancy  float64 `json:"smOccupancy"`
@@ -87,7 +88,7 @@ type GraphEdge struct {
 }
 
 var (
-	reWitness   = regexp.MustCompile(`^\s*(\S+/\S+)\s+K8s:\s+imgRarity=([\d.]+)\s+coRes=([\d.]+)\s+slack=([\d.]+)\s+pdbMinAvail=(-?\d+)\s+migValid=(\w+)\s+epss=([\d.]+)`)
+	reWitness   = regexp.MustCompile(`^\s*(\S+/\S+)\s+K8s:\s+imgRarity=([\d.]+)\s+coRes=([\d.]+)\s+slack=([\d.]+)\s+pdbMinAvail=(-?\d+)\s+migValid=(\w+)\s+epss=([\d.]+)(?:\s+stateful=(\w+))?`)
 	reKill      = regexp.MustCompile(`^\s*(\S+/\S+)\s+stage=(\S+)\s+\[([^\]]+)\]\s+PHold=([\d.]+)\s+PreemptMargin=([\d.]+)\s+ProjNextStage=([\d.]+)s\s+infectionFrontier=([\d.]+)`)
 	reNode      = regexp.MustCompile(`^\s*NODE\s+(\S+/\S+)\s+blast=([\d.]+)\s+ai=([01])`)
 	reEdge      = regexp.MustCompile(`^\s*EDGE\s+(\S+/\S+)\s+->\s+(\S+/\S+)`)
@@ -124,6 +125,9 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	for _, ln := range strings.Split(raw, "\n") {
 		if m := reWitness.FindStringSubmatch(ln); m != nil {
 			pw := PhysWitness{Pod: m[1], ImageRare: atof(m[2]), CoRes: atof(m[3]), Slack: atof(m[4]), PDBMin: int(atof(m[5])), MIGValid: m[6] == "true", EPSS: atof(m[7])}
+			if len(m) > 8 && m[8] != "" {
+				pw.Stateful = m[8] == "true" // StatefulSet/Job/PVC-backed — the stateful-safe physics signal
+			}
 			// the same scan line carries the GPU half when a DCGM feed answered for this pod.
 			if a := reAI.FindStringSubmatch(ln); a != nil {
 				pw.GPU, pw.VRAMFraction, pw.SMOccupancy, pw.LinkBW = true, atof(a[1]), atof(a[2]), atof(a[3])
