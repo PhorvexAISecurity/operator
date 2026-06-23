@@ -126,33 +126,41 @@ export function CostPanel({ lens }: { lens: Lens }) {
               </tbody>
             </table>
           </div>
-          <div className="text-[11px] text-muted-foreground">
-            <span className="text-foreground">Phorvex defense overhead</span> = <span className="font-medium text-primary">{usd(d.defenseOverhead || 0)}/yr</span> — measured directly: {d.overheadBasis || "the operator's CPU/memory footprint"}, priced at that node's on-demand rate. This is the operator's actual resource cost on your cluster (no assumed % — it's what Phorvex really reserves on real hardware). {d.pricing.source}.
+          <div className="space-y-1 text-[11px] text-muted-foreground">
+            <div><span className="text-foreground">Phorvex defense cost</span> = <span className="font-medium text-primary">{usd(d.defenseOverhead || 0)}/yr</span> — two REAL, measured parts (no assumed %):</div>
+            <div className="pl-3">• <span className="text-foreground">operator footprint</span> {usd(d.operatorCost || 0)}/yr — {d.overheadBasis || "the operator pod's CPU/memory"} × node rate (always-on).</div>
+            <div className="pl-3">• <span className="text-foreground">actuation compute</span> {usd(d.actuationCost || 0)}/yr — {(d.actuationRatePerHr || 0) > 0 ? `${Math.round(d.actuationRatePerHr || 0)} actions/hr (measured from the live audit)` : "live actuation rate"} × {((d.perActionCost || 0) * 1e6).toFixed(1)}µ$/action (measured ~0.53s re-encode at the node rate). This is what Phorvex's RESPONSES actually cost — the part the bare operator-pod figure omits.</div>
           </div>
         </CardContent></Card>
       )}
 
       {/* per-scenario */}
       <Card><CardContent className="p-0">
-        <div className="px-4 pt-4"><SectionLabel>Per scenario</SectionLabel></div>
+        <div className="px-4 pt-4"><SectionLabel>Cost per attack — without vs with Phorvex</SectionLabel>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">For each attack: the AWS cost it imposes if it lands (without Phorvex) vs the cost of handling it with Phorvex (residual exposure + defense). “Response” = how many actions Phorvex took, and what that response costs.</div>
+        </div>
         <div className="overflow-x-auto p-3">
           <table className="w-full text-[12px]">
             <thead><tr className="text-left text-muted-foreground">
-              <th className="px-2 py-1.5">Scenario</th>
-              <th className="px-2 py-1.5">Phorvex OFF</th>
-              <th className="px-2 py-1.5">Phorvex ON</th>
+              <th className="px-2 py-1.5">Attack</th>
+              <th className="px-2 py-1.5">Without Phorvex</th>
+              <th className="px-2 py-1.5">With Phorvex</th>
               <th className="px-2 py-1.5">Disruption</th>
-              <th className="px-2 py-1.5 text-right">Saving</th>
+              <th className="px-2 py-1.5">Response</th>
+              <th className="px-2 py-1.5 text-right">Burden saved</th>
             </tr></thead>
             <tbody>
               {d.scenarios.map((s) => (
                 <tr key={s.scenario} className="border-t border-border/40">
                   <td className="px-2 py-2 font-mono text-foreground/90">{s.scenario}</td>
-                  <td className="px-2 py-2 tabular text-danger">{usd(s.costWithout)}</td>
-                  <td className="px-2 py-2 tabular text-primary">{usd(s.costWith)} <span className="text-muted-foreground/60">({usd(s.defenseCost)}/yr)</span></td>
+                  <td className="px-2 py-2 tabular text-danger">{usd(s.costWithout)}/yr</td>
+                  <td className="px-2 py-2 tabular text-primary">{usd(s.costWith)}/yr</td>
                   <td className="px-2 py-2 tabular text-muted-foreground">{Math.round(s.disruptWith * 100)}%</td>
+                  <td className="px-2 py-2 tabular text-muted-foreground" title="actions Phorvex took to handle this attack × per-action AWS compute">
+                    {s.defensiveActions > 0 ? <>{s.defensiveActions.toFixed(1)} act <span className="text-muted-foreground/60">({s.responseCost < 0.01 ? "<$0.01" : usd(s.responseCost)})</span></> : <span className="text-muted-foreground/40">—</span>}
+                  </td>
                   <td className="px-2 py-2 text-right tabular">
-                    {s.helps ? <span className="text-success font-medium">{usd(s.savings)}</span> : <Badge variant="pending">no help</Badge>}
+                    {s.helps ? <span className="text-success font-medium">{usd(s.savings)}/yr</span> : <Badge variant="pending">no help</Badge>}
                   </td>
                 </tr>
               ))}

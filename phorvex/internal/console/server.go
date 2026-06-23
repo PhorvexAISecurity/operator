@@ -235,16 +235,29 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 	//                      footprint × the on-demand price of the node it runs on). No magic %.
 	pricing := s.clusterPricing(target)
 	valueAtRisk := pricing.TotalPerYear
-	overhead, overheadBasis := s.phorvexOperatorCost(target)
+	// (a) operator footprint — what the Phorvex operator POD reserves on real AWS hardware (always-on).
+	operatorCost, overheadBasis := s.phorvexOperatorCost(target)
 	if overheadBasis == "" {
 		overheadBasis = "no live Phorvex operator pod found on this cluster"
 	}
-	scen, totWithout, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, overhead)
+	// (b) actuation compute — what Phorvex's RESPONSES cost: each action ≈ perActionSeconds of
+	// compute (MEASURED kv-reset re-encode) at the workload node rate; × the live measured actuation
+	// rate from the audit = the real annual "doing the work" cost the operator-pod figure omits.
+	nodeRate := pricing.GPUPricePerHr
+	if nodeRate <= 0 {
+		nodeRate = pricing.TotalPerHr // no GPU → use the cluster's blended node rate
+	}
+	perActionCost := perActionSeconds / 3600.0 * nodeRate
+	actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost)
+	defenseCost := operatorCost + actuationCost
+	scen, totWithout, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost)
 	writeJSON(w, 200, map[string]any{
 		"available": ok, "scenarios": scen,
 		"totalWithout": totWithout, "totalWith": totWith, "totalSavings": totSavings,
-		"pricing": pricing, "valueAtRisk": valueAtRisk, "defenseOverhead": overhead, "overheadBasis": overheadBasis,
-		"note": "All figures are live AWS on-demand prices (" + pricing.Provider + " · " + pricing.Region + "). Value at risk = your cluster's real infrastructure cost/yr; Phorvex OFF = that infra exposed; ON = residual after the measured disruption + the real cost of running Phorvex (" + overheadBasis + "). The headline is the single infra value at the average measured disruption — never N× the same hardware, never a fabricated figure.",
+		"pricing": pricing, "valueAtRisk": valueAtRisk,
+		"defenseOverhead": defenseCost, "operatorCost": operatorCost, "actuationCost": actuationCost,
+		"actuationRatePerHr": actuationRatePerHr, "perActionCost": perActionCost, "overheadBasis": overheadBasis,
+		"note": "All figures are live AWS on-demand prices (" + pricing.Provider + " · " + pricing.Region + "). Value at risk = your cluster's real infrastructure cost/yr; Phorvex OFF = that infra fully exposed (attack lands); ON = residual after the measured disruption + the real cost of running Phorvex = operator footprint (" + overheadBasis + ") + actuation compute (measured action rate × per-action AWS compute). Per attack, 'defensive actions' shows how hard Phorvex worked. Nothing is a fabricated figure.",
 	})
 }
 
