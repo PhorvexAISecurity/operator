@@ -83,6 +83,10 @@ func main() {
 	}
 	srv.EnableVCluster(oidc, console.NewTenantQuota(console.DefaultQuota()), console.NewApplyFixManager(nil, nil, nil))
 	log.Printf("  apply-fix : %s/api/apply-fix/* (allowlist + gate-check + two-key; %s identity; record-only applier [PENDING-CLUSTER-VALIDATION])", url, map[bool]string{true: "OIDC", false: "demo-trust"}[oidc != nil])
+	// P-UPTIME: background sampler records MEASURED service availability (K8s API) so /api/uptime can
+	// show the real actuator impact on uptime. Read-only; no-ops if no cluster is reachable.
+	srv.StartUptimeSampler(context.Background())
+	log.Printf("  uptime    : %s/api/uptime (measured availability vs actuation markers)", url)
 	if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
 		log.Fatal(err)
 	}

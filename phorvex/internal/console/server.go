@@ -85,6 +85,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/reports", s.withCORS(s.scoped("operator", s.reports)))
 	mux.HandleFunc("/api/cost", s.withCORS(s.scoped("operator", s.cost)))
 	mux.HandleFunc("/api/cost-timeseries", s.withCORS(s.scoped("operator", s.costTimeseries)))
+	// UPTIME (P-UPTIME) — MEASURED actuator impact on service availability (K8s API + audit markers).
+	mux.HandleFunc("/api/uptime", s.withCORS(s.scoped("operator", s.uptime)))
 	mux.HandleFunc("/api/pricing", s.withCORS(s.scoped("operator", s.pricing)))
 	// RED-TEAM CONTROL group (P-REDTEAM) — additive; reads real artifacts + execs the attacker tool.
 	mux.HandleFunc("/api/redteam/curves", s.withCORS(s.scoped("operator", s.redteamCurves)))

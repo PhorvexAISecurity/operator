@@ -119,6 +119,7 @@ export const api = {
   reports: (lens: Lens) => get<{ reports: ReportMeta[] }>("/api/reports", lens),
   cost: (lens: Lens) => get<CostResult>("/api/cost", lens),
   costTimeseries: (lens: Lens) => get<CostTimeseries>("/api/cost-timeseries", lens),
+  uptime: (lens: Lens, window = "1h") => get<UptimeResult>(`/api/uptime?window=${encodeURIComponent(window)}`, lens),
   report: (id: string, lens: Lens) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
@@ -200,6 +201,11 @@ export interface ClusterPricing { provider: string; region: string; nodes: NodeP
 export interface CostResult { available: boolean; scenarios: CostScenario[]; totalWithout: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; valueAtRisk?: number; defenseOverhead?: number; operatorCost?: number; actuationCost?: number; actuationRatePerHr?: number; perActionCost?: number; overheadBasis?: string; note: string }
 export interface CostTimePoint { time: string; unixMillis: number; phorvexCost: number; blindCost: number; savings: number; decisions: number }
 export interface CostTimeseries { available: boolean; points: CostTimePoint[]; totalPhorvex: number; totalBlind: number; totalSavings: number; decisions: number; note: string }
+// UPTIME (P-UPTIME) — MEASURED service availability vs the moments Phorvex acted.
+export interface UptimePoint { t: string; pct: number }
+export interface UptimeMarker { t: string; action: string }
+export interface UptimeWorkload { ns: string; workload: string; kind: string; series: UptimePoint[]; markers: UptimeMarker[]; uptimePct: number; minPct: number; actuations: number; killingActs: number }
+export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; note: string }
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
 export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }
