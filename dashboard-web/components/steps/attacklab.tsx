@@ -30,7 +30,8 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const ns = "amtd-attack-test"; // attacks always run in a dedicated disposable sandbox (backend-enforced)
   const [scenarios, setScenarios] = React.useState<CatalogItem[]>([]);
   const [scenario, setScenario] = React.useState("");
-  const [withPX, setWithPX] = React.useState(true);
+  // mode: px = Phorvex vs no-defense · base = no-defense vs blind · three = live 3-way (drives cost/uptime)
+  const [mode, setMode] = React.useState<"px" | "base" | "three">("three");
   const [runId, setRunId] = React.useState("");
   const [events, setEvents] = React.useState<TimelineEvent[]>([]);
   const [stage, setStage] = React.useState<TimelineEvent | null>(null);
@@ -112,7 +113,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
     if (!scenario || !target) return;
     setBusy(true); setErr("");
     try {
-      const { id } = await api.startScenario(scenario, withPX, target, ns, lens);
+      const { id } = await api.startScenario(scenario, mode === "px", target, ns, lens, mode === "three");
       setRunId(id);
     } catch (e: any) { setErr(String(e.message || e)); }
     finally { setBusy(false); }
@@ -232,18 +233,32 @@ export function AttackLab({ lens }: { lens: Lens }) {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-            <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted-foreground">
-              <button onClick={() => setWithPX((v) => !v)} className={cn("relative h-5 w-9 rounded-full transition-colors", withPX ? "bg-primary" : "bg-muted")}>
-                <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform", withPX ? "translate-x-4" : "translate-x-0.5")} />
-              </button>
-              {withPX ? <ShieldCheck className="h-3.5 w-3.5 text-primary" /> : <ShieldOff className="h-3.5 w-3.5" />}
-              {withPX ? "Defend with Phorvex (compare vs no-MTD)" : "Baselines only (no-MTD vs blind timer)"}
-            </label>
-            <Button onClick={launch} disabled={busy || running || !scenario || !toolchain}>
-              {busy || running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {running ? "Attack running…" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
-            </Button>
+          <div className="space-y-3 border-t border-border pt-4">
+            <div>
+              <div className="mb-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">Which strategies to measure this run</div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {([
+                  { id: "three", title: "3-way (live)", desc: "No-defense · Blind R6 · Phorvex — all three, drives the Cost & Uptime panels", icon: Crosshair },
+                  { id: "px", title: "Phorvex vs no-defense", desc: "just the headline contrast", icon: ShieldCheck },
+                  { id: "base", title: "No-defense vs Blind", desc: "the two baselines", icon: ShieldOff },
+                ] as const).map((m) => (
+                  <button key={m.id} onClick={() => setMode(m.id)}
+                    className={cn("rounded-lg border p-2.5 text-left transition-colors", mode === m.id ? "border-primary/50 bg-primary/[0.06]" : "border-border bg-elevated/30 hover:bg-elevated/60")}>
+                    <div className={cn("flex items-center gap-1.5 text-[12px] font-medium", mode === m.id ? "text-primary" : "text-foreground")}><m.icon className="h-3.5 w-3.5" /> {m.title}</div>
+                    <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{m.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              {mode === "three"
+                ? <span className="text-[11px] text-success">After this run, the Cost &amp; Uptime panels read THIS attack (not the static benchmark).</span>
+                : <span className="text-[11px] text-muted-foreground">For the live Cost/Uptime 3-way, pick “3-way (live)”.</span>}
+              <Button onClick={launch} disabled={busy || running || !scenario || !toolchain}>
+                {busy || running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                {running ? "Attack running…" : mode === "three" ? "Launch live 3-way attack" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
+              </Button>
+            </div>
           </div>
           {!toolchain && (
             <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-2 text-[12px] text-warning">

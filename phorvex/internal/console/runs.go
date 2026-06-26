@@ -53,6 +53,7 @@ type RunStatus struct {
 	Arms      []ArmResult `json:"arms,omitempty"`
 	Error     string      `json:"error,omitempty"`
 	NativeActuator bool   `json:"nativeActuator"`
+	Compare3       bool   `json:"compare3,omitempty"` // a 3-strategy (no-defense/blind/Phorvex) live comparison run
 	Namespace string      `json:"namespace,omitempty"` // the sandbox the scenario ran in
 	Target    string      `json:"target,omitempty"`    // the kubeconfig context targeted
 	Provider    string    `json:"provider,omitempty"`    // which provider this attack ran on: "AWS EKS" | "vCluster" | ...
@@ -212,7 +213,7 @@ func (rm *RunManager) ClusterTargets() []ClusterTarget {
 // d-phorvex (compared against no-MTD); otherwise the non-PX baselines. The harness deploys its
 // own synthetic attacker + victim into `namespace` and confines every object there — it does
 // not touch pre-existing workloads in other namespaces.
-func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, namespace, startedAt string) (string, error) {
+func (rm *RunManager) StartScenario(scenario string, withPX, compare3 bool, targetID, namespace, startedAt string) (string, error) {
 	if !scenarioRe.MatchString(scenario) {
 		return "", fmt.Errorf("invalid scenario name")
 	}
@@ -233,8 +234,14 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, name
 			targetLabel = t.Label
 		}
 	}
-	arms := "[d-nomtd, d-r6blindtimer]"
-	if withPX {
+	// THREE-WAY (compare3): one run measures all three strategies the dashboard contrasts —
+	// No defense (d-nomtd), Blind R6 timer (d-r6blindtimer), Phorvex (d-phorvex) — so cost/uptime
+	// reflect THIS live run, not the static benchmark.
+	arms, expectedTrials := "[d-nomtd, d-r6blindtimer]", 4
+	switch {
+	case compare3:
+		arms, expectedTrials = "[d-nomtd, d-r6blindtimer, d-phorvex]", 6
+	case withPX:
 		arms = "[d-phorvex, d-nomtd]"
 	}
 	rm.mu.Lock()
@@ -255,11 +262,14 @@ func (rm *RunManager) StartScenario(scenario string, withPX bool, targetID, name
 		return "", err
 	}
 	rm.mu.Lock()
-	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: 4} // trialsPerArm(2) × arms(2)
+	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials}
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
 	rm.mu.Unlock()
-	go rm.run(id, suite{File: "config.console-" + id + ".yaml", OutDir: outDir}, false) // Seam-1 actuator (matches the benchmark); native is a separate opt-in
+	// A 3-way (compare3) run uses the NATIVE actuator so the Phorvex arm actually rotates the
+	// sandbox victim (direct client-go pod delete) — reliable + fast, so it visibly disrupts the
+	// attack. Plain 2-arm scenario runs stay on Seam-1 (matches the benchmark).
+	go rm.run(id, suite{File: "config.console-" + id + ".yaml", OutDir: outDir}, compare3)
 	return id, nil
 }
 
@@ -312,8 +322,15 @@ func seqOf(id string) int {
 }
 
 func (rm *RunManager) run(id string, su suite, native bool) {
-	// 5-minute cap so a triggered run can never hang the console.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Cap so a triggered run can never hang the console. A 3-strategy (compare3) run executes
+	// 3 arms × trials and needs more headroom than a 2-arm scenario, so give it longer.
+	cap := 5 * time.Minute
+	rm.mu.Lock()
+	if st := rm.runs[id]; st != nil && st.Compare3 {
+		cap = 12 * time.Minute
+	}
+	rm.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), cap)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, rm.cfg.HarnessBin,
 		"-config", filepath.Join(rm.cfg.HarnessDir, su.File),
@@ -369,6 +386,12 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	}
 	st.State = "done"
 	st.Finished = tsNow()
+	// A completed 3-strategy run becomes the LIVE source for the cost/uptime comparison: drop a
+	// pointer the cost/uptime readers pick up, so those panels reflect THIS attack, not the static
+	// benchmark. (Plain 2-arm scenario runs do NOT claim the comparison — they'd leave it half-filled.)
+	if st.Compare3 {
+		_ = os.WriteFile(filepath.Join(rm.cfg.HarnessDir, "latest-compare-out.txt"), []byte(su.OutDir), 0o644)
+	}
 	// Regenerate the cost/ROI report for THIS run so the Report tab updates after an attack
 	// finishes (no cluster, no re-run — pure post-processing of the run's metrics.jsonl).
 	go func(out string) {

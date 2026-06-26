@@ -62,6 +62,11 @@ func NewPod(env *core.Env, name string, extraLabels map[string]string) *PodBuild
 			},
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyNever,
+				// Sandbox victims/mock-servers are ephemeral and must schedule wherever there is room.
+				// Real clusters taint their nodes (CriticalAddonsOnly, nvidia.com/gpu, dedicated pools);
+				// without a toleration the victim stays Pending and the scenario skips. Tolerate ANY taint
+				// so the attack can actually run — it is a throwaway pod in a disposable namespace.
+				Tolerations: []corev1.Toleration{{Operator: corev1.TolerationOpExists}},
 			},
 		},
 	}

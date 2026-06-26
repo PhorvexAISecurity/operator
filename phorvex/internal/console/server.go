@@ -252,10 +252,11 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 	perActionCost := perActionSeconds / 3600.0 * nodeRate
 	actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost)
 	defenseCost := operatorCost + actuationCost
-	scen, totWithout, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost)
+	scen, totWithout, totBlind, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost)
+	_, costSource, costRun := s.cfg.comparisonMetricsPath()
 	writeJSON(w, 200, map[string]any{
-		"available": ok, "scenarios": scen,
-		"totalWithout": totWithout, "totalWith": totWith, "totalSavings": totSavings,
+		"available": ok, "scenarios": scen, "source": costSource, "runId": costRun,
+		"totalWithout": totWithout, "totalBlind": totBlind, "totalWith": totWith, "totalSavings": totSavings,
 		"pricing": pricing, "valueAtRisk": valueAtRisk,
 		"defenseOverhead": defenseCost, "operatorCost": operatorCost, "actuationCost": actuationCost,
 		"actuationRatePerHr": actuationRatePerHr, "perActionCost": perActionCost, "overheadBasis": overheadBasis,
@@ -355,12 +356,13 @@ func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Scenario  string `json:"scenario"`
 		WithPX    bool   `json:"withPX"`
+		Compare3  bool   `json:"compare3"` // run all three strategies (no-defense/blind/Phorvex) in one live run
 		Target    string `json:"target"`
 		Namespace string `json:"namespace"`
 		StartedAt string `json:"startedAt"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	id, err := s.runs.StartScenario(body.Scenario, body.WithPX, body.Target, body.Namespace, body.StartedAt)
+	id, err := s.runs.StartScenario(body.Scenario, body.WithPX, body.Compare3, body.Target, body.Namespace, body.StartedAt)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return

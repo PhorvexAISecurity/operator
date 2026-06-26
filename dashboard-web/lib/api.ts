@@ -21,7 +21,7 @@ export interface ArmResult { defender: string; trials: number; disruption: numbe
 export interface RunStatus {
   id: string; config: string; state: "running" | "done" | "error" | "stopped"; started: string;
   date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
-  trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean;
+  trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean; compare3?: boolean;
 }
 export interface Suite { Name: string; Desc: string }
 
@@ -139,8 +139,8 @@ export const api = {
   // capabilities reports live cluster GPU/MIG/multi-node so the UI gates only genuinely-unmet scenarios.
   capabilities: (target: string, lens: Lens) =>
     get<{ gpu: boolean; mig: boolean; multiNode: boolean; nodes: number; gpuCount: number }>(`/api/capabilities${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
-  startScenario: (scenario: string, withPX: boolean, target: string, namespace: string, lens: Lens) =>
-    post<{ id: string }>("/api/runs/scenario", { scenario, withPX, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
+  startScenario: (scenario: string, withPX: boolean, target: string, namespace: string, lens: Lens, compare3 = false) =>
+    post<{ id: string }>("/api/runs/scenario", { scenario, withPX, compare3, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
   // scan execs `phorvex --scan` LIVE (fresh exec each call — not a cached corpus). ns="" scans all
   // namespaces; context targets a specific kubeconfig context (the selected environment).
   scan: (ns: string, lens: Lens, context?: string) => {
@@ -195,17 +195,18 @@ export interface TimelineEvent {
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
 }
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
-export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptWith: number; defensiveActions: number; responseCost: number; defenseCost: number; costWithout: number; costWith: number; savings: number; helps: boolean }
+export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptBlind: number; disruptWith: number; defensiveActions: number; blindActions: number; responseCost: number; defenseCost: number; costWithout: number; costBlind: number; costWith: number; successNone: number; successBlind: number; successWith: number; savings: number; helps: boolean }
 export interface NodePrice { instanceType: string; count: number; gpu: boolean; pricePerHr: number; estimated: boolean }
 export interface ClusterPricing { provider: string; region: string; nodes: NodePrice[]; totalPerHr: number; totalPerYear: number; gpuPricePerHr: number; gpuCount: number; source: string; available: boolean }
-export interface CostResult { available: boolean; scenarios: CostScenario[]; totalWithout: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; valueAtRisk?: number; defenseOverhead?: number; operatorCost?: number; actuationCost?: number; actuationRatePerHr?: number; perActionCost?: number; overheadBasis?: string; note: string }
+export interface CostResult { available: boolean; scenarios: CostScenario[]; source?: string; runId?: string; totalWithout: number; totalBlind: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; valueAtRisk?: number; defenseOverhead?: number; operatorCost?: number; actuationCost?: number; actuationRatePerHr?: number; perActionCost?: number; overheadBasis?: string; note: string }
 export interface CostTimePoint { time: string; unixMillis: number; phorvexCost: number; blindCost: number; savings: number; decisions: number }
 export interface CostTimeseries { available: boolean; points: CostTimePoint[]; totalPhorvex: number; totalBlind: number; totalSavings: number; decisions: number; note: string }
 // UPTIME (P-UPTIME) — MEASURED service availability vs the moments Phorvex acted.
 export interface UptimePoint { t: string; pct: number }
 export interface UptimeMarker { t: string; action: string }
 export interface UptimeWorkload { ns: string; workload: string; kind: string; series: UptimePoint[]; markers: UptimeMarker[]; uptimePct: number; minPct: number; actuations: number; killingActs: number }
-export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; note: string }
+export interface UptimeStrategy { key: string; label: string; attackSuccess: number; disrupted: number; defensiveActions: number; trials: number }
+export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; strategies?: UptimeStrategy[]; strategiesSource?: string; strategiesRun?: string; note: string }
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
 export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }

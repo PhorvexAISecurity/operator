@@ -269,11 +269,88 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].Workload < out[j].Workload
 	})
+	_, stratSource, stratRun := s.cfg.comparisonMetricsPath()
 	writeJSON(w, 200, map[string]any{
-		"windowSeconds": int(window.Seconds()),
-		"workloads":     out,
-		"note":          "availability = readyReplicas/desired from the K8s API; markers = moments Phorvex acted (live decision audit). kv-reset does not kill the pod, so it never dents availability.",
+		"windowSeconds":    int(window.Seconds()),
+		"workloads":        out,
+		"strategies":       benchStrategies(s.cfg),
+		"strategiesSource": stratSource, // "latest run" | "benchmark"
+		"strategiesRun":    stratRun,     // run id when sourced from a live run
+		"note":             "availability = readyReplicas/desired from the K8s API; markers = moments Phorvex acted (live decision audit). kv-reset does not kill the pod, so it never dents availability.",
 	})
+}
+
+// uptimeStrategy is one defender strategy's MEASURED attack outcome (benchmark arm), used to show
+// the third "what if there were NO defense" case alongside Phorvex and the blind R6 timer.
+type uptimeStrategy struct {
+	Key              string  `json:"key"`              // none | blind | phorvex
+	Label            string  `json:"label"`            //
+	AttackSuccess    float64 `json:"attackSuccess"`    // % of attacks that reached their objective (measured oracleAchieved)
+	Disrupted        float64 `json:"disrupted"`        // mean fraction of the attack disrupted (measured disruptionVsOracle)
+	DefensiveActions float64 `json:"defensiveActions"` // mean self-inflicted defensive actions per attack (measured)
+	Trials           int     `json:"trials"`
+}
+
+// benchStrategies reads the MEASURED benchmark arms and returns the No-defense / Blind-R6 / Phorvex
+// attack outcomes — the third "no defense, attack lands" baseline for the uptime view. The defining
+// number is AttackSuccess (oracleAchieved): with no defense the attack lands every time; the blind
+// timer barely helps; Phorvex cuts it most — all measured, none synthesized.
+func benchStrategies(cfg Config) []uptimeStrategy {
+	// DYNAMIC: the latest live 3-way run if one exists, else the static benchmark.
+	path, _, _ := cfg.comparisonMetricsPath()
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	type acc struct {
+		disr, acts   float64
+		ach, n, actN int
+	}
+	arms := map[string]*acc{"d-nomtd": {}, "d-r6blindtimer": {}, "d-phorvex": {}}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
+	for sc.Scan() {
+		var r costParse
+		if json.Unmarshal([]byte(strings.TrimSpace(sc.Text())), &r) != nil || r.Skipped || r.NegativeControl {
+			continue
+		}
+		a := arms[r.Defender]
+		if a == nil {
+			continue
+		}
+		a.disr += r.Disruption
+		a.n++
+		if r.OracleAchieved {
+			a.ach++
+		}
+		if r.Defender != "d-nomtd" {
+			a.acts += r.DefensiveActions
+			a.actN++
+		}
+	}
+	mk := func(key, label, arm string) uptimeStrategy {
+		a := arms[arm]
+		if a == nil || a.n == 0 {
+			return uptimeStrategy{Key: key, Label: label}
+		}
+		acts := 0.0
+		if a.actN > 0 {
+			acts = a.acts / float64(a.actN)
+		}
+		return uptimeStrategy{
+			Key: key, Label: label, Trials: a.n,
+			AttackSuccess:    round2(100 * float64(a.ach) / float64(a.n)),
+			Disrupted:        round2(100 * a.disr / float64(a.n)),
+			DefensiveActions: round2(acts),
+		}
+	}
+	return []uptimeStrategy{
+		mk("none", "No defense", "d-nomtd"),
+		mk("blind", "Blind R6 timer", "d-r6blindtimer"),
+		mk("phorvex", "Phorvex", "d-phorvex"),
+	}
 }
 
 func readUptimeSamples(path string) []uptimeSample {

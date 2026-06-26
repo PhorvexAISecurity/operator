@@ -31,6 +31,7 @@ type costParse struct {
 	Disruption       float64 `json:"disruptionVsOracle"`
 	DefensiveActions float64 `json:"defensiveActions"` // # of actions Phorvex took to handle this attack (measured)
 	Dwell            float64 `json:"attackerDwellSeconds"`
+	OracleAchieved   bool    `json:"oracleAchieved"` // did the attacker reach its objective (attack SUCCEEDED)
 	Skipped          bool    `json:"skipped"`
 	NegativeControl  bool    `json:"negativeControl"`
 	ROI              struct {
@@ -45,17 +46,90 @@ type costParse struct {
 // "cost of Phorvex's response" (defensive actions) per attack, at the workload's AWS node rate.
 const perActionSeconds = 0.534
 
-// CostScenario is the per-attack with/without-Phorvex dollar contrast — all AWS-priced.
+// latestComparePath returns the metrics.jsonl of the most recent COMPLETED 3-strategy run — the
+// pointer the run manager drops on completion (runs.go) — plus a friendly run id, or ("","") if
+// none. This is what makes the cost/uptime comparison DYNAMIC: after you run a live 3-way attack,
+// the panels read THAT run instead of the static benchmark.
+func (c *Config) latestComparePath() (path, runID string) {
+	b, err := os.ReadFile(filepath.Join(c.HarnessDir, "latest-compare-out.txt"))
+	if err != nil {
+		return "", ""
+	}
+	outDir := strings.TrimSpace(string(b))
+	if outDir == "" {
+		return "", ""
+	}
+	p := filepath.Join(c.HarnessDir, outDir, "metrics.jsonl")
+	// Only adopt the run if it actually measured ALL THREE strategies — a partial/interrupted run
+	// (e.g. timed out before the blind arm) would otherwise render a broken 3-way. Fall back to the
+	// static benchmark when incomplete.
+	if !hasThreeArms(p) {
+		return "", ""
+	}
+	return p, strings.TrimPrefix(outDir, "out-console-")
+}
+
+// hasThreeArms reports whether a metrics.jsonl contains at least one trial for each of the three
+// compared strategies (no-defense, blind R6, Phorvex).
+func hasThreeArms(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	need := map[string]bool{"d-nomtd": false, "d-r6blindtimer": false, "d-phorvex": false}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 1<<22)
+	for sc.Scan() {
+		var r struct {
+			Defender string `json:"defender"`
+		}
+		if json.Unmarshal(sc.Bytes(), &r) == nil {
+			if _, ok := need[r.Defender]; ok {
+				need[r.Defender] = true
+			}
+		}
+	}
+	for _, ok := range need {
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// comparisonMetricsPath resolves WHERE the 3-strategy comparison reads its measured metrics: the
+// most recent live 3-way run if one exists, else the static benchmark (out-eks → out-p3deep).
+// source is "latest run" | "benchmark"; runID names the run when live.
+func (c *Config) comparisonMetricsPath() (path, source, runID string) {
+	if p, rid := c.latestComparePath(); p != "" {
+		return p, "latest run", rid
+	}
+	p := filepath.Join(c.Root, "build", "test-harness", "out-eks", "metrics.jsonl")
+	if _, err := os.Stat(p); err == nil {
+		return p, "benchmark", ""
+	}
+	return c.harnessOut("out-p3deep"), "benchmark", ""
+}
+
+// CostScenario is the per-attack THREE-STRATEGY dollar contrast — all AWS-priced, all from the
+// MEASURED benchmark arms: No defense (d-nomtd), Blind R6 timer (d-r6blindtimer), Phorvex (d-phorvex).
 type CostScenario struct {
 	Scenario         string  `json:"scenario"`
 	AvoidedBreach    float64 `json:"avoidedBreach"`    // valueAtRisk: live AWS infra $/yr the attack exposes
 	DisruptWithout   float64 `json:"disruptWithout"`   // d-nomtd disruption (≈0 — attack lands)
+	DisruptBlind     float64 `json:"disruptBlind"`     // d-r6blindtimer disruption (measured — blind rotation rarely catches the attack)
 	DisruptWith      float64 `json:"disruptWith"`      // d-phorvex disruption (measured)
 	DefensiveActions float64 `json:"defensiveActions"` // # actions Phorvex took to handle THIS attack (measured)
+	BlindActions     float64 `json:"blindActions"`     // # actions the blind R6 timer took (measured)
 	ResponseCost     float64 `json:"responseCost"`     // $ Phorvex's response to this attack costs (actions × per-action AWS compute)
 	DefenseCost      float64 `json:"defenseCost"`      // $/yr cost of running Phorvex (operator footprint + actuation compute)
-	CostWithout      float64 `json:"costWithout"`      // Phorvex OFF: full AWS-infra exposure (attack lands)
-	CostWith         float64 `json:"costWith"`         // Phorvex ON: residual exposure + defense cost
+	CostWithout      float64 `json:"costWithout"`      // NO DEFENSE: full AWS-infra exposure (attack lands)
+	CostBlind        float64 `json:"costBlind"`        // BLIND R6: residual exposure (only 15% disrupted) + its small defense cost
+	CostWith         float64 `json:"costWith"`         // PHORVEX: residual exposure + defense cost
+	SuccessNone      float64 `json:"successNone"`      // attack-success % with no defense (measured oracleAchieved)
+	SuccessBlind     float64 `json:"successBlind"`     // attack-success % under the blind R6 timer (measured)
+	SuccessWith      float64 `json:"successWith"`      // attack-success % under Phorvex (measured)
 	Savings          float64 `json:"savings"`          // costWithout - costWith
 	Helps            bool    `json:"helps"`            // PX measurably reduces cost here
 }
@@ -130,24 +204,24 @@ func (c *Config) actuationCostPerYear(perActionCost float64) (costYr, ratePerHr 
 // types); defenseOverride (>0) is the real cloud-priced rotation overhead. The headline does
 // NOT sum valueAtRisk across scenarios — it reports the single infra value at the AVERAGE
 // measured disruption (summing would double-count the same hardware). ok=false if no metrics.
-func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64) (scen []CostScenario, totWithout, totWith, totSavings float64, ok bool) {
-	path := filepath.Join(c.Root, "build", "test-harness", "out-eks", "metrics.jsonl")
+func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64) (scen []CostScenario, totWithout, totBlind, totWith, totSavings float64, ok bool) {
+	// DYNAMIC: the latest live 3-way run if one exists, else the static benchmark.
+	path, _, _ := c.comparisonMetricsPath()
 	f, err := os.Open(path)
 	if err != nil {
-		// fall back to whatever the effectiveness board reads
-		path = c.harnessOut("out-p3deep")
-		if f, err = os.Open(path); err != nil {
-			return nil, 0, 0, 0, false
-		}
+		return nil, 0, 0, 0, 0, false
 	}
 	defer f.Close()
 
 	type agg struct {
-		withoutSum, withSum float64
-		withoutN, withN     int
-		defActSum           float64 // d-phorvex defensive-action count (response intensity)
-		defActN             int
-		avoided             float64
+		withoutSum, withSum, blindSum float64 // disruption sums per strategy
+		withoutN, withN, blindN       int
+		defActSum, blindActSum        float64 // defensive-action counts (response intensity)
+		defActN, blindActN            int
+		oNoneAch, oNoneN              int // attack-SUCCESS (oracleAchieved) per strategy
+		oBlindAch, oBlindN            int
+		oWithAch, oWithN              int
+		avoided                       float64
 	}
 	m := map[string]*agg{}
 	order := []string{}
@@ -167,19 +241,34 @@ func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64)
 		if r.ROI.AvoidedBreachValueDollars > 0 {
 			a.avoided = r.ROI.AvoidedBreachValueDollars
 		}
+		oracle := func(n *int, ach *int) { *n++; if r.OracleAchieved { *ach++ } }
 		switch r.Defender {
-		case "d-nomtd":
+		case "d-nomtd": // NO DEFENSE — the attack lands
 			a.withoutSum += r.Disruption
 			a.withoutN++
+			oracle(&a.oNoneN, &a.oNoneAch)
+		case "d-r6blindtimer": // BLIND R6 TIMER — fixed-cadence rotation, no targeting
+			a.blindSum += r.Disruption
+			a.blindN++
+			a.blindActSum += r.DefensiveActions
+			a.blindActN++
+			oracle(&a.oBlindN, &a.oBlindAch)
 		case "d-phorvex":
 			a.withSum += r.Disruption
 			a.withN++
 			a.defActSum += r.DefensiveActions // how many actions PX took to handle this attack
 			a.defActN++
+			oracle(&a.oWithN, &a.oWithAch)
 		}
 	}
 
-	var disruptOnSum float64 // for the headline's AVERAGE disruption (no double-counting)
+	pct := func(ach, n int) float64 {
+		if n == 0 {
+			return 0
+		}
+		return 100 * float64(ach) / float64(n)
+	}
+	var disruptOnSum, disruptBlindSum float64 // for the headline AVERAGES (no double-counting)
 	for _, s := range order {
 		a := m[s]
 		if a.withoutN == 0 || a.withN == 0 {
@@ -189,28 +278,42 @@ func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64)
 		if risk <= 0 {
 			risk = a.avoided // legacy fallback: harness ROI breach value (only if no live pricing)
 		}
-		defActs := 0.0
+		defActs, blindActs := 0.0, 0.0
 		if a.defActN > 0 {
 			defActs = a.defActSum / float64(a.defActN)
+		}
+		if a.blindActN > 0 {
+			blindActs = a.blindActSum / float64(a.blindActN)
 		}
 		cs := CostScenario{
 			Scenario: s, AvoidedBreach: risk, DefenseCost: defenseCost,
 			DefensiveActions: defActs,
+			BlindActions:     blindActs,
 			ResponseCost:     defActs * perActionCost, // $ Phorvex's response to THIS attack costs (measured actions × per-action AWS compute)
 			DisruptWithout:   clampUnitC(a.withoutSum / float64(a.withoutN)),
 			DisruptWith:      clampUnitC(a.withSum / float64(a.withN)),
+			SuccessNone:      pct(a.oNoneAch, a.oNoneN),
+			SuccessBlind:     pct(a.oBlindAch, a.oBlindN),
+			SuccessWith:      pct(a.oWithAch, a.oWithN),
 		}
+		if a.blindN > 0 {
+			cs.DisruptBlind = clampUnitC(a.blindSum / float64(a.blindN))
+		}
+		// NO DEFENSE: the whole infra exposure lands (attack disruption ≈ 0), zero defense spend.
 		cs.CostWithout = risk * (1 - cs.DisruptWithout)
-		// Phorvex ON = residual infra exposure + the real cost of running Phorvex (operator footprint
-		// + annual actuation compute, passed in as defenseCost) + the per-incident response compute.
+		// BLIND R6: residual exposure after its (small, measured) disruption + its own response compute.
+		cs.CostBlind = risk*(1-cs.DisruptBlind) + blindActs*perActionCost
+		// PHORVEX: residual exposure + the real cost of running Phorvex (operator footprint + annual
+		// actuation compute, passed in as defenseCost) + the per-incident response compute.
 		cs.CostWith = risk*(1-cs.DisruptWith) + defenseCost + cs.ResponseCost
 		cs.Savings = cs.CostWithout - cs.CostWith
 		cs.Helps = cs.Savings > 0.5
 		scen = append(scen, cs)
 		disruptOnSum += cs.DisruptWith
+		disruptBlindSum += cs.DisruptBlind
 	}
 	if len(scen) == 0 {
-		return nil, 0, 0, 0, false
+		return nil, 0, 0, 0, 0, false
 	}
 	// HEADLINE — single cluster infrastructure value at risk (NOT a sum across scenarios), defended
 	// at the average measured disruption. This is the real AWS exposure, not N× the same hardware.
@@ -218,12 +321,13 @@ func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64)
 	if risk <= 0 {
 		risk = scen[0].AvoidedBreach
 	}
-	avgDisruptOn := disruptOnSum / float64(len(scen))
-	totWithout = risk                                  // undefended: the whole infra is exposed
-	totWith = risk*(1-avgDisruptOn) + defenseCost      // defended: residual exposure + real defense cost
+	n := float64(len(scen))
+	totWithout = risk                                              // NO DEFENSE: the whole infra is exposed
+	totBlind = risk*(1-disruptBlindSum/n) + 0                      // BLIND R6: residual after its weak disruption
+	totWith = risk*(1-disruptOnSum/n) + defenseCost                // PHORVEX: residual + real defense cost
 	totSavings = totWithout - totWith
 	sort.Slice(scen, func(i, j int) bool { return scen[i].Savings > scen[j].Savings })
-	return scen, totWithout, totWith, totSavings, true
+	return scen, totWithout, totBlind, totWith, totSavings, true
 }
 
 func clampUnitC(x float64) float64 {

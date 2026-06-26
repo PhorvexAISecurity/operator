@@ -4,7 +4,7 @@ import { api, Lens, CostResult, CostTimeseries } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
-import { ShieldOff, ShieldCheck, TrendingDown, Loader2 } from "lucide-react";
+import { ShieldOff, ShieldCheck, TrendingDown, Loader2, Clock } from "lucide-react";
 
 function usd(n: number): string {
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
@@ -66,8 +66,14 @@ export function CostPanel({ lens }: { lens: Lens }) {
   const [ts, setTs] = React.useState<CostTimeseries | null>(null);
   const [err, setErr] = React.useState("");
   React.useEffect(() => {
-    api.cost(lens).then(setD).catch((e) => setErr(String(e.message || e)));
-    api.costTimeseries(lens).then(setTs).catch(() => setTs(null)); // optional — never blocks the panel
+    let live = true;
+    const load = () => {
+      api.cost(lens).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
+      api.costTimeseries(lens).then((r) => { if (live) setTs(r); }).catch(() => { if (live) setTs(null); }); // optional — never blocks the panel
+    };
+    load();
+    const iv = setInterval(load, 6000); // live refresh — picks up the latest 3-way attack run
+    return () => { live = false; clearInterval(iv); };
   }, [lens]);
 
   if (err) return <ErrorState msg={err} />;
@@ -76,25 +82,37 @@ export function CostPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="space-y-5">
-      <PageHead title="Cost — with vs without Phorvex (real AWS prices)" sub="Grounded entirely in your live AWS on-demand pricing — no fabricated breach figures. The value at risk is your cluster's real infrastructure cost/yr; with Phorvex OFF that infrastructure is exposed, with Phorvex ON the residual exposure shrinks by the measured disruption for a small rotation overhead. The headline is the single infra value at the average disruption — never the same hardware counted N times." />
+      <PageHead title="Cost — three strategies (real AWS prices)" sub="Grounded entirely in your live AWS on-demand pricing — no fabricated breach figures. The value at risk is your cluster's real infrastructure cost/yr; under No defense it is fully exposed, the Blind R6 timer barely helps, and Phorvex shrinks the residual by the measured disruption for a small real defense cost." />
 
-      {/* headline: OFF vs ON vs savings — single cluster infra value, AWS-priced */}
+      {/* SOURCE — live run vs static benchmark */}
+      <div className="flex items-center gap-2 text-[11px]">
+        {d.source === "latest run"
+          ? <Badge variant="real">live · from attack run {d.runId || ""}</Badge>
+          : <Badge variant="modeled">static benchmark</Badge>}
+        <span className="text-muted-foreground">{d.source === "latest run" ? "these numbers are from the 3-way attack you just ran" : "run a 3-way attack in the Attack Lab to measure these live against your scenario"}</span>
+      </div>
+
+      {/* headline: THREE strategies, worst → best — single cluster infra value, AWS-priced */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-1.5 text-[12px] text-danger"><ShieldOff className="h-3.5 w-3.5" /> Phorvex OFF</div>
+        <Card className="border-danger/40"><CardContent className="p-4">
+          <div className="flex items-center gap-1.5 text-[12px] text-danger"><ShieldOff className="h-3.5 w-3.5" /> No defense</div>
           <div className="mt-1 text-3xl font-semibold tabular text-danger">{usd(d.totalWithout)}/yr</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">your AWS infrastructure exposed</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">attack lands — full AWS infra exposed</div>
         </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-1.5 text-[12px] text-primary"><ShieldCheck className="h-3.5 w-3.5" /> Phorvex ON</div>
+        <Card className="border-warning/40"><CardContent className="p-4">
+          <div className="flex items-center gap-1.5 text-[12px] text-warning"><Clock className="h-3.5 w-3.5" /> Blind R6 timer</div>
+          <div className="mt-1 text-3xl font-semibold tabular text-warning">{usd(d.totalBlind)}/yr</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">rotates blindly — barely disrupts the attack</div>
+        </CardContent></Card>
+        <Card className="border-primary/40"><CardContent className="p-4">
+          <div className="flex items-center gap-1.5 text-[12px] text-primary"><ShieldCheck className="h-3.5 w-3.5" /> Phorvex</div>
           <div className="mt-1 text-3xl font-semibold tabular text-primary">{usd(d.totalWith)}/yr</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">residual exposure + rotation overhead</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">residual exposure + real defense cost</div>
         </CardContent></Card>
-        <Card className="border-success/40"><CardContent className="p-4">
-          <div className="flex items-center gap-1.5 text-[12px] text-success"><TrendingDown className="h-3.5 w-3.5" /> Net saving</div>
-          <div className="mt-1 text-3xl font-semibold tabular text-success">{usd(d.totalSavings)}/yr</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">at avg disruption across {d.scenarios.length} scenarios</div>
-        </CardContent></Card>
+      </div>
+      <div className="flex items-center gap-1.5 rounded-md border border-success/30 bg-success/[0.05] px-3 py-2 text-[12px] text-success">
+        <TrendingDown className="h-4 w-4" />
+        Phorvex saves <span className="font-semibold">{usd(d.totalSavings)}/yr</span> vs no defense, and <span className="font-semibold">{usd(Math.max(0, d.totalBlind - d.totalWith))}/yr</span> vs the blind R6 timer — at the average measured disruption across {d.scenarios.length} attack scenarios.
       </div>
 
       {/* LIVE cloud pricing — the defense overhead is computed from this, not a placeholder */}
@@ -136,28 +154,32 @@ export function CostPanel({ lens }: { lens: Lens }) {
 
       {/* per-scenario */}
       <Card><CardContent className="p-0">
-        <div className="px-4 pt-4"><SectionLabel>Cost per attack — without vs with Phorvex</SectionLabel>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">For each attack: the AWS cost it imposes if it lands (without Phorvex) vs the cost of handling it with Phorvex (residual exposure + defense). “Response” = how many actions Phorvex took, and what that response costs.</div>
+        <div className="px-4 pt-4"><SectionLabel>Cost per attack — three strategies</SectionLabel>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">For each attack, the AWS cost it imposes under three strategies — <span className="text-danger">No defense</span> (attack lands), the <span className="text-warning">Blind R6 timer</span> (rotates on a fixed schedule), and <span className="text-primary">Phorvex</span> — plus the measured % of attacks that still SUCCEED under each. All from the measured benchmark arms.</div>
         </div>
         <div className="overflow-x-auto p-3">
           <table className="w-full text-[12px]">
             <thead><tr className="text-left text-muted-foreground">
               <th className="px-2 py-1.5">Attack</th>
-              <th className="px-2 py-1.5">Without Phorvex</th>
-              <th className="px-2 py-1.5">With Phorvex</th>
-              <th className="px-2 py-1.5">Disruption</th>
-              <th className="px-2 py-1.5">Response</th>
-              <th className="px-2 py-1.5 text-right">Burden saved</th>
+              <th className="px-2 py-1.5 text-danger">No defense</th>
+              <th className="px-2 py-1.5 text-warning">Blind R6</th>
+              <th className="px-2 py-1.5 text-primary">Phorvex</th>
+              <th className="px-2 py-1.5" title="% of attacks that reached their objective under each strategy (measured)">Attack succeeds (none→blind→PX)</th>
+              <th className="px-2 py-1.5 text-right">Saved vs no-defense</th>
             </tr></thead>
             <tbody>
               {d.scenarios.map((s) => (
                 <tr key={s.scenario} className="border-t border-border/40">
                   <td className="px-2 py-2 font-mono text-foreground/90">{s.scenario}</td>
                   <td className="px-2 py-2 tabular text-danger">{usd(s.costWithout)}/yr</td>
-                  <td className="px-2 py-2 tabular text-primary">{usd(s.costWith)}/yr</td>
-                  <td className="px-2 py-2 tabular text-muted-foreground">{Math.round(s.disruptWith * 100)}%</td>
-                  <td className="px-2 py-2 tabular text-muted-foreground" title="actions Phorvex took to handle this attack × per-action AWS compute">
-                    {s.defensiveActions > 0 ? <>{s.defensiveActions.toFixed(1)} act <span className="text-muted-foreground/60">({s.responseCost < 0.01 ? "<$0.01" : usd(s.responseCost)})</span></> : <span className="text-muted-foreground/40">—</span>}
+                  <td className="px-2 py-2 tabular text-warning">{usd(s.costBlind)}/yr</td>
+                  <td className="px-2 py-2 tabular text-primary">{usd(s.costWith)}/yr <span className="text-muted-foreground/60">· {Math.round(s.disruptWith * 100)}% disr</span></td>
+                  <td className="px-2 py-2 tabular">
+                    <span className="text-danger">{Math.round(s.successNone)}%</span>
+                    <span className="text-muted-foreground/50"> → </span>
+                    <span className="text-warning">{Math.round(s.successBlind)}%</span>
+                    <span className="text-muted-foreground/50"> → </span>
+                    <span className="text-primary font-medium">{Math.round(s.successWith)}%</span>
                   </td>
                   <td className="px-2 py-2 text-right tabular">
                     {s.helps ? <span className="text-success font-medium">{usd(s.savings)}/yr</span> : <Badge variant="pending">no help</Badge>}

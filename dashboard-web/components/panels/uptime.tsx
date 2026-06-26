@@ -1,11 +1,65 @@
 "use client";
 import * as React from "react";
-import { api, Lens, UptimeResult, UptimeWorkload, UptimeMarker } from "@/lib/api";
+import { api, Lens, UptimeResult, UptimeWorkload, UptimeMarker, UptimeStrategy } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Segmented } from "@/components/ui/more";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
-import { Activity, ShieldCheck, Loader2, Zap, Scissors, RefreshCw } from "lucide-react";
+import { Activity, ShieldCheck, ShieldOff, Clock, Loader2, Zap, Scissors, RefreshCw } from "lucide-react";
+
+// AttackOutcome — the THIRD baseline the user asked for: what happens to the service if there were
+// NO defense at all and an attack lands, next to the blind R6 timer and Phorvex. All MEASURED from
+// the benchmark arms (d-nomtd / d-r6blindtimer / d-phorvex). The headline number is "attacks that
+// succeed": no defense → ~100% (service owned), blind barely helps, Phorvex cuts it most.
+const STRAT_META: Record<string, { Icon: any; text: string; box: string; bar: string; sub: string }> = {
+  none:    { Icon: ShieldOff,   text: "text-danger",  box: "border-danger/30 bg-danger/[0.04]",   bar: "bg-danger",  sub: "nothing acts — the attack lands in full" },
+  blind:   { Icon: Clock,       text: "text-warning", box: "border-warning/30 bg-warning/[0.04]", bar: "bg-warning", sub: "fixed-cadence rotation, no targeting" },
+  phorvex: { Icon: ShieldCheck, text: "text-primary", box: "border-primary/30 bg-primary/[0.04]", bar: "bg-primary", sub: "value-targeted, surgical (kv-reset: no kill)" },
+};
+
+function AttackOutcome({ strategies, source, runId }: { strategies: UptimeStrategy[]; source?: string; runId?: string }) {
+  if (!strategies || strategies.length === 0) return null;
+  const trials = strategies[0]?.trials || 0;
+  const live = source === "latest run";
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SectionLabel>If an attack hits — what each strategy does to the service</SectionLabel>
+            {live ? <Badge variant="real">live · from attack run {runId || ""}</Badge> : <Badge variant="modeled">static benchmark</Badge>}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">The third “no defense” baseline, beside the blind R6 timer and Phorvex — MEASURED across {trials} trials per strategy {live ? "in the 3-way attack you just ran" : "(run a 3-way attack in the Attack Lab to measure this live)"}. “Attacks succeed” = the attacker reached its objective (the service is effectively <span className="text-danger">owned</span>, even if its pods stay Running).</div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {strategies.map((s) => {
+            const m = STRAT_META[s.key] || STRAT_META.phorvex;
+            return (
+              <div key={s.key} className={cn("rounded-lg border p-3", m.box)}>
+                <div className={cn("flex items-center gap-1.5 text-[12px] font-medium", m.text)}><m.Icon className="h-3.5 w-3.5" /> {s.label}</div>
+                <div className="mt-2 flex items-end gap-1.5">
+                  <span className={cn("text-3xl font-semibold tabular", m.text)}>{Math.round(s.attackSuccess)}%</span>
+                  <span className="mb-1 text-[11px] text-muted-foreground">attacks succeed</span>
+                </div>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-elevated">
+                  <div className={cn("h-full rounded-full", m.bar)} style={{ width: `${Math.max(2, s.attackSuccess)}%` }} />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>attack disrupted <span className="text-foreground">{Math.round(s.disrupted)}%</span></span>
+                  <span>self-actions <span className="text-foreground">{s.defensiveActions.toFixed(2)}</span></span>
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground">{m.sub}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="rounded-md border border-border bg-elevated/30 px-3 py-2 text-[11px] text-muted-foreground">
+          The chart below shows the OTHER half: Phorvex achieves this protection at near-zero <span className="text-foreground">availability</span> cost (kv-reset never kills a pod). No defense keeps the pods “up” but hands the service to the attacker; the blind timer tanks neither here nor protects much.
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // action -> color + label. kv-reset never kills the pod, so it sits on a flat 100% line;
 // quarantine/rotate detach/delete a pod -> a brief dip that recovers. Color encodes that.
@@ -158,6 +212,9 @@ export function UptimePanel({ lens }: { lens: Lens }) {
         </div>
         <Segmented value={win} onChange={setWin} tabs={[{ id: "10m", label: "10m" }, { id: "1h", label: "1h" }, { id: "6h", label: "6h" }]} />
       </div>
+
+      {/* THIRD baseline: no-defense / blind-R6 / Phorvex attack outcome — live run or benchmark */}
+      <AttackOutcome strategies={d.strategies || []} source={d.strategiesSource} runId={d.strategiesRun} />
 
       {d.workloads.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No actuations yet in this window — once Phorvex acts on a service (quarantine / rotate / kv-reset), its availability series and the action markers appear here.</CardContent></Card>
