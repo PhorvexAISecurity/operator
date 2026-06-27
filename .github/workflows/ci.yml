@@ -10,8 +10,9 @@ on:
 # Required for GitHub OIDC token so aws-actions can assume the IAM role
 # without any long-lived credentials stored as secrets.
 permissions:
-  id-token:  write   # request OIDC JWT
-  contents:  read    # checkout
+  id-token:      write   # request OIDC JWT (build jobs assume the AWS role)
+  contents:      read    # checkout
+  pull-requests: read    # dorny/paths-filter lists PR changed files via the API
 
 env:
   AWS_REGION: us-east-2
