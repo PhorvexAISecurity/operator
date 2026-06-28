@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, UptimeResult, UptimeWorkload, UptimeMarker, UptimeStrategy } from "@/lib/api";
+import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Segmented } from "@/components/ui/more";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
@@ -75,7 +76,7 @@ function actionMeta(a: string): { color: string; label: string } {
 
 // UptimeChart — self-contained inline SVG (no chart lib; matches the CostOverTimeChart pattern).
 // Availability % over the window (area + line) with a vertical marker at every moment Phorvex acted.
-function UptimeChart({ wl }: { wl: UptimeWorkload }) {
+function UptimeChart({ wl, attacks = [] }: { wl: UptimeWorkload; attacks?: { scenario: string; start: number; end: number }[] }) {
   const pts = wl.series;
   if (!pts || pts.length < 2) return <div className="py-6 text-center text-[12px] text-muted-foreground">collecting samples… (the sampler records availability every 5s)</div>;
   const W = 720, H = 200, padL = 40, padR = 14, padT = 12, padB = 26;
@@ -91,8 +92,18 @@ function UptimeChart({ wl }: { wl: UptimeWorkload }) {
   const yticks = [0, 50, 100];
   // only render markers that fall within the plotted time span.
   const inMarkers = (wl.markers || []).filter((m) => { const t = ms(m.t); return t >= t0 - span * 0.02 && t <= tN + span * 0.02; });
+  // attack windows that overlap the chart span — drawn as bands so you SEE the attack relative to uptime.
+  const bands = attacks.map((a) => ({ a, s: Math.max(a.start, t0), e: Math.min(a.end, tN) })).filter((b) => b.e > b.s);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Availability of ${wl.workload} over time with actuation markers`}>
+      {/* attack-run bands (behind everything) */}
+      {bands.map((b, i) => (
+        <g key={`b${i}`}>
+          <rect x={x(b.s)} y={padT} width={Math.max(1, x(b.e) - x(b.s))} height={innerH} fill="hsl(var(--warning))" fillOpacity={0.1} />
+          <line x1={x(b.s)} y1={padT} x2={x(b.s)} y2={padT + innerH} stroke="hsl(var(--warning))" strokeWidth={1} strokeOpacity={0.5} strokeDasharray="2 2" />
+          <text x={x(b.s) + 2} y={padT + 9} fontSize={9} fill="hsl(var(--warning))">⚔ {b.a.scenario}</text>
+        </g>
+      ))}
       {yticks.map((v, i) => (
         <g key={i}>
           <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray={v === 100 ? "0" : "2 3"} />
@@ -127,7 +138,7 @@ function actionLegend(markers: UptimeMarker[]) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1]);
 }
 
-function WorkloadCard({ wl }: { wl: UptimeWorkload }) {
+function WorkloadCard({ wl, attacks }: { wl: UptimeWorkload; attacks?: { scenario: string; start: number; end: number }[] }) {
   const legend = actionLegend(wl.markers || []);
   const upTone = wl.uptimePct >= 99.5 ? "good" : wl.uptimePct >= 90 ? "warn" : "muted";
   return (
@@ -149,7 +160,7 @@ function WorkloadCard({ wl }: { wl: UptimeWorkload }) {
           </div>
         </div>
 
-        <UptimeChart wl={wl} />
+        <UptimeChart wl={wl} attacks={attacks} />
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Uptime (window)" value={`${wl.uptimePct.toFixed(2)}%`} tone={upTone} />
@@ -169,17 +180,34 @@ function WorkloadCard({ wl }: { wl: UptimeWorkload }) {
   );
 }
 
+// parseTs parses a UTC tsNow() string ("2026-06-28 14:30:00 UTC") to epoch ms (for overlaying
+// attack-run windows on the availability chart).
+function parseTs(s?: string): number {
+  if (!s) return NaN;
+  const p = s.split(" ");
+  return p.length >= 2 ? Date.parse(`${p[0]}T${p[1]}Z`) : Date.parse(s);
+}
+
 export function UptimePanel({ lens }: { lens: Lens }) {
   const [d, setD] = React.useState<UptimeResult | null>(null);
   const [err, setErr] = React.useState("");
   const [win, setWin] = React.useState("1h");
+  const [attacks, setAttacks] = React.useState<{ scenario: string; start: number; end: number }[]>([]);
+  const sel = useSelectedTarget(); // SCOPE uptime to the selected provider
   React.useEffect(() => {
     let live = true;
-    const load = () => api.uptime(lens, win).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
+    const load = () => {
+      api.uptime(lens, win, sel.context).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
+      // attack-run windows (scoped to the provider) to overlay on the chart.
+      api.runsList(lens).then((rl) => { if (live) setAttacks((rl.runs || [])
+        .filter((r) => !sel.provider || (r.provider || "") === sel.provider)
+        .map((r) => ({ scenario: r.config, start: parseTs(r.date), end: r.finished ? parseTs(r.finished) : (r.state === "running" ? Date.now() + 60_000 : parseTs(r.date) + 600_000) }))
+        .filter((a) => !isNaN(a.start))); }).catch(() => {});
+    };
     load();
     const iv = setInterval(load, 8000); // live refresh — the sampler appends every 5s
     return () => { live = false; clearInterval(iv); };
-  }, [lens, win]);
+  }, [lens, win, sel.context, sel.provider]);
 
   if (err) return <ErrorState msg={err} />;
   if (!d) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> measuring service availability…</CardContent></Card>;
@@ -221,7 +249,7 @@ export function UptimePanel({ lens }: { lens: Lens }) {
       ) : (
         <div className="space-y-4">
           <SectionLabel>Per-service availability vs actuation</SectionLabel>
-          {d.workloads.map((wl) => <WorkloadCard key={`${wl.ns}/${wl.workload}`} wl={wl} />)}
+          {d.workloads.map((wl) => <WorkloadCard key={`${wl.ns}/${wl.workload}`} wl={wl} attacks={attacks} />)}
         </div>
       )}
     </div>

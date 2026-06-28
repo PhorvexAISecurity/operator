@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, CostResult, CostTimeseries } from "@/lib/api";
+import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
@@ -65,16 +66,17 @@ export function CostPanel({ lens }: { lens: Lens }) {
   const [d, setD] = React.useState<CostResult | null>(null);
   const [ts, setTs] = React.useState<CostTimeseries | null>(null);
   const [err, setErr] = React.useState("");
+  const sel = useSelectedTarget(); // SCOPE cost to the selected provider
   React.useEffect(() => {
     let live = true;
     const load = () => {
-      api.cost(lens).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
+      api.cost(lens, sel.context).then((r) => { if (live) setD(r); }).catch((e) => { if (live) setErr(String(e.message || e)); });
       api.costTimeseries(lens).then((r) => { if (live) setTs(r); }).catch(() => { if (live) setTs(null); }); // optional — never blocks the panel
     };
     load();
     const iv = setInterval(load, 6000); // live refresh — picks up the latest 3-way attack run
     return () => { live = false; clearInterval(iv); };
-  }, [lens]);
+  }, [lens, sel.context]);
 
   if (err) return <ErrorState msg={err} />;
   if (!d) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> computing cost…</CardContent></Card>;

@@ -28,6 +28,12 @@ type CatalogItem struct {
 	Techniques []string `json:"techniques"` // ATT&CK
 	Caps       []string `json:"caps"`
 	HasRun     bool     `json:"hasRun"`
+	// per-attack guidance (derived): which actuator(s) it should trigger, when it's meaningful,
+	// what it needs to run.
+	ExpectedActuators []string `json:"expectedActuators"`
+	MeaningfulWhen    string   `json:"meaningfulWhen"`
+	RunnableNote      string   `json:"runnableNote"`
+	Prereqs           []string `json:"prereqs"`
 }
 
 var listRe = regexp.MustCompile(`^\s*-\s+(\S+)\s+\[([A-Za-z0-9]+)\]\s+R6=(\S+)\s+techniques=\[([^\]]*)\]\s+caps=\[([^\]]*)\]`)
@@ -63,9 +69,14 @@ func (c *Config) Catalog() []CatalogItem {
 		if m == nil {
 			continue
 		}
+		prod := productOf(m[1])
+		caps := splitFields(m[5])
+		meta := deriveScenarioMeta(m[1], prod, caps)
 		items = append(items, CatalogItem{
-			Name: m[1], Product: productOf(m[1]), Category: m[2], R6Tag: m[3],
-			Techniques: splitFields(m[4]), Caps: splitFields(m[5]), HasRun: hasRun[m[1]],
+			Name: m[1], Product: prod, Category: m[2], R6Tag: m[3],
+			Techniques: splitFields(m[4]), Caps: caps, HasRun: hasRun[m[1]],
+			ExpectedActuators: meta.ExpectedActuators, MeaningfulWhen: meta.MeaningfulWhen,
+			RunnableNote: meta.RunnableNote, Prereqs: meta.Prereqs,
 		})
 	}
 	sort.SliceStable(items, func(i, j int) bool {

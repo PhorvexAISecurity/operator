@@ -222,7 +222,12 @@ func (s *Server) effectiveness(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
-	target := r.URL.Query().Get("target")
+	// SCOPED per provider: ?context=<kubeconfig-context> (the SPA's header selection). Our target IDs
+	// ARE the kubeconfig contexts, so the same value prices the cluster AND picks the provider's run.
+	target := r.URL.Query().Get("context")
+	if target == "" {
+		target = r.URL.Query().Get("target")
+	}
 	if target == "" {
 		for _, t := range s.runs.ClusterTargets() {
 			if t.Runnable {
@@ -252,8 +257,8 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 	perActionCost := perActionSeconds / 3600.0 * nodeRate
 	actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost)
 	defenseCost := operatorCost + actuationCost
-	scen, totWithout, totBlind, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost)
-	_, costSource, costRun := s.cfg.comparisonMetricsPath()
+	scen, totWithout, totBlind, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost, target)
+	_, costSource, costRun := s.cfg.comparisonMetricsPath(target)
 	writeJSON(w, 200, map[string]any{
 		"available": ok, "scenarios": scen, "source": costSource, "runId": costRun,
 		"totalWithout": totWithout, "totalBlind": totBlind, "totalWith": totWith, "totalSavings": totSavings,
@@ -354,15 +359,20 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Scenario  string `json:"scenario"`
-		WithPX    bool   `json:"withPX"`
-		Compare3  bool   `json:"compare3"` // run all three strategies (no-defense/blind/Phorvex) in one live run
-		Target    string `json:"target"`
-		Namespace string `json:"namespace"`
-		StartedAt string `json:"startedAt"`
+		Scenario  string   `json:"scenario"`  // single (back-compat)
+		Scenarios []string `json:"scenarios"` // BATCH: run all of these in one sweep
+		WithPX    bool     `json:"withPX"`
+		Compare3  bool     `json:"compare3"` // run all three strategies (no-defense/blind/Phorvex) in one live run
+		Target    string   `json:"target"`
+		Namespace string   `json:"namespace"`
+		StartedAt string   `json:"startedAt"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	id, err := s.runs.StartScenario(body.Scenario, body.WithPX, body.Compare3, body.Target, body.Namespace, body.StartedAt)
+	scenarios := body.Scenarios
+	if len(scenarios) == 0 && body.Scenario != "" {
+		scenarios = []string{body.Scenario}
+	}
+	id, err := s.runs.StartScenario(scenarios, body.WithPX, body.Compare3, body.Target, body.Namespace, body.StartedAt)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
