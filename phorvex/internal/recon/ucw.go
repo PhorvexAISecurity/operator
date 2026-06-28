@@ -55,8 +55,12 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		}
 	}
 
-	// AI recon facts — DEFINED for both-products completeness, AUDIT-ONLY (no cover) so
-	// they never inflate selectable coverage until the Phase-2 reset actuators ship.
+	// AI recon facts — emitted on GPU/served-model assets. The Phase-2 reset actuators are now
+	// CROSSED into the coverage gate (opt-in): each AI fact is invalidated by its matching AI
+	// actuator, so the engine can select the gentle AI move (model-shard-replace / endpoint-rotate /
+	// mig-rebind / warm-swap / kv-migrate-invalidate) instead of a blunt rotate on an inference
+	// workload. These remain [SP-0-PENDING] for VALIDATION (the actuation needs a vLLM-shaped control
+	// plane to fire), but they are no longer hidden from selection.
 	if view.Pod.HasGPU || view.Pod.ModelID != "" {
 		asset := view.Pod.Namespace + "/" + view.Pod.Name
 		base := fctx.AssetValue * clamp01(fctx.PHold)
@@ -64,12 +68,19 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			base = 0.001 * clamp01(fctx.PHold)
 		}
 		urg := 0.5 + 0.5*clamp01(fctx.StageUrgency)
-		af.Facts = append(af.Facts,
-			Fact{Asset: asset, Kind: FactModelFingerprint, Weight: base * urg * ph.ModelRarity},
-			Fact{Asset: asset, Kind: FactEndpointPath, Weight: base * urg},
-			Fact{Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency},
-			Fact{Asset: asset, Kind: FactSideChannel, Weight: base * urg},
-		)
+		mf := Fact{Asset: asset, Kind: FactModelFingerprint, Weight: base * urg * ph.ModelRarity}
+		ep := Fact{Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
+		gc := Fact{Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency}
+		sc := Fact{Asset: asset, Kind: FactSideChannel, Weight: base * urg}
+		af.Facts = append(af.Facts, mf, ep, gc, sc)
+		if af.CoverByAction == nil {
+			af.CoverByAction = map[model.Action][]string{}
+		}
+		af.CoverByAction[model.ActionModelShardReplace] = append(af.CoverByAction[model.ActionModelShardReplace], mf.Key())
+		af.CoverByAction[model.ActionEndpointRotate] = append(af.CoverByAction[model.ActionEndpointRotate], ep.Key())
+		af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], gc.Key(), sc.Key())
+		af.CoverByAction[model.ActionWarmSwap] = append(af.CoverByAction[model.ActionWarmSwap], gc.Key(), sc.Key())
+		af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], ep.Key())
 	}
 	return af
 }

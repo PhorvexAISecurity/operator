@@ -53,7 +53,7 @@ async function post<T>(path: string, body: unknown, lens: Lens): Promise<T> {
   return r.json();
 }
 
-export interface CatalogItem { name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string; techniques: string[]; caps: string[]; hasRun: boolean }
+export interface CatalogItem { name: string; product: "k8s" | "ai" | "structural"; category: string; r6Tag: string; techniques: string[]; caps: string[]; hasRun: boolean; expectedActuators?: string[]; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[] }
 export interface BenchArm { defender: string; disruption: CI; dwell: CI; harmRate: CI; trials: number }
 export interface BenchGroup { scenario: string; source: string; arms: BenchArm[] }
 export interface CoverageTechnique { technique: string; scenarios: string[]; product: string; covered: boolean }
@@ -117,9 +117,9 @@ export const api = {
   ownerEvents: (lens: Lens, tenant?: string) => get<{ events: OwnerEvent[]; empty: boolean; rollup: OwnerRollup; note: string }>(`/api/owner/events${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`, lens),
   ownerTenants: (lens: Lens) => get<{ tenants: string[] }>("/api/owner/tenants", lens),
   reports: (lens: Lens) => get<{ reports: ReportMeta[] }>("/api/reports", lens),
-  cost: (lens: Lens) => get<CostResult>("/api/cost", lens),
+  cost: (lens: Lens, context = "") => get<CostResult>(`/api/cost${context ? `?context=${encodeURIComponent(context)}` : ""}`, lens),
   costTimeseries: (lens: Lens) => get<CostTimeseries>("/api/cost-timeseries", lens),
-  uptime: (lens: Lens, window = "1h") => get<UptimeResult>(`/api/uptime?window=${encodeURIComponent(window)}`, lens),
+  uptime: (lens: Lens, window = "1h", context = "") => get<UptimeResult>(`/api/uptime?window=${encodeURIComponent(window)}${context ? `&context=${encodeURIComponent(context)}` : ""}`, lens),
   report: (id: string, lens: Lens) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
@@ -139,8 +139,8 @@ export const api = {
   // capabilities reports live cluster GPU/MIG/multi-node so the UI gates only genuinely-unmet scenarios.
   capabilities: (target: string, lens: Lens) =>
     get<{ gpu: boolean; mig: boolean; multiNode: boolean; nodes: number; gpuCount: number }>(`/api/capabilities${target ? `?target=${encodeURIComponent(target)}` : ""}`, lens),
-  startScenario: (scenario: string, withPX: boolean, target: string, namespace: string, lens: Lens, compare3 = false) =>
-    post<{ id: string }>("/api/runs/scenario", { scenario, withPX, compare3, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
+  startScenario: (scenarios: string | string[], withPX: boolean, target: string, namespace: string, lens: Lens, compare3 = false) =>
+    post<{ id: string }>("/api/runs/scenario", { scenarios: Array.isArray(scenarios) ? scenarios : [scenarios], withPX, compare3, target, namespace, startedAt: new Date().toLocaleTimeString() }, lens),
   // scan execs `phorvex --scan` LIVE (fresh exec each call — not a cached corpus). ns="" scans all
   // namespaces; context targets a specific kubeconfig context (the selected environment).
   scan: (ns: string, lens: Lens, context?: string) => {
@@ -214,10 +214,11 @@ export interface RunEvidence { id: string; scenario: string; date: string; finis
 // liveStream opens the SSE decision stream (per-lens projected server-side). Returns a
 // cleanup fn. Each message is the per-lens payload (full Record for investor/operator;
 // OwnerEvent for owner).
-export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: string, tail = 80): () => void {
+export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: string, tail = 80, context = ""): () => void {
   // tail=N: replay only the last N decisions on connect (avoids the "fast train" flood after the
   // operator has run for hours), then tail live. tail=0 replays the whole audit (opt-in).
-  const es = new EventSource(`${API_BASE}/api/live?lens=${lens}&tail=${tail}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}`);
+  // context=<kubeconfig context>: SCOPE the stream to that provider's operator audit (EKS vs vCluster).
+  const es = new EventSource(`${API_BASE}/api/live?lens=${lens}&tail=${tail}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}${context ? `&context=${encodeURIComponent(context)}` : ""}`);
   // NOTE: EventSource cannot send headers; the lens is passed as a query param the backend
   // also honors. (Demo-trust; real authn is [PENDING-P-VCLUSTER].)
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };

@@ -46,12 +46,22 @@ type costParse struct {
 // "cost of Phorvex's response" (defensive actions) per attack, at the workload's AWS node rate.
 const perActionSeconds = 0.534
 
-// latestComparePath returns the metrics.jsonl of the most recent COMPLETED 3-strategy run — the
-// pointer the run manager drops on completion (runs.go) — plus a friendly run id, or ("","") if
-// none. This is what makes the cost/uptime comparison DYNAMIC: after you run a live 3-way attack,
-// the panels read THAT run instead of the static benchmark.
-func (c *Config) latestComparePath() (path, runID string) {
-	b, err := os.ReadFile(filepath.Join(c.HarnessDir, "latest-compare-out.txt"))
+// comparePointerFile is the per-provider pointer the run manager drops on a completed 3-way run, so
+// the cost/uptime comparison is scoped to the SELECTED provider (a vCluster attack does not overwrite
+// the EKS comparison, and vice-versa).
+func comparePointerFile(context string) string {
+	if isVClusterContext(context) {
+		return "latest-compare-vcluster.txt"
+	}
+	return "latest-compare-out.txt"
+}
+
+// latestComparePath returns the metrics.jsonl of the most recent COMPLETED 3-strategy run for the
+// given provider context — the pointer the run manager drops on completion (runs.go) — plus a
+// friendly run id, or ("","") if none. This is what makes the comparison DYNAMIC + per-provider:
+// after a live 3-way attack on a provider, that provider's panels read THAT run.
+func (c *Config) latestComparePath(context string) (path, runID string) {
+	b, err := os.ReadFile(filepath.Join(c.HarnessDir, comparePointerFile(context)))
 	if err != nil {
 		return "", ""
 	}
@@ -101,8 +111,8 @@ func hasThreeArms(path string) bool {
 // comparisonMetricsPath resolves WHERE the 3-strategy comparison reads its measured metrics: the
 // most recent live 3-way run if one exists, else the static benchmark (out-eks → out-p3deep).
 // source is "latest run" | "benchmark"; runID names the run when live.
-func (c *Config) comparisonMetricsPath() (path, source, runID string) {
-	if p, rid := c.latestComparePath(); p != "" {
+func (c *Config) comparisonMetricsPath(context string) (path, source, runID string) {
+	if p, rid := c.latestComparePath(context); p != "" {
 		return p, "latest run", rid
 	}
 	p := filepath.Join(c.Root, "build", "test-harness", "out-eks", "metrics.jsonl")
@@ -204,9 +214,10 @@ func (c *Config) actuationCostPerYear(perActionCost float64) (costYr, ratePerHr 
 // types); defenseOverride (>0) is the real cloud-priced rotation overhead. The headline does
 // NOT sum valueAtRisk across scenarios — it reports the single infra value at the AVERAGE
 // measured disruption (summing would double-count the same hardware). ok=false if no metrics.
-func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64) (scen []CostScenario, totWithout, totBlind, totWith, totSavings float64, ok bool) {
-	// DYNAMIC: the latest live 3-way run if one exists, else the static benchmark.
-	path, _, _ := c.comparisonMetricsPath()
+func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64, context string) (scen []CostScenario, totWithout, totBlind, totWith, totSavings float64, ok bool) {
+	// DYNAMIC + per-provider: the latest live 3-way run for this provider if one exists, else the
+	// static benchmark.
+	path, _, _ := c.comparisonMetricsPath(context)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, 0, 0, 0, 0, false

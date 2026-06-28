@@ -213,9 +213,17 @@ func (rm *RunManager) ClusterTargets() []ClusterTarget {
 // d-phorvex (compared against no-MTD); otherwise the non-PX baselines. The harness deploys its
 // own synthetic attacker + victim into `namespace` and confines every object there — it does
 // not touch pre-existing workloads in other namespaces.
-func (rm *RunManager) StartScenario(scenario string, withPX, compare3 bool, targetID, namespace, startedAt string) (string, error) {
-	if !scenarioRe.MatchString(scenario) {
-		return "", fmt.Errorf("invalid scenario name")
+func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, targetID, namespace, startedAt string) (string, error) {
+	if len(scenarios) == 0 {
+		return "", fmt.Errorf("no scenario selected")
+	}
+	if len(scenarios) > 16 {
+		return "", fmt.Errorf("too many scenarios (max 16 per batch)")
+	}
+	for _, s := range scenarios {
+		if !scenarioRe.MatchString(s) {
+			return "", fmt.Errorf("invalid scenario name %q", s)
+		}
 	}
 	// SAFETY (load-bearing): the harness DELETES its run namespace at final teardown
 	// (core.Env.CleanupOwned deleteNamespace=true). So an attack MUST run only in a dedicated,
@@ -237,12 +245,20 @@ func (rm *RunManager) StartScenario(scenario string, withPX, compare3 bool, targ
 	// THREE-WAY (compare3): one run measures all three strategies the dashboard contrasts —
 	// No defense (d-nomtd), Blind R6 timer (d-r6blindtimer), Phorvex (d-phorvex) — so cost/uptime
 	// reflect THIS live run, not the static benchmark.
-	arms, expectedTrials := "[d-nomtd, d-r6blindtimer]", 4
+	armsPerScenario := 2
+	arms := "[d-nomtd, d-r6blindtimer]"
 	switch {
 	case compare3:
-		arms, expectedTrials = "[d-nomtd, d-r6blindtimer, d-phorvex]", 6
+		arms, armsPerScenario = "[d-nomtd, d-r6blindtimer, d-phorvex]", 3
 	case withPX:
 		arms = "[d-phorvex, d-nomtd]"
+	}
+	// BATCH: the harness scenarioFilter is a list — one run sweeps every selected scenario.
+	expectedTrials := armsPerScenario * 2 * len(scenarios) // arms × trialsPerArm(2) × #scenarios
+	scenList := strings.Join(scenarios, ", ")
+	scenLabel := scenarios[0]
+	if len(scenarios) > 1 {
+		scenLabel = fmt.Sprintf("%s +%d more", scenarios[0], len(scenarios)-1)
 	}
 	rm.mu.Lock()
 	if err := rm.guard(time.Now()); err != nil {
@@ -256,13 +272,13 @@ func (rm *RunManager) StartScenario(scenario string, withPX, compare3 bool, targ
 	outDir := "out-console-" + id
 	rm.mu.Unlock()
 	cfg := fmt.Sprintf("kubeconfig: \"\"\ncontext: %q\nnamespace: %q\nownedAck: true\ntrialsPerArm: 2\nmasterSeed: 1337\nphoenixSrcDir: %q\noutDir: %q\ndefenderFilter: %s\nscenarioFilter: [%s]\n",
-		target, namespace, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), filepath.Join(rm.cfg.HarnessDir, outDir), arms, scenario)
+		target, namespace, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), filepath.Join(rm.cfg.HarnessDir, outDir), arms, scenList)
 	cfgPath := filepath.Join(rm.cfg.HarnessDir, "config.console-"+id+".yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		return "", err
 	}
 	rm.mu.Lock()
-	st := &RunStatus{ID: id, Config: scenario, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials}
+	st := &RunStatus{ID: id, Config: scenLabel, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials}
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
 	rm.mu.Unlock()
@@ -390,7 +406,9 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	// pointer the cost/uptime readers pick up, so those panels reflect THIS attack, not the static
 	// benchmark. (Plain 2-arm scenario runs do NOT claim the comparison — they'd leave it half-filled.)
 	if st.Compare3 {
-		_ = os.WriteFile(filepath.Join(rm.cfg.HarnessDir, "latest-compare-out.txt"), []byte(su.OutDir), 0o644)
+		// per-provider pointer (st.Target is the kubeconfig context) so a vCluster 3-way doesn't
+		// overwrite the EKS comparison and vice-versa.
+		_ = os.WriteFile(filepath.Join(rm.cfg.HarnessDir, comparePointerFile(st.Target)), []byte(su.OutDir), 0o644)
 	}
 	// Regenerate the cost/ROI report for THIS run so the Report tab updates after an attack
 	// finishes (no cluster, no re-run — pure post-processing of the run's metrics.jsonl).

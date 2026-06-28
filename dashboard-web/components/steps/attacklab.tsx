@@ -1,11 +1,12 @@
 "use client";
 import * as React from "react";
 import { api, runStream, Lens, ClusterTarget, WorkloadNS, CatalogItem, TimelineEvent } from "@/lib/api";
+import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "@/components/panels/effectiveness";
 import { cn } from "@/lib/utils";
 import {
-  Server, Boxes, Swords, Play, Loader2, ShieldCheck, ShieldOff, Crosshair,
+  Server, Boxes, Swords, Play, Loader2, ShieldCheck, ShieldOff, Crosshair, Check,
   Radio, Terminal, AlertTriangle, CheckCircle2, Skull, StopCircle, FileText,
 } from "lucide-react";
 
@@ -29,7 +30,8 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const [nsLoading, setNsLoading] = React.useState(false);
   const ns = "amtd-attack-test"; // attacks always run in a dedicated disposable sandbox (backend-enforced)
   const [scenarios, setScenarios] = React.useState<CatalogItem[]>([]);
-  const [scenario, setScenario] = React.useState("");
+  const [picked, setPicked] = React.useState<string[]>([]); // BATCH: multi-select scenarios
+  const [runScenarios, setRunScenarios] = React.useState<string[]>([]); // the scenarios of the LIVE run (in order)
   // mode: px = Phorvex vs no-defense · base = no-defense vs blind · three = live 3-way (drives cost/uptime)
   const [mode, setMode] = React.useState<"px" | "base" | "three">("three");
   const [runId, setRunId] = React.useState("");
@@ -45,21 +47,24 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const [nowMs, setNowMs] = React.useState(0);
   const [stopping, setStopping] = React.useState(false);
   const [ended, setEnded] = React.useState<string>(""); // "" | "done" | "stopped"
+  const sel = useSelectedTarget(); // header provider scope — the attack defaults to this cluster
 
   // load the live clusters + the scenario catalog once.
   React.useEffect(() => {
     api.health(lens).then((h) => setToolchain(!!h.harnessBin)).catch(() => {});
     api.targets(lens).then((d) => {
-      setTargets(d.targets || []);
-      const run = (d.targets || []).find((t) => t.runnable);
-      if (run) setTarget(run.id);
+      const ts = d.targets || [];
+      setTargets(ts);
+      // default the attack target to the globally-selected provider (header scope), else first runnable.
+      const pick = ts.find((t) => t.runnable && t.context === sel.context) ?? ts.find((t) => t.runnable);
+      if (pick) setTarget(pick.id);
     }).catch((e) => setErr(String(e.message || e)));
     api.catalog(lens).then((d) => {
       const items = (d.items || []).filter((i) => !i.name.endsWith("-apt"));
       setScenarios(items);
-      if (items.length) setScenario(items[0].name);
+      if (items.length) setPicked((p) => (p.length ? p : [items[0].name]));
     }).catch(() => {});
-  }, [lens]);
+  }, [lens, sel.context]);
 
   // live cluster capabilities (GPU/MIG/multi-node) — drives scenario gating.
   React.useEffect(() => {
@@ -86,10 +91,12 @@ export function AttackLab({ lens }: { lens: Lens }) {
       if (e.type === "meta") { if (e.expectedTrials) setExpectedTrials(e.expectedTrials); }
       else if (e.type === "stage") setStage(e);
       else if (e.type === "trial") setEvents((prev) => {
-        // de-dupe by (defender,trial) — the SSE replays the file on every reconnect, so the
-        // same trial can arrive multiple times; counting dupes inflated the progress bar.
-        const k = `${e.defender}-${e.trial}`;
-        return prev.some((p) => `${p.defender}-${p.trial}` === k) ? prev : [...prev, e];
+        // de-dupe by (scenario,defender,trial) — the SSE replays the file on every reconnect, so the
+        // same trial can arrive twice. MUST include the scenario: in a BATCH run, scenario A's
+        // d-nomtd-0 and scenario B's d-nomtd-0 share (defender,trial), so a defender+trial-only key
+        // silently dropped every scenario after the first.
+        const k = `${e.scenario}-${e.defender}-${e.trial}`;
+        return prev.some((p) => `${p.scenario}-${p.defender}-${p.trial}` === k) ? prev : [...prev, e];
       });
       else if (e.type === "end") { setRunning(false); setStage(null); setEnded(e.state || "done"); }
     });
@@ -110,10 +117,11 @@ export function AttackLab({ lens }: { lens: Lens }) {
   }
 
   async function launch() {
-    if (!scenario || !target) return;
+    if (picked.length === 0 || !target) return;
     setBusy(true); setErr("");
+    setRunScenarios([...picked]); // freeze the run's scenario list (in order) for the per-attack tracker
     try {
-      const { id } = await api.startScenario(scenario, mode === "px", target, ns, lens, mode === "three");
+      const { id } = await api.startScenario(picked, mode === "px", target, ns, lens, mode === "three");
       setRunId(id);
     } catch (e: any) { setErr(String(e.message || e)); }
     finally { setBusy(false); }
@@ -197,30 +205,68 @@ export function AttackLab({ lens }: { lens: Lens }) {
           </div>
 
           <div>
-            <div className="mb-2 text-[12px] text-muted-foreground">Attack scenario</div>
-            <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12px] text-muted-foreground">Attack scenarios — <span className="text-foreground">pick one or many</span> (batch). Each badge is the actuator Phorvex should trigger.</span>
+              {picked.length > 0 && <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">{picked.length} selected</span>}
+            </div>
+            <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
               {scenarios.map((s) => {
                 const gated = scenarioGated(s.caps, caps);
                 const unmet = (s.caps || []).filter((c) => capUnmet(c, caps)).map((c) => c.replace("Cap", "")).join("+");
-                const isGpu = (s.caps || []).includes("CapGPU");
+                const sel = picked.includes(s.name);
                 return (
-                  <button key={s.name} disabled={gated} onClick={() => setScenario(s.name)}
+                  <button key={s.name} disabled={gated}
+                    onClick={() => setPicked((p) => (p.includes(s.name) ? p.filter((x) => x !== s.name) : [...p, s.name]))}
                     className={cn("rounded-lg border p-2.5 text-left transition-colors",
-                      scenario === s.name ? "border-primary/50 bg-primary/[0.06]" : "border-border bg-elevated/30 hover:bg-elevated/60",
+                      sel ? "border-primary/50 bg-primary/[0.06]" : "border-border bg-elevated/30 hover:bg-elevated/60",
                       gated && "opacity-40")}>
                     <div className="flex items-center gap-2 font-mono text-[12px] text-foreground">
-                      <Swords className={cn("h-3 w-3", scenario === s.name ? "text-primary" : "text-muted-foreground")} />{s.name}
+                      <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border", sel ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                        {sel && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                      </span>
+                      {s.name}
+                    </div>
+                    {/* expected-actuator badges */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {(s.expectedActuators || []).map((a) => (
+                        <span key={a} className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] text-primary" title="actuator Phorvex should trigger for this attack">{a}</span>
+                      ))}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       <span className="rounded bg-muted/40 px-1 text-[9px] uppercase text-muted-foreground">{s.product}</span>
                       <span className="text-[10px] text-muted-foreground/80">{s.r6Tag}</span>
-                      {isGpu && !gated && <span className="text-[10px] text-success">GPU ✓</span>}
                       {gated && <span className="text-[10px] text-warning">needs {unmet}</span>}
                     </div>
                   </button>
                 );
               })}
             </div>
+            {/* per-attack explanation for the most-recently-picked scenario */}
+            {(() => {
+              const last = picked[picked.length - 1];
+              const s = scenarios.find((x) => x.name === last);
+              if (!s) return null;
+              return (
+                <div className="mt-3 rounded-lg border border-border bg-elevated/30 p-3 text-[11px]">
+                  <div className="mb-1 flex items-center gap-1.5 font-mono text-[12px] text-foreground"><Crosshair className="h-3.5 w-3.5 text-primary" />{s.name}</div>
+                  {s.meaningfulWhen && <div className="text-muted-foreground"><span className="text-foreground">When it matters:</span> {s.meaningfulWhen}</div>}
+                  {s.runnableNote && <div className="mt-1 text-muted-foreground"><span className="text-foreground">Runnable:</span> {s.runnableNote}</div>}
+                  {!!(s.prereqs || []).length && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <span className="text-muted-foreground">Prereqs:</span>
+                      {(s.prereqs || []).map((p, i) => <span key={i} className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">{p}</span>)}
+                    </div>
+                  )}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    <span className="text-muted-foreground">Should trigger:</span>
+                    {(s.expectedActuators || []).map((a) => <span key={a} className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">{a}</span>)}
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-success">
+                    <ShieldCheck className="h-3 w-3" /> Phorvex can respond — every expected actuator (incl. the AI ones) is now enabled; the brain selects the gentlest net-positive one for the live situation.
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* WHICH PROVIDER this attack will hit — explicit so EKS vs vCluster is never ambiguous */}
@@ -254,9 +300,9 @@ export function AttackLab({ lens }: { lens: Lens }) {
               {mode === "three"
                 ? <span className="text-[11px] text-success">After this run, the Cost &amp; Uptime panels read THIS attack (not the static benchmark).</span>
                 : <span className="text-[11px] text-muted-foreground">For the live Cost/Uptime 3-way, pick “3-way (live)”.</span>}
-              <Button onClick={launch} disabled={busy || running || !scenario || !toolchain}>
+              <Button onClick={launch} disabled={busy || running || picked.length === 0 || !toolchain}>
                 {busy || running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                {running ? "Attack running…" : mode === "three" ? "Launch live 3-way attack" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
+                {running ? "Attack running…" : picked.length > 1 ? `Launch ${picked.length} attacks${mode === "three" ? " (3-way)" : ""}` : mode === "three" ? "Launch live 3-way attack" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
               </Button>
             </div>
           </div>
@@ -291,53 +337,92 @@ export function AttackLab({ lens }: { lens: Lens }) {
               </div>
             </div>
 
-            {/* progress bar + ETA — trial-based (accurate), with an explicit finalize phase */}
             {(() => {
-              const done = trials.length;
-              const total = Math.max(expectedTrials, done, 1);
+              // per-scenario progress: a batch run sweeps every selected scenario, so track how many
+              // attacks are done / running / pending, NOT just aggregate trials.
+              const armsPer = mode === "three" ? 3 : 2;
+              const expectedPer = armsPer * 2; // arms × trialsPerArm(2)
+              const trialsOf = (s: string) => trials.filter((t) => t.scenario === s);
+              const scenList = runScenarios.length ? runScenarios : Array.from(new Set(trials.map((t) => t.scenario).filter(Boolean) as string[]));
+              const statusOf = (s: string): "done" | "running" | "pending" => {
+                const n = trialsOf(s).length;
+                if (n >= expectedPer) return "done";
+                if (s === stage?.scenario || n > 0) return "running";
+                return "pending";
+              };
+              const doneN = scenList.filter((s) => statusOf(s) === "done").length;
+              const curScen = stage?.scenario || scenList.find((s) => statusOf(s) === "running");
+              const curIdx = curScen ? scenList.indexOf(curScen) : -1;
+              const done = trials.length, total = Math.max(expectedTrials, done, 1);
               const elapsed = startedMs ? Math.round((nowMs - startedMs) / 1000) : 0;
-              const finalizing = running && done >= total; // trials done, harness still tearing down operators
+              const finalizing = running && done >= total;
               const frac = !running ? 1 : finalizing ? 0.97 : done / total;
-              // ETA from the measured per-trial pace (each PX trial rebuilds operators → ~30-45s).
               const perTrial = done > 0 ? elapsed / done : 45;
               const eta = running && !finalizing ? Math.max(5, Math.round((total - done) * perTrial)) : 0;
               return (
-                <div>
+                <div className="space-y-3">
+                  {/* attacks done / remaining */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[13px]">
+                      <span className="font-semibold text-foreground">{doneN}/{scenList.length}</span> <span className="text-muted-foreground">attacks complete</span>
+                      {running && curScen && <span className="text-muted-foreground"> · now running <span className="font-mono text-primary">{curScen}</span>{curIdx >= 0 ? ` (#${curIdx + 1})` : ""}</span>}
+                    </div>
+                    <span className="text-[11px] tabular text-muted-foreground">
+                      {finalizing ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> finalizing…</span>
+                        : running ? `${done}/${total} trials · elapsed ${elapsed}s · ~${eta}s left`
+                        : ended === "stopped" ? "stopped by you"
+                        : <span className="inline-flex items-center gap-1 text-success"><FileText className="h-3 w-3" /> all done — report in the Report tab</span>}
+                    </span>
+                  </div>
+                  {/* progress bar */}
                   <div className="h-2 w-full overflow-hidden rounded-full bg-muted/50">
                     <div className={cn("h-2 rounded-full transition-all", running ? "bg-primary" : ended === "stopped" ? "bg-danger/60" : "bg-success")} style={{ width: `${Math.round(frac * 100)}%` }} />
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>{done}/{total} trials{stage ? ` · now: ${stage.scenario} (${stage.defender?.replace("d-", "")})` : ""}</span>
-                    <span className="tabular">
-                      {finalizing ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> finalizing — tearing down operators…</span>
-                        : running ? `elapsed ${elapsed}s · ~${eta}s left`
-                        : ended === "stopped" ? "stopped by you"
-                        : <span className="inline-flex items-center gap-1 text-success"><FileText className="h-3 w-3" /> report ready in the Report tab</span>}
-                    </span>
+                  {/* scenario chips — one per attack, with live status */}
+                  {scenList.length > 1 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {scenList.map((s, i) => {
+                        const st = statusOf(s);
+                        return (
+                          <span key={s} className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px]",
+                            st === "done" ? "border-success/40 bg-success/[0.06] text-success"
+                            : st === "running" ? "border-primary/50 bg-primary/[0.08] text-primary"
+                            : "border-border bg-elevated/30 text-muted-foreground/70")}>
+                            {st === "done" ? <Check className="h-3 w-3" /> : st === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <span className="text-[9px]">#{i + 1}</span>}
+                            {s}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* per-attack results — each scenario's measured arms as it finishes */}
+                  <div className="space-y-3">
+                    {scenList.filter((s) => trialsOf(s).length > 0).map((s) => {
+                      const st = statusOf(s);
+                      return (
+                        <div key={s} className="rounded-lg border border-border/60 bg-elevated/20 p-3">
+                          <div className="mb-2 flex items-center gap-2 text-[12px]">
+                            {st === "done" ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                            <span className="font-mono text-foreground">{s}</span>
+                            <Badge variant={st === "done" ? "real" : "accent"}>{st === "done" ? "done" : "running"}</Badge>
+                            <span className="text-[11px] text-muted-foreground">{trialsOf(s).length}/{expectedPer} trials</span>
+                          </div>
+                          <ArmSummary trials={trialsOf(s)} />
+                          {/* per-trial rows: each trial's attack-landed/disrupted state + the attacker's commands */}
+                          <div className="mt-2 space-y-1.5">
+                            {trialsOf(s).slice().reverse().map((t, i) => <TrialRow key={`${t.defender}-${t.trial}-${i}`} t={t} />)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!trials.length && running && (
+                      <div className="py-6 text-center text-[13px] text-muted-foreground">Building operators + deploying victims… the first attack lands shortly.</div>
+                    )}
                   </div>
                 </div>
               );
             })()}
-
-            {stage && (
-              <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/[0.05] px-3 py-2 text-[12px]">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                <span className="text-muted-foreground">now attacking</span>
-                <span className="font-mono text-foreground">{stage.scenario}</span>
-                <span className="text-muted-foreground">·</span>
-                <ArmTag defender={stage.defender || ""} />
-                <span className="text-muted-foreground">trial {stage.trial}</span>
-              </div>
-            )}
-
-            <ArmSummary trials={trials} />
-
-            <div className="space-y-2">
-              {trials.slice().reverse().map((t, i) => <TrialRow key={`${t.defender}-${t.trial}-${i}`} t={t} />)}
-              {!trials.length && running && (
-                <div className="py-6 text-center text-[13px] text-muted-foreground">Building operators + deploying victims… the first attack lands shortly.</div>
-              )}
-            </div>
           </CardContent>
         </Card>
       )}
@@ -387,18 +472,22 @@ function ArmSummary({ trials }: { trials: TimelineEvent[] }) {
         const disrupt = rs.reduce((s, r) => s + (r.disruption || 0), 0) / rs.length;
         const dwell = rs.reduce((s, r) => s + (r.dwellSeconds || 0), 0) / rs.length;
         const px = def === "d-phorvex";
+        // OUTCOME STATE for this arm: the attack LANDED (arm failed to stop it) vs DISRUPTED.
+        const landed = disrupt < 0.5;
         return (
-          <div key={def} className={cn("rounded-lg border p-3", px ? "border-primary/40 bg-primary/[0.05]" : "border-border bg-elevated/30")}>
-            <div className="flex items-center justify-between">
+          <div key={def} className={cn("rounded-lg border p-3", landed ? "border-danger/30 bg-danger/[0.04]" : "border-success/30 bg-success/[0.04]")}>
+            <div className="flex items-center justify-between gap-2">
               <ArmTag defender={def} />
-              <span className="text-[11px] tabular text-muted-foreground">{rs.length} trials</span>
+              {landed
+                ? <Badge variant="danger"><Skull className="h-3 w-3" /> attack landed</Badge>
+                : <Badge variant="real"><ShieldCheck className="h-3 w-3" /> {Math.round(disrupt * 100)}% disrupted{px ? " by Phorvex" : def === "d-r6blindtimer" ? " by R6 blind" : ""}</Badge>}
             </div>
             <div className="mt-2 h-1.5 w-full rounded-full bg-muted/50">
-              <div className={cn("h-1.5 rounded-full", px ? "bg-primary" : "bg-danger/60")} style={{ width: `${Math.round(disrupt * 100)}%` }} />
+              <div className={cn("h-1.5 rounded-full", landed ? "bg-danger/60" : px ? "bg-primary" : "bg-success/70")} style={{ width: `${Math.round(disrupt * 100)}%` }} />
             </div>
             <div className="mt-1.5 flex justify-between text-[11px] tabular text-muted-foreground">
               <span>disrupted {Math.round(disrupt * 100)}%</span>
-              <span>attacker dwell {dwell.toFixed(1)}s</span>
+              <span>{rs.length} trials · dwell {dwell.toFixed(1)}s</span>
             </div>
           </div>
         );

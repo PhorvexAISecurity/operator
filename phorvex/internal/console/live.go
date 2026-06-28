@@ -18,11 +18,35 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
 )
+
+// isVClusterContext reports whether a kubeconfig context names a vCluster (vs the EKS host). The ONE
+// place provider routing is decided, shared by the audit/cost/uptime scoping.
+func isVClusterContext(ctxName string) bool {
+	lc := strings.ToLower(ctxName)
+	return strings.Contains(lc, "vcluster") || strings.Contains(lc, "vc-")
+}
+
+// auditPathForContext returns the decision-audit file for a kubeconfig context, so Live Ops can be
+// SCOPED per provider. Each provider's operator writes its OWN audit file: a vCluster context reads
+// phorvex-live-vcluster.jsonl (alongside the default), everything else (EKS) reads the default
+// AuditPath. An empty/unknown context falls back to the default — never a mixed cross-provider view.
+func (c Config) auditPathForContext(ctxName string) string {
+	base := c.AuditPath
+	if base == "" {
+		return base
+	}
+	if isVClusterContext(ctxName) {
+		return filepath.Join(filepath.Dir(base), "phorvex-live-vcluster.jsonl")
+	}
+	return base
+}
 
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
@@ -35,7 +59,9 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	path := s.cfg.AuditPath
+	// SCOPED per provider: ?context=<kubeconfig-context> selects which operator's audit to stream
+	// (EKS vs vCluster), so the dashboard shows ONLY the selected provider's decisions.
+	path := s.cfg.auditPathForContext(r.URL.Query().Get("context"))
 	if path == "" {
 		path = s.newestAudit()
 	}
@@ -158,7 +184,7 @@ func (s *Server) liveClear(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
 		return
 	}
-	path := s.cfg.AuditPath
+	path := s.cfg.auditPathForContext(r.URL.Query().Get("context"))
 	if path == "" {
 		path = s.newestAudit()
 	}

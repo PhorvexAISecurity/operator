@@ -185,7 +185,7 @@ spec:
   triggers:
     eventDriven: true
   actions:
-    enabled: ["rotate", "quarantine"]
+    enabled: ["rotate"]
   mode: active
 `, "harness-"+p.name(), ns, ns, RotationTargetLabel, p.proactiveFloor())
 	outDir := env.Config.OutDir
@@ -233,18 +233,25 @@ func (p *phorvexArm) Start(ctx context.Context, env *core.Env) error {
 	}
 	p.auditPath = filepath.Join(outDir, "phorvex-audit-"+p.name()+".jsonl")
 	if cmd, lf, pin, err := startPinnedProc(ctx, env, phorvexBin, pxDir,
-		[]string{"--engine=p1", "--base-interval=4s",
+		// base-interval 1s (was 4s): the in-request/dwell attacks land in ~2-3s, so a 4s tick + 3s
+		// warm-up meant the first actuation fired ~10s in — after the attacker already won. A 1s tick
+		// lets the brain decide+actuate within ~2s, which is the difference between catching a dwelling
+		// foothold and arriving too late.
+		[]string{"--engine=p1", "--base-interval=1s",
 			"--operator-namespace=" + env.Config.Namespace,
 			"--audit-json=" + p.auditPath,
-			"--metrics-bind-address=:18080", "--health-probe-bind-address=:18081"},
+			// ports :18090/:18091 (was :18080/:18081) — a live jump-server phorvex-operator now binds
+			// :18080/:18081, so the arm's brain collided and CRASHED on startup ("address already in
+			// use") → it never decided/actuated → 0 disruption. Distinct ports fix it.
+			"--metrics-bind-address=:18090", "--health-probe-bind-address=:18091"},
 		"phorvex", "px-phorvex"); err == nil {
 		p.phorvexProc, p.phorvexLog, p.phorvexPin = cmd, lf, pin
 	} else {
 		env.Log.Logf("PX: phorvex operator start failed: %v", err)
 	}
-	// Let both managers lease + the Phorvex AMTD stamp the guest list before the
-	// first decision tick actuates.
-	time.Sleep(3 * time.Second)
+	// Let both managers lease + the Phorvex AMTD stamp the guest list before the first decision tick
+	// actuates — 1s (was 3s) so the defender is armed before the fast attacks complete.
+	time.Sleep(1 * time.Second)
 	return nil
 }
 

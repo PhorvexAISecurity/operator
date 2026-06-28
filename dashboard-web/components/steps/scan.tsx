@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, ScanResult } from "@/lib/api";
+import { useSelectedTarget } from "@/lib/provider-store";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { ErrorBox } from "@/components/ui/more";
@@ -20,18 +21,15 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
   const [scan, setScan] = React.useState<ScanResult | null>(null);
   const [err, setErr] = React.useState("");
   const [at, setAt] = React.useState("");
-  const [ctxLabel, setCtxLabel] = React.useState("");
-
-  React.useEffect(() => {
-    if (typeof window !== "undefined") setCtxLabel(localStorage.getItem("phorvex-context") || "current kubeconfig context");
-  }, []);
+  const sel = useSelectedTarget(); // the header's provider scope drives which cluster is scanned
+  const ctxLabel = sel.label || sel.context || "current kubeconfig context";
 
   // run() execs `phorvex --scan` LIVE via /api/scan (a fresh exec each click — not a cached corpus).
   // The PHASES below are the real server-side pipeline this single exec runs; we show them all
   // in-progress during the exec and done on completion — NOT a fake sequential per-phase timer.
   async function run() {
     setScanning(true); setErr(""); setScan(null);
-    const context = typeof window !== "undefined" ? localStorage.getItem("phorvex-context") || "" : "";
+    const context = sel.context;
     try {
       const res = await api.scan("", lens, context); // ns="" => all namespaces; live exec
       setScan(res);

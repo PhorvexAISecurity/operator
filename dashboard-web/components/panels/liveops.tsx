@@ -1,12 +1,22 @@
 "use client";
 import * as React from "react";
-import { api, Lens, liveStream } from "@/lib/api";
+import { api, Lens, liveStream, RunStatus } from "@/lib/api";
 import { useOwnerTenant } from "@/lib/owner";
+import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { Pending } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
-import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
+import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords } from "lucide-react";
+
+// parseTs parses a UTC tsNow() string ("2026-06-28 14:30:00 UTC") to epoch ms.
+function parseTs(s?: string): number {
+  if (!s) return NaN;
+  const p = s.split(" ");
+  return p.length >= 2 ? Date.parse(`${p[0]}T${p[1]}Z`) : Date.parse(s);
+}
+// AttackWindow is one attack run's time span, for correlating decisions to the attack that ran then.
+interface AttackWindow { id: string; scenario: string; start: number; end: number; running: boolean }
 
 const PAGE_SIZE = 15;       // decisions per page
 const BUFFER_CAP = 400;     // how many recent decisions we keep client-side for paging/filtering
@@ -32,6 +42,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [page, setPage] = React.useState(0);                   // 0-indexed page (0 = newest/live)
   const owner = lens === "owner";
   const { tenant, tenants, setTenant } = useOwnerTenant(lens);
+  const sel = useSelectedTarget(); // SCOPE the live stream to the selected provider (EKS vs vCluster)
 
   React.useEffect(() => {
     // owner stream is tenant-scoped: wait for a tenant before opening the SSE.
@@ -39,9 +50,9 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     setEvents([]); setConnected(true);
     // tail=80: the server replays only the last 80 decisions on connect (no "fast train" flood
     // after hours of running), then tails live; we keep up to BUFFER_CAP client-side for paging.
-    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, BUFFER_CAP)), owner ? tenant : undefined, 80);
+    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, BUFFER_CAP)), owner ? tenant : undefined, 80, sel.context);
     return () => { stop(); setConnected(false); };
-  }, [lens, owner, tenant, reloadKey]);
+  }, [lens, owner, tenant, reloadKey, sel.context]);
 
   // clear the persisted decision audit, then reconnect the SSE so the server restarts fresh.
   async function clearDecisions() {
@@ -60,19 +71,51 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     return Array.from(s).sort();
   }, [events]);
 
-  // filter by actuator type + free-text (pod / namespace / tenant).
+  // ATTACK ↔ DECISION TRACE: pull the attack runs, build their UTC time windows, and correlate each
+  // live decision to the attack that was running at that instant — so you can SEE/SEARCH "this
+  // decision happened DURING attack X".
+  const [runs, setRuns] = React.useState<RunStatus[]>([]);
+  const [traceRun, setTraceRun] = React.useState(""); // "" = show all; else only decisions in this attack's window
+  React.useEffect(() => {
+    let alive = true;
+    const load = () => api.runsList(lens).then((d) => { if (alive) setRuns(d.runs || []); }).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(t); };
+  }, [lens]);
+  const windows: AttackWindow[] = React.useMemo(() => runs
+    .filter((r) => !sel.provider || (r.provider || "") === sel.provider)
+    .map((r) => {
+      const start = parseTs(r.date);
+      const running = r.state === "running";
+      const end = r.finished ? parseTs(r.finished) : running ? Date.now() + 60_000 : start + 600_000;
+      return { id: r.id, scenario: r.config, start, end, running };
+    })
+    .filter((w) => !isNaN(w.start)), [runs, sel.provider]);
+  const attackOf = React.useCallback((timeStr?: string): AttackWindow | null => {
+    const t = Date.parse(timeStr || "");
+    if (isNaN(t)) return null;
+    return windows.find((w) => t >= w.start - 5000 && t <= w.end + 5000) || null; // small margin
+  }, [windows]);
+  const traceWin = windows.find((w) => w.id === traceRun) || null;
+
+  // filter by actuator type + free-text + (optionally) the traced attack's time window.
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => events.filter((e) => {
     if (actionFilter && e.action !== actionFilter) return false;
     if (q && !`${e.namespace || ""}/${e.pod || ""} ${e.tenant || ""}`.toLowerCase().includes(q)) return false;
+    if (traceWin) {
+      const t = Date.parse(e.time || e.Time || "");
+      if (isNaN(t) || t < traceWin.start - 5000 || t > traceWin.end + 5000) return false;
+    }
     return true;
-  }), [events, actionFilter, q]);
+  }), [events, actionFilter, q, traceWin]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount - 1);
   const pageEvents = filtered.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
   // reset to the first (live) page whenever the filter/search/lens changes.
-  React.useEffect(() => { setPage(0); }, [actionFilter, query, lens, tenant]);
+  React.useEffect(() => { setPage(0); }, [actionFilter, query, lens, tenant, traceRun]);
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -115,6 +158,19 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             className="w-56 bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none" />
           {query && <button onClick={() => setQuery("")} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>}
         </div>
+        {/* TRACE AN ATTACK — show only the decisions that fell inside a chosen attack's time window */}
+        {windows.length > 0 && (
+          <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
+            <Swords className="h-3.5 w-3.5 text-warning" />
+            <span className="text-muted-foreground">trace attack</span>
+            <select value={traceRun} onChange={(e) => setTraceRun(e.target.value)} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[12px] text-foreground">
+              <option value="">— none —</option>
+              {windows.slice(0, 25).map((w) => (
+                <option key={w.id} value={w.id}>{w.scenario} · {new Date(w.start).toLocaleTimeString()}{w.running ? " (running)" : ""}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {/* quick actuator chips */}
         <div className="flex flex-wrap items-center gap-1">
           {actions.slice(0, 6).map((a) => (
@@ -138,12 +194,19 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
         <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No decisions match the current filter. <button onClick={() => { setActionFilter(""); setQuery(""); }} className="text-primary hover:underline">reset</button></CardContent></Card>
       ) : (
         <section className="space-y-3">
+          {traceWin && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning/[0.05] px-3 py-2 text-[12px] text-warning">
+              <Swords className="h-3.5 w-3.5" />
+              <span>Tracing decisions during attack <span className="font-mono text-foreground">{traceWin.scenario}</span> — {new Date(traceWin.start).toLocaleTimeString()} → {traceWin.running ? "now (running)" : new Date(traceWin.end).toLocaleTimeString()} · <span className="font-medium">{filtered.length} decisions in this window</span></span>
+              <button onClick={() => setTraceRun("")} className="text-muted-foreground hover:text-foreground">clear</button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <SectionLabel>Decision stream {owner ? "(owner projection)" : "(full internals)"}{pageSafe === 0 ? <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-normal text-success"><span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> live</span> : <span className="ml-2 text-[10px] font-normal text-muted-foreground">history · page {pageSafe + 1}</span>}</SectionLabel>
             <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
           </div>
           <div className="space-y-2">
-            {pageEvents.map((e, i) => owner ? <OwnerCard key={`${pageSafe}-${i}`} e={e} /> : <DecisionCard key={`${pageSafe}-${i}`} e={e} />)}
+            {pageEvents.map((e, i) => owner ? <OwnerCard key={`${pageSafe}-${i}`} e={e} /> : <DecisionCard key={`${pageSafe}-${i}`} e={e} attack={attackOf(e.time || e.Time)} />)}
           </div>
           {pageCount > 1 && (
             <div className="flex justify-center pt-1"><Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} /></div>
@@ -224,7 +287,7 @@ function Metric({ label, value, hint }: { label: string; value: React.ReactNode;
   );
 }
 
-function DecisionCard({ e }: { e: any }) {
+function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; running: boolean } | null }) {
   const [open, setOpen] = React.useState(false);
   const acted = e.actuated, sel = e.selected;
   const { date, time } = fmtTime(e.time || e.Time);
@@ -242,6 +305,7 @@ function DecisionCard({ e }: { e: any }) {
           {e.dryRun && !acted && <Badge variant="pending">dry-run</Badge>}
           {e.stage && <span className="text-muted-foreground">stage <span className="text-foreground/80">{e.stage}</span></span>}
           {e.aiClassified && <Badge variant="modeled">AI</Badge>}
+          {attack && <span className="inline-flex items-center gap-1 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning" title={`a live decision made while attack '${attack.scenario}' was running`}><Swords className="h-3 w-3" /> during {attack.scenario}</span>}
           {time && <span className="text-[11px] text-muted-foreground/70">{time}</span>}
           <span className="ml-auto flex items-center gap-3 tabular text-muted-foreground">
             {typeof e.risk === "number" && <span>risk {e.risk.toFixed(2)}</span>}

@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, RunStatus, ArmResult, RunEvidence } from "@/lib/api";
+import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, ErrorState } from "./effectiveness";
 import { cn } from "@/lib/utils";
@@ -112,9 +113,10 @@ const armLabel = (def: string) => def === "d-phorvex" ? "Phorvex" : def === "d-n
 // Post-attack report history: every live attack you launched, newest first, with its date and
 // the real with/without-Phorvex metrics. Polls so it refreshes as runs finish.
 export function RunHistoryPanel({ lens }: { lens: Lens }) {
-  const [runs, setRuns] = React.useState<RunStatus[] | null>(null);
+  const [allRuns, setRuns] = React.useState<RunStatus[] | null>(null);
   const [err, setErr] = React.useState("");
   const [open, setOpen] = React.useState<string>("");
+  const sel = useSelectedTarget(); // SCOPE the report list to the selected provider
 
   React.useEffect(() => {
     let alive = true;
@@ -124,14 +126,16 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
     return () => { alive = false; clearInterval(t); };
   }, [lens]);
 
-  if (err && !runs) return <ErrorState msg={err} />;
-  if (!runs) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> loading attack reports…</CardContent></Card>;
+  if (err && !allRuns) return <ErrorState msg={err} />;
+  if (!allRuns) return <Card><CardContent className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> loading attack reports…</CardContent></Card>;
+  // show ONLY attacks that ran on the selected provider (header scope).
+  const runs = sel.provider ? allRuns.filter((r) => (r.provider || "") === sel.provider) : allRuns;
 
   return (
     <div className="space-y-5">
       <PageHead title="Attack reports" sub="Every attack you launched from the Attack Lab — newest first, with the date it ran and the real measured metrics: attack disruption without Phorvex vs with Phorvex, attacker dwell, and defensive actions. This list refreshes automatically as live attacks finish." />
       {runs.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No attacks run yet — go to <span className="text-primary">Attack Lab</span>, launch a scenario, and its report appears here when it finishes.</CardContent></Card>
+        <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No attacks {sel.provider ? <>on <span className="text-foreground">{sel.label || sel.provider}</span></> : "run"} yet — go to <span className="text-primary">Attack Lab</span>, launch a scenario {sel.provider ? "on this provider" : ""}, and its report appears here when it finishes.</CardContent></Card>
       ) : (
         <Card><CardContent className="p-0">
           <div className="overflow-x-auto p-3">

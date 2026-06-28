@@ -40,6 +40,7 @@ const (
 // uptimeSample is one workload-availability reading at one instant — all from the K8s API.
 type uptimeSample struct {
 	T         string `json:"t"`
+	Ctx       string `json:"ctx"` // kubeconfig context this sample came from — for per-provider scoping
 	NS        string `json:"ns"`
 	Workload  string `json:"workload"`
 	Kind      string `json:"kind"` // Deployment | StatefulSet
@@ -74,17 +75,44 @@ func (s *Server) StartUptimeSampler(ctx context.Context) {
 	}()
 }
 
-// sampleUptimeOnce lists Deployments + StatefulSets on the operator's current-context cluster and
-// appends one availability sample per non-system workload. One list call each — cheap.
+// sampleUptimeOnce samples EVERY kubeconfig context (EKS + vCluster + …) so the dashboard can scope
+// availability per provider. Each sample is tagged with the context it came from. Unreachable
+// contexts are skipped (short per-context timeout) — never blocks the loop.
 func (s *Server) sampleUptimeOnce(ctx context.Context) {
-	cs, err := clientForContext("") // current-context = the operator's cluster (EKS here)
+	contexts := kubeContexts()
+	if len(contexts) == 0 {
+		contexts = []string{""} // dev fallback: the single current-context
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var samples []uptimeSample
+	for _, ctxName := range contexts {
+		samples = append(samples, sampleContextWorkloads(ctx, ctxName, now)...)
+	}
+	if len(samples) == 0 {
+		return
+	}
+	path := uptimePath(s.cfg)
+	rotateIfLarge(path, uptimeCapBytes)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return
 	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for i := range samples {
+		_ = enc.Encode(&samples[i])
+	}
+}
+
+// sampleContextWorkloads lists Deployments + StatefulSets on ONE cluster context, tagging each
+// availability sample with that context. Returns nil if the context is unreachable.
+func sampleContextWorkloads(ctx context.Context, ctxName, now string) []uptimeSample {
+	cs, err := clientForContext(ctxName)
+	if err != nil {
+		return nil
+	}
 	cctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-
 	var samples []uptimeSample
 	if deps, e := cs.AppsV1().Deployments("").List(cctx, metav1.ListOptions{}); e == nil {
 		for i := range deps.Items {
@@ -100,7 +128,7 @@ func (s *Server) sampleUptimeOnce(ctx context.Context) {
 				continue
 			}
 			samples = append(samples, uptimeSample{
-				T: now, NS: d.Namespace, Workload: d.Name, Kind: "Deployment",
+				T: now, Ctx: ctxName, NS: d.Namespace, Workload: d.Name, Kind: "Deployment",
 				Desired: desired, Ready: int(d.Status.ReadyReplicas), Available: int(d.Status.AvailableReplicas),
 			})
 		}
@@ -119,25 +147,12 @@ func (s *Server) sampleUptimeOnce(ctx context.Context) {
 				continue
 			}
 			samples = append(samples, uptimeSample{
-				T: now, NS: d.Namespace, Workload: d.Name, Kind: "StatefulSet",
+				T: now, Ctx: ctxName, NS: d.Namespace, Workload: d.Name, Kind: "StatefulSet",
 				Desired: desired, Ready: int(d.Status.ReadyReplicas), Available: int(d.Status.ReadyReplicas),
 			})
 		}
 	}
-	if len(samples) == 0 {
-		return
-	}
-	path := uptimePath(s.cfg)
-	rotateIfLarge(path, uptimeCapBytes)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
-	for i := range samples {
-		_ = enc.Encode(&samples[i])
-	}
+	return samples
 }
 
 // rotateIfLarge keeps the JSONL bounded: when it exceeds cap, rewrite it with only its last half.
@@ -198,12 +213,17 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cutoff := time.Now().Add(-window)
+	// SCOPED per provider: ?context= selects which cluster's samples/markers/strategies to return.
+	reqCtx := r.URL.Query().Get("context")
 
-	// 1) availability samples, grouped by (ns, workload).
+	// 1) availability samples, grouped by (ns, workload) — only the selected provider's cluster.
 	type key struct{ ns, wl string }
 	series := map[key]*uptimeWorkload{}
 	order := []key{}
 	for _, sm := range readUptimeSamples(uptimePath(s.cfg)) {
+		if reqCtx != "" && sm.Ctx != reqCtx {
+			continue // a different provider's sample
+		}
 		ts, err := time.Parse(time.RFC3339Nano, sm.T)
 		if err != nil || ts.Before(cutoff) {
 			continue
@@ -225,9 +245,9 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 2) actuation markers from the live decision audit (the moments Phorvex committed to a move).
+	// 2) actuation markers from the SELECTED provider's decision audit (moments Phorvex acted).
 	//    Mapped pod -> workload by name prefix (deploy/sts owns name-<hash>-<hash> / name-<ordinal>).
-	for _, mk := range readActuationMarkers(s.cfg.AuditPath, cutoff) {
+	for _, mk := range readActuationMarkers(s.cfg.auditPathForContext(reqCtx), cutoff) {
 		// attach to the workload whose name is the longest prefix of the acted pod.
 		var best *uptimeWorkload
 		bestLen := 0
@@ -269,11 +289,11 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].Workload < out[j].Workload
 	})
-	_, stratSource, stratRun := s.cfg.comparisonMetricsPath()
+	_, stratSource, stratRun := s.cfg.comparisonMetricsPath(reqCtx)
 	writeJSON(w, 200, map[string]any{
 		"windowSeconds":    int(window.Seconds()),
 		"workloads":        out,
-		"strategies":       benchStrategies(s.cfg),
+		"strategies":       benchStrategies(s.cfg, reqCtx),
 		"strategiesSource": stratSource, // "latest run" | "benchmark"
 		"strategiesRun":    stratRun,     // run id when sourced from a live run
 		"note":             "availability = readyReplicas/desired from the K8s API; markers = moments Phorvex acted (live decision audit). kv-reset does not kill the pod, so it never dents availability.",
@@ -295,9 +315,9 @@ type uptimeStrategy struct {
 // attack outcomes — the third "no defense, attack lands" baseline for the uptime view. The defining
 // number is AttackSuccess (oracleAchieved): with no defense the attack lands every time; the blind
 // timer barely helps; Phorvex cuts it most — all measured, none synthesized.
-func benchStrategies(cfg Config) []uptimeStrategy {
-	// DYNAMIC: the latest live 3-way run if one exists, else the static benchmark.
-	path, _, _ := cfg.comparisonMetricsPath()
+func benchStrategies(cfg Config, context string) []uptimeStrategy {
+	// DYNAMIC + per-provider: the latest live 3-way run for this provider if one exists, else benchmark.
+	path, _, _ := cfg.comparisonMetricsPath(context)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil

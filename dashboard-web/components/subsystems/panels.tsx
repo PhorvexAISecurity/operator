@@ -192,7 +192,7 @@ export function CostPanel({ lens }: { lens: Lens }) {
 }
 
 /* ---------- ACTUATOR (live registry from /api/handlers) ---------- */
-const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace"]);
+const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace", "kv-migrate-invalidate"]);
 export function ActuatorPanel({ lens }: { lens: Lens }) {
   const recs = useAudit(lens);
   const [reg, setReg] = React.useState<RegistryView | null>(null);
@@ -213,7 +213,9 @@ export function ActuatorPanel({ lens }: { lens: Lens }) {
               return (
                 <div key={n} className="rounded-md border border-border/60 bg-elevated/30 px-2.5 py-2">
                   <div className="flex items-center gap-1.5"><Boxes className={cn("h-3.5 w-3.5", ai ? "text-info" : "text-primary")} /><span className="font-mono text-[12px]">{n}</span></div>
-                  <div className="mt-1">{ai ? <Badge variant="pending">AI · SP-0</Badge> : <Badge variant="real">K8s live</Badge>}</div>
+                  <div className="mt-1">{ai
+                    ? <Badge variant="accent" title="ungated: the brain can now SELECT this AI actuator on GPU/served-model workloads. Actuation validation [SP-0] still pending — it needs a vLLM-shaped control plane to fire.">AI · enabled</Badge>
+                    : <Badge variant="real">K8s live</Badge>}</div>
                 </div>
               );
             })}

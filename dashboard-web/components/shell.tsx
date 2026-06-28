@@ -1,15 +1,64 @@
 "use client";
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Lens } from "@/lib/api";
+import { Lens, api, ClusterTarget } from "@/lib/api";
 import { STEPS, StepId, JourneySignals, stepState } from "@/lib/journey";
-import { Activity, ShieldCheck, Lock, Check, PlayCircle, Home, ChevronRight } from "lucide-react";
+import { useSelectedTarget, setSelectedTarget } from "@/lib/provider-store";
+import { Activity, ShieldCheck, Lock, Check, PlayCircle, Home, ChevronRight, Server, ChevronDown } from "lucide-react";
 
 const LENS_META: Record<Lens, { label: string; hint: string }> = {
   investor: { label: "Investor", hint: "the moat + the proofs" },
   operator: { label: "Operator", hint: "live defense + run methods" },
   owner: { label: "Customer-Owner", hint: "what changed in my platform (IP-walled)" },
 };
+
+// ProviderSelector — the GLOBAL provider/cluster switch. Picking vCluster scopes every scoped view
+// (workloads, Live Ops, run-history, scan) to that provider via the shared provider-store.
+function ProviderSelector({ lens }: { lens: Lens }) {
+  const [targets, setTargets] = React.useState<ClusterTarget[]>([]);
+  const [open, setOpen] = React.useState(false);
+  const sel = useSelectedTarget();
+  React.useEffect(() => {
+    api.targets(lens).then((d) => {
+      const ts = d.targets ?? [];
+      setTargets(ts);
+      // seed the global selection once if nothing is chosen yet (prefer the runnable EKS).
+      if (!sel.context && ts.length) {
+        const def = ts.find((t) => t.runnable && /eks|arn:aws/i.test(t.context || t.id)) ?? ts.find((t) => t.runnable) ?? ts[0];
+        if (def) setSelectedTarget({ context: def.context || "", provider: def.provider, label: def.label });
+      }
+    }).catch(() => {});
+  }, [lens]); // eslint-disable-line
+  const current = targets.find((t) => t.context === sel.context) ?? targets.find((t) => t.provider === sel.provider);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-lg border border-border bg-panel/60 px-3 py-1.5 text-[12px] transition-colors hover:bg-elevated"
+        title="Provider/cluster scope — every view shows ONLY this provider's data">
+        <Server className="h-3.5 w-3.5 text-primary" />
+        <span className="font-medium text-foreground">{current?.label ?? sel.label ?? "Select provider"}</span>
+        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-50 mt-1 w-72 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-xl">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Scope all views to</div>
+            {targets.map((t) => (
+              <button key={t.id} disabled={!t.runnable}
+                onClick={() => { if (t.runnable) { setSelectedTarget({ context: t.context || "", provider: t.provider, label: t.label }); setOpen(false); } }}
+                className={cn("flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors",
+                  t.context === sel.context ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-elevated hover:text-foreground", !t.runnable && "opacity-40")}>
+                <span className="flex items-center gap-2"><Server className="h-3.5 w-3.5" /> <span className="font-medium">{t.label}</span></span>
+                {t.context === sel.context ? <Check className="h-3.5 w-3.5 text-primary" /> : !t.runnable ? <Lock className="h-3 w-3" /> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function Shell({
   lens, setLens, active, go, signals, onDemo, children,
@@ -34,9 +83,8 @@ export function Shell({
         </button>
         <div className="hidden items-center gap-2 text-[12px] text-muted-foreground md:flex">
           <ShieldCheck className="h-4 w-4 text-success" />
-          <span className="font-medium text-foreground">Live on AWS EKS</span>
-          <span className="text-muted-foreground/50">·</span>
-          <span>AI defense <span className="text-warning">[SP-0-PENDING-P4]</span></span>
+          <span>scoped to</span>
+          <ProviderSelector lens={lens} />
         </div>
         <div className="flex items-center gap-3">
           <button onClick={onDemo} className="hidden items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-elevated hover:text-foreground sm:flex">

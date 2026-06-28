@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, ClusterTarget } from "@/lib/api";
+import { setSelectedTarget } from "@/lib/provider-store";
 import { StepId } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Loading, ErrorBox } from "@/components/ui/more";
@@ -20,13 +21,13 @@ export function ConnectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void 
       // targets[0] (which may be an unreachable cloud context). Persist its kubeconfig context so
       // the Scan step execs `phorvex --scan --context <that>`.
       const def = ts.find((t) => t.runnable && /eks|arn:aws/i.test(t.context || t.id)) ?? ts.find((t) => t.runnable) ?? ts[0];
-      if (def) { setSel(def.id); if (typeof window !== "undefined") localStorage.setItem("phorvex-context", def.context || ""); }
+      if (def) { setSel(def.id); setSelectedTarget({ context: def.context || "", provider: def.provider, label: def.label }); }
     }).catch((e) => setErr(String(e.message || e)));
   }, [lens]); // eslint-disable-line
   if (err) return <ErrorBox msg={err} />;
   if (!targets) return <Loading label="Reading available environments…" rows={3} />;
   const selT = targets.find((t) => t.id === sel);
-  const pick = (t: ClusterTarget) => { if (!t.runnable) return; setSel(t.id); if (typeof window !== "undefined") localStorage.setItem("phorvex-context", t.context || ""); };
+  const pick = (t: ClusterTarget) => { if (!t.runnable) return; setSel(t.id); setSelectedTarget({ context: t.context || "", provider: t.provider, label: t.label }); };
 
   return (
     <div className="animate-fade-up space-y-6">
