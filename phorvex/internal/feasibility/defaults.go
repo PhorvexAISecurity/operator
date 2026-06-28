@@ -14,14 +14,34 @@ import (
 // one self-registering struct; adding another (e.g. VRAM/SM conservation on the GPU
 // path) is one more file — zero change here.
 
-// availabilityFloor enforces readyReplicas-1 >= MinAvailableReplicas for a rotate
-// (Delete kills one replica; the ReplicaSet respawns, but momentarily availability
-// drops). A PodDisruptionBudget analogue. Quarantine also removes a serving replica.
+// removesReadyReplica reports whether a move drops a Ready serving replica from rotation:
+// rotate (Delete kills the pod) and quarantine (detach/freeze removes it from service) DO.
+// The in-process AI moves do NOT: kv-reset keeps the pod ALIVE and Ready (handlers_ai:
+// "kv-reset: pod ALIVE"); warm-swap cuts over to an already-Ready shadow; endpoint/adapter/
+// guardrail rotate change identity/config, not the replica count. Gating those by the
+// availability floor is the action-blind bug that makes Phorvex unable to defend a
+// SINGLE-replica GPU/LLM server with its gentlest actuator (ready=1-1 < minAvail=1).
+func removesReadyReplica(a model.Action) bool {
+	switch a {
+	case model.ActionRotate, model.ActionQuarantine:
+		return true
+	}
+	return false
+}
+
+// availabilityFloor enforces readyReplicas-1 >= MinAvailableReplicas for a move that
+// REMOVES a Ready serving replica (rotate=Delete kills one; quarantine detaches one). A
+// PodDisruptionBudget analogue. Non-removing moves (kv-reset/warm-swap/endpoint-rotate)
+// keep the replica Ready, so they are NOT gated here — otherwise the floor would forbid
+// the gentle in-process defense on the very single-replica inference pods it suits best.
 type availabilityFloor struct{}
 
 func (availabilityFloor) Name() string { return "availability-floor" }
 
-func (availabilityFloor) Check(view *model.WorkloadView, _ model.Move, pol model.Policy) Verdict {
+func (availabilityFloor) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
+	if !removesReadyReplica(move.Action) {
+		return feasible // in-process move: the pod stays Ready, availability is unchanged
+	}
 	// Only meaningful when we know the owner's replica counts.
 	if view.Pod.DesiredReplicas <= 0 {
 		return feasible // bare pod / unknown owner: nothing to compare against
