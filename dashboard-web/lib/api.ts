@@ -206,7 +206,9 @@ export interface UptimePoint { t: string; pct: number }
 export interface UptimeMarker { t: string; action: string }
 export interface UptimeWorkload { ns: string; workload: string; kind: string; series: UptimePoint[]; markers: UptimeMarker[]; uptimePct: number; minPct: number; actuations: number; killingActs: number }
 export interface UptimeStrategy { key: string; label: string; attackSuccess: number; disrupted: number; defensiveActions: number; trials: number }
-export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; strategies?: UptimeStrategy[]; strategiesSource?: string; strategiesRun?: string; note: string }
+export interface UptimeScenarioArm { key: string; label: string; attackSuccess: number; disrupted: number; dwell: number; defensiveActions: number; trials: number }
+export interface UptimeScenario { scenario: string; category: string; arms: UptimeScenarioArm[] }
+export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; strategies?: UptimeStrategy[]; scenarios?: UptimeScenario[]; strategiesSource?: string; strategiesRun?: string; note: string }
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
 export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }
