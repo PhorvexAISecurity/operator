@@ -105,6 +105,10 @@ spec:
                       - mig-rebind
                       - kv-reset
                       - model-shard-replace
+                      - adapter-rotate
+                      - request-drain
+                      - guardrail-rotate
+                      - kv-migrate-invalidate
                       type: string
                     minItems: 1
                     type: array

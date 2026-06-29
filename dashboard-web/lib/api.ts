@@ -123,6 +123,7 @@ export const api = {
   report: (id: string, lens: Lens) => get<{ id: string; title: string; content: string }>(`/api/reports?id=${encodeURIComponent(id)}`, lens),
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
+  version: (lens: Lens) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens),
   runStatus: (id: string, lens: Lens) => get<RunStatus>(`/api/runs/status?id=${id}`, lens),
   runsList: (lens: Lens) => get<{ runs: RunStatus[] }>("/api/runs/list", lens),
   stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
@@ -189,7 +190,7 @@ export interface WorkloadNS { namespace: string; system: boolean; podCount: numb
 // Attack-timeline SSE event (one per harness stage header / completed trial / run end).
 export interface TimelineEvent {
   type: "meta" | "stage" | "trial" | "end";
-  id?: string; state?: string; expectedTrials?: number; provider?: string; targetLabel?: string;
+  id?: string; state?: string; queuePos?: number; expectedTrials?: number; provider?: string; targetLabel?: string;
   scenario?: string; defender?: string; trial?: number;
   oracleAchieved?: boolean; disruption?: number; dwellSeconds?: number;
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;

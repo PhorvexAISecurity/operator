@@ -199,6 +199,7 @@ type Pod struct {
 	SMFraction       float64 // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
 	ModelID          string  // served model identity/version fingerprint (AI; "" if not a model server)
 	EndpointPath     string  // inference endpoint/API route the attacker can map (AI; "" if none)
+	SuspectAdapter   string  // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
 }
 
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as

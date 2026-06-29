@@ -47,6 +47,7 @@ export function AttackLab({ lens }: { lens: Lens }) {
   const [nowMs, setNowMs] = React.useState(0);
   const [stopping, setStopping] = React.useState(false);
   const [ended, setEnded] = React.useState<string>(""); // "" | "done" | "stopped"
+  const [queuePos, setQueuePos] = React.useState(0); // >0 while THIS run waits in the FIFO behind an active run
   const sel = useSelectedTarget(); // header provider scope — the attack defaults to this cluster
 
   // load the live clusters + the scenario catalog once.
@@ -85,11 +86,11 @@ export function AttackLab({ lens }: { lens: Lens }) {
   // subscribe to the attack timeline while a run is live.
   React.useEffect(() => {
     if (!runId) return;
-    setEvents([]); setStage(null); setRunning(true); setStopping(false); setEnded("");
+    setEvents([]); setStage(null); setRunning(true); setStopping(false); setEnded(""); setQueuePos(0);
     setStartedMs(Date.now()); setNowMs(Date.now());
     const close = runStream(runId, lens, (e) => {
-      if (e.type === "meta") { if (e.expectedTrials) setExpectedTrials(e.expectedTrials); }
-      else if (e.type === "stage") setStage(e);
+      if (e.type === "meta") { if (e.expectedTrials) setExpectedTrials(e.expectedTrials); setQueuePos(e.queuePos || 0); if ((e.queuePos || 0) === 0) { setStartedMs(Date.now()); setNowMs(Date.now()); } }
+      else if (e.type === "stage") { setQueuePos(0); setStage(e); }
       else if (e.type === "trial") setEvents((prev) => {
         // de-dupe by (scenario,defender,trial) — the SSE replays the file on every reconnect, so the
         // same trial can arrive twice. MUST include the scenario: in a BATCH run, scenario A's
@@ -300,9 +301,9 @@ export function AttackLab({ lens }: { lens: Lens }) {
               {mode === "three"
                 ? <span className="text-[11px] text-success">After this run, the Cost &amp; Uptime panels read THIS attack (not the static benchmark).</span>
                 : <span className="text-[11px] text-muted-foreground">For the live Cost/Uptime 3-way, pick “3-way (live)”.</span>}
-              <Button onClick={launch} disabled={busy || running || picked.length === 0 || !toolchain}>
-                {busy || running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                {running ? "Attack running…" : picked.length > 1 ? `Launch ${picked.length} attacks${mode === "three" ? " (3-way)" : ""}` : mode === "three" ? "Launch live 3-way attack" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
+              <Button onClick={launch} disabled={busy || picked.length === 0 || !toolchain}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                {running ? `Queue ${picked.length > 1 ? picked.length + " attacks" : "attack"}` : picked.length > 1 ? `Launch ${picked.length} attacks${mode === "three" ? " (3-way)" : ""}` : mode === "three" ? "Launch live 3-way attack" : targetObj ? `Launch attack on ${targetObj.provider}` : "Launch attack"}
               </Button>
             </div>
           </div>
@@ -326,7 +327,8 @@ export function AttackLab({ lens }: { lens: Lens }) {
                 {targetObj && <ProviderChip provider={targetObj.provider} label={targetObj.label} />}
               </div>
               <div className="flex items-center gap-2">
-                {running ? <Badge variant="accent"><Radio className="h-3 w-3 animate-pulse" /> running</Badge>
+                {queuePos > 0 ? <Badge variant="accent"><Loader2 className="h-3 w-3 animate-spin" /> queued · #{queuePos}</Badge>
+                  : running ? <Badge variant="accent"><Radio className="h-3 w-3 animate-pulse" /> running</Badge>
                   : ended === "stopped" ? <Badge variant="danger"><StopCircle className="h-3 w-3" /> stopped</Badge>
                   : <Badge variant="real"><CheckCircle2 className="h-3 w-3" /> complete · report ready</Badge>}
                 {running && (
@@ -337,7 +339,15 @@ export function AttackLab({ lens }: { lens: Lens }) {
               </div>
             </div>
 
-            {(() => {
+            {queuePos > 0 ? (
+              <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/[0.06] px-4 py-4">
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+                <div className="text-[13px]">
+                  <div className="font-medium text-foreground">Queued — position #{queuePos}</div>
+                  <div className="text-[11px] text-muted-foreground">Waiting for the active attack to finish; this one starts automatically. Runs share one sandbox + fixed operator ports, so they execute one at a time (no collision).</div>
+                </div>
+              </div>
+            ) : (() => {
               // per-scenario progress: a batch run sweeps every selected scenario, so track how many
               // attacks are done / running / pending, NOT just aggregate trials.
               const armsPer = mode === "three" ? 3 : 2;

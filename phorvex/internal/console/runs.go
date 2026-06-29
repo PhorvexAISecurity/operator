@@ -45,7 +45,7 @@ var allowedConfigs = map[string]suite{
 type RunStatus struct {
 	ID        string      `json:"id"`
 	Config    string      `json:"config"`
-	State     string      `json:"state"` // running | done | error
+	State     string      `json:"state"` // queued | running | done | error | stopped
 	Started   string      `json:"started"`
 	Date      string      `json:"date"`     // server-side full timestamp the run started (UTC)
 	Finished  string      `json:"finished"` // server-side full timestamp the run finished (UTC)
@@ -59,6 +59,7 @@ type RunStatus struct {
 	Provider    string    `json:"provider,omitempty"`    // which provider this attack ran on: "AWS EKS" | "vCluster" | ...
 	TargetLabel string    `json:"targetLabel,omitempty"` // human label of the target cluster
 	ExpectedTrials int    `json:"expectedTrials"`      // trialsPerArm × arms — drives the progress bar
+	QueuePos       int    `json:"queuePos,omitempty"`  // 1-based slot in the pending queue while state=="queued" (0 once running)
 }
 
 // tsNow is the canonical run timestamp format (UTC) used for the report history.
@@ -72,6 +73,13 @@ type ArmResult struct {
 	DwellMean  float64 `json:"dwellMean"`
 }
 
+// pendingRun holds what's needed to start a QUEUED run once a slot frees up (the harness shares
+// one sandbox ns + fixed operator ports, so only maxConcurrentRuns execute at once; the rest wait).
+type pendingRun struct {
+	su     suite
+	native bool
+}
+
 // RunManager tracks triggered runs (in-memory; the console is single-user until P-VCLUSTER).
 type RunManager struct {
 	cfg       Config
@@ -80,17 +88,19 @@ type RunManager struct {
 	runOut    map[string]string   // run id -> the out dir its config writes to
 	procs     map[string]*exec.Cmd // run id -> the live harness process (for Stop)
 	stopping  map[string]bool     // run id -> a user Stop was requested
+	pending   map[string]pendingRun // run id -> queued launch args (state=="queued")
+	queue     []string            // FIFO of queued run ids (auto-started as slots free)
 	seq       int
 	active    int       // currently-running exec count
 	lastStart time.Time // for the min-interval rate limit
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	return &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}}
+	return &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}}
 }
 
 const (
-	maxConcurrentRuns = 2               // concurrency cap on exec-spawning runs
+	maxConcurrentRuns = 1               // serialize: runs share one sandbox ns + fixed operator ports (:18090/:18091), so concurrent runs collide (port-bind fail -> dead brain -> false "attack landed")
 	minStartInterval  = 3 * time.Second // rate limit between launches
 )
 
@@ -104,6 +114,55 @@ func (rm *RunManager) guard(nowMonotonic time.Time) error {
 		return fmt.Errorf("rate limited: wait a moment between launches")
 	}
 	return nil
+}
+
+// dequeueNextLocked starts as many queued runs as free slots allow (FIFO). Caller MUST hold rm.mu.
+// Called from a finishing run's completion path so the next queued attack auto-starts. A queued run
+// that was Stopped while waiting is skipped (its state is no longer "queued").
+func (rm *RunManager) dequeueNextLocked() {
+	for rm.active < maxConcurrentRuns && len(rm.queue) > 0 {
+		nid := rm.queue[0]
+		rm.queue = rm.queue[1:]
+		pr, ok := rm.pending[nid]
+		delete(rm.pending, nid)
+		st := rm.runs[nid]
+		if !ok || st == nil || st.State != "queued" {
+			continue // dropped/stopped while queued
+		}
+		st.State = "running"
+		st.Date = tsNow()
+		rm.active++
+		rm.lastStart = time.Now()
+		go rm.run(nid, pr.su, pr.native)
+	}
+}
+
+// queuePosLocked returns the 1-based position of a queued run id in the FIFO (0 if not queued).
+// Caller MUST hold rm.mu.
+func (rm *RunManager) queuePosLocked(id string) int {
+	for i, q := range rm.queue {
+		if q == id {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// removeFromQueueLocked drops a run id from the FIFO (used when a queued run is Stopped). Caller MUST hold rm.mu.
+func (rm *RunManager) removeFromQueueLocked(id string) {
+	for i, q := range rm.queue {
+		if q == id {
+			rm.queue = append(rm.queue[:i], rm.queue[i+1:]...)
+			return
+		}
+	}
+}
+
+// queuePos exposes the queued position of a run (0 if running/done) for the timeline SSE.
+func (rm *RunManager) queuePos(id string) int {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	return rm.queuePosLocked(id)
 }
 
 // validScenario allows only the harness scenario-name charset (defense against injection into
@@ -156,6 +215,16 @@ func (rm *RunManager) Stop(id string) error {
 	if !ok {
 		rm.mu.Unlock()
 		return fmt.Errorf("run %q not found", id)
+	}
+	if st.State == "queued" {
+		// cancel a not-yet-started run: drop it from the FIFO so it never executes.
+		rm.removeFromQueueLocked(id)
+		delete(rm.pending, id)
+		st.State = "stopped"
+		st.Finished = tsNow()
+		st.Error = "cancelled while queued"
+		rm.mu.Unlock()
+		return nil
 	}
 	if st.State != "running" {
 		rm.mu.Unlock()
@@ -261,12 +330,12 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 		scenLabel = fmt.Sprintf("%s +%d more", scenarios[0], len(scenarios)-1)
 	}
 	rm.mu.Lock()
-	if err := rm.guard(time.Now()); err != nil {
+	// Rate-limit rapid double-launches; the concurrency cap is handled by QUEUEING (below), not rejecting.
+	if !rm.lastStart.IsZero() && time.Since(rm.lastStart) < minStartInterval {
 		rm.mu.Unlock()
-		return "", err
+		return "", fmt.Errorf("rate limited: wait a moment between launches")
 	}
 	rm.seq++
-	rm.active++
 	rm.lastStart = time.Now()
 	id := fmt.Sprintf("scn-%d", rm.seq)
 	outDir := "out-console-" + id
@@ -277,15 +346,30 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		return "", err
 	}
+	// A 3-way (compare3) run uses the NATIVE actuator so the Phorvex arm actually rotates the
+	// sandbox victim (direct client-go pod delete) — reliable + fast, so it visibly disrupts the attack.
+	su := suite{File: "config.console-" + id + ".yaml", OutDir: outDir}
 	rm.mu.Lock()
-	st := &RunStatus{ID: id, Config: scenLabel, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials}
+	// QUEUE rather than reject: when a slot is busy the run waits in FIFO and auto-starts on completion
+	// (the harness shares one sandbox ns + fixed operator ports, so concurrent runs would collide).
+	queued := rm.active >= maxConcurrentRuns
+	state := "running"
+	if queued {
+		state = "queued"
+	} else {
+		rm.active++
+	}
+	st := &RunStatus{ID: id, Config: scenLabel, State: state, Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials}
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
+	if queued {
+		rm.pending[id] = pendingRun{su: su, native: compare3}
+		rm.queue = append(rm.queue, id)
+		rm.mu.Unlock()
+		return id, nil
+	}
 	rm.mu.Unlock()
-	// A 3-way (compare3) run uses the NATIVE actuator so the Phorvex arm actually rotates the
-	// sandbox victim (direct client-go pod delete) — reliable + fast, so it visibly disrupts the
-	// attack. Plain 2-arm scenario runs stay on Seam-1 (matches the benchmark).
-	go rm.run(id, suite{File: "config.console-" + id + ".yaml", OutDir: outDir}, compare3)
+	go rm.run(id, su, compare3)
 	return id, nil
 }
 
@@ -303,6 +387,7 @@ func (rm *RunManager) Status(id string) (*RunStatus, bool) {
 		st.Arms, st.Trials = summarizeArms(rows)
 	}
 	cp := *st
+	cp.QueuePos = rm.queuePosLocked(id) // 0 unless still queued
 	return &cp, true
 }
 
@@ -316,7 +401,9 @@ func (rm *RunManager) List() []RunStatus {
 		if rows, ok := readMetrics(filepath.Join(rm.cfg.HarnessDir, rm.runOut[id], "metrics.jsonl")); ok {
 			st.Arms, st.Trials = summarizeArms(rows)
 		}
-		out = append(out, *st)
+		cp := *st
+		cp.QueuePos = rm.queuePosLocked(id) // 0 unless still queued
+		out = append(out, cp)
 	}
 	// newest first (run ids are run-N / scn-N; sort by the trailing sequence number desc).
 	sort.Slice(out, func(i, j int) bool { return seqOf(out[i].ID) > seqOf(out[j].ID) })
@@ -378,6 +465,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	}
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
+	defer rm.dequeueNextLocked() // LIFO: runs BEFORE the unlock, so the next queued attack auto-starts
 	delete(rm.procs, id)
 	if rm.active > 0 {
 		rm.active--

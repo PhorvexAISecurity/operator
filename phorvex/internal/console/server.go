@@ -47,6 +47,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	// vendor + operator scope (full data).
 	mux.HandleFunc("/api/health", s.withCORS(s.health))
+	mux.HandleFunc("/api/version", s.withCORS(s.version))
 	mux.HandleFunc("/api/effectiveness", s.withCORS(s.scoped("operator", s.effectiveness)))
 	mux.HandleFunc("/api/frontier", s.withCORS(s.scoped("operator", s.frontier)))
 	mux.HandleFunc("/api/suites", s.withCORS(s.scoped("operator", s.suites)))

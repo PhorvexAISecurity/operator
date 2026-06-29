@@ -81,6 +81,15 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], gc.Key(), sc.Key())
 		af.CoverByAction[model.ActionWarmSwap] = append(af.CoverByAction[model.ActionWarmSwap], gc.Key(), sc.Key())
 		af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], ep.Key())
+		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
+		// adapter on this pod. Weighted to DOMINATE (a poisoned adapter corrupts every response), and
+		// covered by ONLY adapter-rotate — so the engine selects adapter-rotate for THIS attack rather
+		// than a generic rotate/kv-reset. The fact vanishes once the adapter is evicted (move stops).
+		if view.Pod.SuspectAdapter != "" {
+			ai := Fact{Asset: asset, Kind: FactAdapterIntegrity, Weight: (base + 2.0) * urg * 3}
+			af.Facts = append(af.Facts, ai)
+			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
+		}
 	}
 	return af
 }

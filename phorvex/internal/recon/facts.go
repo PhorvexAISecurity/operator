@@ -49,6 +49,11 @@ const (
 	// FactSideChannel = timing/power/GPU-util leakage of a co-tenant model (AUDIT-ONLY;
 	// no infrastructure move fully resets it).
 	FactSideChannel = "sideChannel"
+	// FactAdapterIntegrity = an UNAUTHORIZED LoRA/adapter loaded on the serving stack (a detector
+	// flagged it). It exists ONLY while the poisoned adapter is present, and ONLY adapter-rotate
+	// (unload the adapter) covers it — so the engine selects adapter-rotate for THIS attack, not a
+	// generic rotate/kv-reset.
+	FactAdapterIntegrity = "adapterIntegrity"
 )
 
 // Fact is one weighted recon fact about an asset.

@@ -138,6 +138,27 @@ export function Shell({
         <div className="bg-grid pointer-events-none absolute inset-0 h-56" />
         <div className="relative mx-auto max-w-[1400px] px-6 py-7">{children}</div>
       </main>
+      <VersionBadge lens={lens} />
+    </div>
+  );
+}
+
+// VersionBadge — a tiny, unobtrusive bottom-left readout of the LIVE deployed versions, so you can
+// confirm at a glance which build is running and whether a roll landed (refreshes every 30s).
+function VersionBadge({ lens }: { lens: Lens }) {
+  const [v, setV] = React.useState<{ console: string; operator?: string; operatorImage?: string } | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    const load = () => api.version(lens).then((d) => { if (alive) setV(d); }).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [lens]);
+  if (!v) return null;
+  return (
+    <div className="pointer-events-none fixed bottom-1 left-2 z-40 select-none font-mono text-[9px] leading-[1.35] text-muted-foreground/40">
+      <div>operator <span className="text-muted-foreground/70">{v.operator || "—"}</span></div>
+      <div>console&nbsp; <span className="text-muted-foreground/70">{v.console}</span></div>
     </div>
   );
 }

@@ -83,7 +83,8 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 	provider, targetLabel := s.runs.runMeta(id)
-	send(map[string]any{"type": "meta", "id": id, "state": s.runs.runState(id), "expectedTrials": s.runs.expectedTrials(id), "provider": provider, "targetLabel": targetLabel})
+	lastState, lastPos := s.runs.runState(id), s.runs.queuePos(id)
+	send(map[string]any{"type": "meta", "id": id, "state": lastState, "queuePos": lastPos, "expectedTrials": s.runs.expectedTrials(id), "provider": provider, "targetLabel": targetLabel})
 
 	var mOff, lOff int64
 	ctx := r.Context()
@@ -91,6 +92,12 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 	defer ticker.Stop()
 	drain := 0
 	for {
+		// re-emit meta when the run leaves the queue or advances in it, so the UI shows live
+		// "queued (#N)" -> "running" without the client having to poll.
+		if cs, cp := s.runs.runState(id), s.runs.queuePos(id); cs != lastState || cp != lastPos {
+			lastState, lastPos = cs, cp
+			send(map[string]any{"type": "meta", "id": id, "state": cs, "queuePos": cp, "expectedTrials": s.runs.expectedTrials(id), "provider": provider, "targetLabel": targetLabel})
+		}
 		lOff = tailLines(logPath, lOff, func(line string) {
 			if m := stageLineRe.FindStringSubmatch(line); m != nil {
 				n, _ := strconv.Atoi(m[3])

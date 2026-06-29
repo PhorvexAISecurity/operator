@@ -265,6 +265,12 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	// ("") for non-AI workloads so the generic kill-chain path is unchanged.
 	out.ModelID = p.Annotations["phorvex.ai/model-id"]
 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
+	// A detector flags a poisoned/unauthorized LoRA via phorvex.ai/lora-adapter on a LoRA-enabled
+	// pod; surfacing it as SuspectAdapter lets recon mint the adapter-integrity fact that ONLY
+	// adapter-rotate covers (the same annotation/label the adapter-rotate handler consumes).
+	if p.Labels["phorvex.ai/lora-enabled"] == "true" {
+		out.SuspectAdapter = p.Annotations["phorvex.ai/lora-adapter"]
+	}
 	return out
 }
 

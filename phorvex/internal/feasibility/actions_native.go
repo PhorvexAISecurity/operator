@@ -18,7 +18,8 @@ import "github.com/phorvex/phorvex/internal/model"
 func isAIMove(a model.Action) bool {
 	switch a {
 	case model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
-		model.ActionKVReset, model.ActionEndpointRotate:
+		model.ActionKVReset, model.ActionEndpointRotate,
+		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate:
 		return true
 	}
 	return false
