@@ -294,8 +294,9 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 		"windowSeconds":    int(window.Seconds()),
 		"workloads":        out,
 		"strategies":       benchStrategies(s.cfg, reqCtx),
-		"strategiesSource": stratSource, // "latest run" | "benchmark"
-		"strategiesRun":    stratRun,     // run id when sourced from a live run
+		"scenarios":        benchScenarios(s.cfg, reqCtx), // per-app three-way breakdown (attack landed / Phorvex / R6Blind)
+		"strategiesSource": stratSource,                   // "latest run" | "benchmark"
+		"strategiesRun":    stratRun,                      // run id when sourced from a live run
 		"note":             "availability = readyReplicas/desired from the K8s API; markers = moments Phorvex acted (live decision audit). kv-reset does not kill the pod, so it never dents availability.",
 	})
 }
@@ -371,6 +372,123 @@ func benchStrategies(cfg Config, context string) []uptimeStrategy {
 		mk("blind", "Blind R6 timer", "d-r6blindtimer"),
 		mk("phorvex", "Phorvex", "d-phorvex"),
 	}
+}
+
+// uptimeScenarioArm is one defender's MEASURED outcome for ONE attacked app/scenario — the building
+// block of the per-app three-way breakdown (attack landed / Phorvex / R6 blind).
+type uptimeScenarioArm struct {
+	Key              string  `json:"key"`              // none | phorvex | blind
+	Label            string  `json:"label"`            // "Attack landed" | "Defense by Phorvex" | "Defense by R6Blind"
+	AttackSuccess    float64 `json:"attackSuccess"`    // % of attacks that reached their objective (measured oracleAchieved)
+	Disrupted        float64 `json:"disrupted"`        // mean % of the attack disrupted (measured disruptionVsOracle)
+	Dwell            float64 `json:"dwell"`            // mean attacker dwell seconds (measured attackerDwellSeconds)
+	DefensiveActions float64 `json:"defensiveActions"` // mean self-inflicted defensive actions per attack (measured)
+	Trials           int     `json:"trials"`
+}
+
+// uptimeScenario is one attacked app/scenario with all three defender arms side-by-side — what the
+// dashboard renders as a per-app card, MEASURED entirely from the 3-way run's metrics.jsonl.
+type uptimeScenario struct {
+	Scenario string              `json:"scenario"`
+	Category string              `json:"category"`
+	Arms     []uptimeScenarioArm `json:"arms"` // ordered: none (attack landed), phorvex, blind
+}
+
+// benchScenarios returns, FOR EACH attacked app/scenario, the MEASURED three-way outcome split into
+// "attack landed" (d-nomtd), "defense by Phorvex" (d-phorvex) and "defense by R6Blind"
+// (d-r6blindtimer) — the per-app breakdown the uptime view shows. Only scenarios that measured all
+// three arms are returned (an honest 3-way), reading the SAME per-provider run as benchStrategies.
+func benchScenarios(cfg Config, context string) []uptimeScenario {
+	path, _, _ := cfg.comparisonMetricsPath(context)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	type acc struct {
+		disr, dwell, acts float64
+		ach, n, actN      int
+		category          string
+	}
+	defToKey := map[string]string{"d-nomtd": "none", "d-phorvex": "phorvex", "d-r6blindtimer": "blind"}
+	scen := map[string]map[string]*acc{}
+	order := []string{}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
+	for sc.Scan() {
+		var r costParse
+		if json.Unmarshal([]byte(strings.TrimSpace(sc.Text())), &r) != nil || r.Skipped || r.NegativeControl {
+			continue
+		}
+		key, ok := defToKey[r.Defender]
+		if !ok || r.Scenario == "" {
+			continue
+		}
+		arms := scen[r.Scenario]
+		if arms == nil {
+			arms = map[string]*acc{}
+			scen[r.Scenario] = arms
+			order = append(order, r.Scenario)
+		}
+		a := arms[key]
+		if a == nil {
+			a = &acc{}
+			arms[key] = a
+		}
+		a.disr += r.Disruption
+		a.dwell += r.Dwell
+		a.n++
+		if r.OracleAchieved {
+			a.ach++
+		}
+		if r.Category != "" {
+			a.category = r.Category
+		}
+		if key != "none" { // no-defense takes no actions by definition
+			a.acts += r.DefensiveActions
+			a.actN++
+		}
+	}
+
+	// labels mirror the user-facing terms; order is attack-landed → Phorvex → R6 blind.
+	armSpec := []struct{ key, label string }{
+		{"none", "Attack landed"},
+		{"phorvex", "Defense by Phorvex"},
+		{"blind", "Defense by R6Blind"},
+	}
+	out := make([]uptimeScenario, 0, len(order))
+	for _, name := range order {
+		arms := scen[name]
+		if arms["none"] == nil || arms["phorvex"] == nil || arms["blind"] == nil {
+			continue // not a complete 3-way for this app — skip rather than show a partial story
+		}
+		us := uptimeScenario{Scenario: name}
+		for _, spec := range armSpec {
+			a := arms[spec.key]
+			arm := uptimeScenarioArm{Key: spec.key, Label: spec.label, Trials: a.n}
+			if a.n > 0 {
+				arm.AttackSuccess = round2(100 * float64(a.ach) / float64(a.n))
+				arm.Disrupted = round2(100 * a.disr / float64(a.n))
+				arm.Dwell = round2(a.dwell / float64(a.n))
+				if us.Category == "" {
+					us.Category = a.category
+				}
+			}
+			if a.actN > 0 {
+				arm.DefensiveActions = round2(a.acts / float64(a.actN))
+			}
+			us.Arms = append(us.Arms, arm)
+		}
+		out = append(out, us)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Category != out[j].Category {
+			return out[i].Category < out[j].Category
+		}
+		return out[i].Scenario < out[j].Scenario
+	})
+	return out
 }
 
 func readUptimeSamples(path string) []uptimeSample {

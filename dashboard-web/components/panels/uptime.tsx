@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, Lens, UptimeResult, UptimeWorkload, UptimeMarker, UptimeStrategy } from "@/lib/api";
+import { api, Lens, UptimeResult, UptimeWorkload, UptimeMarker, UptimeStrategy, UptimeScenario, UptimeScenarioArm } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Segmented } from "@/components/ui/more";
@@ -59,6 +59,82 @@ function AttackOutcome({ strategies, source, runId }: { strategies: UptimeStrate
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// scenarioTitle prettifies a scenario id ("c1-fast-attacker") into a readable app label.
+function scenarioTitle(s: string): string {
+  return s.replace(/^[a-z]\d+-/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ArmCell — one defender column for one attacked app: the MEASURED "attacks succeed %" headline
+// (bar grows with success → red = bad), with disruption + attacker dwell beneath it.
+function ArmCell({ arm }: { arm: UptimeScenarioArm }) {
+  const m = STRAT_META[arm.key] || STRAT_META.phorvex;
+  return (
+    <div className={cn("rounded-lg border p-3", m.box)}>
+      <div className={cn("flex items-center gap-1.5 text-[12px] font-medium", m.text)}>
+        <m.Icon className="h-3.5 w-3.5" /> {arm.label}
+      </div>
+      <div className="mt-2 flex items-end gap-1.5">
+        <span className={cn("text-3xl font-semibold tabular", m.text)}>{Math.round(arm.attackSuccess)}%</span>
+        <span className="mb-1 text-[11px] text-muted-foreground">attacks succeed</span>
+      </div>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-elevated">
+        <div className={cn("h-full rounded-full", m.bar)} style={{ width: `${Math.max(2, arm.attackSuccess)}%` }} />
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>disrupted <span className="text-foreground">{Math.round(arm.disrupted)}%</span></span>
+        <span>dwell <span className="text-foreground">{arm.dwell.toFixed(1)}s</span></span>
+      </div>
+      <div className="mt-1 text-[10px] text-muted-foreground">
+        {arm.key === "none" ? "no actions — attack runs free" : <>self-actions <span className="text-foreground">{arm.defensiveActions.toFixed(2)}</span></>}
+      </div>
+    </div>
+  );
+}
+
+// ScenarioCard — one attacked app, split three ways: attack landed (no defense) vs defense by
+// Phorvex vs defense by R6Blind. Every number is MEASURED across the run's trials for this app.
+function ScenarioCard({ s }: { s: UptimeScenario }) {
+  const trials = s.arms[0]?.trials || 0;
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-primary" />
+            <span className="font-medium text-[14px] text-foreground">{scenarioTitle(s.scenario)}</span>
+            {s.category ? <Badge variant="modeled">{s.category}</Badge> : null}
+          </div>
+          <span className="text-[10px] text-muted-foreground">{trials} trials/arm</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {s.arms.map((arm) => <ArmCell key={arm.key} arm={arm} />)}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ScenarioBreakdown — the per-app three-way view the dashboard leads with: for EACH attacked app,
+// what happens with no defense, under Phorvex, and under the blind R6 timer — all measured.
+function ScenarioBreakdown({ scenarios, source, runId }: { scenarios: UptimeScenario[]; source?: string; runId?: string }) {
+  if (!scenarios || scenarios.length === 0) return null;
+  const live = source === "latest run";
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <SectionLabel>Per-app breakdown — attack landed vs Phorvex vs R6Blind</SectionLabel>
+        {live ? <Badge variant="real">live · from attack run {runId || ""}</Badge> : <Badge variant="modeled">static benchmark</Badge>}
+      </div>
+      <div className="text-[11px] text-muted-foreground -mt-1">
+        Each app was attacked under all three defenses. “Attacks succeed” = the attacker reached its objective (measured <span className="text-danger">oracleAchieved</span>); lower is better. {live ? "From the 3-way attack you just ran." : "Run a 3-way attack in the Attack Lab to make this live."}
+      </div>
+      <div className="space-y-4">
+        {scenarios.map((s) => <ScenarioCard key={s.scenario} s={s} />)}
+      </div>
+    </div>
   );
 }
 
@@ -243,6 +319,9 @@ export function UptimePanel({ lens }: { lens: Lens }) {
 
       {/* THIRD baseline: no-defense / blind-R6 / Phorvex attack outcome — live run or benchmark */}
       <AttackOutcome strategies={d.strategies || []} source={d.strategiesSource} runId={d.strategiesRun} />
+
+      {/* Per-app three-way breakdown: attack landed / defense by Phorvex / defense by R6Blind */}
+      <ScenarioBreakdown scenarios={d.scenarios || []} source={d.strategiesSource} runId={d.strategiesRun} />
 
       {d.workloads.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No actuations yet in this window — once Phorvex acts on a service (quarantine / rotate / kv-reset), its availability series and the action markers appear here.</CardContent></Card>

@@ -32,6 +32,7 @@ type costParse struct {
 	DefensiveActions float64 `json:"defensiveActions"` // # of actions Phorvex took to handle this attack (measured)
 	Dwell            float64 `json:"attackerDwellSeconds"`
 	OracleAchieved   bool    `json:"oracleAchieved"` // did the attacker reach its objective (attack SUCCEEDED)
+	Category         string  `json:"category"`       // scenario family (ClassicChain, …) — for the per-app breakdown header
 	Skipped          bool    `json:"skipped"`
 	NegativeControl  bool    `json:"negativeControl"`
 	ROI              struct {
