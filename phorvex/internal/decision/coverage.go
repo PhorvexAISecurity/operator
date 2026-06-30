@@ -192,6 +192,22 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		return provFloor + (1-provFloor)*r // a fresh, evidence-less decoy competes at <= provFloor
 	}
 
+	// [reactiveOnly] When the policy is reactive-only, an asset is actionable ONLY while a
+	// REAL attack signal targets it — a non-Phorvex SecurityEvent (this pod or a compromised
+	// neighbor; Phorvex's own events are already filtered at ingest) OR an AI poison marker
+	// (SuspectAdapter). Proactive, exposure-only moves are suppressed, so the workload stays
+	// CALM until attacked and the response is a clean, attributable reaction. The map is
+	// ALL-TRUE when reactiveOnly=false, so every gate below is a no-op and the default path
+	// stays byte-identical.
+	attackBackedKey := make(map[string]bool, len(views))
+	for _, v := range views {
+		backed := true
+		if pol.ReactiveOnly {
+			backed = v.Pod.SuspectAdapter != "" || len(v.Events) > 0
+		}
+		attackBackedKey[v.Pod.Namespace+"/"+v.Pod.Name] = backed
+	}
+
 	// --- submodular greedy under partition (one move/asset) + budget B ---
 	covered := map[string]bool{}
 	selectedAsset := map[string]bool{}
@@ -206,6 +222,9 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 			c := set.Candidates[i]
 			if selectedAsset[c.Key] {
 				continue
+			}
+			if !attackBackedKey[c.Key] {
+				continue // reactiveOnly: suppress proactive moves on un-attacked assets
 			}
 			marginal := 0.0
 			for _, k := range c.CoverKeys {
@@ -234,7 +253,10 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 
 	// demand = number of assets with a net-positive best move (for the dual subgradient)
 	demand := 0
-	for _, idxs := range candsByAsset {
+	for key, idxs := range candsByAsset {
+		if !attackBackedKey[key] {
+			continue // reactiveOnly: un-attacked assets create no proactive demand
+		}
 		best := 0.0
 		for _, i := range idxs {
 			c := set.Candidates[i]
@@ -264,7 +286,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 					break
 				}
 			}
-		} else if len(idxs) > 0 {
+		} else if len(idxs) > 0 && attackBackedKey[key] {
 			// best standalone candidate (highest coverage − λ·cost)
 			bestNet := -1.0
 			for _, i := range idxs {

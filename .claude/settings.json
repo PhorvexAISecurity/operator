@@ -12,7 +12,10 @@
       "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 10 -H \"X-Phorvex-Lens:operator\" http://localhost:8095/api/benchmarks | python3 -c \" *)",
       "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 6 http://localhost:8095/api/health')",
       "Bash(ssh -o ControlPath=/tmp/phx-ssh-%r@%h:%p -p 22 hami@87.106.63.105 'curl -s --max-time 12 -H '\\\\''X-Phorvex-Lens:operator'\\\\'' http://acea4b96735444434bc63e1c3833af84-1075391860.us-east-2.elb.amazonaws.com/api/effectiveness | python3 -c '\\\\''import sys,json; d=json.load\\(sys.stdin\\); [print\\(s[\"label\"],\"=\",s[\"value\"],s.get\\(\"unit\",\"\"\\),\"|\",s[\"status\"]\\) for s in d.get\\(\"stats\",[]\\)]'\\\\''')",
-      "Bash(grep -n \"go rm.run\\(id, suite{File: \\\\\"config.console-\\\\\"\" runs.go)"
+      "Bash(grep -n \"go rm.run\\(id, suite{File: \\\\\"config.console-\\\\\"\" runs.go)",
+      "Bash(export SSHPASS='hami1370caspersisi')",
+      "Bash(sshpass -e ssh -o StrictHostKeyChecking=no -o NumberOfPasswordPrompts=1 hami@87.106.63.105 ' *)",
+      "Bash(sshpass -e *)"
     ],
     "additionalDirectories": [
       "/Users/hami/Downloads/Phorvex/phorvex/internal/model"

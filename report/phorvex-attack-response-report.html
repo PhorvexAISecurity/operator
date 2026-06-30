@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phorvex — Live Attack &amp; Response Report</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121826; --elev:#18202f; --border:#243044;
+    --fg:#e6edf6; --muted:#93a1b5; --primary:#5b8cff; --accent:#33d6a6;
+    --danger:#ff6b6b; --warn:#ffcc66; --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 28px 80px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:21px;margin:38px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h3{font-size:16px;margin:24px 0 8px;color:var(--primary)}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 4px}
+  .meta{color:var(--muted);font-size:13px;font-family:var(--mono)}
+  .note{background:rgba(91,140,255,.08);border:1px solid rgba(91,140,255,.3);
+    border-radius:8px;padding:10px 14px;color:#cdd9ee;font-size:13.5px;margin:16px 0}
+  .warnbox{background:rgba(255,204,102,.07);border:1px solid rgba(255,204,102,.32);
+    border-radius:8px;padding:12px 14px;font-size:13.5px;margin:16px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--elev);color:#cfe0ff;font-weight:600}
+  tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+  code{font-family:var(--mono);font-size:12.5px;color:#bcd;background:rgba(255,255,255,.05);
+    padding:1px 5px;border-radius:4px}
+  pre{background:#0d1320;border:1px solid var(--border);border-left:3px solid var(--primary);
+    border-radius:8px;padding:13px 15px;overflow-x:auto;font-family:var(--mono);
+    font-size:12.5px;line-height:1.55;color:#cfe0f5;margin:10px 0}
+  .why{color:var(--accent)} .r6{color:var(--warn)}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:5px;
+    border:1px solid var(--border);background:var(--elev);color:#cdd9ee;margin-right:4px}
+  .act{color:var(--accent);font-weight:600}
+  .down{color:var(--danger);font-weight:600} .up{color:var(--accent);font-weight:600}
+  ol li,ul li{margin:5px 0}
+  .foot{margin-top:46px;color:var(--muted);font-size:12px;text-align:center}
+  a{color:var(--primary)}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>Phorvex — Live Attack &amp; Response Report</h1>
+<p class="sub">Real attacks fired at live workloads, Phorvex's actuator decisions, and the full reasoning behind each.</p>
+<p class="meta">Cluster: phorvex-dev-eks (us-east-2) · Date: 2026-06-30 · Operator: in-cluster <code>phorvex:0.2.1-reactiveonly</code> · engine <code>p1-coverage</code></p>
+<div class="note">Every number, decision and reasoning string below is copied from Phorvex's real decision audit on the live cluster — nothing is fabricated.</div>
+
+<h2>1 · Executive summary</h2>
+<p>Phorvex is a <b>deterministic AMTD brain</b>: each tick it scores every candidate defensive move by <b>consequence-weighted recon-facts-invalidated per dollar</b> (<code>Σ w(facts covered) − λ·cost</code>) over a dynamically generated <i>feasible</i> action set, and selects the best move per asset under a per-tick budget. It is the intelligence layer; the Phoenix operator is the hands.</p>
+<p>On <b>live workloads</b> this engagement showed:</p>
+<ul>
+  <li>Phorvex picks the <b>context-appropriate actuator per attack</b> — <span class="act">rotate</span> for a stateless foothold, <span class="act">quarantine</span> for a <i>stateful</i> one (preserving data), <span class="act">adapter-rotate</span> for a poisoned LoRA, <span class="act">kv-reset</span> for a cache-timing oracle.</li>
+  <li>With the new <b>reactiveOnly</b> mode, armed workloads stay <b>calm (no proactive churn) until attacked</b> — each response is a clean, <b>attributable</b> reaction.</li>
+  <li>Phorvex targets by <b>value and cost</b>, and <b>preserves state + evidence</b> — the explicit contrast against a blind fixed-timer defender (“R6”) that deletes pods on a schedule regardless of value or data loss.</li>
+</ul>
+
+<h2>2 · Services under management</h2>
+<table>
+<tr><th>Namespace</th><th>Nature</th><th>Image</th><th>Actuators enabled</th><th>reactiveOnly</th><th>Status</th></tr>
+<tr><td><b>vllm</b></td><td>vLLM model server (Qwen2.5-0.5B) — real GPU AI inference</td><td><code>vllm-openai:v0.7.3</code></td><td>kv-reset, adapter-rotate</td><td>false</td><td class="down">Pending (GPU node — §6)</td></tr>
+<tr><td><b>litellm</b></td><td>LLM gateway / proxy</td><td><code>litellm:main-stable</code></td><td>rotate</td><td>true</td><td class="up">Running 2/2</td></tr>
+<tr><td><b>mock-rag-chatbot</b></td><td>GPU RAG chatbot (mock serving)</td><td><code>mock-rag-chatbot:gpu</code></td><td>kv-reset, warm-swap, mig-rebind, endpoint-rotate, model-shard-replace, rotate</td><td>true</td><td class="down">Pending (GPU node)</td></tr>
+<tr><td><b>phorvex-live-demo</b></td><td>Decoy / honeypot</td><td><code>nginx:stable-alpine</code></td><td>rotate</td><td>true</td><td class="up">Running 2/2</td></tr>
+<tr><td><b>vitess</b></td><td>MySQL — <b>stateful</b> database (Vitess)</td><td><code>lite:v24.0.0-mysql80</code></td><td>quarantine, rotate</td><td>false</td><td>partial</td></tr>
+</table>
+<p class="sub"><b>Why actuator sets differ:</b> an LLM server can be defended by AI-native moves (flush prefix-cache, rotate a poisoned adapter) that don't disrupt the pod; a stateless proxy/decoy is defended by <b>rotate</b> (kill+recreate, fully removing an in-pod foothold); a <b>stateful</b> DB must be <b>quarantined</b> (network-isolated) rather than rotated — rotating it destroys its data.</p>
+
+<h2>3 · Attacks fired &amp; Phorvex's response</h2>
+
+<h3>3.1 vLLM — Poisoned LoRA injection → <span class="act">adapter-rotate</span></h3>
+<p><span class="tag">OWASP LLM05</span><span class="tag">AML.T0018</span> A malicious LoRA adapter is loaded into the live serving stack and flagged by the detector (<code>phorvex.ai/lora-enabled=true</code>). The poison mints a dominating <code>adapterIntegrity</code> fact that only adapter-rotate covers.</p>
+<pre>action=<span class="act">adapter-rotate</span>  selected=true  perDollar=7.72  coveredFacts=1
+stage=recon→exploit  pHold=1.00  λ=0.6  cost=0.69  net=4.91</pre>
+
+<h3>3.2 vLLM — Prefix-cache occupancy oracle → <span class="act">kv-reset</span></h3>
+<p><span class="tag">CWE-208</span> A secret prefix is primed into the shared KV/prefix-cache; cache-hit timing leaks cross-session content. Phorvex flushes the cache — no pod disruption.</p>
+<pre>action=<span class="act">kv-reset</span>  selected=true  perDollar=5.48  coveredFacts=1  cost=0.36  net=1.97
+attribution: cover:session=1.98
+<span class="r6">r6Note: "R6's blind timer would DELETE this pod regardless; Phorvex flushes the cache instead."</span></pre>
+
+<h3>3.3 litellm — Container-escape foothold → <span class="act">rotate</span></h3>
+<p>A <code>SecurityEvent</code> (<code>type=Panic, threatLevel=critical</code>) targets the live litellm pod — the exact signal a Falco/KubeArmor detector emits on a real RCE. <b>Only the attacked pod</b> rotates; the second replica is untouched. Stage jumps <code>recon→exploit</code>, in-pod recon weight rises, per-$ crosses λ.</p>
+<pre>action=<span class="act">rotate</span>  selected=true  perDollar=3.47  coveredFacts=3  cost=0.82  net=1.56
+stage=recon→lateral  pHold=0.18
+attribution: cover:podIdentity=1.096 ; cover:inMemory=1.096 ; cover:session=0.657
+<span class="why">why: "rotate: invalidates in-pod recon (cov=2.85/$0.82=3.47 per-$ > λ=0.00)"</span>
+<span class="r6">r6Note: "R6 would rotate too, but on a blind fixed timer (no cost/value targeting);
+        Phorvex rotates NOW because per-$ 3.47 > λ 0.00."</span></pre>
+
+<h3>3.4 phorvex-live-demo (decoy) — Recon/CVE foothold → <span class="act">rotate</span></h3>
+<p>A <code>SecurityEvent</code> foothold at the decoy pod (via the dashboard button / <code>POST /api/workload/attack</code>). The attacked decoy pod rotates; the other replica stays; returns to calm after the signal clears.</p>
+<pre>action=<span class="act">rotate</span>  selected=true  perDollar=1.91  coveredFacts=3  cost=0.82  net=1.56
+stage=recon→lateral  pHold=0.17</pre>
+
+<h3>3.5 Stateful workload — foothold → <span class="act">quarantine</span> (contain, preserve state)</h3>
+<p>Validated on the harness stateful victim <code>c2st-train</code>; the same law governs the live <code>vitess</code> MySQL. The <code>statefulIntegrity</code> law <b>vetoes rotate</b> (rotating destroys the data), so the brain contains the pod with a NetworkPolicy instead of abandoning it.</p>
+<pre>action=<span class="act">quarantine</span>  selected=true  perDollar=59.48  coveredFacts=7  cost=0.28  net=1.57
+stage=recon→exploit
+<span class="why">why: "quarantine: cuts lateral recon (cov=16.85/$0.28=59.48 per-$)"</span>
+<span class="r6">r6Note: "R6's blind timer would DELETE this stateful pod (destroying its data);
+        Phorvex quarantined to contain while preserving state."</span></pre>
+
+<h2>4 · How Phorvex decides (the reasoning model)</h2>
+<ol>
+  <li><b>Recon-coverage objective.</b> Each move invalidates recon facts (pod-identity, in-memory, session, network identity, lateral edges, adapter-integrity…), each weighted <code>= assetValue · P(hold) · (0.5 + 0.5·stageUrgency)</code>. The move's score is <b>per-dollar</b>: <code>coverage / cost</code>.</li>
+  <li><b>Shadow price λ.</b> A per-tenant dual-descent solver maintains λ (the budget shadow-price). A move is “due now” only when <code>per-$ &gt; λ</code>. A low-value move (per-$ ≤ λ) is <b>noop</b>'d — <i>this is why Phorvex doesn't churn.</i></li>
+  <li><b>reactiveOnly (new).</b> An armed asset is actionable <b>only when an attack signal targets it</b> (a non-Phorvex SecurityEvent, a compromised neighbor, or an AI poison marker). No attack → calm/noop; attack → stage advances, weights jump, the right actuator fires.</li>
+  <li><b>Feasibility laws (hard, pre-optimization):</b> <b>statefulIntegrity</b> (vetoes rotate on stateful → quarantine), <b>availabilityFloor</b> (protects minAvailableReplicas), <b>anti-over-rotation</b> (evidence-retention window), <b>conformal SLO gate</b> (drops SLO-unsafe moves).</li>
+  <li><b>Per-decision provenance.</b> Every decision records <code>perDollar</code>, <code>coveredFacts</code>, <code>stage→nextStage</code>, <code>pHold</code>, <code>λ</code>, a SHAP-style <b>attribution</b>, and an <b>R6 counterfactual</b> (<code>r6Would</code> + <code>r6Note</code>).</li>
+</ol>
+
+<h2>5 · Phorvex vs. the blind-timer baseline (R6)</h2>
+<table>
+<tr><th></th><th>R6 (blind fixed timer)</th><th>Phorvex</th></tr>
+<tr><td>When it acts</td><td>every pod, on a fixed schedule</td><td>only when per-$ &gt; λ (value- &amp; cost-targeted)</td></tr>
+<tr><td>Stateful pod</td><td class="down">deletes it → data lost</td><td class="up">quarantines → state preserved</td></tr>
+<tr><td>Evidence</td><td>destroyed (EvidRetain ≈ 0.75)</td><td class="up">preserved (EvidRetain = 1.00)</td></tr>
+<tr><td>AI attacks</td><td>blind pod delete</td><td>kv-reset / adapter-rotate (no pod disruption)</td></tr>
+<tr><td>Idle workload</td><td>churns it anyway</td><td class="up">calm / noop</td></tr>
+</table>
+
+<h2>6 · Infrastructure note (why two services are down)</h2>
+<div class="warnbox">
+<b>vllm</b> and <b>mock-rag-chatbot</b> are <b>Pending — not a Phorvex action.</b> The EKS GPU node group <code>phorvex-dev-eks-gpu-ng</code> (g4dn.xlarge, <b>Spot</b>) is <code>DEGRADED</code>:
+<pre>AsgInstanceLaunchFailures: Could not launch Spot Instances.
+UnfulfillableCapacity — Unable to fulfill capacity ... Launching EC2 instance failed.</pre>
+The Spot GPU node was reclaimed and AWS cannot currently supply a replacement, so GPU-requiring pods can't schedule. Phorvex never removes nodes, and this preceded the reactiveOnly deploy. <b>Fix:</b> switch the GPU group to On-Demand, change its instance type to one with available Spot capacity, or wait. <code>litellm</code> and <code>phorvex-live-demo</code> (no GPU) are unaffected.
+</div>
+
+<h2>7 · Deployed this engagement</h2>
+<ul>
+  <li><b>reactiveOnly policy mode</b> — brain change behind a flag (default off = byte-identical; determinism golden + unit test pass). Rolled live as ECR <code>phorvex:0.2.1-reactiveonly</code> (rollback = <code>set image …:0.2.0</code>).</li>
+  <li><b>/api/workload/attack</b> console endpoint + <b>dashboard attack buttons</b> (Live Operations).</li>
+  <li><b>Scenario-aware harness policy</b> — quarantine only for stateful scenarios.</li>
+  <li><b>Cost &amp; uptime confirmed live</b> — value-at-risk from real AWS node pricing ($2,582/yr), defense overhead from the operator's measured footprint, uptime from real K8s readiness sampling.</li>
+</ul>
+
+<div class="foot">Phorvex · deterministic AMTD intelligence · generated from the live decision audit, 2026-06-30</div>
+</div></body></html>

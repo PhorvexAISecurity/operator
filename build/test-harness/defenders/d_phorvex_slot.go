@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -155,6 +156,27 @@ func (p *phorvexArm) buildPhorvex(ctx context.Context, env *core.Env, pxDir stri
 	return bin, ""
 }
 
+// enabledActionsFor returns the PhorvexPolicy actions.enabled list for a scenario.
+//
+// Quarantine is the STATEFUL-containment actuator and is enabled ONLY for scenarios
+// whose victim is a stateful workload (in-progress work on a PVC). On such a pod the
+// brain's stateful-integrity law vetoes rotate, so WITHOUT quarantine the brain has no
+// feasible move and noops — that is the bug this fixes: a stateful workload should be
+// CONTAINED (quarantine), not abandoned. For stateless scenarios the policy stays
+// rotate-only: a pod rotate (kill+recreate) fully removes an in-pod foothold that a
+// network-cut quarantine cannot, and on a stateless pod the cost-aware brain would
+// otherwise prefer the cheaper quarantine and leave the foothold alive (0 disruption,
+// where rotate would have removed it). c2-stateful-training is the only stateful
+// scenario today; the "stateful" name convention keeps this forward-compatible.
+func statefulScenario(name string) bool { return strings.Contains(name, "stateful") }
+
+func enabledActionsFor(name string) string {
+	if statefulScenario(name) {
+		return `["rotate", "quarantine"]`
+	}
+	return `["rotate"]`
+}
+
 func (p *phorvexArm) applyPolicy(ctx context.Context, env *core.Env) string {
 	ns := env.Config.Namespace
 	policy := fmt.Sprintf(`apiVersion: phorvex.ai/v1alpha1
@@ -185,9 +207,9 @@ spec:
   triggers:
     eventDriven: true
   actions:
-    enabled: ["rotate"]
+    enabled: %s
   mode: active
-`, "harness-"+p.name(), ns, ns, RotationTargetLabel, p.proactiveFloor())
+`, "harness-"+p.name(), ns, ns, RotationTargetLabel, p.proactiveFloor(), enabledActionsFor(env.ScenarioName))
 	outDir := env.Config.OutDir
 	if outDir == "" {
 		outDir = "out"

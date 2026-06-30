@@ -508,6 +508,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		P99Ms:                  s.SLO.P99Ms,
 		MinTokensPerSec:        s.SLO.MinTokensPerSec,
 		EventDriven:            s.Triggers.EventDriven,
+		ReactiveOnly:           s.Triggers.ReactiveOnly,
 		EnabledActions:         enabled,
 		AssetWeightFromLabels:  s.AssetWeightFromLabels,
 	}

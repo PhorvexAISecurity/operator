@@ -314,6 +314,7 @@ type Policy struct {
 	P99Ms                  int64
 	MinTokensPerSec        int64
 	EventDriven            bool
+	ReactiveOnly           bool
 	EnabledActions         map[Action]bool
 	AssetWeightFromLabels  func(labels map[string]string) float64
 }

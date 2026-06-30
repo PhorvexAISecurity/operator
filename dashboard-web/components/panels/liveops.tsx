@@ -7,7 +7,7 @@ import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { Pending } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
-import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords } from "lucide-react";
+import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2 } from "lucide-react";
 
 // parseTs parses a UTC tsNow() string ("2026-06-28 14:30:00 UTC") to epoch ms.
 function parseTs(s?: string): number {
@@ -30,6 +30,33 @@ function fmtTime(t?: string): { date: string; time: string } {
     date: d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" }),
     time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
   };
+}
+
+// ---- workload-aware LIVE attack: derive a workload's TYPE, then the attacks meaningful for it ----
+type WlAttack = { id: string; label: string; actuator: string; runnable: boolean; note?: string };
+function wlType(images: string[]): { type: string; label: string } {
+  const img = (images || []).join(" ").toLowerCase();
+  if (img.includes("vllm")) return { type: "model-server", label: "vLLM model server (real)" };
+  if (img.includes("mysql") || img.includes("vitess")) return { type: "database", label: "MySQL database — stateful" };
+  if (img.includes("litellm")) return { type: "llm-proxy", label: "LLM gateway / proxy" };
+  if (img.includes("mock-rag") || img.includes("chatbot")) return { type: "gpu-inference", label: "GPU inference (mock RAG)" };
+  return { type: "generic", label: "Generic workload" };
+}
+// Each attack maps to the actuator Phorvex SHOULD pick for it. vLLM (real serving stack) fires the AI
+// signals (kv-reset / adapter-rotate). The other reactiveOnly-armed demo workloads fire a REAL foothold
+// detector signal (a SecurityEvent) → the brain rotates the attacked pod (or quarantines a stateful one).
+// `armed` namespaces stay CALM until attacked, so the response is a clean, attributable reaction.
+function attacksFor(type: string, armed: boolean): WlAttack[] {
+  switch (type) {
+    case "model-server": return [
+      { id: "kvcache", label: "Prefix-cache occupancy oracle (CWE-208)", actuator: "kv-reset", runnable: true },
+      { id: "poison", label: "Poisoned LoRA injection (OWASP LLM05 / AML.T0018)", actuator: "adapter-rotate", runnable: true },
+    ];
+    case "gpu-inference": return [{ id: "foothold", label: "Container-escape foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
+    case "llm-proxy": return [{ id: "foothold", label: "RCE / credential foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
+    case "database": return [{ id: "foothold", label: "Lateral-movement foothold (red-team)", actuator: "quarantine (stateful — state preserved)", runnable: armed, note: armed ? undefined : "would isolate a live DB — arm explicitly to fire" }];
+    default: return [{ id: "foothold", label: "Recon / CVE foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
+  }
 }
 
 export function LiveOpsPanel({ lens }: { lens: Lens }) {
@@ -117,6 +144,45 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   // reset to the first (live) page whenever the filter/search/lens changes.
   React.useEffect(() => { setPage(0); }, [actionFilter, query, lens, tenant, traceRun]);
 
+  // LIVE vLLM ATTACK: fire a real attack on the live vLLM; the operator's actuator choice streams below.
+  const [attacking, setAttacking] = React.useState("");
+  const [attackMsg, setAttackMsg] = React.useState("");
+  const fireAttack = async (action: string) => {
+    setAttacking(action); setAttackMsg("");
+    try {
+      if (action === "poison" || action === "kvcache" || action === "reset") {
+        const r = await api.vllmAttack(action as any, lens);
+        setAttackMsg(r.message);
+        if (action !== "reset") setActionFilter(action === "poison" ? "adapter-rotate" : "kv-reset");
+      } else {
+        // foothold | clear — a REAL detector signal on the selected reactiveOnly-armed workload.
+        const ns = (selWl.split("/")[0] || "").trim();
+        const r = await api.workloadAttack(ns, action as any, lens);
+        setAttackMsg(r.message + (r.expect ? "  (expected actuator: " + r.expect + ")" : ""));
+        if (action === "foothold") setActionFilter("");
+      }
+    } catch (e: any) { setAttackMsg("error: " + String(e.message || e)); }
+    finally { setAttacking(""); }
+  };
+  // STEP 1 — pick a workload; STEP 2 shows the attacks meaningful for its type.
+  const [wls, setWls] = React.useState<{ ns: string; name: string; images: string[] }[]>([]);
+  const [selWl, setSelWl] = React.useState("");
+  React.useEffect(() => {
+    if (owner) return;
+    api.workloads(sel.context || "", lens).then((d) => {
+      const flat: { ns: string; name: string; images: string[] }[] = [];
+      for (const n of d.namespaces || []) { if (n.system) continue; for (const w of n.workloads || []) flat.push({ ns: n.namespace, name: w.name, images: w.images || [] }); }
+      setWls(flat);
+      const def = flat.find((w) => w.images.join(" ").toLowerCase().includes("vllm")) || flat[0];
+      if (def) setSelWl((cur) => cur || def.ns + "/" + def.name);
+    }).catch(() => {});
+  }, [sel.context, lens, owner]);
+  const curWl = wls.find((w) => w.ns + "/" + w.name === selWl);
+  const curType = curWl ? wlType(curWl.images) : null;
+  // reactiveOnly-armed namespaces: calm until attacked, so a fired foothold is a clean attributable reaction.
+  const ARMED = ["litellm", "mock-rag-chatbot", "phorvex-live-demo"];
+  const armed = !!curWl && ARMED.includes(curWl.ns);
+
   return (
     <div className="animate-fade-up space-y-6">
       <PageHead title="Live Operations" sub="Phorvex deciding in real time — streamed from the decision audit. Investor/Operator see the full per-decision internals; the Customer-Owner stream is projected through the IP-wall (outcome only). Click any decision to see its date + full reasoning. Filter by actuator, search by pod, and page through the history." />
@@ -141,6 +207,48 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
           </Button>
         )}
       </div>
+
+      {/* LIVE WORKLOAD ATTACK — step 1: pick a workload; step 2: fire an attack meaningful for its type */}
+      {!owner && (
+        <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/[0.05] p-3">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] font-medium text-foreground">
+            <Swords className="h-3.5 w-3.5 text-primary" /> Live attack
+            <span className="text-[11px] font-normal text-muted-foreground">— pick a workload, fire a meaningful attack, watch Phorvex pick the actuator below</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[12px]">
+            <span className="text-[11px] text-muted-foreground">1 · target workload:</span>
+            <select value={selWl} onChange={(e) => { setSelWl(e.target.value); setAttackMsg(""); }} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[11px] text-foreground">
+              {wls.length === 0 && <option value="">(loading…)</option>}
+              {wls.map((w) => <option key={w.ns + "/" + w.name} value={w.ns + "/" + w.name}>{w.ns}/{w.name}</option>)}
+            </select>
+            {curType && <Badge variant="accent">{curType.label}</Badge>}
+          </div>
+          {curType && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] text-muted-foreground">2 · meaningful attacks for this workload:</div>
+              <div className="flex flex-wrap items-center gap-2">
+                {attacksFor(curType.type, armed).map((a) => a.runnable ? (
+                  <Button key={a.id} size="sm" variant="outline" disabled={!!attacking} onClick={() => fireAttack(a.id as any)} className="gap-1.5" title={a.label}>
+                    {attacking === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldOff className="h-3.5 w-3.5 text-danger" />}
+                    {a.label.split(" (")[0]} <span className="text-muted-foreground">→ {a.actuator}</span>
+                  </Button>
+                ) : (
+                  <span key={a.id} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-elevated/30 px-2 py-1 text-[11px] text-muted-foreground" title={a.note}>
+                    <Lock className="h-3 w-3" /> {a.label} <span className="font-mono">→ {a.actuator}</span>
+                  </span>
+                ))}
+                <Button size="sm" variant="ghost" disabled={!!attacking} onClick={() => fireAttack(curType.type === "model-server" ? "reset" : "clear")} className="gap-1.5 text-muted-foreground">
+                  {(attacking === "reset" || attacking === "clear") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} {curType.type === "model-server" ? "Reset" : "Clear attack"}
+                </Button>
+              </div>
+              {attacksFor(curType.type, armed).every((a) => !a.runnable) && (
+                <div className="text-[10px] text-warning">This workload’s namespace isn’t armed for live attacks yet — the row shows the attack→actuator mapping honestly. The armed demo workloads (vllm · litellm · mock-rag-chatbot · phorvex-live-demo) run reactiveOnly, so they stay calm until you fire a foothold and Phorvex reacts attributably.</div>
+              )}
+            </div>
+          )}
+          {attackMsg && <div className="text-[11px] text-primary">{attackMsg}</div>}
+        </div>
+      )}
 
       {/* FILTER BAR — by actuator type + free-text pod/namespace search */}
       <div className="flex flex-wrap items-center gap-2">

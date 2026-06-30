@@ -207,6 +207,16 @@ type TriggersSpec struct {
 	// +kubebuilder:default=true
 	EventDriven bool `json:"eventDriven,omitempty"`
 
+	// ReactiveOnly suppresses PROACTIVE (exposure-only) moves: when true, an asset is
+	// actionable ONLY while a real attack signal targets it (a non-Phorvex SecurityEvent,
+	// a compromised neighbor, or an AI poison marker). The hygiene-floor proactive
+	// rotation/quarantine cadence is disabled, so the workload stays CALM until attacked
+	// and the response is a clean, attributable reaction. Default false preserves the
+	// proactive moving-target-defense behavior.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	ReactiveOnly bool `json:"reactiveOnly,omitempty"`
+
 	// KillChainSource is the allowlist of SecurityEvent .spec.rule.source values
 	// that feed the kill-chain belief (e.g. ["FalcoIntegrator","prometheus"]). Empty
 	// accepts all sources.

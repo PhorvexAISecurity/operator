@@ -124,6 +124,8 @@ export const api = {
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
   version: (lens: Lens) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens),
+  vllmAttack: (action: "poison" | "kvcache" | "reset", lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
+  workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string }>("/api/workload/attack", { namespace, action }, lens),
   runStatus: (id: string, lens: Lens) => get<RunStatus>(`/api/runs/status?id=${id}`, lens),
   runsList: (lens: Lens) => get<{ runs: RunStatus[] }>("/api/runs/list", lens),
   stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
