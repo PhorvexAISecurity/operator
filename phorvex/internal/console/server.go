@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/runs/scenario", s.withCORS(s.scoped("operator", s.startScenario)))
 	mux.HandleFunc("/api/vllm/attack", s.withCORS(s.scoped("operator", s.vllmAttack)))
 	mux.HandleFunc("/api/workload/attack", s.withCORS(s.scoped("operator", s.workloadAttack)))
+	mux.HandleFunc("/api/attack-results", s.withCORS(s.scoped("operator", s.attackResults)))
 	mux.HandleFunc("/api/runs/status", s.withCORS(s.scoped("operator", s.runStatus)))
 	mux.HandleFunc("/api/runs/stream", s.withCORS(s.scoped("operator", s.runStream)))
 	mux.HandleFunc("/api/runs/list", s.withCORS(s.scoped("operator", s.runsList)))

@@ -30,9 +30,14 @@ const (
 	// law. AI/GPU magnitudes are [SP-0-PENDING] (read the GPUPresent-gated PhysicsWitness).
 
 	// ActionDebugger injects one ephemeral container (= Phoenix Debugger). Irreversible.
+	// MANUAL-BY-DESIGN: it is a human diagnostic, not a moving-target defence, so it carries NO
+	// recon cover set (nothing it invalidates) and the autonomous optimizer never selects it — it
+	// is reachable only by explicit operator dispatch. (See recon/profile.go: no cover[Debugger].)
 	ActionDebugger Action = "debugger"
 	// ActionCustomInject injects a parameterized ephemeral container (= Phoenix
 	// CustomAction); also the KV-reset substrate. Irreversible.
+	// MANUAL-BY-DESIGN: an operator/extension escape hatch, likewise NO recon cover set → never
+	// autonomously selected; reachable only by explicit dispatch.
 	ActionCustomInject Action = "custom-inject"
 	// ActionDisable is the declared-not-implemented capability (= Phoenix's own posture).
 	// Excluded from MutatingActions (never generatable) but a handler exists so the

@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { api, Lens, liveStream, RunStatus } from "@/lib/api";
+import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { useOwnerTenant } from "@/lib/owner";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
@@ -247,6 +248,8 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             </div>
           )}
           {attackMsg && <div className="text-[11px] text-primary">{attackMsg}</div>}
+          {/* measured outcome of the attacks you just fired — full detail + cost/uptime in the Report tab */}
+          <div className="mt-1 border-t border-border/40 pt-2"><AttackResultsPanel lens={lens} compact /></div>
         </div>
       )}
 

@@ -62,6 +62,7 @@ func main() {
 		enableLeader     bool
 		baseInterval     time.Duration
 		promURL          string
+		epssCachePath    string
 		killSwitch       bool
 		auditJSON        string
 		operatorNS       string
@@ -101,6 +102,7 @@ func main() {
 	flag.BoolVar(&enableLeader, "leader-elect", false, "Enable leader election (single active controller).")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
+	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", 256<<20, "[audit-json] rotate when the live file exceeds this many bytes (0 = unbounded). Default 256 MiB.")
@@ -118,6 +120,15 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// Seed the exploitability (EPSS/CVSS) cache from the scanner export, if wired. This makes the
+	// EPSS physics leg data-driven for BOTH the --scan path and the live operator loop; a missing/empty
+	// path leaves EPSS honest-absent (1.0). One package-level cache, seeded once at startup.
+	if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
+		setupLog.Error(err, "epss-cache load failed (continuing with EPSS honest-absent)", "path", epssCachePath)
+	} else if n := platform.EPSSLoaded(); n > 0 {
+		setupLog.Info("epss: exploitability cache seeded", "images", n, "path", epssCachePath)
+	}
 
 	if integrationEmit {
 		if err := runIntegrationEmit(emitTenant, emitNamespace, emitPod, emitAction, emitMatchLabels); err != nil {
@@ -174,6 +185,7 @@ func main() {
 	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetClient(), Namespace: operatorNS}
 
 	// Telemetry source: real Prometheus client if a URL is set, else honest nil source.
+	rmgr.PromURL = promURL // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)
 	if promURL != "" {
 		rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)
 		setupLog.Info("telemetry: prometheus", "url", promURL)

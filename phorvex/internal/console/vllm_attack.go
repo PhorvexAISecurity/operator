@@ -49,14 +49,16 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		kctl("label", "pod", pod, "phorvex.ai/lora-enabled=true", "--overwrite")
 		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter=evil", "--overwrite")
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
-			"message": "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset)."})
+			"message": "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset). See the Report tab for the measured outcome."})
 	case "kvcache":
 		// ATTACK: prime a secret prefix into the shared prefix-cache. kv-reset (proactive hygiene)
 		// flushes it; the timing-oracle leak/close numbers are the CLI oracle.
 		_, _ = execIn(`curl -s -o /dev/null http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","prompt":"SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal","max_tokens":1}'`)
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kvcache",
-			"message": "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below)."})
+			"message": "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
 	case "reset":
 		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter-")
 		kctl("label", "pod", pod, "phorvex.ai/lora-enabled-")

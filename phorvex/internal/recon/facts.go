@@ -54,6 +54,16 @@ const (
 	// (unload the adapter) covers it — so the engine selects adapter-rotate for THIS attack, not a
 	// generic rotate/kv-reset.
 	FactAdapterIntegrity = "adapterIntegrity"
+
+	// FactInflightRequests = the attacker's IN-FLIGHT request / queue / streaming-session state on a
+	// serving pod (distinct from the KV-cache session): the requests currently being served that a
+	// hijacked client rides. Covered by request-drain (graceful connection drain, no pod kill) — so the
+	// engine can pick a surgical drain over a full rotate on an inference workload.
+	FactInflightRequests = "inflightRequests"
+	// FactGuardrailBypass = a learned jailbreak / prompt-injection that BYPASSES the pod's CURRENT
+	// safety-guardrail variant. Covered by guardrail-rotate (swap the guardrail variant so the learned
+	// bypass no longer works) — a targeted AI-safety move the engine can pick instead of a blunt rotate.
+	FactGuardrailBypass = "guardrailBypass"
 )
 
 // Fact is one weighted recon fact about an asset.

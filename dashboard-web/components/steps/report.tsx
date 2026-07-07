@@ -6,8 +6,9 @@ import { Loading, csvDownload } from "@/components/ui/more";
 import { StepHead } from "./shared";
 import { MethodologyPanel } from "@/components/subsystems/panels";
 import { ReportsPanel } from "@/components/panels/reports";
+import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { RunHistoryPanel } from "@/components/panels/run-history";
-import { FileText, Download, Printer } from "lucide-react";
+import { FileText, Download, Printer, Swords } from "lucide-react";
 
 export function ReportStep({ lens }: { lens: Lens }) {
   const [stats, setStats] = React.useState<Stat[]>([]);
@@ -39,6 +40,14 @@ export function ReportStep({ lens }: { lens: Lens }) {
         <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / Save PDF</Button>
         {bench.length > 0 && <span className="text-[12px] text-muted-foreground">· {bench.length} benchmark scenarios in the pack</span>}
       </div>
+
+      {/* LIVE ATTACK RESULTS — every real attack fired from Live Operations: landed vs defended,
+          the actuator + why, uptime before/dip/after, and the three-way cost (without / R6 / with). */}
+      <Card><CardContent className="p-5">
+        <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold"><Swords className="h-4 w-4 text-primary" /> Live attack results — real attacks on live services</div>
+        <div className="mb-3 text-[11px] text-muted-foreground">Fire attacks from <b>Protect → Live theatre</b>; each real attack's measured outcome, uptime impact and cost land here.</div>
+        <AttackResultsPanel lens={lens} />
+      </CardContent></Card>
 
       {/* Post-attack reports — updates live as Attack Lab runs finish (date + real metrics). */}
       <RunHistoryPanel lens={lens} />

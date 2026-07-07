@@ -4,7 +4,11 @@
 
 package platform
 
-import "sync"
+import (
+	"encoding/json"
+	"os"
+	"sync"
+)
 
 // epss.go realizes the PRD context signal #1 (CVE/CVSS posture from image-scan + NVD)
 // as a DETERMINISTIC, OFFLINE, honest-absent EMR exploitability multiplier. Rather than
@@ -32,10 +36,10 @@ type epssEntry struct {
 // SeedEPSS replaces the offline exploitability cache (from a scanner export or a config
 // file). Deterministic; no network in the decision path. Empty map => all lookups 1.0.
 //
-// [SP-0-PENDING-P4a] UNWIRED: as of P4a SeedEPSS has ZERO callers, so epssCache is empty and
-// epssMultiplier returns 1.0 for EVERY image — one of the three EMR dispersion legs is inert.
-// Wiring a scanner/NVD-FIRST export feed is a P4a follow-up; until then EPSS must NOT be
-// presented as "live today."
+// WIRED (P4a follow-up): LoadEPSSFromFile below is invoked at operator/scan startup from the
+// --epss-cache path (env PHORVEX_EPSS_CACHE), so the cache is populated from a real
+// scanner/NVD-FIRST export when one is provided. With no file the cache stays EMPTY and every
+// lookup honest-degrades to 1.0 — the prior is data-driven, never fabricated.
 func SeedEPSS(m map[string]struct {
 	EPSS float64
 	CVSS float64
@@ -46,6 +50,49 @@ func SeedEPSS(m map[string]struct {
 	for k, v := range m {
 		epssCache[k] = epssEntry{EPSS: clamp01(v.EPSS), CVSS: v.CVSS}
 	}
+}
+
+// LoadEPSSFromFile seeds the exploitability cache from a JSON file mapping image reference/digest ->
+// {epss,cvss} — a point-in-time scanner + NVD/FIRST-EPSS export. Returns nil no-op when path is empty
+// or the file is missing, so a cluster with no scan feed keeps EPSS honest-absent (1.0) rather than
+// fabricating. Deterministic + offline: the decision path never touches the network.
+func LoadEPSSFromFile(path string) error {
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // honest-absent: no feed wired
+		}
+		return err
+	}
+	var raw map[string]struct {
+		EPSS float64 `json:"epss"`
+		CVSS float64 `json:"cvss"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	m := make(map[string]struct {
+		EPSS float64
+		CVSS float64
+	}, len(raw))
+	for k, v := range raw {
+		m[k] = struct {
+			EPSS float64
+			CVSS float64
+		}{EPSS: v.EPSS, CVSS: v.CVSS}
+	}
+	SeedEPSS(m)
+	return nil
+}
+
+// EPSSLoaded reports how many image entries are currently seeded (for scan/audit visibility).
+func EPSSLoaded() int {
+	epssMu.RLock()
+	defer epssMu.RUnlock()
+	return len(epssCache)
 }
 
 // epssMultiplier returns 1 + (0.5*EPSS + 0.5*CVSS/10) in [1,2] for a known-exploitable

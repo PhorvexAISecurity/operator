@@ -53,8 +53,15 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 		cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], f.Key())
 	}
 
-	// In-pod facts — invalidated by ROTATE.
-	addRotate(FactPodIdentity, base*urg)
+	// In-pod facts — invalidated by ROTATE (full kill+respawn). The gentler IDENTITY-ROTATE
+	// (re-issue the SA token / bump the identity label epoch) invalidates the pod-identity fact
+	// WITHOUT killing the pod — a SUBSET of rotate's cover, so the optimizer picks the surgical
+	// identity refresh for an identity-only threat and escalates to a full rotate only when the
+	// in-memory implant / session recon is also at stake.
+	pid := Fact{Asset: asset, Kind: FactPodIdentity, Weight: base * urg}
+	facts = append(facts, pid)
+	cover[model.ActionRotate] = append(cover[model.ActionRotate], pid.Key())
+	cover[model.ActionIdentityRotate] = append(cover[model.ActionIdentityRotate], pid.Key())
 	addRotate(FactInMemory, base*urg)
 	// Session/KV-cache fact matters most for GPU/LLM + stateful agents.
 	sessionW := base * urg * 0.6
@@ -75,8 +82,15 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
 	}
 
-	// Network facts — invalidated by QUARANTINE.
-	addQuarantine(FactNetworkIdentity, "", base*urg*0.8)
+	// Network facts — invalidated by QUARANTINE (deny-all + detach). The gentler ROUTE-ROTATE
+	// (re-key the route epoch / restitch the Service selector) invalidates the reachable
+	// network-identity fact WITHOUT a deny-all — a SUBSET of quarantine's cover, so the optimizer
+	// picks the surgical re-route for a narrow network-recon threat and escalates to a full
+	// quarantine only when learned lateral edges need cutting.
+	nid := Fact{Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
+	facts = append(facts, nid)
+	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
+	cover[model.ActionRouteRotate] = append(cover[model.ActionRouteRotate], nid.Key())
 	latUrg := 0.5 + 0.5*clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	for _, nb := range fctx.Neighbors {
 		// A learned edge to a high-value neighbor is worth cutting (blast containment).

@@ -103,6 +103,13 @@ spec:
 		writeJSON(w, 502, map[string]string{"error": "apply SecurityEvent failed: " + strings.TrimSpace(out)})
 		return
 	}
+	stateful := strings.Contains(strings.ToLower(strings.TrimSpace(ownerKind)), "stateful")
+	actuator := "rotate"
+	if stateful {
+		actuator = "quarantine"
+	}
+	// capture the REAL outcome (landed vs defended) + reasoning + uptime + cost for the Report tab.
+	s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful)
 	writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": pod, "expect": expect,
-		"message": "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before)."})
+		"message": "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before). See the Report tab for the measured outcome."})
 }

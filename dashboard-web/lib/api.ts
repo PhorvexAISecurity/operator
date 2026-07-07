@@ -126,6 +126,7 @@ export const api = {
   version: (lens: Lens) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens),
   vllmAttack: (action: "poison" | "kvcache" | "reset", lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string }>("/api/workload/attack", { namespace, action }, lens),
+  attackResults: (lens: Lens) => get<{ attacks: AttackResult[] }>("/api/attack-results", lens),
   runStatus: (id: string, lens: Lens) => get<RunStatus>(`/api/runs/status?id=${id}`, lens),
   runsList: (lens: Lens) => get<{ runs: RunStatus[] }>("/api/runs/list", lens),
   stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
@@ -198,6 +199,14 @@ export interface TimelineEvent {
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
 }
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
+export interface AttackCost { valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string }
+export interface AttackResult {
+  id: string; firedAt: string; service: string; namespace: string; pod: string; deploy: string;
+  attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
+  status: "running" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
+  why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
+  uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
+}
 export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptBlind: number; disruptWith: number; defensiveActions: number; blindActions: number; responseCost: number; defenseCost: number; costWithout: number; costBlind: number; costWith: number; successNone: number; successBlind: number; successWith: number; savings: number; helps: boolean }
 export interface NodePrice { instanceType: string; count: number; gpu: boolean; pricePerHr: number; estimated: boolean }
 export interface ClusterPricing { provider: string; region: string; nodes: NodePrice[]; totalPerHr: number; totalPerYear: number; gpuPricePerHr: number; gpuCount: number; source: string; available: boolean }

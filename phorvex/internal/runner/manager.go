@@ -50,9 +50,12 @@ type Manager struct {
 	Optimizer     decision.Optimizer
 	Audit         *audit.Logger
 	MetricsSource ingest.MetricsSource
-	Actuator      actuator.Actuator
-	KillSwitch    *KillSwitch
-	BaseInterval  time.Duration
+	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
+	// K8s-only signals (GPU half stays honest-absent/neutral).
+	PromURL      string
+	Actuator     actuator.Actuator
+	KillSwitch   *KillSwitch
+	BaseInterval time.Duration
 	// PerTickTimeout bounds one tick so a slow/hung API server cannot wedge the loop
 	// goroutine indefinitely (P4b livelock fix). 0 => defaulted in Start.
 	PerTickTimeout time.Duration
@@ -212,6 +215,13 @@ func (m *Manager) tick(ctx context.Context) {
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		return
+	}
+
+	// GPU-half physics on the LIVE tick (not just --scan): fill the DCGM-via-Prometheus witness so
+	// VRAMFraction/SMOccupancy/LinkBandwidth/GPUPresent feed the live decision engine when a Prometheus
+	// feed is wired. Honest-absent (leaves the neutral witness) when PromURL is empty or DCGM has no data.
+	if m.PromURL != "" {
+		ingest.PopulateGPUWitness(ctx, snap, m.PromURL)
 	}
 
 	for _, e := range due {

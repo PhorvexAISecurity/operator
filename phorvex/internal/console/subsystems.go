@@ -10,6 +10,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -119,6 +120,11 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 		if _, err := validateFetchTarget(promURL, c.MetricsAllow); err == nil {
 			args = append(args, "--prometheus-url", promURL)
 		}
+	}
+	// Feed the EPSS exploitability cache to the scan child (execText uses a curated env, so pass it
+	// explicitly) — makes the physics EPSS leg data-driven in the dashboard scan, not honest-absent.
+	if p := os.Getenv("PHORVEX_EPSS_CACHE"); p != "" {
+		args = append(args, "--epss-cache", p)
 	}
 	raw, _ := c.execText(90*time.Second, c.PhorvexBin, args...)
 	res := ScanResult{Raw: raw}

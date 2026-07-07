@@ -72,7 +72,12 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		ep := Fact{Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
 		gc := Fact{Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency}
 		sc := Fact{Asset: asset, Kind: FactSideChannel, Weight: base * urg}
-		af.Facts = append(af.Facts, mf, ep, gc, sc)
+		// In-flight-request + guardrail-bypass recon on a serving pod — each invalidated by its own
+		// gentle AI actuator (request-drain / guardrail-rotate) so the engine can pick the surgical
+		// serving move over a blunt rotate. Distinct facts => distinct, meaningful cover per action.
+		rq := Fact{Asset: asset, Kind: FactInflightRequests, Weight: base * urg}
+		gb := Fact{Asset: asset, Kind: FactGuardrailBypass, Weight: base * urg}
+		af.Facts = append(af.Facts, mf, ep, gc, sc, rq, gb)
 		if af.CoverByAction == nil {
 			af.CoverByAction = map[model.Action][]string{}
 		}
@@ -81,6 +86,8 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], gc.Key(), sc.Key())
 		af.CoverByAction[model.ActionWarmSwap] = append(af.CoverByAction[model.ActionWarmSwap], gc.Key(), sc.Key())
 		af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], ep.Key())
+		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
+		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
 		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
 		// adapter on this pod. Weighted to DOMINATE (a poisoned adapter corrupts every response), and
 		// covered by ONLY adapter-rotate — so the engine selects adapter-rotate for THIS attack rather
