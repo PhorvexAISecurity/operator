@@ -25,6 +25,7 @@ var armedWorkloads = map[string]bool{
 	"litellm":           true,
 	"mock-rag-chatbot":  true,
 	"phorvex-live-demo": true,
+	"nats":              true, // NATS JetStream (StatefulSet) — stateful => Phorvex quarantines, not rotates
 }
 
 func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +100,10 @@ spec:
 	_, _ = f.WriteString(yaml)
 	_ = f.Close()
 
+	// snapshot the defense baseline BEFORE applying the attack — the operator can quarantine within ~1s,
+	// so a post-apply snapshot would absorb this attack's own response and misreport it as LANDED.
+	base := s.snapshotBaseline(ns, pod)
+
 	if out, e := kctl(10*time.Second, "apply", "-f", f.Name()); e != nil {
 		writeJSON(w, 502, map[string]string{"error": "apply SecurityEvent failed: " + strings.TrimSpace(out)})
 		return
@@ -109,7 +114,7 @@ spec:
 		actuator = "quarantine"
 	}
 	// capture the REAL outcome (landed vs defended) + reasoning + uptime + cost for the Report tab.
-	s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful)
+	s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful, base)
 	writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": pod, "expect": expect,
 		"message": "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before). See the Report tab for the measured outcome."})
 }

@@ -39,6 +39,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	kctl := func(args ...string) { _, _ = s.cfg.execText(8*time.Second, "kubectl", append([]string{"-n", vllmAttackNS}, args...)...) }
 
+	// snapshot the defense baseline BEFORE the attack lands (esp. the adapter epoch for poison) so a
+	// fast operator reaction is correctly attributed and not absorbed into the baseline.
+	base := s.snapshotBaseline(vllmAttackNS, pod)
+
 	switch body.Action {
 	case "poison":
 		// ATTACK: inject an unauthorized/poisoned LoRA adapter, then flag it (detector stand-in:
@@ -49,14 +53,14 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		kctl("label", "pod", pod, "phorvex.ai/lora-enabled=true", "--overwrite")
 		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter=evil", "--overwrite")
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false)
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
 			"message": "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset). See the Report tab for the measured outcome."})
 	case "kvcache":
 		// ATTACK: prime a secret prefix into the shared prefix-cache. kv-reset (proactive hygiene)
 		// flushes it; the timing-oracle leak/close numbers are the CLI oracle.
 		_, _ = execIn(`curl -s -o /dev/null http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","prompt":"SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal","max_tokens":1}'`)
-		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false)
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kvcache",
 			"message": "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
 	case "reset":

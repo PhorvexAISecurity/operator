@@ -41,6 +41,7 @@ function wlType(images: string[]): { type: string; label: string } {
   if (img.includes("mysql") || img.includes("vitess")) return { type: "database", label: "MySQL database — stateful" };
   if (img.includes("litellm")) return { type: "llm-proxy", label: "LLM gateway / proxy" };
   if (img.includes("mock-rag") || img.includes("chatbot")) return { type: "gpu-inference", label: "GPU inference (mock RAG)" };
+  if (img.includes("nats")) return { type: "message-broker", label: "NATS JetStream — stateful broker" };
   return { type: "generic", label: "Generic workload" };
 }
 // Each attack maps to the actuator Phorvex SHOULD pick for it. vLLM (real serving stack) fires the AI
@@ -56,6 +57,7 @@ function attacksFor(type: string, armed: boolean): WlAttack[] {
     case "gpu-inference": return [{ id: "foothold", label: "Container-escape foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
     case "llm-proxy": return [{ id: "foothold", label: "RCE / credential foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
     case "database": return [{ id: "foothold", label: "Lateral-movement foothold (red-team)", actuator: "quarantine (stateful — state preserved)", runnable: armed, note: armed ? undefined : "would isolate a live DB — arm explicitly to fire" }];
+    case "message-broker": return [{ id: "foothold", label: "Broker-node compromise / lateral foothold (red-team)", actuator: "quarantine (stateful — data + quorum preserved)", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
     default: return [{ id: "foothold", label: "Recon / CVE foothold (red-team)", actuator: "rotate", runnable: armed, note: armed ? undefined : "arm this namespace (reactiveOnly) to fire" }];
   }
 }
@@ -181,7 +183,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const curWl = wls.find((w) => w.ns + "/" + w.name === selWl);
   const curType = curWl ? wlType(curWl.images) : null;
   // reactiveOnly-armed namespaces: calm until attacked, so a fired foothold is a clean attributable reaction.
-  const ARMED = ["litellm", "mock-rag-chatbot", "phorvex-live-demo"];
+  const ARMED = ["litellm", "mock-rag-chatbot", "phorvex-live-demo", "nats"];
   const armed = !!curWl && ARMED.includes(curWl.ns);
 
   return (

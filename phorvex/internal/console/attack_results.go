@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,7 @@ type attackRecord struct {
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
 	Action          string  `json:"phorvexAction"`
+	DefendedPod     string  `json:"defendedPod"` // pod Phorvex actually actuated on (may differ from the attacked pod: on a stateful cluster it quarantines the highest lateral-coverage node to contain spread)
 	Actuated        bool    `json:"actuated"`
 	TimeToDefendSec float64 `json:"timeToDefendSec"`
 
@@ -70,7 +72,29 @@ type attackRecord struct {
 
 	Cost attackCost `json:"cost"`
 
-	started time.Time // unexported, for elapsed timing
+	started   time.Time       // unexported, for elapsed timing
+	baseEpoch string          // pre-attack adapter epoch (poison detection)
+	baseQuar  map[string]bool // pre-attack quarantine SecurityEvent names
+	baseNP    map[string]bool // pre-attack quarantine NetworkPolicy names
+}
+
+// defenseBaseline is the snapshot of pre-existing defense artifacts, taken by the attack handler BEFORE
+// the attack is applied. Capturing it pre-fire (not at watcher start) is essential: the operator can
+// react within ~1s, faster than the watcher's own baseline kubectl calls would complete — so a
+// watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
+type defenseBaseline struct {
+	epoch string
+	quar  map[string]bool
+	nps   map[string]bool
+}
+
+// snapshotBaseline captures the defense baseline for a namespace/pod. Call BEFORE applying the attack.
+func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
+	return defenseBaseline{
+		epoch: s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
+		quar:  s.quarantineEvents(ns),
+		nps:   s.quarantineNPs(ns),
+	}
 }
 
 var (
@@ -123,7 +147,7 @@ func (s *Server) persistAttack(r *attackRecord) {
 
 // startAttackRecord registers a running attack and launches the ground-truth watcher. Called by the
 // attack handlers immediately after the real attack is applied to the cluster.
-func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool) {
+func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline) {
 	s.loadAttacks()
 	now := time.Now()
 	deploy := s.firstDeploy(ns)
@@ -135,6 +159,9 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 		Status:       "running",
 		UptimeBefore: s.workloadUptime(ns, deploy),
 		started:      now,
+		baseEpoch:    base.epoch,
+		baseQuar:     base.quar,
+		baseNP:       base.nps,
 	}
 	// capture value-at-risk NOW (the attacked pod's node still exists; it may be rotated away before
 	// the watcher finishes) so the cost is grounded in the real node price, not the cluster fallback.
@@ -148,7 +175,11 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 	deadline := time.Now().Add(95 * time.Second)
 	minUp := r.UptimeBefore
-	epoch0 := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch")
+	// baselines were captured PRE-FIRE by the handler (see defenseBaseline) — using a watcher-side
+	// snapshot here would race a fast operator and misreport a real quarantine as LANDED.
+	epoch0 := r.baseEpoch
+	quar0 := r.baseQuar
+	np0 := r.baseNP
 	for time.Now().Before(deadline) {
 		time.Sleep(3 * time.Second)
 		if up := s.workloadUptime(r.Namespace, r.Deploy); up >= 0 && up < minUp {
@@ -163,13 +194,23 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "adapter-rotate", true
 				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
 			}
-		default: // foothold: rotate (stateless) removes the attacked pod; quarantine (stateful) adds a NetworkPolicy
+		default: // foothold: rotate (stateless) removes the attacked pod; quarantine (stateful) is recorded as a fresh phorvex-quarantine SecurityEvent
 			if s.podGone(r.Namespace, r.Pod) {
 				r.Outcome, r.Actuated = "DEFENDED", true
 				r.Action = "rotate"
+				r.DefendedPod = r.Pod
 				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
-			} else if s.hasQuarantineNP(r.Namespace, r.Pod) {
+			} else if qn := s.freshQuarantineName(r.Namespace, quar0); qn != "" {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "quarantine", true
+				// capture the REAL target Phorvex quarantined (may be a neighbor node it isolates to cut
+				// lateral spread, not necessarily the attacked pod) + the decision reasoning from the event.
+				r.DefendedPod = strings.TrimPrefix(s.kctlOut(r.Namespace, "get", "securityevent", qn, "-o", "jsonpath={.spec.targets[0]}"), r.Namespace+"/")
+				r.Why = s.kctlOut(r.Namespace, "get", "securityevent", qn, "-o", "jsonpath={.spec.description}")
+				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+			} else if np := s.newQuarantineNP(r.Namespace, np0); np != "" {
+				// native-actuator path (no phorvex-quarantine SecurityEvent): a fresh quarantine NetworkPolicy.
+				r.Outcome, r.Action, r.Actuated = "DEFENDED", "quarantine", true
+				r.DefendedPod = podFromNP(np, r.Namespace)
 				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
 			}
 		}
@@ -197,8 +238,31 @@ func (s *Server) kctlOut(ns string, args ...string) string {
 	return strings.TrimSpace(out)
 }
 
+// firstDeploy returns the namespace's primary workload name — a Deployment, or a StatefulSet (e.g.
+// NATS JetStream) when there's no Deployment. Used to sample availability around an attack. Uses
+// `-o name` (not jsonpath {.items[0]}), which returns empty (not an array-index error) on an empty
+// list — the console's execText folds stderr in, so an errored jsonpath would poison the name.
 func (s *Server) firstDeploy(ns string) string {
-	return s.kctlOut(ns, "get", "deploy", "-o", "jsonpath={.items[0].metadata.name}")
+	if d := firstName(s.kctlOut(ns, "get", "deploy", "-o", "name")); d != "" {
+		return d
+	}
+	return firstName(s.kctlOut(ns, "get", "statefulset", "-o", "name"))
+}
+
+// firstName extracts the first resource short-name from `kubectl -o name` output
+// ("deployment.apps/litellm\n..." => "litellm"); "" if none.
+func firstName(out string) string {
+	for _, ln := range strings.Split(out, "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		if i := strings.LastIndex(ln, "/"); i >= 0 {
+			return ln[i+1:]
+		}
+		return ln
+	}
+	return ""
 }
 
 func (s *Server) podGone(ns, pod string) bool {
@@ -206,21 +270,80 @@ func (s *Server) podGone(ns, pod string) bool {
 	return err != nil // NotFound => gone (rotated)
 }
 
-func (s *Server) hasQuarantineNP(ns, pod string) bool {
-	out := s.kctlOut(ns, "get", "networkpolicy", "phorvex-quarantine-"+pod, "--ignore-not-found", "-o", "name")
-	return out != ""
+// quarantineNPs returns the set of Phorvex/Phoenix QUARANTINE NetworkPolicy names in the namespace:
+// phorvex-quarantine-<pod> (native actuator) or <ns>-<pod>-policy (Phoenix actuator). Baselined at watch
+// start so a STALE policy from a prior attack cannot false-trigger THIS attack's outcome.
+func (s *Server) quarantineNPs(ns string) map[string]bool {
+	out := s.kctlOut(ns, "get", "networkpolicy", "--no-headers", "-o", "custom-columns=N:.metadata.name")
+	set := map[string]bool{}
+	for _, ln := range strings.Split(out, "\n") {
+		if n := strings.TrimSpace(ln); strings.Contains(n, "quarantine") || strings.HasSuffix(n, "-policy") {
+			set[n] = true
+		}
+	}
+	return set
+}
+
+// newQuarantineNP returns a quarantine NetworkPolicy name that appeared since the baseline, or "".
+func (s *Server) newQuarantineNP(ns string, baseline map[string]bool) string {
+	for n := range s.quarantineNPs(ns) {
+		if !baseline[n] {
+			return n
+		}
+	}
+	return ""
+}
+
+// podFromNP extracts the quarantined pod from a quarantine NetworkPolicy name:
+// Phoenix "<ns>-<pod>-policy" => pod; native "phorvex-quarantine-<pod>" => pod.
+func podFromNP(name, ns string) string {
+	if strings.HasPrefix(name, "phorvex-quarantine-") {
+		return strings.TrimPrefix(name, "phorvex-quarantine-")
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(name, ns+"-"), "-policy")
+}
+
+// quarantineEvents returns the set of Phorvex QUARANTINE SecurityEvent names in the namespace. The
+// in-cluster (Phoenix) actuator records a quarantine as a phorvex-quarantine-<hash> SecurityEvent
+// (spec.targets = ["<ns>/<pod>"]) — NOT a NetworkPolicy — so we snapshot this set at watch start and
+// detect a NEW entry to attribute a quarantine to THIS attack (ignoring stale records from prior runs).
+func (s *Server) quarantineEvents(ns string) map[string]bool {
+	out := s.kctlOut(ns, "get", "securityevent", "--no-headers", "-o", "custom-columns=N:.metadata.name")
+	set := map[string]bool{}
+	for _, ln := range strings.Split(out, "\n") {
+		if n := strings.TrimSpace(ln); strings.HasPrefix(n, "phorvex-quarantine-") {
+			set[n] = true
+		}
+	}
+	return set
+}
+
+// freshQuarantineName returns the name of a phorvex-quarantine SecurityEvent that appeared since the
+// baseline snapshot (i.e. THIS attack's), or "" if none. Namespace-scoped: a Phorvex quarantine records
+// its own target in the event, which the caller reads back.
+func (s *Server) freshQuarantineName(ns string, baseline map[string]bool) string {
+	for name := range s.quarantineEvents(ns) {
+		if !baseline[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 func (s *Server) podAnno(ns, pod, key string) string {
 	return s.kctlOut(ns, "get", "pod", pod, "-o", "jsonpath={.metadata.annotations."+strings.ReplaceAll(key, ".", "\\.")+"}")
 }
 
-// workloadUptime = readyReplicas/replicas * 100 for the deploy (real availability). -1 if unknown.
+// workloadUptime = readyReplicas/replicas * 100 for the Deployment OR StatefulSet (real availability).
+// -1 if unknown.
 func (s *Server) workloadUptime(ns, deploy string) float64 {
 	if deploy == "" {
 		return -1
 	}
-	out := s.kctlOut(ns, "get", "deploy", deploy, "-o", "jsonpath={.status.readyReplicas}|{.spec.replicas}")
+	out := s.kctlOut(ns, "get", "deploy", deploy, "--ignore-not-found", "-o", "jsonpath={.status.readyReplicas}|{.spec.replicas}")
+	if strings.TrimSpace(out) == "" {
+		out = s.kctlOut(ns, "get", "statefulset", deploy, "--ignore-not-found", "-o", "jsonpath={.status.readyReplicas}|{.spec.replicas}")
+	}
 	parts := strings.SplitN(out, "|", 2)
 	if len(parts) != 2 {
 		return -1
@@ -243,10 +366,16 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 		return
 	}
 	logs, _ := s.cfg.execText(10*time.Second, "kubectl", "logs", "-n", "phorvex-system", op, "--tail=400")
+	// the real decision is for the pod Phorvex actuated on — the quarantined/rotated pod, which on a
+	// stateful cluster may be a neighbor of the attacked pod. Fall back to the attacked pod.
+	target := r.Pod
+	if r.DefendedPod != "" {
+		target = r.DefendedPod
+	}
 	var best map[string]any
 	for _, ln := range strings.Split(logs, "\n") {
 		i := strings.Index(ln, "decision\t")
-		if i < 0 || !strings.Contains(ln, r.Namespace+"/"+r.Pod) {
+		if i < 0 || !strings.Contains(ln, r.Namespace+"/"+target) {
 			continue
 		}
 		var d map[string]any
@@ -262,12 +391,17 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 		}
 	}
 	if best == nil {
+		// no structured audit decision (e.g. in-cluster Phoenix actuator records reasoning in the
+		// SecurityEvent, not the operator audit log): derive the numbers from the event description.
+		s.parseDescReasoning(r)
 		return
 	}
 	if v, ok := best["action"].(string); ok && v != "" && v != "noop" {
 		r.Action = v
 	}
-	r.Why, _ = best["why"].(string)
+	if w, _ := best["why"].(string); w != "" { // don't clobber an event-derived reason with an empty audit why
+		r.Why = w
+	}
 	r.Stage, _ = best["stage"].(string)
 	r.R6Would, _ = best["r6Would"].(string)
 	r.R6Note, _ = best["r6Note"].(string)
@@ -275,6 +409,37 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	r.PHold = numf(best["pHold"])
 	r.Lambda = numf(best["lambda"])
 	r.CoveredFacts = int(numf(best["coveredFacts"]))
+	s.parseDescReasoning(r) // backfill any numbers the audit line lacked (e.g. per-$ from the event desc)
+}
+
+var (
+	reDescPerDollar = regexp.MustCompile(`=([0-9.]+) per-\$`)
+	reDescPHold     = regexp.MustCompile(`pHold=([0-9.]+)`)
+	reDescStage     = regexp.MustCompile(`stage=(\S+)`)
+)
+
+// parseDescReasoning derives the numeric decision fields from a Phorvex SecurityEvent description, e.g.
+// "quarantine nats/nats-1: cuts lateral recon (cov=34.33/$0.28=121.15 per-$); stage=recon→lateral pHold=0.31".
+// Only fills fields that are still zero/empty so a real audit decision always wins.
+func (s *Server) parseDescReasoning(r *attackRecord) {
+	if r.Why == "" {
+		return
+	}
+	if r.PerDollar == 0 {
+		if m := reDescPerDollar.FindStringSubmatch(r.Why); len(m) == 2 {
+			r.PerDollar = atof(m[1])
+		}
+	}
+	if r.PHold == 0 {
+		if m := reDescPHold.FindStringSubmatch(r.Why); len(m) == 2 {
+			r.PHold = atof(m[1])
+		}
+	}
+	if r.Stage == "" {
+		if m := reDescStage.FindStringSubmatch(r.Why); len(m) == 2 {
+			r.Stage = m[1]
+		}
+	}
 }
 
 // nodeAnnualCost = the pod's node annual on-demand cost (real AWS list price). Falls back to the
