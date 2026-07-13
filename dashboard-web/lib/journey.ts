@@ -3,7 +3,7 @@
 import * as React from "react";
 import { api, Lens, API_BASE } from "./api";
 
-export type StepId = "landing" | "connect" | "scan" | "discovered" | "attacklab" | "protect" | "prove" | "report";
+export type StepId = "landing" | "connect" | "scan" | "discovered" | "attacklab" | "protect" | "prove" | "report" | "bench";
 export type NodeState = "done" | "active" | "ready" | "locked";
 
 export interface StepDef { id: StepId; n: number; label: string; tagline: string }
@@ -16,6 +16,7 @@ export const STEPS: StepDef[] = [
   { id: "protect", n: 5, label: "Protect / Run", tagline: "run Phorvex — where every method lives" },
   { id: "prove", n: 6, label: "Prove", tagline: "attack it, with & without Phorvex" },
   { id: "report", n: 7, label: "Report", tagline: "generate the evidence pack" },
+  { id: "bench", n: 8, label: "Optimizer Bench", tagline: "tune the optimizer, benchmark vs R6-blind & attack-landed" },
 ];
 
 export interface JourneySignals {
@@ -59,6 +60,7 @@ export function stepState(id: StepId, sig: JourneySignals, active: StepId): Node
     case "protect": return sig.hasAudit ? "done" : sig.hasCorpus ? "ready" : "locked";
     case "prove": return sig.hasBench ? "done" : sig.connected ? "ready" : "locked";
     case "report": return sig.hasBench ? "ready" : "locked";
+    case "bench": return "ready"; // self-contained in-process sim — always available
     default: return "ready";
   }
 }

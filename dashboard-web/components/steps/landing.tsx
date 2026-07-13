@@ -5,9 +5,9 @@ import { useOwnerTenant } from "@/lib/owner";
 import { STEPS, StepId, JourneySignals, stepState } from "@/lib/journey";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
-import { ArrowRight, PlayCircle, Plug, Radar, Network, Radio, Swords, FileText, Check, Lock } from "lucide-react";
+import { ArrowRight, PlayCircle, Plug, Radar, Network, Radio, Swords, FileText, Check, Lock, FlaskConical } from "lucide-react";
 
-const ICON: Record<StepId, React.ElementType> = { landing: Plug, connect: Plug, scan: Radar, discovered: Network, attacklab: Swords, protect: Radio, prove: Swords, report: FileText };
+const ICON: Record<StepId, React.ElementType> = { landing: Plug, connect: Plug, scan: Radar, discovered: Network, attacklab: Swords, protect: Radio, prove: Swords, report: FileText, bench: FlaskConical };
 
 export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: JourneySignals; go: (s: StepId) => void; onDemo: () => void }) {
   const [stats, setStats] = React.useState<Stat[]>([]);

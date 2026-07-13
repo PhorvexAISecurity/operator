@@ -67,3 +67,48 @@ func TestReactiveOnlyCalmUntilAttacked(t *testing.T) {
 		}
 	}
 }
+
+// The containment must isolate the COMPROMISED node, not a clean neighbor of it. broker-0 carries the
+// DIRECT foothold (TargetsPod=true) but a modest lateral edge; broker-2 is a clean NEIGHBOR (only a
+// propagated TargetsPod=false event) with a FATTER edge — so a coverage-only greedy would wrongly pick
+// broker-2 (the pre-fix bug: attack on nats-0, quarantine of nats-2). Only the compromised broker-0 may
+// be contained. This test FAILS on the pre-fix gate (which backed neighbors too).
+func TestReactiveOnly_ContainsCompromisedNodeNotNeighbor(t *testing.T) {
+	fixedNow := func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }
+	mk := func(name string, direct bool, nbVal float64) *model.WorkloadView {
+		v := covView(name, true, time.Hour, true) // stateful broker, secrets, aged
+		v.Neighbors = []model.NeighborRef{{Key: "ns/peer", Value: nbVal}}
+		v.Events = []model.SecurityEventInfo{{Type: "Panic", ThreatLevel: "critical", TargetsPod: direct}}
+		return v
+	}
+	views := []*model.WorkloadView{
+		mk("broker-0", true, 5.0),  // the real foothold
+		mk("broker-1", false, 5.0), // clean neighbor
+		mk("broker-2", false, 9.0), // clean neighbor with the fattest edge (would win a coverage-only pick)
+	}
+	e := NewCoverageEngine()
+	e.Now = fixedNow
+	pol := covPolicy(1)
+	pol.ReactiveOnly = true
+
+	var decs []model.Decision
+	for i := 0; i < 4; i++ {
+		decs = e.Decide(views, pol)
+	}
+	byPod := map[string]model.Decision{}
+	for _, d := range decs {
+		byPod[d.Pod] = d
+	}
+	if !byPod["broker-0"].Selected || byPod["broker-0"].Action == model.ActionNoop {
+		t.Fatalf("the COMPROMISED node broker-0 must be contained; got selected=%v action=%s", byPod["broker-0"].Selected, byPod["broker-0"].Action)
+	}
+	if byPod["broker-0"].Action != model.ActionQuarantine {
+		t.Fatalf("stateful broker-0 must be QUARANTINED (rotate vetoed), got %s", byPod["broker-0"].Action)
+	}
+	for _, n := range []string{"broker-1", "broker-2"} {
+		if byPod[n].Selected {
+			t.Fatalf("%s is a clean NEIGHBOR (TargetsPod=false) — must NOT be quarantined; got action=%s", n, byPod[n].Action)
+		}
+	}
+	t.Logf("contained the compromised node: broker-0 -> quarantine; clean neighbors broker-1/broker-2 untouched")
+}

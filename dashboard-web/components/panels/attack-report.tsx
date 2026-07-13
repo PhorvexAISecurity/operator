@@ -3,7 +3,7 @@ import * as React from "react";
 import { api, Lens, AttackResult } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { csvDownload, Empty } from "@/components/ui/more";
-import { ShieldCheck, ShieldAlert, Loader2, Download, Swords, Activity } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Loader2, Download, Swords, Activity, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // AttackResultsPanel — the REAL outcome of every attack fired from Live Operations: landed vs defended,
@@ -27,20 +27,22 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
   const shown = compact ? rows.slice(0, 3) : rows;
   function exportCSV() {
     const rs = rows || [];
-    const head = ["fired", "service", "attack", "mitre", "outcome", "actuator", "time_to_defend_s", "uptime_before", "uptime_dip", "uptime_after", "cost_without", "cost_r6", "cost_with", "savings", "why"];
-    const body = rs.map((r) => [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, r.phorvexAction, r.timeToDefendSec, r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
+    const head = ["fired", "service", "attack", "mitre", "outcome", "actuator", "containment", "time_to_action_s", "dwell_s", "dwell_ongoing", "uptime_before", "uptime_dip", "uptime_after", "cost_without", "cost_r6", "cost_with", "savings", "why"];
+    const body = rs.map((r) => [r.firedAt, r.service, r.attack, r.mitre, r.outcome || r.status, r.phorvexAction, r.containment, r.timeToDefendSec, r.dwellSec, r.dwellOngoing ? "ongoing" : "bounded", r.uptimeBefore, r.uptimeDip, r.uptimeAfter, r.cost?.without, r.cost?.r6, r.cost?.with, r.cost?.savings, r.why]);
     csvDownload("phorvex-attack-results.csv", [head, ...body]);
   }
 
   const defended = rows.filter((r) => r.outcome === "DEFENDED").length;
   const landed = rows.filter((r) => r.outcome === "LANDED").length;
+  const boundedRows = rows.filter((r) => (r.containment === "evicted" || r.containment === "contained") && r.dwellSec > 0);
+  const meanDwell = boundedRows.length ? (boundedRows.reduce((a, r) => a + r.dwellSec, 0) / boundedRows.length).toFixed(1) : null;
 
   return (
     <div className="space-y-3">
       {!compact && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-[12px] font-medium"><Swords className="h-3.5 w-3.5 text-primary" /> Live attack results</div>
-          <div className="text-[11px] text-muted-foreground">{rows.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span></div>
+          <div className="text-[11px] text-muted-foreground">{rows.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span>{meanDwell && <> · mean containment dwell <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
           <Button size="sm" variant="outline" onClick={exportCSV} className="ml-auto gap-1.5"><Download className="h-3.5 w-3.5" /> CSV</Button>
         </div>
       )}
@@ -49,10 +51,27 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
   );
 }
 
+// containmentInfo frames what the action actually did to the FOOTHOLD (not just "an action fired").
+function containmentInfo(r: AttackResult): { tone: "good" | "warn" | "bad"; cls: string; line: string; dwellNote: string; bounded: boolean } {
+  switch (r.containment) {
+    case "evicted":
+      return { tone: "good", cls: "text-success", line: `${r.pod} rotated away — attacker evicted`, dwellNote: "attacker evicted — window closed", bounded: true };
+    case "contained":
+      return { tone: "good", cls: "text-success", line: `${r.pod} quarantined — attacker isolated on its own node`, dwellNote: "foothold network-isolated on its node", bounded: true };
+    case "foothold-active":
+      return { tone: "warn", cls: "text-warning", line: `neighbor ${r.defendedPod} isolated — attacker STILL holds ${r.pod}`, dwellNote: `foothold on ${r.pod} not evicted — lateral spread cut only`, bounded: false };
+    case "landed":
+      return { tone: "bad", cls: "text-danger", line: "foothold persists — attacker retains access", dwellNote: "attacker never evicted", bounded: false };
+    default:
+      return { tone: "bad", cls: "text-muted-foreground", line: "", dwellNote: "", bounded: false };
+  }
+}
+
 function AttackCard({ r }: { r: AttackResult }) {
   const running = r.status === "running";
   const defended = r.outcome === "DEFENDED";
   const landed = r.outcome === "LANDED";
+  const cinfo = containmentInfo(r);
   return (
     <Card className={cn("border-l-2", defended ? "border-l-success" : landed ? "border-l-danger" : "border-l-warning")}>
       <CardContent className="space-y-3 p-4">
@@ -74,8 +93,20 @@ function AttackCard({ r }: { r: AttackResult }) {
           </span>
           {defended && r.timeToDefendSec > 0 && <span className="text-muted-foreground">in <span className="tabular text-foreground">{r.timeToDefendSec}s</span></span>}
           <span className="text-muted-foreground">target pod <span className="font-mono text-[11px] text-foreground/80">{r.pod?.split("-").slice(-1)[0]}</span></span>
-          {landed && <span className="text-danger">foothold persists — attacker retains access</span>}
-          {defended && <span className="text-success">foothold removed — attacker access lost</span>}
+          {!running && cinfo.line && <span className={cinfo.cls}>{cinfo.line}</span>}
+        </div>
+
+        {/* attacker dwell time — how long the intruder held effective access */}
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70"><Clock className="h-3 w-3" /> attacker dwell time</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+            {running
+              ? <span className="text-muted-foreground">measuring…</span>
+              : cinfo.bounded
+                ? <><span className="tabular text-[15px] font-semibold text-success">{r.dwellSec}s</span><span className="text-muted-foreground">{cinfo.dwellNote}</span></>
+                : <><span className="tabular text-[15px] font-semibold text-danger">≥ {r.dwellSec}s</span><span className="text-warning">ongoing — {cinfo.dwellNote}</span></>}
+            <span className="ml-auto text-[10px] text-muted-foreground/60">bounded only when the foothold pod itself is evicted/contained · no defense: unbounded</span>
+          </div>
         </div>
 
         {/* uptime before / dip / after */}

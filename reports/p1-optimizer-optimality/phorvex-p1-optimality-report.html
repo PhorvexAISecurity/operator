@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phorvex — P1 Optimizer Optimality Report</title>
+<style>html,body{margin:0}body{background:var(--paper)}</style>
+</head>
+<body>
+<style>
+  :root {
+    --paper:#F5F7F8; --panel:#FFFFFF; --panel-2:#F0F3F4;
+    --ink:#131A20; --ink-soft:#3B4650; --muted:#69747E; --line:#E1E6EA; --line-soft:#EDF0F2;
+    --accent:#0E8A9B; --accent-strong:#0A6E7A; --accent-wash:#E4F1F3;
+    --good:#1E824F; --good-wash:#E3F1E9; --warn:#A9670F; --warn-wash:#F6ECDC; --bad:#BF3F3C; --bad-wash:#F7E6E5;
+    --serif:"Charter","Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,"Cascadia Code","Roboto Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --shadow:0 1px 2px rgba(19,26,32,.04),0 8px 24px -14px rgba(19,26,32,.14);
+  }
+  @media (prefers-color-scheme: dark){:root{
+    --paper:#0A0F14; --panel:#111922; --panel-2:#0E151C;
+    --ink:#E7ECF1; --ink-soft:#B2BDC8; --muted:#7E8894; --line:#1F2A34; --line-soft:#182129;
+    --accent:#31C0D2; --accent-strong:#57D2E1; --accent-wash:#0E2A31;
+    --good:#3BC98C; --good-wash:#0E2A22; --warn:#E0A24A; --warn-wash:#2A2113; --bad:#E8635E; --bad-wash:#2C1615;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -16px rgba(0,0,0,.6);
+  }}
+  :root[data-theme="light"]{--paper:#F5F7F8;--panel:#FFFFFF;--panel-2:#F0F3F4;--ink:#131A20;--ink-soft:#3B4650;--muted:#69747E;--line:#E1E6EA;--line-soft:#EDF0F2;--accent:#0E8A9B;--accent-strong:#0A6E7A;--accent-wash:#E4F1F3;--good:#1E824F;--good-wash:#E3F1E9;--warn:#A9670F;--warn-wash:#F6ECDC;--bad:#BF3F3C;--bad-wash:#F7E6E5;--shadow:0 1px 2px rgba(19,26,32,.04),0 8px 24px -14px rgba(19,26,32,.14);}
+  :root[data-theme="dark"]{--paper:#0A0F14;--panel:#111922;--panel-2:#0E151C;--ink:#E7ECF1;--ink-soft:#B2BDC8;--muted:#7E8894;--line:#1F2A34;--line-soft:#182129;--accent:#31C0D2;--accent-strong:#57D2E1;--accent-wash:#0E2A31;--good:#3BC98C;--good-wash:#0E2A22;--warn:#E0A24A;--warn-wash:#2A2113;--bad:#E8635E;--bad-wash:#2C1615;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -16px rgba(0,0,0,.6);}
+
+  *{box-sizing:border-box}
+  .doc{background:var(--paper);color:var(--ink);font-family:var(--serif);line-height:1.6;-webkit-font-smoothing:antialiased;padding:clamp(20px,5vw,60px) 20px 72px;min-height:100vh}
+  .wrap{max-width:920px;margin:0 auto}
+  .measure{max-width:68ch}
+  .doc p{margin:0 0 1em;color:var(--ink-soft);font-size:1.02rem}
+  .doc strong{color:var(--ink);font-weight:600}
+  .doc code{font-family:var(--mono);font-size:.86em;color:var(--ink);background:var(--panel-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line-soft)}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-strong);margin:0 0 14px;display:flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--accent);display:inline-block}
+  .mast{border-bottom:1px solid var(--line);padding-bottom:30px}
+  h1{font-size:clamp(1.8rem,4.4vw,2.7rem);line-height:1.1;letter-spacing:-.015em;font-weight:600;margin:0 0 18px;text-wrap:balance;color:var(--ink)}
+  .dek{font-size:clamp(1rem,1.6vw,1.15rem);color:var(--ink-soft);max-width:64ch;margin:0}
+  .metarow{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;font-family:var(--mono);font-size:.76rem;color:var(--muted);align-items:center}
+  .metarow b{color:var(--ink-soft);font-weight:500}
+  .chip{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;border:1px solid;display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,transparent);background:var(--good-wash)}
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+  .verdict{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:34px 0 8px;box-shadow:var(--shadow)}
+  .vcell{background:var(--panel);padding:18px 16px}
+  .vcell .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+  .vcell .v{font-family:var(--mono);font-size:1.4rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1}
+  .vcell .v.good{color:var(--good)} .vcell .v.warn{color:var(--warn)}
+  .vcell .s{font-size:.74rem;color:var(--muted);margin-top:6px;font-family:var(--sans)}
+  @media(max-width:720px){.verdict{grid-template-columns:repeat(2,1fr)}}
+
+  section{margin-top:54px}
+  .snum{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;color:var(--accent-strong);text-transform:uppercase}
+  h2{font-size:clamp(1.35rem,2.6vw,1.8rem);font-weight:600;letter-spacing:-.01em;margin:8px 0 16px;color:var(--ink);text-wrap:balance;line-height:1.15}
+  h3{font-family:var(--sans);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:28px 0 12px}
+
+  .tbl-wrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;min-width:460px;background:var(--panel)}
+  thead th{font-family:var(--sans);font-size:.66rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:11px 15px;border-bottom:1px solid var(--line);font-weight:700;background:var(--panel-2)}
+  thead th.r,tbody td.r{text-align:right}
+  tbody td{padding:11px 15px;border-top:1px solid var(--line-soft);font-size:.9rem;color:var(--ink-soft)}
+  tbody td.m{font-family:var(--mono);font-size:.82rem;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  tbody td.good{color:var(--good);font-weight:600} tbody td.bad{color:var(--bad);font-weight:600}
+  tbody tr:hover{background:var(--panel-2)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--panel);padding:16px 20px;border-radius:0 10px 10px 0;margin:22px 0;box-shadow:var(--shadow)}
+  .callout .h{font-family:var(--sans);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-strong);font-weight:700;margin-bottom:8px}
+  .callout p{margin:0;color:var(--ink-soft)}
+  .callout.good{border-left-color:var(--good)} .callout.good .h{color:var(--good)}
+
+  pre{font-family:var(--mono);font-size:.8rem;line-height:1.7;color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:20px 0;overflow-x:auto}
+  pre .hl{color:var(--accent-strong);font-weight:600} pre .g{color:var(--good)} pre .b{color:var(--bad)}
+
+  .ratio{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}
+  .rc{flex:1;min-width:180px;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--panel);box-shadow:var(--shadow)}
+  .rc .rl{font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .rc .rv{font-family:var(--mono);font-size:1.5rem;font-weight:600;font-variant-numeric:tabular-nums}
+  .rc.g .rv{color:var(--good)} .rc.b .rv{color:var(--bad)}
+  .rc .rs{font-size:.8rem;color:var(--muted);margin-top:6px}
+
+  footer{margin-top:48px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:.72rem;color:var(--muted);letter-spacing:.03em;display:flex;flex-wrap:wrap;gap:6px 18px}
+  @media (prefers-reduced-motion:no-preference){.vcell,.rc{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+</style>
+
+<div class="doc"><div class="wrap">
+  <header class="mast">
+    <p class="eyebrow">Phorvex · P1 Coverage Optimizer</p>
+    <h1>Is the greedy move-selector optimal?</h1>
+    <p class="dek">Answering the optimization team's note end-to-end. Short version: <strong>yes — provably, on the facts the engine ships</strong>; and where a plain greedy would slip (shared facts), a <strong>greedy-then-swaps</strong> optimizer <strong>closes the gap to the exact optimum</strong> (0.845 → 1.000). The counterexample, the boundary, and the regression target — all measured by the real engine.</p>
+    <div class="metarow">
+      <span><b>Engine</b>&nbsp; coverage.go submodular-greedy</span>
+      <span><b>Objective</b>&nbsp; gain = marginal·prov − λ·ECost</span>
+      <span><b>Date</b>&nbsp; 2026-07-08</span>
+      <span class="chip"><span class="dot"></span> Provably optimal</span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <div class="vcell"><div class="k">Shipped facts</div><div class="v good">1.000</div><div class="s">greedy = brute-force optimal</div></div>
+    <div class="vcell"><div class="k">Optimality gap</div><div class="v good">0.000</div><div class="s">on asset-disjoint facts</div></div>
+    <div class="vcell"><div class="k">Boundary (plain greedy)</div><div class="v warn">0.845</div><div class="s">shared-fact stress probe</div></div>
+    <div class="vcell"><div class="k">Gap closed · greedy+swaps</div><div class="v good">1.000</div><div class="s">tested + live, no regression</div></div>
+  </div>
+
+  <section>
+    <p class="snum">Section 01</p>
+    <h2>Why greedy is exact on the facts we ship</h2>
+    <div class="measure">
+      <p>Phorvex selects moves with a <strong>submodular greedy</strong>: each pick maximizes <code>marginal·prov − λ·ECost</code>. Greedy is <strong>provably optimal</strong> when the objective is <strong>modular</strong> — when no two pods can cover the same recon "fact".</p>
+      <p>The shipped <code>standard-recon</code> profile keys <em>every</em> fact by its owning pod — <code>recon.Fact.Key() = "&lt;ns&gt;/&lt;pod&gt;|&lt;kind&gt;"</code>. So pod A's facts never collide with pod B's: covers are <strong>asset-disjoint</strong>, the set value is a plain sum, the objective is modular, and greedy equals the exact optimum. This isn't assumed — the engine brute-forces the exact optimum over the identical objective on every ablation (<code>OptimalityOut</code>) and self-checks disjointness.</p>
+    </div>
+
+    <div class="callout good">
+      <div class="h">Live measurement · this deploy</div>
+      <p>The Optimizer Bench now runs the exact solver next to the greedy for every config. On all three built-in scenarios the greedy is exact:</p>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Scenario</th><th class="r">Optimality ratio</th><th class="r">Gap</th><th class="r">Asset-disjoint</th></tr></thead>
+      <tbody>
+        <tr><td>NATS brokers · stateful</td><td class="m good r">1.0000</td><td class="m r">0.0000</td><td class="m r">✓</td></tr>
+        <tr><td>Mixed fleet</td><td class="m good r">1.0000</td><td class="m r">0.0000</td><td class="m r">✓</td></tr>
+        <tr><td>AI / GPU</td><td class="m good r">1.0000</td><td class="m r">0.0000</td><td class="m r">✓</td></tr>
+      </tbody>
+    </table></div>
+    <p class="measure">The bench's <strong>Greedy=Optimal</strong> column reads <code>1.000 ✓</code> for exactly this reason.</p>
+  </section>
+
+  <section>
+    <p class="snum">Section 02</p>
+    <h2>The boundary — where greedy would slip</h2>
+    <div class="measure"><p>A gap needs a <strong>shared</strong> fact. The hand-specified hub-spoke instance: three <code>pool</code> facts (weight 5) are each shared between a <code>hub</code> and one <code>spoke</code>; each spoke also has a private fact (weight 9). Budget <code>B=2</code>, <code>λ=0.3</code>, <code>prov=1</code>.</p></div>
+
+    <div class="callout">
+      <div class="h">The load-bearing inequality</div>
+      <p><code>pool (5) &lt; private (9) &lt; 2·pool (10)</code> — so two spokes (2 pools + 2 privates = 28) beat hub+spoke (3 pools + 1 private = 24), yet the hub standalone (15) outscores each spoke (14), so <strong>greedy grabs the hub first</strong> and is then locked out of the better two-spoke pair.</p>
+    </div>
+
+    <pre><span class="hl">Round 1</span>  hub: (5+5+5+0) − 0.3·1.20 = <span class="hl">14.64</span>  ← MAX → take hub   (spoke = 13.976)
+<span class="hl">Round 2</span>  hub's pools now covered → spoke marginal = private only = 9
+         spoke-0: 9 − 0.024 = 8.976         ← take spoke-0</pre>
+
+    <div class="ratio">
+      <div class="rc b"><div class="rl">Greedy</div><div class="rv">23.616</div><div class="rs">{hub, spoke-0} · covers 24.0</div></div>
+      <div class="rc g"><div class="rl">Brute-force optimum</div><div class="rv">27.952</div><div class="rs">{spoke-0, spoke-1} · covers 28.0</div></div>
+      <div class="rc"><div class="rl">Optimality ratio</div><div class="rv" style="color:var(--warn)">0.845</div><div class="rs">gap 4.336 · coverage 24/28 = 0.857</div></div>
+    </div>
+
+    <h3>Measured — the deterministic unit test</h3>
+    <pre>TestScenarioNonOptimal_HubSpokeClean
+  greedy picks <span class="b">[ns/hub ns/spoke-0]</span> -> objective 23.616
+  exact optimum                    -> objective <span class="g">27.952</span>
+  OptimalityRatio=<span class="hl">0.8449</span>  gap=4.336  (pure coverage 24/28=0.8571)
+--- PASS</pre>
+  </section>
+
+  <section>
+    <p class="snum">Section 03</p>
+    <h2>The paired control — it's the sharing, not a bug</h2>
+    <div class="measure"><p>Re-key the three pools <strong>per pod</strong> (<code>ns/hub|p0</code>, <code>ns/spoke-0|p0</code>, …) so nothing is shared. Same topology, same <code>B</code>, same <code>λ</code>:</p></div>
+    <pre>TestScenarioNonOptimal_DisjointControlIsExact
+  PAIRED CONTROL (per-pod keys, disjoint): ratio=<span class="g">1.000000</span> — the gap vanishes; sharing is the cause
+--- PASS</pre>
+    <p class="measure">The gap appears the instant facts are shared and disappears the instant they aren't. That pair is the whole message: the greedy's exactness is a property of the <em>fact model</em>, and the shipped fact model keeps it exact.</p>
+  </section>
+
+  <section>
+    <p class="snum">Section 04</p>
+    <h2>The gap, closed — greedy-then-swaps</h2>
+    <div class="measure"><p>A deterministic <strong>1-exchange local search</strong> (<code>localsearch.go</code>), seeded from the base greedy: while a single <em>add / drop / swap</em> (one move per asset, ≤B total) strictly improves the objective, apply the best one. By construction it <strong>never underperforms greedy</strong>, is <strong>byte-identical on disjoint facts</strong>, and escapes the hub-spoke lock-in — from <code>{hub, spoke-0}</code> it swaps <code>hub → spoke-1</code> onto the optimal <code>{spoke-0, spoke-1}</code>.</p></div>
+
+    <div class="ratio">
+      <div class="rc"><div class="rl">Shared · greedy</div><div class="rv" style="color:var(--warn)">0.845</div><div class="rs">{hub, spoke-0}</div></div>
+      <div class="rc g"><div class="rl">Shared · greedy+swaps</div><div class="rv">1.000</div><div class="rs">{spoke-0, spoke-1} = optimum</div></div>
+      <div class="rc g"><div class="rl">Disjoint control · swaps</div><div class="rv">1.000</div><div class="rs">no regression</div></div>
+    </div>
+
+    <h3>Measured — live probe + tests</h3>
+    <pre>optimizerProbe (live)
+  SHARED    greedy=<span class="b">0.8449</span>  →  greedy+swaps=<span class="g">1.0000</span>   picks [spoke-0, spoke-1] = exact 27.952
+  DISJOINT  greedy=1.0000   →  greedy+swaps=1.0000   picks [hub, spoke-0]     (no regression)
+
+TestSwapsCloseTheGap_HubSpoke ......... PASS
+TestSwapsNeverUnderperformGreedy_Sweep  720 cells — improved 124, never underperformed,
+                                        never exceeded exact ... <span class="g">PASS</span></pre>
+
+    <div class="callout">
+      <div class="h">Honest scope</div>
+      <p>Greedy-then-swaps is a <strong>local</strong> search — it closes this gap and never regresses, but it is not a global solver for every submodular instance. A universal guarantee is the <strong>LP / MPC</strong> tier the note also names; swaps is the cheapest, ship-safe first rung. It is wired as a benchmark/opt-in optimizer — the shipped <code>Decide</code> is untouched (and on the disjoint facts it ships, promoting it would be a no-op).</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="snum">Section 05</p>
+    <h2>What shipped · the regression target</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Where</th><th>What</th></tr></thead>
+      <tbody>
+        <tr><td class="m">localsearch.go</td><td><code>greedyThenSwaps</code> (1-exchange local search) + <code>RunOptimizerProbe</code> (live greedy/swaps/exact on both fixtures).</td></tr>
+        <tr><td class="m">optimality.go</td><td><code>OptimalityOut</code> gains <code>SwapObjective / SwapRatio</code>; <code>computeOptimality</code> reports them.</td></tr>
+        <tr><td class="m">optimality_scenario_test.go</td><td>Four deterministic tests: the 0.845 gap, the 1.000 disjoint control, swaps-close-the-gap, and the 720-cell never-underperform sweep.</td></tr>
+        <tr><td class="m">benchmark_sim.go</td><td><code>/api/benchmark-sim</code> returns <code>optimizerProbe</code> + per-config <code>swapRatio</code>, straight from the engine.</td></tr>
+        <tr><td class="m">bench.tsx</td><td>The <strong>Greedy=Optimal</strong> column + the <strong>Optimizer optimality</strong> card (greedy 0.845 → swaps 1.000, live).</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="callout good">
+      <div class="h">The regression target — closed</div>
+      <p>The note set <strong>0.845</strong> as the bar a <strong>lazy-greedy-with-swaps / LP / MPC</strong> optimizer must close. <strong>Closed at the greedy-with-swaps tier</strong>: the hub-spoke instance is now 1.000 under <code>greedyThenSwaps</code> — unit-tested, shown live in the bench, no regression on disjoint facts, and no change to the shipped <code>Decide</code>. The LP/MPC tier remains available if a future recon profile ever needs a <em>global</em> guarantee on arbitrary submodular instances — nothing shipped requires it today.</p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Phorvex — Adaptive Moving Target Defense</span>
+    <span>engine p1-coverage</span>
+    <span>console bench-optimality</span>
+    <span>generated 2026-07-08</span>
+  </footer>
+</div></div>
+</body>
+</html>

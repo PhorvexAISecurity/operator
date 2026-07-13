@@ -188,6 +188,9 @@ type OptimalityOut struct {
 	CoversDisjoint  bool    `json:"coversDisjoint"`  // true => modular => greedy provably exact
 	SharedKeyNote   string  `json:"sharedKeyNote"`   // the self-check message (surfaces a shared key)
 	ExactSkipped    bool    `json:"exactSkipped"`    // fleet exceeded the brute-force cap
+	// [Step 3] greedy-then-swaps local search (localsearch.go): >= greedy always; closes the hub-spoke gap.
+	SwapObjective float64 `json:"swapObjective"`
+	SwapRatio     float64 `json:"swapRatio"` // greedy+swaps / exact (1.000 => swaps reach the optimum)
 }
 
 // computeOptimality (Step 1) measures the REAL greedy (from the actual Decisions) against the brute-force
@@ -209,16 +212,19 @@ func (e *CoverageEngine) computeOptimality(decs []model.Decision, set actionset.
 	}
 	out.GreedyObjective = gObj
 	out.CoversDisjoint, out.SharedKeyNote = coversDisjoint(set)
+	// greedy-then-swaps over the same substrate + frozen λ + re-created prov (>= greedy always).
+	out.SwapObjective = setObjective(greedyThenSwaps(set, pol.MaxMovesPerTick, prov, lambda), set.FactWeights, prov, lambda)
 	exObj, skipped := exactObjective(set, pol.MaxMovesPerTick, prov, lambda)
 	out.ExactObjective, out.ExactSkipped = exObj, skipped
 	if skipped {
-		return out // OptimalityRatio left 0 (not brute-forced)
+		return out // OptimalityRatio/SwapRatio left 0 (not brute-forced)
 	}
 	out.OptimalityGap = exObj - gObj
 	if exObj <= 1e-12 {
-		out.OptimalityRatio = 1 // both correctly select nothing (objective 0)
+		out.OptimalityRatio, out.SwapRatio = 1, 1 // both correctly select nothing (objective 0)
 	} else {
 		out.OptimalityRatio = gObj / exObj
+		out.SwapRatio = out.SwapObjective / exObj
 	}
 	return out
 }

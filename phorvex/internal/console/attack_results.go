@@ -54,6 +54,20 @@ type attackRecord struct {
 	DefendedPod     string  `json:"defendedPod"` // pod Phorvex actually actuated on (may differ from the attacked pod: on a stateful cluster it quarantines the highest lateral-coverage node to contain spread)
 	Actuated        bool    `json:"actuated"`
 	TimeToDefendSec float64 `json:"timeToDefendSec"`
+	// attacker dwell = seconds the foothold held effective access. DEFENDED => from the attack landing
+	// until Phorvex contained/evicted it (= timeToDefend); LANDED => the observation window and STILL
+	// COUNTING (dwellOngoing=true — the attacker was never evicted). This is the security-standard metric:
+	// how long the intruder operated. Without any defense it is unbounded.
+	DwellSec     float64 `json:"dwellSec"`
+	DwellOngoing bool    `json:"dwellOngoing"`
+	// what the defensive action actually did to the FOOTHOLD (the attacked pod), not just "an action fired":
+	//   evicted         = the foothold pod was rotated away (destroyed) — attacker gone.
+	//   contained       = the foothold pod itself was quarantined (network-isolated on its own node).
+	//   foothold-active = only a NEIGHBOR was quarantined — the attacker still holds the attacked pod.
+	//   landed          = no defensive action reached the foothold.
+	// Dwell is bounded ONLY for evicted/contained; otherwise the intruder was never removed from the
+	// attacked pod, so its dwell is open-ended (DwellOngoing=true).
+	Containment string `json:"containment"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
 	Why          string  `json:"why"`
@@ -129,8 +143,27 @@ func (s *Server) loadAttacks() {
 		var r attackRecord
 		if json.Unmarshal([]byte(ln), &r) == nil {
 			r.Status = "done"
+			if r.Containment == "" { // (re)classify records persisted before the field existed
+				classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
+			}
 			attackList = append(attackList, &r)
 		}
+	}
+}
+
+// classifyContainment sets Containment + the honest dwell. `elapsed` is the observation window used as
+// the dwell floor when the foothold was NOT neutralized (foothold-active / landed).
+func classifyContainment(r *attackRecord, elapsed float64) {
+	switch {
+	case r.Outcome == "DEFENDED" && (r.Action == "rotate" || r.Action == "adapter-rotate"):
+		r.Containment, r.DwellSec, r.DwellOngoing = "evicted", r.TimeToDefendSec, false
+	case r.Outcome == "DEFENDED" && r.Action == "quarantine" && r.DefendedPod != "" && r.DefendedPod == r.Pod:
+		r.Containment, r.DwellSec, r.DwellOngoing = "contained", r.TimeToDefendSec, false
+	case r.Outcome == "DEFENDED" && r.Action == "quarantine":
+		// a clean neighbor was isolated — the attacker still holds the attacked pod: dwell is open-ended.
+		r.Containment, r.DwellSec, r.DwellOngoing = "foothold-active", elapsed, true
+	default:
+		r.Containment, r.DwellSec, r.DwellOngoing = "landed", elapsed, true
 	}
 }
 
@@ -222,6 +255,7 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 			r.Action = "noop"
 		}
 	}
+	classifyContainment(r, round2(time.Since(r.started).Seconds()))
 	r.UptimeDip = minUp
 	r.UptimeAfter = s.workloadUptime(r.Namespace, r.Deploy)
 	s.fillReasoning(ctxName, r)

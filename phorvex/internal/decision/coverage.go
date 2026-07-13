@@ -72,6 +72,18 @@ func NewCoverageEngine() *CoverageEngine {
 // Name implements Optimizer.
 func (e *CoverageEngine) Name() string { return "p1-coverage" }
 
+// hasDirectFoothold reports whether an event places the attacker ON this pod (TargetsPod=true), as
+// opposed to a neighbor-propagated event (TargetsPod=false). Under reactiveOnly this is what makes a
+// pod actionable — so containment isolates the COMPROMISED node, not a clean neighbor of it.
+func hasDirectFoothold(evs []model.SecurityEventInfo) bool {
+	for i := range evs {
+		if evs[i].TargetsPod {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *CoverageEngine) now() time.Time {
 	if e.Now != nil {
 		return e.Now()
@@ -192,18 +204,20 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		return provFloor + (1-provFloor)*r // a fresh, evidence-less decoy competes at <= provFloor
 	}
 
-	// [reactiveOnly] When the policy is reactive-only, an asset is actionable ONLY while a
-	// REAL attack signal targets it — a non-Phorvex SecurityEvent (this pod or a compromised
-	// neighbor; Phorvex's own events are already filtered at ingest) OR an AI poison marker
-	// (SuspectAdapter). Proactive, exposure-only moves are suppressed, so the workload stays
-	// CALM until attacked and the response is a clean, attributable reaction. The map is
-	// ALL-TRUE when reactiveOnly=false, so every gate below is a no-op and the default path
-	// stays byte-identical.
+	// [reactiveOnly] When the policy is reactive-only, an asset is actionable ONLY while a REAL
+	// attack signal places the attacker ON it — a DIRECT foothold (a non-Phorvex SecurityEvent with
+	// TargetsPod=true; Phorvex's own events are already filtered at ingest) OR an AI poison marker
+	// (SuspectAdapter). A pod that merely NEIGHBORS a compromised node (only propagated
+	// TargetsPod=false events) is NOT contained: isolating a clean neighbor degrades availability
+	// without evicting or containing the real intruder, so the reactive containment must land on the
+	// COMPROMISED node itself. Proactive, exposure-only moves are suppressed, so the workload stays
+	// CALM until attacked. The map is ALL-TRUE when reactiveOnly=false, so every gate below is a
+	// no-op and the default (proactive) path stays byte-identical.
 	attackBackedKey := make(map[string]bool, len(views))
 	for _, v := range views {
 		backed := true
 		if pol.ReactiveOnly {
-			backed = v.Pod.SuspectAdapter != "" || len(v.Events) > 0
+			backed = v.Pod.SuspectAdapter != "" || hasDirectFoothold(v.Events)
 		}
 		attackBackedKey[v.Pod.Namespace+"/"+v.Pod.Name] = backed
 	}

@@ -127,6 +127,10 @@ export const api = {
   vllmAttack: (action: "poison" | "kvcache" | "reset", lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens) => get<{ attacks: AttackResult[] }>("/api/attack-results", lens),
+  // Optimizer Bench — run the REAL p1-coverage engine over a config sweep, in-process (no live attack).
+  // horizonSec>0 adds the temporal (over-time) simulation where tickInterval + anti-rotation manifest.
+  benchmarkSim: (scenario: string, configs: BenchConfigInput[], horizonSec: number, r6IntervalSec: number, lens: Lens) =>
+    post<BenchResult>("/api/benchmark-sim", { scenario, configs, horizonSec, r6IntervalSec }, lens),
   runStatus: (id: string, lens: Lens) => get<RunStatus>(`/api/runs/status?id=${id}`, lens),
   runsList: (lens: Lens) => get<{ runs: RunStatus[] }>("/api/runs/list", lens),
   stopRun: (id: string, lens: Lens) => post<{ status: string; id: string }>("/api/runs/stop", { id }, lens),
@@ -201,11 +205,55 @@ export interface TimelineEvent {
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
 export interface AttackCost { valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string }
 export interface AttackResult {
-  id: string; firedAt: string; service: string; namespace: string; pod: string; deploy: string;
+  id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
   status: "running" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
+  dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
+}
+// --- Optimizer Bench: config sweep over the real p1-coverage engine (in-process, no live attack) ---
+export interface BenchConfigInput {
+  label: string;
+  maxMovesPerTick: number;
+  normSparsity: number;
+  flowDisruption: number;
+  weightSecrets: number;
+  minAvailableReplicas: number;
+  proactiveFloorSec: number;
+  reactiveOnly: boolean;
+  lambda: number;
+  tickIntervalSec: number;
+  antiOverRotationSec: number;
+  enabledActions?: string[];
+}
+export interface BenchMove {
+  pod: string; stateful: boolean; attacked: boolean; action: string; selected: boolean; feasible: boolean;
+  infeasibleWhy: string; cost: number; coverage: number; coveredFacts: number; perDollar: number; stage: string;
+  pHold: number; assetValue: number; blindCost: number; r6Would: string;
+}
+export interface BenchTemporalPoint { sec: number; phorvexCum: number; r6Cum: number; moves: number }
+export interface BenchTemporal {
+  horizonSec: number; tickSec: number; ticks: number; phorvexMoves: number; phorvexCost: number;
+  phorvexByAction: Record<string, number>; r6IntervalSec: number; r6Moves: number; r6Cost: number;
+  r6StatefulKills: number; savingsVsR6: number; series: BenchTemporalPoint[];
+}
+export interface BenchConfigResult {
+  label: string; config: BenchConfigInput; moves: BenchMove[]; movesSelected: number; totalCoverage: number;
+  totalCost: number; perDollar: number; ablationRatio: number; statefulRotated: boolean; phorvexMovesPerHour: number;
+  optimalityRatio: number; optimalityGap: number; coversDisjoint: boolean; exactSkipped: boolean; swapRatio: number;
+  temporal?: BenchTemporal;
+}
+export interface OptimizerProbeArm {
+  name: string; greedyObjective: number; swapObjective: number; exactObjective: number;
+  greedyRatio: number; swapRatio: number; greedyPicks: string[]; swapPicks: string[]; coversDisjoint: boolean;
+}
+export interface OptimizerProbe { b: number; lambda: number; shared: OptimizerProbeArm; disjoint: OptimizerProbeArm }
+export interface BenchResult {
+  scenario: string; scenarioLabel: string; engine: string; pods: number; stateful: number; attacked: number;
+  attackLandedRisk: number; r6BlindCost: number; r6DestroysStateful: number; r6BlindMovesPerHour: number;
+  horizonSec: number; r6IntervalSec: number; computeMs: number; optimizerProbe: OptimizerProbe;
+  configs: BenchConfigResult[]; note: string;
 }
 export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptBlind: number; disruptWith: number; defensiveActions: number; blindActions: number; responseCost: number; defenseCost: number; costWithout: number; costBlind: number; costWith: number; successNone: number; successBlind: number; successWith: number; savings: number; helps: boolean }
 export interface NodePrice { instanceType: string; count: number; gpu: boolean; pricePerHr: number; estimated: boolean }
