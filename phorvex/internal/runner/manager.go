@@ -89,11 +89,18 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 // PHORVEX_ACTUATOR=native) or the Phoenix adapter (default — drives UNMODIFIED Phoenix via
 // SecurityEvent/AMTD CRs). Both satisfy the Actuator interface; the brain is unchanged.
 func selectActuator(c client.Client, log logr.Logger) actuator.Actuator {
-	if os.Getenv("PHORVEX_ACTUATOR") == "native" {
+	switch os.Getenv("PHORVEX_ACTUATOR") {
+	case "native":
 		log.WithName("runner").Info("actuator=native (Phorvex own hands; direct client-go enactment, no Phoenix CRDs)")
 		return actuator.NewNativeActuator(c)
+	case "hybrid":
+		// Phoenix enacts rotate/quarantine (keeps the nats AMTD-CR mechanism); the native
+		// actuator enacts the AI-native moves (kv-reset, adapter-rotate, …) Phoenix can't.
+		log.WithName("runner").Info("actuator=hybrid (Phoenix for rotate/quarantine, native for AI-native moves)")
+		return actuator.NewHybridActuator(c)
+	default:
+		return actuator.NewPhoenixActuator(c)
 	}
-	return actuator.NewPhoenixActuator(c)
 }
 
 // Upsert adds or updates a tenant policy in the registry.
