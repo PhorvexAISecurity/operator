@@ -285,8 +285,17 @@ func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Hand
 	case resetErr == nil:
 		flushNote = "KV/prefix cache flushed via the serving stack (defeats wipe-surviving implant)"
 	case errors.Is(resetErr, errStackUnreachable):
-		// no serving stack reachable (kind / no GPU): the pod-alive mechanic is real; the flush is pending.
-		flushNote = "serving stack unreachable [PENDING-GPU-VALIDATION]: KV flush NOT performed (no vLLM); pod kept alive + flush epoch recorded"
+		// [FAIL-CLOSED FIX] No serving stack reachable (pod Pending / no IP / no vLLM). This branch
+		// used to fall through and return Emitted:true with a "flush NOT performed" note — so a move
+		// that flushed NOTHING was recorded as a real actuation, counted in phorvex_actuations_total,
+		// and narrated to the customer as "Cleared injected state on the inference workload". A KV
+		// flush that did not happen is not a defence: report it as NOT emitted and write no epoch
+		// (a "flush epoch" for a flush that never ran is a false forensic record).
+		return HandlerResult{
+			Emitted: false, MutationKind: "none",
+			Note: "[PENDING-GPU-VALIDATION] kv-reset NOT performed: serving stack unreachable at " +
+				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — no cache was flushed",
+		}, nil
 	default:
 		// reachable but the admin call failed => FAIL-CLOSED (do not claim a flush).
 		return HandlerResult{}, fmt.Errorf("kv-reset %s/%s: serving-stack flush failed: %w", req.Namespace, req.Pod, resetErr)

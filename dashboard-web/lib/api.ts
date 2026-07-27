@@ -208,7 +208,7 @@ export interface AttackResult {
   id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
   status: "running" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
-  dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "foothold-active" | "landed" | "";
+  dwellSec: number; dwellOngoing: boolean; containment: "evicted" | "contained" | "flushed" | "foothold-active" | "landed" | "";
   why: string; perDollar: number; stage: string; coveredFacts: number; pHold: number; lambda: number; r6Would: string; r6Note: string;
   uptimeBefore: number; uptimeDip: number; uptimeAfter: number; cost: AttackCost;
 }

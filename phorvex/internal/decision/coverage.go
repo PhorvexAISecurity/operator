@@ -481,8 +481,12 @@ func counterfactualNote(a model.Action, v *model.WorkloadView, perDollar, lambda
 		return fmt.Sprintf("R6 would rotate too, but on a blind fixed timer (no cost/value targeting); Phorvex rotates now because per-$ %.2f > λ %.2f.", perDollar, lambda)
 	case model.ActionQuarantine:
 		return "R6 has no path to quarantine here without a hand-written exact-match rule; Phorvex chose quarantine to cut lateral recon."
-	default:
+	case model.ActionNoop:
 		return fmt.Sprintf("R6's blind timer would DELETE this pod on schedule regardless; Phorvex skipped (best per-$ <= λ %.2f — not worth the disruption now).", lambda)
+	default:
+		// [HONEST-LABEL FIX] An AI-native move was previously narrated as "Phorvex skipped" — the
+		// exact opposite of what happened. R6 has no non-destructive equivalent at all.
+		return fmt.Sprintf("R6's blind timer would DELETE this pod on schedule; Phorvex used %s instead — the workload keeps serving (R6 has no non-destructive equivalent).", a)
 	}
 }
 
@@ -494,7 +498,14 @@ func coverageReason(a model.Action, as killchain.Assessment, cov, ecost, perDoll
 	case model.ActionQuarantine:
 		return fmt.Sprintf("quarantine: cuts lateral recon (cov=%.2f/$%.2f=%.2f per-$); stage=%s→%s lateralUrg=%.2f pHold=%.2f",
 			cov, ecost, perDollar, as.StageName, as.NextStageName, as.LateralUrgency, as.PHold)
-	default:
+	case model.ActionNoop:
 		return fmt.Sprintf("noop: no net-positive feasible move (best per-$ <= λ=%.2f) stage=%s pHold=%.2f", lambda, as.StageName, as.PHold)
+	default:
+		// [HONEST-LABEL FIX] Every AI-native move (kv-reset, adapter-rotate, warm-swap, …) used to
+		// fall through to the noop text above, so a GENUINELY SELECTED move was audited as
+		// "noop: no net-positive feasible move" — the decision was real, the label was a lie, and it
+		// made the operator/dashboard read a live defence as an inaction.
+		return fmt.Sprintf("%s: selected (cov=%.2f/$%.2f=%.2f per-$ > λ=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
+			a, cov, ecost, perDollar, lambda, as.StageName, as.NextStageName, as.Hazard, as.PHold)
 	}
 }

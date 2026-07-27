@@ -65,7 +65,22 @@ func coarseStage(stage string) string {
 
 // ownerWhy authors a plain-English rationale from OWNER-SAFE outputs only. It NEVER reads
 // rec.Reason / rec.CounterfactualNote (those inline the EMR/lambda/per-$ math verbatim).
-func ownerWhy(action string, reversible, workPreserved, harm bool) string {
+//
+// [TRUTHFULNESS FIX] Every branch below is written in the PAST TENSE — it asserts to the
+// customer that a defence WAS PERFORMED. Previously this function switched on `action` ALONE
+// and never looked at `actuated`, so a record that was merely EVALUATED (or whose actuation
+// failed) still told the owner "Cleared injected state on the inference workload…". The owner
+// feed admits any record with Selected OR Actuated, so non-actuated records reach here
+// routinely. Claiming a defence that did not happen is the worst failure mode this product
+// has: the customer believes they were protected when they were not. `actuated` is now the
+// FIRST gate — no actuation, no success narrative.
+func ownerWhy(action string, actuated, reversible, workPreserved, harm bool) string {
+	if !actuated {
+		if action == "" || action == "noop" {
+			return "Evaluated this workload and took no action — no threat warranted intervention."
+		}
+		return "Selected a protective action for this workload, but it was NOT carried out — treat this workload as unprotected for this event."
+	}
 	switch {
 	case action == "quarantine" && workPreserved:
 		return "Contained the threat in place and kept your workload running — no data or job loss."
@@ -81,8 +96,13 @@ func ownerWhy(action string, reversible, workPreserved, harm bool) string {
 }
 
 // blindOutcome sanitizes the R6 counterfactual to the OUTCOME only (what blind rotation
-// would have done), never the underlying math.
-func blindOutcome(action string, workPreserved bool) string {
+// would have done), never the underlying math. Gated on `actuated` for the same reason as
+// ownerWhy: a counterfactual comparison is meaningless (and flattering) when Phorvex itself
+// did nothing.
+func blindOutcome(action string, actuated, workPreserved bool) string {
+	if !actuated {
+		return "No comparison applies — Phorvex did not act on this event."
+	}
 	if action == "quarantine" && workPreserved {
 		return "A blind fixed-interval rotation would have deleted this workload — destroying its state."
 	}
@@ -117,8 +137,8 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 		HarmCaused:      harm,
 		SLOKept:         true, // boolean only; PX never violates the SLO gate (feasibility-enforced)
 		AttackStage:     coarseStage(rec.Stage),
-		Why:             ownerWhy(rec.Action, reversible, workPreserved, harm),
-		BlindOutcome:    blindOutcome(rec.Action, workPreserved),
+		Why:             ownerWhy(rec.Action, rec.Actuated, reversible, workPreserved, harm),
+		BlindOutcome:    blindOutcome(rec.Action, rec.Actuated, workPreserved),
 	}
 }
 

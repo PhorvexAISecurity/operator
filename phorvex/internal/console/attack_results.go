@@ -86,10 +86,11 @@ type attackRecord struct {
 
 	Cost attackCost `json:"cost"`
 
-	started   time.Time       // unexported, for elapsed timing
-	baseEpoch string          // pre-attack adapter epoch (poison detection)
-	baseQuar  map[string]bool // pre-attack quarantine SecurityEvent names
-	baseNP    map[string]bool // pre-attack quarantine NetworkPolicy names
+	started     time.Time       // unexported, for elapsed timing
+	baseEpoch   string          // pre-attack adapter epoch (poison detection)
+	baseKVEpoch string          // pre-attack kv-reset epoch (kvcache detection)
+	baseQuar    map[string]bool // pre-attack quarantine SecurityEvent names
+	baseNP      map[string]bool // pre-attack quarantine NetworkPolicy names
 }
 
 // defenseBaseline is the snapshot of pre-existing defense artifacts, taken by the attack handler BEFORE
@@ -97,17 +98,19 @@ type attackRecord struct {
 // react within ~1s, faster than the watcher's own baseline kubectl calls would complete — so a
 // watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
 type defenseBaseline struct {
-	epoch string
-	quar  map[string]bool
-	nps   map[string]bool
+	epoch   string
+	kvEpoch string
+	quar    map[string]bool
+	nps     map[string]bool
 }
 
 // snapshotBaseline captures the defense baseline for a namespace/pod. Call BEFORE applying the attack.
 func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
 	return defenseBaseline{
-		epoch: s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
-		quar:  s.quarantineEvents(ns),
-		nps:   s.quarantineNPs(ns),
+		epoch:   s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
+		kvEpoch: s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
+		quar:    s.quarantineEvents(ns),
+		nps:     s.quarantineNPs(ns),
 	}
 }
 
@@ -157,6 +160,11 @@ func classifyContainment(r *attackRecord, elapsed float64) {
 	switch {
 	case r.Outcome == "DEFENDED" && (r.Action == "rotate" || r.Action == "adapter-rotate"):
 		r.Containment, r.DwellSec, r.DwellOngoing = "evicted", r.TimeToDefendSec, false
+	case r.Outcome == "DEFENDED" && r.Action == "kv-reset":
+		// The pod is deliberately kept ALIVE; what ends is the attacker's PLANTED STATE (the primed
+		// cache entry). Distinct from "evicted" (pod replaced) — labelling it evicted would claim a
+		// rotation that never happened. Dwell is bounded: the injected state is gone at flush time.
+		r.Containment, r.DwellSec, r.DwellOngoing = "flushed", r.TimeToDefendSec, false
 	case r.Outcome == "DEFENDED" && r.Action == "quarantine" && r.DefendedPod != "" && r.DefendedPod == r.Pod:
 		r.Containment, r.DwellSec, r.DwellOngoing = "contained", r.TimeToDefendSec, false
 	case r.Outcome == "DEFENDED" && r.Action == "quarantine":
@@ -193,6 +201,7 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 		UptimeBefore: s.workloadUptime(ns, deploy),
 		started:      now,
 		baseEpoch:    base.epoch,
+		baseKVEpoch:  base.kvEpoch,
 		baseQuar:     base.quar,
 		baseNP:       base.nps,
 	}
@@ -211,6 +220,7 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 	// baselines were captured PRE-FIRE by the handler (see defenseBaseline) — using a watcher-side
 	// snapshot here would race a fast operator and misreport a real quarantine as LANDED.
 	epoch0 := r.baseEpoch
+	kvEpoch0 := r.baseKVEpoch
 	quar0 := r.baseQuar
 	np0 := r.baseNP
 	for time.Now().Before(deadline) {
@@ -225,6 +235,18 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 		case "poison": // adapter-rotate: real actuation bumps the adapter epoch
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch"); ep != "" && ep != epoch0 {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "adapter-rotate", true
+				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+			}
+		case "kvcache":
+			// [DETECTION FIX] kv-reset's DEFINING property is that the pod stays ALIVE, so the
+			// default branch below (which looks for the pod being deleted or quarantined) could
+			// never observe it: every kvcache attack was scored LANDED no matter how well Phorvex
+			// defended — while vLLM's own log showed POST /reset_prefix_cache 200 OK. The real
+			// evidence of a flush is the kv-reset epoch annotation the handler writes ONLY after
+			// the serving stack confirms the flush.
+			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/kv-reset-epoch"); ep != "" && ep != kvEpoch0 {
+				r.Outcome, r.Action, r.Actuated = "DEFENDED", "kv-reset", true
+				r.DefendedPod = r.Pod // the flush happens IN the attacked pod; it is never a neighbor
 				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
 			}
 		default: // foothold: rotate (stateless) removes the attacked pod; quarantine (stateful) is recorded as a fresh phorvex-quarantine SecurityEvent

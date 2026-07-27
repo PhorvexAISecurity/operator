@@ -194,6 +194,13 @@ func TestKVResetUnreachableIsPendingPodAlive(t *testing.T) {
 	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
 		t.Errorf("unreachable flush must be flagged pending, note=%q", hr.Note)
 	}
+	// TRUTHFULNESS: a flush that did not happen is NOT a defence. This branch used to return
+	// Emitted:true, which marked the decision Actuated, incremented phorvex_actuations_total, and
+	// made the owner lens tell the customer "Cleared injected state on the inference workload" —
+	// while no cache was flushed at all. No flush => not emitted.
+	if hr.Emitted {
+		t.Errorf("unreachable flush must NOT be reported as emitted (it performed nothing), note=%q", hr.Note)
+	}
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err != nil {
 		t.Error("pod must stay alive")

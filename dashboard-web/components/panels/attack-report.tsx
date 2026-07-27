@@ -34,7 +34,7 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
 
   const defended = rows.filter((r) => r.outcome === "DEFENDED").length;
   const landed = rows.filter((r) => r.outcome === "LANDED").length;
-  const boundedRows = rows.filter((r) => (r.containment === "evicted" || r.containment === "contained") && r.dwellSec > 0);
+  const boundedRows = rows.filter((r) => (r.containment === "evicted" || r.containment === "contained" || r.containment === "flushed") && r.dwellSec > 0);
   const meanDwell = boundedRows.length ? (boundedRows.reduce((a, r) => a + r.dwellSec, 0) / boundedRows.length).toFixed(1) : null;
 
   return (
@@ -58,6 +58,8 @@ function containmentInfo(r: AttackResult): { tone: "good" | "warn" | "bad"; cls:
       return { tone: "good", cls: "text-success", line: `${r.pod} rotated away — attacker evicted`, dwellNote: "attacker evicted — window closed", bounded: true };
     case "contained":
       return { tone: "good", cls: "text-success", line: `${r.pod} quarantined — attacker isolated on its own node`, dwellNote: "foothold network-isolated on its node", bounded: true };
+    case "flushed":
+      return { tone: "good", cls: "text-success", line: `${r.pod} kept serving — injected cache state flushed in place`, dwellNote: "planted state cleared — no restart, no downtime", bounded: true };
     case "foothold-active":
       return { tone: "warn", cls: "text-warning", line: `neighbor ${r.defendedPod} isolated — attacker STILL holds ${r.pod}`, dwellNote: `foothold on ${r.pod} not evicted — lateral spread cut only`, bounded: false };
     case "landed":
