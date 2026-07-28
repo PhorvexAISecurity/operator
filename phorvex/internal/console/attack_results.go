@@ -16,6 +16,7 @@ package console
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -533,26 +534,33 @@ func (s *Server) fillCost(ctxName string, r *attackRecord) {
 	}
 	opCost, _ := s.phorvexOperatorCost(ctxName) // $/yr operator footprint (real)
 
-	defended := 0.0
-	if r.Outcome == "DEFENDED" {
-		defended = 1.0
-	}
-	// R6 blind timer: rotates on a fixed schedule regardless of the attack. On a targeted foothold it
-	// catches only by luck (harness-measured ~20%) AND churns; on a STATEFUL pod it DELETES the data.
-	const r6Catch = 0.2
+	// ANNUAL projection: every arm is an EXPECTED yearly loss driven by that defender's PAIRED,
+	// harness-measured prevention rate. Previously this row mixed kinds — Phorvex was scored on the
+	// binary outcome of the single attack just fired (a miss projected a FULL year of loss, so
+	// "WITH PHORVEX" printed above "WITHOUT ANY DEFENSE" and savings went negative) while R6 got a
+	// flat hardcoded 20% credit that understated it by half. A single event is not an annual rate.
+	pr := s.cfg.PreventionRates()
 	r6Churn := opCost * 3 // constant blind rotations cost ~3x the operator footprint (measured order-of-magnitude)
-	without := valueAtRisk
-	with := round2(valueAtRisk*(1-defended) + opCost)
+	without := round2(valueAtRisk * (1 - pr.None))
+	with := round2(valueAtRisk*(1-pr.Phorvex) + opCost)
 	var r6 float64
 	if r.Stateful {
 		r6 = round2(valueAtRisk + r6Churn) // blind rotate destroys the stateful data => full loss + churn
 	} else {
-		r6 = round2(valueAtRisk*(1-r6Catch) + r6Churn)
+		r6 = round2(valueAtRisk*(1-pr.R6) + r6Churn)
+	}
+	src := "documented fallback rates"
+	if pr.Measured {
+		src = fmt.Sprintf("harness-measured over %d paired scenarios (n=%d/%d/%d)", pr.Scenarios, pr.NoneN, pr.R6N, pr.PxN)
 	}
 	r.Cost = attackCost{
 		ValueAtRisk: valueAtRisk, Without: without, R6: r6, With: with,
 		Savings: round2(without - with),
-		Note:    "value-at-risk = attacked node's real AWS on-demand $/yr; WITH = residual after the measured disruption + operator footprint; R6 = blind-timer counterfactual (catches ~20% by luck, churns; destroys stateful data).",
+		Note: fmt.Sprintf("MODELLED annual projection (not this attack's outcome — see the DEFENDED/LANDED badge for that). "+
+			"value-at-risk = attacked node's real AWS on-demand $/yr; each arm = value-at-risk x (1 - prevention rate), "+
+			"prevention rates %s: none %.1f%%, R6 blind timer %.1f%%, Phorvex %.1f%%. WITH adds the real operator footprint; "+
+			"R6 adds blind-rotation churn and destroys stateful data.",
+			src, pr.None*100, pr.R6*100, pr.Phorvex*100),
 	}
 }
 

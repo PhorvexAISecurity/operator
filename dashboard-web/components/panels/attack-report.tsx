@@ -126,11 +126,11 @@ function AttackCard({ r }: { r: AttackResult }) {
 
         {/* three-way cost */}
         <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">annual cost exposure (real AWS $/yr)</div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">annual cost exposure (real AWS $/yr) · <span className="text-muted-foreground/50">modelled from measured prevention rates — not this attack&apos;s outcome</span></div>
           <div className="grid grid-cols-3 gap-2">
             <CostCell label="Without any defense" v={r.cost?.without} tone="bad" max={r.cost?.without} />
-            <CostCell label="R6 blind timer" v={r.cost?.r6} tone="warn" max={r.cost?.without} sub={r.stateful ? "destroys DB data" : "churns · ~20% catch"} />
-            <CostCell label="With Phorvex" v={r.cost?.with} tone="good" max={r.cost?.without} sub={`saves $${fmt(r.cost?.savings)}/yr`} />
+            <CostCell label="R6 blind timer" v={r.cost?.r6} tone="warn" max={r.cost?.without} sub={r.stateful ? "destroys DB data" : "churns · blind rotation"} />
+            <CostCell label="With Phorvex" v={r.cost?.with} tone="good" max={r.cost?.without} sub={(r.cost?.savings ?? 0) > 0 ? `saves $${fmt(r.cost?.savings)}/yr` : `costs $${fmt(Math.abs(r.cost?.savings ?? 0))}/yr more`} />
           </div>
         </div>
 
