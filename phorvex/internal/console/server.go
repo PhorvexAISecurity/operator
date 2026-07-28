@@ -56,6 +56,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/vllm/attack", s.withCORS(s.scoped("operator", s.vllmAttack)))
 	mux.HandleFunc("/api/workload/attack", s.withCORS(s.scoped("operator", s.workloadAttack)))
 	mux.HandleFunc("/api/attack-results", s.withCORS(s.scoped("operator", s.attackResults)))
+	// LIVE-ATTACK MONITORING — before/during/after availability + real downtime cost per attack.
+	mux.HandleFunc("/api/attack-monitoring", s.withCORS(s.scoped("operator", s.attackMonitoringHandler)))
 	// OPTIMIZER BENCH — in-process real-engine parameter sweep vs R6-blind + attack-landed (no live attack).
 	mux.HandleFunc("/api/benchmark-sim", s.withCORS(s.scoped("operator", s.benchmarkSim)))
 	mux.HandleFunc("/api/runs/status", s.withCORS(s.scoped("operator", s.runStatus)))

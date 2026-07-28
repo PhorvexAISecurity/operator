@@ -127,6 +127,9 @@ export const api = {
   vllmAttack: (action: "poison" | "kvcache" | "reset", lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens) => get<{ attacks: AttackResult[] }>("/api/attack-results", lens),
+  // LIVE-ATTACK MONITORING — availability before/during/after each real attack + downtime $.
+  attackMonitoring: (lens: Lens) =>
+    get<AttackMonitoringResult>("/api/attack-monitoring", lens),
   // Optimizer Bench — run the REAL p1-coverage engine over a config sweep, in-process (no live attack).
   // horizonSec>0 adds the temporal (over-time) simulation where tickInterval + anti-rotation manifest.
   benchmarkSim: (scenario: string, configs: BenchConfigInput[], horizonSec: number, r6IntervalSec: number, lens: Lens) =>
@@ -293,4 +296,18 @@ export function runStream(id: string, lens: Lens, onEvent: (e: TimelineEvent) =>
   const es = new EventSource(`${API_BASE}/api/runs/stream?id=${encodeURIComponent(id)}&lens=${lens}`);
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
   return () => es.close();
+}
+
+// ---- live-attack monitoring (before / during / after) ----
+export interface MonPoint { t: string; offsetSec: number; ready: number; desired: number; pct: number; phase: "before" | "during" | "after" }
+export interface MonPhase { samples: number; meanPct: number; minPct: number; complete: boolean }
+export interface DowntimeCost { replicaSeconds: number; nodeRatePerHr: number; dollars: number; basis: string }
+export interface AttackMonitoring {
+  id: string; firedAt: string; service: string; namespace: string; workload: string;
+  attack: string; attackId: string; outcome: string; phorvexAction: string;
+  before: MonPhase; during: MonPhase; after: MonPhase;
+  recoveredSec: number; impacted: boolean; series: MonPoint[]; downtime: DowntimeCost; note: string;
+}
+export interface AttackMonitoringResult {
+  attacks: AttackMonitoring[]; sampleInterval: number; preWindowSec: number; postWindowSec: number; note: string;
 }
