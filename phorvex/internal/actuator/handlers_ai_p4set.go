@@ -169,6 +169,14 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	switch {
 	case uerr == nil:
 		note = "adapter " + adapter + " unloaded"
+	case errors.Is(uerr, errAdapterAbsent):
+		// [DEADLOCK FIX] The stack answered: the flagged adapter is NOT loaded, so the eviction goal
+		// is ALREADY met. This used to fall through to the hard error below, and because the poison
+		// marker is only cleared on success, the pod stayed flagged forever: the brain re-selected
+		// adapter-rotate every tick (it outranks kv-reset on coverage), the unload 404'd every tick,
+		// nothing ever converged, and every other AI move on that pod — kv-reset included — was
+		// starved. Converging here is what lets the workload return to normal hygiene.
+		note = "adapter " + adapter + " already absent from the serving stack — eviction goal already met"
 	case errors.Is(uerr, errStackUnreachable):
 		// no serving stack here: record the rotation epoch; the unload is [PENDING-GPU-VALIDATION].
 		note = "serving stack unreachable [PENDING-GPU-VALIDATION]: adapter unload NOT performed (no vLLM)"
@@ -190,7 +198,19 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	pod.Annotations = ensureMap(pod.Annotations)
 	pod.Annotations[annoAdapterSnapshot] = string(snap)
 	pod.Labels = ensureMap(pod.Labels)
+	// [DETECTION FIX] The epoch was written ONLY as a label, but every reader — the attack watcher's
+	// pre-fire baseline and its poison-detection loop — reads it as an ANNOTATION. So a genuinely
+	// successful adapter-rotate was invisible and the poison attack was scored LANDED. Write the
+	// annotation (the contract readers use) and keep the label for selector-based consumers.
+	pod.Annotations["phorvex.ai/adapter-epoch"] = pod.ResourceVersion
 	pod.Labels["phorvex.ai/adapter-epoch"] = pod.ResourceVersion
+	// [CONVERGENCE] The poison marker names the adapter to evict. Once it is gone from the serving
+	// stack, the threat is resolved: clear the marker so recon stops minting the adapter-integrity
+	// fact and the pod returns to normal hygiene (a NEW poison re-flags it via the detector). The
+	// lora-enabled LABEL is a capability ("--enable-lora"), not a threat, so it stays.
+	if uerr == nil || errors.Is(uerr, errAdapterAbsent) {
+		delete(pod.Annotations, annoLoRAAdapter)
+	}
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		return HandlerResult{}, fmt.Errorf("adapter-rotate epoch %s/%s: %w", req.Namespace, req.Pod, err)
 	}

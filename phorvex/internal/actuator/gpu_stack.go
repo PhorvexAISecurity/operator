@@ -101,6 +101,12 @@ func endpointForPod(pod *corev1.Pod) servingEndpoint {
 // — distinct from a reachable-but-failing endpoint (case c, fail-closed).
 var errStackUnreachable = errors.New("serving endpoint unreachable [PENDING-GPU-VALIDATION]")
 
+// errAdapterAbsent means the serving stack answered and reported the named adapter is NOT
+// loaded. For an EVICTION this is the goal state already met, not a failure — treating it as
+// an error made adapter-rotate fail forever on a stale detector flag (the flag naming an
+// adapter vLLM never had), which starved every other AI move on that pod. See adapterRotateHandler.
+var errAdapterAbsent = errors.New("adapter not loaded on the serving stack")
+
 // vLLMClient is the serving-stack control plane. Default impl = vLLM HTTP API. Swap for Triton/TGI.
 type vLLMClient interface {
 	// ModelReady reports whether the served model is LOADED + healthy at ep (warm-pool readiness).

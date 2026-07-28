@@ -85,6 +85,12 @@ func (c *httpVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, adapte
 	if err != nil {
 		return err
 	}
+	// 404 = "The lora adapter 'x' cannot be found": the stack ANSWERED and the adapter is not
+	// loaded. For an eviction that is the desired end state, so surface it as a distinct sentinel
+	// rather than a generic failure (the caller decides it means "already converged").
+	if code == http.StatusNotFound {
+		return fmt.Errorf("%w: %q (HTTP 404 %s)", errAdapterAbsent, adapter, strings.TrimSpace(body))
+	}
 	if !okCode(code) {
 		return fmt.Errorf("vLLM unload_lora_adapter %q: HTTP %d %s", adapter, code, strings.TrimSpace(body))
 	}
