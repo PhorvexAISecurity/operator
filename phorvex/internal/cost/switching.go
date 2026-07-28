@@ -4,7 +4,11 @@
 
 package cost
 
-import "github.com/phorvex/phorvex/internal/model"
+import (
+	"math"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
 
 // switching is the DEFAULT CostModel: K = normSparsity*C_norm + flowDisruption*C_flow
 // (PRD §5.1B), the cost-weight split carried on PhorvexPolicy.Objective.CostWeights.
@@ -97,6 +101,12 @@ func flowCost(view *model.WorkloadView, move model.Move) float64 {
 }
 
 func sat(x float64) float64 {
+	// NaN-SAFE: every comparison against NaN is false, so a bare `if x<0 / if x>1` would fall
+	// through and RETURN NaN — poisoning ECost and making the optimizer compare NaN costs. A
+	// NaN/absent telemetry field must read as NEUTRAL (0), never propagate.
+	if math.IsNaN(x) {
+		return 0
+	}
 	if x < 0 {
 		return 0
 	}

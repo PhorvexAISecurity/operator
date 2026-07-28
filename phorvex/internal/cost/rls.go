@@ -4,14 +4,21 @@
 
 package cost
 
-import "github.com/phorvex/phorvex/internal/model"
+import (
+	"math"
 
-// rls.go is the SELF-CALIBRATING C_flow model: C_flow is nonlinear in the raw pod
-// state but LINEAR in engineered features phi(view), so Recursive Least Squares gives
-// a closed-form ONLINE fit of a nonlinear cost surface from observed rotations
-// (METHOD-DECISION cost winner, RC-DD). The feature vector and the RLS recursion live
-// here; the RLS UPDATE runs on the telemetry-ingest cadence (offline w.r.t. the <1s
-// online tick), so the per-tick cost is just a dot product.
+	"github.com/phorvex/phorvex/internal/model"
+)
+
+// rls.go holds the C_flow model: C_flow is nonlinear in the raw pod state but LINEAR in
+// engineered features phi(view), so Recursive Least Squares CAN give a closed-form online fit
+// from observed rotations (METHOD-DECISION cost winner, RC-DD). The feature vector and the RLS
+// recursion live here and the per-tick cost is a dot product.
+//
+// STATUS: the recursion is implemented and correct, but its only entry point
+// (P1Cost.ObserveRotation) has NO callers in the operator loop, so theta stays at priorTheta()
+// forever. C_flow(rotate) is therefore a FIXED PRIOR in production, not a self-calibrating
+// value — do not describe it as the latter until the post-actuation measurement is wired.
 
 // featureDim is the engineered C_flow feature dimension.
 const featureDim = 6
@@ -123,6 +130,11 @@ func (r *RLS) Update(f [featureDim]float64, y float64) {
 func (r *RLS) Primed() bool { return r.primed }
 
 func satRLS(x float64) float64 {
+	// NaN-SAFE (see sat() in switching.go): NaN compares false against everything, so without
+	// this guard a NaN ReqRate would flow into the feature vector and make C_flow NaN.
+	if math.IsNaN(x) {
+		return 0
+	}
 	if x < 0 {
 		return 0
 	}

@@ -7,8 +7,9 @@ package cost
 import "github.com/phorvex/phorvex/internal/model"
 
 // P1Cost is the assembled P1 cost model: C = normSparsity*C_norm + flowDisruption*
-// C_flow, where C_flow is RLS-self-calibrated, lambda is the dual-descent shadow-price,
-// and CHi is the conformal robust upper bound used by the HARD SLO gate. It is a
+// C_flow, where C_flow is an RLS-shaped FIXED PRIOR today (the update path exists but has no
+// callers — see ObserveRotation), lambda is the dual-descent shadow-price, and CHi is the
+// conformal robust upper bound used by the HARD SLO gate. It is a
 // stateful object (the RLS, conformal window and dual persist across ticks) owned by
 // the decision engine.
 type P1Cost struct {
@@ -69,6 +70,13 @@ func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy
 		return e
 	}
 	slack := c.Conformal.Quantile()
+	// CHi >= ECost is the SLO contract: the robust UPPER bound must never sit below the point
+	// estimate. That holds today because ConformalBound.Observe stores |residual|, so Quantile()
+	// is an order statistic over non-negative values (verified by test, not assumed). This clamp
+	// is belt-and-braces: it keeps the contract true by construction if that ever changes.
+	if slack < 0 {
+		slack = 0
+	}
 	if view.Pod.HasGPU && !c.RLS.Primed() {
 		// Unmeasured GPU warm-load: the worst-case envelope applies.
 		slack = maxf(slack, pol.FlowDisruption*GPUEnvelopeMax)

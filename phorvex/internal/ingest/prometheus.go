@@ -5,6 +5,7 @@
 package ingest
 
 import (
+	"math"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -190,7 +191,10 @@ func (p *PromHTTP) instantQuery(ctx context.Context, query string) (map[string]f
 			continue
 		}
 		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
+		// Prometheus legitimately serves "NaN" (e.g. 0/0, a stale/absent series) and Go's
+		// ParseFloat accepts it WITHOUT error. Admitting it would make every downstream cost NaN,
+		// so an unusable sample is DROPPED (honest-absent) rather than ingested.
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 			continue
 		}
 		out[pod] = f
@@ -231,7 +235,7 @@ func (p *PromHTTP) instantQueryNsPod(ctx context.Context, query string) (map[str
 		if !ok {
 			continue
 		}
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
+		if f, err := strconv.ParseFloat(s, 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
 			out[ns+"/"+pod] = f
 		}
 	}
