@@ -103,11 +103,17 @@ type defenseBaseline struct {
 	kvEpoch string
 	quar    map[string]bool
 	nps     map[string]bool
+	// uptime is the workload availability read BEFORE the attack is applied. It must be captured
+	// here for the same reason as the quarantine/NP baselines: the operator is event-driven and
+	// reacts in ~1s, faster than startAttackRecord runs, so reading it afterwards recorded the
+	// attack's OWN dip as the "before" value (a 3/3 broker was reported as 66.67% before).
+	uptime float64
 }
 
 // snapshotBaseline captures the defense baseline for a namespace/pod. Call BEFORE applying the attack.
 func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
 	return defenseBaseline{
+		uptime:  s.workloadUptime(ns, s.firstDeploy(ns)),
 		epoch:   s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
 		kvEpoch: s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
 		quar:    s.quarantineEvents(ns),
@@ -199,7 +205,14 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 		Service:   service, Namespace: ns, Pod: pod, Deploy: deploy,
 		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful,
 		Status:       "running",
-		UptimeBefore: s.workloadUptime(ns, deploy),
+		// PRE-FIRE value when the caller captured one (>=0); fall back to a live read only if the
+		// baseline predates this field, so an old caller still gets a number rather than 0.
+		UptimeBefore: func() float64 {
+			if base.uptime >= 0 {
+				return base.uptime
+			}
+			return s.workloadUptime(ns, deploy)
+		}(),
 		started:      now,
 		baseEpoch:    base.epoch,
 		baseKVEpoch:  base.kvEpoch,
