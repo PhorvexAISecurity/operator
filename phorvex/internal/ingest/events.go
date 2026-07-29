@@ -5,6 +5,7 @@
 package ingest
 
 import (
+	"math"
 	"context"
 	"strconv"
 	"strings"
@@ -35,7 +36,11 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 		}
 		score := -1.0
 		if se.Spec.AnomalyScore != nil {
-			if f, err := strconv.ParseFloat(strings.TrimSpace(*se.Spec.AnomalyScore), 64); err == nil {
+			// ParseFloat accepts the literal strings "NaN"/"Inf" WITHOUT error, and a detector can
+			// emit either. Admitting one would carry NaN into the decision path, so an unusable
+			// score stays honest-absent (-1) rather than poisoning the view.
+			if f, err := strconv.ParseFloat(strings.TrimSpace(*se.Spec.AnomalyScore), 64); err == nil &&
+				!math.IsNaN(f) && !math.IsInf(f, 0) {
 				score = f
 			}
 		}

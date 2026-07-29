@@ -78,7 +78,15 @@ func (littlesLaw) Residual(view *model.WorkloadView, _ model.Policy) float64 {
 // MinTokensPerSec is enforced as a hard FEASIBILITY constraint, not here.
 const pol_floor = 50.0
 
+// clamp01 is NaN-SAFE. The residual arithmetic above legitimately produces NaN from non-finite
+// telemetry — (Inf - Inf) in the fanout term, (-Inf / Inf) in the queue term — and every
+// comparison against NaN is false, so a bare clamp would RETURN NaN. That NaN propagates through
+// Residual -> risk -> the optimizer, where `gain > best` is also always false and selection
+// silently degrades to noop. NaN reads as the neutral LOW end.
 func clamp01(x float64) float64 {
+	if math.IsNaN(x) {
+		return 0
+	}
 	if x < 0 {
 		return 0
 	}

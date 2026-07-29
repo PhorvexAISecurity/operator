@@ -164,6 +164,9 @@ func meanf(xs []float64) float64 {
 }
 
 func clamp01(x float64) float64 {
+	if math.IsNaN(x) { // NaN compares false against everything and would pass straight through
+		return 0
+	}
 	if x < 0 {
 		return 0
 	}
@@ -173,7 +176,13 @@ func clamp01(x float64) float64 {
 	return x
 }
 
+// atof parses a harness/report number. ParseFloat accepts "NaN"/"Inf" WITHOUT error, and this
+// helper already discards the error, so an unusable field would silently become NaN and
+// propagate into every downstream mean/ratio. Unparseable or non-finite reads as 0.
 func atof(s string) float64 {
-	f, _ := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(s), "s"), 64)
+	f, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(s), "s"), 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0
+	}
 	return f
 }

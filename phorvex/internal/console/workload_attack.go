@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -61,18 +62,84 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve the CURRENT rotation-target pod at fire-time — a SecurityEvent targets a pod NAME,
 	// and the pod may have rotated since the page loaded.
-	pod, err := kctl(8*time.Second, "get", "pod", "-l", "r6th.io/rotation-target=true", "-o", "jsonpath={.items[0].metadata.name}")
-	pod = strings.TrimSpace(pod)
+	// [TARGET-SELECTION FIX] Pick a LIVE, NOT-ALREADY-QUARANTINED rotation target. Taking
+	// items[0] blindly aimed the attack at a pod Phorvex had already adopted into the AMTD CR in
+	// an earlier demo (quarantine is sticky — one per reset): the pod is network-isolated and out
+	// of the serving set, so there is nothing left to defend and the attack correctly does
+	// NOTHING — which reads exactly like a broken actuator.
+	list, err := kctl(8*time.Second, "get", "pod", "-l", "r6th.io/rotation-target=true",
+		"-o", `jsonpath={range .items[*]}{.metadata.name}|{.metadata.ownerReferences[0].kind}|{.status.phase}{"\n"}{end}`)
+	pod, skippedQuarantined := "", 0
+	for _, ln := range strings.Split(strings.TrimSpace(list), "\n") {
+		f := strings.Split(strings.TrimSpace(ln), "|")
+		if len(f) < 3 || f[0] == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(f[1]), "AdaptiveMovingTargetDefense") {
+			skippedQuarantined++ // already quarantined by a previous run
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(f[2]), "Running") {
+			continue
+		}
+		pod = strings.TrimSpace(f[0])
+		break
+	}
 	if err != nil || pod == "" {
-		writeJSON(w, 503, map[string]string{"error": "no rotation-target pod in " + ns + ": " + strings.TrimSpace(pod)})
+		msg := "no attackable rotation-target pod in " + ns
+		if skippedQuarantined > 0 {
+			msg += fmt.Sprintf(" — %d pod(s) are ALREADY quarantined from an earlier run; quarantine is sticky (one per reset), so reset the workload before firing again", skippedQuarantined)
+		}
+		writeJSON(w, 503, map[string]string{"error": msg})
 		return
 	}
 
-	// stateful pods get quarantined (rotate vetoed, state preserved); stateless get rotated.
+	// [STATEFULNESS FIX] Statefulness is a property of the WORKLOAD, not of whoever currently owns
+	// the pod: an adopted (quarantined) pod reports ownerKind=AdaptiveMovingTargetDefense, so the
+	// old ownerReferences check called a StatefulSet broker "stateless" and promised a rotate that
+	// the statefulIntegrity law would then veto. Decide from what actually makes rotate
+	// destructive — a mounted PVC — and fall back to the owner kind.
+	stateful := false
+	if pvc, _ := kctl(6*time.Second, "get", "pod", pod,
+		"-o", "jsonpath={.spec.volumes[*].persistentVolumeClaim.claimName}"); strings.TrimSpace(pvc) != "" {
+		stateful = true
+	}
 	ownerKind, _ := kctl(6*time.Second, "get", "pod", pod, "-o", "jsonpath={.metadata.ownerReferences[0].kind}")
-	expect := "rotate"
 	if k := strings.ToLower(strings.TrimSpace(ownerKind)); strings.Contains(k, "stateful") {
+		stateful = true
+	}
+	if !stateful { // the workload may be a StatefulSet even when this pod was adopted away from it
+		if ss, _ := kctl(6*time.Second, "get", "statefulset", "-o", "jsonpath={.items[*].metadata.name}"); strings.TrimSpace(ss) != "" {
+			stateful = true
+		}
+	}
+	expect := "rotate"
+	if stateful {
 		expect = "quarantine (stateful — rotate vetoed, state preserved)"
+	}
+
+	// [PRE-FLIGHT HEADROOM] Promising "Phorvex will act in ~10s" is a lie when the workload has no
+	// availability headroom left: on a stateful workload rotate is vetoed by statefulIntegrity and
+	// quarantine removes a replica, so if available == the policy's minAvailableReplicas floor every
+	// candidate is INFEASIBLE and the tick correctly selects nothing. That reads as a broken
+	// actuator unless we say so up front. Surfaced as a warning; the signal still fires so the
+	// veto itself is visible in the audit.
+	warning := ""
+	if stateful {
+		avail := 0
+		if a, _ := kctl(6*time.Second, "get", "statefulset", "-o", "jsonpath={.items[0].status.availableReplicas}"); strings.TrimSpace(a) != "" {
+			avail, _ = strconv.Atoi(strings.TrimSpace(a))
+		}
+		floor := 0
+		if f, _ := kctl(6*time.Second, "get", "phorvexpolicy", "-o", "jsonpath={.items[0].spec.slo.minAvailableReplicas}"); strings.TrimSpace(f) != "" {
+			floor, _ = strconv.Atoi(strings.TrimSpace(f))
+		}
+		if floor > 0 && avail > 0 && avail <= floor {
+			warning = fmt.Sprintf("NO HEADROOM: %s has %d available replica(s) and the policy floor is %d, "+
+				"so quarantine would breach the availability SLO and every move is correctly vetoed as infeasible. "+
+				"A previous quarantine is likely still in place (it is sticky — one per reset). Reset the workload to restore full replicas, then fire again.",
+				ns, avail, floor)
+		}
 	}
 
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
@@ -108,13 +175,20 @@ spec:
 		writeJSON(w, 502, map[string]string{"error": "apply SecurityEvent failed: " + strings.TrimSpace(out)})
 		return
 	}
-	stateful := strings.Contains(strings.ToLower(strings.TrimSpace(ownerKind)), "stateful")
+	// reuse the workload-level statefulness decided above — recomputing it from ownerKind here
+	// reintroduced the exact bug: an adopted pod reports AdaptiveMovingTargetDefense, so a
+	// StatefulSet broker was recorded as "rotate expected" and every quarantine then looked like
+	// the wrong actuator in the report.
 	actuator := "rotate"
 	if stateful {
 		actuator = "quarantine"
 	}
 	// capture the REAL outcome (landed vs defended) + reasoning + uptime + cost for the Report tab.
 	s.startAttackRecord("", ns, ns, pod, "Container-escape foothold", "foothold", "T1611", actuator, stateful, base)
+	msg := "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before). See the Report tab for the measured outcome."
+	if warning != "" {
+		msg = "Real foothold signal fired at " + pod + ", but " + warning
+	}
 	writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": pod, "expect": expect,
-		"message": "Real foothold signal fired at " + pod + " — within ~10s Phorvex selects " + expect + " on it (it was calm/noop before). See the Report tab for the measured outcome."})
+		"warning": warning, "message": msg})
 }

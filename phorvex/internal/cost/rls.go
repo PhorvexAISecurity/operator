@@ -76,6 +76,13 @@ func (r *RLS) Predict(f [featureDim]float64) float64 {
 	for i := 0; i < featureDim; i++ {
 		s += f[i] * r.theta[i]
 	}
+	// NaN-SAFE: a NaN anywhere in phi or theta makes the dot product NaN, and every comparison
+	// below would then be false — returning NaN straight into ECost, where the optimizer's
+	// `gain > best` is also always false and selection becomes undefined. NaN reads as the
+	// NEUTRAL LOW end so a poisoned signal can never inflate a cost either.
+	if math.IsNaN(s) {
+		return 0
+	}
 	if s < 0 {
 		return 0
 	}

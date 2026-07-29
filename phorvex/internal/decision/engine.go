@@ -13,6 +13,7 @@
 package decision
 
 import (
+	"math"
 	"fmt"
 	"sort"
 	"time"
@@ -248,7 +249,13 @@ func explain(a model.Action, residual float64, sig model.ContextSignals, bel, bl
 	}
 }
 
+// clamp01d is NaN-SAFE: this is the LAST gate before baseRisk, so a NaN arriving from any
+// upstream signal (physics residual, context posture, belief) must read as neutral 0 rather than
+// pass through and make every downstream comparison false.
 func clamp01d(x float64) float64 {
+	if math.IsNaN(x) {
+		return 0
+	}
 	if x < 0 {
 		return 0
 	}
