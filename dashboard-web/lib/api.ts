@@ -132,7 +132,7 @@ export const api = {
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),
   // three-arm availability: no-defense vs blind timer vs Phorvex, measured on the same app.
   availabilityArms: (ns: string, lens: Lens) =>
-    get<AvailabilityArms>(`/api/availability-arms?ns=${encodeURIComponent(ns)}`, lens),
+    get<AvailabilityArms>(`/api/availability-arms${ns ? `?ns=${encodeURIComponent(ns)}` : ""}`, lens),
   // Optimizer Bench — run the REAL p1-coverage engine over a config sweep, in-process (no live attack).
   // horizonSec>0 adds the temporal (over-time) simulation where tickInterval + anti-rotation manifest.
   benchmarkSim: (scenario: string, configs: BenchConfigInput[], horizonSec: number, r6IntervalSec: number, lens: Lens) =>
@@ -327,7 +327,10 @@ export interface ArmResult {
   dipCount: number; secondsDegraded: number; replicaSeconds: number; downtimeUsd: number;
   attackerStopped: "yes" | "no" | "by-luck-only"; verdict: string; complete: boolean;
 }
+export interface ArmRun {
+  runAt: string; namespace: string; deploy: string; attack: string;
+  nodeRatePerHr: number; arms: ArmResult[];
+}
 export interface AvailabilityArms {
-  namespace: string; deploy: string; ranAt: string; nodeRatePerHr: number;
-  arms: ArmResult[]; available: boolean; note: string; howItRan: string;
+  runs: ArmRun[]; available: boolean; note: string; howItRan: string; whyNoDrop: string;
 }

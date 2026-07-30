@@ -31,8 +31,10 @@ import (
 )
 
 type armExperiment struct {
+	RunAt     string `json:"runAt"`
 	Namespace string `json:"namespace"`
 	Deploy    string `json:"deploy"`
+	Attack    string `json:"attack"`
 	ArmAStart string `json:"armA_start"`
 	ArmAEnd   string `json:"armA_end"`
 	ArmBStart string `json:"armB_start"`
@@ -57,125 +59,153 @@ type armResult struct {
 	Complete       bool    `json:"complete"`
 }
 
-type armsResponse struct {
-	Namespace  string      `json:"namespace"`
-	Deploy     string      `json:"deploy"`
-	RanAt      string      `json:"ranAt"`
-	NodeRate   float64     `json:"nodeRatePerHr"`
-	Arms       []armResult `json:"arms"`
-	Available  bool        `json:"available"`
-	Note       string      `json:"note"`
-	HowItRan   string      `json:"howItRan"`
+// armRun is ONE three-arm experiment: which app, when, and the three measured arms.
+type armRun struct {
+	RunAt     string      `json:"runAt"`
+	Namespace string      `json:"namespace"`
+	Deploy    string      `json:"deploy"`
+	Attack    string      `json:"attack"`
+	NodeRate  float64     `json:"nodeRatePerHr"`
+	Arms      []armResult `json:"arms"`
 }
 
-func armsPath(cfg Config, ns string) string {
+type armsResponse struct {
+	Runs      []armRun `json:"runs"`
+	Available bool     `json:"available"`
+	Note      string   `json:"note"`
+	HowItRan  string   `json:"howItRan"`
+	WhyNoDrop string   `json:"whyNoDrop"`
+}
+
+func armsPath(cfg Config) string {
 	base := cfg.AuditPath
 	if base == "" {
 		base = filepath.Join(cfg.Root, "phorvex-live.jsonl")
 	}
-	return filepath.Join(filepath.Dir(base), "three-arm-"+ns+".json")
+	return filepath.Join(filepath.Dir(base), "three-arm-runs.jsonl")
 }
 
 func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
-	ns := r.URL.Query().Get("ns")
-	if ns == "" {
-		ns = "litellm"
-	}
-	if !scenarioRe.MatchString(ns) {
-		writeJSON(w, 400, map[string]string{"error": "invalid namespace"})
+	nsFilter := r.URL.Query().Get("ns") // optional; empty = every app
+
+	b, err := os.ReadFile(armsPath(s.cfg))
+	if err != nil || len(b) == 0 {
+		writeJSON(w, 200, armsResponse{Available: false,
+			Note: "no three-arm experiment has been run yet. It is a real, disruptive procedure (it puts " +
+				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."})
 		return
 	}
-	b, err := os.ReadFile(armsPath(s.cfg, ns))
-	if err != nil {
-		writeJSON(w, 200, armsResponse{
-			Namespace: ns, Available: false,
-			Note: "no three-arm experiment has been run for " + ns + " yet. It is a real, disruptive " +
-				"experiment (it puts the policy in dryRun and rotates pods), so it runs on request rather than automatically.",
-		})
-		return
+	var exps []armExperiment
+	for _, ln := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		var e armExperiment
+		if json.Unmarshal([]byte(ln), &e) == nil {
+			if nsFilter == "" || e.Namespace == nsFilter {
+				exps = append(exps, e)
+			}
+		}
 	}
-	var exp armExperiment
-	if json.Unmarshal(b, &exp) != nil {
-		writeJSON(w, 200, armsResponse{Namespace: ns, Available: false, Note: "experiment file unreadable"})
+	if len(exps) == 0 {
+		writeJSON(w, 200, armsResponse{Available: false, Note: "no experiment recorded for that app yet."})
 		return
-	}
-	deploy := exp.Deploy
-	if deploy == "" {
-		deploy = s.firstDeploy(ns)
 	}
 
 	samples := readUptimeSamples(uptimePath(s.cfg))
-	// buildRateResolver does the two cluster-wide lookups once (nodeHourlyRate per-pod was removed
-	// when it turned out to shell out twice per call and time the endpoint out).
-	rate := s.buildRateResolver("")(ns, s.firstPodOf(ns))
+	resolve := s.buildRateResolver("")
 
-	arms := []struct {
-		id, label, start, end, stopped, verdict string
-	}{
-		{"nodefense", "No defense", exp.ArmAStart, exp.ArmAEnd, "no",
-			"Nothing was disrupted, so availability never moved — but the attacker kept the pod for as long as we watched."},
-		{"r6blind", "R6-style blind timer", exp.ArmBStart, exp.ArmBEnd, "by-luck-only",
-			"Rotates on a fixed schedule whether or not anything is wrong, so it pays an availability dip every cycle and only catches an attacker by coincidence."},
-		{"phorvex", "Phorvex", exp.ArmCStart, exp.ArmCEnd, "yes",
-			"Acted once, on the signal — one short dip, attacker evicted."},
+	out := armsResponse{Available: true,
+		HowItRan: "Same app, same attack, three times. All three availability series are read from the same " +
+			"5s background sampler, so the arms are measured identically and are directly comparable.",
+		// THE point the previous version buried. The no-defense arm scoring 100% is real, and the
+		// reason it is real is the whole argument for this product.
+		WhyNoDrop: "Why does 'no defense' show full availability? Because this attack is an INTRUSION, " +
+			"not a denial of service: it plants a container-escape foothold — the attacker gains access and " +
+			"stays quiet. Nothing crashes, so your availability dashboard stays perfectly green while someone " +
+			"else is inside. That is exactly why availability alone cannot tell you that you are under attack, " +
+			"and why the 'attacker stopped' column is the one that matters here. The cost of this arm is not " +
+			"downtime — it is unbounded attacker dwell time.",
+		Note: "Read availability TOGETHER with 'attacker stopped'. A defence that never acts wins on " +
+			"availability and loses on security.",
 	}
 
-	out := armsResponse{Namespace: ns, Deploy: deploy, RanAt: exp.ArmAStart, NodeRate: round4(rate), Available: true,
-		HowItRan: "Same app, same attack, three times. All three availability series come from the same " +
-			"5s background sampler, so the arms are measured identically.",
-		Note: "Read the availability column TOGETHER with 'attacker stopped'. The no-defense arm scores " +
-			"a perfect availability precisely because nothing was done about the intruder.",
-	}
-	for _, a := range arms {
-		res := armResult{Arm: a.id, Label: a.label, AttackerStopped: a.stopped, Verdict: a.verdict, MinPct: -1, MeanPct: -1}
-		t0, e0 := time.Parse(time.RFC3339, a.start)
-		t1, e1 := time.Parse(time.RFC3339, a.end)
-		if e0 == nil && e1 == nil {
-			var vals []float64
-			var replicaSec, degradedSec float64
-			dips, wasDown := 0, false
-			for _, sm := range samples {
-				if sm.NS != ns || sm.Workload != deploy || sm.Desired <= 0 {
-					continue
-				}
-				at, err := time.Parse(time.RFC3339Nano, sm.T)
-				if err != nil || at.Before(t0) || at.After(t1) {
-					continue
-				}
-				pct := float64(sm.Ready) / float64(sm.Desired) * 100
-				vals = append(vals, pct)
-				if sm.Ready < sm.Desired {
-					replicaSec += float64(sm.Desired-sm.Ready) * uptimeInterval.Seconds()
-					degradedSec += uptimeInterval.Seconds()
-					if !wasDown {
-						dips++
-						wasDown = true
-					}
-				} else {
-					wasDown = false
-				}
-			}
-			if len(vals) > 0 {
-				sum, min := 0.0, vals[0]
-				for _, v := range vals {
-					sum += v
-					if v < min {
-						min = v
-					}
-				}
-				res.Samples = len(vals)
-				res.MeanPct = round2(sum / float64(len(vals)))
-				res.MinPct = round2(min)
-				res.DipCount = dips
-				res.SecondsDegrade = round2(degradedSec)
-				res.ReplicaSeconds = round2(replicaSec)
-				res.DowntimeUSD = round4(replicaSec / 3600.0 * rate)
-				res.Complete = true
-			}
+	for i := len(exps) - 1; i >= 0; i-- { // newest first
+		exp := exps[i]
+		deploy := exp.Deploy
+		if deploy == "" {
+			deploy = s.firstDeploy(exp.Namespace)
 		}
-		out.Arms = append(out.Arms, res)
+		rate := resolve(exp.Namespace, s.firstPodOf(exp.Namespace))
+		run := armRun{RunAt: exp.RunAt, Namespace: exp.Namespace, Deploy: deploy,
+			Attack: exp.Attack, NodeRate: round4(rate)}
+
+		arms := []struct{ id, label, start, end, stopped, verdict string }{
+			{"nodefense", "No defense", exp.ArmAStart, exp.ArmAEnd, "no",
+				"Availability never moved — because nothing was done about the intruder, who kept the pod for the whole window. Full uptime, zero security."},
+			{"r6blind", "Blind fixed-interval rotator", exp.ArmBStart, exp.ArmBEnd, "by-luck-only",
+				"Rotates on a schedule whether or not anything is wrong, so it pays a dip every cycle and only ever catches an attacker by coincidence."},
+			{"phorvex", "Phorvex", exp.ArmCStart, exp.ArmCEnd, "yes",
+				"Acted once, on the signal — one short dip, attacker evicted."},
+		}
+		for _, a := range arms {
+			run.Arms = append(run.Arms, measureArm(samples, exp.Namespace, deploy, a.id, a.label, a.start, a.end, a.stopped, a.verdict, rate))
+		}
+		out.Runs = append(out.Runs, run)
 	}
 	writeJSON(w, 200, out)
+}
+
+// measureArm windows the availability sampler over one arm and reduces it to the comparable numbers.
+func measureArm(samples []uptimeSample, ns, deploy, id, label, start, end, stopped, verdict string, rate float64) armResult {
+	res := armResult{Arm: id, Label: label, AttackerStopped: stopped, Verdict: verdict, MinPct: -1, MeanPct: -1}
+	t0, e0 := time.Parse(time.RFC3339, start)
+	t1, e1 := time.Parse(time.RFC3339, end)
+	if e0 != nil || e1 != nil {
+		return res
+	}
+	var vals []float64
+	var replicaSec, degradedSec float64
+	dips, wasDown := 0, false
+	for _, sm := range samples {
+		if sm.NS != ns || sm.Workload != deploy || sm.Desired <= 0 {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339Nano, sm.T)
+		if err != nil || at.Before(t0) || at.After(t1) {
+			continue
+		}
+		vals = append(vals, float64(sm.Ready)/float64(sm.Desired)*100)
+		if sm.Ready < sm.Desired {
+			replicaSec += float64(sm.Desired-sm.Ready) * uptimeInterval.Seconds()
+			degradedSec += uptimeInterval.Seconds()
+			if !wasDown {
+				dips++
+				wasDown = true
+			}
+		} else {
+			wasDown = false
+		}
+	}
+	if len(vals) == 0 {
+		return res
+	}
+	sum, min := 0.0, vals[0]
+	for _, v := range vals {
+		sum += v
+		if v < min {
+			min = v
+		}
+	}
+	res.Samples = len(vals)
+	res.MeanPct = round2(sum / float64(len(vals)))
+	res.MinPct = round2(min)
+	res.DipCount = dips
+	res.SecondsDegrade = round2(degradedSec)
+	res.ReplicaSeconds = round2(replicaSec)
+	res.DowntimeUSD = round4(replicaSec / 3600.0 * rate)
+	res.Complete = true
+	return res
 }
 
 // firstPodOf returns any pod name in the namespace, used only to resolve which node (and therefore

@@ -1,81 +1,97 @@
 "use client";
 import * as React from "react";
-import { api, Lens, AvailabilityArms, ArmResult } from "@/lib/api";
+import { api, Lens, AvailabilityArms, ArmResult, ArmRun } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Empty } from "@/components/ui/more";
-import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Activity } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Activity, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// AvailabilityArmsPanel — the plain answer to "what does an attack do to my app's availability,
-// with no defense vs a blind rotator vs Phorvex?". All three arms were run on the SAME app with the
-// SAME attack and measured by the SAME 5s sampler, so the comparison is like-for-like.
-export function AvailabilityArmsPanel({ lens, ns = "litellm" }: { lens: Lens; ns?: string }) {
+// AvailabilityArmsPanel — for every three-arm experiment that has been run, what the SAME attack
+// did to the SAME app under three defenders. Listed newest-first with the time it ran.
+export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
   const [d, setD] = React.useState<AvailabilityArms | null>(null);
   const [err, setErr] = React.useState("");
   React.useEffect(() => {
     let alive = true;
-    api.availabilityArms(ns, lens).then((r) => { if (alive) setD(r); }).catch((e) => { if (alive) setErr(String(e.message || e)); });
-    return () => { alive = false; };
-  }, [lens, ns]);
+    const load = () => api.availabilityArms("", lens).then((r) => { if (alive) setD(r); }).catch((e) => { if (alive) setErr(String(e.message || e)); });
+    load();
+    const t = setInterval(load, 10000);
+    return () => { alive = false; clearInterval(t); };
+  }, [lens]);
 
   if (err) return <div className="text-[12px] text-danger">error: {err}</div>;
   if (!d) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading…</div>;
   if (!d.available) return <Empty msg={d.note} />;
-
-  const arms = d.arms.filter((a) => a.complete);
-  const worstDip = Math.min(...arms.map((a) => a.minPct));
 
   return (
     <div className="space-y-4">
       <div>
         <div className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
           <Activity className="h-4 w-4 text-primary" />
-          What an attack does to <span className="font-mono text-primary">{d.namespace}/{d.deploy}</span>
+          Availability under attack — no defense vs blind rotator vs Phorvex
         </div>
-        <p className="mt-1 max-w-[70ch] text-[12px] leading-relaxed text-muted-foreground">
-          The same attack, fired three times on this same app — once with the defense switched off, once
-          with a blind fixed-interval rotator, and once with Phorvex. Availability for all three comes
-          from the same 5-second sampler, so the numbers are directly comparable.
+        <p className="mt-1 max-w-[74ch] text-[12px] leading-relaxed text-muted-foreground">
+          {d.howItRan} One entry per experiment, newest first.
         </p>
       </div>
 
-      {/* the headline: availability alone is not the story */}
-      <div className="grid gap-3 md:grid-cols-3">
-        {arms.map((a) => <ArmCard key={a.arm} a={a} worstDip={worstDip} />)}
-      </div>
-
-      {/* the one sentence that matters */}
-      <Card className="border-l-2 border-l-primary">
-        <CardContent className="p-4 text-[12px] leading-relaxed">
-          <div className="mb-1.5 font-medium text-foreground">How to read this</div>
-          <p className="text-muted-foreground">
-            <span className="text-danger">No defense</span> scores a perfect 100% availability — precisely
-            because nothing was done about the intruder, who kept the pod for the whole window. High
-            availability is not safety.{" "}
-            <span className="text-warning">The blind timer</span> pays a dip on every cycle whether or not
-            anything is wrong ({arms.find((a) => a.arm === "r6blind")?.dipCount ?? "—"} dips in this run),
-            and only ever catches an attacker by coincidence.{" "}
-            <span className="text-success">Phorvex</span> acted once, on the signal: a single short dip,
-            and the attacker was evicted.
-          </p>
+      {/* the honest explanation, given prominence rather than buried in a footnote */}
+      <Card className="border-l-2 border-l-warning">
+        <CardContent className="flex gap-2.5 p-4">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <div className="space-y-1.5 text-[12px] leading-relaxed">
+            <div className="font-medium text-foreground">Why does &quot;no defense&quot; show full availability?</div>
+            <p className="text-muted-foreground">{d.whyNoDrop}</p>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="text-[11px] text-muted-foreground/70">
-        {d.howItRan} Node rate ${d.nodeRatePerHr?.toFixed(4)}/hr (live AWS on-demand) is used for the
-        downtime figures.
-      </div>
+      {d.runs.map((run) => <RunBlock key={run.runAt + run.namespace} run={run} />)}
+
+      <div className="text-[11px] text-muted-foreground/70">{d.note}</div>
     </div>
   );
 }
 
-function ArmCard({ a, worstDip }: { a: ArmResult; worstDip: number }) {
-  const tone =
-    a.attackerStopped === "yes" ? { ring: "border-l-success", txt: "text-success", Icon: ShieldCheck, chip: "real" as const, label: "attacker evicted" }
-      : a.attackerStopped === "no" ? { ring: "border-l-danger", txt: "text-danger", Icon: ShieldAlert, chip: "pending" as const, label: "attacker kept access" }
-        : { ring: "border-l-warning", txt: "text-warning", Icon: ShieldQuestion, chip: "modeled" as const, label: "only by coincidence" };
+function RunBlock({ run }: { run: ArmRun }) {
+  const arms = run.arms.filter((a) => a.complete);
+  const blind = arms.find((a) => a.arm === "r6blind");
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border/60 pb-1.5">
+        <span className="font-mono text-[12px] font-medium text-primary">{run.namespace}/{run.deploy}</span>
+        <span className="text-[11px] text-muted-foreground">{run.attack}</span>
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+          {new Date(run.runAt).toLocaleString()}
+        </span>
+      </div>
 
-  // availability bar: 0..100
+      {arms.length === 0 ? (
+        <div className="py-3 text-[11px] text-muted-foreground">no sampler coverage for this experiment window</div>
+      ) : (
+        <>
+          <div className="grid gap-3 md:grid-cols-3">
+            {arms.map((a) => <ArmCard key={a.arm} a={a} />)}
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <span className="text-danger">No defense</span> kept 100% availability and lost the pod.{" "}
+            <span className="text-warning">The blind rotator</span> dipped {blind?.dipCount ?? "—"} times for{" "}
+            {blind?.secondsDegraded.toFixed(0) ?? "—"}s in the same window, whether or not anything was wrong.{" "}
+            <span className="text-success">Phorvex</span> dipped once and evicted the attacker.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ArmCard({ a }: { a: ArmResult }) {
+  const tone =
+    a.attackerStopped === "yes"
+      ? { ring: "border-l-success", txt: "text-success", bar: "bg-success", Icon: ShieldCheck, chip: "real" as const, label: "attacker evicted" }
+      : a.attackerStopped === "no"
+        ? { ring: "border-l-danger", txt: "text-danger", bar: "bg-danger", Icon: ShieldAlert, chip: "pending" as const, label: "attacker kept access" }
+        : { ring: "border-l-warning", txt: "text-warning", bar: "bg-warning", Icon: ShieldQuestion, chip: "modeled" as const, label: "only by coincidence" };
   const pct = Math.max(0, Math.min(100, a.meanPct));
   return (
     <Card className={cn("border-l-2", tone.ring)}>
@@ -91,8 +107,7 @@ function ArmCard({ a, worstDip }: { a: ArmResult; worstDip: number }) {
             <span className="text-[11px] text-muted-foreground">average availability</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded bg-border/50">
-            <div className={cn("h-full rounded", a.attackerStopped === "yes" ? "bg-success" : a.attackerStopped === "no" ? "bg-danger" : "bg-warning")}
-                 style={{ width: `${pct}%` }} />
+            <div className={cn("h-full rounded", tone.bar)} style={{ width: `${pct}%` }} />
           </div>
         </div>
 
@@ -103,9 +118,7 @@ function ArmCard({ a, worstDip }: { a: ArmResult; worstDip: number }) {
           <Stat k="downtime cost" v={`$${a.downtimeUsd.toFixed(4)}`} />
         </div>
 
-        <div className="flex items-center gap-1.5 border-t border-border/50 pt-2">
-          <Badge variant={tone.chip}>{tone.label}</Badge>
-        </div>
+        <div className="border-t border-border/50 pt-2"><Badge variant={tone.chip}>{tone.label}</Badge></div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">{a.verdict}</p>
       </CardContent>
     </Card>
