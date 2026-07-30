@@ -130,6 +130,9 @@ export const api = {
   // LIVE-ATTACK MONITORING — availability before/during/after each real attack + downtime $.
   attackMonitoring: (lens: Lens) =>
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),
+  // three-arm availability: no-defense vs blind timer vs Phorvex, measured on the same app.
+  availabilityArms: (ns: string, lens: Lens) =>
+    get<AvailabilityArms>(`/api/availability-arms?ns=${encodeURIComponent(ns)}`, lens),
   // Optimizer Bench — run the REAL p1-coverage engine over a config sweep, in-process (no live attack).
   // horizonSec>0 adds the temporal (over-time) simulation where tickInterval + anti-rotation manifest.
   benchmarkSim: (scenario: string, configs: BenchConfigInput[], horizonSec: number, r6IntervalSec: number, lens: Lens) =>
@@ -206,7 +209,13 @@ export interface TimelineEvent {
   mtdEffect?: string; observed?: string; commands?: string[]; defensiveActions?: number;
 }
 export interface ReportMeta { id: string; title: string; group: string; exists: boolean; lines: number }
-export interface AttackCost { valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string }
+export interface AttackCost {
+  valueAtRisk: number; without: number; r6: number; with: number; savings: number; note: string;
+  // inputs behind the three totals, so the card can show the arithmetic
+  nodeInstance?: string; nodeRatePerHr?: number;
+  preventNone?: number; preventR6?: number; preventPhorvex?: number;
+  ratesSource?: string; operatorCost?: number; r6Churn?: number;
+}
 export interface AttackResult {
   id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
@@ -310,4 +319,15 @@ export interface AttackMonitoring {
 }
 export interface AttackMonitoringResult {
   attacks: AttackMonitoring[]; sampleInterval: number; preWindowSec: number; postWindowSec: number; note: string;
+}
+
+// ---- three-arm availability comparison ----
+export interface ArmResult {
+  arm: string; label: string; samples: number; meanPct: number; minPct: number;
+  dipCount: number; secondsDegraded: number; replicaSeconds: number; downtimeUsd: number;
+  attackerStopped: "yes" | "no" | "by-luck-only"; verdict: string; complete: boolean;
+}
+export interface AvailabilityArms {
+  namespace: string; deploy: string; ranAt: string; nodeRatePerHr: number;
+  arms: ArmResult[]; available: boolean; note: string; howItRan: string;
 }

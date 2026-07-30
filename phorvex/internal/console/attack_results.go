@@ -34,6 +34,18 @@ type attackCost struct {
 	With        float64 `json:"with"`        // Phorvex: residual after the measured disruption + defense cost
 	Savings     float64 `json:"savings"`     // without - with
 	Note        string  `json:"note"`
+
+	// SHOW-YOUR-WORKING: every input the three numbers above are built from, so the dashboard can
+	// print the arithmetic instead of asking the reader to trust a total. These were previously
+	// buried inside Note as prose, which meant the breakdown could not be rendered or checked.
+	NodeInstance   string  `json:"nodeInstance"`   // instance type the attacked pod runs on
+	NodeRatePerHr  float64 `json:"nodeRatePerHr"`  // its live on-demand $/hr
+	PreventNone    float64 `json:"preventNone"`    // harness-measured prevention rate, no defense
+	PreventR6      float64 `json:"preventR6"`      // ... R6 blind timer
+	PreventPhorvex float64 `json:"preventPhorvex"` // ... Phorvex
+	RatesSource    string  `json:"ratesSource"`    // where those rates came from + sample size
+	OperatorCost   float64 `json:"operatorCost"`   // Phorvex's own $/yr footprint
+	R6Churn        float64 `json:"r6Churn"`        // blind-rotation churn $/yr added to the R6 arm
 }
 
 type attackRecord struct {
@@ -569,6 +581,15 @@ func (s *Server) fillCost(ctxName string, r *attackRecord) {
 	r.Cost = attackCost{
 		ValueAtRisk: valueAtRisk, Without: without, R6: r6, With: with,
 		Savings: round2(without - with),
+		// the inputs, so the dashboard can print the arithmetic rather than a bare total
+		NodeInstance:   s.nodeInstanceType(ctxName, r.Namespace, r.Pod),
+		NodeRatePerHr:  round4(s.buildRateResolver(ctxName)(r.Namespace, r.Pod)),
+		PreventNone:    round4(pr.None),
+		PreventR6:      round4(pr.R6),
+		PreventPhorvex: round4(pr.Phorvex),
+		RatesSource:    src,
+		OperatorCost:   round2(opCost),
+		R6Churn:        round2(r6Churn),
 		Note: fmt.Sprintf("MODELLED annual projection (not this attack's outcome — see the DEFENDED/LANDED badge for that). "+
 			"value-at-risk = attacked node's real AWS on-demand $/yr; each arm = value-at-risk x (1 - prevention rate), "+
 			"prevention rates %s: none %.1f%%, R6 blind timer %.1f%%, Phorvex %.1f%%. WITH adds the real operator footprint; "+
@@ -605,4 +626,19 @@ func maxi(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// nodeInstanceType returns the EC2 instance type backing the attacked pod, so the cost breakdown
+// can name the hardware the $/hr came from instead of showing an unexplained rate.
+func (s *Server) nodeInstanceType(ctxName, ns, pod string) string {
+	if pod == "" {
+		return ""
+	}
+	node := strings.TrimSpace(s.kctlOut(ns, "get", "pod", pod, "--ignore-not-found", "-o", "jsonpath={.spec.nodeName}"))
+	if node == "" {
+		return ""
+	}
+	it, _ := s.cfg.execText(6*time.Second, "kubectl", "get", "node", node,
+		"-o", "jsonpath={.metadata.labels.node\\.kubernetes\\.io/instance-type}")
+	return strings.TrimSpace(it)
 }

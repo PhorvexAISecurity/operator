@@ -8,6 +8,7 @@ import { StepHead } from "./shared";
 import { LiveOpsPanel } from "@/components/panels/liveops";
 import { UptimePanel } from "@/components/panels/uptime";
 import { AttackMonitoringPanel } from "@/components/panels/attack-monitoring";
+import { AvailabilityArmsPanel } from "@/components/panels/availability-arms";
 import { OptimizationPanel, CostPanel, ActuatorPanel, HealthPanel } from "@/components/subsystems/panels";
 import { RiskHeatmap } from "@/components/subsystems/analytics";
 import { ApplyFixPanel } from "@/components/panels/apply-fix";
@@ -15,12 +16,12 @@ import { cn } from "@/lib/utils";
 import { Play, Pause, Radar, Swords, Hand } from "lucide-react";
 
 export function ProtectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) {
-  const [sub, setSub] = React.useState<"live" | "mtd" | "cost" | "uptime" | "monitoring" | "actuator" | "health" | "risk" | "applyfix">("live");
+  const [sub, setSub] = React.useState<"live" | "mtd" | "cost" | "uptime" | "monitoring" | "arms" | "actuator" | "health" | "risk" | "applyfix">("live");
   const owner = lens === "owner";
   return (
     <div className="animate-fade-up space-y-6">
       <StepHead n={4} title="Protect / Run" sub={owner ? "Phorvex protecting your platform, in plain language — what it did and that it helped." : "The home for every method. Start Phorvex, watch the optimizer DECIDE and the actuator ACTUATE in real time, and drill into the action set, the coverage−λ·cost scoring, and why each move was chosen."} lens={lens} />
-      {!owner && <Segmented value={sub} onChange={setSub} tabs={[{ id: "live", label: "Live theatre" }, { id: "mtd", label: "MTD / Optimization" }, { id: "cost", label: "Cost" }, { id: "uptime", label: "Uptime" }, { id: "monitoring", label: "Attack monitoring" }, { id: "actuator", label: "Actuator" }, { id: "applyfix", label: "Apply-fix" }, { id: "risk", label: "Risk heatmap" }, { id: "health", label: "Health" }]} />}
+      {!owner && <Segmented value={sub} onChange={setSub} tabs={[{ id: "live", label: "Live theatre" }, { id: "mtd", label: "MTD / Optimization" }, { id: "cost", label: "Cost" }, { id: "uptime", label: "Uptime" }, { id: "monitoring", label: "Attack monitoring" }, { id: "arms", label: "Availability: 3-way" }, { id: "actuator", label: "Actuator" }, { id: "applyfix", label: "Apply-fix" }, { id: "risk", label: "Risk heatmap" }, { id: "health", label: "Health" }]} />}
 
       {owner || sub === "live" ? (
         <>
@@ -57,6 +58,7 @@ export function ProtectStep({ lens, go }: { lens: Lens; go: (s: StepId) => void 
         : sub === "cost" ? <CostPanel lens={lens} />
         : sub === "uptime" ? <UptimePanel lens={lens} />
         : sub === "monitoring" ? <AttackMonitoringPanel lens={lens} />
+        : sub === "arms" ? <AvailabilityArmsPanel lens={lens} />
         : sub === "actuator" ? <ActuatorPanel lens={lens} />
         : sub === "applyfix" ? <ApplyFixPanel lens={lens} />
         : sub === "risk" ? <RiskHeatmap lens={lens} />

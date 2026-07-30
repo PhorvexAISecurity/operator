@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
-import { api, Lens, AttackResult } from "@/lib/api";
+import { api, Lens, AttackResult, AttackCost } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { csvDownload, Empty } from "@/components/ui/more";
-import { ShieldCheck, ShieldAlert, Loader2, Download, Swords, Activity, Clock } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Loader2, Download, Swords, Activity, Clock, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // AttackResultsPanel — the REAL outcome of every attack fired from Live Operations: landed vs defended,
@@ -132,6 +132,7 @@ function AttackCard({ r }: { r: AttackResult }) {
             <CostCell label="R6 blind timer" v={r.cost?.r6} tone="warn" max={r.cost?.without} sub={r.stateful ? "destroys DB data" : "churns · blind rotation"} />
             <CostCell label="With Phorvex" v={r.cost?.with} tone="good" max={r.cost?.without} sub={(r.cost?.savings ?? 0) > 0 ? `saves $${fmt(r.cost?.savings)}/yr` : `costs $${fmt(Math.abs(r.cost?.savings ?? 0))}/yr more`} />
           </div>
+          <CostBreakdown c={r.cost} />
         </div>
 
         {/* reasoning */}
@@ -159,6 +160,63 @@ function UpCell({ label, v, warn, good }: { label: string; v: number; warn?: boo
     <div className="text-center">
       <div className={cn("tabular text-[13px] font-semibold", v < 0 ? "text-muted-foreground" : good ? "text-success" : warn && bad ? "text-warning" : bad ? "text-danger" : "text-foreground")}>{v < 0 ? "—" : `${v}%`}</div>
       <div className="text-[9px] uppercase tracking-wide text-muted-foreground/60">{label}</div>
+    </div>
+  );
+}
+
+// CostBreakdown prints the ARITHMETIC behind the three totals. A reader should never have to take
+// a dollar figure on trust: every input is named, sourced, and the formula is shown with this
+// attack's own numbers substituted in.
+function CostBreakdown({ c }: { c?: AttackCost }) {
+  const [open, setOpen] = React.useState(false);
+  if (!c || !c.nodeRatePerHr) return null;
+  const pct = (x?: number) => `${((x ?? 0) * 100).toFixed(1)}%`;
+  const d = (x?: number) => `$${fmt(x)}`;
+  const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
+    <div className="flex flex-wrap items-baseline gap-x-2 py-0.5">
+      <span className="min-w-[150px] text-muted-foreground">{k}</span>
+      <span className="font-mono text-[11px] text-foreground/90">{v}</span>
+    </div>
+  );
+  return (
+    <div className="mt-2">
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[11px] text-primary transition-colors hover:text-primary/80">
+        <Calculator className="h-3 w-3" />
+        {open ? "Hide" : "How was this calculated?"}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2 rounded-md border border-border/60 bg-elevated/30 p-3 text-[11px] leading-relaxed">
+          <div>
+            <div className="mb-1 font-medium text-foreground">1 · What is at risk (real AWS price)</div>
+            <Row k="attacked pod runs on" v={`${c.nodeInstance || "node"} @ ${d(c.nodeRatePerHr)}/hr`} />
+            <Row k="value at risk / yr" v={`${d(c.nodeRatePerHr)}/hr x 8,760 hr = ${d(c.valueAtRisk)}`} />
+            <div className="mt-1 text-muted-foreground/80">
+              This is your live AWS on-demand price for the hardware the attack compromises — not a
+              breach/reputation estimate.
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 font-medium text-foreground">2 · How often each defender actually stops an attack</div>
+            <Row k="no defense" v={pct(c.preventNone)} />
+            <Row k="R6 blind timer" v={pct(c.preventR6)} />
+            <Row k="Phorvex" v={pct(c.preventPhorvex)} />
+            <div className="mt-1 text-muted-foreground/80">Measured, not assumed: {c.ratesSource}</div>
+          </div>
+          <div>
+            <div className="mb-1 font-medium text-foreground">3 · The arithmetic</div>
+            <Row k="without any defense" v={`${d(c.valueAtRisk)} x (1 - ${pct(c.preventNone)}) = ${d(c.without)}`} />
+            <Row k="R6 blind timer" v={`${d(c.valueAtRisk)} x (1 - ${pct(c.preventR6)}) + ${d(c.r6Churn)} churn = ${d(c.r6)}`} />
+            <Row k="with Phorvex" v={`${d(c.valueAtRisk)} x (1 - ${pct(c.preventPhorvex)}) + ${d(c.operatorCost)} operator = ${d(c.with)}`} />
+            <Row k="difference" v={`${d(c.without)} - ${d(c.with)} = ${d(c.savings)}/yr`} />
+          </div>
+          <div className="border-t border-border/50 pt-2 text-muted-foreground/80">
+            These three are an ANNUAL projection using each defender&apos;s measured stop-rate — they answer
+            &quot;what does a year of this cost?&quot;, not &quot;what did this one attack cost?&quot;. This attack&apos;s own
+            result is the DEFENDED/LANDED badge and the dwell time above.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
