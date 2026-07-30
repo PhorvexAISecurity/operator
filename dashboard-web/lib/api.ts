@@ -131,6 +131,9 @@ export const api = {
   attackMonitoring: (lens: Lens) =>
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),
   // three-arm availability: no-defense vs blind timer vs Phorvex, measured on the same app.
+  // start a three-arm comparison for one app (disruptive, ~7 min) — the 3-way tab shows it live.
+  runAvailabilityArms: (namespace: string, attack: string, lens: Lens) =>
+    post<{ ok: boolean; namespace: string; note: string }>("/api/availability-arms/run", { namespace, attack }, lens),
   availabilityArms: (ns: string, lens: Lens) =>
     get<AvailabilityArms>(`/api/availability-arms${ns ? `?ns=${encodeURIComponent(ns)}` : ""}`, lens),
   // Optimizer Bench — run the REAL p1-coverage engine over a config sweep, in-process (no live attack).
@@ -331,6 +334,10 @@ export interface ArmRun {
   runAt: string; namespace: string; deploy: string; attack: string;
   nodeRatePerHr: number; arms: ArmResult[];
 }
+export interface ArmsJob {
+  namespace: string; deploy: string; attack: string; startedAt: string;
+  phase: "arm-a" | "arm-b" | "arm-c" | "done" | "failed"; detail: string; progress: number; error?: string;
+}
 export interface AvailabilityArms {
-  runs: ArmRun[]; available: boolean; note: string; howItRan: string; whyNoDrop: string;
+  running: ArmsJob[]; runs: ArmRun[]; available: boolean; note: string; howItRan: string; whyNoDrop: string;
 }

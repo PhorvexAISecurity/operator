@@ -21,7 +21,8 @@ export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
 
   if (err) return <div className="text-[12px] text-danger">error: {err}</div>;
   if (!d) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading…</div>;
-  if (!d.available) return <Empty msg={d.note} />;
+  const running = (d.running || []).filter((j) => j.phase !== "done");
+  if (!d.available && running.length === 0) return <Empty msg={d.note} />;
 
   return (
     <div className="space-y-4">
@@ -46,7 +47,28 @@ export function AvailabilityArmsPanel({ lens }: { lens: Lens }) {
         </CardContent>
       </Card>
 
-      {d.runs.map((run) => <RunBlock key={run.runAt + run.namespace} run={run} />)}
+      {/* live progress for any experiment currently running */}
+      {running.map((j) => (
+        <Card key={j.namespace} className={cn("border-l-2", j.phase === "failed" ? "border-l-danger" : "border-l-primary")}>
+          <CardContent className="space-y-2 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {j.phase === "failed"
+                ? <ShieldAlert className="h-4 w-4 text-danger" />
+                : <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+              <span className="font-mono text-[12px] font-medium text-foreground">{j.namespace}/{j.deploy}</span>
+              <span className="text-[11px] text-muted-foreground">· {j.attack}</span>
+              <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">started {new Date(j.startedAt).toLocaleTimeString()}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded bg-border/50">
+              <div className={cn("h-full rounded transition-all", j.phase === "failed" ? "bg-danger" : "bg-primary")}
+                   style={{ width: `${Math.max(2, j.progress)}%` }} />
+            </div>
+            <div className="text-[11px] text-muted-foreground">{j.error || j.detail}</div>
+          </CardContent>
+        </Card>
+      ))}
+
+      {(d.runs || []).map((run) => <RunBlock key={run.runAt + run.namespace} run={run} />)}
 
       <div className="text-[11px] text-muted-foreground/70">{d.note}</div>
     </div>

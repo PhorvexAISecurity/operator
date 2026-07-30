@@ -8,7 +8,7 @@ import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
 import { Pending } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
-import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2 } from "lucide-react";
+import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2, BarChart3 } from "lucide-react";
 
 // parseTs parses a UTC tsNow() string ("2026-06-28 14:30:00 UTC") to epoch ms.
 function parseTs(s?: string): number {
@@ -167,6 +167,20 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
     } catch (e: any) { setAttackMsg("error: " + String(e.message || e)); }
     finally { setAttacking(""); }
   };
+  // THREE-ARM COMPARISON — user-triggered from here, streams live into Availability: 3-way.
+  const [comparing, setComparing] = React.useState("");
+  const [compareMsg, setCompareMsg] = React.useState("");
+  const runComparison = async (attack: string) => {
+    const ns = (selWl.split("/")[0] || "").trim();
+    if (!ns) return;
+    setComparing(attack); setCompareMsg("");
+    try {
+      const r = await api.runAvailabilityArms(ns, attack, lens);
+      setCompareMsg(r.note || "started");
+    } catch (e: any) { setCompareMsg("error: " + String(e.message || e)); }
+    finally { setComparing(""); }
+  };
+
   // STEP 1 — pick a workload; STEP 2 shows the attacks meaningful for its type.
   const [wls, setWls] = React.useState<{ ns: string; name: string; images: string[] }[]>([]);
   const [selWl, setSelWl] = React.useState("");
@@ -244,6 +258,31 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                   {(attacking === "reset" || attacking === "clear") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} {curType.type === "model-server" ? "Reset" : "Clear attack"}
                 </Button>
               </div>
+              {/* Compare all three defenders on THIS app with THIS attack — the result streams into
+                  the Availability: 3-way tab while it runs. Kept as an explicit action because it
+                  puts the policy in dryRun and rotates pods for ~7 minutes. */}
+              {armed && attacksFor(curType.type, armed).some((a) => a.runnable) && (
+                <div className="rounded-md border border-border/60 bg-elevated/30 p-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <BarChart3 className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-[11px] font-medium text-foreground">Compare availability: no defense vs blind rotator vs Phorvex</span>
+                    {attacksFor(curType.type, armed).filter((a) => a.runnable).map((a) => (
+                      <Button key={"cmp-" + a.id} size="sm" variant="outline" disabled={!!comparing}
+                        onClick={() => runComparison(a.id)} className="gap-1.5">
+                        {comparing === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BarChart3 className="h-3.5 w-3.5" />}
+                        run for {a.label.split(" (")[0]}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                    Fires this attack three times on <span className="font-mono">{selWl}</span>: once with the
+                    policy in dryRun (no defense), once against a blind fixed-interval rotator, and once with
+                    Phorvex active. Takes ~7 minutes and rotates pods; the policy is restored to active
+                    automatically. Watch it live in <span className="text-foreground">Availability: 3-way</span>.
+                  </div>
+                  {compareMsg && <div className="mt-1.5 text-[11px] text-primary">{compareMsg}</div>}
+                </div>
+              )}
               {attacksFor(curType.type, armed).every((a) => !a.runnable) && (
                 <div className="text-[10px] text-warning">This workload’s namespace isn’t armed for live attacks yet — the row shows the attack→actuator mapping honestly. The armed demo workloads (vllm · litellm · mock-rag-chatbot · phorvex-live-demo) run reactiveOnly, so they stay calm until you fire a foothold and Phorvex reacts attributably.</div>
               )}

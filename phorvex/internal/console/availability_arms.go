@@ -70,6 +70,7 @@ type armRun struct {
 }
 
 type armsResponse struct {
+	Running   []armsJob `json:"running"` // experiments in flight right now, with live progress
 	Runs      []armRun `json:"runs"`
 	Available bool     `json:"available"`
 	Note      string   `json:"note"`
@@ -90,7 +91,7 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 
 	b, err := os.ReadFile(armsPath(s.cfg))
 	if err != nil || len(b) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false,
+		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshot(),
 			Note: "no three-arm experiment has been run yet. It is a real, disruptive procedure (it puts " +
 				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."})
 		return
@@ -108,14 +109,14 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(exps) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Note: "no experiment recorded for that app yet."})
+		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshot(), Note: "no experiment recorded for that app yet."})
 		return
 	}
 
 	samples := readUptimeSamples(uptimePath(s.cfg))
 	resolve := s.buildRateResolver("")
 
-	out := armsResponse{Available: true,
+	out := armsResponse{Available: true, Running: armsJobSnapshot(),
 		HowItRan: "Same app, same attack, three times. All three availability series are read from the same " +
 			"5s background sampler, so the arms are measured identically and are directly comparable.",
 		// THE point the previous version buried. The no-defense arm scoring 100% is real, and the
