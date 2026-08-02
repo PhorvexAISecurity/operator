@@ -13,6 +13,7 @@ OBS="$OUT_DIR/cost-validation-observations.jsonl"
 ENVIRONMENT="$OUT_DIR/cost-validation-environment.json"
 REVISION=${REVISION:-unknown}
 CLUSTER=$(kubectl config current-context)
+PROBE_SHA256=$(sha256sum "$PROBE" | awk '{print $1}')
 PORT=${PORT:-18085}
 PF_PID=""
 LOAD_PID=""
@@ -45,9 +46,9 @@ trap cleanup EXIT
 kubectl create namespace "$NS" >/dev/null
 kubectl label namespace "$NS" phorvex.ai/benchmark=cost-validation --overwrite >/dev/null
 
-python3 - "$ENVIRONMENT" "$CLUSTER" "$NS" "$REVISION" <<'PY'
+python3 - "$ENVIRONMENT" "$CLUSTER" "$NS" "$REVISION" "$PROBE_SHA256" <<'PY'
 import json, platform, subprocess, sys
-path, cluster, namespace, revision = sys.argv[1:]
+path, cluster, namespace, revision, probe_sha256 = sys.argv[1:]
 def output(*args):
     return subprocess.check_output(args, text=True).strip()
 doc = {
@@ -55,6 +56,7 @@ doc = {
     "cluster": cluster,
     "namespace": namespace,
     "benchmark_revision": revision,
+    "costprobe_sha256": probe_sha256,
     "collector_host": platform.node(),
     "kubectl_version": output("kubectl", "version", "--client"),
     "server_version": output("kubectl", "version"),
