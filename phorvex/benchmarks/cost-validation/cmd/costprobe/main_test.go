@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestValidateNamespaceFailClosed(t *testing.T) {
@@ -63,5 +66,33 @@ func TestFeatureComponentsAreActionSpecific(t *testing.T) {
 	}
 	if got := availabilityFeature(model.ActionRotate, 4); got != 0.25 {
 		t.Fatalf("availability feature=%v", got)
+	}
+}
+
+func TestTerminatingPodIsNotReady(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	pod := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &now},
+		Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{
+			Type: corev1.PodReady, Status: corev1.ConditionTrue,
+		}}},
+	}
+	if podReady(pod) {
+		t.Fatal("terminating pod counted as Ready")
+	}
+}
+
+func TestRotateReplacementMustBeNewToWholeReplicaSet(t *testing.T) {
+	pods := []corev1.Pod{
+		{ObjectMeta: metav1.ObjectMeta{Name: "old-target", UID: "uid-a"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "old-peer", UID: "uid-b"}},
+	}
+	before := map[string]bool{"uid-a": true, "uid-b": true}
+	if got := newReplica(pods, before); got.Name != "" {
+		t.Fatalf("pre-existing peer accepted as replacement: %s", got.Name)
+	}
+	pods = append(pods, corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "new", UID: "uid-c"}})
+	if got := newReplica(pods, before); got.Name != "new" {
+		t.Fatalf("replacement=%q, want new", got.Name)
 	}
 }

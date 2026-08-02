@@ -285,6 +285,10 @@ func run(parent context.Context, o options) error {
 			desired = 1
 		}
 	}
+	preActionUIDs := make(map[string]bool, len(podsBefore))
+	for i := range podsBefore {
+		preActionUIDs[string(podsBefore[i].UID)] = true
+	}
 
 	before, beforeErr := fetchMetrics(ctx, o.MetricsURL)
 	view := workloadView(target, o, before, readyBefore, desired)
@@ -349,11 +353,10 @@ func run(parent context.Context, o options) error {
 		if ready < minReady {
 			minReady = ready
 		}
-		for i := range pods {
-			if pods[i].UID != target.UID || action != model.ActionRotate {
-				afterPod = pods[i]
-				break
-			}
+		if action == model.ActionRotate {
+			afterPod = newReplica(pods, preActionUIDs)
+		} else if len(pods) > 0 {
+			afterPod = pods[0]
 		}
 		if action == model.ActionNoop || obs.ActuationError != "" || (ready >= desired && afterPod.Name != "") {
 			break
@@ -479,12 +482,24 @@ func readyPods(ctx context.Context, kube client.Client, namespace, selector stri
 }
 
 func podReady(p corev1.Pod) bool {
+	if p.DeletionTimestamp != nil {
+		return false
+	}
 	for _, c := range p.Status.Conditions {
 		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
 			return true
 		}
 	}
 	return false
+}
+
+func newReplica(pods []corev1.Pod, preActionUIDs map[string]bool) corev1.Pod {
+	for i := range pods {
+		if !preActionUIDs[string(pods[i].UID)] {
+			return pods[i]
+		}
+	}
+	return corev1.Pod{}
 }
 
 func fetchMetrics(ctx context.Context, url string) (metricSnapshot, error) {
