@@ -7,10 +7,9 @@ package feasibility
 import "github.com/phorvex/phorvex/internal/model"
 
 // gpuconservation.go holds the PRD Layer-A GPU/accelerator CONSERVATION hard laws for
-// the AI product. They are DEFINED NOW (both-products mandate) and read the discovered
-// view.Physics witness. Their VALUES are [SP-0-PENDING]: on a cluster without a GPU/DCGM
-// scan (e.g. kind), Physics.GPUPresent is false and they degrade to honest-neutral
-// (feasible) — never fabricating a VRAM number. A GPU adapter (CoreWeave/EKS-GPU) that
+// the AI product. They read the discovered live view.Physics witness. On a cluster
+// without a GPU/DCGM scan (e.g. kind), Physics.GPUPresent is false and they degrade
+// to honest-neutral (feasible) — never fabricating a VRAM number. A GPU adapter that
 // fills the witness activates them with ZERO change here (the registry first-veto-wins
 // gate picks them up automatically).
 
@@ -22,7 +21,7 @@ func (vramConservation) Name() string { return "vram-conservation" }
 
 func (vramConservation) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
 	if !view.Physics.GPUPresent {
-		return feasible // [SP-0-PENDING]: no measured VRAM => never veto
+		return feasible // no measured VRAM => never veto
 	}
 	// A rotate/rebind/warm-replace that demands more VRAM than the device fraction leaves
 	// is illegal. Covers the GPU-provisioning moves, not just plain rotate.

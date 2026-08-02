@@ -31,6 +31,7 @@ spec:
         {{- if .Values.phorvex.prometheusUrl }}
         - --prometheus-url={{ .Values.phorvex.prometheusUrl }}
         {{- end }}
+        - --gpu-envelope-max={{ .Values.phorvex.gpuEnvelopeMax }}
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true
         {{- end }}

@@ -235,9 +235,9 @@ type NeighborRef struct {
 // exactly). The recon EMR profile and the GPU-conservation feasibility laws read it.
 //
 // The K8s half (ImageRarity/CoResidency/SchedulerSlack/PDBMinAvailable/EPSS) is
-// MEASURABLE on any real cluster TODAY. The AI half (VRAM/SM/MIG/interconnect/KV) is
-// DEFINED here NOW but its VALUES are [SP-0-PENDING] (GPUPresent=false until a real-GPU
-// scan lands) — never fabricated.
+// measurable on any real cluster. The DCGM half (VRAM/SM/interconnect) is live when
+// Prometheus has exporter series for the pod and honest-absent otherwise. Runtime-only
+// KV/cold-load values remain separately gated until their serving counters are available.
 type PhysicsWitness struct {
 	Scanned bool // a platform adapter produced this witness (else all-neutral)
 
@@ -250,11 +250,13 @@ type PhysicsWitness struct {
 	PDBDisruptionsAllowed int // live PDB status.disruptionsAllowed (-1 = none)
 	MIGGeometryValid bool   // the pod's MIG partition is a legal device-plugin geometry
 
-	// --- AI / inference, structure-now / values [SP-0-PENDING] ---
+	// --- AI / inference, DCGM-live when GPUPresent=true ---
 	GPUPresent     bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
 	VRAMFraction   float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
 	SMOccupancy    float64 // pod SM compute share [0,1] (0 if !GPUPresent)
+	SMSource       string  // exact DCGM metric used; distinguishes occupancy from duty-cycle fallback
 	LinkBandwidth  float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
+	LinkSource     string  // exact interconnect metric pair used for LinkBandwidth
 	ModelRarity    float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
 	KVRebuildSec   float64 // KV-cache rebuild seconds vs session length (0 = [SP-0-PENDING])
 	ColdLoadSec    float64 // model cold/warm-load seconds (0 = [SP-0-PENDING])

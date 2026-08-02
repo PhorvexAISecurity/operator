@@ -34,9 +34,9 @@ func TestAdapterSelectionIsLabelDriven(t *testing.T) {
 }
 
 // TestGPUAdapterKsHalfByteIdentical — GATE PRESERVATION: the EKS/CoreWeave adapters inherit
-// genericK8s.Derive verbatim (no override yet), so on the SAME GPU snapshot the per-pod witness
-// is byte-identical to generic-k8s with GPUPresent=false (GPU half [SP-0-PENDING-P4], never
-// fabricated). Adding node Labels + label-driven Detect did NOT perturb the physics witness.
+// genericK8s.Derive verbatim when DCGM is absent, so on the SAME GPU snapshot the per-pod
+// witness is byte-identical to generic-k8s with GPUPresent=false. Adding node Labels +
+// label-driven Detect did NOT perturb the physics witness.
 func TestGPUAdapterKsHalfByteIdentical(t *testing.T) {
 	snap := &ingest.Snapshot{
 		Nodes: []ingest.NodeInfo{{Name: "n", AllocatableCPUMilli: 8000, AllocatableMemBytes: 16 << 30, AllocatableGPU: 4, MIGResources: map[string]int64{}, Labels: map[string]string{"eks.amazonaws.com/nodegroup": "gpu"}}},
@@ -52,7 +52,7 @@ func TestGPUAdapterKsHalfByteIdentical(t *testing.T) {
 	}
 	for k, w := range eks {
 		if w.GPUPresent {
-			t.Errorf("pod %s: GPUPresent=true on a node with no DCGM feed — must be [SP-0-PENDING-P4] honest-absent", k)
+			t.Errorf("pod %s: GPUPresent=true on a node with no DCGM feed — must be honest-absent", k)
 		}
 	}
 }

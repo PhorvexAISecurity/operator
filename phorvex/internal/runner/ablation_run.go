@@ -6,6 +6,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -63,6 +64,14 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue)
 	if err != nil {
 		return nil, "", err
+	}
+	// The ablation builds a fresh snapshot, so it must populate that same snapshot from
+	// the configured live DCGM feed before platform.Derive. Otherwise --scan can print a
+	// real GPU witness while its subsequent scarcity A/B silently runs GPU-neutral.
+	if m.PromURL != "" {
+		if err := ingest.PopulateGPUWitness(ctx, snap, m.PromURL); err != nil {
+			return nil, "", fmt.Errorf("GPU/DCGM witness ingest: %w", err)
+		}
 	}
 	platformName, physByKey := platform.Derive(snap)
 	infected := buildInfectedSet(snap)

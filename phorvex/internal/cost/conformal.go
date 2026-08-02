@@ -4,19 +4,50 @@
 
 package cost
 
-import "sort"
+import (
+	"fmt"
+	"math"
+	"sort"
+	"sync/atomic"
+)
 
 // conformal.go provides the DISTRIBUTIONALLY-ROBUST upper bound C_hi used by the HARD
-// feasibility/SLO gate (METHOD-DECISION cost graft, CDR-Cost): while a cost coefficient
-// is literally unmeasured (GPU/KV-cache/warm-load = [SP-0-PENDING]), the gate must
-// still PROVABLY not breach SLO. C_hi = E[C] + conformal-residual-quantile + a DECLARED
-// GPU envelope (NOT a measured number). Feasibility uses C_hi; the objective uses E[C].
+// feasibility/SLO gate (METHOD-DECISION cost graft, CDR-Cost). C_hi = E[C] +
+// conformal-residual-quantile + a hardware-calibrated GPU envelope. Feasibility uses
+// C_hi; the objective uses E[C].
 
-// GPUEnvelopeMax is the DECLARED engineering upper bound on the unmeasured GPU/KV-cache
-// warm-load flow-cost contribution. It is [SP-0-PENDING]: a fail-safe ceiling, never a
-// measurement. Once SP-0 measures the real curve this is replaced by the calibrated RLS
-// coefficient and the envelope collapses.
-const GPUEnvelopeMax = 1.0
+const (
+	// DefaultGPUEnvelopeMax is the fail-safe used when a deployment has no hardware
+	// calibration. Production charts should pass a measured value via --gpu-envelope-max.
+	DefaultGPUEnvelopeMax = 1.0
+
+	// MeasuredT4GPUEnvelopeMax is derived from the worst observed vLLM replacement
+	// recovery on the production EKS Tesla T4 node: 117s creation-to-Ready divided by
+	// the documented 400s top of the model warm-load scale.
+	MeasuredT4GPUEnvelopeMax = 117.0 / 400.0
+)
+
+var gpuEnvelopeMaxBits atomic.Uint64
+
+func init() {
+	gpuEnvelopeMaxBits.Store(math.Float64bits(DefaultGPUEnvelopeMax))
+}
+
+// ConfigureGPUEnvelopeMax installs the operator-wide measured GPU reload/warm-up
+// envelope. The normalized flow-cost contract is [0,1]; rejecting invalid values
+// prevents a typo or NaN from silently disabling the SLO gate.
+func ConfigureGPUEnvelopeMax(v float64) error {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 1 {
+		return fmt.Errorf("gpu envelope max must be finite and in [0,1], got %v", v)
+	}
+	gpuEnvelopeMaxBits.Store(math.Float64bits(v))
+	return nil
+}
+
+// GPUEnvelopeMax returns the configured normalized GPU warm-up envelope.
+func GPUEnvelopeMax() float64 {
+	return math.Float64frombits(gpuEnvelopeMaxBits.Load())
+}
 
 // ConformalBound maintains a sliding window of |observed - predicted| cost residuals
 // and returns their (1-alpha) empirical quantile — the conformal slack added to E[C]
@@ -44,8 +75,8 @@ func (c *ConformalBound) Observe(residual float64) {
 }
 
 // ColdStartSlack is the modest general residual slack used before any cost residual
-// has been observed (the GPU/[SP-0-PENDING] envelope is applied SEPARATELY, in CHi,
-// only for GPU pods — so non-GPU rotates are not over-pruned at cold-start).
+// has been observed (the measured GPU envelope is applied separately, in CHi, only
+// for GPU pods — so non-GPU rotates are not over-pruned at cold-start).
 const ColdStartSlack = 0.1
 
 // Quantile returns the conformal slack q (the (1-alpha) empirical quantile of
