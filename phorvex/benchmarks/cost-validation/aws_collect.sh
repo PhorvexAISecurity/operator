@@ -209,6 +209,10 @@ spec:
         phorvex.ai/guardrail-variants: a,b
     spec:
       terminationGracePeriodSeconds: 1
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+        effect: NoSchedule
       containers:
       - name: app
         image: python:3.12-alpine
@@ -331,6 +335,10 @@ metadata:
     phorvex.ai/role: warm-shadow
     phorvex.ai/model-loaded: "true"
 spec:
+  tolerations:
+  - key: CriticalAddonsOnly
+    operator: Exists
+    effect: NoSchedule
   containers:
   - name: app
     image: ${image}
