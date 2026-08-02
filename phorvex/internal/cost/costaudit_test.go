@@ -152,9 +152,8 @@ func TestPart2_CFlowNoopIsZero(t *testing.T) {
 	}
 }
 
-// The RLS is a FROZEN PRIOR today: ObserveRotation has no operator callers, so identical inputs
-// must give an identical C_flow forever. This test documents the frozen-prior contract; if the
-// update is ever wired, this test must be revisited deliberately.
+// Without a completed rotation observation, identical inputs must keep an identical
+// prior C_flow. The live runner wiring is covered separately in runner tests.
 func TestPart2_RLSIsFrozenPriorUnlessObserved(t *testing.T) {
 	c := NewP1Cost()
 	pol := defaultPolicy()
