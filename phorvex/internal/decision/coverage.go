@@ -56,6 +56,12 @@ func (e *CoverageEngine) costFor(tenant string) *cost.P1Cost {
 	return c
 }
 
+// ObserveRotation implements RotationObserver and keeps the feedback in the same
+// per-tenant bucket used to price that tenant's decisions.
+func (e *CoverageEngine) ObserveRotation(tenant string, view *model.WorkloadView, measuredFlow float64) {
+	e.costFor(tenant).ObserveRotation(view, measuredFlow)
+}
+
 // NewCoverageEngine builds the engine from the registered defaults + fresh stateful
 // calibrators.
 func NewCoverageEngine() *CoverageEngine {
@@ -137,12 +143,13 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 		}
 	}
 
+	tcost := e.costFor(pol.Tenant)
 	costCeiling := pol.NormSparsity + pol.FlowDisruption + 0.2 // worst-case single-move budget
 	deps := actionset.Deps{
 		Recon:       e.Recon,
 		FactContext: factCtx,
-		ECost:       e.Cost.ECost,
-		CHi:         e.costFor(pol.Tenant).CHi,
+		ECost:       tcost.ECost,
+		CHi:         tcost.CHi,
 		CostCeiling: costCeiling,
 	}
 	return deps.Generate(views, pol), ctxByKey

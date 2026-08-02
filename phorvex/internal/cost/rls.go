@@ -15,10 +15,8 @@ import (
 // from observed rotations (METHOD-DECISION cost winner, RC-DD). The feature vector and the RLS
 // recursion live here and the per-tick cost is a dot product.
 //
-// STATUS: the recursion is implemented and correct, but its only entry point
-// (P1Cost.ObserveRotation) has NO callers in the operator loop, so theta stays at priorTheta()
-// forever. C_flow(rotate) is therefore a FIXED PRIOR in production, not a self-calibrating
-// value — do not describe it as the latter until the post-actuation measurement is wired.
+// The live runner feeds this recursion only after a rotation's replacement reaches
+// PodReady, keeping action emission latency out of the learned disruption label.
 
 // featureDim is the engineered C_flow feature dimension.
 const featureDim = 6

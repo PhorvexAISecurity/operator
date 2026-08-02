@@ -183,6 +183,7 @@ type Pod struct {
 	Phase          string // raw K8s pod phase
 	Ready          bool
 	StartedAt      time.Time
+	ReadyAt        time.Time // PodReady=True transition; zero when unavailable/not Ready
 	Age            time.Duration
 	MountedSecrets []string // distinct Secret names referenced by the pod spec (names only)
 	ServiceAccount string

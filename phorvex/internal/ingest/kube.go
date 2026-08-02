@@ -254,6 +254,15 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 		out.Age = now.Sub(out.StartedAt)
 	}
 	out.Ready = podReady(p)
+	if out.Ready {
+		for i := range p.Status.Conditions {
+			c := p.Status.Conditions[i]
+			if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
+				out.ReadyAt = c.LastTransitionTime.Time
+				break
+			}
+		}
+	}
 	out.MountedSecrets = mountedSecrets(p)
 	out.OwnerKind, out.OwnerName = topOwner(p)
 	out.HasGPU, out.MIGDevice = gpuInfo(p)

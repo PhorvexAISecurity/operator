@@ -4,11 +4,15 @@
 
 package cost
 
-import "github.com/phorvex/phorvex/internal/model"
+import (
+	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
 
 // P1Cost is the assembled P1 cost model: C = normSparsity*C_norm + flowDisruption*
-// C_flow, where C_flow is an RLS-shaped FIXED PRIOR today (the update path exists but has no
-// callers — see ObserveRotation), lambda is the dual-descent shadow-price, and CHi is the
+// C_flow, where C_flow is calibrated from completed live rotations, lambda is the
+// dual-descent shadow-price, and CHi is the
 // conformal robust upper bound used by the HARD SLO gate. It is a
 // stateful object (the RLS, conformal window and dual persist across ticks) owned by
 // the decision engine.
@@ -85,19 +89,35 @@ func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy
 }
 
 // ObserveRotation folds a measured rotation disruption into the calibrators (offline
-// cadence). measuredFlow is the real C_flow proxy (e.g. normalized time-to-Ready of
-// the replacement). A no-op if the measurement is unavailable (dry-run): the model
-// stays honestly at its prior.
-//
-// [SP-0-PENDING-P4a] UNWIRED: as of P4a this method has ZERO callers in the operator
-// loop, so the RLS C_flow calibrator never self-updates — C_flow stays a permanent PRIOR,
-// not a live-calibrated value. Wiring a post-actuation measured-flow callback is a P4a/P4b
-// follow-up; until then C_flow must NOT be presented as "self-calibrating today."
+// cadence). measuredFlow is the normalized time-to-Ready of the replacement. The live
+// runner calls this only after an emitted rotation is matched to a new Ready pod UID;
+// a recovery still missing at the model maximum is recorded as right-censored C_flow=2.
+// Dry-run and emitted-but-unexecuted rotations remain honest no-ops.
 func (c *P1Cost) ObserveRotation(view *model.WorkloadView, measuredFlow float64) {
 	f := Features(view)
 	pred := c.RLS.Predict(f)
 	c.Conformal.Observe(measuredFlow - pred)
 	c.RLS.Update(f, measuredFlow)
+}
+
+// ReadyDelayReference is the existing declared upper end of the 60-400 second
+// GPU/LLM warm-load range used by the flow-cost prior. A 400-second recovery maps
+// to C_flow=1; slower recoveries remain distinguishable up to the RLS model's
+// documented maximum of 2.
+const ReadyDelayReference = 400 * time.Second
+
+// NormalizeReadyDelay maps a measured replacement Ready delay into the same [0,2]
+// domain as RLS.Predict. It contains no workload guess: the input is the Kubernetes
+// PodReady transition observed after the emitted rotation.
+func NormalizeReadyDelay(delay time.Duration) float64 {
+	if delay <= 0 {
+		return 0
+	}
+	x := float64(delay) / float64(ReadyDelayReference)
+	if x > 2 {
+		return 2
+	}
+	return x
 }
 
 func maxf(a, b float64) float64 {

@@ -7,6 +7,7 @@ package cost
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -25,6 +26,27 @@ func TestRLSConvergesToObservedCost(t *testing.T) {
 	}
 	if !r.Primed() {
 		t.Errorf("RLS should report primed after observations")
+	}
+}
+
+func TestNormalizeReadyDelayUsesDeclaredRecoveryRange(t *testing.T) {
+	cases := []struct {
+		name  string
+		delay time.Duration
+		want  float64
+	}{
+		{name: "zero", delay: 0, want: 0},
+		{name: "idle end", delay: 60 * time.Second, want: 0.15},
+		{name: "reference", delay: ReadyDelayReference, want: 1},
+		{name: "model maximum", delay: 2 * ReadyDelayReference, want: 2},
+		{name: "clamped", delay: 3 * ReadyDelayReference, want: 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NormalizeReadyDelay(tc.delay); math.Abs(got-tc.want) > 1e-12 {
+				t.Fatalf("NormalizeReadyDelay(%s) = %v, want %v", tc.delay, got, tc.want)
+			}
+		})
 	}
 }
 

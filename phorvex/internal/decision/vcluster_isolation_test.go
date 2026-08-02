@@ -78,8 +78,7 @@ func TestO2_LambdaNonInfluenceExactZero(t *testing.T) {
 
 // O4 — RLS/CONFORMAL NON-INFLUENCE (pre-emptive). Tenant A's measured rotations (ObserveRotation, the
 // latent shared-learning channel) fire heavily on the co-resident engine; tenant B's cost-based
-// decisions must be byte-identical. Proves the calibrators are per-tenant BEFORE ObserveRotation is ever
-// wired in production.
+// decisions must be byte-identical. Proves the live-wired calibrators remain per-tenant.
 func TestO4_RLSConformalNonInfluenceExactZero(t *testing.T) {
 	bAlone := func() string {
 		e := NewCoverageEngine()
@@ -104,5 +103,48 @@ func TestO4_RLSConformalNonInfluenceExactZero(t *testing.T) {
 	}
 	if control != b.String() {
 		t.Errorf("O4 LEAK: tenant A's measured rotations (RLS/Conformal) changed tenant B's cost-based decisions.\n--- B alone ---\n%s\n--- B after A's rotations ---\n%s", control, b.String())
+	}
+}
+
+func TestObserveRotationUpdatesOnlyItsTenantBucket(t *testing.T) {
+	e := NewCoverageEngine()
+	v := covView("observed", false, 3*time.Hour, false)
+	v.Phase = model.PhaseWarm
+	pol := vtPol("A")
+	move := model.Move{Action: model.ActionRotate}
+
+	a := e.costFor("A")
+	before := a.ECost(v, move, pol)
+	e.ObserveRotation("A", v, 0.05)
+	after := a.ECost(v, move, pol)
+	if !a.RLS.Primed() || after == before {
+		t.Fatalf("tenant A rotation feedback did not reach its RLS: primed=%v before=%v after=%v", a.RLS.Primed(), before, after)
+	}
+	if e.costFor("B").RLS.Primed() {
+		t.Fatal("tenant A rotation feedback primed tenant B's isolated RLS bucket")
+	}
+}
+
+func TestObservedTenantCostFeedsGeneratedCandidates(t *testing.T) {
+	e := NewCoverageEngine()
+	_ = e.costFor("A") // make the legacy scalar belong to another tenant
+	v := covView("b-observed", false, 3*time.Hour, false)
+	pol := vtPol("B")
+
+	rotateCost := func() float64 {
+		set, _ := e.AssembleSet([]*model.WorkloadView{v}, pol)
+		for _, candidate := range set.Candidates {
+			if candidate.Action == model.ActionRotate {
+				return candidate.ECost
+			}
+		}
+		t.Fatal("rotate candidate missing from feasible action set")
+		return 0
+	}
+	before := rotateCost()
+	e.ObserveRotation("B", v, 0.05)
+	after := rotateCost()
+	if after == before {
+		t.Fatalf("tenant B learned cost did not reach generated candidates: before=%v after=%v", before, after)
 	}
 }

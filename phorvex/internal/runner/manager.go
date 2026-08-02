@@ -13,6 +13,7 @@ package runner
 import (
 	"context"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
@@ -41,6 +43,16 @@ type policyEntry struct {
 	spec      v1alpha1.PhorvexPolicySpec
 	selector  labels.Selector
 	lastTick  time.Time
+}
+
+// pendingRotation holds the pre-action features until Kubernetes proves that a
+// controller-created replacement UID reached Ready. knownUIDs prevents an already
+// Ready sibling from being mistaken for the replacement.
+type pendingRotation struct {
+	tenant    string
+	startedAt time.Time
+	view      model.WorkloadView
+	knownUIDs map[string]struct{}
 }
 
 // Manager owns the tenant registry and the tick loop.
@@ -63,6 +75,9 @@ type Manager struct {
 
 	mu       sync.RWMutex
 	policies map[string]*policyEntry
+	// Accessed only by the single tick loop. Entries are resolved on a later
+	// snapshot or capped after the RLS [0,2] recovery window.
+	pendingRotations map[string]pendingRotation
 }
 
 // NewManager constructs a Manager with sane defaults for any nil collaborators.
@@ -231,6 +246,11 @@ func (m *Manager) tick(ctx context.Context) {
 		ingest.PopulateGPUWitness(ctx, snap, m.PromURL)
 	}
 
+	// Complete post-action feedback before making this tick's decisions. This is
+	// non-blocking: recovery is measured from the Kubernetes snapshots the runner
+	// already collects, never by waiting inside Actuate.
+	m.observeReadyRotations(snap)
+
 	for _, e := range due {
 		m.processTenant(ctx, snap, e, killEngaged)
 	}
@@ -245,6 +265,139 @@ func genericAssetValue(p *model.Pod) float64 {
 		v += 0.3
 	}
 	return v
+}
+
+func rotationObservationKey(tenant string, view *model.WorkloadView) string {
+	return tenant + "\x00" + view.Pod.Namespace + "\x00" + view.Pod.UID
+}
+
+// trackRotation records only controller-owned rotations for optimizers that can
+// consume feedback. Without a controller identity there is no honest way to match
+// a replacement, so the observation remains unavailable rather than fabricated.
+func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, startedAt time.Time) {
+	if _, ok := m.Optimizer.(decision.RotationObserver); !ok || view == nil ||
+		view.Pod.OwnerKind == "" || view.Pod.OwnerName == "" || view.Pod.UID == "" {
+		return
+	}
+	known := map[string]struct{}{}
+	for _, other := range allViews {
+		if other.Pod.Namespace == view.Pod.Namespace && other.Pod.OwnerKind == view.Pod.OwnerKind &&
+			other.Pod.OwnerName == view.Pod.OwnerName && other.Pod.UID != "" {
+			known[other.Pod.UID] = struct{}{}
+		}
+	}
+	if m.pendingRotations == nil {
+		m.pendingRotations = map[string]pendingRotation{}
+	}
+	key := rotationObservationKey(tenant, view)
+	if _, alreadyPending := m.pendingRotations[key]; alreadyPending {
+		return // repeated Phoenix emits must not reset the original recovery clock
+	}
+	m.pendingRotations[key] = pendingRotation{
+		tenant: tenant, startedAt: startedAt, view: *view, knownUIDs: known,
+	}
+}
+
+// observeReadyRotations resolves pending rotations one-to-one against new Ready
+// UIDs owned by the same controller. At two reference windows an unresolved
+// recovery is a truthful right-censored maximum (C_flow=2), and the entry is
+// retired so a failed replacement cannot leak memory indefinitely.
+func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
+	observer, ok := m.Optimizer.(decision.RotationObserver)
+	if !ok || snap == nil || len(m.pendingRotations) == 0 {
+		return
+	}
+	type pendingRef struct {
+		key string
+		p   pendingRotation
+	}
+	pending := make([]pendingRef, 0, len(m.pendingRotations))
+	for key, p := range m.pendingRotations {
+		pending = append(pending, pendingRef{key: key, p: p})
+	}
+	sort.Slice(pending, func(i, j int) bool {
+		if pending[i].p.startedAt.Equal(pending[j].p.startedAt) {
+			return pending[i].key < pending[j].key
+		}
+		return pending[i].p.startedAt.Before(pending[j].p.startedAt)
+	})
+
+	claimed := map[string]bool{}
+	for _, ref := range pending {
+		p := ref.p
+		oldUIDPresent := false
+		for i := range snap.Pods {
+			if snap.Pods[i].UID == p.view.Pod.UID {
+				oldUIDPresent = true
+				break
+			}
+		}
+		elapsed := snap.Now.Sub(p.startedAt)
+		if oldUIDPresent {
+			// Phoenix reports that the SecurityEvent was emitted, not that Delete
+			// executed. Never train on a scale-up/rollout while the target UID is
+			// still alive. Retire an unexecuted event after the observation window.
+			if elapsed >= 2*cost.ReadyDelayReference {
+				delete(m.pendingRotations, ref.key)
+				m.Log.Info("rotation cost observation unavailable; original UID still present",
+					"tenant", p.tenant,
+					"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
+					"oldUID", p.view.Pod.UID)
+			}
+			continue
+		}
+		var replacement *model.Pod
+		for i := range snap.Pods {
+			candidate := &snap.Pods[i]
+			if !candidate.Ready || candidate.UID == "" || claimed[candidate.UID] ||
+				candidate.Namespace != p.view.Pod.Namespace ||
+				candidate.OwnerKind != p.view.Pod.OwnerKind || candidate.OwnerName != p.view.Pod.OwnerName {
+				continue
+			}
+			if _, existed := p.knownUIDs[candidate.UID]; existed {
+				continue
+			}
+			// A Ready transition predating the actuation cannot be its recovery.
+			if !candidate.ReadyAt.IsZero() && candidate.ReadyAt.Before(p.startedAt) {
+				continue
+			}
+			if replacement == nil || candidate.ReadyAt.Before(replacement.ReadyAt) ||
+				(candidate.ReadyAt.Equal(replacement.ReadyAt) && candidate.UID < replacement.UID) {
+				replacement = candidate
+			}
+		}
+
+		censored := false
+		if replacement != nil {
+			claimed[replacement.UID] = true
+			if !replacement.ReadyAt.IsZero() {
+				elapsed = replacement.ReadyAt.Sub(p.startedAt)
+			}
+		} else if elapsed >= 2*cost.ReadyDelayReference {
+			censored = true
+			elapsed = 2 * cost.ReadyDelayReference
+		} else {
+			continue
+		}
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		measuredFlow := cost.NormalizeReadyDelay(elapsed)
+		observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+		delete(m.pendingRotations, ref.key)
+		replacementUID := ""
+		if replacement != nil {
+			replacementUID = replacement.UID
+		}
+		m.Log.Info("rotation cost observation applied",
+			"tenant", p.tenant,
+			"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
+			"oldUID", p.view.Pod.UID,
+			"replacementUID", replacementUID,
+			"timeToReadySeconds", elapsed.Seconds(),
+			"measuredFlow", measuredFlow,
+			"censored", censored)
+	}
 }
 
 // buildInfectedSet (P-CONTEXT live-beta Tier-1) reconstructs the per-tick infected set:
@@ -471,6 +624,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if score > 1 {
 			score = 1
 		}
+		actuationStarted := time.Now()
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
 			Tenant:    pol.Tenant,
 			Namespace: decisions[i].Namespace,
@@ -492,6 +646,9 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			decisions[i].MutationKind = res.MutationKind
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
+			if decisions[i].Action == model.ActionRotate {
+				m.trackRotation(pol.Tenant, v, viewByKey, actuationStarted)
+			}
 		}
 	}
 	return actuated
