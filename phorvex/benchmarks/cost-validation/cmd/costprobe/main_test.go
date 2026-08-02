@@ -96,3 +96,13 @@ func TestRotateReplacementMustBeNewToWholeReplicaSet(t *testing.T) {
 		t.Fatalf("replacement=%q, want new", got.Name)
 	}
 }
+
+func TestTargetDepartureUsesUIDNotPodCount(t *testing.T) {
+	pods := []corev1.Pod{{ObjectMeta: metav1.ObjectMeta{Name: "peer", UID: "uid-b"}}}
+	if containsUID(pods, "uid-a") {
+		t.Fatal("departed target UID reported present because another replica remained")
+	}
+	if !containsUID(pods, "uid-b") {
+		t.Fatal("present UID reported departed")
+	}
+}

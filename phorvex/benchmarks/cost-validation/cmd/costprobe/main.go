@@ -345,6 +345,7 @@ func run(parent context.Context, o options) error {
 
 	minReady := readyBefore
 	var afterPod corev1.Pod
+	var targetDeparted nullableFloat
 	for {
 		ready, pods, listErr := readyPods(ctx, kube, o.Namespace, o.Selector)
 		if listErr != nil {
@@ -352,6 +353,9 @@ func run(parent context.Context, o options) error {
 		}
 		if ready < minReady {
 			minReady = ready
+		}
+		if !targetDeparted.Valid && !containsUID(pods, string(target.UID)) {
+			targetDeparted = nullableFloat{Value: time.Since(start).Seconds(), Valid: true}
 		}
 		if action == model.ActionRotate {
 			afterPod = newReplica(pods, preActionUIDs)
@@ -400,7 +404,13 @@ func run(parent context.Context, o options) error {
 	if afterErr != nil {
 		obs.Missing = append(obs.Missing, "post_metrics:"+compactError(afterErr))
 	}
-	if before.ActiveConnections.Valid && before.ActiveConnections.Value <= 0 {
+	if action == model.ActionNoop {
+		obs.ConnectionDrainSec = nullableFloat{Value: 0, Valid: true}
+	} else if targetDeparted.Valid {
+		// For replacement/isolation moves this is the real Kubernetes drain boundary:
+		// the target UID has been deleted or detached from the workload selector.
+		obs.ConnectionDrainSec = targetDeparted
+	} else if before.ActiveConnections.Valid && before.ActiveConnections.Value <= 0 {
 		obs.ConnectionDrainSec = nullableFloat{Value: 0, Valid: true}
 	} else if before.ActiveConnections.Valid && after.ActiveConnections.Valid && after.ActiveConnections.Value <= 0 {
 		obs.ConnectionDrainSec = nullableFloat{Value: time.Since(start).Seconds(), Valid: true}
@@ -500,6 +510,15 @@ func newReplica(pods []corev1.Pod, preActionUIDs map[string]bool) corev1.Pod {
 		}
 	}
 	return corev1.Pod{}
+}
+
+func containsUID(pods []corev1.Pod, uid string) bool {
+	for i := range pods {
+		if string(pods[i].UID) == uid {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchMetrics(ctx context.Context, url string) (metricSnapshot, error) {
