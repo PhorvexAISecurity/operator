@@ -99,6 +99,8 @@ class CostValidationTests(unittest.TestCase):
             self.assertIn(result["recommendation"], {
                 "keep the current formula", "promote the calibrated formula", "collect more measurements"
             })
+            self.assertFalse(result["promotion_data_sufficient"])
+            self.assertEqual(result["component_support"]["c_gpu"], {"train_positive": 0, "test_positive": 0})
             for name in (
                 "cost-validation-results.csv", "cost-validation-summary.md", "c2-weights.json",
                 "action-cost-coverage.csv", "cost-validation-provenance.json",

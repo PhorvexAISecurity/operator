@@ -321,6 +321,8 @@ def sha256(path: Path) -> str:
 
 
 def fmt(value: Any, digits: int = 6) -> str:
+    if value is None:
+        return "n/a"
     if isinstance(value, float):
         if math.isnan(value):
             return "n/a"
@@ -417,8 +419,8 @@ def action_coverage(
                 "cost_model_available": "yes" if item.get("cost_model_available") else "no",
                 "cost_components_used": ",".join(item.get("cost_components_used", [])),
                 "observed_cost_sample_count": len(observed),
-                "mean_observed_cost": statistics.fmean(observed) if observed else math.nan,
-                "c0_prediction_mae": statistics.fmean(errors) if errors else math.nan,
+                "mean_observed_cost": statistics.fmean(observed) if observed else None,
+                "c0_prediction_mae": statistics.fmean(errors) if errors else None,
                 "decision_impact": f"C0 selected {c0_actions[action]} vs oracle {c3_actions[action]}",
             }
         )
@@ -550,6 +552,20 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     checker = independent_decision_check(
         [row for row in test_rows if feature_vector(row) is not None], selected, flat_cost
     )
+    component_support = {
+        feature: {
+            "train_positive": sum(float(row[feature]) > 0 for row in train_rows if finite(row.get(feature)) is not None),
+            "test_positive": sum(float(row[feature]) > 0 for row in test_rows if finite(row.get(feature)) is not None),
+        }
+        for feature in FEATURES
+    }
+    # A zero learned coefficient is not identifiable when the component never varies.
+    # Promotion requires at least three positive training witnesses and one held-out
+    # witness for every coefficient in the ticket's five-term formula.
+    promotion_data_sufficient = all(
+        support["train_positive"] >= 3 and support["test_positive"] >= 1
+        for support in component_support.values()
+    )
     c0_numeric_pass = (
         decisions["c0"]["cumulative_objective"] > decisions["c1"]["cumulative_objective"]
         and prediction["c0"]["spearman"] > 0
@@ -563,6 +579,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         and decisions["c2"]["slo_violations"] <= decisions["c0"]["slo_violations"]
         and decisions["c2"]["availability_loss"] <= decisions["c0"]["availability_loss"] + 1e-12
         and stable
+        and promotion_data_sufficient
     )
     recommendation = "promote the calibrated formula" if c2_pass else "keep the current formula" if c0_numeric_pass else "collect more measurements"
 
@@ -593,6 +610,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "c2_regret_reduction": regret_reduction,
         "c0_high_availability_mean_error": high_availability_error,
         "independent_checker": checker,
+        "component_support": component_support,
+        "promotion_data_sufficient": promotion_data_sufficient,
         "weights": weights,
         "prediction": prediction,
         "decisions": decisions,
@@ -693,10 +712,21 @@ def write_summary(path: Path, summary: Mapping[str, Any]) -> None:
         "",
         f"- C0 numeric acceptance checks passed: **{str(summary['c0_numeric_acceptance']).lower()}**.",
         f"- C2 promotion checks passed: **{str(summary['c2_acceptance']).lower()}**.",
+        f"- Promotion data sufficiency (all five coefficients identified in train and held-out data): **{str(summary['promotion_data_sufficient']).lower()}**.",
         f"- C0 mean signed error on high-availability-risk held-out rows: **{fmt(summary['c0_high_availability_mean_error'])}** (negative means systematic underpricing).",
         f"- Independent decision checker: **{summary['independent_checker']['checks']} checks, {summary['independent_checker']['failures']} failures**.",
         "- A lower prediction error alone was not treated as promotion evidence; decision regret and SLO/availability are controlling.",
         "- Unsupported/missing-prerequisite actions remain classified in the matrix rather than silently omitted.",
+        "",
+        "Component support used by the promotion gate:",
+        "",
+        "| component | positive train rows | positive held-out rows |",
+        "|---|---:|---:|",
+    ]
+    for component in FEATURES:
+        support = summary["component_support"][component]
+        lines.append(f"| {component.removeprefix('c_')} | {support['train_positive']} | {support['test_positive']} |")
+    lines += [
         "",
         "## Artifacts",
         "",
