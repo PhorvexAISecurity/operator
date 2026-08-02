@@ -589,6 +589,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "input_sha256": sha256(args.input),
         "action_catalog": str(args.action_catalog),
         "action_catalog_sha256": sha256(args.action_catalog),
+        "evaluator_revision": args.evaluator_revision,
+        "evaluator_sha256": sha256(Path(__file__).resolve()),
         "environment": json.loads(args.environment.read_text()) if args.environment else {},
         "observation_rows": len(rows),
         "usable_rows": len(valid),
@@ -745,6 +747,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True, help="probe observation JSONL")
     parser.add_argument("--action-catalog", type=Path, required=True)
     parser.add_argument("--environment", type=Path)
+    parser.add_argument("--evaluator-revision", default="unknown")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-cost", type=float, default=1.0)
     parser.add_argument(

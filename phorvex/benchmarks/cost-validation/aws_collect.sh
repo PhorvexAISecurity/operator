@@ -358,7 +358,7 @@ YAML
   cleanup_processes
 done
 
-python3 "$EVALUATOR" --input "$OBS" --action-catalog "$CATALOG" --environment "$ENVIRONMENT" --output-dir "$OUT_DIR"
+python3 "$EVALUATOR" --input "$OBS" --action-catalog "$CATALOG" --environment "$ENVIRONMENT" --evaluator-revision "$REVISION" --output-dir "$OUT_DIR"
 kubectl delete namespace "$NS" --wait=true --ignore-not-found >/dev/null
 trap - EXIT
 echo "TASK35_AWS_COLLECTION_COMPLETE output=$OUT_DIR"
