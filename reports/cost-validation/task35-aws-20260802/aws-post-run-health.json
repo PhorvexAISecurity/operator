@@ -1,0 +1,41 @@
+{
+  "benchmark_namespace_absent": true,
+  "captured_at": "2026-08-02T19:07:07.413712+00:00",
+  "cluster": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+  "deployment_restore": {
+    "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:sha-589fa1b",
+    "reason": "a later external 0.4.3 rollout lacked --gpu-envelope-max and CrashLooped; restored the already live tested merge image",
+    "revision": "589fa1b12da91a0e632f58e9184d5a634c0da957"
+  },
+  "deployments": {
+    "operator-controller-manager": {
+      "available": 1,
+      "desired": 1,
+      "image": "ghcr.io/r6security/phoenix/amtd-operator:v0.2.2",
+      "ready": 1
+    },
+    "phorvex-console": {
+      "available": 1,
+      "desired": 1,
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console:0.4.3",
+      "ready": 1
+    },
+    "phorvex-phorvex": {
+      "available": 1,
+      "desired": 1,
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:sha-589fa1b",
+      "ready": 1
+    }
+  },
+  "operator_pods": [
+    {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:sha-589fa1b",
+      "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:d667c7d11f155ba62c2db270ce2172dda33a53cc100f46741d35a2ff56ce0709",
+      "name": "phorvex-phorvex-84b9d85485-rf542",
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    }
+  ],
+  "schema_version": "phorvex.cost-validation-post-run-health.v2"
+}
