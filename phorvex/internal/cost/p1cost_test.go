@@ -84,7 +84,7 @@ func TestCHiPrunesUncalibratedGPURotate(t *testing.T) {
 	rot := model.Move{Action: model.ActionRotate}
 
 	if chi := c.CHi(gpu, rot, pol); chi <= ceiling {
-		t.Errorf("uncalibrated GPU rotate CHi (%.3f) should EXCEED ceiling (%.3f) [SP-0-PENDING envelope]", chi, ceiling)
+		t.Errorf("uncalibrated GPU rotate CHi (%.3f) should EXCEED ceiling (%.3f) with the conservative default envelope", chi, ceiling)
 	}
 	if chi := c.CHi(cpu, rot, pol); chi > ceiling {
 		t.Errorf("non-GPU rotate CHi (%.3f) should be within ceiling (%.3f)", chi, ceiling)
@@ -102,5 +102,32 @@ func TestConformalColdStartSlack(t *testing.T) {
 	}
 	if c.Calibrated() {
 		t.Errorf("conformal bound should not report calibrated with zero residuals")
+	}
+}
+
+func TestMeasuredT4GPUEnvelopeConfiguresCHi(t *testing.T) {
+	original := GPUEnvelopeMax()
+	t.Cleanup(func() { _ = ConfigureGPUEnvelopeMax(original) })
+
+	if math.Abs(MeasuredT4GPUEnvelopeMax-0.2925) > 1e-12 {
+		t.Fatalf("T4 envelope must be 117s/400s = 0.2925, got %.12f", MeasuredT4GPUEnvelopeMax)
+	}
+	if err := ConfigureGPUEnvelopeMax(MeasuredT4GPUEnvelopeMax); err != nil {
+		t.Fatal(err)
+	}
+	c := NewP1Cost()
+	pol := model.Policy{FlowDisruption: 1}
+	view := &model.WorkloadView{Pod: model.Pod{HasGPU: true}}
+	move := model.Move{Action: model.ActionRotate}
+	if delta := c.CHi(view, move, pol) - c.ECost(view, move, pol); math.Abs(delta-MeasuredT4GPUEnvelopeMax) > 1e-12 {
+		t.Errorf("GPU CHi slack = %.12f, want measured envelope %.12f", delta, MeasuredT4GPUEnvelopeMax)
+	}
+
+	before := GPUEnvelopeMax()
+	if err := ConfigureGPUEnvelopeMax(math.NaN()); err == nil {
+		t.Fatal("NaN GPU envelope must be rejected")
+	}
+	if GPUEnvelopeMax() != before {
+		t.Fatal("invalid calibration changed the active GPU envelope")
 	}
 }

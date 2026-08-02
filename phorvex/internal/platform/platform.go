@@ -13,9 +13,9 @@
 //
 // HONESTY: every value is honest-absent. The K8s half (image-rarity, co-residency,
 // scheduler-slack, live PDB, MIG-geometry) is MEASURABLE on any real cluster TODAY. The
-// AI/GPU half is DEFINED here but its VALUES are [SP-0-PENDING] — GPUPresent=false until
-// a DCGM/NVML adapter answers, so consumers degrade to neutral 1.0 and the 1.62x
-// baseline reproduces bit-for-bit on kind.
+// AI/GPU half is populated from live DCGM values when an adapter answers. With no DCGM
+// series GPUPresent=false, so consumers degrade to neutral values and the 1.62x baseline
+// reproduces bit-for-bit on kind.
 package platform
 
 import (
@@ -159,7 +159,7 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		w.MIGGeometryValid = migValid(p, nodeByName)
 
 		// AI/GPU half: genericK8s cannot measure VRAM/SM/interconnect (no DCGM) ->
-		// GPUPresent=false, values 0 ([SP-0-PENDING]). A GPU adapter overrides these.
+		// GPUPresent=false, values 0. A GPU adapter overrides these from live DCGM.
 		out[p.Namespace+"/"+p.Name] = w
 	}
 	return out

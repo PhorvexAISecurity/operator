@@ -43,8 +43,8 @@ type Snapshot struct {
 
 	// GPUWitness is the live DCGM-via-Prometheus GPU half ("ns/pod" -> witness GPU fields:
 	// GPUPresent + VRAMFraction/SMOccupancy/LinkBandwidth). Populated by PopulateGPUWitness when
-	// a Prometheus/dcgm-exporter feed is configured; nil/empty => the GPU half stays
-	// [SP-0-PENDING] (honest-absent) and a GPU platform adapter leaves those floats at 0.
+	// a Prometheus/dcgm-exporter feed is configured; nil/empty is honest-absent and a GPU
+	// platform adapter leaves those floats at 0.
 	GPUWitness map[string]model.PhysicsWitness
 }
 

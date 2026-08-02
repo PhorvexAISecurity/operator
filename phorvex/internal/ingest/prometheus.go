@@ -5,10 +5,11 @@
 package ingest
 
 import (
-	"math"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -62,15 +63,14 @@ func DefaultPromQueries() map[string]string {
 const (
 	SigVRAMUsedMiB = "vramUsedMiB"
 	SigVRAMFreeMiB = "vramFreeMiB"
-	SigSMActive    = "smActive"    // PROF_SM_ACTIVE — TRUE occupancy (needs DCP profiling)
-	SigSMUtilFb    = "smUtilFb"    // GPU_UTIL fallback — DUTY-CYCLE, must be source-labeled, NOT occupancy
-	SigNVLinkBytes = "nvlinkBytes"
+	SigSMActive    = "smActive" // PROF_SM_ACTIVE — TRUE occupancy (needs DCP profiling)
+	SigSMUtilFb    = "smUtilFb" // GPU_UTIL fallback — DUTY-CYCLE, must be source-labeled, NOT occupancy
+	SigPCIeBytes   = "pcieBytes"
 )
 
-// DCGMWitnessQueries are the DESIGNED DCGM-via-Prometheus templates for the GPU witness half.
-// VALUES are [SP-0-PENDING-P4] — these are query STRINGS only; NO DCGM value is hardcoded into
-// any witness float, and no adapter wires them until a real GPU run at P4. Scraped through
-// Prometheus (read-only HTTP), so the GPU half adds ZERO additional Kubernetes RBAC verb.
+// DCGMWitnessQueries are the live DCGM-via-Prometheus templates for the GPU witness half.
+// They were validated against dcgm-exporter on an EKS Tesla T4 node. Scraping stays read-only
+// HTTP, so the GPU half adds zero Kubernetes RBAC verbs. Missing series remain honest-absent.
 //
 // HONESTY (red-team, load-bearing): SMOccupancy must prefer PROF_SM_ACTIVE (true occupancy);
 // the GPU_UTIL duty-cycle is only a labeled FALLBACK — conflating them would overstate the AI
@@ -83,8 +83,9 @@ func DCGMWitnessQueries() map[string]string {
 		// SMOccupancy: prefer the profiling signal; fall back to duty-cycle ONLY if absent.
 		SigSMActive: `avg by (pod) (DCGM_FI_PROF_SM_ACTIVE{namespace="{namespace}"})`,
 		SigSMUtilFb: `avg by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace="{namespace}"}) / 100`,
-		// LinkBandwidth = NVLink TX+RX byte-rate (interconnect saturation).
-		SigNVLinkBytes: `sum by (pod) (rate(DCGM_FI_PROF_NVLINK_TX_BYTES{namespace="{namespace}"}[1m]) + rate(DCGM_FI_PROF_NVLINK_RX_BYTES{namespace="{namespace}"}[1m]))`,
+		// LinkBandwidth = PCIe RX+TX byte-rate. Tesla T4 is PCIe-attached and its live
+		// exporter does not expose the NVLink counters assumed by the old template.
+		SigPCIeBytes: `sum by (pod) (rate(DCGM_FI_PROF_PCIE_RX_BYTES{namespace="{namespace}"}[1m]) + rate(DCGM_FI_PROF_PCIE_TX_BYTES{namespace="{namespace}"}[1m]))`,
 	}
 }
 
@@ -160,6 +161,25 @@ type promResponse struct {
 }
 
 func (p *PromHTTP) instantQuery(ctx context.Context, query string) (map[string]float64, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		out, err := p.instantQueryOnce(ctx, query)
+		if err == nil {
+			return out, nil
+		}
+		lastErr = err
+		if attempt < 2 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+func (p *PromHTTP) instantQueryOnce(ctx context.Context, query string) (map[string]float64, error) {
 	u := fmt.Sprintf("%s/api/v1/query?query=%s", p.BaseURL, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -205,6 +225,25 @@ func (p *PromHTTP) instantQuery(ctx context.Context, query string) (map[string]f
 // instantQueryNsPod runs query and keys results by "namespace/pod" (DCGM series carry both
 // labels). Series missing either label are skipped.
 func (p *PromHTTP) instantQueryNsPod(ctx context.Context, query string) (map[string]float64, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		out, err := p.instantQueryNsPodOnce(ctx, query)
+		if err == nil {
+			return out, nil
+		}
+		lastErr = err
+		if attempt < 2 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+func (p *PromHTTP) instantQueryNsPodOnce(ctx context.Context, query string) (map[string]float64, error) {
 	u := fmt.Sprintf("%s/api/v1/query?query=%s", p.BaseURL, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -252,7 +291,9 @@ func clusterWide(q string) string {
 	return q
 }
 
-const nvlinkCeilingBytesPerSec = 25e9 // ~25 GB/s order-of-magnitude per-link ceiling for [0,1] normalization
+// A Tesla T4 is PCIe Gen3 x16: 15.754 GB/s per direction. The query sums RX and TX,
+// hence the 31.508 GB/s aggregate ceiling used to normalize the measured byte-rate.
+const pcieT4AggregateCeilingBytesPerSec = 2 * 15.754e9
 
 func clampUnit(x float64) float64 {
 	if x < 0 {
@@ -267,29 +308,41 @@ func clampUnit(x float64) float64 {
 // PopulateGPUWitness fills snap.GPUWitness from a live dcgm-exporter feed via Prometheus
 // (read-only HTTP; zero extra K8s RBAC). For each pod DCGM reports a GPU for, it stamps
 // GPUPresent + VRAMFraction (FB_USED/(USED+FREE)) + SMOccupancy (PROF_SM_ACTIVE true occupancy,
-// falling back to the GPU_UTIL duty-cycle) + LinkBandwidth (NVLink rate, normalized). An empty
-// promURL or no DCGM data leaves GPUWitness empty => the GPU half stays honest-absent
-// ([SP-0-PENDING]); no GPU float is ever fabricated.
-func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) {
+// falling back to the source-labeled GPU_UTIL duty-cycle) + LinkBandwidth (PCIe RX+TX rate,
+// normalized to the measured T4 hardware class). An empty promURL or no DCGM data leaves
+// GPUWitness empty; no GPU float is ever fabricated.
+func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) error {
 	if snap == nil || promURL == "" {
-		return
+		return nil
 	}
 	p := NewPromHTTP(promURL, nil)
 	q := DCGMWitnessQueries()
-	used, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMUsedMiB]))
-	free, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMFreeMiB]))
-	smActive, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigSMActive]))
-	smUtil, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigSMUtilFb]))
-	nvlink, _ := p.instantQueryNsPod(ctx, clusterWide(q[SigNVLinkBytes]))
+	used, usedErr := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMUsedMiB]))
+	free, freeErr := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMFreeMiB]))
+	smActive, smActiveErr := p.instantQueryNsPod(ctx, clusterWide(q[SigSMActive]))
+	smUtil, smUtilErr := p.instantQueryNsPod(ctx, clusterWide(q[SigSMUtilFb]))
+	pcie, pcieErr := p.instantQueryNsPod(ctx, clusterWide(q[SigPCIeBytes]))
+	var queryErrs []error
+	for _, item := range []struct {
+		signal string
+		err    error
+	}{
+		{SigVRAMUsedMiB, usedErr}, {SigVRAMFreeMiB, freeErr}, {SigSMActive, smActiveErr},
+		{SigSMUtilFb, smUtilErr}, {SigPCIeBytes, pcieErr},
+	} {
+		if item.err != nil {
+			queryErrs = append(queryErrs, fmt.Errorf("%s: %w", item.signal, item.err))
+		}
+	}
 
 	keys := map[string]struct{}{}
-	for _, m := range []map[string]float64{used, free, smActive, smUtil} {
+	for _, m := range []map[string]float64{used, free, smActive, smUtil, pcie} {
 		for k := range m {
 			keys[k] = struct{}{}
 		}
 	}
 	if len(keys) == 0 {
-		return
+		return errors.Join(queryErrs...)
 	}
 	wit := make(map[string]model.PhysicsWitness, len(keys))
 	for k := range keys {
@@ -299,13 +352,17 @@ func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) {
 		}
 		if v, ok := smActive[k]; ok {
 			w.SMOccupancy = clampUnit(v) // PROF_SM_ACTIVE is a [0,1] occupancy fraction
-		} else {
-			w.SMOccupancy = clampUnit(smUtil[k]) // duty-cycle fallback (query already /100)
+			w.SMSource = "DCGM_FI_PROF_SM_ACTIVE"
+		} else if v, ok := smUtil[k]; ok {
+			w.SMOccupancy = clampUnit(v) // duty-cycle fallback (query already /100)
+			w.SMSource = "DCGM_FI_DEV_GPU_UTIL"
 		}
-		if b, ok := nvlink[k]; ok && b > 0 {
-			w.LinkBandwidth = clampUnit(b / nvlinkCeilingBytesPerSec)
+		if b, ok := pcie[k]; ok {
+			w.LinkBandwidth = clampUnit(b / pcieT4AggregateCeilingBytesPerSec)
+			w.LinkSource = "DCGM_FI_PROF_PCIE_RX_BYTES+DCGM_FI_PROF_PCIE_TX_BYTES"
 		}
 		wit[k] = w
 	}
 	snap.GPUWitness = wit
+	return errors.Join(queryErrs...)
 }

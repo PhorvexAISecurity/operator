@@ -34,6 +34,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/controller"
+	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -85,6 +86,7 @@ func main() {
 		nativeDemoNS     string
 		auditMaxBytes    int64
 		auditMaxBackups  int
+		gpuEnvelopeMax   float64
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -102,6 +104,7 @@ func main() {
 	flag.BoolVar(&enableLeader, "leader-elect", false, "Enable leader election (single active controller).")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
+	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
@@ -120,6 +123,10 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
+		setupLog.Error(err, "invalid GPU warm-up calibration")
+		os.Exit(2)
+	}
 
 	// Seed the exploitability (EPSS/CVSS) cache from the scanner export, if wired. This makes the
 	// EPSS physics leg data-driven for BOTH the --scan path and the live operator loop; a missing/empty
@@ -308,9 +315,9 @@ func runScan(namespace, promURL, kubeContext string) error {
 	if err != nil {
 		return err
 	}
-	// Live GPU half: when a Prometheus/dcgm-exporter feed is configured, stamp the per-pod GPU
-	// witness (VRAM/SM/NVLink) so the eks-gpu adapter fills it instead of [SP-0-PENDING].
-	ingest.PopulateGPUWitness(ctx, snap, promURL)
+	// Live GPU half: when a Prometheus/dcgm-exporter feed is configured, stamp the per-pod
+	// VRAM/SM/PCIe witness so the GPU adapter can consume measured values.
+	gpuIngestErr := ingest.PopulateGPUWitness(ctx, snap, promURL)
 	platformName, phys := platform.Derive(snap)
 	fmt.Printf("=== P-PHYSICS live scan ===\nplatform-adapter: %s\nnodes: %d   pods: %d   PDBs: %d\n",
 		platformName, len(snap.Nodes), len(snap.Pods), len(snap.PDBs))
@@ -330,7 +337,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 		ai := "AI:[SP-0-PENDING] (no GPU/DCGM scan)"
 		if w.GPUPresent {
 			gpuPresent = true
-			ai = fmt.Sprintf("AI: VRAMfrac=%.2f SM=%.2f link=%.2f modelRarity=%.2f", w.VRAMFraction, w.SMOccupancy, w.LinkBandwidth, w.ModelRarity)
+			ai = fmt.Sprintf("AI: VRAMfrac=%.2f SM=%.2f link=%.2f modelRarity=%.2f SMsource=%s linkSource=%s", w.VRAMFraction, w.SMOccupancy, w.LinkBandwidth, w.ModelRarity, w.SMSource, w.LinkSource)
 		}
 		fmt.Printf("  %-34s K8s: imgRarity=%.2f coRes=%.2f slack=%.2f pdbMinAvail=%d migValid=%v epss=%.2f stateful=%v | %s\n",
 			p.Namespace+"/"+p.Name, w.ImageRarity, w.CoResidency, w.SchedulerSlack, w.PDBMinAvailable, w.MIGGeometryValid, w.EPSS, p.Stateful, ai)
@@ -341,6 +348,9 @@ func runScan(namespace, promURL, kubeContext string) error {
 		gpuNote = "live GPU/AI physics from DCGM"
 	}
 	fmt.Printf("(%d pods shown; GPU/AI values measured: %v — %s)\n", shown, gpuPresent, gpuNote)
+	if gpuIngestErr != nil {
+		fmt.Printf("GPU/DCGM ingest warning (partial data kept, unavailable signals remain honest-absent): %v\n", gpuIngestErr)
+	}
 
 	// P-GRAPH: emit the live reachability graph (nodes + directed edges) the console renders in
 	// the Discovered blast-radius map. The edges are the three real lateral paths (NetworkPolicy
@@ -367,6 +377,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 
 	if namespace != "" {
 		rmgr := runner.NewManager(c, ctrl.Log)
+		rmgr.PromURL = promURL // the fresh context/ablation snapshots must receive the same DCGM witness
 
 		// P4a: wire live telemetry (no longer telemetry-blind). The operator-supplied
 		// --prometheus-url feeds cost/continuity/feasibility/context (the platform K8s-half

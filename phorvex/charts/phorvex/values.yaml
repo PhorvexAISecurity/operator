@@ -8,6 +8,9 @@ phorvex:
   # Prometheus base URL for telemetry ingest. Empty => K8s-only signals (no
   # fabricated metrics).
   prometheusUrl: ""
+  # Normalized GPU reload/warm-up envelope. 0.2925 is the observed worst case on
+  # the production EKS Tesla T4 fleet: 117s time-to-Ready / 400s documented scale.
+  gpuEnvelopeMax: 0.2925
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false

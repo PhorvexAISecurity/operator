@@ -65,9 +65,9 @@ func (c *P1Cost) ECost(view *model.WorkloadView, move model.Move, pol model.Poli
 }
 
 // CHi is the conformal robust UPPER bound used by the hard SLO/feasibility gate. For a
-// rotate it adds the conformal slack (which, cold-start, is the [SP-0-PENDING] GPU
-// envelope) on top of E[C]; for a GPU pod the envelope dominates until SP-0 measures
-// the real warm-load. NEVER a fabricated number — a declared fail-safe ceiling.
+// rotate it adds the conformal slack on top of E[C]; for an unprimed GPU pod the
+// configured hardware-measured reload/warm-up envelope dominates. Deployments without
+// a calibration retain the conservative default rather than fabricating a measurement.
 func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy) float64 {
 	e := c.ECost(view, move, pol)
 	if move.Action != model.ActionRotate {
@@ -82,8 +82,8 @@ func (c *P1Cost) CHi(view *model.WorkloadView, move model.Move, pol model.Policy
 		slack = 0
 	}
 	if view.Pod.HasGPU && !c.RLS.Primed() {
-		// Unmeasured GPU warm-load: the worst-case envelope applies.
-		slack = maxf(slack, pol.FlowDisruption*GPUEnvelopeMax)
+		// Hardware-calibrated GPU warm-load envelope (or conservative unconfigured default).
+		slack = maxf(slack, pol.FlowDisruption*GPUEnvelopeMax())
 	}
 	return e + slack
 }
