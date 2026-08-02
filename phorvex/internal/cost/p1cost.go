@@ -22,6 +22,18 @@ type P1Cost struct {
 	Dual      *DualSolver
 }
 
+// P1Components is the exact decomposition used by the current objective-cost
+// model. It is exported for empirical cost validation so a benchmark can record
+// the model inputs without reimplementing (and potentially drifting from) ECost.
+// State/GPU/availability are intentionally not claimed here: in the current C0
+// model GPU and load are embedded in CFlow, while state and availability remain
+// hard feasibility constraints rather than additive objective-cost terms.
+type P1Components struct {
+	Norm  float64 `json:"c_norm"`
+	Flow  float64 `json:"c_flow"`
+	Total float64 `json:"total"`
+}
+
 // NewP1Cost constructs the P1 cost model seeded at the P0-equivalent prior.
 func NewP1Cost() *P1Cost {
 	return &P1Cost{RLS: NewRLS(), Conformal: NewConformalBound(), Dual: NewDualSolver()}
@@ -45,10 +57,10 @@ func normCostP1(move model.Move) float64 {
 	}
 }
 
-// ECost is the expected (objective) cost of a move: the calibrated point estimate.
-func (c *P1Cost) ECost(view *model.WorkloadView, move model.Move, pol model.Policy) float64 {
+// Components returns the exact current-model terms and weighted total for a move.
+func (c *P1Cost) Components(view *model.WorkloadView, move model.Move, pol model.Policy) P1Components {
 	if move.Action == model.ActionNoop {
-		return 0
+		return P1Components{}
 	}
 	cNorm := normCostP1(move)
 	cFlow := 0.0
@@ -61,7 +73,16 @@ func (c *P1Cost) ECost(view *model.WorkloadView, move model.Move, pol model.Poli
 	} else {
 		cFlow = c.RLS.Predict(Features(view))
 	}
-	return pol.NormSparsity*cNorm + pol.FlowDisruption*cFlow
+	return P1Components{
+		Norm:  cNorm,
+		Flow:  cFlow,
+		Total: pol.NormSparsity*cNorm + pol.FlowDisruption*cFlow,
+	}
+}
+
+// ECost is the expected (objective) cost of a move: the calibrated point estimate.
+func (c *P1Cost) ECost(view *model.WorkloadView, move model.Move, pol model.Policy) float64 {
+	return c.Components(view, move, pol).Total
 }
 
 // CHi is the conformal robust UPPER bound used by the hard SLO/feasibility gate. For a
