@@ -566,21 +566,23 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         support["train_positive"] >= 3 and support["test_positive"] >= 1
         for support in component_support.values()
     )
-    c0_numeric_pass = (
-        decisions["c0"]["cumulative_objective"] > decisions["c1"]["cumulative_objective"]
-        and prediction["c0"]["spearman"] > 0
-        and decisions["c0"]["slo_violations"] <= decisions["c3"]["slo_violations"]
-        and (not high_availability or high_availability_error >= 0)
-        and checker["failures"] == 0
-    )
-    c2_pass = (
-        regret_reduction >= 0.10
-        and decisions["c2"]["cumulative_objective"] >= decisions["c0"]["cumulative_objective"]
-        and decisions["c2"]["slo_violations"] <= decisions["c0"]["slo_violations"]
-        and decisions["c2"]["availability_loss"] <= decisions["c0"]["availability_loss"] + 1e-12
-        and stable
-        and promotion_data_sufficient
-    )
+    c0_checks = {
+        "beats_flat_cumulative_objective": decisions["c0"]["cumulative_objective"] > decisions["c1"]["cumulative_objective"],
+        "positive_rank_correlation": prediction["c0"]["spearman"] > 0,
+        "no_systematic_high_availability_underpricing": not high_availability or high_availability_error >= 0,
+        "slo_violations_no_worse_than_oracle": decisions["c0"]["slo_violations"] <= decisions["c3"]["slo_violations"],
+        "independent_checker_clean": checker["failures"] == 0,
+    }
+    c2_checks = {
+        "regret_reduction_at_least_10pct": regret_reduction >= 0.10,
+        "cumulative_objective_preserved": decisions["c2"]["cumulative_objective"] >= decisions["c0"]["cumulative_objective"],
+        "slo_violations_not_increased": decisions["c2"]["slo_violations"] <= decisions["c0"]["slo_violations"],
+        "availability_loss_not_increased": decisions["c2"]["availability_loss"] <= decisions["c0"]["availability_loss"] + 1e-12,
+        "weights_stable": stable,
+    }
+    c0_numeric_pass = all(c0_checks.values())
+    c2_numeric_pass = all(c2_checks.values())
+    c2_pass = c2_numeric_pass and promotion_data_sufficient
     recommendation = "promote the calibrated formula" if c2_pass else "keep the current formula" if c0_numeric_pass else "collect more measurements"
 
     provenance = {
@@ -608,7 +610,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "requested_cost_model": args.cost_model,
         "recommendation": recommendation,
         "c0_numeric_acceptance": c0_numeric_pass,
+        "c0_acceptance_checks": c0_checks,
         "c2_acceptance": c2_pass,
+        "c2_numeric_criteria": c2_numeric_pass,
+        "c2_acceptance_checks": c2_checks,
         "c2_regret_reduction": regret_reduction,
         "c0_high_availability_mean_error": high_availability_error,
         "independent_checker": checker,
@@ -713,12 +718,22 @@ def write_summary(path: Path, summary: Mapping[str, Any]) -> None:
         "## Acceptance decision",
         "",
         f"- C0 numeric acceptance checks passed: **{str(summary['c0_numeric_acceptance']).lower()}**.",
-        f"- C2 promotion checks passed: **{str(summary['c2_acceptance']).lower()}**.",
+        f"- C2 numeric improvement criteria passed: **{str(summary['c2_numeric_criteria']).lower()}**.",
+        f"- C2 final promotion checks passed: **{str(summary['c2_acceptance']).lower()}**.",
         f"- Promotion data sufficiency (all five coefficients identified in train and held-out data): **{str(summary['promotion_data_sufficient']).lower()}**.",
         f"- C0 mean signed error on high-availability-risk held-out rows: **{fmt(summary['c0_high_availability_mean_error'])}** (negative means systematic underpricing).",
         f"- Independent decision checker: **{summary['independent_checker']['checks']} checks, {summary['independent_checker']['failures']} failures**.",
         "- A lower prediction error alone was not treated as promotion evidence; decision regret and SLO/availability are controlling.",
         "- Unsupported/missing-prerequisite actions remain classified in the matrix rather than silently omitted.",
+        "",
+        "| acceptance check | passed |",
+        "|---|---|",
+    ]
+    for check, passed in summary["c0_acceptance_checks"].items():
+        lines.append(f"| C0: {check.replace('_', ' ')} | {str(passed).lower()} |")
+    for check, passed in summary["c2_acceptance_checks"].items():
+        lines.append(f"| C2: {check.replace('_', ' ')} | {str(passed).lower()} |")
+    lines += [
         "",
         "Component support used by the promotion gate:",
         "",
