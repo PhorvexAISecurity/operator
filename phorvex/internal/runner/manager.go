@@ -357,8 +357,13 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			if _, existed := p.knownUIDs[candidate.UID]; existed {
 				continue
 			}
-			// A Ready transition predating the actuation cannot be its recovery.
-			if !candidate.ReadyAt.IsZero() && candidate.ReadyAt.Before(p.startedAt) {
+			// Kubernetes serializes Pod condition transition timestamps at whole-second
+			// precision, while startedAt carries Go nanoseconds. Compare at the API's
+			// precision so a genuine sub-second replacement in the SAME timestamp second
+			// is not misclassified as predating the actuation. knownUIDs above still
+			// excludes every pod present in the pre-action snapshot.
+			if !candidate.ReadyAt.IsZero() &&
+				candidate.ReadyAt.Truncate(time.Second).Before(p.startedAt.Truncate(time.Second)) {
 				continue
 			}
 			if replacement == nil || candidate.ReadyAt.Before(replacement.ReadyAt) ||

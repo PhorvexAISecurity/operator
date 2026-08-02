@@ -80,6 +80,39 @@ func TestLiveActuationLearnsOnlyFromNewReadyReplacement(t *testing.T) {
 	}
 }
 
+func TestSameSecondReadyTimestampIsAcceptedAtKubernetesPrecision(t *testing.T) {
+	opt := &observingOptimizer{}
+	m := &Manager{Optimizer: opt, Log: logr.Discard()}
+	startedAt := time.Date(2026, 8, 2, 12, 28, 17, 600_000_000, time.UTC)
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+	}}
+	m.trackRotation("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+
+	// A candidate from an earlier whole timestamp second still predates the action.
+	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(100 * time.Millisecond), Pods: []model.Pod{{
+		Namespace: "ns", UID: "stale-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
+		ReadyAt: startedAt.Truncate(time.Second).Add(-time.Second),
+	}}})
+	if len(opt.observations) != 0 || len(m.pendingRotations) != 1 {
+		t.Fatalf("earlier-second candidate was accepted: observations=%d pending=%d", len(opt.observations), len(m.pendingRotations))
+	}
+
+	// The Kubernetes API rounds this genuine sub-second recovery down to the same
+	// whole second as the action. It must be accepted, with the negative rounding
+	// artifact clamped to the model's zero-cost boundary.
+	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(500 * time.Millisecond), Pods: []model.Pod{{
+		Namespace: "ns", UID: "replacement-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
+		ReadyAt: startedAt.Truncate(time.Second),
+	}}})
+	if len(opt.observations) != 1 || opt.observations[0].flow != 0 {
+		t.Fatalf("same-second observation = %+v, want one flow=0 record", opt.observations)
+	}
+	if len(m.pendingRotations) != 0 {
+		t.Fatal("same-second replacement observation was not retired")
+	}
+}
+
 func TestUnresolvedRotationUsesCensoredMaximum(t *testing.T) {
 	opt := &observingOptimizer{}
 	m := &Manager{Optimizer: opt, Log: logr.Discard()}
