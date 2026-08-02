@@ -594,6 +594,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "evaluator_revision": args.evaluator_revision,
         "evaluator_sha256": sha256(Path(__file__).resolve()),
         "environment": json.loads(args.environment.read_text()) if args.environment else {},
+        "post_run_health": json.loads(args.post_run_health.read_text()) if args.post_run_health else {},
+        "post_run_health_sha256": sha256(args.post_run_health) if args.post_run_health else None,
         "observation_rows": len(rows),
         "usable_rows": len(valid),
         "train_rows": len(train_rows),
@@ -752,8 +754,10 @@ def write_summary(path: Path, summary: Mapping[str, Any]) -> None:
         "- `action-cost-coverage.csv` — complete action vocabulary",
         "- `cost-validation-provenance.json` — environment/input/hash/split provenance",
         "- `cost-validation-summary.json` — machine-readable metrics",
-        "",
     ]
+    if summary["provenance"].get("post_run_health"):
+        lines.append("- `aws-post-run-health.json` — final production readiness and benchmark cleanup proof")
+    lines.append("")
     path.write_text("\n".join(lines))
 
 
@@ -762,6 +766,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True, help="probe observation JSONL")
     parser.add_argument("--action-catalog", type=Path, required=True)
     parser.add_argument("--environment", type=Path)
+    parser.add_argument("--post-run-health", type=Path)
     parser.add_argument("--evaluator-revision", default="unknown")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-cost", type=float, default=1.0)
