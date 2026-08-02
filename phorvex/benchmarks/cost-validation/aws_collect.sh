@@ -15,6 +15,7 @@ REVISION=${REVISION:-unknown}
 CLUSTER=$(kubectl config current-context)
 PROBE_SHA256=$(sha256sum "$PROBE" | awk '{print $1}')
 PORT=${PORT:-18085}
+PROXY_BASE="http://127.0.0.1:${PORT}/api/v1/namespaces/${NS}/services/http:costbench:8080/proxy"
 PF_PID=""
 LOAD_PID=""
 
@@ -245,18 +246,21 @@ YAML
 start_port_forward_and_load() {
   local load_profile=$1
   cleanup_processes
-  kubectl -n "$NS" port-forward service/costbench "${PORT}:8080" >/tmp/phorvex-cost-pf.log 2>&1 &
+  # The API Service proxy resolves a healthy backend on every request. A normal
+  # `kubectl port-forward service/...` pins one pod and dies when rotate deletes it,
+  # which would censor the post-action p99/TPS measurement.
+  kubectl proxy --port="${PORT}" >/tmp/phorvex-cost-proxy.log 2>&1 &
   PF_PID=$!
   for _ in $(seq 1 30); do
-    if curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null 2>&1; then break; fi
+    if curl -fsS "${PROXY_BASE}/healthz" >/dev/null 2>&1; then break; fi
     sleep 0.2
   done
   (
     while true; do
       case "$load_profile" in
-        high|slo-hot) curl -fsS "http://127.0.0.1:${PORT}/work" >/dev/null 2>&1 & ;;
-        connections) curl -fsS "http://127.0.0.1:${PORT}/hold?seconds=8" >/dev/null 2>&1 & ;;
-        *) curl -fsS "http://127.0.0.1:${PORT}/work" >/dev/null 2>&1; sleep 0.3 ;;
+        high|slo-hot) curl -fsS "${PROXY_BASE}/work" >/dev/null 2>&1 & ;;
+        connections) curl -fsS "${PROXY_BASE}/hold?seconds=8" >/dev/null 2>&1 & ;;
+        *) curl -fsS "${PROXY_BASE}/work" >/dev/null 2>&1; sleep 0.3 ;;
       esac
       sleep 0.05
     done
@@ -273,7 +277,7 @@ run_probe() {
     --namespace "$NS" --pod "$pod" --selector app=costbench --action "$action" \
     --scenario-id "$scenario" --seed "$seed" --tick-id "${scenario}-${seed}" \
     --workload-id costbench --workload-type "$workload_type" --load-profile "$load_profile" \
-    --cluster "$CLUSTER" --revision "$REVISION" --metrics-url "http://127.0.0.1:${PORT}/snapshot" \
+    --cluster "$CLUSTER" --revision "$REVISION" --metrics-url "${PROXY_BASE}/snapshot" \
     --output "$OBS" --implementation-status "$implementation" --feasibility "$feasibility" \
     --stateful="$stateful" --rag="$rag" --gpu=false --desired-replicas "$replicas" \
     --lambda 0.7 --security-value "$security" --slo-p99-ms 200 --timeout 180s --post-window 3s
