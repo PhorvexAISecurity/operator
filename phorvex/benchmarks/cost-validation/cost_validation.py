@@ -432,7 +432,7 @@ def write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fields: Sequence[st
     if fields is None:
         fields = sorted({key for row in rows for key in row})
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(fields), extrasaction="ignore")
+        writer = csv.DictWriter(handle, fieldnames=list(fields), extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for row in rows:
             cooked = {key: json.dumps(value, separators=(",", ":"), sort_keys=True) if isinstance(value, (dict, list)) else value for key, value in row.items()}
