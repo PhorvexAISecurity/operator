@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Lens, api, ClusterTarget } from "@/lib/api";
 import { STEPS, StepId, JourneySignals, stepState } from "@/lib/journey";
 import { useSelectedTarget, setSelectedTarget } from "@/lib/provider-store";
-import { Activity, ShieldCheck, Lock, Check, PlayCircle, Home, ChevronRight, Server, ChevronDown } from "lucide-react";
+import { Activity, ShieldCheck, Lock, Check, PlayCircle, Home, ChevronRight, Server, ChevronDown, Sun, Moon } from "lucide-react";
 
 const LENS_META: Record<Lens, { label: string; hint: string }> = {
   investor: { label: "Investor", hint: "the moat + the proofs" },
@@ -14,6 +14,29 @@ const LENS_META: Record<Lens, { label: string; hint: string }> = {
 
 // ProviderSelector — the GLOBAL provider/cluster switch. Picking vCluster scopes every scoped view
 // (workloads, Live Ops, run-history, scan) to that provider via the shared provider-store.
+// ThemeToggle flips the root class the palette hangs off, and remembers the choice. It READS the
+// current class on mount rather than assuming a default, so it always agrees with the pre-paint
+// boot script in layout.tsx instead of fighting it on first render.
+function ThemeToggle() {
+  const [light, setLight] = React.useState(false);
+  React.useEffect(() => { setLight(document.documentElement.classList.contains("light")); }, []);
+  const flip = () => {
+    const next = !light;
+    const c = document.documentElement.classList;
+    c.add(next ? "light" : "dark");
+    c.remove(next ? "dark" : "light");
+    try { localStorage.setItem("phorvex-theme", next ? "light" : "dark"); } catch {}
+    setLight(next);
+  };
+  return (
+    <button onClick={flip} aria-label={light ? "Switch to dark theme" : "Switch to light theme"}
+      title={light ? "Switch to dark theme" : "Switch to light theme"}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-elevated/40 text-muted-foreground transition-colors hover:text-foreground">
+      {light ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
 function ProviderSelector({ lens }: { lens: Lens }) {
   const [targets, setTargets] = React.useState<ClusterTarget[]>([]);
   const [open, setOpen] = React.useState(false);
@@ -91,6 +114,7 @@ export function Shell({
             <PlayCircle className="h-3.5 w-3.5 text-primary" /> Guided demo
           </button>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <span className="hidden items-center gap-1 text-[10px] text-muted-foreground/70 xl:flex" title="The owner IP-wall redaction is enforced server-side. Lens SELECTION is demo-trust until real authn (P-VCLUSTER).">
               <Lock className="h-3 w-3" /> demo-trust lens · redaction enforced
             </span>
