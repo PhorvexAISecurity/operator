@@ -442,7 +442,19 @@ func attributionOf(c actionset.Candidate, weights map[string]float64, lambda flo
 		terms = append(terms, model.AttributionTerm{Source: "cover:" + kind, Contribution: round4(w)})
 	}
 	terms = append(terms, model.AttributionTerm{Source: "cost:-lambda*C", Contribution: round4(-lambda * c.ECost)})
-	sort.Slice(terms, func(i, j int) bool { return terms[i].Contribution > terms[j].Contribution })
+	// DETERMINISM: byKind is a map, so terms enter in random order. Sorting on Contribution alone
+	// did NOT fix that — sort.Slice is unstable, and ties are the common case (every cover term is
+	// 0.0 on a low-risk pod), so the random map order survived. The audit record was therefore not
+	// byte-stable: replaying the SAME views produced a different attribution ordering every run, so
+	// two audit logs of identical decisions could not be hashed or diffed. Measured on live
+	// phorvex-dev-eks views (69 pods): 5 replays gave 5 distinct record hashes as-is, and one
+	// identical hash once Source breaks the tie. Keep Source as the tiebreak.
+	sort.Slice(terms, func(i, j int) bool {
+		if terms[i].Contribution != terms[j].Contribution {
+			return terms[i].Contribution > terms[j].Contribution
+		}
+		return terms[i].Source < terms[j].Source
+	})
 	return terms
 }
 
