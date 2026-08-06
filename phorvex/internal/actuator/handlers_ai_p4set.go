@@ -178,8 +178,20 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 		// starved. Converging here is what lets the workload return to normal hygiene.
 		note = "adapter " + adapter + " already absent from the serving stack — eviction goal already met"
 	case errors.Is(uerr, errStackUnreachable):
-		// no serving stack here: record the rotation epoch; the unload is [PENDING-GPU-VALIDATION].
-		note = "serving stack unreachable [PENDING-GPU-VALIDATION]: adapter unload NOT performed (no vLLM)"
+		// [FAIL-CLOSED FIX] No serving stack reachable, so the poisoned adapter was NOT evicted. This
+		// branch used to fall through and return Emitted:true after stamping an adapter-epoch — the
+		// same false-forensic-record class already fixed in kv-reset: an eviction that did not happen
+		// was counted as a real actuation and narrated as a defence. Unlike request-drain (whose
+		// stop-admit is a real, stack-independent K8s step), adapter-rotate has NO stack-independent
+		// half: the unload IS the whole move. Report NOT emitted and write no epoch. The poison marker
+		// is deliberately left in place (the adapter is still loaded), so recon keeps the
+		// adapter-integrity fact and the move is retried once a stack is reachable.
+		return HandlerResult{
+			Emitted: false, MutationKind: "none",
+			Note: "[PENDING-GPU-VALIDATION] adapter-rotate NOT performed: serving stack unreachable at " +
+				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — adapter " + adapter +
+				" was NOT evicted",
+		}, nil
 	default:
 		return HandlerResult{}, fmt.Errorf("adapter-rotate unload %q: %w", adapter, uerr)
 	}
@@ -374,7 +386,18 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 	case ierr == nil:
 		note = "local KV invalidated"
 	case errors.Is(ierr, errStackUnreachable):
-		note = "serving stack unreachable [PENDING-GPU-VALIDATION]: local KV invalidate NOT performed"
+		// [FAIL-CLOSED FIX] No serving stack reachable, so NOTHING was invalidated — not the local KV
+		// and (a fortiori) not the remote decode workers. This branch used to fall through and return
+		// Emitted:true after stamping a kv-epoch, the same false-forensic-record class already fixed
+		// in kv-reset: a poisoned KV that was never invalidated was counted as a real actuation. The
+		// invalidate IS the whole move (there is no stack-independent half), so report NOT emitted and
+		// write no epoch — a KV epoch for an invalidate that never ran is a false forensic record.
+		return HandlerResult{
+			Emitted: false, MutationKind: "none",
+			Note: "[PENDING-GPU-VALIDATION] kv-migrate-invalidate NOT performed: serving stack " +
+				"unreachable at " + req.Namespace + "/" + req.Pod + " (no reachable endpoint) — " +
+				"neither local nor cross-worker KV was invalidated",
+		}, nil
 	default:
 		return HandlerResult{}, fmt.Errorf("kv-migrate-invalidate local %s/%s: %w", req.Namespace, req.Pod, ierr)
 	}
