@@ -61,7 +61,13 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	pid := Fact{Asset: asset, Kind: FactPodIdentity, Weight: base * urg}
 	facts = append(facts, pid)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], pid.Key())
-	cover[model.ActionIdentityRotate] = append(cover[model.ActionIdentityRotate], pid.Key())
+	// NO COVER for identity-rotate. It writes a `phorvex.ai/identity-epoch` LABEL and nothing else:
+	// the SA-token branch is `_ = ec.Client` (a no-op on modern K8s, where projected tokens rotate on
+	// their own), and nothing in the repo or on the cluster selects on that label. So the pod's identity
+	// as an attacker holds it — UID, SA token, IP, EndpointSlice membership — is UNCHANGED. Granting it
+	// podIdentity told the optimiser it had neutralised identity recon when it had only relabelled the
+	// pod, i.e. it could be selected INSTEAD of a rotate that really would have. Only actions that truly
+	// invalidate the fact may claim it.
 	addRotate(FactInMemory, base*urg)
 	// Session/KV-cache fact matters most for GPU/LLM + stateful agents.
 	sessionW := base * urg * 0.6
@@ -90,7 +96,10 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	nid := Fact{Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
-	cover[model.ActionRouteRotate] = append(cover[model.ActionRouteRotate], nid.Key())
+	// NO COVER for route-rotate — same reason. It writes a `phorvex.ai/route-epoch` label and touches
+	// no Service selector and no EndpointSlice (contrast endpoint-rotate, handlers_ai.go, which DOES
+	// restitch a declared Service). The learned route is therefore not staled, so networkIdentity is not
+	// invalidated.
 	latUrg := 0.5 + 0.5*clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	for _, nb := range fctx.Neighbors {
 		// A learned edge to a high-value neighbor is worth cutting (blast containment).

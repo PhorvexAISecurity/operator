@@ -85,7 +85,7 @@ const (
 )
 
 type qtnSnapshot struct {
-	Labels     map[string]string      `json:"labels"`
+	Labels     map[string]string       `json:"labels"`
 	OwnerRefs  []metav1.OwnerReference `json:"ownerRefs"`
 	PolicyName string                  `json:"policyName"`
 }
@@ -258,8 +258,13 @@ func (disableHandler) Enact(_ context.Context, _ EnactCtx, _ Request) (HandlerRe
 
 // --- 6. identity-rotate (advanced K8s; native-only) — reversible -------------------------
 //
-// Rotate the pod's identity (labels epoch + SA-token) — a lighter touch than a full
-// respawn that stales the attacker's identity recon. Reversible (prior labels snapshotted).
+// Relabel the pod with a fresh identity epoch. Reversible (prior labels snapshotted).
+//
+// SCOPE — read before granting this action recon cover: it writes a `phorvex.ai/identity-epoch`
+// LABEL. The SA-token branch below is a deliberate no-op (projected tokens rotate on their own on
+// modern K8s), and nothing selects on the label, so the pod's UID, SA token, IP and EndpointSlice
+// membership are UNCHANGED. It does not invalidate the podIdentity recon fact — see
+// recon/profile.go, where the cover grant was removed for exactly this reason.
 
 type identityRotateHandler struct{}
 
@@ -298,8 +303,13 @@ func (identityRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Requ
 
 // --- 7. route-rotate (advanced K8s; native-only) — reversible ----------------------------
 //
-// Repoint the route to the pod (a route-epoch label + any fronting Service's selector
-// annotation) so the attacker's learned route goes stale WITHOUT denying all traffic.
+// Relabel the pod with a fresh route epoch, without denying traffic.
+//
+// SCOPE: this writes a `phorvex.ai/route-epoch` LABEL only. It does NOT restitch a Service selector
+// and does NOT touch EndpointSlices — the earlier comment claimed "any fronting Service's selector"
+// but no such code exists here; `endpoint-rotate` (handlers_ai.go) is the action that really does
+// re-key a declared Service. The learned route is therefore NOT staled, which is why the
+// networkIdentity cover grant was removed in recon/profile.go.
 
 type routeRotateHandler struct{}
 

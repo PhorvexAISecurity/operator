@@ -21,12 +21,27 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	fctx := FactContext{AssetValue: 1, PHold: 1, StageUrgency: 1, LateralUrgency: 1, HasGPU: true,
 		Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}
 
-	// (1) generic pod — identity-rotate + route-rotate are the gentle subsets of rotate/quarantine.
+	// (1) generic pod — rotate and quarantine really do invalidate recon, so they must have cover.
 	generic := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "web"}}
 	gc := prof.AssetFacts(generic, fctx).CoverByAction
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine, model.ActionIdentityRotate, model.ActionRouteRotate} {
+	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
 		if len(gc[a]) == 0 {
 			t.Errorf("generic pod: %q has EMPTY cover set — optimizer can never select it", a)
+		}
+	}
+
+	// (1b) identity-rotate and route-rotate must have NO cover (PHVX-9e). Both write a single
+	// phorvex.ai/*-epoch LABEL and nothing else: identity-rotate's SA-token branch is a no-op on
+	// modern K8s, route-rotate touches no Service selector or EndpointSlice, and nothing in the repo
+	// or on the live cluster selects on either label. So neither invalidates the fact it used to
+	// claim. Granting cover for work an action does not do is worse than granting none: the
+	// optimiser would pick the cheap relabel INSTEAD of the rotate that would really have staled the
+	// attacker's recon. If either action later gains a real mechanism (a Service restitch, a genuine
+	// token rotation), restore its grant IN THE SAME CHANGE.
+	for _, a := range []model.Action{model.ActionIdentityRotate, model.ActionRouteRotate} {
+		if len(gc[a]) != 0 {
+			t.Errorf("%q claims cover %v, but it only writes an epoch label — the optimizer would be "+
+				"credited for recon invalidation that never happens", a, gc[a])
 		}
 	}
 
