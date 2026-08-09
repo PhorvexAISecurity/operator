@@ -65,6 +65,20 @@ func (s Stage) String() string {
 }
 
 // consequence is the normalized cost-if-this-stage-completes (0..1, increasing).
+// minConsequence is the floor every stage's consequence shares — consequence() never returns less,
+// including its default arm. It is exported through BaselineStageUrgency below because callers need
+// to know what "no evidence at all" actually scores.
+const minConsequence = 0.1
+
+// BaselineStageUrgency is the StageUrgency of an asset carrying NO kill-chain evidence: earliest
+// stage, zero hazard. Since StageUrgency = 0.5*consequence(stage) + 0.5*hazard*consequence(next)
+// and consequence() floors at minConsequence, StageUrgency can never be 0 — its minimum is this.
+//
+// This matters because a caller testing `StageUrgency > 0` to mean "has evidence" is testing a
+// condition that is ALWAYS true, i.e. testing nothing. Compare against this baseline instead.
+// Derived from the model rather than hardcoded so it cannot drift if consequence() changes.
+const BaselineStageUrgency = 0.5 * minConsequence
+
 func consequence(s Stage) float64 {
 	switch s {
 	case StageRecon:
@@ -86,7 +100,7 @@ func consequence(s Stage) float64 {
 	case StagePromptInjectPersist:
 		return 0.65 // injected agent state, survives a wipe
 	}
-	return 0.1
+	return minConsequence
 }
 
 // Assessment is the per-asset kill-chain belief output.
@@ -236,7 +250,7 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, proactiveFloorSec float64) Assessment {
 	// --- stage belief from events (this pod) + neighbor pressure ---
 	stage := StageRecon
-	eventAlpha := 0.0   // held-evidence pseudo-counts for the Beta posterior
+	eventAlpha := 0.0 // held-evidence pseudo-counts for the Beta posterior
 	lateralPressure := 0.0
 	for _, e := range view.Events {
 		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / 4.0

@@ -97,6 +97,21 @@ func (e *CoverageEngine) now() time.Time {
 	return time.Now()
 }
 
+// provFloor is the weight a FRESH, evidence-less candidate is discounted to, so a manufactured
+// decoy cannot displace a genuinely-due asset from the move budget.
+//
+// It was inert until PHVX-72. The gate that decides whether to apply it read
+// `StageUrgency > 0` — but StageUrgency = 0.5*consequence(stage) + 0.5*hazard*consequence(next)
+// and consequence() floors at 0.1 for EVERY stage including its default arm, so the least urgent
+// asset in the system still scores 0.05. `> 0` was therefore always true, every asset took the
+// `return 1` path, and this discount had never once been applied in production. The gate now
+// compares against killchain.BaselineStageUrgency (the no-evidence score, derived from the model
+// rather than hardcoded) so "carries real evidence" means what it says.
+//
+// Defined ONCE here and used by provFn in optimality.go too — the two used to be separate local
+// consts under a "KEEP IN SYNC" comment, which is how they drifted into agreeing on a broken gate.
+const provFloor = 0.34
+
 type assetCtx struct {
 	sig      model.ContextSignals
 	assess   killchain.Assessment
@@ -195,13 +210,12 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 	// slot. The reported coverage/marginal is the UN-discounted value (reporting unchanged). NO
 	// learning enters Decide — prov is a deterministic function of the real exposure/assessment.
 	floorSec := pol.ProactiveFloor.Seconds()
-	const provFloor = 0.34
 	prov := func(key string) float64 {
 		if floorSec <= 0 {
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.StageUrgency > 0 {
+		if ac.exposure >= floorSec || ac.assess.StageUrgency > killchain.BaselineStageUrgency {
 			return 1 // genuinely due, or backed by real recon/event evidence => full weight (legit path unchanged)
 		}
 		r := ac.exposure / floorSec
@@ -372,41 +386,41 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		net := cov - lambda*ecost
 
 		decisions = append(decisions, model.Decision{
-			Tenant:           pol.Tenant,
-			Namespace:        v.Pod.Namespace,
-			Pod:              v.Pod.Name,
-			Node:             v.Pod.Node,
-			Risk:             cov, // recon value at stake
-			Cost:             ecost,
-			Net:              net,
-			AssetValue:       ac.sig.AssetValue,
-			ThreatPosture:    ac.sig.ThreatPosture,
-			Exposure:         ac.sig.Exposure,
-			Belief:           ac.assess.PHold,
-			BlastRadius:      v.BlastRadius,
-			SLOHeadroom:      ac.sig.SLOHeadroom,
-			Phase:            v.Phase,
-			Action:           action,
-			Selected:         selected,
-			Feasible:         feasible,
-			InfeasibleWhy:    infeasibleWhy,
-			Reason:             coverageReason(action, ac.assess, cov, ecost, perDollar, lambda),
-			R6Counterfactual:   model.ActionRotate,
-			CounterfactualNote: counterfactualNote(action, v, perDollar, lambda),
-			BlindCost:          blindCost,
-			DryRun:             pol.DryRun,
-			DecidedAt:        now,
-			Engine:           "p1-coverage",
-			CoveredWeight:    marginal,
-			CoveredFacts:     coveredFacts,
-			PerDollar:        perDollar,
-			Stage:            ac.assess.StageName,
-			StageHazard:      ac.assess.Hazard,
-			NextStage:        ac.assess.NextStageName,
-			PHold:            ac.assess.PHold,
-			Lambda:           lambda,
-			ProactiveRate:    rate,
-			Attribution:      attribution,
+			Tenant:                pol.Tenant,
+			Namespace:             v.Pod.Namespace,
+			Pod:                   v.Pod.Name,
+			Node:                  v.Pod.Node,
+			Risk:                  cov, // recon value at stake
+			Cost:                  ecost,
+			Net:                   net,
+			AssetValue:            ac.sig.AssetValue,
+			ThreatPosture:         ac.sig.ThreatPosture,
+			Exposure:              ac.sig.Exposure,
+			Belief:                ac.assess.PHold,
+			BlastRadius:           v.BlastRadius,
+			SLOHeadroom:           ac.sig.SLOHeadroom,
+			Phase:                 v.Phase,
+			Action:                action,
+			Selected:              selected,
+			Feasible:              feasible,
+			InfeasibleWhy:         infeasibleWhy,
+			Reason:                coverageReason(action, ac.assess, cov, ecost, perDollar, lambda),
+			R6Counterfactual:      model.ActionRotate,
+			CounterfactualNote:    counterfactualNote(action, v, perDollar, lambda),
+			BlindCost:             blindCost,
+			DryRun:                pol.DryRun,
+			DecidedAt:             now,
+			Engine:                "p1-coverage",
+			CoveredWeight:         marginal,
+			CoveredFacts:          coveredFacts,
+			PerDollar:             perDollar,
+			Stage:                 ac.assess.StageName,
+			StageHazard:           ac.assess.Hazard,
+			NextStage:             ac.assess.NextStageName,
+			PHold:                 ac.assess.PHold,
+			Lambda:                lambda,
+			ProactiveRate:         rate,
+			Attribution:           attribution,
 			PreemptMargin:         ac.assess.PreemptMargin,
 			ProjectedNextStageSec: ac.assess.ProjectedNextStageSec,
 			AIClassified:          ac.assess.AIClassified,
