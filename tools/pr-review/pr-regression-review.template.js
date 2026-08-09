@@ -19,8 +19,8 @@ const WD = args?.workdir ?? '.'
 // the chat app's dirty working tree instead of this PR.)
 const DIFF = args?.diff ?? ''
 const FILES = args?.files ?? []
-const CHANGES = args?.changes ?? []
-const OVERLAP = args?.overlap ?? {}
+const CHANGES = (typeof TARGET !== "undefined" ? TARGET.changes : args?.changes) ?? []
+const OVERLAP = (typeof TARGET !== "undefined" ? TARGET.overlap : args?.overlap) ?? {}
 
 // FAIL FAST — never spawn reviewers against an empty/absent target. A reviewer that finds nothing
 // because it was handed nothing is indistinguishable from a clean PR, which is the single most
