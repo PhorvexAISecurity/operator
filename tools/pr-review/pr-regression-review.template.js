@@ -19,6 +19,8 @@ const WD = args?.workdir ?? '.'
 // the chat app's dirty working tree instead of this PR.)
 const DIFF = args?.diff ?? ''
 const FILES = args?.files ?? []
+const CHANGES = args?.changes ?? []
+const OVERLAP = args?.overlap ?? {}
 
 // FAIL FAST — never spawn reviewers against an empty/absent target. A reviewer that finds nothing
 // because it was handed nothing is indistinguishable from a clean PR, which is the single most
@@ -93,6 +95,12 @@ Every path you read, grep or cite MUST be under ${WD}. Prefix every shell comman
 expect is missing, you are in the wrong directory: re-run with the absolute path under ${WD}.
 Sanity check before you start: \`cd ${WD} && git rev-parse --show-toplevel\` must print ${WD}.
 
+${CHANGES.length > 1 ? `THIS IS A BATCH REVIEW OF ${CHANGES.length} CHANGES that are candidates to land together:
+${CHANGES.map(c => `  PR #${c.pr}: ${c.title}`).join('\n')}
+${Object.keys(OVERLAP).length ? `Files touched by more than one of them (the obvious interaction surface):
+${Object.entries(OVERLAP).map(([f, prs]) => `  ${f}  <- PRs ${prs.join(', ')}`).join('\n')}` : 'No file is touched by more than one PR — interactions, if any, are BEHAVIOURAL rather than textual.'}
+Judge them BOTH individually AND as a set.` : ''}
+
 The full PR diff is included below — do NOT fetch it yourself.
 Files changed by this PR (relative to ${WD}):
 ${FILES.length ? FILES.map(f => '  ' + f).join('\n') : '  (see diff)'}
@@ -152,6 +160,28 @@ RULES:
 - The PR being incomplete-by-design (e.g. deliberately out of scope, documented as such) is NOT a fail.
 - Report nothing rather than pad the list.`
 
+const INTERACTION_LENS = {
+  key: 'cross-change-interaction',
+  prompt: `${BASE}
+
+LENS: CROSS-CHANGE INTERACTION — the reason these changes are reviewed together.
+
+A change can be individually correct and still be unsafe to land ALONE or in the wrong ORDER. Look
+for exactly that, across the ${CHANGES.length} changes:
+
+- Does one change make a code path REACHABLE that another change is required to make safe? (A branch
+  that was previously dead, or reached only via an error path, now executes in normal operation.)
+- Does one change rely on a guarantee that another change introduces? What breaks if only the first
+  lands?
+- Do two changes edit the same file/function in ways that merge cleanly but combine wrongly?
+- Do they both touch a shared contract (a sentinel error, an annotation, a metric, a record field)
+  in ways that only make sense together?
+- Follow the consumers: if change A alters WHEN a value is written, find who READS that value and
+  check whether change B is what keeps their interpretation correct.
+
+For every interaction, state explicitly: what happens if ONLY change X lands, and what the required
+merge order is. Severity "fail" if landing one alone is provably harmful.` }
+
 const LENSES = [
   { key: 'semantic-conflict', prompt: `${BASE}
 
@@ -182,6 +212,8 @@ LENS: DATA/AUDIT CONTRACT — does the PR change anything observable to consumer
 audit/decision record fields, JSON shapes, annotation/label names, or ordering that something else
 hashes or diffs? Flag anything that would silently alter a downstream artefact.` },
 ]
+
+if (CHANGES.length > 1) LENSES.unshift(INTERACTION_LENS)
 
 phase('Find')
 const perLens = await pipeline(
@@ -241,8 +273,14 @@ are no confirmed findings, say so plainly and note what was checked — do not i
   { label: 'summary', phase: 'Report' },
 )
 
+const interaction = confirmed.filter(f => f.lens === 'cross-change-interaction')
+
 return {
   pr: PR,
+  changes: CHANGES.map(c => `#${c.pr} ${c.title}`),
+  merge_order_risk: interaction.length
+    ? interaction.map(f => ({ severity: f.severity, what: f.description, evidence: f.evidence }))
+    : (CHANGES.length > 1 ? 'none found — each change appears safe to land independently' : 'n/a (single change)'),
   status: fails.length ? 'fail' : (warns.length ? 'warn' : 'pass'),
   counts: { raised: all.length, confirmed: confirmed.length, refuted: dropped.length, fail: fails.length, warn: warns.length, info: infos.length },
   findings: confirmed.map(f => ({

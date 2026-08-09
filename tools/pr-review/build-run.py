@@ -8,8 +8,13 @@ session's cwd, so a bare `gh pr diff` / `git diff` silently reviews whatever rep
 be.  Both failure modes cost a full run before being caught.  So the caller resolves the target and
 bakes it into the script.
 
-    ./build-run.py 8 --repo PhorvexSecurity/operator --workdir /path/to/checkout -o /tmp/run8.js
-    # then:  Workflow({scriptPath: "/tmp/run8.js"})
+    ./build-run.py 8 --repo R --workdir /path/to/checkout -o /tmp/run8.js       # one PR
+    ./build-run.py 7 8 9 --repo R --workdir /path/to/checkout -o /tmp/batch.js   # review together
+    # then:  Workflow({scriptPath: "/tmp/batch.js"})
+
+Reviewing several PRs in one pass is the point: a change can be individually correct and still be
+unsafe to merge alone. PR #8 was exactly that — it needed #7 to land first, which no single-PR
+review could have known.
 """
 import argparse, json, pathlib, subprocess, sys
 
@@ -26,7 +31,7 @@ def sh(*cmd: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("pr")
+    ap.add_argument("pr", nargs="+", help="one or more PR numbers to review TOGETHER")
     ap.add_argument("--repo", required=True)
     ap.add_argument("--workdir", required=True, help="absolute path to the checkout under review")
     ap.add_argument("-o", "--out", default="/tmp/pr-review-run.js")
@@ -36,14 +41,31 @@ def main() -> None:
     if not (wd / ".git").exists():
         sys.exit(f"{wd} is not a git checkout")
 
-    diff = sh("gh", "pr", "diff", a.pr, "--repo", a.repo)
-    meta = json.loads(sh("gh", "pr", "view", a.pr, "--repo", a.repo, "--json", "title,files"))
-    files = [f["path"] for f in meta["files"]]
-    if not diff.strip() or not files:
-        sys.exit(f"PR #{a.pr} produced an empty diff — refusing to build a review that would read as 'clean'")
+    changes, files, blocks = [], [], []
+    for n in a.pr:
+        d = sh("gh", "pr", "diff", n, "--repo", a.repo)
+        m = json.loads(sh("gh", "pr", "view", n, "--repo", a.repo, "--json", "title,files"))
+        f = [x["path"] for x in m["files"]]
+        if not d.strip() or not f:
+            sys.exit(f"PR #{n} produced an empty diff — refusing to build a review that would read as 'clean'")
+        changes.append({"pr": n, "title": m["title"], "files": f})
+        files += f
+        blocks.append(f"===== PR #{n}: {m['title']} =====\n{d}")
+        print(f"  PR #{n}: {m['title'][:64]} ({len(f)} files, {len(d)} chars)")
+
+    files = sorted(set(files))
+    diff = "\n\n".join(blocks)
+    # Files touched by more than one PR are the obvious interaction surface; hand them to the
+    # reviewers explicitly rather than hoping a lens rediscovers the overlap.
+    seen, overlap = {}, []
+    for c in changes:
+        for f in c["files"]:
+            seen.setdefault(f, []).append(c["pr"])
+    overlap = {f: prs for f, prs in seen.items() if len(prs) > 1}
 
     target = json.dumps(
-        {"repo": a.repo, "pr": a.pr, "workdir": str(wd), "files": files, "diff": diff}, indent=2
+        {"repo": a.repo, "pr": ",".join(a.pr), "prs": a.pr, "changes": changes,
+         "overlap": overlap, "workdir": str(wd), "files": files, "diff": diff}, indent=2
     )
     tpl = TEMPLATE.read_text()
     old = """const REPO = args?.repo ?? 'PhorvexSecurity/operator'
@@ -62,7 +84,9 @@ const WD = args?.workdir ?? '.'"""
         "const DIFF = TARGET.diff\nconst FILES = TARGET.files",
     )
     pathlib.Path(a.out).write_text(out)
-    print(f"wrote {a.out}\n  PR #{a.pr}: {meta['title'][:70]}\n  {len(files)} files, {len(diff)} diff chars")
+    print(f"\nwrote {a.out}\n  {len(a.pr)} PR(s), {len(files)} distinct files, {len(diff)} diff chars")
+    if overlap:
+        print(f"  files touched by >1 PR: {', '.join(list(overlap)[:4])}")
     print(f'\nnow run:  Workflow({{scriptPath: "{a.out}"}})')
 
 

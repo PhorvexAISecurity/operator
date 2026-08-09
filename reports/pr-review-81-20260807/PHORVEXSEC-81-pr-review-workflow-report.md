@@ -18,6 +18,12 @@ python3 tools/pr-review/build-run.py 8 --repo PhorvexSecurity/operator --workdir
 Runs **locally, on demand** (the agreed scope). It does not comment on the PR or block merges by
 itself — a human reads the verdict.
 
+**It also takes several PRs at once** — `build-run.py 7 8 9 ...` — which is the intended cadence:
+review a batch (say every 3 PRs, or once per merge window) rather than every PR. That is cheaper,
+and it is the only way to see the defect class in §2.1: a change that is correct in isolation but
+unsafe to land alone or in the wrong order. In batch mode an extra `cross-change-interaction` lens
+runs, and the result carries an explicit `merge_order_risk` field.
+
 ```
 Scope   →  extract changed CONTRACTS from the diff
    ↓        (signatures, sentinel errors, struct fields, config keys, label constants)

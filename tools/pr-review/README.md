@@ -4,15 +4,20 @@ A Claude Code **workflow** that reviews a PR for regressions, semantic conflicts
 impact, and refuses to report "clean" unless it actually looked at something.
 
 ```bash
-# 1. build a runnable script for one PR (resolves the diff and bakes it in)
-python3 tools/pr-review/build-run.py 8 \
-    --repo PhorvexSecurity/operator \
-    --workdir "$PWD" \
-    -o /tmp/run8.js
+# one PR
+python3 tools/pr-review/build-run.py 8 --repo PhorvexSecurity/operator --workdir "$PWD" -o /tmp/run8.js
 
-# 2. run it
-#    Workflow({scriptPath: "/tmp/run8.js"})
+# or a BATCH — review several PRs together (e.g. every 3 PRs, before a merge window)
+python3 tools/pr-review/build-run.py 7 8 9 --repo PhorvexSecurity/operator --workdir "$PWD" -o /tmp/batch.js
+
+# then:  Workflow({scriptPath: "/tmp/batch.js"})
 ```
+
+**Batching is not just cheaper — it sees a class of defect a single-PR review cannot.** A change can
+be individually correct and still be unsafe to land *alone* or in the wrong *order*. That is exactly
+what happened with PR #8: correct in isolation, but it made a code path reachable that PR #7 was
+required to make safe. A per-PR review found that only by accident; the batch mode has a lens aimed
+at it.
 
 Runs **locally**, on demand. It does not comment on the PR or block merges by itself — a human
 reads the verdict and decides.
@@ -39,6 +44,7 @@ Report  →  {status, findings[], refuted[], summary}
 | `correctness` | bugs in the changed lines; partial mutation followed by an error return |
 | `test-adequacy` | **would a test actually fail if this change were reverted?**; tests that assert only "no error" |
 | `contract-stability` | observable output: metrics, audit-record fields, JSON shapes, ordering something hashes |
+| `cross-change-interaction` | **batch mode only** — does one change make a path reachable that another is needed to make safe? what breaks if only one lands? required merge order |
 
 ## Two guards against confident nonsense
 
@@ -79,7 +85,12 @@ Both cost a full run before being caught, so they are encoded as hard failures:
 
 ## Cost
 
-~31 agents / ~1.6M tokens / ~25 min for a 166-line diff. Not free. Trim the lens list for small PRs.
+~31 agents / ~1.6M tokens / ~25 min for a 166-line diff. Not free.
+
+Batching several PRs into one run is the cheaper cadence *and* the more informative one: the fixed
+Scope/Report overhead is paid once, and the interaction lens only has something to say when there is
+more than one change. Reviewing every 3 PRs — or once per merge window — is a reasonable default.
+Trim the lens list for small diffs.
 
 ## Extending to sub-tickets 1–4
 
