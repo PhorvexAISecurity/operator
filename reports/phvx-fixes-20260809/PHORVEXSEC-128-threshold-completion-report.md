@@ -55,8 +55,17 @@ Swept an evidence-less candidate against a genuine, nearly-overdue foothold thro
 
 The cause is `feasibility/defaults.go:87` — below the window the candidate is **infeasible**, so it
 has no coverage to discount. §6 asked for "the first positive coverage point"; it is not a property
-of the coverage model at all, it is the feasibility gate. First positive and first
-budget-competitive coincide, because coverage arrives as a step, not a ramp.
+of the coverage model at all, it is the feasibility gate.
+
+> **CORRECTED 2026-08-10.** This section originally continued *"first positive and first
+> budget-competitive coincide, because coverage arrives as a step, not a ramp."* That was wrong — an
+> artifact of this fixture's 5-minute window and a decoy manufactured at 25x. Measured on the live
+> policy they are 3.5 minutes apart: first positive at 90s (U = 0.0504), first budget-competitive at
+> 5m (U = **0.0548**). Coverage does ramp; only feasibility is a step. So `U_competitive` is 0.0548
+> and §7's formula gives τ = 0.0649, not 0.0625 — and §6's insistence on separating the two points
+> was right. See `PHORVEXSEC-128-measurement-addendum.md` for the full eight-column table.
+
+**Finding 1b — the numbers above are from the FIXTURE.** The live-policy sweep is in the addendum.
 
 **Finding 2 — the sweep must use the LIVE policies, not the fixture.** The fixture's 5m/1h is not
 what production runs:
