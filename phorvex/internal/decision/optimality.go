@@ -38,7 +38,7 @@ func provFn(ctxByKey map[string]assetCtx, floorSec float64) func(string) float64
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.StageUrgency > killchain.BaselineStageUrgency {
+		if ac.exposure >= floorSec || ac.assess.StageUrgency > killchain.ProvenanceEvidenceThreshold {
 			return 1
 		}
 		r := ac.exposure / floorSec

@@ -79,6 +79,39 @@ const minConsequence = 0.1
 // Derived from the model rather than hardcoded so it cannot drift if consequence() changes.
 const BaselineStageUrgency = 0.5 * minConsequence
 
+// lowestEvidencedConsequence is consequence(StageGPUSideChannel) — the SMALLEST consequence any
+// stage that requires real evidence to classify can carry. Every other evidenced stage (exploit,
+// persist, lateral, impact, model-theft, llm-jacking, prompt-inject-persist) is strictly higher.
+const lowestEvidencedConsequence = 0.15
+
+// LowestEvidencedStageUrgency is the StageUrgency of the WEAKEST possible genuinely-evidenced asset:
+// GPU side-channel classified at hazard 0 (freshly seen, nothing projected yet). Any threshold that
+// must preserve real evidence has to stay strictly below it.
+const LowestEvidencedStageUrgency = 0.5 * lowestEvidencedConsequence
+
+// ProvenanceEvidenceThreshold separates "no evidence, merely aged" from "carries real evidence" for
+// the anti-decoy provenance floor (PHVX-72 / PHORVEXSEC-128).
+//
+// Both endpoints are model-derived, not tuned:
+//
+//	BaselineStageUrgency        = 0.050  an evidence-less asset at hazard 0
+//	LowestEvidencedStageUrgency = 0.075  the weakest genuinely-evidenced asset
+//
+// Comparing against the BASELINE (the PHVX-72 first fix) is provably inert: an evidence-less asset's
+// urgency is 0.05 + 0.175*h(t), so ANY positive exposure lifts it above the baseline, and a candidate
+// cannot be selected at all until it clears AntiOverRotationWindow — by which point it has already
+// escaped. Measured on the live tenant policies, competitive coverage begins at U = 0.0502-0.0504,
+// i.e. essentially AT the baseline. The midpoint is the largest value that still preserves every
+// evidenced stage while covering that onset.
+//
+// KNOWN LIMITS, deliberately recorded rather than hidden (see the PHORVEXSEC-128 report):
+//   - The discount is only reachable while AntiOverRotationWindow <= t < ProactiveFloor. A tenant
+//     whose window is >= its floor (live: vllm 15m/15m, mock-rag-chatbot 90s/15s) has an EMPTY
+//     window and this defence cannot act there, whatever the threshold.
+//   - provFloor bounds how much manufactured advantage the discount can absorb (~2.5x at onset).
+//     A decoy manufactured far above that still wins the slot.
+const ProvenanceEvidenceThreshold = (BaselineStageUrgency + LowestEvidencedStageUrgency) / 2
+
 func consequence(s Stage) float64 {
 	switch s {
 	case StageRecon:
