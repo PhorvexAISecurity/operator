@@ -10,12 +10,31 @@ import (
 
 // exact_skipped_test.go — PHVX-23 / PHORVEXSEC-114 item 1.
 //
-// Above exactBruteForceAssetCap no exact solve runs, so no ratio was measured. The defect this file
+// Above exactWorkBudget no exact solve runs, so no ratio was measured. The defect this file
 // guards is that an UNMEASURED arm used to render as a PASSING one: probeArm discarded the skipped
 // flag, the resulting exObj of 0 fell into the "both correctly selected nothing" branch, and the arm
 // reported greedyRatio = swapRatio = 1.0000 — a perfect score for a computation that never happened.
 
-// overCapSet builds a disjoint fixture with strictly more assets than the brute-force cap.
+// overCapWorkSet builds a fixture whose enumeration exceeds exactWorkBudget at B=4: 40 assets with
+// 6 actions each is C(40,4)*6^4 = 118M candidate sets, measured at ~5.8s even at only 3 actions.
+func overCapWorkSet() actionset.ActionSet {
+	set := actionset.ActionSet{FactWeights: map[string]float64{}}
+	acts := []model.Action{model.ActionRotate, model.ActionKVReset, model.ActionQuarantine,
+		model.ActionEndpointRotate, model.ActionWarmSwap, model.ActionAdapterRotate}
+	for i := 0; i < 40; i++ {
+		key := fmt.Sprintf("ns/a%02d", i)
+		for j := range acts {
+			fact := fmt.Sprintf("%s|f%d", key, j)
+			set.FactWeights[fact] = 5.0
+			set.Candidates = append(set.Candidates, actionset.Candidate{
+				Key: key, Action: acts[j], CoverKeys: []string{fact}, ECost: 0.10,
+			})
+		}
+	}
+	return set
+}
+
+// overCapSet builds a disjoint fixture with n assets, one action each.
 func overCapSet(assets int) actionset.ActionSet {
 	set := actionset.ActionSet{FactWeights: map[string]float64{}}
 	for i := 0; i < assets; i++ {
@@ -33,10 +52,11 @@ func overCapSet(assets int) actionset.ActionSet {
 // fails with greedyRatio == 1, which is the whole point: it did not report "unknown", it reported
 // "optimal".
 func TestOverCapProbeArmIsMarkedSkippedNotPerfect(t *testing.T) {
-	arm := probeArm("over-cap", overCapSet(exactBruteForceAssetCap+1), 2, 0.3)
+	set := overCapWorkSet()
+	arm := probeArm("over-cap", set, 4, 0.3)
 	if !arm.ExactSkipped {
-		t.Fatalf("a fixture of %d assets exceeds the cap of %d but ExactSkipped is false",
-			exactBruteForceAssetCap+1, exactBruteForceAssetCap)
+		t.Fatalf("a fixture whose estimated work is %.0f exceeds the budget of %d but ExactSkipped is false",
+			exactWorkEstimate(len(set.FactWeights), 4, 6), exactWorkBudget)
 	}
 	if arm.GreedyRatio == 1 || arm.SwapRatio == 1 {
 		t.Fatalf("an UNMEASURED arm reported a perfect ratio (greedy=%v swap=%v); a skipped exact solve "+
@@ -79,9 +99,35 @@ func TestZeroObjectiveIsNotConfusedWithSkipped(t *testing.T) {
 // TestComputeOptimalitySkipDoesNotEmitRatios covers the OTHER path (the live decision path). It
 // already handled skipping correctly; this pins it so the two paths cannot drift apart.
 func TestComputeOptimalitySkipDoesNotEmitRatios(t *testing.T) {
-	set := overCapSet(exactBruteForceAssetCap + 1)
-	_, skipped := exactObjective(set, 2, func(string) float64 { return 1 }, 0.3)
+	set := overCapWorkSet()
+	_, skipped := exactObjective(set, 4, func(string) float64 { return 1 }, 0.3)
 	if !skipped {
 		t.Fatalf("exactObjective did not report a skip above the cap")
+	}
+}
+
+// TestWorkBudgetReachesTheLiveFleet is the point of replacing the asset cap. Every live tenant policy
+// sets maxMovesPerTick=1, and at that budget the exact arm must reach the whole 76-pod fleet — the
+// old flat cap of 18 blocked it for no computational reason, which is why the exactness claim had
+// never been measured at production scale.
+func TestWorkBudgetReachesTheLiveFleet(t *testing.T) {
+	for _, tc := range []struct {
+		n, b, k  int
+		wantSkip bool
+		why      string
+	}{
+		{76, 1, 6, false, "live fleet at the live budget: measured 0.98ms"},
+		{600, 1, 6, false, "8x the live fleet at B=1: measured 28.7ms"},
+		{76, 2, 6, false, "measured 102ms"},
+		{76, 3, 6, true, "measured 20.3s — must skip"},
+		{40, 4, 6, true, "measured 5.8s at only k=3 — must skip"},
+	} {
+		t.Run(fmt.Sprintf("n=%d/B=%d/k=%d", tc.n, tc.b, tc.k), func(t *testing.T) {
+			got := exactWorkEstimate(tc.n, tc.b, tc.k) > exactWorkBudget
+			if got != tc.wantSkip {
+				t.Fatalf("skip=%v want %v (work=%.0f budget=%d) — %s",
+					got, tc.wantSkip, exactWorkEstimate(tc.n, tc.b, tc.k), exactWorkBudget, tc.why)
+			}
+		})
 	}
 }
