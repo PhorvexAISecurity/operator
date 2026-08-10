@@ -1,0 +1,28 @@
+   today: raw 1.875-7.500 | clamped 1.875-4.000 | pinned at cap 26/70 (37%) | distinct clamped 8
+    full: raw 2.476-7.500 | clamped 2.476-4.000 | pinned at cap 60/70 (86%) | distinct clamped 8
+
+pods whose CLAMPED scalar changes: 44/70
+ordering identical: False
+  positions differing: 69/70
+  top-10 today: ['document-store', 'document-store', 'external-dns', 'gpu-telemetry', 'kube-system', 'kube-system', 'kube-system', 'kube-system', 'litellm', 'litellm']
+  top-10 full : ['amazon-network-flow-monitor', 'amazon-network-flow-monitor', 'amazon-network-flow-monitor', 'amazon-network-flow-monitor', 'crm', 'document-store', 'document-store', 'external-dns', 'gpu-telemetry', 'gpu-telemetry']
+
+==========================================================================
+CAP SWEEP — what MaxDispersionMult preserves discrimination? (input for PHVX-24 item 2)
+==========================================================================
+   cap    today: pinned  today: distinct     full: pinned   full: distinct
+   4.0      26/70 (37%)                8      60/70 (86%)                8
+   4.5       7/70 (10%)                9      51/70 (73%)               11
+   5.0       7/70 (10%)                9      37/70 (53%)               16
+   5.5        3/70 (4%)               11      22/70 (31%)               24
+   6.0        3/70 (4%)               11      11/70 (16%)               34
+   6.5        1/70 (1%)               12        6/70 (9%)               38
+   7.0        1/70 (1%)               12        6/70 (9%)               38
+   7.5        0/70 (0%)               12        0/70 (0%)               41
+   8.0        0/70 (0%)               12        0/70 (0%)               41
+
+TOP-GROUP SIZE at the live budget B=1 (how many assets tie for first on physics alone):
+  today cap=4.0: 26 assets tied at the top value 4.000
+  today cap=7.5: 1 assets tied at the top value 7.500
+   full cap=4.0: 60 assets tied at the top value 4.000
+   full cap=7.5: 1 assets tied at the top value 7.500
