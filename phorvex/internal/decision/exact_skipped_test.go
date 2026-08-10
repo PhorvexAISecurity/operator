@@ -2,7 +2,9 @@ package decision
 
 import (
 	"fmt"
+	"math"
 	"testing"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/model"
@@ -128,6 +130,42 @@ func TestWorkBudgetReachesTheLiveFleet(t *testing.T) {
 				t.Fatalf("skip=%v want %v (work=%.0f budget=%d) — %s",
 					got, tc.wantSkip, exactWorkEstimate(tc.n, tc.b, tc.k), exactWorkBudget, tc.why)
 			}
+		})
+	}
+}
+
+// productionScaleFleet mirrors the shipped fixture's shape at the live fleet size (76 pods): a few
+// high-value assets carrying secrets and a long tail of cheap ones.
+func productionScaleFleet(n int) []*model.WorkloadView {
+	views := make([]*model.WorkloadView, 0, n)
+	for i := 0; i < n; i++ {
+		if i%12 == 0 {
+			views = append(views, covView(fmt.Sprintf("crown%02d", i), true, 3*time.Hour, false))
+			continue
+		}
+		views = append(views, lowValueView(fmt.Sprintf("cheap%02d", i)))
+	}
+	return views
+}
+
+// TestGreedyIsExactAtProductionScale is the measurement the ticket says has never been run: the
+// exactness claim evaluated at the live fleet size, at the live move budget. Every tenant policy on
+// the cluster sets maxMovesPerTick=1, and the work-budget guard admits that case, so this is a direct
+// brute-force comparison rather than a bound.
+func TestGreedyIsExactAtProductionScale(t *testing.T) {
+	for _, n := range []int{18, 40, 76} {
+		t.Run(fmt.Sprintf("%d-assets", n), func(t *testing.T) {
+			e := NewCoverageEngine()
+			pol := covPolicy(1) // the LIVE budget: maxMovesPerTick=1 on every tenant
+			res := e.Ablate(productionScaleFleet(n), pol, []int64{1, 2, 3})
+			if res.ExactSkipped {
+				t.Fatalf("%d assets at B=1 must be inside the work budget, but the exact arm skipped", n)
+			}
+			if math.Abs(res.OptimalityRatio-1.0) > 1e-9 {
+				t.Fatalf("ratio=%.12f gap=%.9g at %d assets — the exactness claim does NOT hold at this scale (%s)",
+					res.OptimalityRatio, res.OptimalityGap, n, res.SharedKeyNote)
+			}
+			t.Logf("%d assets, B=1: ratio=%.12f gap=%.3g disjoint=%v", n, res.OptimalityRatio, res.OptimalityGap, res.CoversDisjoint)
 		})
 	}
 }

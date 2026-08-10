@@ -1232,7 +1232,7 @@ deferred; magnitudes remain `[SP-0-PENDING-P4]`.
 (`phorvex/P-OPTIMIZE-RATIO-DECISION.md`) found a stronger answer than the premise, now turned into an in-tree
 measured fact.
 
-**Finding (verified by running, not asserted).** The greedy is **EXACTLY optimal (OptimalityRatio = 1.000000,
+**Finding (proven structurally, and verified by running).** The greedy is **EXACTLY optimal (OptimalityRatio = 1.000000,
 gap 0)** on the shipped fleets — not merely 1−1/e — because the objective is degenerately **MODULAR**:
 `recon.Fact.Key` prefixes every cover key with its owning asset (`facts.go:65`), so distinct candidates have
 **asset-disjoint cover universes** and the diminishing-returns discount never fires across the partition. The
@@ -1244,7 +1244,8 @@ perf-only.
 `OptimalityRatio/OptimalityGap/CoversDisjoint/SharedKeyNote/ExactSkipped` fields to `AblationResult`. The exact
 arm brute-forces the optimal feasible selection over the **same `AssembleSet` substrate**, the **frozen per-tick
 λ** (carried on every `Decision` as `d.Lambda`), and a `prov()` re-created byte-for-byte from
-`coverage.go:152-167`. `TestGreedyIsExactOnShippedFleets` **asserts ratio = 1.000000** + the self-check
+`coverage.go:152-167`. `TestGreedyIsExactOnShippedFleets` **asserts ratio = 1.000000** (6 assets) and
+`TestGreedyIsExactAtProductionScale` re-measures it at 18/40/**76** assets at the live B=1, + the self-check
 (`coversDisjoint`) surfaces any shared key (proven non-vacuous: it fires on a deliberately-overlapping fleet).
 
 **Step 2 (benchmark-only sweep, NOT wired to defaults).** A synthetic hub/spoke (pool-of-shared-keys)
@@ -1261,7 +1262,7 @@ The `ablation.go:19` "exact tie at 1.62x" is a **comment**; the in-repo **gate a
 8.78/5.41). The ratio is **strongly fleet-dependent** — **measured 5.87× on the in-repo gate fleet** this stage,
 1.62× on the P1-REPORT fleet. **Honest claim:** *Phorvex's coverage optimizer beats equal-budget random
 selection per-dollar (ratio > 1.0, gate-enforced; fleet-dependent, 1.62×–5.87× observed — NOT a guaranteed
-1.62×), and its greedy is provably exactly optimal (ratio 1.000) for the current asset-keyed cover structure.*
+1.62×), and its greedy is provably exactly optimal (proof is scale-free; measured 1.000000 at 76 assets, B=1) for the current asset-keyed cover structure.*
 
 **Discipline (verified).** Brain UNCHANGED — `coverage.go`/`engine.go`/`optimizer.go`/`cost` **untouched**
 (mtimes predate this stage); the change is confined to `ablation.go` (benchmark) + new `optimality.go` +

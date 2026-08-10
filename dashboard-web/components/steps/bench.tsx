@@ -221,7 +221,7 @@ function Results({ res, onCSV }: { res: BenchResult; onCSV: () => void }) {
               <th className="px-3 py-2 text-right font-semibold">Cost</th>
               <th className="px-3 py-2 text-right font-semibold">Per-$</th>
               <th className="px-3 py-2 text-right font-semibold">vs random</th>
-              <th className="px-3 py-2 text-center font-semibold" title="Greedy objective / brute-force optimal objective. 1.000 = the greedy is provably optimal (facts are asset-disjoint => modular).">Greedy=Optimal</th>
+              <th className="px-3 py-2 text-center font-semibold" title="Greedy objective / brute-force optimal objective. 1.000 = the greedy matched the exact optimum. Optimality is PROVEN structurally (asset-disjoint facts => modular => Rado-Edmonds), and that proof does not depend on fleet size; this column is the empirical check, shown only where the brute force is tractable. n/a = not measured, never a score.">Greedy=Optimal</th>
               <th className="px-3 py-2 text-center font-semibold">No-harm</th>
               <th className="px-3 py-2 text-right font-semibold">Moves/hr</th>
             </tr>

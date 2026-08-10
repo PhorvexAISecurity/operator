@@ -19,7 +19,7 @@ certifiable. A **separate reinforcement-learning red-team** attacks that determi
 **What is proven (measured, on disk).**
 - **The optimizer beats equal-budget random targeting per dollar** — gate-enforced (`ratio > 1.0`), and
   **fleet-dependent 1.62×–5.87×** as measured (not a fixed number).
-- **The greedy selection is *exactly* optimal** (ratio 1.000000) for the current cover structure — a stronger,
+- **The greedy selection is *exactly* optimal** (proven structurally; measured 1.000000 at 76 assets, B=1) for the current cover structure — a stronger,
   rarer guarantee than the usual "near-optimal," turned into a reproducible test.
 - **A learning adversary found two real structural vulnerabilities; both were fixed and re-proven neutralized,
   live** (the real Kubernetes pod actually rotated end-to-end).
@@ -56,7 +56,7 @@ measured on a GPU — and we label every such claim as exactly that.*
   raises λ when the budget binds and lowers it when slack — and λ is also the proactive-timing knob (an asset
   fires when `perDollar > λ`), so *rotation rate is an optimized decision variable*, not a cadence.
 
-### 2.2 Greedy proven EXACTLY optimal — the corrected, stronger claim (MEASURED-REAL)
+### 2.2 Greedy proven EXACTLY optimal — the corrected, stronger claim (PROVEN + MEASURED-REAL)
 A deep search + brute-force exact solve (`P-OPTIMIZE-RATIO-DECISION.md`, §9.20) established that the greedy is
 **not merely near-optimal (1−1/e) — it is *exactly* optimal, OptimalityRatio = 1.000000, gap 0**. Reason:
 `recon.Fact.Key` prefixes every cover key with its owning asset (`facts.go:65`), so distinct candidates have
@@ -66,6 +66,15 @@ modular objective is exact. Turned into a reproducible test: `TestGreedyIsExactO
 reappear only under a deliberately-overlapping profile (worst min 0.53 at a binding budget). **Honest scope:**
 this is **profile-dependent** — a future profile keying a fact off a shared node would make the objective
 genuinely submodular.
+
+**Scope of this claim (PHORVEXSEC-114).** Exact optimality is **proven structurally**: with
+block-ownership plus the partition constraint the objective is modular over a truncated partition
+matroid, so the greedy is exact by Rado–Edmonds. That proof is **scale-free** and does not depend on
+fleet size. The empirical check is separate and bounded: it is a brute-force comparison, admitted only
+while the enumeration stays inside the work budget (`optimality.go`). Measured directly at
+**76 assets at the live move budget of B=1: ratio 1.000000000000, gap 0** — and at 18 and 40 assets on
+the way. Above the work budget the exact arm reports `ExactSkipped`; it never reports a ratio it did
+not compute.
 
 ### 2.3 The recon-per-dollar gate — the CORRECTED gate-true claim (MEASURED-REAL)
 The patentable economic core is that the optimizer invalidates **more recon-weight per dollar than an
@@ -121,7 +130,7 @@ as final.
 | Claim | Maturity | Evidence / what's needed |
 |---|---|---|
 | recon-per-dollar **> equal-budget random** (gate `ratio>1.0`; 1.62×–5.87× fleet-dependent, NOT fixed) | **MEASURED-REAL** | `TestAblationP1BeatsRandomPerDollar`; 1.62× P1-REPORT live-kind, 5.87× in-repo gate fleet (§9.20) |
-| greedy selection **exactly optimal** (OptimalityRatio 1.000000) for the asset-keyed structure | **MEASURED-REAL** | `TestGreedyIsExactOnShippedFleets` (modular/disjoint; profile-dependent, §9.20) |
+| greedy selection **exactly optimal** (OptimalityRatio 1.000000) for the asset-keyed structure | **PROVEN + MEASURED-REAL** | proof scale-free (modular over a truncated partition matroid, Rado–Edmonds); measured by `TestGreedyIsExactOnShippedFleets` (6 assets) and `TestGreedyIsExactAtProductionScale` (18/40/**76** assets at the live B=1) |
 | Deterministic `coverage−λ·cost` optimizer + budget/feasibility; **no ML in Decide** | **MEASURED-REAL** | `coverage.go`, `dual.go`; `internal/decision` suite green |
 | Structural zero-day frontier (P3 / P3-DEEP) | **MEASURED-REAL** | 792 rows `out-p3-full`; `P3-REPORT.md`; `TestCoverageZeroDayProactiveNoEvents` |
 | RL red-team learns (climbs vs structure, flat vs random) | **MEASURED-REAL** | `result.json` (−1.3→35.2 / flat); `TestGradientCheck` 9.5e-9 |
@@ -151,7 +160,7 @@ overclaim. **None of the AI/GPU magnitudes are claimed reduced-to-practice on ha
 1. **Recon-coverage-per-dollar MTD** — pricing rotations by *recon-coverage value invalidated* ÷ cost, with λ a
    *solved* budget shadow-price (not a fixed cadence). *Novel combination; prior MTD does not optimize
    recon-per-dollar.* (`coverage.go`, `dual.go`; gate `ratio>1.0`, 1.62×–5.87×.) **[strongest]**
-2. **Provably exactly-optimal selection via an asset-keyed modular reduction** — keying recon facts by owning
+2. **Provably exactly-optimal selection via an asset-keyed modular reduction** (proof scale-free; measured to 76 assets at B=1) — keying recon facts by owning
    asset makes the coverage objective *modular*, so the budgeted partition-matroid greedy is *exactly* optimal
    (ratio 1.000), not merely 1−1/e — a deterministic, certifiable optimality guarantee for an MTD selector.
    *Novel framing + proof.* (`facts.go:65`, `optimality.go`; §9.20.) **[strongest]**
