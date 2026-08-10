@@ -418,19 +418,26 @@ function OptimizerGuarantee({ probe }: { probe: OptimizerProbe }) {
 }
 
 function ProbeArm({ arm, label, note }: { arm: OptimizerProbeArm; label: string; note: string }) {
-  const closed = arm.greedyRatio < 0.999 && arm.swapRatio >= 0.999;
+  // An arm above the brute-force cap has no exact solve to compare against, so NEITHER ratio was
+  // measured. Rendering a number here would state a result that was never computed (PHVX-23).
+  const skipped = arm.exactSkipped;
+  const closed = !skipped && arm.greedyRatio < 0.999 && arm.swapRatio >= 0.999;
+  const ratio = (v: number, tone: string) =>
+    skipped
+      ? <span className="tabular text-[18px] font-semibold text-muted-foreground/60" title="fleet exceeded the brute-force cap — not measured">n/a</span>
+      : <span className={cn("tabular text-[18px] font-semibold", tone)}>{v.toFixed(3)}</span>;
   return (
     <div className="rounded-md border border-border/60 bg-panel/50 p-3">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{label}</div>
       <div className="mt-2 flex items-end gap-4">
         <div>
           <div className="text-[9px] uppercase tracking-wide text-muted-foreground/60">Greedy</div>
-          <div className={cn("tabular text-[18px] font-semibold", arm.greedyRatio >= 0.999 ? "text-success" : "text-warning")}>{arm.greedyRatio.toFixed(3)}</div>
+          {ratio(arm.greedyRatio, arm.greedyRatio >= 0.999 ? "text-success" : "text-warning")}
         </div>
         <div className="pb-1 text-muted-foreground/40">→</div>
         <div>
           <div className="text-[9px] uppercase tracking-wide text-muted-foreground/60">Greedy+swaps</div>
-          <div className="tabular text-[18px] font-semibold text-success">{arm.swapRatio.toFixed(3)}</div>
+          {ratio(arm.swapRatio, arm.swapRatio >= 0.999 ? "text-success" : "text-warning")}
         </div>
         {closed && <span className="mb-1 ml-auto rounded bg-success/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-success">gap closed</span>}
       </div>
