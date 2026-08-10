@@ -1,11 +1,8 @@
 package decision
 
 import (
-	"math"
 	"testing"
 	"time"
-
-	"github.com/phorvex/phorvex/internal/killchain"
 )
 
 // provfloor_window_test.go — PHVX-72 / PHORVEXSEC-128, §6 of the threshold analysis.
@@ -20,17 +17,10 @@ import (
 // entirely — a fact that is invisible from the code alone and would otherwise be rediscovered the
 // hard way.
 
-// evidenceLessUrgency is U(t) for an asset with no kill-chain evidence: stage=Recon, next=Exploit,
-// Weibull sojourn 1800s with shape 2 (killchain.NewModel defaults).
-func evidenceLessUrgency(sec float64) float64 {
-	h := 1 - math.Exp(-math.Pow(sec/1800.0, 2))
-	return 0.5*0.1 + 0.5*h*0.35
-}
-
 func TestDiscountWindowGeometryPerLiveTenant(t *testing.T) {
-	// t at which an evidence-less asset reaches the threshold and escapes the discount.
-	hAt := (killchain.ProvenanceEvidenceThreshold - 0.05) / 0.175
-	escape := 1800 * math.Sqrt(-math.Log(1-hAt))
+	// With the explicit evidence gate, an evidence-less asset stays discounted right up to the
+	// proactive floor; there is no urgency-based escape. The window is therefore purely
+	// [AntiOverRotationWindow, ProactiveFloor).
 
 	for _, tc := range []struct {
 		name      string
@@ -49,18 +39,13 @@ func TestDiscountWindowGeometryPerLiveTenant(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lo := tc.antiOver.Seconds()
-			hi := math.Min(tc.floor.Seconds(), escape)
+			hi := tc.floor.Seconds()
 			empty := hi <= lo
 			if empty != tc.wantEmpty {
 				t.Fatalf("window [%.0fs,%.0fs) empty=%v, want empty=%v", lo, hi, empty, tc.wantEmpty)
 			}
 			if !empty {
-				u := evidenceLessUrgency(lo)
-				if u > killchain.ProvenanceEvidenceThreshold {
-					t.Fatalf("at the feasibility onset (%.0fs) urgency is already %.4f > threshold %.4f: "+
-						"the discount can never act for this tenant", lo, u, killchain.ProvenanceEvidenceThreshold)
-				}
-				t.Logf("window [%.0fs, %.0fs) = %.0fs wide; urgency at onset %.4f", lo, hi, hi-lo, u)
+				t.Logf("window [%.0fs, %.0fs) = %.0fs wide", lo, hi, hi-lo)
 			} else {
 				t.Logf("EMPTY window [%.0fs, %.0fs): this defence cannot act for this tenant at ANY threshold", lo, hi)
 			}

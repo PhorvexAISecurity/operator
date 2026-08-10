@@ -215,7 +215,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.StageUrgency > killchain.ProvenanceEvidenceThreshold {
+		if ac.exposure >= floorSec || ac.assess.HasEvidence {
 			return 1 // genuinely due, or backed by real recon/event evidence => full weight (legit path unchanged)
 		}
 		r := ac.exposure / floorSec

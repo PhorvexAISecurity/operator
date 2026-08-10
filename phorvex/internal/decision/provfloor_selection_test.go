@@ -83,15 +83,61 @@ func TestProvenanceFloorLimitIsMeasuredNotAssumed(t *testing.T) {
 	t.Logf("documented limit holds: a decoy manufactured beyond ~2.5x the genuine gain still wins")
 }
 
-// TestThresholdPreservesWeakestGenuineEvidence is criterion 2: the threshold must sit strictly below
-// the weakest genuinely-evidenced stage, or real evidence would be discounted as if manufactured.
-func TestThresholdPreservesWeakestGenuineEvidence(t *testing.T) {
-	if killchain.ProvenanceEvidenceThreshold >= killchain.LowestEvidencedStageUrgency {
-		t.Fatalf("threshold %.4f must be < the weakest evidenced urgency %.4f, or GPU side-channel evidence is discounted",
-			killchain.ProvenanceEvidenceThreshold, killchain.LowestEvidencedStageUrgency)
+// TestWeakGenuineEvidenceIsNotTreatedAsADecoy is the criterion that rejected the scalar threshold
+// (conditions 2 and 3 of the threshold analysis attached to the ticket). Evidence is the PRESENCE of
+// a real observation, not its magnitude: a low-severity event on the pod and a compromised neighbour
+// both leave the kill-chain stage at Recon, so their StageUrgency is indistinguishable from an asset
+// that has seen nothing. Discounting them would penalise a genuinely-attacked pod in exactly the
+// first minutes that matter.
+func TestWeakGenuineEvidenceIsNotTreatedAsADecoy(t *testing.T) {
+	m := killchain.NewModel()
+	pol := covPolicy(1)
+	pol.Tenant = "phvx72-weak"
+	pol.ProactiveFloor = 15 * time.Minute
+	for _, tc := range []struct {
+		name         string
+		events       []model.SecurityEventInfo
+		wantEvidence bool
+	}{
+		{"no evidence at all (a true decoy)", nil, false},
+		{"direct LOW-severity event", []model.SecurityEventInfo{
+			{Type: "Anomaly", ThreatLevel: "low", TargetsPod: true, Age: 10 * time.Second}}, true},
+		{"direct MEDIUM-severity event", []model.SecurityEventInfo{
+			{Type: "Anomaly", ThreatLevel: "medium", TargetsPod: true, Age: 10 * time.Second}}, true},
+		{"compromised NEIGHBOUR only", []model.SecurityEventInfo{
+			{Type: "panic", ThreatLevel: "critical", TargetsPod: false, Age: 10 * time.Second}}, true},
+		{"direct HIGH-severity event", []model.SecurityEventInfo{
+			{Type: "Anomaly", ThreatLevel: "high", TargetsPod: true, Age: 10 * time.Second}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := covView("x", true, 90*time.Second, false)
+			v.Events = tc.events
+			a := m.Assess(v, pol, 90, pol.ProactiveFloor.Seconds())
+			if a.HasEvidence != tc.wantEvidence {
+				t.Fatalf("HasEvidence = %v, want %v (StageUrgency %.4f — note how little it separates these)",
+					a.HasEvidence, tc.wantEvidence, a.StageUrgency)
+			}
+		})
 	}
-	if killchain.ProvenanceEvidenceThreshold <= killchain.BaselineStageUrgency {
-		t.Fatalf("threshold %.4f must be > the evidence-less baseline %.4f, or the gate is the tautology PHVX-72 reported",
-			killchain.ProvenanceEvidenceThreshold, killchain.BaselineStageUrgency)
+}
+
+// TestStageUrgencyCannotDiscriminateEvidence pins WHY the scalar threshold was rejected, so nobody
+// reintroduces one. If this ever fails, urgency has become evidence-sensitive and the simpler gate
+// could be reconsidered.
+func TestStageUrgencyCannotDiscriminateEvidence(t *testing.T) {
+	m := killchain.NewModel()
+	pol := covPolicy(1)
+	pol.ProactiveFloor = 15 * time.Minute
+	mk := func(ev []model.SecurityEventInfo) float64 {
+		v := covView("x", true, 90*time.Second, false)
+		v.Events = ev
+		return m.Assess(v, pol, 90, pol.ProactiveFloor.Seconds()).StageUrgency
+	}
+	none := mk(nil)
+	weak := mk([]model.SecurityEventInfo{{Type: "Anomaly", ThreatLevel: "low", TargetsPod: true, Age: time.Second}})
+	if weak != none {
+		t.Fatalf("a low-severity DIRECT event now yields urgency %.6f vs %.6f with no evidence; "+
+			"StageUrgency has become evidence-sensitive and the PHVX-72 rejection of a scalar threshold is stale",
+			weak, none)
 	}
 }

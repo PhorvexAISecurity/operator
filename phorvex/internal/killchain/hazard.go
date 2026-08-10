@@ -79,38 +79,12 @@ const minConsequence = 0.1
 // Derived from the model rather than hardcoded so it cannot drift if consequence() changes.
 const BaselineStageUrgency = 0.5 * minConsequence
 
-// lowestEvidencedConsequence is consequence(StageGPUSideChannel) — the SMALLEST consequence any
-// stage that requires real evidence to classify can carry. Every other evidenced stage (exploit,
-// persist, lateral, impact, model-theft, llm-jacking, prompt-inject-persist) is strictly higher.
-const lowestEvidencedConsequence = 0.15
-
-// LowestEvidencedStageUrgency is the StageUrgency of the WEAKEST possible genuinely-evidenced asset:
-// GPU side-channel classified at hazard 0 (freshly seen, nothing projected yet). Any threshold that
-// must preserve real evidence has to stay strictly below it.
-const LowestEvidencedStageUrgency = 0.5 * lowestEvidencedConsequence
-
-// ProvenanceEvidenceThreshold separates "no evidence, merely aged" from "carries real evidence" for
-// the anti-decoy provenance floor (PHVX-72 / PHORVEXSEC-128).
-//
-// Both endpoints are model-derived, not tuned:
-//
-//	BaselineStageUrgency        = 0.050  an evidence-less asset at hazard 0
-//	LowestEvidencedStageUrgency = 0.075  the weakest genuinely-evidenced asset
-//
-// Comparing against the BASELINE (the PHVX-72 first fix) is provably inert: an evidence-less asset's
-// urgency is 0.05 + 0.175*h(t), so ANY positive exposure lifts it above the baseline, and a candidate
-// cannot be selected at all until it clears AntiOverRotationWindow — by which point it has already
-// escaped. Measured on the live tenant policies, competitive coverage begins at U = 0.0502-0.0504,
-// i.e. essentially AT the baseline. The midpoint is the largest value that still preserves every
-// evidenced stage while covering that onset.
-//
-// KNOWN LIMITS, deliberately recorded rather than hidden (see the PHORVEXSEC-128 report):
-//   - The discount is only reachable while AntiOverRotationWindow <= t < ProactiveFloor. A tenant
-//     whose window is >= its floor (live: vllm 15m/15m, mock-rag-chatbot 90s/15s) has an EMPTY
-//     window and this defence cannot act there, whatever the threshold.
-//   - provFloor bounds how much manufactured advantage the discount can absorb (~2.5x at onset).
-//     A decoy manufactured far above that still wins the slot.
-const ProvenanceEvidenceThreshold = (BaselineStageUrgency + LowestEvidencedStageUrgency) / 2
+// NOTE (PHVX-72): a scalar StageUrgency threshold was evaluated for the anti-decoy gate and
+// REJECTED. Measurement showed it cannot discriminate evidence: a low- or medium-severity event on
+// the pod leaves the stage at Recon, so its urgency is identical to an asset with no evidence at
+// all (0.0504 at 90s), and a compromised neighbour only reaches 0.0511. Any threshold able to
+// discount a fresh decoy would therefore also discount a genuinely-attacked pod. The gate uses
+// Assessment.HasEvidence instead. See reports/phvx-fixes-20260809/PHORVEXSEC-128-*.
 
 func consequence(s Stage) float64 {
 	switch s {
@@ -138,13 +112,19 @@ func consequence(s Stage) float64 {
 
 // Assessment is the per-asset kill-chain belief output.
 type Assessment struct {
-	Stage          Stage
-	StageName      string
-	NextStage      Stage
-	NextStageName  string
-	Hazard         float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
-	PHold          float64 // P(attacker still holds the foothold) in [0,1]
-	StageUrgency   float64 // [0,1] current-consequence blended with predictive (hazard*next)
+	Stage         Stage
+	StageName     string
+	NextStage     Stage
+	NextStageName string
+	Hazard        float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
+	PHold         float64 // P(attacker still holds the foothold) in [0,1]
+	StageUrgency  float64 // [0,1] current-consequence blended with predictive (hazard*next)
+	// HasEvidence is TRUE when this assessment rests on a REAL observation rather than on the
+	// passage of time: a SecurityEvent on this pod, a compromised graph neighbour, an AI kill-chain
+	// signature, or a poisoned adapter. It is the anti-decoy discriminator (PHVX-72): StageUrgency
+	// CANNOT serve that role, because a low/medium direct event and a compromised neighbour both
+	// leave the stage at Recon, giving them the SAME urgency as an asset with no evidence at all.
+	HasEvidence    bool
 	LateralUrgency float64 // [0,1] specifically the about-to-pivot-here pressure
 
 	// --- P-CONTEXT predictive-horizon: the MOVED-BEFORE-NEXT-STAGE measurable. ---
@@ -323,6 +303,11 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	// StageUrgency = blend(current consequence, hazard * next consequence): we invalidate
 	// the recon the attacker is ABOUT TO exploit, not only what they hold now.
 	stageUrg := clamp01(0.5*consequence(stage) + 0.5*hazard*consequence(next))
+	// Evidence is the PRESENCE of a real observation, independent of how severe it is or how much
+	// urgency it happens to produce. eventAlpha>0 covers every event targeting this pod (any
+	// severity); lateralPressure>0 covers a compromised neighbour; aiClassified covers an AI
+	// signature; SuspectAdapter covers a poisoned adapter.
+	hasEvidence := eventAlpha > 0 || lateralPressure > 0 || aiClassified || view.Pod.SuspectAdapter != ""
 	// Lateral urgency rises with neighbor pressure and an imminent lateral transition.
 	latUrg := clamp01(math.Max(lateralPressure, hazard*boolf(next == StageLateral)))
 
@@ -364,6 +349,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		Hazard:                hazard,
 		PHold:                 pHold,
 		StageUrgency:          stageUrg,
+		HasEvidence:           hasEvidence,
 		LateralUrgency:        latUrg,
 		PreemptMargin:         preempt,
 		ProjectedNextStageSec: projNext,

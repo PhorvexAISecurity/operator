@@ -22,7 +22,6 @@ import (
 	"sort"
 
 	"github.com/phorvex/phorvex/internal/actionset"
-	"github.com/phorvex/phorvex/internal/killchain"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -38,7 +37,7 @@ func provFn(ctxByKey map[string]assetCtx, floorSec float64) func(string) float64
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.StageUrgency > killchain.ProvenanceEvidenceThreshold {
+		if ac.exposure >= floorSec || ac.assess.HasEvidence {
 			return 1
 		}
 		r := ac.exposure / floorSec

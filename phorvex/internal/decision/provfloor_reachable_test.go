@@ -45,10 +45,13 @@ func TestBaselineStageUrgencyIsNotZero(t *testing.T) {
 }
 
 // provOf rebuilds the gate exactly as Decide does, for an asset with the given exposure and urgency.
-func provOf(t *testing.T, floorSec, exposure, urgency float64) float64 {
+// provOf drives the real gate. `hasEvidence` is what the gate now reads: StageUrgency was rejected
+// as a proxy because weak-but-genuine evidence leaves it identical to no evidence at all (see
+// TestStageUrgencyCannotDiscriminateEvidence).
+func provOf(t *testing.T, floorSec, exposure float64, hasEvidence bool) float64 {
 	t.Helper()
 	ctxByKey := map[string]assetCtx{
-		"ns/p": {assess: killchain.Assessment{StageUrgency: urgency}, exposure: exposure},
+		"ns/p": {assess: killchain.Assessment{HasEvidence: hasEvidence}, exposure: exposure},
 	}
 	return provFn(ctxByKey, floorSec)("ns/p")
 }
@@ -56,7 +59,7 @@ func provOf(t *testing.T, floorSec, exposure, urgency float64) float64 {
 // TestProvFloorIsReachable is the regression: a FRESH asset carrying only the baseline urgency must
 // be discounted. Before the fix this returned 1 and the decoy defence never fired.
 func TestProvFloorIsReachable(t *testing.T) {
-	got := provOf(t, 900, 0, killchain.BaselineStageUrgency)
+	got := provOf(t, 900, 0, false)
 	if got >= 1 {
 		t.Fatalf("a fresh, evidence-less asset got prov=%v (full weight) — the anti-decoy discount is "+
 			"inert, which is exactly the PHVX-72 defect", got)
@@ -70,15 +73,16 @@ func TestProvFloorIsReachable(t *testing.T) {
 // anything above the no-evidence baseline, or aged past the proactive floor, keeps full weight.
 func TestGenuineEvidenceIsNotDiscounted(t *testing.T) {
 	for _, tc := range []struct {
-		name              string
-		exposure, urgency float64
+		name        string
+		exposure    float64
+		hasEvidence bool
 	}{
-		{"real kill-chain evidence", 0, killchain.BaselineStageUrgency * 3},
-		{"overdue for the hygiene floor", 1000, killchain.BaselineStageUrgency},
-		{"both", 1000, killchain.BaselineStageUrgency * 3},
+		{"real kill-chain evidence", 0, true},
+		{"overdue for the hygiene floor", 1000, false},
+		{"both", 1000, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := provOf(t, 900, tc.exposure, tc.urgency); got != 1 {
+			if got := provOf(t, 900, tc.exposure, tc.hasEvidence); got != 1 {
 				t.Errorf("a genuinely-due asset must keep full weight, got prov=%v", got)
 			}
 		})
