@@ -7,8 +7,17 @@
     "port": 22,
     "connect_timeout_sec": 10
   },
+  "_console_comment": [
+    "The IN-CLUSTER console, reached over the ALB. This used to point at localhost:8095 on",
+    "the jump host — a systemd service running a binary built from a loose, un-versioned",
+    "copy of the source. That stack was never built by CI and never deployed by ArgoCD, so",
+    "the suite was asserting contracts against code nobody could trace to a commit.",
+    "",
+    "The console now runs as a container inside the operator's pod and streams the audit",
+    "the operator actually writes, so what this tests is what ArgoCD deployed."
+  ],
   "console": {
-    "base": "http://localhost:8095",
+    "base": "https://console.phorvex.ai",
     "lens": "operator"
   },
   "capture": {
@@ -207,7 +216,21 @@
   ],
   "operator_namespace": "phorvex-system",
   "audit_writer": {
-    "_comment": "Prometheus endpoint of the operator that WRITES the audit the console streams. Its kill-switch gauge is what distinguishes a decision-only mirror from a broken actuator.",
-    "metrics_url": "http://localhost:18080/metrics"
+    "_comment": [
+      "The operator that WRITES the audit the console streams. Its kill-switch gauge is what",
+      "distinguishes a decision-only mirror from a broken actuator (check A06).",
+      "",
+      "It is now the in-cluster operator, whose metrics port has no Service and no ingress —",
+      "correctly, since nothing about an operator's internals belongs on the internet. It is",
+      "read through the API server's pod proxy instead, using the same kubeconfig the",
+      "ground-truth kubectl calls already use. The pod is resolved by label at scrape time,",
+      "because it is recreated on every deploy."
+    ],
+    "kubectl_pod_proxy": {
+      "namespace": "phorvex-system",
+      "selector": "app.kubernetes.io/name=phorvex",
+      "port": 8080,
+      "path": "/metrics"
+    }
   }
 }

@@ -50,6 +50,33 @@ phorvex:
     # live Deployment; dropping it on adoption would have changed which actuator runs, and
     # the E2E checks A01–A04 assert on exactly that.
     actuator: hybrid
+
+    # ── the live decision audit ──────────────────────────────────────────────
+    # The console streams /api/live from a FILE. Without this the in-cluster console had
+    # nothing live to stream and fell back to the snapshot baked into its own image — which
+    # is why console.phorvex.ai was serving decisions from a kind cluster
+    # (node: amtd-test-control-plane) dated two months earlier, labelled "Live Theatre".
+    audit:
+      enabled: true
+      path: /audit/live.jsonl
+      maxBytes: 268435456
+      persistence:
+        enabled: true
+        storageClass: gp2-csi
+        size: 5Gi
+
+    # ── console, co-located ──────────────────────────────────────────────────
+    # Runs in this pod so it can read the audit file above. This is also what makes
+    # /api/workload/attack work in-cluster for the first time: the console image now
+    # carries kubectl, and here it inherits the operator's ServiceAccount, which holds the
+    # securityevents rights its own ServiceAccount never had.
+    console:
+      enabled: true
+      image:
+        repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
+        tag: "0.4.5"          # ci:console-tag
+        pullPolicy: IfNotPresent
+      port: 8090
     epss:
       enabled: true
       configMapName: phorvex-epss
@@ -61,9 +88,17 @@ phorvex:
 
 dashboard:
   enabled: true
+  # The console runs inside the operator's pod so it can read the audit file the operator
+  # writes. This chart then contributes only the Service and Ingress; the container itself
+  # is rendered by the subchart from phorvex.console above.
+  sidecar: true
   image:
+    # NOT machine-edited, and deliberately carries no `# ci:` marker — the tag CI rewrites
+    # is phorvex.console.image.tag above. Two markers with the same name would make the
+    # release step ambiguous, and it fails rather than guess. This block is only read if
+    # `sidecar` is turned back off.
     repository: phorvex/phorvex-console   # basename + global.registry => <ecr>/phorvex-console
-    tag: "0.4.5"          # ci:console-tag
+    tag: "0.4.5"
     pullPolicy: IfNotPresent
   replicas: 1
   port: 8090

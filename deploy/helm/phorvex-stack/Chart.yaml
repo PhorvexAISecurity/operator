@@ -16,6 +16,6 @@ dependencies:
     repository: "file://../../../build/phoenix-extended/charts/phoenix"
     condition: phoenix.enabled
   - name: phorvex
-    version: "0.1.1"
+    version: "0.1.2"
     repository: "file://../../../phorvex/charts/phorvex"
     condition: phorvex.enabled

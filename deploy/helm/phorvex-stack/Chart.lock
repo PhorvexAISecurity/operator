@@ -4,6 +4,6 @@ dependencies:
   version: 0.1.4
 - name: phorvex
   repository: file://../../../phorvex/charts/phorvex
-  version: 0.1.1
-digest: sha256:5f38e36a5973068470427a50a586cafc005f2d8648c486abfd8ef30f0dfe5fed
-generated: "2026-08-11T16:35:51.663375+03:30"
+  version: 0.1.2
+digest: sha256:3f54f96813ebf516c1094b9bac4786cb160940383dd394c2727600621281ffd7
+generated: "2026-08-11T22:37:01.166642+03:30"

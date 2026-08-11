@@ -30,6 +30,25 @@ WORKDIR /workspace/phorvex
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -a -o /console cmd/console/main.go
 
+# ---- Stage 2b: kubectl ----
+# internal/console/workload_attack.go fires a real attack by applying a SecurityEvent CR,
+# and it does that by SHELLING OUT to kubectl (the console cannot reach pod IPs directly).
+# Without the binary the endpoint fails with `exec: "kubectl": executable file not found`,
+# which is why the in-cluster console could never fire an attack and the End-to-End suite
+# had to drive a console running on the jump host instead.
+#
+# Pinned, and the checksum is verified: this binary is handed cluster-admin-shaped
+# credentials at runtime, so a silently substituted download is not an acceptable risk.
+FROM golang:1.26 AS kubectl
+ARG TARGETARCH
+ARG KUBECTL_VERSION=v1.31.4
+RUN set -eux; \
+    arch="${TARGETARCH:-amd64}"; \
+    curl -fsSLo /kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl"; \
+    curl -fsSLo /kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl.sha256"; \
+    echo "$(cat /kubectl.sha256)  /kubectl" | sha256sum -c -; \
+    chmod +x /kubectl
+
 # ---- Stage 3: assemble the data snapshot (kept separate so it's easy to swap) ----
 # The console resolves data relative to -root: <root>/build/test-harness/out-* for the
 # benchmark metrics, and <root>/phorvex/bin/console-audit.jsonl for the owner audit view.
@@ -60,6 +79,8 @@ WORKDIR /app
 COPY --from=gobuild /console /app/console
 COPY --from=web /web/out /app/web
 COPY --from=data /data /data
+# Both are static and CGO-free, so distroless/static stays the right base.
+COPY --from=kubectl /kubectl /usr/local/bin/kubectl
 USER 65532:65532
 EXPOSE 8090
 ENTRYPOINT ["/app/console"]

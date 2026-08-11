@@ -7,6 +7,13 @@ metadata:
     {{- include "phorvex.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  {{- if and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled }}
+  # A ReadWriteOnce volume can only be attached to one node at a time, so a RollingUpdate
+  # would deadlock: the new pod cannot mount the PVC until the old pod releases it, and the
+  # old pod is not terminated until the new one is Ready.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "phorvex.name" . }}
@@ -19,6 +26,12 @@ spec:
       serviceAccountName: {{ include "phorvex.serviceAccountName" . }}
       securityContext:
         runAsNonRoot: true
+        {{- if .Values.phorvex.audit.enabled }}
+        # Both containers run as non-root with different images; fsGroup makes the mounted
+        # audit volume group-writable so the operator can create the file and the console
+        # can read it.
+        fsGroup: 65532
+        {{- end }}
       containers:
       - name: manager
         image: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
@@ -38,6 +51,13 @@ spec:
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
         {{- end }}
         - --gpu-envelope-max={{ .Values.phorvex.gpuEnvelopeMax }}
+        {{- if .Values.phorvex.audit.enabled }}
+        - --audit-json={{ .Values.phorvex.audit.path }}
+        # int64, because YAML parses 268435456 as a float and Helm would otherwise render
+        # it as 2.68435456e+08 — which flag.Int64Var rejects, so the operator would refuse
+        # to start with an error about an invalid flag value.
+        - --audit-max-bytes={{ .Values.phorvex.audit.maxBytes | int64 }}
+        {{- end }}
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true
         {{- end }}
@@ -80,17 +100,88 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if .Values.phorvex.epss.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled }}
         volumeMounts:
+        {{- if .Values.phorvex.epss.enabled }}
         - name: epss
           mountPath: {{ .Values.phorvex.epss.mountPath }}
           readOnly: true
         {{- end }}
-      {{- if .Values.phorvex.epss.enabled }}
+        {{- if .Values.phorvex.audit.enabled }}
+        - name: audit
+          mountPath: {{ .Values.phorvex.audit.path | dir }}
+        {{- end }}
+        {{- end }}
+{{- if .Values.phorvex.console.enabled }}
+
+      # ── console ────────────────────────────────────────────────────────────
+      # Second container, not a second Deployment: it reads the audit as a local file and
+      # the operator writes it as a local file, so they have to share one filesystem.
+      # It also inherits this pod's ServiceAccount, which is what finally lets
+      # /api/workload/attack apply a SecurityEvent — the console's own ServiceAccount
+      # never had the rights, and its image never had kubectl.
+      - name: console
+        image: "{{ .Values.phorvex.console.image.repository }}:{{ .Values.phorvex.console.image.tag }}"
+        imagePullPolicy: {{ .Values.phorvex.console.image.pullPolicy }}
+        args:
+        - -root={{ .Values.phorvex.console.root }}
+        - -web={{ .Values.phorvex.console.web }}
+        - -addr=:{{ .Values.phorvex.console.port }}
+        {{- if .Values.phorvex.audit.enabled }}
+        # Explicit, so the console streams the operator's LIVE audit rather than falling
+        # back to newestAudit() and serving the snapshot baked into its own image.
+        - -audit-json={{ .Values.phorvex.audit.path }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.phorvex.console.port }}
+        readinessProbe:
+          httpGet: { path: /, port: http }
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: { path: /, port: http }
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.phorvex.console.resources | nindent 10 }}
+        volumeMounts:
+        {{- if .Values.phorvex.audit.enabled }}
+        - name: audit
+          mountPath: {{ .Values.phorvex.audit.path | dir }}
+          readOnly: true
+        {{- end }}
+        # workload_attack.go writes the SecurityEvent manifest with os.CreateTemp before
+        # applying it. With readOnlyRootFilesystem that fails, so /tmp must be writable —
+        # an emptyDir keeps the root filesystem read-only while allowing it.
+        - name: console-tmp
+          mountPath: /tmp
+{{- end }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled }}
       volumes:
+      {{- if .Values.phorvex.epss.enabled }}
       - name: epss
         configMap:
           name: {{ .Values.phorvex.epss.configMapName }}
+      {{- end }}
+      {{- if .Values.phorvex.audit.enabled }}
+      - name: audit
+        {{- if .Values.phorvex.audit.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "phorvex.fullname" . }}-audit
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.phorvex.console.enabled }}
+      - name: console-tmp
+        emptyDir: {}
+      {{- end }}
       {{- end }}
       {{- with .Values.phorvex.nodeSelector }}
       nodeSelector:
