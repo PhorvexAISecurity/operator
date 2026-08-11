@@ -17,6 +17,14 @@ on:
         description: 'End-to-End target (see End-to-End/config.json)'
         type: string
         default: voicebot
+      force_release:
+        description: 'Release the images already built for the current main SHA (re-deploy / recover a missed release) instead of running E2E'
+        type: boolean
+        default: false
+      release_from:
+        description: 'force_release only — release THIS existing image tag instead of the current SHA (e.g. sha-36612f3). Also how you roll back: name an older tag.'
+        type: string
+        default: ''
 
 permissions:
   id-token:      write   # request OIDC JWT (build jobs assume the AWS role)
@@ -291,7 +299,10 @@ jobs:
   # checks, config, trace fields — actually runs. The gate on the PR's own code is the
   # post-merge run in `deploy`, which executes after ArgoCD has rolled the new image out.
   e2e:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # A forced release is not a test run: e2e-main covers it after the rollout.
+    if: |
+      github.event_name == 'pull_request'
+      || (github.event_name == 'workflow_dispatch' && !inputs.force_release)
     runs-on: ubuntu-latest
     # The pipeline fires REAL attacks and reads a shared audit stream. Two runs at once
     # would interleave their attacks in the same capture window and make attribution
@@ -402,11 +413,18 @@ jobs:
     # their paths did not change. Without the explicit result checks below, a merge that
     # touched only the console would never produce a version. `failure` still blocks;
     # `skipped` does not.
+    # force_release exists because a merge that changes only CI config builds nothing, so
+    # there is no path back to a deploy without an unrelated dummy commit. It also covers
+    # re-deploying and recovering a release that was missed.
     if: |
-      github.event_name == 'push' && github.ref == 'refs/heads/main' && !cancelled()
+      !cancelled()
       && needs.chart-sync.result == 'success'
       && needs.build-operator.result != 'failure'
       && needs.build-console.result != 'failure'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        || (github.event_name == 'workflow_dispatch' && inputs.force_release)
+      )
     runs-on: ubuntu-latest
     concurrency:
       group: phorvex-deploy-main
@@ -438,8 +456,17 @@ jobs:
             esac
           fi
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Next version: $NEXT (previous: ${LAST:-none})"
+
+          # Which already-built image this version points at. Normally the commit being
+          # released, but a forced release can name one explicitly — a merge that only
+          # changed CI config builds nothing, so HEAD has no image, and rolling back means
+          # releasing an OLDER image on purpose.
+          SRC="${{ inputs.release_from }}"
+          if [ -z "$SRC" ]; then
+            SRC="sha-$(git rev-parse --short HEAD)"
+          fi
+          echo "sha_tag=$SRC" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT (previous: ${LAST:-none}) from image tag: $SRC"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -449,47 +476,82 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      - name: Tag the built images with the version
+      # Which images exist is decided from the BUILD JOBS' results, not by asking ECR.
+      #
+      # This previously called `aws ecr describe-images`, which the CI role has no
+      # permission for — iam-ecr-policy.json grants DescribeRepositories but not
+      # DescribeImages. Every call returned AccessDenied, the guard silently concluded
+      # "nothing was built", the version bump became a no-op, the push step was skipped by
+      # its own condition, and the failure only surfaced 16 minutes later as a timeout in a
+      # step that was waiting for a rollout that had never been requested.
+      #
+      # The job that built the image is the authority on whether it exists, needs no extra
+      # IAM permission, and cannot silently answer "no".
+      - name: Decide what was built
+        id: built
         env:
-          REG: ${{ steps.ecr.outputs.registry }}
-          V:   ${{ steps.version.outputs.version }}
-          SHA: ${{ steps.version.outputs.sha_tag }}
+          OPERATOR: ${{ needs.build-operator.result }}
+          CONSOLE:  ${{ needs.build-console.result }}
+          FORCED:   ${{ github.event_name == 'workflow_dispatch' && inputs.force_release }}
+        run: |
+          echo "build-operator=$OPERATOR  build-console=$CONSOLE  forced=$FORCED"
+          BUMP=""
+          if [ "$FORCED" = "true" ]; then
+            # A forced release pins BOTH components to the current main SHA. Nothing is
+            # assumed about whether those images exist — the re-tag step below reads each
+            # manifest and fails loudly if one is missing, which is the honest answer.
+            BUMP="ci:phorvex-tag ci:console-tag"
+          else
+            [ "$OPERATOR" = "success" ] && BUMP="$BUMP ci:phorvex-tag"
+            [ "$CONSOLE"  = "success" ] && BUMP="$BUMP ci:console-tag"
+          fi
+          BUMP="${BUMP# }"
+          echo "markers=$BUMP" >> "$GITHUB_OUTPUT"
+          if [ -z "$BUMP" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Neither image was rebuilt by this merge (both jobs skipped), so there is nothing to version or deploy."
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "will bump:$BUMP"
+          fi
+
+      - name: Tag the built images with the version
+        if: steps.built.outputs.any == 'true'
+        env:
+          REG:     ${{ steps.ecr.outputs.registry }}
+          V:       ${{ steps.version.outputs.version }}
+          SHA:     ${{ steps.version.outputs.sha_tag }}
+          MARKERS: ${{ steps.built.outputs.markers }}
         run: |
           # Re-tag the manifest that was just built rather than rebuilding it: a second
           # build is not guaranteed to be bit-identical, and deploying an image that was
           # never the one CI tested defeats the point of testing it.
-          for repo in phorvex phorvex-console; do
-            if aws ecr describe-images --repository-name "$repo" \
-                 --image-ids imageTag="$SHA" >/dev/null 2>&1; then
-              docker buildx imagetools create -t "$REG/$repo:$V" "$REG/$repo:$SHA"
-              echo "tagged $repo:$SHA -> $V"
-            else
-              echo "::notice::$repo has no $SHA image (unchanged this merge) — leaving its pinned tag alone"
-            fi
+          #
+          # No `|| true` here. If a re-tag fails the release must stop, because the next
+          # step would otherwise pin values-eks.yaml to a tag that does not exist in ECR
+          # and ArgoCD would roll the cluster into ImagePullBackOff.
+          for marker in $MARKERS; do
+            case "$marker" in
+              ci:phorvex-tag) repo=phorvex ;;
+              ci:console-tag) repo=phorvex-console ;;
+              *) echo "::error::unknown marker $marker"; exit 1 ;;
+            esac
+            docker buildx imagetools create -t "$REG/$repo:$V" "$REG/$repo:$SHA"
+            echo "tagged $repo:$SHA -> $V"
           done
 
       - name: Write the version into the GitOps values
         id: bump
+        if: steps.built.outputs.any == 'true'
         env:
-          REG: ${{ steps.ecr.outputs.registry }}
-          V:   ${{ steps.version.outputs.version }}
-          SHA: ${{ steps.version.outputs.sha_tag }}
+          V:       ${{ steps.version.outputs.version }}
+          MARKERS: ${{ steps.built.outputs.markers }}
         run: |
           F=deploy/helm/phorvex-stack/values-eks.yaml
-          # Only bump the image that was actually rebuilt this merge. Pinning a component
-          # to a version whose image was never built would make ArgoCD chase a tag that
-          # does not exist in ECR, and the rollout would hang on ImagePullBackOff.
-          BUMP=""
-          aws ecr describe-images --repository-name phorvex \
-            --image-ids imageTag="$SHA" >/dev/null 2>&1 && BUMP="$BUMP ci:phorvex-tag"
-          aws ecr describe-images --repository-name phorvex-console \
-            --image-ids imageTag="$SHA" >/dev/null 2>&1 && BUMP="$BUMP ci:console-tag"
-          echo "bumping markers:${BUMP:- none}"
-
           # Done in Python rather than sed: the `-i` flag differs between GNU and BSD, and
           # a rewrite rule that silently no-ops is the worst possible failure here — CI
           # would tag and push a release whose values file still pins the previous image.
-          python3 - "$F" "$V" $BUMP <<'PY'
+          python3 - "$F" "$V" $MARKERS <<'PY'
           import re, sys
           path, version, markers = sys.argv[1], sys.argv[2], sys.argv[3:]
           src = open(path, encoding="utf-8").read()
@@ -506,10 +568,15 @@ jobs:
           PY
           git diff --stat "$F"
           if git diff --quiet "$F"; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            # An image was built, so the file MUST have moved. Unchanged means the markers
+            # no longer match the file — the release would otherwise be tagged and pushed
+            # while still pinning the previous image, which is the quiet failure this whole
+            # job was rewritten to make impossible.
+            echo "::error::values-eks.yaml did not change even though $MARKERS was built."
+            echo "::error::Either it is already pinned to v$V, or the '# ci:' markers were edited."
+            exit 1
           fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit, tag and push
         if: steps.bump.outputs.changed == 'true'
@@ -527,6 +594,10 @@ jobs:
           git push origin "v$V"
 
       - name: Wait for ArgoCD to roll it out
+        # Only wait for a rollout that was actually requested. Without this guard a merge
+        # that pushed nothing still polled for 15 minutes and then failed, pointing at
+        # ArgoCD instead of at the step that had quietly done nothing.
+        if: steps.bump.outputs.changed == 'true'
         env:
           SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
@@ -557,7 +628,13 @@ jobs:
 
   # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
   e2e-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Runs after any real deploy, however it was triggered.
+    if: |
+      !cancelled() && needs.deploy.result == 'success'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        || (github.event_name == 'workflow_dispatch' && inputs.force_release)
+      )
     needs: deploy
     runs-on: ubuntu-latest
     concurrency:
