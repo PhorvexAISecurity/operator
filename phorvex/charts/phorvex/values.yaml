@@ -30,11 +30,16 @@ phorvex:
   # can be refreshed without a rebuild; the file arrives as a ConfigMap.
   epss:
     enabled: false
-    # Name of an EXISTING ConfigMap holding the cache (the chart does not create it —
-    # the data is an operational feed, not desired state that belongs in git).
     configMapName: phorvex-epss
     mountPath: /etc/phorvex
     fileName: epss-cache.json
+    # Create the ConfigMap from `data` below, rather than expecting it to already exist.
+    # The Deployment mounts it, so a missing ConfigMap means the pod never starts — which
+    # makes it a startup dependency, and a startup dependency that exists only as a
+    # hand-applied object is a cluster that cannot be rebuilt from git.
+    # Set false when an external pipeline owns the ConfigMap instead.
+    create: false
+    data: ""
   # Write the decision audit to a JSONL file. The console streams /api/live from a FILE,
   # so without this there is nothing live to stream — which is why the in-cluster console
   # could only ever serve the stale snapshot baked into its image.
