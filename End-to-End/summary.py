@@ -39,6 +39,10 @@ def main():
     counts = doc.get("counts", {})
     checks = doc.get("checks", [])
     target = (doc.get("target") or {}).get("name") or "—"
+    baselined = doc.get("baselined") or []
+    new_failures = doc.get("newFailures") or []
+    reasons = doc.get("baselineReasons") or {}
+    stale = doc.get("staleBaseline") or []
 
     out = []
     if a.marker:
@@ -47,6 +51,23 @@ def main():
     out.append("")
     out.append(blurb)
     out.append("")
+
+    # A red report next to a green check is exactly the kind of thing that erodes trust in
+    # a gate, so it is explained at the top rather than left to be discovered.
+    if baselined and not new_failures:
+        out.append(f"> **No new regressions.** All {len(baselined)} failing check(s) are "
+                   f"known and recorded in `End-to-End/baseline.json`, so this does not "
+                   f"block the merge. The report still reports them as failures.")
+        out.append("")
+    elif new_failures:
+        out.append(f"> **{len(new_failures)} new failure(s) not in the baseline:** "
+                   + ", ".join(f"`{i}`" for i in new_failures) + ". This blocks the merge.")
+        out.append("")
+    if stale:
+        out.append(f"> ⚠️ `{'`, `'.join(stale)}` now **passes** but is still listed in "
+                   f"`baseline.json`. Delete the entry — a baseline that outlives its cause "
+                   f"is a permanent blind spot.")
+        out.append("")
 
     # The headline numbers. `skip` is shown as prominently as `pass` on purpose: a board of
     # 30 passes and 20 skips is not the same claim as 50 passes, and hiding the skips is
@@ -65,12 +86,21 @@ def main():
     if bad:
         out.append("### Failed checks")
         out.append("")
-        out.append("| id | severity | check | what went wrong |")
-        out.append("|:--|:--|:--|:--|")
+        out.append("| id | severity | known? | check | what went wrong |")
+        out.append("|:--|:--|:--|:--|:--|")
         for c in bad:
-            out.append(f"| `{c['id']}` | {c.get('severity', '?')} | {c['title']} "
+            mark = "baseline" if c["id"] in baselined else "**new**"
+            out.append(f"| `{c['id']}` | {c.get('severity', '?')} | {mark} | {c['title']} "
                        f"| {c['summary']} |")
         out.append("")
+        if reasons:
+            out.append("<details><summary>Why the known failures are accepted</summary>")
+            out.append("")
+            for cid, why in reasons.items():
+                out.append(f"- **`{cid}`** — {why}")
+            out.append("")
+            out.append("</details>")
+            out.append("")
     if warned:
         out.append("<details><summary>Warnings (" + str(len(warned)) + ")</summary>")
         out.append("")

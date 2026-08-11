@@ -100,6 +100,30 @@ Both post to Telegram, and both take the `phorvex-e2e-live` concurrency group: t
 fires real attacks into one shared audit stream, so two runs at once would interleave their
 attacks in the same capture window and make attribution unreliable.
 
+### The baseline
+
+`baseline.json` lists checks that are known to fail right now, each with a reason and the
+condition that clears it. CI passes `--baseline baseline.json`, which changes **only the
+exit code**: a baselined failure is still a failure in the report, in the dashboard and in
+the pull-request comment.
+
+The distinction it draws is between *already broken* and *broken by this change*. A gate
+that demands an all-green board cannot be adopted onto a system that has a known defect —
+the first pull request is blocked by something it did not cause, and the usual response is
+to disable the gate entirely. This keeps the gate on and narrows what it asserts to the one
+thing a pull request can actually be held responsible for.
+
+Two rules keep it from rotting into a list of muted checks:
+
+- **Every entry needs a `clears_when`.** An entry without an exit condition is a disabled
+  check wearing a disguise.
+- **A baselined check that starts passing is reported as an error.** The run prints it, the
+  PR comment calls it out, and `staleBaseline` records it in the run JSON — because a
+  baseline that outlives its cause is a permanent blind spot, and the failure mode is
+  silent.
+
+Removing the last entry is the goal, not the exception.
+
 **What a PR run does and does not prove.** There is one live cluster and no ephemeral
 environment, so a pull-request run exercises the build that is *currently deployed*, not the
 build the PR would produce. It proves the contracts still hold, and it exercises any change

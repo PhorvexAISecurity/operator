@@ -115,7 +115,7 @@ def read_policy(cluster, namespace):
 
 
 def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, run_label=None,
-        report_url=None):
+        report_url=None, baseline=None):
     ctx = Ctx(cfg)
     t = Transport(cfg["transport"])
     console = Console(t, cfg["console"])
@@ -271,8 +271,25 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     soft = [r for r in results if (r["status"] == "fail" and r["severity"] == "minor")
             or r["status"] == "warn"]
     verdict = "FAIL" if hard else ("WARN" if soft else "PASS")
-    n.stage(5, "fail" if hard else ("warn" if soft else "ok"),
-            f"✔{tally['pass']} ✘{tally['fail']} !{tally['warn']} –{tally['skip']}")
+
+    # The verdict above stays honest: a contract violation is a FAIL whether or not anyone
+    # wrote it down. The baseline only separates "already broken" from "broken by this
+    # change", because that is the question a pull-request gate is actually asking.
+    known = dict((baseline or {}).get("checks") or {})
+    baselined = [r["id"] for r in hard if r["id"] in known]
+    new_failures = [r["id"] for r in hard if r["id"] not in known]
+    # A baselined check that PASSES means the entry outlived its cause. Left alone it
+    # becomes a permanent hole in the gate, so it is reported loudly rather than silently
+    # tolerated.
+    stale = [r["id"] for r in results if r["status"] == "pass" and r["id"] in known]
+    for cid in baselined:
+        log(f"↷ {cid} از پیش شناخته‌شده است — {known[cid].get('reason', '')[:110]}", 1)
+    for cid in stale:
+        log(f"! {cid} دیگر خطا نمی‌دهد — ورودی‌اش را از baseline.json حذف کنید", 1)
+
+    n.stage(5, "fail" if new_failures else ("warn" if (soft or hard) else "ok"),
+            f"✔{tally['pass']} ✘{tally['fail']} !{tally['warn']} –{tally['skip']}"
+            + (f" ({len(baselined)} شناخته‌شده)" if baselined else ""))
 
     # ── 6 · clear + report ───────────────────────────────────────────────────
     n.running(6)
@@ -294,6 +311,12 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
         "target": ctx.target,
         "verdict": verdict,
         "tally": tally,
+        # What the gate acted on, recorded next to the verdict so a green CI run next to a
+        # red report is self-explaining rather than suspicious.
+        "baselined": baselined,
+        "newFailures": new_failures,
+        "staleBaseline": stale,
+        "baselineReasons": {k: v.get("reason") for k, v in known.items() if k in baselined},
         "preflight": ctx.preflight,
         "attackResponse": attack_response,
         "policy": {"maxMovesPerTick": ctx.max_moves_per_tick,
@@ -320,15 +343,27 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
 
     log(f"\n══ نتیجه: {verdict}  "
         f"(✔{tally['pass']}  ✘{tally['fail']}  !{tally['warn']}  –{tally['skip']})")
+    if baselined:
+        log(f"   {len(baselined)} خطای شناخته‌شده: {', '.join(baselined)}")
+    if new_failures:
+        log(f"   {len(new_failures)} خطای تازه: {', '.join(new_failures)}")
     log(f"   {jpath}")
     log(f"   {hpath}")
 
     # CI passes a URL template so the channel links the published report, not a path on a
     # runner that is about to be destroyed.
     url = report_url.replace("{stamp}", stamp) if report_url else None
+    extra = []
+    if baselined:
+        extra.append(f"از پیش شناخته‌شده: {', '.join(baselined)}")
+    if stale:
+        extra.append(f"baseline کهنه (حذف شود): {', '.join(stale)}")
     n.finish(verdict, tally, url,
-             failures=[r["id"] for r in results if r["status"] == "fail"])
-    return run_doc, 1 if verdict == "FAIL" else 0
+             failures=[r["id"] for r in results if r["status"] == "fail"], extra=extra)
+
+    # Exit non-zero only for a hard failure nobody has accounted for. With no baseline
+    # loaded this is exactly the old behaviour: every hard failure is a new one.
+    return run_doc, 1 if new_failures else 0
 
 
 def main():
@@ -347,6 +382,10 @@ def main():
     ap.add_argument("--report-url", default=None,
                     help="URL template for the published report; {stamp} is replaced with "
                          "the run id, e.g. https://ci-report.phorvex.ai/pr-42/run-{stamp}.html")
+    ap.add_argument("--baseline", default=None,
+                    help="known-failure file (see baseline.json). Failures listed there are "
+                         "still reported as failures, but do not set a non-zero exit code — "
+                         "so CI gates on NEW regressions rather than on absolute state.")
     a = ap.parse_args()
 
     cfg = json.loads(Path(a.config).read_text(encoding="utf-8"))
@@ -357,13 +396,23 @@ def main():
     if a.mode == "attack" and not a.target:
         ap.error("--mode attack به --target نیاز دارد (فهرست: --list-targets)")
 
+    baseline = None
+    if a.baseline:
+        # A missing or malformed baseline is fatal rather than ignored: silently falling
+        # back to "no known failures" would turn a typo in a CI path into a red build that
+        # looks like a real regression.
+        baseline = json.loads(Path(a.baseline).read_text(encoding="utf-8"))
+        n_known = len((baseline.get("checks") or {}))
+        log(f"● baseline: {a.baseline} ({n_known} چک شناخته‌شده)")
+
     n = Notifier(enabled=a.telegram, log=lambda m: log(m, 1))
     if a.telegram and not n.enabled:
         log("هشدار: --telegram داده شد ولی TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID تنظیم نیست "
             "— اعلان‌ها خاموش‌اند")
     try:
         _, rc = run(cfg, a.mode, a.target, Path(a.out), a.stream_seconds,
-                    notifier=n, run_label=a.run_label, report_url=a.report_url)
+                    notifier=n, run_label=a.run_label, report_url=a.report_url,
+                    baseline=baseline)
         return rc
     except TransportError as e:
         log(f"خطای ترابری: {e}")

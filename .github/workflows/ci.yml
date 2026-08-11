@@ -325,7 +325,7 @@ jobs:
           set +e
           python3 pipeline/e2e.py \
             --mode "$MODE" --target "$E2E_TARGET" \
-            --telegram \
+            --telegram --baseline baseline.json \
             --run-label "$LABEL" \
             --report-url "https://ci-report.phorvex.ai/$PREFIX/run-{stamp}.html"
           echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
@@ -585,7 +585,7 @@ jobs:
           set +e
           python3 pipeline/e2e.py \
             --mode attack --target "$E2E_TARGET" \
-            --telegram \
+            --telegram --baseline baseline.json \
             --run-label "main · v$V · post-deploy" \
             --report-url "https://ci-report.phorvex.ai/main/run-{stamp}.html"
           echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
