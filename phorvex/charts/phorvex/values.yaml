@@ -30,11 +30,54 @@ phorvex:
   # can be refreshed without a rebuild; the file arrives as a ConfigMap.
   epss:
     enabled: false
-    # Name of an EXISTING ConfigMap holding the cache (the chart does not create it —
-    # the data is an operational feed, not desired state that belongs in git).
     configMapName: phorvex-epss
     mountPath: /etc/phorvex
     fileName: epss-cache.json
+    # Create the ConfigMap from `data` below, rather than expecting it to already exist.
+    # The Deployment mounts it, so a missing ConfigMap means the pod never starts — which
+    # makes it a startup dependency, and a startup dependency that exists only as a
+    # hand-applied object is a cluster that cannot be rebuilt from git.
+    # Set false when an external pipeline owns the ConfigMap instead.
+    create: false
+    data: ""
+  # Write the decision audit to a JSONL file. The console streams /api/live from a FILE,
+  # so without this there is nothing live to stream — which is why the in-cluster console
+  # could only ever serve the stale snapshot baked into its image.
+  audit:
+    enabled: false
+    path: /audit/live.jsonl
+    # 0 = unbounded. The operator rotates the file itself (internal/audit/rotate.go).
+    maxBytes: 268435456
+    persistence:
+      # A PVC rather than an emptyDir so the decision history survives a restart. The
+      # volume is shared between the operator and the console container INSIDE ONE POD,
+      # so ReadWriteOnce is sufficient and no EFS/RWX filesystem is needed.
+      enabled: true
+      storageClass: ""
+      size: 5Gi
+
+  # Run the console as a second container in this pod.
+  #
+  # They are co-located because the console reads the audit as a local file and the
+  # operator writes it as a local file. Two Deployments cannot share a ReadWriteOnce
+  # volume, and the alternative — an RWX filesystem — means provisioning EFS for what is
+  # one file on one node. Co-location is also what already works on the jump host.
+  #
+  # The cost is a shared lifecycle: the console restarts whenever the operator does.
+  console:
+    enabled: false
+    image:
+      repository: ""
+      tag: ""
+      pullPolicy: IfNotPresent
+    port: 8090
+    # Matches the console image's own CMD (deploy/docker/console.Dockerfile).
+    root: /data
+    web: /app/web
+    resources:
+      limits: { cpu: 500m, memory: 256Mi }
+      requests: { cpu: 10m, memory: 64Mi }
+
   # Escape hatches, so a flag added to the operator does not require a chart release
   # before it can be deployed — and, more importantly, so a live deployment never has to be
   # hand-patched out from under Helm again.

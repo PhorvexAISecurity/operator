@@ -120,7 +120,7 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     t = Transport(cfg["transport"])
     console = Console(t, cfg["console"])
     cluster = Cluster(t)
-    metrics = Metrics(t, (cfg.get("audit_writer") or {}).get("metrics_url"))
+    metrics = Metrics(t, cfg.get("audit_writer"))
     cap = cfg["capture"]
     started = datetime.now(timezone.utc)
     n = notifier or Notifier(enabled=False)
@@ -137,7 +137,7 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     ctx.preflight["controllers"] = ctx.controller_pods
     ctx.writer_metrics = metrics.scrape()
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
-    ctx.preflight["auditWriter"] = {"metricsUrl": metrics.url, "killSwitchEngaged": ks}
+    ctx.preflight["auditWriter"] = {"metricsUrl": metrics.describe(), "killSwitchEngaged": ks}
     if ks is not None:
         log(f"نویسنده‌ی حسابرسی: کلید توقف = {'فعال (فقط تصمیم، بدون اقدام)' if ks else 'خاموش'}", 1)
     for name, meta in ctx.controller_pods.items():

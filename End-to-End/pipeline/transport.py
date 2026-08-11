@@ -150,17 +150,58 @@ class Metrics:
     instead of inferring it from an absence.
     """
 
-    def __init__(self, transport, url):
+    def __init__(self, transport, cfg):
         self.t = transport
-        self.url = url
+        cfg = cfg or {}
+        self.url = cfg.get("metrics_url")
+        # The in-cluster operator publishes metrics on a container port with no Service and
+        # no ingress, so there is no URL the jump host can curl. Rather than expose an
+        # operator's internals to the internet just to read one gauge, go through the API
+        # server's pod proxy — the same credentials kubectl already uses for ground truth.
+        self.proxy = cfg.get("kubectl_pod_proxy")
+
+    def describe(self):
+        if self.proxy:
+            p = self.proxy
+            return f"kubectl proxy {p['namespace']}/{p['selector']}:{p['port']}{p.get('path', '/metrics')}"
+        return self.url or "—"
 
     def scrape(self, timeout=15):
+        if self.proxy:
+            return self._scrape_proxy(timeout)
         if not self.url:
             return {}
         rc, out, _ = self.t.run(
             f"curl -s -m {timeout - 3} {shlex.quote(self.url)}", timeout=timeout)
         if rc != 0 and not out:
             return {}
+        return self._parse(out)
+
+    def _scrape_proxy(self, timeout):
+        """Read the operator's own metrics through the API server's pod proxy.
+
+        The pod name is resolved at scrape time rather than configured: the operator is
+        recreated on every deploy, and a stale pod name would return an empty scrape that
+        looks exactly like "the gauge is absent" — which is the one thing check A06 must
+        never get wrong.
+        """
+        p = self.proxy
+        ns, sel, port = p["namespace"], p["selector"], int(p["port"])
+        path = p.get("path", "/metrics")
+        cmd = (
+            f"POD=$(kubectl -n {shlex.quote(ns)} get pod -l {shlex.quote(sel)} "
+            f"--field-selector=status.phase=Running "
+            f"-o jsonpath='{{.items[0].metadata.name}}') && "
+            f"[ -n \"$POD\" ] && "
+            f"kubectl get --raw \"/api/v1/namespaces/{ns}/pods/$POD:{port}/proxy{path}\""
+        )
+        rc, out, _ = self.t.run(cmd, timeout=timeout)
+        if rc != 0 and not out:
+            return {}
+        return self._parse(out)
+
+    @staticmethod
+    def _parse(out):
         vals = {}
         for line in out.splitlines():
             if line.startswith("#") or " " not in line:

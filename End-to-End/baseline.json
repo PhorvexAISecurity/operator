@@ -10,14 +10,32 @@
     "disabled check, and the pipeline warns when a baselined check starts passing so the",
     "entry gets deleted instead of quietly becoming a permanent blind spot."
   ],
+  "_system_under_test": [
+    "This suite now tests the IN-CLUSTER stack — the one ArgoCD deploys — so both entries",
+    "below clear on a rollout of the current images.",
+    "",
+    "It previously drove a console at localhost:8095 on the jump host: a systemd service",
+    "running a binary built from a loose, un-versioned copy of the source at",
+    "/home/hami/phorvex-src, never built by CI and never deployed by ArgoCD. Asserting",
+    "contracts against code that cannot be traced to a commit proves nothing about what",
+    "ships, so the target moved to console.phorvex.ai.",
+    "",
+    "That move required the operator to actually write an audit (the console streams",
+    "/api/live from a FILE, and in-cluster there was none — it was serving the snapshot",
+    "baked into its own image, decisions from a kind cluster dated two months earlier).",
+    "The console now runs as a container in the operator's pod, sharing the audit volume.",
+    "",
+    "The jump-host services are still running and are now redundant. Retire them once a",
+    "few runs have gone green against the cluster."
+  ],
   "checks": {
     "A07": {
-      "reason": "The deployed operator predates the killSwitch stamp on model.Decision / audit.Record / runner.processTenant, so a kill-switched decision is byte-identical in the audit to one whose actuator failed. The source fix is in this repo; the running binary is older.",
-      "clears_when": "the first merge to main that rebuilds the operator image is rolled out by ArgoCD"
+      "reason": "The deployed operator predates the killSwitch stamp on model.Decision / audit.Record / runner.processTenant, so a kill-switched decision is byte-identical in the audit to one whose actuator failed. Note the in-cluster operator runs with the kill switch OFF (phorvex_kill_switch_engaged 0) and does actuate, so this check may resolve differently against it than it did against the kill-switched jump-host operator.",
+      "clears_when": "an operator image built from this source is rolled out by ArgoCD"
     },
     "A05": {
-      "reason": "The deployed console (0.4.4) predates voice being added to armedWorkloads, so it answers the attack POST with 'namespace not armed for live attack: voice' and no decision can change. Confirmed from attackResponse in the run JSON, not inferred from the absence of a reaction.",
-      "clears_when": "the first merge to main that rebuilds the console image is rolled out by ArgoCD"
+      "reason": "The deployed console predates voice being added to armedWorkloads, so it answers the attack POST with 'namespace not armed for live attack: voice'. Read from attackResponse in the run JSON, not inferred from the absence of a reaction. The in-cluster console additionally had no kubectl in its image and no rights to write SecurityEvents, so it could never have fired an attack at all — both are fixed in this change.",
+      "clears_when": "a console image built from this source is rolled out by ArgoCD"
     }
   }
 }

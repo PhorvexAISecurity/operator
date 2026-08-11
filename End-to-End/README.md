@@ -33,6 +33,26 @@ That is this project.
 | 5 | چک‌ها | run the assertion catalogue over every record | — |
 | 6 | گزارش | write `run-*.json` and a self-contained dashboard | — |
 
+## What it drives
+
+The **in-cluster** stack — the one ArgoCD deploys:
+
+| | |
+|---|---|
+| console | `https://console.phorvex.ai`, a container inside the operator's pod |
+| audit | `/audit/live.jsonl` on a PVC the operator writes and the console streams |
+| kill-switch gauge | the operator's `:8080/metrics`, read through the API server's pod proxy |
+| ground truth | `kubectl` over SSH to the jump host — deliberately independent of all of the above |
+
+The console has to sit in the operator's pod because it streams `/api/live` from a **file**
+and the operator writes that file. Two Deployments cannot share a ReadWriteOnce volume, and
+an RWX filesystem would mean provisioning EFS for one append-only file.
+
+Earlier this suite drove a console on the jump host instead. That console was a systemd
+service running a binary built from a loose copy of the source — never built by CI, never
+deployed by ArgoCD — so the contracts were being asserted against code that could not be
+traced to a commit. The jump host is now only the SSH route to `kubectl`.
+
 ## Running it
 
 ```bash
