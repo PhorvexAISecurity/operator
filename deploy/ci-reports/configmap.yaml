@@ -1,0 +1,44 @@
+# nginx config for the report host.
+#
+# The reports are self-contained HTML written by End-to-End/pipeline/report.py — no build
+# step, no backend, no database. This server's whole job is to hand them back and to let a
+# person walk the directory tree when they have a run id but not a link.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ci-reports-nginx
+  namespace: ci-reports
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      server_name _;
+      root /usr/share/nginx/html;
+      charset utf-8;
+
+      # The dashboards are Persian/English mixed and report.py writes UTF-8. Without this
+      # nginx labels .html as ISO-8859-1 and every Persian stage name renders as mojibake.
+      charset_types text/html text/plain application/json;
+
+      # A run id is enough to find a report: autoindex turns /pr-42/ into a browsable list
+      # of that PR's runs, newest last.
+      autoindex on;
+      autoindex_exact_size off;
+      autoindex_localtime on;
+
+      # Reports are immutable once written — run-<stamp>.html never changes. latest.html
+      # does, so it must never be cached or a PR comment shows the previous run.
+      location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+      }
+      location ~ ^/.*/latest\.html$ {
+        add_header Cache-Control "no-store";
+      }
+      location ~ ^/.*/run-.*\.(html|json)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+      }
+      location / {
+        try_files $uri $uri/ =404;
+      }
+    }
