@@ -10,14 +10,32 @@
     "disabled check, and the pipeline warns when a baselined check starts passing so the",
     "entry gets deleted instead of quietly becoming a permanent blind spot."
   ],
+  "_system_under_test": [
+    "IMPORTANT, and not obvious: this suite does NOT test the in-cluster deployment.",
+    "config.json points the console at localhost:8095 on the jump host, which is a",
+    "systemd service running a binary built from a loose copy of the source at",
+    "/home/hami/phorvex-src — not a git checkout, and not managed by ArgoCD:",
+    "",
+    "  phorvex-console.service           bin/console  -addr 0.0.0.0:8095",
+    "  phorvex-operator.service          bin/phorvex  --global-kill-switch  (:18080)",
+    "  phorvex-operator-vcluster.service bin/phorvex                        (:18082)",
+    "",
+    "The console streams /api/live from an audit FILE, and the file is written by that",
+    "kill-switched local operator. The in-cluster operator runs without --audit-json and",
+    "so writes no such file, which is why this second stack exists at all.",
+    "",
+    "Consequence: an ArgoCD rollout changes NOTHING that these checks observe. Both",
+    "entries below clear only when the jump-host binaries are rebuilt from current",
+    "source and their services restarted."
+  ],
   "checks": {
     "A07": {
-      "reason": "The deployed operator predates the killSwitch stamp on model.Decision / audit.Record / runner.processTenant, so a kill-switched decision is byte-identical in the audit to one whose actuator failed. The source fix is in this repo; the running binary is older.",
-      "clears_when": "the first merge to main that rebuilds the operator image is rolled out by ArgoCD"
+      "reason": "The jump-host operator binary predates the killSwitch stamp on model.Decision / audit.Record / runner.processTenant, so a kill-switched decision is byte-identical in the audit to one whose actuator failed. That operator runs WITH --global-kill-switch, which is exactly the case the stamp exists to distinguish.",
+      "clears_when": "phorvex-operator.service on the jump host runs a binary built from this source"
     },
     "A05": {
-      "reason": "The deployed console (0.4.4) predates voice being added to armedWorkloads, so it answers the attack POST with 'namespace not armed for live attack: voice' and no decision can change. Confirmed from attackResponse in the run JSON, not inferred from the absence of a reaction.",
-      "clears_when": "the first merge to main that rebuilds the console image is rolled out by ArgoCD"
+      "reason": "The jump-host console binary predates voice being added to armedWorkloads, so it answers the attack POST with 'namespace not armed for live attack: voice (armed: litellm, mock-rag-chatbot, phorvex-live-demo)' — naming two namespaces that no longer exist — and no decision can change. Read from attackResponse in the run JSON, not inferred from the absence of a reaction.",
+      "clears_when": "phorvex-console.service on the jump host runs a binary built from this source"
     }
   }
 }
