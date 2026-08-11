@@ -1,4 +1,4 @@
-name: CI — Build & Push to ECR
+name: CI — Build, E2E & Deploy
 
 on:
   push:
@@ -6,26 +6,34 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      e2e_mode:
+        description: 'End-to-End mode'
+        type: choice
+        options: [observe, attack]
+        default: observe
+      e2e_target:
+        description: 'End-to-End target (see End-to-End/config.json)'
+        type: string
+        default: voicebot
 
-# Required for GitHub OIDC token so aws-actions can assume the IAM role
-# without any long-lived credentials stored as secrets.
 permissions:
   id-token:      write   # request OIDC JWT (build jobs assume the AWS role)
-  contents:      read    # checkout
-  pull-requests: read    # dorny/paths-filter lists PR changed files via the API
+  contents:      write   # release job pushes the version bump commit and the tag
+  pull-requests: write   # the E2E job posts / updates its report comment
 
 env:
   AWS_REGION: us-east-2
+  E2E_TARGET: ${{ inputs.e2e_target || 'voicebot' }}
 
-# ── Required GitHub secret ────────────────────────────────────────────────────
-# AWS_ROLE_ARN  — ARN of the IAM role GitHub Actions will assume via OIDC.
-#                 Example: arn:aws:iam::753556437180:role/github-actions-phorvex
-#
-# One-time AWS setup (see deploy/eks/iam-oidc-setup.sh for the exact commands):
-#   1. Create the GitHub OIDC identity provider in IAM (once per account).
-#   2. Create the role with the trust policy in deploy/eks/iam-oidc-trust.json.
-#   3. Attach the ECR permissions policy (deploy/eks/iam-ecr-policy.json).
-#   4. Add the role ARN as the AWS_ROLE_ARN secret in this repo.
+# ── Required GitHub secrets ───────────────────────────────────────────────────
+# AWS_ROLE_ARN           IAM role assumed via OIDC (see deploy/eks/iam-oidc-setup.sh)
+# PHORVEX_SSH_HOST       jump host that can reach the console and the EKS API
+# PHORVEX_SSH_USER       ssh user on that host
+# PHORVEX_SSH_PASSWORD   its password (passed to sshpass via env, never argv)
+# TELEGRAM_BOT_TOKEN     bot that posts the per-stage board
+# TELEGRAM_CHAT_ID       channel id, e.g. -1001234567890
 #
 # Optional repository variable:
 #   BUILD_PHOENIX = true   — enable the extended Phoenix operator build job.
@@ -58,10 +66,75 @@ jobs:
             phoenix:
               - 'build/phoenix-extended/**'
 
-  # ── 2. Phorvex operator ────────────────────────────────────────────────────
+  # ── 2. Chart hygiene ───────────────────────────────────────────────────────
+  # The Helm chart vendors a copy of the PhorvexPolicy CRD. That copy silently fell behind
+  # api/v1alpha1 once already: it was missing `reactiveOnly` and four actuator actions, so
+  # a GitOps sync would have DELETED those fields from the live CRD and broken every policy
+  # using them. CD makes a stale vendored CRD destructive, so it is now a build error.
+  chart-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vendored CRD matches config/crd/bases
+        run: |
+          if ! diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml \
+                       phorvex/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml; then
+            echo "::error::phorvex/charts/phorvex/crds/ is stale. Copy the generated CRD:"
+            echo "::error::cp phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml phorvex/charts/phorvex/crds/"
+            exit 1
+          fi
+
+      - uses: azure/setup-helm@v4
+        with: { version: v3.16.4 }
+
+      - name: Chart renders
+        run: |
+          helm template phorvex deploy/helm/phorvex-stack -n phorvex-system \
+            -f deploy/helm/phorvex-stack/values.yaml \
+            -f deploy/helm/phorvex-stack/values-eks.yaml --include-crds > /dev/null
+
+      - name: Vendored subchart matches its source
+        run: |
+          # ArgoCD renders the chart from the vendored charts/*.tgz, NOT from
+          # phorvex/charts/phorvex — so a subchart edit that is never re-packaged is
+          # invisible until it silently fails to deploy.
+          #
+          # This compares EXTRACTED CONTENTS, not the .tgz bytes: `helm package` stamps
+          # gzip metadata at build time, so the archive is not byte-reproducible and a
+          # byte comparison would fail on every single run.
+          V=$(grep -E '^version:' phorvex/charts/phorvex/Chart.yaml | awk '{print $2}')
+          TGZ="deploy/helm/phorvex-stack/charts/phorvex-$V.tgz"
+          if [ ! -f "$TGZ" ]; then
+            echo "::error::$TGZ is missing — phorvex/charts/phorvex is at version $V."
+            echo "::error::Run: helm dependency update deploy/helm/phorvex-stack (and bump the dependency in Chart.yaml)"
+            exit 1
+          fi
+          mkdir -p /tmp/vendored && tar xzf "$TGZ" -C /tmp/vendored
+          # templates/, values.yaml and crds/ are archived verbatim, so they diff directly.
+          # Chart.yaml does NOT: `helm package` reorders its keys and reflows the folded
+          # description, so it is compared as parsed data instead of as text.
+          if ! diff -r --exclude=.helmignore --exclude=Chart.yaml \
+                 phorvex/charts/phorvex /tmp/vendored/phorvex; then
+            echo "::error::the vendored subchart differs from phorvex/charts/phorvex."
+            echo "::error::Run: helm dependency update deploy/helm/phorvex-stack && git add deploy/helm/phorvex-stack"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import sys, yaml
+          a = yaml.safe_load(open("phorvex/charts/phorvex/Chart.yaml"))
+          b = yaml.safe_load(open("/tmp/vendored/phorvex/Chart.yaml"))
+          drift = {k: (a.get(k), b.get(k)) for k in set(a) | set(b) if a.get(k) != b.get(k)}
+          if drift:
+              for k, (x, y) in drift.items():
+                  print(f"::error::Chart.yaml {k}: source={x!r} vendored={y!r}")
+              sys.exit("vendored Chart.yaml is stale — helm dependency update")
+          print("  Chart.yaml matches")
+          PY
+
+  # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
-    needs: changes
-    # Always build on version tags so ECR has a clean semver image on every release.
+    needs: [changes, chart-sync]
     if: needs.changes.outputs.operator == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -104,9 +177,9 @@ jobs:
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
-  # ── 3. Phorvex console (Next.js + Go backend) ─────────────────────────────
+  # ── 4. Phorvex console (Next.js + Go backend) ─────────────────────────────
   build-console:
-    needs: changes
+    needs: [changes, chart-sync]
     if: needs.changes.outputs.console == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -149,9 +222,9 @@ jobs:
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
-  # ── 4. Extended Phoenix operator (optional — BUILD_PHOENIX gate) ───────────
+  # ── 5. Extended Phoenix operator (optional — BUILD_PHOENIX gate) ───────────
   build-phoenix:
-    needs: changes
+    needs: [changes, chart-sync]
     if: needs.changes.outputs.phoenix == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     env:
@@ -208,3 +281,339 @@ jobs:
           labels:     ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
+
+  # ── 6. End-to-End against the live system ─────────────────────────────────
+  #
+  # WHAT THIS DOES AND DOES NOT PROVE, on a pull request:
+  # there is one live cluster and no ephemeral environment, so a PR run exercises the
+  # DEPLOYED build, not the build this PR would produce. It proves (a) the 39 contracts
+  # still hold right now, and (b) that any change this PR makes to the suite itself —
+  # checks, config, trace fields — actually runs. The gate on the PR's own code is the
+  # post-merge run in `deploy`, which executes after ArgoCD has rolled the new image out.
+  e2e:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # The pipeline fires REAL attacks and reads a shared audit stream. Two runs at once
+    # would interleave their attacks in the same capture window and make attribution
+    # meaningless — exactly the failure the suite exists to detect. Serialise, and never
+    # cancel a run mid-attack: a cancelled run never posts its `clear`.
+    concurrency:
+      group: phorvex-e2e-live
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Run End-to-End
+        id: e2e
+        env:
+          PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
+          PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
+          PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+        working-directory: End-to-End
+        run: |
+          MODE="${{ inputs.e2e_mode || 'attack' }}"
+          PREFIX="pr-${{ github.event.pull_request.number || github.run_id }}"
+          LABEL="PR #${{ github.event.pull_request.number || '—' }} · ${GITHUB_SHA::7} · ${{ github.actor }}"
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          # Do NOT fail the step here: the report still has to be published and the comment
+          # posted when the run goes red. The verdict is re-raised at the end of the job.
+          set +e
+          python3 pipeline/e2e.py \
+            --mode "$MODE" --target "$E2E_TARGET" \
+            --telegram --baseline baseline.json \
+            --run-label "$LABEL" \
+            --report-url "https://ci-report.phorvex.ai/$PREFIX/run-{stamp}.html"
+          echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Publish report to ci-report.phorvex.ai
+        id: publish
+        if: always() && steps.e2e.outcome != 'skipped'
+        env:
+          PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
+          PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
+          PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+        working-directory: End-to-End
+        run: ./publish-report.sh runs "${{ steps.e2e.outputs.prefix }}"
+
+      - name: Build the summary
+        id: summary
+        if: always() && steps.e2e.outcome != 'skipped'
+        working-directory: End-to-End
+        run: |
+          RUN_JSON="$(ls -1 runs/run-*.json | sort | tail -1)"
+          python3 summary.py "$RUN_JSON" \
+            --url "${{ steps.publish.outputs.url }}" --marker > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment per PR, edited on each push. A new comment per push buries the
+      # conversation and makes the newest result the hardest one to find. summary.py writes
+      # an invisible marker into the body; that marker is how the previous comment is found.
+      - name: Find the previous report comment
+        id: find-comment
+        if: always() && github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- phorvex-e2e-report -->'
+
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        continue-on-error: true
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          body-path: End-to-End/comment.md
+          edit-mode: replace
+
+      - name: Keep the run artifacts
+        if: always() && steps.e2e.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ steps.e2e.outputs.prefix }}
+          path: End-to-End/runs/
+          retention-days: 30
+
+      - name: Re-raise the End-to-End verdict
+        if: always()
+        run: |
+          RC="${{ steps.e2e.outputs.verdict_rc }}"
+          if [ "$RC" != "0" ]; then
+            echo "::error::End-to-End failed (exit $RC) — see ${{ steps.publish.outputs.url }}"
+            exit "$RC"
+          fi
+          echo "End-to-End passed — ${{ steps.publish.outputs.url }}"
+
+  # ── 7. Release + GitOps deploy (main only) ────────────────────────────────
+  #
+  # The deploy is a COMMIT, not a cluster call. This job computes the next version, retags
+  # the images ECR already holds, writes the version into deploy/helm/phorvex-stack/
+  # values-eks.yaml and pushes. ArgoCD sees the new tag in git and rolls it out — so the
+  # cluster's state always has a commit that explains it, and a rollback is `git revert`.
+  deploy:
+    needs: [changes, chart-sync, build-operator, build-console]
+    # `needs` skips a job when any dependency was skipped, and the build jobs skip whenever
+    # their paths did not change. Without the explicit result checks below, a merge that
+    # touched only the console would never produce a version. `failure` still blocks;
+    # `skipped` does not.
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/main' && !cancelled()
+      && needs.chart-sync.result == 'success'
+      && needs.build-operator.result != 'failure'
+      && needs.build-console.result != 'failure'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: phorvex-deploy-main
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the version is derived from the tag history
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute the next version
+        id: version
+        run: |
+          # Semver from the tag history. A commit whose message contains [major] or [minor]
+          # bumps that component; everything else is a patch. Deliberately boring — the
+          # version has to be predictable from the commit alone.
+          LAST="$(git tag -l 'v*.*.*' --sort=-v:refname | head -1)"
+          if [ -z "$LAST" ]; then
+            NEXT="0.1.0"
+          else
+            IFS=. read -r MA MI PA <<< "${LAST#v}"
+            MSG="$(git log -1 --pretty=%B)"
+            case "$MSG" in
+              *"[major]"*) NEXT="$((MA+1)).0.0" ;;
+              *"[minor]"*) NEXT="$MA.$((MI+1)).0" ;;
+              *)           NEXT="$MA.$MI.$((PA+1))" ;;
+            esac
+          fi
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT (previous: ${LAST:-none})"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Tag the built images with the version
+        env:
+          REG: ${{ steps.ecr.outputs.registry }}
+          V:   ${{ steps.version.outputs.version }}
+          SHA: ${{ steps.version.outputs.sha_tag }}
+        run: |
+          # Re-tag the manifest that was just built rather than rebuilding it: a second
+          # build is not guaranteed to be bit-identical, and deploying an image that was
+          # never the one CI tested defeats the point of testing it.
+          for repo in phorvex phorvex-console; do
+            if aws ecr describe-images --repository-name "$repo" \
+                 --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+              docker buildx imagetools create -t "$REG/$repo:$V" "$REG/$repo:$SHA"
+              echo "tagged $repo:$SHA -> $V"
+            else
+              echo "::notice::$repo has no $SHA image (unchanged this merge) — leaving its pinned tag alone"
+            fi
+          done
+
+      - name: Write the version into the GitOps values
+        id: bump
+        env:
+          REG: ${{ steps.ecr.outputs.registry }}
+          V:   ${{ steps.version.outputs.version }}
+          SHA: ${{ steps.version.outputs.sha_tag }}
+        run: |
+          F=deploy/helm/phorvex-stack/values-eks.yaml
+          # Only bump the image that was actually rebuilt this merge. Pinning a component
+          # to a version whose image was never built would make ArgoCD chase a tag that
+          # does not exist in ECR, and the rollout would hang on ImagePullBackOff.
+          BUMP=""
+          aws ecr describe-images --repository-name phorvex \
+            --image-ids imageTag="$SHA" >/dev/null 2>&1 && BUMP="$BUMP ci:phorvex-tag"
+          aws ecr describe-images --repository-name phorvex-console \
+            --image-ids imageTag="$SHA" >/dev/null 2>&1 && BUMP="$BUMP ci:console-tag"
+          echo "bumping markers:${BUMP:- none}"
+
+          # Done in Python rather than sed: the `-i` flag differs between GNU and BSD, and
+          # a rewrite rule that silently no-ops is the worst possible failure here — CI
+          # would tag and push a release whose values file still pins the previous image.
+          python3 - "$F" "$V" $BUMP <<'PY'
+          import re, sys
+          path, version, markers = sys.argv[1], sys.argv[2], sys.argv[3:]
+          src = open(path, encoding="utf-8").read()
+          for marker in markers:
+              # Anchored on the `# ci:` comment, not on `tag:` alone, so an unrelated tag
+              # key elsewhere in the file can never be rewritten by accident.
+              pat = re.compile(rf'^(\s*tag:\s*)"[^"]*"(\s*#\s*{re.escape(marker)})',
+                               re.MULTILINE)
+              src, n = pat.subn(rf'\g<1>"{version}"\g<2>', src)
+              if n != 1:
+                  sys.exit(f"marker '{marker}' matched {n} times in {path} — expected 1")
+              print(f"  {marker} -> {version}")
+          open(path, "w", encoding="utf-8").write(src)
+          PY
+          git diff --stat "$F"
+          if git diff --quiet "$F"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit, tag and push
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name  "phorvex-ci[bot]"
+          git config user.email "ci@phorvex.ai"
+          git add deploy/helm/phorvex-stack/values-eks.yaml
+          # [skip ci] stops the version commit from re-triggering this workflow, which
+          # would otherwise version every version commit, forever.
+          git commit -m "release: v$V [skip ci]" -m "Deployed by ArgoCD from deploy/helm/phorvex-stack/values-eks.yaml."
+          git tag -a "v$V" -m "v$V"
+          git push origin HEAD:main
+          git push origin "v$V"
+
+      - name: Wait for ArgoCD to roll it out
+        env:
+          SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
+          USER_:   ${{ secrets.PHORVEX_SSH_USER }}
+          V:       ${{ steps.version.outputs.version }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          # The phorvex-stack Application runs with automated sync, so ArgoCD picks the
+          # commit up on its own reconciliation (~3 min). Rather than sleeping blindly,
+          # poll for the DEPLOYED image to become the version just released: the deploy is
+          # not done until the pods run it, and the E2E that follows would otherwise pass
+          # or fail on the previous build.
+          sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o LogLevel=ERROR "$USER_@$HOST" "V=$V bash -s" <<'EOS'
+          set -e
+          for i in $(seq 1 60); do
+            IMG=$(kubectl -n phorvex-system get deploy phorvex-phorvex \
+                  -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+            echo "[$i/60] deployed image: $IMG"
+            case "$IMG" in
+              *:"$V") kubectl -n phorvex-system rollout status deploy/phorvex-phorvex --timeout=180s; exit 0 ;;
+            esac
+            sleep 15
+          done
+          echo "ArgoCD did not roll out v$V within 15 minutes" >&2
+          exit 1
+          EOS
+
+  # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
+  e2e-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-latest
+    concurrency:
+      group: phorvex-e2e-live
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Run End-to-End against the deployed version
+        id: e2e
+        env:
+          PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
+          PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
+          PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+          V:                    ${{ needs.deploy.outputs.version }}
+        working-directory: End-to-End
+        run: |
+          set +e
+          python3 pipeline/e2e.py \
+            --mode attack --target "$E2E_TARGET" \
+            --telegram --baseline baseline.json \
+            --run-label "main · v$V · post-deploy" \
+            --report-url "https://ci-report.phorvex.ai/main/run-{stamp}.html"
+          echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Publish report to ci-report.phorvex.ai
+        id: publish
+        if: always()
+        env:
+          PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
+          PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
+          PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+        working-directory: End-to-End
+        run: ./publish-report.sh runs main
+
+      - name: Summary
+        if: always()
+        working-directory: End-to-End
+        run: |
+          RUN_JSON="$(ls -1 runs/run-*.json | sort | tail -1)"
+          python3 summary.py "$RUN_JSON" --url "${{ steps.publish.outputs.url }}" \
+            --title "Phorvex End-to-End — v${{ needs.deploy.outputs.version }} (post-deploy)" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Re-raise the End-to-End verdict
+        if: always()
+        run: |
+          RC="${{ steps.e2e.outputs.verdict_rc }}"
+          if [ "$RC" != "0" ]; then
+            echo "::error::Post-deploy End-to-End FAILED for v${{ needs.deploy.outputs.version }} — ${{ steps.publish.outputs.url }}"
+            exit "$RC"
+          fi

@@ -36,9 +36,22 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 FROM busybox:1.36 AS data
 WORKDIR /data
 COPY build/test-harness/ /data/build/test-harness/
-COPY phorvex/bin/console-audit.jsonl /data/phorvex/bin/console-audit.jsonl
+# console-audit.jsonl is a GENERATED runtime trail, excluded by .gitignore, so it is absent
+# from every clean checkout — a hard COPY of it made this image unbuildable in CI while
+# still working on a developer machine that happened to have run the console locally.
+# It is genuinely optional: newestAudit() in internal/console/server.go returns "" when the
+# file is missing, and the owner audit view degrades rather than breaking.
+#
+# The trailing * makes it a glob, which resolves to nothing instead of failing when the
+# file is absent — the same idiom as the familiar `COPY package.json package-lock.json* ./`.
+# A COPY still fails when ALL of its sources resolve to nothing, so phorvex/go.mod rides
+# along purely to guarantee one real match: it is always in the context (the gobuild stage
+# builds from it) and .dockerignore excludes only phorvex/bin/*.exe, not it. Deleted again
+# on the next line.
+COPY phorvex/go.mod phorvex/bin/console-audit.jsonl* /data/phorvex/bin/
 # Drop anything heavy/irrelevant the .dockerignore didn't catch (keep only out-* + audit).
-RUN cd /data/build/test-harness && \
+RUN rm -f /data/phorvex/bin/go.mod && \
+    cd /data/build/test-harness && \
     find . -maxdepth 1 -mindepth 1 ! -name 'out-*' -exec rm -rf {} + || true
 
 # ---- Final image ----

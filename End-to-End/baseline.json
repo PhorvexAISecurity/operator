@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "Checks that are KNOWN to fail right now, with the reason and the condition that",
+    "clears them. A baselined check still shows as FAIL in the report and in the pull",
+    "request comment — this file never changes what is reported, only whether CI treats",
+    "the run as a REGRESSION. The gate asks 'did this change break something new', which",
+    "is a question a red baseline can still answer.",
+    "",
+    "Every entry needs a 'clears_when'. A baseline without an exit condition is just a",
+    "disabled check, and the pipeline warns when a baselined check starts passing so the",
+    "entry gets deleted instead of quietly becoming a permanent blind spot."
+  ],
+  "checks": {
+    "A07": {
+      "reason": "The deployed operator predates the killSwitch stamp on model.Decision / audit.Record / runner.processTenant, so a kill-switched decision is byte-identical in the audit to one whose actuator failed. The source fix is in this repo; the running binary is older.",
+      "clears_when": "the first merge to main that rebuilds the operator image is rolled out by ArgoCD"
+    },
+    "A05": {
+      "reason": "The deployed console (0.4.4) predates voice being added to armedWorkloads, so it answers the attack POST with 'namespace not armed for live attack: voice' and no decision can change. Confirmed from attackResponse in the run JSON, not inferred from the absence of a reaction.",
+      "clears_when": "the first merge to main that rebuilds the console image is rolled out by ArgoCD"
+    }
+  }
+}

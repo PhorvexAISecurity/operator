@@ -5,5 +5,5 @@ description: >-
   brain (decide which workload to move, when, and which action by optimizing
   security gained against disruption cost) on top of UNMODIFIED Phoenix.
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "0.1.0-p0"

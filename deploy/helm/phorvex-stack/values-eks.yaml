@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EKS overlay — the desired state ArgoCD reconciles for the live cluster.
+#
+# This file was written to reproduce the RUNNING deployment byte-for-byte at the moment
+# ArgoCD adopted it, so the first sync is a no-op rather than a silent reconfiguration.
+# Several settings below (epss, actuator, operatorNamespace, the Phoenix tag) existed only
+# as hand-patches on the live Deployment and were not expressible in the chart; they are
+# desired state now, which is the point.
+#
+# The three image tags are MACHINE-EDITED. `.github/workflows/ci.yml` rewrites them on
+# every merge to main and pushes the commit — that commit is the deployment. Keep the
+# `tag:` keys on their own line and quoted, or the sed in the release job will miss them.
+# ─────────────────────────────────────────────────────────────────────────────
+global:
+  registry: 753556437180.dkr.ecr.us-east-2.amazonaws.com
+
+# ── Phoenix is deliberately NOT managed by ArgoCD ────────────────────────────
+# Phoenix is unmodified third-party software, already installed in this cluster, and the
+# copy vendored at deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz is OLDER than what is
+# running: its CRDs were generated with controller-gen v0.16.0 while the live
+# SecurityEvent / AdaptiveMovingTargetDefense CRDs are v0.17.2. A `kubectl diff` of the
+# rendered chart against the cluster showed the sync would DELETE 18 schema fields —
+# spec.baseline, spec.anomalyScore and spec.evidence among them — silently invalidating any
+# CR that uses them.
+#
+# CD for this repo means CD for Phorvex, the thing this repo builds. Adopting a third-party
+# dependency through a stale vendored chart is how a deploy pipeline destroys state it was
+# never asked to own. Upgrade Phoenix deliberately: refresh the vendored chart from
+# upstream, diff it against the cluster, then flip this to true.
+phoenix:
+  enabled: false
+
+phorvex:
+  enabled: true
+  installCRD: true
+  phorvex:
+    image:
+      # The phorvex subchart has no global-registry helper (unlike the dashboard), so the
+      # registry has to be spelled out in the repository here.
+      repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
+      tag: "sha-589fa1b"    # ci:phorvex-tag
+      pullPolicy: IfNotPresent
+    baseInterval: 10s
+    leaderElect: true
+    globalKillSwitch: false
+    prometheusUrl: http://prometheus.gpu-telemetry.svc.cluster.local:9090
+    gpuEnvelopeMax: 0.2925
+    operatorNamespace: phorvex-system
+    # hybrid drives Phoenix CRs and the direct path. This was an env var patched onto the
+    # live Deployment; dropping it on adoption would have changed which actuator runs, and
+    # the E2E checks A01–A04 assert on exactly that.
+    actuator: hybrid
+    epss:
+      enabled: true
+      configMapName: phorvex-epss
+      mountPath: /etc/phorvex
+      fileName: epss-cache.json
+    resources:
+      limits: { cpu: 500m, memory: 256Mi }
+      requests: { cpu: 10m, memory: 64Mi }
+
+dashboard:
+  enabled: true
+  image:
+    repository: phorvex/phorvex-console   # basename + global.registry => <ecr>/phorvex-console
+    tag: "0.4.4"          # ci:console-tag
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 8090
+  service:
+    # LoadBalancer, matching the live Service. The public hostname console.phorvex.ai is
+    # served by a separately-applied ALB Ingress that this chart does not own — which is
+    # also why the phorvex-stack Application runs with prune: false.
+    type: LoadBalancer
+    port: 80
+  ingress:
+    enabled: false

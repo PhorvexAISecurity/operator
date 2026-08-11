@@ -18,6 +18,28 @@ phorvex:
   leaderElect: false
   metricsBindAddress: ":8080"
   healthProbeBindAddress: ":8081"
+  # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
+  # and its leader-election lease). Empty => the operator's own POD_NAMESPACE.
+  operatorNamespace: ""
+  # Actuator backend: hybrid drives Phoenix CRs AND the direct kubectl path; the operator's
+  # own default is used when this is empty. Surfaced here because the difference is visible
+  # in the audit (A01–A04 assert on what actually touched the cluster), so it must be part
+  # of desired state rather than a hand-patched env var.
+  actuator: ""
+  # EPSS exploit-probability cache. The operator reads it from a file so a scored CVE feed
+  # can be refreshed without a rebuild; the file arrives as a ConfigMap.
+  epss:
+    enabled: false
+    # Name of an EXISTING ConfigMap holding the cache (the chart does not create it —
+    # the data is an operational feed, not desired state that belongs in git).
+    configMapName: phorvex-epss
+    mountPath: /etc/phorvex
+    fileName: epss-cache.json
+  # Escape hatches, so a flag added to the operator does not require a chart release
+  # before it can be deployed — and, more importantly, so a live deployment never has to be
+  # hand-patched out from under Helm again.
+  extraArgs: []
+  extraEnv: []
   resources:
     limits:
       cpu: 500m

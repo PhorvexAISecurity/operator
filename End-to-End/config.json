@@ -1,0 +1,213 @@
+{
+  "_comment": "End-to-End pipeline configuration. No secrets live here — the SSH password is read from $PHORVEX_SSH_PASSWORD or ~/.phorvex-e2e/secret.",
+  "transport": {
+    "kind": "ssh",
+    "host": "87.106.63.105",
+    "user": "hami",
+    "port": 22,
+    "connect_timeout_sec": 10
+  },
+  "console": {
+    "base": "http://localhost:8095",
+    "lens": "operator"
+  },
+  "capture": {
+    "stream_seconds": 12,
+    "post_attack_seconds": 45,
+    "settle_seconds": 6,
+    "max_bytes": 8000000
+  },
+  "invariants": {
+    "net_identity_tolerance": 0.005,
+    "known_engines": [
+      "p0-greedy",
+      "p1-coverage"
+    ],
+    "known_phases": [
+      "ColdStarting",
+      "Warm",
+      "Idle"
+    ],
+    "known_stages": [
+      "recon",
+      "exploit",
+      "persist",
+      "lateral",
+      "impact",
+      "gpu-side-channel",
+      "model-theft",
+      "llm-jacking",
+      "prompt-inject-persist"
+    ],
+    "known_actions": [
+      "noop",
+      "rotate",
+      "quarantine",
+      "debugger",
+      "custom-inject",
+      "disable",
+      "identity-rotate",
+      "route-rotate",
+      "warm-swap",
+      "mig-rebind",
+      "kv-reset",
+      "endpoint-rotate",
+      "model-shard-replace",
+      "adapter-rotate",
+      "request-drain",
+      "guardrail-rotate",
+      "kv-migrate-invalidate"
+    ],
+    "known_laws": [
+      "availability-floor",
+      "slo-headroom",
+      "anti-over-rotation",
+      "stateful-integrity",
+      "vram-conservation",
+      "mig-validity",
+      "mig-device-required",
+      "ai-context-required",
+      "tokens-floor",
+      "code-exec-guard",
+      "panicking-law"
+    ],
+    "_law_reason_prefixes": "A law's Verdict.Reason does not always start with its Name() — e.g. availability-floor writes 'availability:'. These are the literal prefixes in internal/feasibility/*.go, so the check matches the code instead of guessing.",
+    "law_reason_prefixes": {
+      "availability-floor": [
+        "availability:"
+      ],
+      "slo-headroom": [
+        "slo:"
+      ],
+      "anti-over-rotation": [
+        "anti-over-rotation:"
+      ],
+      "stateful-integrity": [
+        "stateful-integrity:"
+      ],
+      "vram-conservation": [
+        "VRAM conservation:"
+      ],
+      "mig-validity": [
+        "MIG validity:"
+      ],
+      "mig-device-required": [
+        "mig-device-required:"
+      ],
+      "ai-context-required": [
+        "ai-context-required:"
+      ],
+      "tokens-floor": [
+        "tokens/sec below floor"
+      ],
+      "code-exec-guard": [
+        "code-exec-guard:"
+      ],
+      "panicking-law": [
+        "feasibility law "
+      ]
+    },
+    "phoenix_actions": [
+      "rotate",
+      "quarantine"
+    ],
+    "max_controller_restarts": 10
+  },
+  "_targets_comment": "litellm, mock-rag-chatbot and phorvex-live-demo were removed from the cluster — ArgoCD now owns that capacity. voicebot replaces them as the stateless rotate target: it already carries r6th.io/rotation-target=true and a voice-defense PhorvexPolicy.",
+  "targets": [
+    {
+      "name": "voicebot",
+      "namespace": "voice",
+      "kind": "workload",
+      "attack": {
+        "path": "/api/workload/attack",
+        "body": {
+          "namespace": "voice",
+          "action": "foothold"
+        }
+      },
+      "clear": {
+        "path": "/api/workload/attack",
+        "body": {
+          "namespace": "voice",
+          "action": "clear"
+        }
+      },
+      "expect": {
+        "stateful": false
+      }
+    },
+    {
+      "name": "nats",
+      "namespace": "nats",
+      "kind": "workload",
+      "attack": {
+        "path": "/api/workload/attack",
+        "body": {
+          "namespace": "nats",
+          "action": "foothold"
+        }
+      },
+      "clear": {
+        "path": "/api/workload/attack",
+        "body": {
+          "namespace": "nats",
+          "action": "clear"
+        }
+      },
+      "expect": {
+        "stateful": true,
+        "forbidden_actions": [
+          "rotate"
+        ]
+      }
+    },
+    {
+      "name": "vllm-kvcache",
+      "namespace": "vllm",
+      "kind": "vllm",
+      "attack": {
+        "path": "/api/vllm/attack",
+        "body": {
+          "action": "kvcache"
+        }
+      },
+      "clear": {
+        "path": "/api/vllm/attack",
+        "body": {
+          "action": "reset"
+        }
+      },
+      "expect": {
+        "stateful": false,
+        "gpu": true
+      }
+    },
+    {
+      "name": "vllm-poison",
+      "namespace": "vllm",
+      "kind": "vllm",
+      "attack": {
+        "path": "/api/vllm/attack",
+        "body": {
+          "action": "poison"
+        }
+      },
+      "clear": {
+        "path": "/api/vllm/attack",
+        "body": {
+          "action": "reset"
+        }
+      },
+      "expect": {
+        "stateful": false,
+        "gpu": true
+      }
+    }
+  ],
+  "operator_namespace": "phorvex-system",
+  "audit_writer": {
+    "_comment": "Prometheus endpoint of the operator that WRITES the audit the console streams. Its kill-switch gauge is what distinguishes a decision-only mirror from a broken actuator.",
+    "metrics_url": "http://localhost:18080/metrics"
+  }
+}
