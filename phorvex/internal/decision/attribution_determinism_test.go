@@ -58,9 +58,9 @@ func TestAttributionOrderIsStableAcrossRuns(t *testing.T) {
 func TestAttributionOrdersByContributionThenSource(t *testing.T) {
 	c := actionset.Candidate{
 		CoverKeys: []string{
-			"ns/pod|podIdentity|a",  // 0.10
-			"ns/pod|inMemory|b",     // 0.50  <- largest, must come first
-			"ns/pod|session|c",      // 0.10  <- ties with podIdentity, "session" sorts after
+			"ns/pod|podIdentity|a", // 0.10
+			"ns/pod|inMemory|b",    // 0.50  <- largest, must come first
+			"ns/pod|session|c",     // 0.10  <- ties with podIdentity, "session" sorts after
 		},
 		ECost: 0,
 	}
