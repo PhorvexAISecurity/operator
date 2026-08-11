@@ -7,6 +7,8 @@
 package recon
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -63,6 +65,34 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	for _, a := range []model.Action{model.ActionDebugger, model.ActionCustomInject} {
 		if len(gc[a]) != 0 || len(ac[a]) != 0 {
 			t.Errorf("%q is manual-by-design and must have NO cover set (got some)", a)
+		}
+	}
+}
+
+// TestActionDocCommentsDoNotClaimUnearnedEffects binds the model/types.go doc comments to what the
+// handlers actually do (PHVX-9e). The comments there described identity-rotate as rotating the
+// "SA-token/IP" and route-rotate as repointing the "Service selector / EndpointSlice". Neither is
+// true — both write a single label — and it is those false descriptions that justified the recon
+// cover grants this ticket removed. Correcting handlers_k8s.go while leaving model/types.go saying
+// the opposite is how a disproven claim survives a fix.
+func TestActionDocCommentsDoNotClaimUnearnedEffects(t *testing.T) {
+	src, err := os.ReadFile("../model/types.go")
+	if err != nil {
+		t.Fatalf("read model/types.go: %v", err)
+	}
+	text := string(src)
+	for _, banned := range []struct{ phrase, why string }{
+		{"SA-token/IP", "identity-rotate does not change the SA token, the UID or the IP"},
+		{"repoints Service selector", "route-rotate writes a label; endpoint-rotate is what re-keys a Service"},
+	} {
+		if strings.Contains(text, banned.phrase) {
+			t.Errorf("model/types.go still claims %q — %s", banned.phrase, banned.why)
+		}
+	}
+	// And the positive half: the corrected text must actually say what the action does.
+	for _, required := range []string{"identity-epoch", "route-epoch"} {
+		if !strings.Contains(text, required) {
+			t.Errorf("model/types.go no longer names the %q label the action really writes", required)
 		}
 	}
 }
