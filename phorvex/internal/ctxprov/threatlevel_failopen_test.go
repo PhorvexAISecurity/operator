@@ -1,6 +1,7 @@
 package ctxprov
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -94,4 +95,50 @@ func TestCanonicalLevelsAreOrdered(t *testing.T) {
 		}
 		prev = got
 	}
+}
+
+// TestUnknownThreatLevelsAreBounded is the growth guard. The map is keyed on a string that arrives
+// from outside the operator, and this code path exists precisely BECAUSE that string is not from a
+// fixed vocabulary — so an unbounded map here is a leak waiting for a misconfigured detector. The
+// operator never resets it, so it would only grow. Against the unbounded version this test fails
+// with a count of 5000.
+func TestUnknownThreatLevelsAreBounded(t *testing.T) {
+	resetUnknownThreatLevels()
+	for i := 0; i < 5000; i++ {
+		unknownThreatLevel(fmt.Sprintf("garbage-level-%d", i))
+	}
+	got := UnknownThreatLevelsSeen()
+	if len(got) > unknownThreatLevelBudget {
+		t.Fatalf("retained %d distinct levels against a budget of %d — the map is unbounded and is "+
+			"keyed on unvalidated external input", len(got), unknownThreatLevelBudget)
+	}
+	if !UnknownThreatLevelsTruncated() {
+		t.Error("overflowing the budget must be visible; dropping silently hides the stronger signal " +
+			"that the detector is emitting unbounded variety")
+	}
+}
+
+// TestUnknownThreatLevelsStillReportUnderTheBudget pins that the cap did not break the feature it
+// guards: a handful of genuinely unmapped levels must still be reported in full.
+func TestUnknownThreatLevelsStillReportUnderTheBudget(t *testing.T) {
+	resetUnknownThreatLevels()
+	for _, l := range []string{"sev-9", "URGENT", "p0"} {
+		unknownThreatLevel(l)
+		unknownThreatLevel(l) // repeated every tick: must not double-count
+	}
+	got := UnknownThreatLevelsSeen()
+	if len(got) != 3 {
+		t.Fatalf("expected the 3 distinct levels, got %v", got)
+	}
+	if UnknownThreatLevelsTruncated() {
+		t.Error("three levels is well inside the budget; truncation must not be reported")
+	}
+}
+
+// resetUnknownThreatLevels clears the package-level state so the two tests above do not interfere
+// with each other or with anything that ran earlier in the package.
+func resetUnknownThreatLevels() {
+	unknownThreatLevels.Range(func(k, _ any) bool { unknownThreatLevels.Delete(k); return true })
+	unknownThreatLevelCount.Store(0)
+	unknownThreatLevelTruncated.Store(false)
 }

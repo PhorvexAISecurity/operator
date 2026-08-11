@@ -7,6 +7,7 @@ package ctxprov
 import (
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
@@ -23,11 +24,43 @@ const threatRankUnknown = 2
 // the same bad level every tick must not flood the log.
 var unknownThreatLevels sync.Map
 
+// unknownThreatLevelBudget caps how many DISTINCT out-of-vocabulary levels are retained.
+//
+// This map is keyed on a string that arrives from OUTSIDE the operator — a SecurityEvent's
+// ThreatLevel — and the whole reason this code path exists is that the value is not from a fixed
+// vocabulary. An unbounded map keyed on unvalidated input is a memory leak waiting for a
+// misconfigured detector, and a growth primitive for anything that can author SecurityEvents. The
+// operator is long-lived and never resets this, so it would only ever grow.
+//
+// The cap is diagnostic, not defensive: 32 distinct levels is far more than a real detector
+// vocabulary, so hitting it means something is generating garbage — which is itself the signal, and
+// is why unknownThreatLevelsTruncated exists rather than the overflow being dropped silently.
+const unknownThreatLevelBudget = 32
+
+var (
+	unknownThreatLevelCount     atomic.Int64
+	unknownThreatLevelTruncated atomic.Bool
+)
+
 // unknownThreatLevel notes an out-of-vocabulary level. Exposed for the metric/report path; the
 // dedupe means the caller can invoke it on every event without cost.
 func unknownThreatLevel(level string) {
-	unknownThreatLevels.LoadOrStore(level, struct{}{})
+	if _, loaded := unknownThreatLevels.Load(level); loaded {
+		return // already recorded; no growth, no counter churn
+	}
+	if unknownThreatLevelCount.Load() >= unknownThreatLevelBudget {
+		unknownThreatLevelTruncated.Store(true)
+		return
+	}
+	if _, loaded := unknownThreatLevels.LoadOrStore(level, struct{}{}); !loaded {
+		unknownThreatLevelCount.Add(1)
+	}
 }
+
+// UnknownThreatLevelsTruncated reports that MORE distinct out-of-vocabulary levels were seen than
+// the budget retains. A true here is a stronger signal than the list itself: the detector is not
+// merely using an unmapped level, it is emitting unbounded variety.
+func UnknownThreatLevelsTruncated() bool { return unknownThreatLevelTruncated.Load() }
 
 // UnknownThreatLevelsSeen returns the out-of-vocabulary threat levels observed so far, sorted.
 // A non-empty result is an operator-visible signal that the detector vocabulary needs extending —
