@@ -80,32 +80,71 @@ func TestInstantQueryKeepsFiniteSamples(t *testing.T) {
 
 // TestPodMetricsNeverYieldsNonFiniteTelemetry is the end-to-end property at the ingest boundary:
 // whatever Prometheus serves, no Telemetry field handed to the decision path may be non-finite.
+//
+// The first version of this test ranged over the returned map and checked each field. That was
+// VACUOUS: when every series is NaN the guard drops every sample, so no pod is ever added and the
+// range body never ran — the test passed without asserting anything, which is precisely the failure
+// mode this file was written to catch. It now asserts BOTH halves explicitly.
 func TestPodMetricsNeverYieldsNonFiniteTelemetry(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		// Every series answers NaN — the worst case (a fully stale exporter).
-		fmt.Fprint(w, vectorBody("api-0", "NaN"))
-	}))
-	defer srv.Close()
+	// (a) Fully stale exporter: every series NaN. The honest outcome is that the pod is ABSENT,
+	//     not present-with-zeroes — an absent metric is recoverable, a zeroed one is a lie.
+	t.Run("all NaN => the pod is dropped entirely", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, vectorBody("api-0", "NaN"))
+		}))
+		defer srv.Close()
+		p := NewPromHTTP(srv.URL, DefaultPromQueries())
+		tele, err := p.PodMetrics(context.Background(), "prod", []string{"api-0"})
+		if err != nil {
+			t.Fatalf("PodMetrics: %v", err)
+		}
+		if len(tele) != 0 {
+			t.Fatalf("every series was NaN, so nothing should have been ingested; got %d pods: %v", len(tele), tele)
+		}
+	})
 
-	p := NewPromHTTP(srv.URL, DefaultPromQueries())
-	tele, err := p.PodMetrics(context.Background(), "prod", []string{"api-0"})
-	if err != nil {
-		t.Fatalf("PodMetrics: %v", err)
-	}
-	for pod, tl := range tele {
-		for name, v := range map[string]float64{
-			"ReqRate": tl.ReqRate, "LatencyMs": tl.LatencyMs, "P99Ms": tl.P99Ms,
-			"QueueDepth": tl.QueueDepth, "ConnCount": tl.ConnCount, "BytesIn": tl.BytesIn,
-			"BytesOut": tl.BytesOut, "GPUUtil": tl.GPUUtil, "SyscallRate": tl.SyscallRate,
-			"TokensPerSec": tl.TokensPerSec,
-		} {
-			if math.IsNaN(v) || math.IsInf(v, 0) {
-				t.Errorf("pod %s: Telemetry.%s is non-finite (%v) — it would poison ECost and "+
-					"silently stop the optimizer selecting", pod, name, v)
+	// (b) The case that actually exercises the loop: SOME series are finite, so the pod IS present
+	//     and every field it carries must be finite. Without this arm the assertion above is the
+	//     only thing running, and the per-field check is dead code.
+	t.Run("mixed => the pod is present and every field is finite", func(t *testing.T) {
+		var nth int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			nth++
+			raw := "NaN"
+			if nth%2 == 1 {
+				raw = "12.5" // alternate finite / non-finite across the signal queries
+			}
+			fmt.Fprint(w, vectorBody("api-0", raw))
+		}))
+		defer srv.Close()
+		p := NewPromHTTP(srv.URL, DefaultPromQueries())
+		tele, err := p.PodMetrics(context.Background(), "prod", []string{"api-0"})
+		if err != nil {
+			t.Fatalf("PodMetrics: %v", err)
+		}
+		if len(tele) == 0 {
+			t.Fatal("some series were finite, so the pod must be present — otherwise the per-field " +
+				"check below never runs and this test asserts nothing")
+		}
+		for pod, tl := range tele {
+			if !tl.Present {
+				t.Errorf("pod %s: ingested but Present=false", pod)
+			}
+			for name, v := range map[string]float64{
+				"ReqRate": tl.ReqRate, "LatencyMs": tl.LatencyMs, "P99Ms": tl.P99Ms,
+				"QueueDepth": tl.QueueDepth, "ConnCount": tl.ConnCount, "BytesIn": tl.BytesIn,
+				"BytesOut": tl.BytesOut, "GPUUtil": tl.GPUUtil, "SyscallRate": tl.SyscallRate,
+				"TokensPerSec": tl.TokensPerSec,
+			} {
+				if math.IsNaN(v) || math.IsInf(v, 0) {
+					t.Errorf("pod %s: Telemetry.%s is non-finite (%v) — it would poison ECost and "+
+						"silently stop the optimizer selecting", pod, name, v)
+				}
 			}
 		}
-	}
+	})
 }
 
 // TestParseFloatAcceptsNaN documents WHY the guards are required — this is not hypothetical:
