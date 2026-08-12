@@ -1,0 +1,29 @@
+# App-of-apps root. Applied once by hand; everything else in the cluster follows from it.
+#
+# It lives outside apps/ deliberately — a root that also watched its own directory would
+# manage itself, and a bad commit to root.yaml would then be un-revertable by ArgoCD
+# because the controller reconciling it is the thing the commit broke.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    # Deleting the root must cascade, or its children become orphans that no longer
+    # reconcile but keep running.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PhorvexSecurity/operator.git
+    targetRevision: main
+    path: deploy/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true         # an Application removed from apps/ should really go away
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
