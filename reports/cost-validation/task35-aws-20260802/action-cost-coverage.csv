@@ -1,0 +1,18 @@
+action,c0_prediction_mae,candidate_generated,classification,cost_components_used,cost_model_available,decision_impact,executable,implemented,mean_observed_cost,observed_cost_sample_count
+rotate,0.725178472939116,yes,executable,"norm,flow,state,gpu,availability",yes,C0 selected 0 vs oracle 3,yes,yes,0.09634152706088404,12
+quarantine,0.19503709133564331,yes,executable,"norm,flow,availability",yes,C0 selected 4 vs oracle 1,yes,yes,0.09579624199769003,15
+debugger,0.4194875839679353,yes,executable,flow,yes,C0 selected 1 vs oracle 0,yes,yes,0.0006924160320646907,1
+custom-inject,0.4200937283975,yes,executable,flow,yes,C0 selected 0 vs oracle 0,yes,yes,0.0001462716025,1
+disable,,no,not implemented,"flow,availability",yes,C0 selected 0 vs oracle 0,no,no,,0
+identity-rotate,0.41330369057588595,yes,executable,flow,yes,C0 selected 0 vs oracle 0,yes,yes,0.006996309424114037,1
+route-rotate,0.4200945276305,yes,executable,flow,yes,C0 selected 0 vs oracle 1,yes,yes,0.0001454723695,1
+warm-swap,,yes,not executable,"flow,state,gpu",yes,C0 selected 0 vs oracle 0,no,yes,,0
+mig-rebind,,yes,not executable,"flow,state,gpu,availability",yes,C0 selected 0 vs oracle 0,no,yes,,0
+kv-reset,,yes,not executable,"flow,state,gpu",yes,C0 selected 0 vs oracle 0,no,yes,,0
+endpoint-rotate,0.41902238617757437,yes,executable,flow,yes,C0 selected 0 vs oracle 0,yes,yes,0.0013376138224256806,1
+model-shard-replace,,yes,not executable,"flow,state,gpu",yes,C0 selected 0 vs oracle 0,no,yes,,0
+adapter-rotate,,yes,not executable,"flow,gpu",yes,C0 selected 0 vs oracle 0,no,yes,,0
+request-drain,,yes,not executable,"flow,availability",yes,C0 selected 0 vs oracle 0,no,yes,,0
+guardrail-rotate,,yes,not executable,flow,yes,C0 selected 0 vs oracle 0,no,yes,,0
+kv-migrate-invalidate,,yes,not executable,"flow,state,gpu",yes,C0 selected 0 vs oracle 0,no,yes,,0
+noop,0.00628085674654998,yes,executable,,yes,C0 selected 2 vs oracle 2,yes,yes,0.00628085674654998,21

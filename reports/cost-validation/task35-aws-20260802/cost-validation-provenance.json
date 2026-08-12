@@ -1,0 +1,162 @@
+{
+  "action_catalog": "benchmarks/cost-validation/action-catalog.json",
+  "action_catalog_sha256": "ed4092d48f4b5fbc0c077616cf1a6cb791cd93087e799d9204ca0d8525d3eb00",
+  "environment": {
+    "benchmark_revision": "8ceb4b917e3407c9e7f0b270010602ca92cf64a1",
+    "cluster": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+    "collector_host": "ubuntu",
+    "costprobe_sha256": "ef75836ba4959803a03fbafe0fceac5d607f1a3096e07a2fd8b78a906e9a42a4",
+    "kubectl_version": "Client Version: v1.36.1\nKustomize Version: v5.8.1",
+    "mutation_scope": "disposable benchmark namespace only",
+    "namespace": "phorvex-cost-validate-8ceb4b9",
+    "node_inventory": "NAME                                          STATUS   ROLES    AGE     VERSION               INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                        KERNEL-VERSION                           CONTAINER-RUNTIME\nip-172-27-11-153.us-east-2.compute.internal   Ready    <none>   42d     v1.36.1-eks-0de9cde   172.27.11.153   <none>        Amazon Linux 2023.12.20260608   6.18.33-63.124.amzn2023.x86_64 (amd64)   containerd://2.2.4+unknown\nip-172-27-12-134.us-east-2.compute.internal   Ready    <none>   38d     v1.36.1-eks-0de9cde   172.27.12.134   <none>        Amazon Linux 2023.12.20260608   6.18.33-63.124.amzn2023.x86_64 (amd64)   containerd://2.2.4+unknown\nip-172-27-12-137.us-east-2.compute.internal   Ready    <none>   6d23h   v1.36.2-eks-bca9cf6   172.27.12.137   <none>        Amazon Linux 2023.12.20260720   6.18.38-73.137.amzn2023.x86_64 (amd64)   containerd://2.2.4+unknown\nip-172-27-12-51.us-east-2.compute.internal    Ready    <none>   45d     v1.36.1-eks-0de9cde   172.27.12.51    <none>        Amazon Linux 2023.12.20260608   6.18.33-63.124.amzn2023.x86_64 (amd64)   containerd://2.2.4+unknown\nip-172-27-12-9.us-east-2.compute.internal     Ready    <none>   33h     v1.36.2-eks-93b80c6   172.27.12.9     <none>        Amazon Linux 2023.12.20260611   6.18.33-63.124.amzn2023.x86_64 (amd64)   containerd://2.2.4+unknown",
+    "observed_label_weights": "equal mean of available normalized disruption terms",
+    "production_workloads_mutated": false,
+    "schema_version": "phorvex.cost-validation-environment.v1",
+    "server_version": "Client Version: v1.36.1\nKustomize Version: v5.8.1\nServer Version: v1.36.2-eks-8f14419"
+  },
+  "evaluator_revision": "4e02c149c6a32813f9b09bc79ea201d9496b0813",
+  "evaluator_sha256": "45e87b4ca286599a56342154c1c894da625fbc43e0115d951df9914570ef5409",
+  "input": "../reports/cost-validation/task35-aws-20260802/cost-validation-observations.jsonl",
+  "input_sha256": "72b88773a35b94761cbeab250166ea9aee56ac9a6abccb7d742b480c2ad4e641",
+  "label": "equal-weight mean of available normalized availability, p99, TPS, Ready, state/KV, and GPU terms",
+  "observation_rows": 77,
+  "post_run_health": {
+    "benchmark_namespace_absent": true,
+    "captured_at": "2026-08-02T19:07:07.413712+00:00",
+    "cluster": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+    "deployment_restore": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:sha-589fa1b",
+      "reason": "a later external 0.4.3 rollout lacked --gpu-envelope-max and CrashLooped; restored the already live tested merge image",
+      "revision": "589fa1b12da91a0e632f58e9184d5a634c0da957"
+    },
+    "deployments": {
+      "operator-controller-manager": {
+        "available": 1,
+        "desired": 1,
+        "image": "ghcr.io/r6security/phoenix/amtd-operator:v0.2.2",
+        "ready": 1
+      },
+      "phorvex-console": {
+        "available": 1,
+        "desired": 1,
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console:0.4.3",
+        "ready": 1
+      },
+      "phorvex-phorvex": {
+        "available": 1,
+        "desired": 1,
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:sha-589fa1b",
+        "ready": 1
+      }
+    },
+    "operator_pods": [
+      {
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:sha-589fa1b",
+        "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:d667c7d11f155ba62c2db270ce2172dda33a53cc100f46741d35a2ff56ce0709",
+        "name": "phorvex-phorvex-84b9d85485-rf542",
+        "phase": "Running",
+        "ready": true,
+        "restarts": 0
+      }
+    ],
+    "schema_version": "phorvex.cost-validation-post-run-health.v2"
+  },
+  "post_run_health_sha256": "13ea39c6e7848d0c941d86dd08d886cf893d43559f20c6dfbebe0749265b1e0f",
+  "schema_version": "phorvex.cost-validation-evaluation.v1",
+  "test_groups": [
+    [
+      "action-coverage",
+      999
+    ],
+    [
+      "low-replica",
+      1
+    ],
+    [
+      "rag",
+      2
+    ],
+    [
+      "slo-hot",
+      2
+    ],
+    [
+      "stateful",
+      2
+    ],
+    [
+      "stateless-high",
+      1
+    ],
+    [
+      "stateless-low",
+      3
+    ]
+  ],
+  "test_rows": 18,
+  "train_groups": [
+    [
+      "connections",
+      1
+    ],
+    [
+      "connections",
+      2
+    ],
+    [
+      "connections",
+      3
+    ],
+    [
+      "low-replica",
+      2
+    ],
+    [
+      "low-replica",
+      3
+    ],
+    [
+      "rag",
+      1
+    ],
+    [
+      "rag",
+      3
+    ],
+    [
+      "slo-hot",
+      1
+    ],
+    [
+      "slo-hot",
+      3
+    ],
+    [
+      "stateful",
+      1
+    ],
+    [
+      "stateful",
+      3
+    ],
+    [
+      "stateless-high",
+      2
+    ],
+    [
+      "stateless-high",
+      3
+    ],
+    [
+      "stateless-low",
+      1
+    ],
+    [
+      "stateless-low",
+      2
+    ]
+  ],
+  "train_rows": 35,
+  "usable_rows": 53
+}
