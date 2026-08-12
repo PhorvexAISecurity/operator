@@ -354,6 +354,12 @@ type Decision struct {
 	CounterfactualNote string // why Phorvex's choice differs from R6's blind action
 	BlindCost      float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
 	DryRun         bool
+	// KillSwitch records that the GLOBAL kill switch suppressed actuation on this tick.
+	// Without it a kill-switched decision is byte-identical in the audit to one whose
+	// actuator silently failed — both read selected=true, dryRun=false, actuated=false —
+	// so a decision-only mirror looks exactly like a broken actuator. Kill-switch and
+	// dry-run are separate gates and must stay separately visible.
+	KillSwitch     bool
 	Actuated       bool
 	DecidedAt      time.Time
 
