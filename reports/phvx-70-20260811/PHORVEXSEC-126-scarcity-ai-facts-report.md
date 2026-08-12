@@ -43,6 +43,10 @@ lifted by the same factor. Against the pre-fix code it fails with the 4.00x figu
 
 **`TestScarcityPreservesWithinAssetOrdering`** — every within-asset ratio is unchanged by dispersion.
 
+The ratio test is taxonomy-independent: its plain-fact list intentionally excludes the renamed GPU
+fact, so combining this PR with PHORVEXSEC-121's `sideChannel → gpuContentionChannel` change still
+compiles and enforces the scarcity invariant. Commit `debfe52` binds that integration edge.
+
 ### A correction made while writing the second test
 
 Its first version compared *every* pair of facts and failed — correctly. Three facts deliberately
