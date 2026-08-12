@@ -27,8 +27,35 @@ RUN go mod download
 WORKDIR /workspace
 COPY phorvex/ phorvex/
 WORKDIR /workspace/phorvex
+# BuildStamp is what GET /api/version reports as the console's own version, and it is the
+# ONLY way to tell which console build is serving — the operator's version is read from the
+# live Deployment, but the console can only report what was compiled into it. Left unset it
+# defaults to "dev", which made the deployed console report "dev" against operator "0.4.6"
+# and tripped the End-to-End version-match check (P02) on every single run.
+ARG CONSOLE_VERSION=dev
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /console cmd/console/main.go
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
+      -a -o /console cmd/console/main.go
+
+# ---- Stage 2b: kubectl ----
+# internal/console/workload_attack.go fires a real attack by applying a SecurityEvent CR,
+# and it does that by SHELLING OUT to kubectl (the console cannot reach pod IPs directly).
+# Without the binary the endpoint fails with `exec: "kubectl": executable file not found`,
+# which is why the in-cluster console could never fire an attack and the End-to-End suite
+# had to drive a console running on the jump host instead.
+#
+# Pinned, and the checksum is verified: this binary is handed cluster-admin-shaped
+# credentials at runtime, so a silently substituted download is not an acceptable risk.
+FROM golang:1.26 AS kubectl
+ARG TARGETARCH
+ARG KUBECTL_VERSION=v1.31.4
+RUN set -eux; \
+    arch="${TARGETARCH:-amd64}"; \
+    curl -fsSLo /kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl"; \
+    curl -fsSLo /kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl.sha256"; \
+    echo "$(cat /kubectl.sha256)  /kubectl" | sha256sum -c -; \
+    chmod +x /kubectl
 
 # ---- Stage 3: assemble the data snapshot (kept separate so it's easy to swap) ----
 # The console resolves data relative to -root: <root>/build/test-harness/out-* for the
@@ -36,9 +63,22 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 FROM busybox:1.36 AS data
 WORKDIR /data
 COPY build/test-harness/ /data/build/test-harness/
-COPY phorvex/bin/console-audit.jsonl /data/phorvex/bin/console-audit.jsonl
+# console-audit.jsonl is a GENERATED runtime trail, excluded by .gitignore, so it is absent
+# from every clean checkout — a hard COPY of it made this image unbuildable in CI while
+# still working on a developer machine that happened to have run the console locally.
+# It is genuinely optional: newestAudit() in internal/console/server.go returns "" when the
+# file is missing, and the owner audit view degrades rather than breaking.
+#
+# The trailing * makes it a glob, which resolves to nothing instead of failing when the
+# file is absent — the same idiom as the familiar `COPY package.json package-lock.json* ./`.
+# A COPY still fails when ALL of its sources resolve to nothing, so phorvex/go.mod rides
+# along purely to guarantee one real match: it is always in the context (the gobuild stage
+# builds from it) and .dockerignore excludes only phorvex/bin/*.exe, not it. Deleted again
+# on the next line.
+COPY phorvex/go.mod phorvex/bin/console-audit.jsonl* /data/phorvex/bin/
 # Drop anything heavy/irrelevant the .dockerignore didn't catch (keep only out-* + audit).
-RUN cd /data/build/test-harness && \
+RUN rm -f /data/phorvex/bin/go.mod && \
+    cd /data/build/test-harness && \
     find . -maxdepth 1 -mindepth 1 ! -name 'out-*' -exec rm -rf {} + || true
 
 # ---- Final image ----
@@ -47,6 +87,8 @@ WORKDIR /app
 COPY --from=gobuild /console /app/console
 COPY --from=web /web/out /app/web
 COPY --from=data /data /data
+# Both are static and CGO-free, so distroless/static stays the right base.
+COPY --from=kubectl /kubectl /usr/local/bin/kubectl
 USER 65532:65532
 EXPOSE 8090
 ENTRYPOINT ["/app/console"]
