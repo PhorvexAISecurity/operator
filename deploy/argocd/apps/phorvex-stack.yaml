@@ -1,0 +1,54 @@
+# The Phorvex stack — Phoenix (AMTD executor) + Phorvex (the brain) + the console.
+#
+# releaseName MUST stay `phorvex`: the cluster already carries a Helm release by that name
+# (sh.helm.release.v1.phorvex.v2 in phorvex-system), and its resources are named after it
+# (phorvex-phorvex, phorvex-console). Any other release name makes ArgoCD create a second,
+# parallel copy of the whole stack next to the running one instead of adopting it.
+#
+# The image tags live in values-eks.yaml, which CI rewrites on every merge to main. That
+# commit is the deploy: ArgoCD sees the new tag in git and rolls it out.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phorvex-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PhorvexSecurity/operator.git
+    targetRevision: main
+    path: deploy/helm/phorvex-stack
+    helm:
+      releaseName: phorvex
+      valueFiles:
+        - values.yaml
+        - values-eks.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: phorvex-system
+  syncPolicy:
+    automated:
+      # prune stays FALSE for this app. The namespace holds resources this chart never
+      # created — the hand-applied console ingress, the Phoenix CRs the operator writes at
+      # runtime — and a prune would delete them the first time ArgoCD reconciles.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The Phoenix CRDs are large enough to blow the 262144-byte annotation limit that
+      # client-side apply uses to store last-applied-configuration.
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+  ignoreDifferences:
+    # The AMTD operator writes status/spec back onto the CRs it owns; those are runtime
+    # state, not desired state, and reconciling them would fight the controller.
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /status

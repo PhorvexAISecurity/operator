@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-reports
+  labels:
+    app.kubernetes.io/part-of: phorvex-ci
+    # Phorvex must not treat the report host as a workload to defend: it has no
+    # rotation-target pods and no PhorvexPolicy, and rotating it mid-run would delete the
+    # very report the run is writing.
+    phorvex.ai/managed: "false"
