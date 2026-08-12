@@ -104,6 +104,12 @@ returns to the inert row.
 `HasEvidence` also strictly dominates on the decoy side — it still discounts the 12-minute decoy
 (0.868) where every threshold has already released it (1.000).
 
+Audit correction (2026-08-12): the measurement tests originally printed these conclusions without
+asserting them, so a future behavior change could leave CI green while making this report stale.
+They now assert the two boundaries (90s first-positive, 5m first-competitive) and every scorecard
+pair above, while leaving individual floating-point rows as measurements rather than a brittle
+golden file.
+
 ## 4. What this does not settle
 
 - The population is eight synthetic shapes, not a live incident trace. It is designed to separate
