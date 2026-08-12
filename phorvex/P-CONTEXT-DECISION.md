@@ -101,7 +101,11 @@ Two additive `Assessment` fields, pure closed-form reads of the existing Weibull
 ## 4. PRD-context completed-and-beaten map (code-verified)
 - **Asset value / blast** [built] → + GPUColocationEdge (B2 co-location) + Tier-1 infection frontier (zero at empty-I).
 - **Workload phase / SLO headroom** [built] → preserved unchanged.
-- **Threat posture** [built, **AI-blind**] → 4 AI stages classified in `Assess` off Pod+Physics+Telemetry+SecurityEvent strings (no new Type).
+- **Threat posture** [built, **audit-only scalar in P1**] → raw SecurityEvents and
+  severity drive targeting through `Assess` (P(hold)/stage urgency); the derived
+  `ctxprov.ThreatPosture` is recorded but is not multiplied into P1 gain a second
+  time. Four AI stages classify off Pod+Physics+Telemetry+SecurityEvent strings (no
+  new Type).
 - **Exposure** [built] → + GPUCoResidencyExposure (AI recon-accrual).
 - **Kill-chain** [5 generic stages] → **4 AI stages** (parallel chain) + the successor-map fix + the KV-keyed RecoverScale fix.
 - **Predictive horizon** [Weibull hazard, lead-time computed-then-discarded] → surfaced as `ProjectedNextStageSec` + `PreemptMargin`.

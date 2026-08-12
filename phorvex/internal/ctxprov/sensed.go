@@ -14,7 +14,9 @@ import (
 //  1. AssetValue — labels (data-class map) + mounted-secret count + blast-radius
 //     graph score. Sets cost_if_compromised / consequence weighting (R6 has none).
 //  2. Phase — already derived during ingest; passed through.
-//  3. ThreatPosture — recent event severity for this pod + neighbors (boosts risk).
+//  3. ThreatPosture — recent event severity for this pod + neighbors, recorded for
+//     audit/explainability. P1 targeting consumes the raw events through kill-chain
+//     P(hold)/stage urgency; this derived scalar is not applied a second time.
 //  4. Exposure — time-since-last-move vs the proactive floor (boosts risk over time).
 //  5. SLOHeadroom — remaining latency/availability budget (hard limit on disruption).
 type sensed struct{}
