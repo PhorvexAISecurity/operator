@@ -181,25 +181,25 @@ type Telemetry struct {
 
 // Pod is the K8s-observed state of one protected pod.
 type Pod struct {
-	Namespace       string
-	Name            string
-	UID             string
-	Labels          map[string]string
-	Node            string
-	Phase           string // raw K8s pod phase
-	Ready           bool
-	StartedAt       time.Time
-	ReadyAt         time.Time // PodReady=True transition; zero when unavailable/not Ready
-	Age             time.Duration
-	MountedSecrets  []string // distinct Secret names referenced by the pod spec (names only)
-	ServiceAccount  string
-	OwnerKind       string
-	OwnerName       string
+	Namespace      string
+	Name           string
+	UID            string
+	Labels         map[string]string
+	Node           string
+	Phase          string // raw K8s pod phase
+	Ready          bool
+	StartedAt      time.Time
+	ReadyAt        time.Time // PodReady=True transition; zero when unavailable/not Ready
+	Age            time.Duration
+	MountedSecrets []string // distinct Secret names referenced by the pod spec (names only)
+	ServiceAccount string
+	OwnerKind      string
+	OwnerName      string
 	DesiredReplicas int
 	ReadyReplicas   int
-	HasGPU          bool
-	MIGDevice       string
-	Stateful        bool // owned by a StatefulSet or mounts a PVC / Job
+	HasGPU         bool
+	MIGDevice      string
+	Stateful       bool // owned by a StatefulSet or mounts a PVC / Job
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
@@ -248,24 +248,24 @@ type PhysicsWitness struct {
 	Scanned bool // a platform adapter produced this witness (else all-neutral)
 
 	// --- K8s, measurable now (recon-EMR dispersion multipliers, >=1.0; 1.0 = neutral) ---
-	ImageRarity           float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
-	CoResidency           float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
-	EPSS                  float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
-	SchedulerSlack        float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
-	PDBMinAvailable       int     // live PodDisruptionBudget minAvailable resolved for the owner (-1 = none)
-	PDBDisruptionsAllowed int     // live PDB status.disruptionsAllowed (-1 = none)
-	MIGGeometryValid      bool    // the pod's MIG partition is a legal device-plugin geometry
+	ImageRarity   float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
+	CoResidency   float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
+	EPSS          float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
+	SchedulerSlack float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
+	PDBMinAvailable int    // live PodDisruptionBudget minAvailable resolved for the owner (-1 = none)
+	PDBDisruptionsAllowed int // live PDB status.disruptionsAllowed (-1 = none)
+	MIGGeometryValid bool   // the pod's MIG partition is a legal device-plugin geometry
 
 	// --- AI / inference, DCGM-live when GPUPresent=true ---
-	GPUPresent    bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
-	VRAMFraction  float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
-	SMOccupancy   float64 // pod SM compute share [0,1] (0 if !GPUPresent)
-	SMSource      string  // exact DCGM metric used; distinguishes occupancy from duty-cycle fallback
-	LinkBandwidth float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
-	LinkSource    string  // exact interconnect metric pair used for LinkBandwidth
-	ModelRarity   float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
-	KVRebuildSec  float64 // KV-cache rebuild seconds vs session length (0 = [SP-0-PENDING])
-	ColdLoadSec   float64 // model cold/warm-load seconds (0 = [SP-0-PENDING])
+	GPUPresent     bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
+	VRAMFraction   float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
+	SMOccupancy    float64 // pod SM compute share [0,1] (0 if !GPUPresent)
+	SMSource       string  // exact DCGM metric used; distinguishes occupancy from duty-cycle fallback
+	LinkBandwidth  float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
+	LinkSource     string  // exact interconnect metric pair used for LinkBandwidth
+	ModelRarity    float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
+	KVRebuildSec   float64 // KV-cache rebuild seconds vs session length (0 = [SP-0-PENDING])
+	ColdLoadSec    float64 // model cold/warm-load seconds (0 = [SP-0-PENDING])
 }
 
 // NeutralPhysics is the honest-absent witness (all multipliers 1.0, no capacity, no
