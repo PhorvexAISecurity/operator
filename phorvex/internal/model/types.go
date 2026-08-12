@@ -336,32 +336,38 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	Tenant             string
-	Namespace          string
-	Pod                string
-	Node               string
-	Risk               float64
-	Cost               float64
-	Net                float64 // Risk - Lambda*Cost
-	AssetValue         float64
-	Residual           float64
-	ThreatPosture      float64
-	Exposure           float64
-	Belief             float64
-	BlastRadius        float64
-	SLOHeadroom        float64
-	Phase              WorkloadPhase
-	Action             Action
-	Selected           bool    // chosen within the budget this tick
-	Feasible           bool    // all hard constraints passed for the chosen action
-	InfeasibleWhy      string  // first blocking constraint, when not feasible
-	Reason             string  // short human explanation (attribution)
-	R6Counterfactual   Action  // what R6's blind timer/exact-match would have done
-	CounterfactualNote string  // why Phorvex's choice differs from R6's blind action
-	BlindCost          float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
-	DryRun             bool
-	Actuated           bool
-	DecidedAt          time.Time
+	Tenant         string
+	Namespace      string
+	Pod            string
+	Node           string
+	Risk           float64
+	Cost           float64
+	Net            float64 // Risk - Lambda*Cost
+	AssetValue     float64
+	Residual       float64
+	ThreatPosture  float64
+	Exposure       float64
+	Belief         float64
+	BlastRadius    float64
+	SLOHeadroom    float64
+	Phase          WorkloadPhase
+	Action         Action
+	Selected       bool   // chosen within the budget this tick
+	Feasible       bool   // all hard constraints passed for the chosen action
+	InfeasibleWhy  string // first blocking constraint, when not feasible
+	Reason         string // short human explanation (attribution)
+	R6Counterfactual Action // what R6's blind timer/exact-match would have done
+	CounterfactualNote string // why Phorvex's choice differs from R6's blind action
+	BlindCost      float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
+	DryRun         bool
+	// KillSwitch records that the GLOBAL kill switch suppressed actuation on this tick.
+	// Without it a kill-switched decision is byte-identical in the audit to one whose
+	// actuator silently failed — both read selected=true, dryRun=false, actuated=false —
+	// so a decision-only mirror looks exactly like a broken actuator. Kill-switch and
+	// dry-run are separate gates and must stay separately visible.
+	KillSwitch     bool
+	Actuated       bool
+	DecidedAt      time.Time
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
