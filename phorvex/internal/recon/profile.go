@@ -88,18 +88,14 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
 	}
 
-	// Network facts — invalidated by QUARANTINE (deny-all + detach). The gentler ROUTE-ROTATE
-	// (re-key the route epoch / restitch the Service selector) invalidates the reachable
-	// network-identity fact WITHOUT a deny-all — a SUBSET of quarantine's cover, so the optimizer
-	// picks the surgical re-route for a narrow network-recon threat and escalates to a full
-	// quarantine only when learned lateral edges need cutting.
+	// Network facts — invalidated by QUARANTINE (deny-all + detach).
 	nid := Fact{Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
 	// NO COVER for route-rotate — same reason. It writes a `phorvex.ai/route-epoch` label and touches
 	// no Service selector and no EndpointSlice (contrast endpoint-rotate, handlers_ai.go, which DOES
-	// restitch a declared Service). The learned route is therefore not staled, so networkIdentity is not
-	// invalidated.
+	// restitch a declared Service). The learned route is therefore not staled, so networkIdentity
+	// is not invalidated.
 	latUrg := 0.5 + 0.5*clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	for _, nb := range fctx.Neighbors {
 		// A learned edge to a high-value neighbor is worth cutting (blast containment).
