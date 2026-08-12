@@ -1,0 +1,48 @@
+# ArgoCD itself — bootstrapped once with `kubectl apply -k`, not managed by ArgoCD.
+#
+# Pinned to v3.4.6 rather than the newest release: it is the latest patch of the previous
+# minor, so it has had a release cycle of real use behind it. Bump deliberately, never by
+# tracking `stable` — a CD controller that silently upgrades itself is the one component
+# whose breakage you cannot roll back with CD.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml
+  - namespace.yaml
+  - ingress.yaml
+
+patches:
+  # TLS is terminated at the ALB, so argocd-server must serve plain HTTP behind it.
+  # Left on its default self-signed HTTPS, the ALB health check fails and the target group
+  # never goes healthy — the classic "ArgoCD behind an ALB returns 502" symptom.
+  - path: params-patch.yaml
+    target:
+      kind: ConfigMap
+      name: argocd-cmd-params-cm
+
+  # Every general-purpose node in this cluster carries CriticalAddonsOnly=true:NoSchedule,
+  # and every workload here tolerates it — the remaining two nodes are a GPU node and a
+  # database node with their own taints. Upstream ArgoCD ships no tolerations, so without
+  # this every one of its pods sits Pending forever with "untolerated taint(s)" and the
+  # cluster autoscaler correctly refuses to help ("max node group size reached").
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: CriticalAddonsOnly
+            operator: Exists
+            effect: NoSchedule
+  - target:
+      kind: StatefulSet
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: CriticalAddonsOnly
+            operator: Exists
+            effect: NoSchedule
