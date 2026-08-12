@@ -80,7 +80,10 @@ func TestScarcityPreservesWithinAssetOrdering(t *testing.T) {
 	lifted := factsByKind(ucwRecon{}.AssetFacts(gpuView(), fctx).Facts)
 
 	// Facts weighted purely as base*urg, i.e. carrying no physics term of their own.
-	plain := []string{FactEndpointPath, FactSideChannel, FactInflightRequests, FactGuardrailBypass, FactPodIdentity}
+	// Keep this list to semantic roles that survive taxonomy renames. In particular,
+	// PHORVEXSEC-121 renames sideChannel to gpuContentionChannel; that rename must not
+	// make this independent scarcity invariant fail to compile when the PRs combine.
+	plain := []string{FactEndpointPath, FactInflightRequests, FactGuardrailBypass, FactPodIdentity}
 	for _, a := range plain {
 		for _, b := range plain {
 			if a == b || flat[a] == 0 || flat[b] == 0 {
