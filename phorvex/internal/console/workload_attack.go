@@ -16,17 +16,29 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
 // armedWorkloads are the reactiveOnly demo namespaces the dashboard may fire REAL attacks at.
+// The litellm / mock-rag-chatbot / phorvex-live-demo demo namespaces were retired from the
+// cluster; voice (voice-bot Deployment) is the stateless rotate target that replaced them.
 var armedWorkloads = map[string]bool{
-	"litellm":           true,
-	"mock-rag-chatbot":  true,
-	"phorvex-live-demo": true,
-	"nats":              true, // NATS JetStream (StatefulSet) — stateful => Phorvex quarantines, not rotates
+	"voice": true, // voice-bot (Deployment) — stateless => Phorvex rotates
+	"nats":  true, // NATS JetStream (StatefulSet) — stateful => Phorvex quarantines, not rotates
+}
+
+// armedList renders the allowlist for error messages, so a namespace added above can never
+// drift out of what the API tells the caller is available.
+func armedList() string {
+	names := make([]string, 0, len(armedWorkloads))
+	for ns := range armedWorkloads {
+		names = append(names, ns)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +53,7 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	ns := strings.TrimSpace(body.Namespace)
 	if !armedWorkloads[ns] {
-		writeJSON(w, 400, map[string]string{"error": "namespace not armed for live attack: " + ns + " (armed: litellm, mock-rag-chatbot, phorvex-live-demo)"})
+		writeJSON(w, 400, map[string]string{"error": "namespace not armed for live attack: " + ns + " (armed: " + armedList() + ")"})
 		return
 	}
 	kctl := func(timeout time.Duration, args ...string) (string, error) {

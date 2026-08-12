@@ -197,7 +197,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const curWl = wls.find((w) => w.ns + "/" + w.name === selWl);
   const curType = curWl ? wlType(curWl.images) : null;
   // reactiveOnly-armed namespaces: calm until attacked, so a fired foothold is a clean attributable reaction.
-  const ARMED = ["litellm", "mock-rag-chatbot", "phorvex-live-demo", "nats"];
+  const ARMED = ["voice", "nats"];
   const armed = !!curWl && ARMED.includes(curWl.ns);
 
   return (
@@ -284,7 +284,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
                 </div>
               )}
               {attacksFor(curType.type, armed).every((a) => !a.runnable) && (
-                <div className="text-[10px] text-warning">This workload’s namespace isn’t armed for live attacks yet — the row shows the attack→actuator mapping honestly. The armed demo workloads (vllm · litellm · mock-rag-chatbot · phorvex-live-demo) run reactiveOnly, so they stay calm until you fire a foothold and Phorvex reacts attributably.</div>
+                <div className="text-[10px] text-warning">This workload’s namespace isn’t armed for live attacks yet — the row shows the attack→actuator mapping honestly. The armed workloads (vllm · voice · nats) run reactiveOnly, so they stay calm until you fire a foothold and Phorvex reacts attributably.</div>
               )}
             </div>
           )}

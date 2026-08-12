@@ -1,0 +1,34 @@
+# The End-to-End report host behind ci-report.phorvex.ai.
+#
+# ArgoCD owns the server; CI owns the content. The PVC's contents are deliberately NOT in
+# git — a report is evidence produced by a run, not desired state — so prune is safe here
+# for the manifests while the reports themselves live only on the volume.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ci-reports
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PhorvexSecurity/operator.git
+    targetRevision: main
+    path: deploy/ci-reports
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ci-reports
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  ignoreDifferences:
+    # A bound PVC reports the capacity the CSI driver actually provisioned, which can
+    # exceed the request. Reconciling that is both impossible and pointless.
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/resources/requests/storage

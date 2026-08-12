@@ -1,0 +1,73 @@
+# Static host for End-to-End reports at https://ci-report.phorvex.ai.
+#
+# One replica on purpose: the PVC is ReadWriteOnce and CI writes into this pod by name via
+# `kubectl cp`. A second replica would serve a volume it cannot mount and hand out 404s for
+# half the requests. Recreate (not RollingUpdate) for the same reason — two pods must never
+# contend for the volume during a rollout.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-reports
+  namespace: ci-reports
+  labels:
+    app.kubernetes.io/name: ci-reports
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ci-reports
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ci-reports
+    spec:
+      # Every general-purpose node in this cluster is tainted CriticalAddonsOnly=true.
+      # Without this the pod sits Pending, and because gp2-csi binds WaitForFirstConsumer
+      # the PVC stays Pending behind it — which reads as a broken volume rather than an
+      # unschedulable pod.
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101          # nginx user in nginxinc/nginx-unprivileged
+        fsGroup: 101            # so the mounted PVC is writable by `kubectl cp`
+      containers:
+        - name: nginx
+          # -unprivileged binds 8080 rather than 80, which is what lets the pod run as
+          # non-root without NET_BIND_SERVICE.
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: reports
+              mountPath: /usr/share/nginx/html
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # nginx writes its own cache/pid under /tmp
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: ci-reports
+        - name: conf
+          configMap:
+            name: ci-reports-nginx
