@@ -3,7 +3,7 @@
 Date: 2026-08-10 · Cluster `phorvex-dev-eks` (100 running containers, 70 pods, 41 image digests, 5 nodes)
 Follows §4.1 of the earlier verification report: **measure the effect before building the feed.**
 
-## Verdict: **do not build the CronJob yet — on its own it makes the ranking worse**
+## Verdict: **do not ship the feed without re-fitting/observing the clamp**
 
 Expanding EPSS coverage at the current `MaxDispersionMult = 4.0` **reduces** the physics engine's
 discriminating power. It only pays off if the clamp is re-fitted at the same time, and then it pays
@@ -33,7 +33,7 @@ shipped formulas. `ModelRarity` is held at 1.0, its measured live value.
 | today (7 containers covered) | **26 / 70 (37%)** | 8 |
 | full coverage | **60 / 70 (86%)** | 8 |
 
-Assets that can be told apart drop from 44 to 10.
+Unpinned assets drop from 44 to 10 in the full-coverage scenario.
 
 At the live move budget (`maxMovesPerTick = 1` on every tenant) the decisive number is the size of the
 tie group at the top, because everything in it is indistinguishable on physics:
@@ -43,9 +43,9 @@ today, cap 4.0 :  26 assets tied at 4.000
 full,  cap 4.0 :  60 assets tied at 4.000
 ```
 
-**This direction does not depend on the synthetic scores in §5.** The EPSS multiplier is bounded below
-by 1 and is realistically 1.2–1.9, so multiplying a fleet in which 37% already sit at the cap can only
-push more of it over. Broad coverage at a fixed cap is structurally saturating.
+The direction is structural: an EPSS multiplier bounded below by 1 cannot move an already-pinned
+asset off the cap, and can push more assets onto it. The exact **60/70** magnitude does depend on the
+synthetic scores described in §5 and must be treated as a scenario result, not a live measurement.
 
 ## 3. Result once the cap is re-fitted
 
@@ -67,7 +67,8 @@ So the honest summary of the two levers:
 - **EPSS alone** (cap unchanged): 8 → 8 distinct, and 26 → 60 assets tied at the top — *harmful*
 - **both**: 8 → **41** distinct values
 
-EPSS is worth roughly 3.4× the resolution of the cap change alone, and negative without it.
+In this synthetic full-coverage scenario, EPSS plus the cap change yields roughly 3.4× as many
+distinct scalar values as the cap change alone. This is directional, not a production effect size.
 
 ## 4. Recommendation
 
@@ -77,14 +78,21 @@ EPSS is worth roughly 3.4× the resolution of the cap change alone, and negative
    now because it does not need the feed to exist.
 2. **Then** build the CronJob (scan → FIRST.org lookup → `SeedEPSS`), with the digest-churn handling
    and the loaded-entry count from the previous report.
-3. **Do not ship the feed alone.** It would move 34 more assets onto the cap and reduce ranking
-   information, and the regression would be invisible without the saturation metric PHVX-74 asks for.
+3. **Do not ship the feed alone.** This scenario moves 34 more assets onto the cap; a real feed must
+   ship with the saturation metric and a cap decision so the production effect is observed rather
+   than inferred from synthetic scores.
 
 ## 5. Validity
 
 - The 37 uncovered digests are given **synthetic** EPSS/CVSS values (deterministic per digest,
   heavy-tailed, CVSS 4–10). Real scores could be less dispersed, so the **41 distinct values at cap
-  7.5 is an upper estimate**. The harm at cap 4.0 is not an estimate — see §2.
+  7.5** and **60/70 pinned at cap 4.0** are scenario estimates. Only the monotone direction of the
+  saturation pressure is structural.
 - Read-only: `kubectl get pods -A`. No cluster mutation.
 - Container count is 100; scalars are per pod, so the tables are over 70 pods.
-- Script: `epss_impact_measurement.py`, raw output `epss-impact-output.txt`.
+- Script: `epss_impact_measurement.py`, historical stdout: `epss-impact-output.txt`.
+- **Provenance limitation found in the PR audit (2026-08-12):** the 2026-08-10 preprocessed live pod
+  inventory was written only to `/tmp/live-pods.json` and was not retained. Therefore the exact
+  historical output cannot be independently reproduced from this PR. The script now requires an
+  explicit inventory path and prints its SHA-256 for future runs; this report remains evidence of the
+  recorded run, not a self-contained reproducibility package.

@@ -1,5 +1,24 @@
-import json, math, hashlib
-rows = json.load(open('/tmp/live-pods.json'))
+"""Re-run the PHVX-14b scalar/cap scenario on a JSON pod inventory.
+
+The input is a JSON array with `ns`, `pod`, `node`, `img`, and `gpu` fields. The
+historical 2026-08-10 inventory was not retained, so the committed output documents
+that run but cannot be reproduced byte-for-byte; use a newly collected inventory to
+repeat the method against current cluster state.
+"""
+
+import argparse
+import hashlib
+import json
+import math
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("inventory", type=Path, help="JSON pod inventory (ns,pod,node,img,gpu)")
+args = parser.parse_args()
+raw_inventory = args.inventory.read_bytes()
+rows = json.loads(raw_inventory)
+if not rows:
+    raise SystemExit("inventory is empty")
 N = len(rows)
 
 def clamp01(x): return 0.0 if x < 0 else (1.0 if x > 1 else x)
@@ -46,6 +65,7 @@ def scalars(mode):
     return out
 
 a, b = scalars('today'), scalars('full')
+print(f"input: {args.inventory} | sha256={hashlib.sha256(raw_inventory).hexdigest()} | pods={N}")
 def summarize(tag, d):
     raw = [v[0] for v in d.values()]; cl = [v[1] for v in d.values()]
     pinned = sum(1 for x in cl if abs(x-MAXMULT) < 1e-9)
