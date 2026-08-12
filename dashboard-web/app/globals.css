@@ -63,3 +63,47 @@ body {
 ::-webkit-scrollbar-thumb { background: hsl(var(--muted)); border-radius: 9px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(222 16% 22%); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/*
+ * LIGHT theme. Same Phorvex identity (one cyan-teal accent), re-grounded for a light canvas:
+ * the neutrals carry a slight cool/teal bias so they read as chosen rather than default grey,
+ * and every semantic colour is darkened until it passes contrast on a near-white surface —
+ * the dark values would wash out.
+ */
+:root.light {
+  --background: 210 30% 98%;      /* near-white canvas, faint cool bias */
+  --foreground: 222 30% 12%;
+  --panel: 0 0% 100%;             /* card surface */
+  --elevated: 210 28% 96%;        /* hover / raised */
+  --muted: 210 22% 92%;
+  --muted-foreground: 215 14% 42%;
+  --border: 214 20% 87%;
+  --input: 214 20% 84%;
+  --ring: 184 70% 34%;
+
+  --primary: 186 84% 30%;         /* deepened so it holds on white */
+  --primary-foreground: 0 0% 100%;
+  --accent: 186 76% 33%;
+  --accent-foreground: 0 0% 100%;
+
+  --success: 152 58% 30%;
+  --warning: 32 85% 36%;
+  --danger: 0 66% 44%;
+  --info: 212 74% 42%;
+}
+
+/* The canvas glow is a dark-theme device; on light it becomes a soft tint instead of a haze. */
+:root.light body {
+  background:
+    radial-gradient(1100px 560px at 82% -12%, hsl(186 60% 42% / 0.07), transparent 60%),
+    radial-gradient(900px 500px at -10% 8%, hsl(214 40% 60% / 0.08), transparent 55%),
+    hsl(var(--background));
+}
+
+:root.light .bg-grid {
+  background-image: linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.6) 1px, transparent 1px);
+}
+
+:root.light ::-webkit-scrollbar-thumb { background: hsl(214 18% 78%); }
+:root.light ::-webkit-scrollbar-thumb:hover { background: hsl(214 18% 68%); }

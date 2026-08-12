@@ -1,0 +1,36 @@
+# argocd.phorvex.ai
+#
+# gRPC note: the argocd CLI and `argocd app sync` speak gRPC-Web against this host. The ALB
+# forwards it as ordinary HTTP/1.1 because argocd-server multiplexes gRPC-Web on the same
+# port when running with server.insecure — so no backend-protocol-version: GRPC annotation
+# here. Adding one breaks the browser UI without helping the CLI.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:753556437180:certificate/6f771a0d-5c30-4897-bcba-9422024cd3b6
+    alb.ingress.kubernetes.io/subnets: subnet-0e2c4f3f433045f81,subnet-08bd0af4dcc7672e2
+    alb.ingress.kubernetes.io/security-groups: sg-098aac8d74e88e2fe
+    alb.ingress.kubernetes.io/manage-backend-security-group-rules: "true"
+    external-dns.alpha.kubernetes.io/hostname: argocd.phorvex.ai
+spec:
+  ingressClassName: alb
+  rules:
+    - host: argocd.phorvex.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
