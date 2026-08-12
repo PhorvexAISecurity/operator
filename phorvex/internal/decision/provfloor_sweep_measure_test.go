@@ -19,8 +19,8 @@ import (
 //   exposure · pHold · stage/nextStage · hazard · StageUrgency · raw coverage
 //   · coverage AFTER provenance weighting · can it consume budget / displace the real foothold
 //
-// Run with -v to print the tables. The assertions are deliberately few — this is a measurement, and
-// pinning every number would make it a change-detector rather than evidence.
+// Run with -v to print the tables. The key reported conclusions are asserted; individual floating-
+// point rows remain measurements so harmless numeric drift does not turn the table into a golden.
 
 // sweepRow is one measured point.
 type sweepRow struct {
@@ -140,6 +140,12 @@ func TestSweepTableSection6(t *testing.T) {
 	fmt.Printf("\nfirst POSITIVE coverage      : %v\n", firstPositive)
 	fmt.Printf("first BUDGET-COMPETITIVE     : %v  (decoy actually takes the slot)\n", firstCompetitive)
 	fmt.Printf("note: coverage is 0 below antiOverRotationWindow because the candidate is INFEASIBLE\n")
+	if firstPositive != antiOver {
+		t.Errorf("first positive coverage = %v, want anti-over-rotation boundary %v", firstPositive, antiOver)
+	}
+	if firstCompetitive != 5*time.Minute {
+		t.Errorf("first budget-competitive exposure = %v, report records 5m", firstCompetitive)
+	}
 }
 
 // assetShape is one population member the gate must classify correctly.
@@ -216,6 +222,14 @@ func TestGateComparisonAgainstBaseline(t *testing.T) {
 	}
 
 	fmt.Printf("\nSCORECARD\n%-62s %9s %11s  %s\n", "gate", "suppressed", "falseAlarms", "verdict")
+	wantScore := map[string][2]int{
+		"urg>0":   {0, 0},
+		"t.0500":  {0, 0},
+		"t.0625":  {2, 3},
+		"t.0649":  {2, 3},
+		"t.0700":  {2, 3},
+		"EVIDNCE": {3, 0},
+	}
 	for _, g := range gates {
 		sup, fa, decoys, genuines := 0, 0, 0, 0
 		for _, sh := range shapes(floor) {
@@ -242,6 +256,10 @@ func TestGateComparisonAgainstBaseline(t *testing.T) {
 			verdict = "acts BUT penalises real threats"
 		}
 		fmt.Printf("%-62s %5d/%-3d %7d/%-3d  %s\n", g.name, sup, decoys, fa, genuines, verdict)
+		if want := wantScore[g.short]; sup != want[0] || fa != want[1] {
+			t.Errorf("gate %s score = suppressed %d, false alarms %d; report records %d, %d",
+				g.short, sup, fa, want[0], want[1])
+		}
 	}
 	fmt.Println("\nnote: 'aged, no evidence' is counted as a non-decoy target because a pod past its")
 	fmt.Println("proactive floor is legitimately due; every gate returns 1 for it via the exposure arm.")
