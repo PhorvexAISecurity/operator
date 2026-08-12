@@ -487,6 +487,11 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 			Fingerprints: map[string]string{
 				model.VarPodIdentity:   p.UID,
 				model.VarNodePlacement: p.Node,
+				// [PHVX-67] The session clock. kv-reset leaves the pod alive, so podIdentity never
+				// moves and the anti-over-rotation guard could never fire for it — measured on the
+				// live cluster as a 20s median interval against a 15m budget, 2360 times in 10h on
+				// one pod.
+				model.VarSession: p.SessionEpoch,
 			},
 		}, snap.Now)
 		keep[exposure.SlotKey(pol.Tenant, p.Namespace, p.Name)] = struct{}{}
