@@ -33,6 +33,9 @@ type Record struct {
 	Feasible         bool      `json:"feasible"`
 	InfeasibleWhy    string    `json:"infeasibleWhy,omitempty"`
 	DryRun           bool      `json:"dryRun"`
+	// KillSwitch is emitted only when engaged, so an existing consumer sees no change on a
+	// normal tick, and a suppressed decision is no longer indistinguishable from a failed one.
+	KillSwitch       bool      `json:"killSwitch,omitempty"`
 	Actuated         bool      `json:"actuated"`
 	Risk             float64   `json:"risk"`
 	Cost             float64   `json:"cost"`
@@ -119,6 +122,7 @@ func ToRecord(d model.Decision) Record {
 		Feasible:         d.Feasible,
 		InfeasibleWhy:    d.InfeasibleWhy,
 		DryRun:           d.DryRun,
+		KillSwitch:       d.KillSwitch,
 		Actuated:         d.Actuated,
 		Risk:             round4(d.Risk),
 		Cost:             round4(d.Cost),
