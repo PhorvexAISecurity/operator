@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/metrics"
 )
 
 // metav1SelAsSel compiles a metav1.LabelSelector into a labels.Selector. An empty
@@ -30,8 +31,16 @@ func metav1SelAsSel(sel *metav1.LabelSelector) (labels.Selector, error) {
 func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, moves, actuated int, killEngaged bool, now time.Time) {
 	var p v1alpha1.PhorvexPolicy
 	if err := m.Client.Get(ctx, e.key, &p); err != nil {
+		metrics.SetKillSwitchStatusDisagreement(e.key.Namespace, e.key.Name, true)
+		m.Log.Error(err, "status read failed; kill-switch readout is UNKNOWN",
+			"tenant", e.tenant, "policy", e.key.String(), "killSwitchEngaged", killEngaged)
 		return
 	}
+	// Publish the disagreement before attempting the transition. A successful write clears it;
+	// a failed write deliberately leaves it asserted so the alert survives the failure.
+	metrics.SetKillSwitchStatusDisagreement(
+		p.Namespace, p.Name, p.Status.KillSwitchEngaged != killEngaged,
+	)
 	p.Status.Tenant = e.tenant
 	p.Status.ObservedGeneration = p.Generation
 	p.Status.SelectedPods = protected
@@ -89,5 +98,7 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		m.Log.Error(err, "status update failed; the policy CR now shows a STALE kill-switch and "+
 			"decision state", "tenant", e.spec.Tenant, "policy", p.Namespace+"/"+p.Name,
 			"killSwitchEngaged", killEngaged)
+		return
 	}
+	metrics.SetKillSwitchStatusDisagreement(p.Namespace, p.Name, false)
 }

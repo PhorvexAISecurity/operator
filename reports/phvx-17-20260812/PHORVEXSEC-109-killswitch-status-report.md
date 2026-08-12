@@ -44,7 +44,7 @@ With `json:"killSwitchEngaged,omitempty"` a `false` **vanishes from the CR**. So
 running normally" and "this status has never been reconciled" produce byte-identical output. For a
 safety control, that is the one distinction that has to survive.
 
-## The three fixes
+## The five fixes
 
 **1. `omitempty` removed.** A safety-control readout must state the safe value explicitly. Omitting
 it is not the same as reporting it. The generated CRD manifests (chart + config/crd) were updated in
@@ -61,11 +61,29 @@ dropped write left the CR showing a stale kill-switch with no signal anywhere �
 mode this ticket describes, reached by a different route. It is now logged with the tenant, the
 policy and the value that failed to land.
 
+**4. Runtime/status disagreement is now measurable and alertable.**
+`phorvex_kill_switch_status_disagreement{namespace,policy}` is asserted when the policy status cannot
+be read or when a runtime transition cannot be persisted. It is cleared only after a successful
+status write and its series is removed when the policy leaves the registry. The Helm chart includes
+`PhorvexKillSwitchStatusDisagreement` plus the shared
+`PhorvexOperatorRestartStorm` warning based on kube-state-metrics restart counters. The rules are
+feature-gated (`phorvex.alerts.enabled`) because clusters without the Prometheus Operator CRD would
+otherwise reject the release; enabling them renders a valid `PrometheusRule`.
+
+**5. The chart is actually deployable.** The subchart is bumped to `0.1.4`, the stack dependency and
+lock are updated, and `phorvex-0.1.4.tgz` is regenerated from the source chart. Extracted source and
+vendored contents are identical, closing the previous `chart-sync` CI failure.
+
 ## Tests
 
-`TestKillSwitchFalseIsSerialised` — a disengaged kill-switch must appear in the serialised status.
-Against the previous definition it fails with `{"lastTickTime":null,"lastDecisionTime":null}`, the
-field simply gone.
+| test | what it proves |
+|---|---|
+| `TestKillSwitchFalseIsSerialised` | a disengaged switch remains explicit in JSON; against the old definition the field vanishes |
+| `TestKillSwitchEngageDisengageSuppressesAndResumesActuation` | reads a real sentinel ConfigMap, runs `processTenant`, and checks the actuator call count, decision and actuation Prometheus counters, bool, and `KillSwitch` condition in both directions: engaged keeps deciding but emits zero; changing the sentinel to false resumes one real emit |
+| `TestKillSwitchStatusDisagreementSurvivesFailedTransition` | an injected status-subresource failure during `false→true` leaves the disagreement gauge at `1` so the alert can fire |
+
+The chart was rendered both with alerts disabled (safe default) and enabled. The enabled render
+contains both rules with the configured thresholds.
 
 ## Not claimed
 
@@ -73,6 +91,8 @@ field simply gone.
   measured on the running fleet, not the fix.
 - The `omitempty` removal makes the field appear on every policy status from the next reconcile. That
   is the intent, but it is a visible CR change and worth mentioning at rollout.
-- Not addressed: the ticket also asks for a dashboard surface and a disagreement alert. There is no
-  kill-switch surface in `internal/console/` at all today (only the Prometheus gauge and a Grafana
-  panel), and the alert is shared with PHVX-16. Both are separate work.
+- The existing dashboard policy panel already renders `status.killSwitchEngaged`; this change does
+  not add a write/toggle control.
+- Alert rules are installed only when `phorvex.phorvex.alerts.enabled=true` and require Prometheus
+  Operator plus kube-state-metrics. The production EKS values currently point at plain Prometheus,
+  so this PR does not silently assume that CRD exists or claim the alerts are live there.

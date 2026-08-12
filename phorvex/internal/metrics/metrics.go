@@ -73,6 +73,11 @@ var (
 		Help: "1 when the global kill-switch is engaged (all actuation suppressed).",
 	})
 
+	killSwitchStatusDisagreement = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_kill_switch_status_disagreement",
+		Help: "1 when the runtime kill-switch state is unknown to or disagrees with a PhorvexPolicy status.",
+	}, []string{"namespace", "policy"})
+
 	decisionsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_decisions_total",
 		Help: "Decisions emitted, by tenant/action/mode/selected.",
@@ -99,7 +104,7 @@ func init() {
 	crmetrics.Registry.MustRegister(
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
-		selectedPods, protectedPods, killSwitch,
+		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
 		decisionsTotal, actuationsTotal, ticksTotal, tickDuration,
 	)
 }
@@ -111,6 +116,22 @@ func SetKillSwitch(engaged bool) {
 		return
 	}
 	killSwitch.Set(0)
+}
+
+// SetKillSwitchStatusDisagreement exposes a stale/unknown policy readout separately from the
+// runtime gauge. A successful status write clears it; a failed read or a failed transition leaves
+// it at 1 so Prometheus can alert instead of trusting a silently stale safety-control field.
+func SetKillSwitchStatusDisagreement(namespace, policy string, disagrees bool) {
+	v := 0.0
+	if disagrees {
+		v = 1
+	}
+	killSwitchStatusDisagreement.WithLabelValues(namespace, policy).Set(v)
+}
+
+// ResetKillSwitchStatus removes the bounded per-policy series when a policy leaves the registry.
+func ResetKillSwitchStatus(namespace, policy string) {
+	killSwitchStatusDisagreement.DeleteLabelValues(namespace, policy)
 }
 
 // ResetTenant clears a tenant's per-pod series (call before re-publishing a tick, and
