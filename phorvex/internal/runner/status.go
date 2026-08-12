@@ -66,5 +66,28 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		ObservedGeneration: p.Generation,
 	})
 
-	_ = m.Client.Status().Update(ctx, &p)
+	// [PHVX-17] The CRD documents a "KillSwitch" condition ("Conditions includes Ready, DryRun,
+	// ValidationError, KillSwitch") and nothing ever wrote one. A condition carries a reason and a
+	// timestamp, which a bare bool cannot: an operator can see WHEN actuation stopped and why.
+	ksStatus, ksReason, ksMsg := metav1.ConditionFalse, "Disengaged", "actuation is permitted"
+	if killEngaged {
+		ksStatus, ksReason, ksMsg = metav1.ConditionTrue, "Engaged",
+			"actuation suppressed globally; the engine still decides, logs and emits metrics"
+	}
+	meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
+		Type:               "KillSwitch",
+		Status:             ksStatus,
+		Reason:             ksReason,
+		Message:            ksMsg,
+		ObservedGeneration: p.Generation,
+	})
+
+	// [PHVX-17] Do not swallow this. A dropped status write leaves the CR showing a stale
+	// kill-switch state with no signal at all, which is the failure this ticket is about: the
+	// operator's readout silently stops tracking the engine.
+	if err := m.Client.Status().Update(ctx, &p); err != nil {
+		m.Log.Error(err, "status update failed; the policy CR now shows a STALE kill-switch and "+
+			"decision state", "tenant", e.spec.Tenant, "policy", p.Namespace+"/"+p.Name,
+			"killSwitchEngaged", killEngaged)
+	}
 }

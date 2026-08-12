@@ -402,6 +402,10 @@ spec:
                 description: |-
                   KillSwitchEngaged reflects the global kill-switch (FR8): when engaged the
                   engine decides + logs but suppresses all actuation regardless of Mode.
+
+                  NOT omitempty (PHVX-17). With it, `false` was indistinguishable from "never
+                  written": the field simply vanished, so an operator reading the CR could not tell
+                  a running defence from a status that had never been reconciled.
                 type: boolean
               lastDecisionTime:
                 description: |-
