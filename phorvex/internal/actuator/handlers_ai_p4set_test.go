@@ -82,23 +82,23 @@ func TestAdapterRotateUnreachableIsPending(t *testing.T) {
 	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
 		t.Errorf("note must flag pending, %q", hr.Note)
 	}
-	// TRUTHFULNESS (same class as the kv-reset fail-closed fix): an eviction that did not happen is
-	// NOT a defence. This branch used to return Emitted:true and stamp an adapter-epoch, marking the
+	// TRUTHFULNESS (same class as the kv-reset fail-closed fix): an eviction without confirmed success
+	// is NOT a defence. This branch used to return Emitted:true and stamp an adapter-epoch, marking the
 	// decision Actuated and counting it in phorvex_actuations_total while the poisoned adapter was
 	// still loaded. Unlike request-drain there is no stack-independent half here — the unload IS the
-	// move. No unload => not emitted, and no epoch (a false forensic record).
+	// move. No confirmed unload => not emitted, and no epoch (a false forensic record).
 	if hr.Emitted {
-		t.Errorf("unreachable unload must NOT be reported as emitted (it evicted nothing), note=%q", hr.Note)
+		t.Errorf("an unconfirmed unload must NOT be reported as emitted, note=%q", hr.Note)
 	}
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err != nil {
 		t.Fatalf("pod must still exist: %v", err)
 	}
 	if p.Annotations["phorvex.ai/adapter-epoch"] != "" {
-		t.Error("no adapter-epoch may be written for an unload that never ran (false forensic record)")
+		t.Error("no adapter-epoch may be written for an unconfirmed unload (false forensic record)")
 	}
 	if p.Annotations[annoLoRAAdapter] == "" {
-		t.Error("the poison marker must be KEPT when the adapter was not evicted, so the move is retried")
+		t.Error("the poison marker must be KEPT until eviction is confirmed, so the move is reconciled")
 	}
 }
 
@@ -240,18 +240,18 @@ func TestKVMigrateLocalUnreachablePending(t *testing.T) {
 	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
 		t.Errorf("note: %q", hr.Note)
 	}
-	// TRUTHFULNESS (same class as the kv-reset fail-closed fix): nothing was invalidated — not the
-	// local KV and a fortiori not the remote decode workers. This used to return Emitted:true and
+	// TRUTHFULNESS (same class as the kv-reset fail-closed fix): no invalidation was confirmed — local
+	// or remote. This used to return Emitted:true and
 	// stamp a kv-epoch, counting a poisoned cache that was never cleared as a real actuation.
 	if hr.Emitted {
-		t.Errorf("unreachable invalidate must NOT be reported as emitted (it invalidated nothing), note=%q", hr.Note)
+		t.Errorf("an unconfirmed invalidate must NOT be reported as emitted, note=%q", hr.Note)
 	}
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err != nil {
 		t.Fatalf("pod must still exist: %v", err)
 	}
 	if p.Annotations[annoKVEpoch] != "" {
-		t.Error("no kv-epoch may be written for an invalidate that never ran (false forensic record)")
+		t.Error("no kv-epoch may be written for an unconfirmed invalidate (false forensic record)")
 	}
 }
 

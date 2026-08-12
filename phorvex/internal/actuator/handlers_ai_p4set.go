@@ -33,20 +33,20 @@ import (
 )
 
 const (
-	labelLoRAEnabled     = "phorvex.ai/lora-enabled"        // pod advertises --enable-lora
-	annoLoRAAdapter      = "phorvex.ai/lora-adapter"        // the adapter to evict
-	annoLoRACleanSource  = "phorvex.ai/lora-clean-source"   // a TRUSTED pinned source to reload (optional)
-	annoAdapterSnapshot  = "phorvex.ai/adapter-snapshot"    // rollback record
-	labelGuardrailTier   = "phorvex.ai/guardrail-tier"      // marks a guardrail pod
-	annoGuardrailVariant = "phorvex.ai/guardrail-variant"   // current variant
-	annoGuardrailAlts    = "phorvex.ai/guardrail-variants"  // comma-list of DIVERSE alternates
-	annoGuardrailSnap    = "phorvex.ai/guardrail-snapshot"  // rollback record
-	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"     // comma-list of P/D peer endpoints
+	labelLoRAEnabled     = "phorvex.ai/lora-enabled"       // pod advertises --enable-lora
+	annoLoRAAdapter      = "phorvex.ai/lora-adapter"       // the adapter to evict
+	annoLoRACleanSource  = "phorvex.ai/lora-clean-source"  // a TRUSTED pinned source to reload (optional)
+	annoAdapterSnapshot  = "phorvex.ai/adapter-snapshot"   // rollback record
+	labelGuardrailTier   = "phorvex.ai/guardrail-tier"     // marks a guardrail pod
+	annoGuardrailVariant = "phorvex.ai/guardrail-variant"  // current variant
+	annoGuardrailAlts    = "phorvex.ai/guardrail-variants" // comma-list of DIVERSE alternates
+	annoGuardrailSnap    = "phorvex.ai/guardrail-snapshot" // rollback record
+	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"    // comma-list of P/D peer endpoints
 	annoKVEpoch          = "phorvex.ai/kv-migrate-epoch"
-	labelServing         = "phorvex.ai/serving"             // K8s readiness-drain target label
-	labelParallelGroup   = "phorvex.ai/parallel-group"      // TP/PP group id (a consistency unit)
-	labelRank            = "phorvex.ai/rank"                // rank within the parallel group
-	annoParallelSize     = "phorvex.ai/parallel-size"       // number of ranks in the group
+	labelServing         = "phorvex.ai/serving"        // K8s readiness-drain target label
+	labelParallelGroup   = "phorvex.ai/parallel-group" // TP/PP group id (a consistency unit)
+	labelRank            = "phorvex.ai/rank"           // rank within the parallel group
+	annoParallelSize     = "phorvex.ai/parallel-size"  // number of ranks in the group
 )
 
 // groupCoherentCutover flips an ENTIRE tensor/pipeline-parallel group as a UNIT (model-shard-replace's
@@ -178,19 +178,21 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 		// starved. Converging here is what lets the workload return to normal hygiene.
 		note = "adapter " + adapter + " already absent from the serving stack — eviction goal already met"
 	case errors.Is(uerr, errStackUnreachable):
-		// [FAIL-CLOSED FIX] No serving stack reachable, so the poisoned adapter was NOT evicted. This
+		// [FAIL-CLOSED FIX] The unload did not return a confirmed success. A dial failure means the
+		// stack never received it; a timeout can leave the outcome unknown. In either case we must not
+		// credit the defence. This
 		// branch used to fall through and return Emitted:true after stamping an adapter-epoch — the
 		// same false-forensic-record class already fixed in kv-reset: an eviction that did not happen
 		// was counted as a real actuation and narrated as a defence. Unlike request-drain (whose
 		// stop-admit is a real, stack-independent K8s step), adapter-rotate has NO stack-independent
 		// half: the unload IS the whole move. Report NOT emitted and write no epoch. The poison marker
-		// is deliberately left in place (the adapter is still loaded), so recon keeps the
-		// adapter-integrity fact and the move is retried once a stack is reachable.
+		// is deliberately left in place until absence is confirmed, so recon keeps the
+		// adapter-integrity fact and the move is safely reconciled/retried.
 		return HandlerResult{
 			Emitted: false, MutationKind: "none",
-			Note: "[PENDING-GPU-VALIDATION] adapter-rotate NOT performed: serving stack unreachable at " +
-				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — adapter " + adapter +
-				" was NOT evicted",
+			Note: "[PENDING-GPU-VALIDATION] adapter-rotate outcome unconfirmed: no usable serving-stack " +
+				"response at " + req.Namespace + "/" + req.Pod + " — adapter " + adapter +
+				" eviction was NOT credited; poison marker retained for reconciliation",
 		}, nil
 	default:
 		return HandlerResult{}, fmt.Errorf("adapter-rotate unload %q: %w", adapter, uerr)
@@ -386,17 +388,18 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 	case ierr == nil:
 		note = "local KV invalidated"
 	case errors.Is(ierr, errStackUnreachable):
-		// [FAIL-CLOSED FIX] No serving stack reachable, so NOTHING was invalidated — not the local KV
-		// and (a fortiori) not the remote decode workers. This branch used to fall through and return
+		// [FAIL-CLOSED FIX] The local invalidate did not return a confirmed success. A dial failure
+		// means it did not run; a timeout leaves the outcome unknown. In neither case may we claim that
+		// local or remote KV was invalidated. This branch used to fall through and return
 		// Emitted:true after stamping a kv-epoch, the same false-forensic-record class already fixed
 		// in kv-reset: a poisoned KV that was never invalidated was counted as a real actuation. The
 		// invalidate IS the whole move (there is no stack-independent half), so report NOT emitted and
 		// write no epoch — a KV epoch for an invalidate that never ran is a false forensic record.
 		return HandlerResult{
 			Emitted: false, MutationKind: "none",
-			Note: "[PENDING-GPU-VALIDATION] kv-migrate-invalidate NOT performed: serving stack " +
-				"unreachable at " + req.Namespace + "/" + req.Pod + " (no reachable endpoint) — " +
-				"neither local nor cross-worker KV was invalidated",
+			Note: "[PENDING-GPU-VALIDATION] kv-migrate-invalidate outcome unconfirmed: no usable " +
+				"serving-stack response at " + req.Namespace + "/" + req.Pod + " — no local or " +
+				"cross-worker invalidation was credited",
 		}, nil
 	default:
 		return HandlerResult{}, fmt.Errorf("kv-migrate-invalidate local %s/%s: %w", req.Namespace, req.Pod, ierr)
