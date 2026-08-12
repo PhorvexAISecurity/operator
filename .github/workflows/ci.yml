@@ -225,6 +225,11 @@ jobs:
           file:       deploy/docker/console.Dockerfile
           platforms:  linux/amd64
           push:       ${{ github.event_name != 'pull_request' }}
+          # Compiled into the binary as console.BuildStamp — GET /api/version can only
+          # report what was built in. metadata-action's `version` output is the semver tag
+          # on a release and the sha- tag otherwise, which is exactly what should be shown.
+          build-args: |
+            CONSOLE_VERSION=${{ steps.meta.outputs.version }}
           tags:       ${{ steps.meta.outputs.tags }}
           labels:     ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

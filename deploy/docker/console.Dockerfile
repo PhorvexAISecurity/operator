@@ -27,8 +27,16 @@ RUN go mod download
 WORKDIR /workspace
 COPY phorvex/ phorvex/
 WORKDIR /workspace/phorvex
+# BuildStamp is what GET /api/version reports as the console's own version, and it is the
+# ONLY way to tell which console build is serving — the operator's version is read from the
+# live Deployment, but the console can only report what was compiled into it. Left unset it
+# defaults to "dev", which made the deployed console report "dev" against operator "0.4.6"
+# and tripped the End-to-End version-match check (P02) on every single run.
+ARG CONSOLE_VERSION=dev
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /console cmd/console/main.go
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
+      -a -o /console cmd/console/main.go
 
 # ---- Stage 2b: kubectl ----
 # internal/console/workload_attack.go fires a real attack by applying a SecurityEvent CR,
