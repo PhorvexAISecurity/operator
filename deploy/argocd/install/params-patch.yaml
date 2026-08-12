@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+data:
+  # Serve HTTP; the ALB in front holds the *.phorvex.ai certificate and redirects 80→443.
+  server.insecure: "true"
