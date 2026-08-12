@@ -60,9 +60,11 @@ These prove the **mechanism**. They do **not** prove EPSS changes ranking on the
 the test says so in a comment rather than leaving it to be rediscovered.
 
 Measured under PHORVEXSEC-104 on `phorvex-dev-eks`: the uncapped dispersion product already spans
-**1.875–7.500** against `MaxDispersionMult = 4.0`, so **26% of assets are pinned at the cap** and an
-EPSS lift on those is discarded before it reaches a decision. Widening EPSS coverage without
-re-fitting that cap moves **86%** of assets onto it and *reduces* ranking resolution.
+**1.875–7.500** against `MaxDispersionMult = 4.0`, so **26 of 70 pods (37%) are pinned at the cap**
+and an EPSS lift on those is discarded before it reaches a decision. In PHORVEXSEC-104's synthetic
+full-coverage scenario, widening EPSS coverage without re-fitting that cap moves **60 of 70 pods
+(86%)** onto it and reduces ranking resolution. Those magnitudes are scenario estimates; the
+direction of additional saturation at a fixed cap is structural.
 
 The fixtures therefore carry no other dispersion, so the clamp is not what is being measured — and an
 assertion fails if a fixture ever drifts above 4.0, which would silently turn the test into a
