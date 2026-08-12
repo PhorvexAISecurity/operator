@@ -1,0 +1,22 @@
+{{- if and .Values.phorvex.epss.enabled .Values.phorvex.epss.create }}
+# The EPSS exploit-probability cache the operator mounts at startup.
+#
+# This is created by the chart rather than left as a hand-applied object because the
+# Deployment MOUNTS it: without the ConfigMap the pod never starts, it just sits waiting
+# for a volume that does not exist. A startup dependency that lives nowhere in git is a
+# cluster you cannot rebuild, so it is desired state whether or not it looks like data.
+#
+# It is deliberately SMALL and hand-curated (a few image digests scored by hand), not a
+# feed. If you later point this at a real EPSS pipeline, set `create: false` and let that
+# pipeline own the ConfigMap instead — the mount keeps working either way.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.phorvex.epss.configMapName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+data:
+  {{ .Values.phorvex.epss.fileName }}: |
+{{ .Values.phorvex.epss.data | default "{}" | indent 4 }}
+{{- end }}
