@@ -49,11 +49,9 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		s *= ph.ModelRarity
 	}
 	s = boundMult(s)
-	if s != 1.0 {
-		for i := range af.Facts {
-			af.Facts[i].Weight *= s
-		}
-	}
+	// NOTE: s is APPLIED AT THE END of this function, after the AI facts exist. Applying it here
+	// would scale only the six standardRecon facts, because every AI fact below is appended after
+	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
 
 	// AI recon facts — emitted on GPU/served-model assets. The Phase-2 reset actuators are now
 	// CROSSED into the coverage gate (opt-in): each AI fact is invalidated by its matching AI
@@ -98,6 +96,24 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 		}
 	}
+	// [PHVX-70] Apply the scarcity scalar HERE, not where it is computed.
+	//
+	// It used to be applied immediately after boundMult, which is before every AI fact is appended.
+	// The six standardRecon facts were therefore scaled and the AI facts were not, so on a GPU pod a
+	// base fact could carry up to MaxDispersionMult (4x) the weight of an AI fact describing the same
+	// asset — the engine was systematically steered toward generic moves over the AI-specific ones,
+	// on exactly the workloads the AI facts exist for.
+	//
+	// The doc comment above always claimed the scalar was applied "UNIFORMLY to every fact of the
+	// asset". That claim is what makes the EMR argument sound (a common factor preserves the
+	// within-asset ordering and only sharpens the cross-asset one); partial application breaks it.
+	// The comment was right and the code was wrong.
+	if s != 1.0 {
+		for i := range af.Facts {
+			af.Facts[i].Weight *= s
+		}
+	}
+
 	return af
 }
 
