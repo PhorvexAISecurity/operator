@@ -1,0 +1,23 @@
+{{- if and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled }}
+# The decision audit the console streams from.
+#
+# ReadWriteOnce is deliberate and sufficient: the only two readers/writers are the operator
+# and the console, and they run as containers in the SAME pod, so the volume is attached to
+# exactly one node. Sharing it between two Deployments would have required an RWX
+# filesystem (EFS) for what is a single append-only file.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "phorvex.fullname" . }}-audit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.phorvex.audit.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.phorvex.audit.persistence.size }}
+{{- end }}

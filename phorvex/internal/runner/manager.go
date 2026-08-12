@@ -546,6 +546,15 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
 		}
 	}
+	if killEngaged {
+		for i := range decisions {
+			// The kill switch is a SEPARATE gate from dry-run: it leaves DryRun false while
+			// suppressing actuation. Stamping it keeps a decision-only mirror (an operator
+			// run with --global-kill-switch to feed a dashboard) distinguishable from an
+			// operator whose actuator is failing. Both otherwise emit the identical record.
+			decisions[i].KillSwitch = true
+		}
+	}
 
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
