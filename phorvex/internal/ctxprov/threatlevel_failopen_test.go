@@ -2,6 +2,7 @@ package ctxprov
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -135,10 +136,30 @@ func TestUnknownThreatLevelsStillReportUnderTheBudget(t *testing.T) {
 	}
 }
 
+func TestUnknownThreatLevelBudgetIsConcurrent(t *testing.T) {
+	resetUnknownThreatLevels()
+	var wg sync.WaitGroup
+	for i := 0; i < 5000; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			unknownThreatLevel(fmt.Sprintf("concurrent-level-%d", i))
+		}(i)
+	}
+	wg.Wait()
+	if got := len(UnknownThreatLevelsSeen()); got > unknownThreatLevelBudget {
+		t.Fatalf("concurrent inserts retained %d levels against a budget of %d", got, unknownThreatLevelBudget)
+	}
+	if !UnknownThreatLevelsTruncated() {
+		t.Error("concurrent overflow must set the truncation signal")
+	}
+}
+
 // resetUnknownThreatLevels clears the package-level state so the two tests above do not interfere
 // with each other or with anything that ran earlier in the package.
 func resetUnknownThreatLevels() {
-	unknownThreatLevels.Range(func(k, _ any) bool { unknownThreatLevels.Delete(k); return true })
-	unknownThreatLevelCount.Store(0)
-	unknownThreatLevelTruncated.Store(false)
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	unknownThreatLevels.seen = map[string]struct{}{}
+	unknownThreatLevels.truncated = false
 }

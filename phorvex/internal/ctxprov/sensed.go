@@ -7,7 +7,6 @@ package ctxprov
 import (
 	"sort"
 	"sync"
-	"sync/atomic"
 
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
@@ -19,10 +18,14 @@ import (
 // threats, while treating it as `critical` would let a single mislabelled event dominate a tenant.
 const threatRankUnknown = 2
 
-// unknownThreatLevels records every out-of-vocabulary threat level seen, so an operator can find
-// and map it instead of silently living with a degraded signal. Deduplicated — a detector emitting
-// the same bad level every tick must not flood the log.
-var unknownThreatLevels sync.Map
+// unknownThreatLevels records out-of-vocabulary values. All access is protected by the mutex so
+// the size check and insertion are one operation; a Load/check/LoadOrStore sequence can exceed the
+// budget when several event streams discover distinct values concurrently.
+var unknownThreatLevels = struct {
+	sync.Mutex
+	seen      map[string]struct{}
+	truncated bool
+}{seen: map[string]struct{}{}}
 
 // unknownThreatLevelBudget caps how many DISTINCT out-of-vocabulary levels are retained.
 //
@@ -37,43 +40,41 @@ var unknownThreatLevels sync.Map
 // is why unknownThreatLevelsTruncated exists rather than the overflow being dropped silently.
 const unknownThreatLevelBudget = 32
 
-var (
-	unknownThreatLevelCount     atomic.Int64
-	unknownThreatLevelTruncated atomic.Bool
-)
-
 // unknownThreatLevel notes an out-of-vocabulary level. Exposed for the metric/report path; the
 // dedupe means the caller can invoke it on every event without cost.
 func unknownThreatLevel(level string) {
-	if _, loaded := unknownThreatLevels.Load(level); loaded {
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	if _, loaded := unknownThreatLevels.seen[level]; loaded {
 		return // already recorded; no growth, no counter churn
 	}
-	if unknownThreatLevelCount.Load() >= unknownThreatLevelBudget {
-		unknownThreatLevelTruncated.Store(true)
+	if len(unknownThreatLevels.seen) >= unknownThreatLevelBudget {
+		unknownThreatLevels.truncated = true
 		return
 	}
-	if _, loaded := unknownThreatLevels.LoadOrStore(level, struct{}{}); !loaded {
-		unknownThreatLevelCount.Add(1)
-	}
+	unknownThreatLevels.seen[level] = struct{}{}
 }
 
 // UnknownThreatLevelsTruncated reports that MORE distinct out-of-vocabulary levels were seen than
 // the budget retains. A true here is a stronger signal than the list itself: the detector is not
 // merely using an unmapped level, it is emitting unbounded variety.
-func UnknownThreatLevelsTruncated() bool { return unknownThreatLevelTruncated.Load() }
+func UnknownThreatLevelsTruncated() bool {
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	return unknownThreatLevels.truncated
+}
 
 // UnknownThreatLevelsSeen returns the out-of-vocabulary threat levels observed so far, sorted.
 // A non-empty result is an operator-visible signal that the detector vocabulary needs extending —
 // every one of these events is being scored at the `threatRankUnknown` fallback, not its real
 // severity.
 func UnknownThreatLevelsSeen() []string {
-	var out []string
-	unknownThreatLevels.Range(func(k, _ any) bool {
-		if s, ok := k.(string); ok {
-			out = append(out, s)
-		}
-		return true
-	})
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	out := make([]string, 0, len(unknownThreatLevels.seen))
+	for level := range unknownThreatLevels.seen {
+		out = append(out, level)
+	}
 	sort.Strings(out)
 	return out
 }
