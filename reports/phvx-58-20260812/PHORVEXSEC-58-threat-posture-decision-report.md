@@ -1,6 +1,6 @@
 # PHORVEXSEC-58 — ThreatPosture targeting decision report
 
-Date: 2026-08-12  
+Date: 2026-08-12
 Branch: `fix/phvx-58-threat-posture-claim`
 
 ## Decision
