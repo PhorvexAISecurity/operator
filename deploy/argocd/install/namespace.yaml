@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+    # The CD controller is not a workload for Phorvex to rotate. Quarantining argocd-server
+    # mid-sync would strand the very thing that repairs the cluster.
+    phorvex.ai/managed: "false"
