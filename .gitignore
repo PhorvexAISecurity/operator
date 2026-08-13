@@ -14,6 +14,10 @@ dashboard-web/out/
 *.test
 *.out
 
+# Python bytecode/cache
+**/__pycache__/
+*.py[cod]
+
 # Runtime audit trail (generated)
 phorvex/bin/console-audit.jsonl
 
