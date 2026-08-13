@@ -1,0 +1,126 @@
+{
+  "max_cost": 1.0,
+  "model": "C2 nonnegative unitless formula",
+  "schema_version": "phorvex.cost-validation-evaluation.v1",
+  "stability": {
+    "c_availability": {
+      "cv": 0.1918400177497866,
+      "mean": 0.15889405281487762,
+      "std": 0.030482237912341652
+    },
+    "c_flow": {
+      "cv": null,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "c_gpu": {
+      "cv": 0.1518990802690721,
+      "mean": 0.11004840566710299,
+      "std": 0.016716251605910684
+    },
+    "c_norm": {
+      "cv": 0.27278837444997067,
+      "mean": 0.04760563541843364,
+      "std": 0.012986263900452464
+    },
+    "c_state": {
+      "cv": 0.7009422766908745,
+      "mean": 0.021713058175329352,
+      "std": 0.015219600431336761
+    }
+  },
+  "training_groups": [
+    [
+      "connections",
+      1
+    ],
+    [
+      "connections",
+      2
+    ],
+    [
+      "connections",
+      3
+    ],
+    [
+      "low-replica",
+      2
+    ],
+    [
+      "low-replica",
+      3
+    ],
+    [
+      "rag",
+      1
+    ],
+    [
+      "rag",
+      3
+    ],
+    [
+      "slo-hot",
+      1
+    ],
+    [
+      "slo-hot",
+      3
+    ],
+    [
+      "stateful",
+      3
+    ],
+    [
+      "stateless-high",
+      2
+    ],
+    [
+      "stateless-high",
+      3
+    ],
+    [
+      "stateless-low",
+      1
+    ],
+    [
+      "stateless-low",
+      2
+    ],
+    [
+      "vllm-gpu",
+      1
+    ],
+    [
+      "vllm-gpu",
+      2
+    ],
+    [
+      "vllm-gpu",
+      4
+    ],
+    [
+      "vllm-gpu",
+      5
+    ],
+    [
+      "vllm-gpu",
+      6
+    ],
+    [
+      "vllm-gpu",
+      7
+    ],
+    [
+      "vllm-gpu",
+      8
+    ]
+  ],
+  "training_samples": 54,
+  "weights": {
+    "availability": 0.27556174791543603,
+    "flow": 0.0,
+    "gpu": 0.12840137448756747,
+    "norm": 0.0,
+    "state": 0.0
+  }
+}
