@@ -79,14 +79,37 @@ type antiOverRotation struct{}
 
 func (antiOverRotation) Name() string { return "anti-over-rotation" }
 
-func (antiOverRotation) Check(view *model.WorkloadView, _ model.Move, pol model.Policy) Verdict {
-	since, ok := view.ExposureByVariable[model.VarPodIdentity]
+// exposureVarFor maps an action to the exposure clock it actually resets.
+//
+// [PHVX-67] The guard used to read podIdentity for EVERY action. That is only correct for actions
+// that replace the pod. kv-reset flushes the KV cache and leaves the pod alive, so podIdentity never
+// changes, its clock only grows, and `since < window` was never true — the budget could not fire.
+//
+// Measured on the live cluster before this fix: one vllm pod took 2360 kv-resets in 10h21m, a median
+// of 20s apart against a 15m budget. Every flush costs ~0.534s of re-encode, so roughly 3.4% of wall
+// time was spent redoing work, and the user saw a first-token stall each time.
+//
+// An action with no clock of its own falls back to podIdentity, which is the conservative direction:
+// a shared clock over-restricts rather than under-restricts.
+func exposureVarFor(a model.Action) string {
+	switch a {
+	case model.ActionKVReset, model.ActionKVMigrateInvalidate:
+		return model.VarSession
+	default:
+		return model.VarPodIdentity
+	}
+}
+
+func (antiOverRotation) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
+	v := exposureVarFor(move.Action)
+	since, ok := view.ExposureByVariable[v]
 	if !ok {
 		return feasible // no clock yet (first observation): allow
 	}
 	if since < pol.AntiOverRotationWindow {
 		return Verdict{Feasible: false, Reason: fmt.Sprintf(
-			"anti-over-rotation: lastMove=%s < window=%s (evidence-retention guard)", since.Round(1e9), pol.AntiOverRotationWindow)}
+			"anti-over-rotation: %s unchanged for %s < window=%s (evidence-retention guard)",
+			v, since.Round(1e9), pol.AntiOverRotationWindow)}
 	}
 	return feasible
 }
