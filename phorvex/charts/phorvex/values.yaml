@@ -14,6 +14,15 @@ phorvex:
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false
+  # Optional Prometheus Operator rules for the two kill-switch observability failures that
+  # must not stay silent. Enable only where the monitoring.coreos.com CRDs are installed.
+  alerts:
+    enabled: false
+    disagreementFor: 2m
+    restartWindow: 10m
+    restartThreshold: 3
+    restartFor: 2m
+    additionalLabels: {}
   # Leader election for HA (single active controller).
   leaderElect: false
   metricsBindAddress: ":8080"

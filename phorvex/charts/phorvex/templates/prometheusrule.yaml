@@ -1,0 +1,42 @@
+{{- if .Values.phorvex.alerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "phorvex.fullname" . }}-safety
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    {{- with .Values.phorvex.alerts.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+  - name: phorvex.kill-switch
+    rules:
+    - alert: PhorvexKillSwitchStatusDisagreement
+      expr: max(phorvex_kill_switch_status_disagreement) > 0
+      for: {{ .Values.phorvex.alerts.disagreementFor }}
+      labels:
+        severity: critical
+      annotations:
+        summary: Phorvex runtime and policy kill-switch status disagree
+        description: >-
+          The operator could not persist or verify the runtime kill-switch state in at least one
+          PhorvexPolicy status. Treat the CR readout as stale and inspect status-update errors.
+    - alert: PhorvexOperatorRestartStorm
+      expr: >-
+        sum(increase(kube_pod_container_status_restarts_total{
+          namespace="{{ .Release.Namespace }}",
+          container="manager",
+          pod=~"{{ include "phorvex.fullname" . }}-.*"
+        }[{{ .Values.phorvex.alerts.restartWindow }}])) >= {{ .Values.phorvex.alerts.restartThreshold }}
+      for: {{ .Values.phorvex.alerts.restartFor }}
+      labels:
+        severity: warning
+      annotations:
+        summary: Phorvex operator is restarting repeatedly
+        description: >-
+          The manager container restarted at least {{ .Values.phorvex.alerts.restartThreshold }}
+          times within {{ .Values.phorvex.alerts.restartWindow }}. Repeated restarts can make a stale
+          kill-switch status look authoritative between reconciliations.
+{{- end }}

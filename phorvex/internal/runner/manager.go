@@ -151,6 +151,7 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	m.mu.Unlock()
 	if e != nil {
 		metrics.ResetTenant(e.tenant)
+		metrics.ResetKillSwitchStatus(e.key.Namespace, e.key.Name)
 	}
 }
 
