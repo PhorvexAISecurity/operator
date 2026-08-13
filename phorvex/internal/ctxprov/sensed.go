@@ -5,9 +5,79 @@
 package ctxprov
 
 import (
+	"sort"
+	"sync"
+
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
 )
+
+// threatRankUnknown is the rank assigned to a threat level outside the canonical vocabulary
+// (v1beta1.ThreatLevelRank returns -1). It is deliberately MEDIUM (2 of 4): unknown means we do
+// not know how severe the event is, so treating it as `info` (the previous behaviour) hides real
+// threats, while treating it as `critical` would let a single mislabelled event dominate a tenant.
+const threatRankUnknown = 2
+
+// unknownThreatLevels records out-of-vocabulary values. All access is protected by the mutex so
+// the size check and insertion are one operation; a Load/check/LoadOrStore sequence can exceed the
+// budget when several event streams discover distinct values concurrently.
+var unknownThreatLevels = struct {
+	sync.Mutex
+	seen      map[string]struct{}
+	truncated bool
+}{seen: map[string]struct{}{}}
+
+// unknownThreatLevelBudget caps how many DISTINCT out-of-vocabulary levels are retained.
+//
+// This map is keyed on a string that arrives from OUTSIDE the operator — a SecurityEvent's
+// ThreatLevel — and the whole reason this code path exists is that the value is not from a fixed
+// vocabulary. An unbounded map keyed on unvalidated input is a memory leak waiting for a
+// misconfigured detector, and a growth primitive for anything that can author SecurityEvents. The
+// operator is long-lived and never resets this, so it would only ever grow.
+//
+// The cap is diagnostic, not defensive: 32 distinct levels is far more than a real detector
+// vocabulary, so hitting it means something is generating garbage — which is itself the signal, and
+// is why unknownThreatLevelsTruncated exists rather than the overflow being dropped silently.
+const unknownThreatLevelBudget = 32
+
+// unknownThreatLevel notes an out-of-vocabulary level. Exposed for the metric/report path; the
+// dedupe means the caller can invoke it on every event without cost.
+func unknownThreatLevel(level string) {
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	if _, loaded := unknownThreatLevels.seen[level]; loaded {
+		return // already recorded; no growth, no counter churn
+	}
+	if len(unknownThreatLevels.seen) >= unknownThreatLevelBudget {
+		unknownThreatLevels.truncated = true
+		return
+	}
+	unknownThreatLevels.seen[level] = struct{}{}
+}
+
+// UnknownThreatLevelsTruncated reports that MORE distinct out-of-vocabulary levels were seen than
+// the budget retains. A true here is a stronger signal than the list itself: the detector is not
+// merely using an unmapped level, it is emitting unbounded variety.
+func UnknownThreatLevelsTruncated() bool {
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	return unknownThreatLevels.truncated
+}
+
+// UnknownThreatLevelsSeen returns the out-of-vocabulary threat levels observed so far, sorted.
+// A non-empty result is an operator-visible signal that the detector vocabulary needs extending —
+// every one of these events is being scored at the `threatRankUnknown` fallback, not its real
+// severity.
+func UnknownThreatLevelsSeen() []string {
+	unknownThreatLevels.Lock()
+	defer unknownThreatLevels.Unlock()
+	out := make([]string, 0, len(unknownThreatLevels.seen))
+	for level := range unknownThreatLevels.seen {
+		out = append(out, level)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // sensed is the DEFAULT ContextProvider (PRD §4.2 five sensed signals):
 //
@@ -44,7 +114,18 @@ func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextS
 	for _, e := range view.Events {
 		rank := v1beta1.ThreatLevelRank(e.ThreatLevel)
 		if rank < 0 {
-			rank = 0
+			// FAIL-CLOSED. An UNKNOWN threat level is not a harmless one. This used to clamp to 0,
+			// which is exactly `info` — so a detector emitting a severity outside our vocabulary
+			// ("severe", "warning", a localised string, a new Falco/CrowdStrike level) was scored as
+			// the LOWEST possible threat and the event effectively disappeared. Unknown ≠ benign:
+			// we cannot tell how bad it is, so we must not assume the best case.
+			//
+			// Mapped to MEDIUM rather than critical on purpose: unknown means uncertain, and
+			// unconditionally maximising would let one mislabelled event dominate the posture of a
+			// whole tenant. Medium is the honest midpoint — high enough that a real threat is not
+			// silently dropped, low enough that a vocabulary gap is not an amplifier.
+			rank = threatRankUnknown
+			unknownThreatLevel(e.ThreatLevel)
 		}
 		sev := float64(rank) / 4.0
 		decay := 1.0

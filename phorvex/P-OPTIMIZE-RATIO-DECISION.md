@@ -19,6 +19,15 @@ they are valid upper bounds on the gap, not tight. So the "is greedy near-optima
 to **greedy = exact, gap = 0** on the real system — there is **structurally zero headroom** for any
 selection-combinatorics improvement on the shipped profiles.
 
+**Scope of this claim (PHORVEXSEC-114).** Exact optimality is **proven structurally**: with
+block-ownership plus the partition constraint the objective is modular over a truncated partition
+matroid, so the greedy is exact by Rado–Edmonds. That proof is **scale-free** and does not depend on
+fleet size. The empirical check is separate and bounded: it is a brute-force comparison, admitted only
+while the enumeration stays inside the work budget (`optimality.go`). Measured directly at
+**76 assets at the live move budget of B=1: ratio 1.000000000000, gap 0** — and at 18 and 40 assets on
+the way. Above the work budget the exact arm reports `ExactSkipped`; it never reports a ratio it did
+not compute.
+
 **Why (verified):** `recon.Fact.Key() = Asset|Kind[|Edge]` ([facts.go:62-68](internal/recon/facts.go#L62-L68)) —
 every cover key is **prefixed by its owning asset**, and lateral edges are keyed on the **source** asset. So
 distinct candidates have **provably disjoint cover-key universes**; the `!covered[k]` marginal discount

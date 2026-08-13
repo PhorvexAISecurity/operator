@@ -2,7 +2,7 @@
 
 ## 1. CURRENT STATE
 All **in-session-buildable code is COMPLETE through P-REALCODE (§9.23)**. **PROVEN-REAL** (run on kind /
-measured / adversarially tested): the deterministic K8s engine, the optimizer (greedy **exactly optimal**;
+measured / adversarially tested): the deterministic K8s engine, the optimizer (greedy **exactly optimal** — proven structurally, measured to 76 assets at B=1;
 recon-per-$ **ratio > 1.0** fleet-dependent — not a fixed "1.62×"), the RL red-team + 2 real vulns fixed, and
 multi-tenant **decision isolation exact-zero** + the safe write-path (OIDC / allowlist+gate-check / two-key /
 per-namespace-SA / DoS quotas). **CODE-COMPLETE-PENDING-VALIDATION** (real code behind mockable interfaces,

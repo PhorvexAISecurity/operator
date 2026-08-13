@@ -207,12 +207,16 @@ func hubSpokeDisjointSet() actionset.ActionSet {
 
 // OptimizerProbeArm is greedy vs greedy+swaps vs brute-force exact on one fixture.
 type OptimizerProbeArm struct {
-	Name           string   `json:"name"`
+	Name            string  `json:"name"`
 	GreedyObjective float64 `json:"greedyObjective"`
-	SwapObjective  float64  `json:"swapObjective"`
-	ExactObjective float64  `json:"exactObjective"`
-	GreedyRatio    float64  `json:"greedyRatio"`
-	SwapRatio      float64  `json:"swapRatio"`
+	SwapObjective   float64 `json:"swapObjective"`
+	ExactObjective  float64 `json:"exactObjective"`
+	GreedyRatio     float64 `json:"greedyRatio"`
+	SwapRatio       float64 `json:"swapRatio"`
+	// ExactSkipped is TRUE when the fixture exceeded exactBruteForceAssetCap, so no exact solve ran
+	// and BOTH ratios are unmeasured. It must be checked before either ratio is read or displayed:
+	// an unmeasured arm is not a passing arm. (PHVX-23 / PHORVEXSEC-114)
+	ExactSkipped   bool     `json:"exactSkipped"`
 	GreedyPicks    []string `json:"greedyPicks"`
 	SwapPicks      []string `json:"swapPicks"`
 	CoversDisjoint bool     `json:"coversDisjoint"`
@@ -244,16 +248,30 @@ func probeArm(name string, set actionset.ActionSet, B int, lambda float64) Optim
 	sPicks := greedyThenSwaps(set, B, prov1, lambda)
 	gObj := setObjective(gPicks, set.FactWeights, prov1, lambda)
 	sObj := setObjective(sPicks, set.FactWeights, prov1, lambda)
-	exObj, _ := exactObjective(set, B, prov1, lambda)
+	exObj, skipped := exactObjective(set, B, prov1, lambda)
 	dj, _ := coversDisjoint(set)
 	arm := OptimizerProbeArm{
 		Name: name, GreedyObjective: round4(gObj), SwapObjective: round4(sObj), ExactObjective: round4(exObj),
 		GreedyPicks: candKeys(gPicks), SwapPicks: candKeys(sPicks), CoversDisjoint: dj,
+		ExactSkipped: skipped,
 	}
-	if exObj > 1e-12 {
+	// exObj == 0 carries TWO different meanings and they must not be conflated (PHVX-23):
+	//
+	//   skipped      -> the exact arm never ran; nothing was measured.
+	//   not skipped  -> the exact solve ran and correctly selected nothing, so greedy matching it
+	//                   at 0 IS a ratio of 1.
+	//
+	// Before this fix `skipped` was discarded, so an over-cap fixture fell into the second branch
+	// and reported greedyRatio = swapRatio = 1.0000 — an unmeasured arm rendered as a perfect score,
+	// which is exactly the "stale 1.0 with no signal" the ticket describes. Leave the ratios at zero
+	// when skipped and let ExactSkipped carry the meaning.
+	switch {
+	case skipped:
+		// ratios stay 0; ExactSkipped is the signal
+	case exObj > 1e-12:
 		arm.GreedyRatio = round4(gObj / exObj)
 		arm.SwapRatio = round4(sObj / exObj)
-	} else {
+	default:
 		arm.GreedyRatio, arm.SwapRatio = 1, 1
 	}
 	return arm
