@@ -64,3 +64,39 @@ func (k *KillSwitch) Engaged(ctx context.Context) bool {
 	}
 	return false
 }
+
+// CalibrationFrozen reports whether ONLINE COST CALIBRATION should be suppressed (PHVX-2). It reads
+// the `costCalibration` key of the SAME sentinel ConfigMap the actuation kill-switch uses, because
+// that is where an operator already looks during an incident and it needs no restart — a restart
+// would be a poor off-switch here, since in-process RLS state is lost on restart anyway.
+//
+// Deliberately DIFFERENT from Engaged in two ways:
+//
+//   - It is a separate key. Freezing actuation and freezing learning are different decisions: an
+//     operator may want the defence to stop moving while the cost model keeps observing, or to
+//     distrust the learned costs while the defence keeps running on the shipped prior.
+//   - A read failure does NOT fail closed. Engaged fails closed because acting on an unreadable
+//     kill-switch is dangerous. Here the dangerous direction is inverted: freezing REVERTS theta to
+//     the prior and discards every tenant's calibration, so a transient API hiccup must not throw
+//     that away. `ok=false` means "no answer, leave the current state alone".
+func (k *KillSwitch) CalibrationFrozen(ctx context.Context) (frozen, ok bool) {
+	if k == nil || k.Client == nil || k.Namespace == "" {
+		return false, false
+	}
+	name := k.Name
+	if name == "" {
+		name = DefaultKillSwitchName
+	}
+	var cm corev1.ConfigMap
+	if err := k.Client.Get(ctx, client.ObjectKey{Namespace: k.Namespace, Name: name}, &cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, true // sentinel absent => calibration runs (the normal case)
+		}
+		return false, false // uncertainty: hold the current state rather than discard calibration
+	}
+	switch cm.Data["costCalibration"] {
+	case "off", "Off", "OFF", "false", "False", "frozen", "0", "no":
+		return true, true
+	}
+	return false, true
+}

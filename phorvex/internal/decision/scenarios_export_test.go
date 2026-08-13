@@ -3,7 +3,8 @@
  * (disjoint vs non-disjoint × N × B × seeds), computes the REAL Phorvex greedy / greedy+swaps / brute-force
  * objectives over the shared substrate, and writes one JSONL line per instance (facts + candidates + Go
  * results) so an external MILP/PuLP solver can compute the EXACT optimum at any scale (brute-force is capped
- * at 18 assets). Run: SCEN_OUT=bin/scenarios-instances.jsonl go test ./internal/decision -run TestScenariosExport -v
+ * at 18 assets). Run: SCEN_OUT=$PWD/bin/scenarios-instances.jsonl go test ./internal/decision -run TestScenariosExport -v
+ * (SCEN_OUT must be ABSOLUTE: go test runs with cwd = the package directory, not the module root.)
  */
 
 package decision
@@ -11,13 +12,33 @@ package decision
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestScenariosExport(t *testing.T) {
+	// This is a GENERATOR, not a test: it writes the scale-sweep grid for an external MILP solver and
+	// asserts nothing about the code (its only two t.Fatal calls are I/O errors). It has also never
+	// been able to pass on a fresh checkout — `go test` runs a package binary with cwd set to the
+	// PACKAGE directory, so the default relative path resolved to internal/decision/bin/, which does
+	// not exist. The bin/ that does exist is phorvex/bin/, two levels up, and the invocation in this
+	// file's own header comment inherits the same mistake.
+	//
+	// A permanently-red suite is worse than the missing artefact: it teaches everyone to read "1
+	// failure" as normal, so the next real failure is read as normal too. Run it deliberately —
+	//
+	//	SCEN_OUT=$PWD/bin/scenarios-instances.jsonl go test ./internal/decision -run TestScenariosExport
+	//
+	// and it does its job. Left implicit, it skips instead of failing. (PHVX-29 / PHORVEXSEC-123)
 	path := os.Getenv("SCEN_OUT")
 	if path == "" {
-		path = "bin/scenarios-instances.jsonl"
+		t.Skip("SCEN_OUT not set: this is an on-demand generator for the external MILP solver, " +
+			"not an assertion. Set SCEN_OUT to an absolute path to produce the instance grid.")
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create output directory %s: %v", dir, err)
+		}
 	}
 	f, err := os.Create(path)
 	if err != nil {

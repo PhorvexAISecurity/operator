@@ -240,6 +240,16 @@ func (m *Manager) tick(ctx context.Context) {
 	killEngaged := m.KillSwitch.Engaged(ctx)
 	metrics.SetKillSwitch(killEngaged)
 
+	// [PHVX-2] Online cost calibration has its own off-switch, evaluated every tick from the same
+	// sentinel ConfigMap so it takes effect without a restart. `ok=false` means the sentinel could
+	// not be read; hold the current state rather than discard every tenant's calibration on a
+	// transient API error.
+	if frozen, ok := m.KillSwitch.CalibrationFrozen(ctx); ok {
+		if ce, isCoverage := m.Optimizer.(*decision.CoverageEngine); isCoverage {
+			ce.SetCostCalibrationFrozen(frozen)
+		}
+	}
+
 	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
 	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
 	// engaged (a deliberate global freeze) or actuation is unavailable.

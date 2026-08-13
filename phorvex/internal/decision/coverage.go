@@ -35,7 +35,28 @@ type CoverageEngine struct {
 	// FIRST (single-tenant default) bucket reuses the original `Cost` singleton → bit-identical
 	// single-tenant path. No cross-tenant feed (each bucket integrates only its own tenant's evidence).
 	costByTenant map[string]*cost.P1Cost
+	// calibrationFrozen is the PHVX-2 off-switch, remembered so lazily-created tenant buckets
+	// inherit it rather than starting to learn behind the operator's back.
+	calibrationFrozen bool
 }
+
+// SetCostCalibrationFrozen applies the PHVX-2 off-switch to EVERY tenant bucket, present and future.
+// Buckets are created lazily per tenant, so the flag is remembered and applied on creation too —
+// otherwise a tenant first seen after the switch was thrown would quietly start learning again.
+func (e *CoverageEngine) SetCostCalibrationFrozen(frozen bool) {
+	if e.calibrationFrozen == frozen {
+		return // idempotent: re-freezing every tick must not keep reverting theta
+	}
+	e.calibrationFrozen = frozen
+	for _, c := range e.costByTenant {
+		if c != nil && c.RLS != nil {
+			c.RLS.SetFrozen(frozen)
+		}
+	}
+}
+
+// CostCalibrationFrozen reports the current state (audit/observability).
+func (e *CoverageEngine) CostCalibrationFrozen() bool { return e.calibrationFrozen }
 
 // costFor resolves the per-tenant cost bucket (DEFAULT-TO-OLD-SCALAR: the first tenant IS the original
 // singleton; additional tenants get a fresh, identically-seeded, fully-isolated bucket).
@@ -51,6 +72,9 @@ func (e *CoverageEngine) costFor(tenant string) *cost.P1Cost {
 		c = e.Cost // bit-identical single-tenant default
 	} else {
 		c = cost.NewP1Cost() // isolated per-tenant bucket, zero cross-feed
+	}
+	if c != nil && c.RLS != nil {
+		c.RLS.SetFrozen(e.calibrationFrozen)
 	}
 	e.costByTenant[tenant] = c
 	return c
@@ -96,6 +120,21 @@ func (e *CoverageEngine) now() time.Time {
 	}
 	return time.Now()
 }
+
+// provFloor is the weight a FRESH, evidence-less candidate is discounted to, so a manufactured
+// decoy cannot displace a genuinely-due asset from the move budget.
+//
+// It was inert until PHVX-72. The gate that decides whether to apply it read
+// `StageUrgency > 0` — but StageUrgency = 0.5*consequence(stage) + 0.5*hazard*consequence(next)
+// and consequence() floors at 0.1 for EVERY stage including its default arm, so the least urgent
+// asset in the system still scores 0.05. `> 0` was therefore always true, every asset took the
+// `return 1` path, and this discount had never once been applied in production. The gate now
+// compares against killchain.BaselineStageUrgency (the no-evidence score, derived from the model
+// rather than hardcoded) so "carries real evidence" means what it says.
+//
+// Defined ONCE here and used by provFn in optimality.go too — the two used to be separate local
+// consts under a "KEEP IN SYNC" comment, which is how they drifted into agreeing on a broken gate.
+const provFloor = 0.34
 
 type assetCtx struct {
 	sig      model.ContextSignals
@@ -195,13 +234,12 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 	// slot. The reported coverage/marginal is the UN-discounted value (reporting unchanged). NO
 	// learning enters Decide — prov is a deterministic function of the real exposure/assessment.
 	floorSec := pol.ProactiveFloor.Seconds()
-	const provFloor = 0.34
 	prov := func(key string) float64 {
 		if floorSec <= 0 {
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.StageUrgency > 0 {
+		if ac.exposure >= floorSec || ac.assess.HasEvidence {
 			return 1 // genuinely due, or backed by real recon/event evidence => full weight (legit path unchanged)
 		}
 		r := ac.exposure / floorSec
@@ -372,41 +410,41 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		net := cov - lambda*ecost
 
 		decisions = append(decisions, model.Decision{
-			Tenant:           pol.Tenant,
-			Namespace:        v.Pod.Namespace,
-			Pod:              v.Pod.Name,
-			Node:             v.Pod.Node,
-			Risk:             cov, // recon value at stake
-			Cost:             ecost,
-			Net:              net,
-			AssetValue:       ac.sig.AssetValue,
-			ThreatPosture:    ac.sig.ThreatPosture,
-			Exposure:         ac.sig.Exposure,
-			Belief:           ac.assess.PHold,
-			BlastRadius:      v.BlastRadius,
-			SLOHeadroom:      ac.sig.SLOHeadroom,
-			Phase:            v.Phase,
-			Action:           action,
-			Selected:         selected,
-			Feasible:         feasible,
-			InfeasibleWhy:    infeasibleWhy,
-			Reason:             coverageReason(action, ac.assess, cov, ecost, perDollar, lambda),
-			R6Counterfactual:   model.ActionRotate,
-			CounterfactualNote: counterfactualNote(action, v, perDollar, lambda),
-			BlindCost:          blindCost,
-			DryRun:             pol.DryRun,
-			DecidedAt:        now,
-			Engine:           "p1-coverage",
-			CoveredWeight:    marginal,
-			CoveredFacts:     coveredFacts,
-			PerDollar:        perDollar,
-			Stage:            ac.assess.StageName,
-			StageHazard:      ac.assess.Hazard,
-			NextStage:        ac.assess.NextStageName,
-			PHold:            ac.assess.PHold,
-			Lambda:           lambda,
-			ProactiveRate:    rate,
-			Attribution:      attribution,
+			Tenant:                pol.Tenant,
+			Namespace:             v.Pod.Namespace,
+			Pod:                   v.Pod.Name,
+			Node:                  v.Pod.Node,
+			Risk:                  cov, // recon value at stake
+			Cost:                  ecost,
+			Net:                   net,
+			AssetValue:            ac.sig.AssetValue,
+			ThreatPosture:         ac.sig.ThreatPosture,
+			Exposure:              ac.sig.Exposure,
+			Belief:                ac.assess.PHold,
+			BlastRadius:           v.BlastRadius,
+			SLOHeadroom:           ac.sig.SLOHeadroom,
+			Phase:                 v.Phase,
+			Action:                action,
+			Selected:              selected,
+			Feasible:              feasible,
+			InfeasibleWhy:         infeasibleWhy,
+			Reason:                coverageReason(action, ac.assess, cov, ecost, perDollar, lambda),
+			R6Counterfactual:      model.ActionRotate,
+			CounterfactualNote:    counterfactualNote(action, v, perDollar, lambda),
+			BlindCost:             blindCost,
+			DryRun:                pol.DryRun,
+			DecidedAt:             now,
+			Engine:                "p1-coverage",
+			CoveredWeight:         marginal,
+			CoveredFacts:          coveredFacts,
+			PerDollar:             perDollar,
+			Stage:                 ac.assess.StageName,
+			StageHazard:           ac.assess.Hazard,
+			NextStage:             ac.assess.NextStageName,
+			PHold:                 ac.assess.PHold,
+			Lambda:                lambda,
+			ProactiveRate:         rate,
+			Attribution:           attribution,
 			PreemptMargin:         ac.assess.PreemptMargin,
 			ProjectedNextStageSec: ac.assess.ProjectedNextStageSec,
 			AIClassified:          ac.assess.AIClassified,

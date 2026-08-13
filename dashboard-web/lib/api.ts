@@ -262,6 +262,8 @@ export interface BenchConfigResult {
 export interface OptimizerProbeArm {
   name: string; greedyObjective: number; swapObjective: number; exactObjective: number;
   greedyRatio: number; swapRatio: number; greedyPicks: string[]; swapPicks: string[]; coversDisjoint: boolean;
+  /** true => the fixture exceeded the brute-force cap, so NEITHER ratio was measured (PHVX-23). */
+  exactSkipped: boolean;
 }
 export interface OptimizerProbe { b: number; lambda: number; shared: OptimizerProbeArm; disjoint: OptimizerProbeArm }
 export interface BenchResult {
