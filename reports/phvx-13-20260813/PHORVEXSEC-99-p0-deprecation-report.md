@@ -2,7 +2,7 @@
 
 Date: 2026-08-13
 Branch: `fix/phvx-13-deprecate-p0`
-Base: `origin/main` at `040a09b` (`v0.4.8`)
+Base: synchronized with `origin/main` at `303e897` (`v0.4.18`)
 
 ## Result
 
@@ -46,13 +46,12 @@ The current-record test also verifies the stable required key set, including `ri
 - `go vet ./...`
 - `go test -count=1 ./internal/audit`
 - `go test -count=1 ./internal/decision -run 'Test(AblationNeverReferencesDeprecatedP0Engine|DecideNeverEmitsNonFiniteCost|DecideStaysSelectableUnderPoisonedTelemetry)$'`
-- `go test -count=1 -skip TestScenariosExport ./...`
+- `go test -count=1 ./...`
 - `go test -count=1 ./...` in `build/test-harness`
 - `git diff --check`
 
-The unfiltered decision suite still encounters the pre-existing `TestScenariosExport` missing-output
-directory failure on `origin/main`; PHORVEXSEC-123 / PR #21 is the separate fix. This branch neither
-changes nor conceals that behavior.
+PHORVEXSEC-123 / PR #21 is now merged into `main`; the formerly missing scenarios-export output
+directory is present, so the unfiltered suite is part of this branch's final verification.
 
 ## Review note
 
