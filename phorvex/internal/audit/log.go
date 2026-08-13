@@ -20,8 +20,16 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
+const (
+	// SchemaVersionCurrent is written by every audit record produced by this release.
+	SchemaVersionCurrent = "phorvex.audit.v1"
+	// SchemaVersionLegacy identifies pre-versioning JSONL records when they are replayed.
+	SchemaVersionLegacy = "phorvex.audit.v0"
+)
+
 // Record is the serialized form of one decision (stable JSON for the audit trail).
 type Record struct {
+	SchemaVersion    string    `json:"schemaVersion"`
 	Kind             string    `json:"kind"`
 	Time             time.Time `json:"time"`
 	Tenant           string    `json:"tenant"`
@@ -80,6 +88,31 @@ type Record struct {
 	AIClassified          bool    `json:"aiClassified,omitempty"`
 }
 
+// MarshalJSON guarantees that every newly serialized audit record declares its contract version,
+// including records constructed directly by tests and internal tooling rather than via ToRecord.
+func (r Record) MarshalJSON() ([]byte, error) {
+	type recordAlias Record
+	if r.SchemaVersion == "" {
+		r.SchemaVersion = SchemaVersionCurrent
+	}
+	return json.Marshal(recordAlias(r))
+}
+
+// UnmarshalJSON keeps the shipped, pre-versioning JSONL corpus replayable. An absent version is
+// explicit legacy v0 after decode; it is never confused with the current version.
+func (r *Record) UnmarshalJSON(data []byte) error {
+	type recordAlias Record
+	var decoded recordAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded.SchemaVersion == "" {
+		decoded.SchemaVersion = SchemaVersionLegacy
+	}
+	*r = Record(decoded)
+	return nil
+}
+
 // Logger writes decision records.
 type Logger struct {
 	log     logr.Logger
@@ -111,6 +144,7 @@ func New(log logr.Logger, jsonOut io.Writer) *Logger {
 // ToRecord converts a Decision to a Record.
 func ToRecord(d model.Decision) Record {
 	return Record{
+		SchemaVersion:    SchemaVersionCurrent,
 		Kind:             "phorvex.decision",
 		Time:             d.DecidedAt,
 		Tenant:           d.Tenant,
