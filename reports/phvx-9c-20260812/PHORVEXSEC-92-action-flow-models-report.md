@@ -2,6 +2,7 @@
 
 Date: 2026-08-12
 Branch: `fix/phvx-9c-action-flow-models`
+Base: `main` — PR #6 is merged, and PR #35 now targets `main` directly.
 
 ## Result
 
