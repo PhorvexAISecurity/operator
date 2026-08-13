@@ -11,8 +11,10 @@ import (
 )
 
 // P1Cost is the assembled P1 cost model: C = normSparsity*C_norm + flowDisruption*
-// C_flow, where C_flow is calibrated from completed live rotations, lambda is the
-// dual-descent shadow-price, and CHi is the
+// C_flow. Respawn C_flow is calibrated from completed live rotations; cutover,
+// serving-state, quarantine and lightweight mutations have separate action-specific
+// shapes so rotation latency is never applied across incompatible units. Lambda is
+// the dual-descent shadow-price, and CHi is the
 // conformal robust upper bound used by the HARD SLO gate. It is a
 // stateful object (the RLS, conformal window and dual persist across ticks) owned by
 // the decision engine.
@@ -25,9 +27,9 @@ type P1Cost struct {
 // P1Components is the exact decomposition used by the current objective-cost
 // model. It is exported for empirical cost validation so a benchmark can record
 // the model inputs without reimplementing (and potentially drifting from) ECost.
-// State/GPU/availability are intentionally not claimed here: in the current C0
-// model GPU and load are embedded in CFlow, while state and availability remain
-// hard feasibility constraints rather than additive objective-cost terms.
+// State/GPU/availability are intentionally not separate additive terms: actionFlow
+// incorporates the action-relevant serving/load signals, while state and availability
+// remain hard feasibility constraints.
 type P1Components struct {
 	Norm  float64 `json:"c_norm"`
 	Flow  float64 `json:"c_flow"`
@@ -63,16 +65,7 @@ func (c *P1Cost) Components(view *model.WorkloadView, move model.Move, pol model
 		return P1Components{}
 	}
 	cNorm := normCostP1(move)
-	cFlow := 0.0
-	if move.Action == model.ActionQuarantine {
-		// Quarantine does not pay a warm-load; small, phase-independent flow hit.
-		cFlow = 0.25
-		if view.Telemetry.Present {
-			cFlow += 0.15 * sat(view.Telemetry.ConnCount/100.0)
-		}
-	} else {
-		cFlow = c.RLS.Predict(Features(view))
-	}
+	cFlow := c.actionFlow(view, move.Action)
 	return P1Components{
 		Norm:  cNorm,
 		Flow:  cFlow,

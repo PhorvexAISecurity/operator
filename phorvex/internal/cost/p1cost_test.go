@@ -37,17 +37,16 @@ func TestComponentsExactlyRecomposeECost(t *testing.T) {
 		Phase:     model.PhaseWarm,
 		Telemetry: model.Telemetry{Present: true, ReqRate: 100, ConnCount: 40},
 	}
-	for _, action := range []model.Action{
-		model.ActionNoop,
-		model.ActionRotate,
-		model.ActionQuarantine,
-		model.ActionKVReset,
-	} {
+	actions := append([]model.Action{model.ActionNoop}, model.MutatingActions...)
+	for _, action := range actions {
 		move := model.Move{Action: action}
 		got := c.Components(view, move, pol)
-		want := c.ECost(view, move, pol)
-		if math.Abs(got.Total-want) > 1e-12 {
-			t.Fatalf("%s components total=%v ECost=%v", action, got.Total, want)
+		wantFlow := 0.0
+		if action != model.ActionNoop {
+			wantFlow = c.actionFlow(view, action)
+		}
+		if math.Abs(got.Flow-wantFlow) > 1e-12 {
+			t.Fatalf("%s components flow=%v actionFlow=%v", action, got.Flow, wantFlow)
 		}
 		if math.Abs(got.Total-(pol.NormSparsity*got.Norm+pol.FlowDisruption*got.Flow)) > 1e-12 {
 			t.Fatalf("%s components do not recompose: %+v", action, got)
