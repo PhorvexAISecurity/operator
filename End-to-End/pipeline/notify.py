@@ -25,13 +25,13 @@ API = "https://api.telegram.org"
 # Stage titles mirror the [n/6] headings e2e.py prints, so the channel and the CI log read
 # as the same run.
 STAGES = [
-    (0, "پیش‌پرواز"),
-    (1, "ضبط پایه"),
-    (2, "شلیک"),
-    (3, "ضبط پس از حمله"),
-    (4, "راستی‌آزمایی"),
-    (5, "چک‌ها"),
-    (6, "گزارش"),
+    (0, "Preflight"),
+    (1, "Baseline capture"),
+    (2, "Fire"),
+    (3, "Post-attack capture"),
+    (4, "Ground truth"),
+    (5, "Checks"),
+    (6, "Report"),
 ]
 
 ICON = {"ok": "✅", "fail": "❌", "warn": "⚠️", "skip": "⏭", "run": "⏳", "wait": "▫️"}
@@ -73,11 +73,11 @@ class Notifier:
             body = e.read().decode("utf-8", "replace")[:200]
             # "message is not modified" is benign: two stages rendered to the same board.
             if "message is not modified" not in body:
-                self.log(f"تلگرام: {method} → HTTP {e.code} {body}")
+                self.log(f"telegram: {method} → HTTP {e.code} {body}")
             return None
         except Exception as e:                       # network, DNS, TLS, timeout
             self._broken = True
-            self.log(f"تلگرام: خاموش شد — {type(e).__name__}: {e}")
+            self.log(f"telegram: disabled — {type(e).__name__}: {e}")
             return None
 
     # ── board ────────────────────────────────────────────────────────────────
@@ -115,8 +115,8 @@ class Notifier:
             return
         head = [f"🛡 <b>Phorvex E2E</b> · <code>{_esc(mode)}</code>"]
         if target:
-            head.append(f"هدف: <code>{_esc(target)}</code>")
-        head.append(f"ترابری: <code>{_esc(transport)}</code>")
+            head.append(f"target: <code>{_esc(target)}</code>")
+        head.append(f"transport: <code>{_esc(transport)}</code>")
         self.header = "\n".join(head + [_esc(l) for l in ctx_lines])
         self._flush()
 
@@ -146,13 +146,13 @@ class Notifier:
         ]
         if failures:
             shown = list(failures)[:8]
-            line = "افتاده: " + ", ".join(f"<code>{_esc(f)}</code>" for f in shown)
+            line = "failed: " + ", ".join(f"<code>{_esc(f)}</code>" for f in shown)
             if len(failures) > len(shown):
                 line += f" (+{len(failures) - len(shown)})"
             parts.append(line)
         parts += [_esc(e) for e in extra]
         if report_url:
-            parts.append(f'📊 <a href="{_esc(report_url)}">گزارش کامل</a>')
+            parts.append(f'📊 <a href="{_esc(report_url)}">full report</a>')
         self.footer = "\n".join(parts)
         self._flush()
 
