@@ -2,7 +2,7 @@
 
 Date: 2026-08-12
 Branch: `fix/phvx-9c-action-flow-models`
-Base: `main` — PR #6 is merged, and PR #35 now targets `main` directly.
+Base: `main` at `303e897` (`v0.4.18`) — PR #6 is merged, and PR #35 targets `main` directly.
 
 ## Result
 
@@ -55,11 +55,10 @@ on that task.
 go build ./...                                                   PASS
 go vet ./...                                                     PASS
 go test -count=1 ./internal/cost                                PASS
-go test -count=1 -skip TestScenariosExport ./internal/...       PASS
+go test -count=1 ./...                                          PASS
 TestGreedyIsExactOnShippedFleets ratio=1.000000000000           PASS
 TestO1SingleTenantByteIdentical                                 PASS
 ```
 
-The unfiltered suite still invokes `TestScenariosExport`, a benchmark artifact
-generator that defaults to an absent `internal/decision/bin` output directory.
-That main-branch failure is unrelated to this change.
+PHORVEXSEC-123 / PR #21 is now merged into `main`; its scenarios-export fixture
+path is present, and the unfiltered suite passes on this synchronized branch.
