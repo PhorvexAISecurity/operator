@@ -4,7 +4,7 @@ Date: 2026-08-13
 
 Branch: `feat/phvx-25d-actions-supported`
 
-Base: `origin/main` at `77e1b95` (`v0.4.11`)
+Base: synchronized with `origin/main` at `303e897` (`v0.4.18`)
 
 ## Result
 
@@ -79,7 +79,7 @@ The debounce threshold is configurable with
 
 - `go test -count=1 ./api/v1alpha1 ./internal/ingest ./internal/runner`
 - `go test -race -count=1 ./internal/runner`
-- `go test -count=1 -skip TestScenariosExport ./...`
+- `go test -count=1 ./...`
 - `go build ./...`
 - `go vet ./...`
 - `go test -count=1 ./...` in `build/test-harness`
@@ -89,12 +89,11 @@ The debounce threshold is configurable with
   extracted-content and parsed-`Chart.yaml` comparison used by CI `chart-sync`
 - `git diff --check`
 
-The unfiltered Phorvex suite still fails only at the pre-existing
-`TestScenariosExport` missing `bin/scenarios-instances.jsonl` fixture. That failure
-is owned by PHORVEXSEC-123 / PR #21 and is not changed or hidden here. Helm is not
-installed in this environment, so the vendored chart was repackaged directly and
-verified by extracting it and running CI's source-content comparison rather than
-`helm template`.
+PHORVEXSEC-123 / PR #21 is now merged into `main`; the scenarios-export fixture
+path is present and the unfiltered suite passes on this synchronized branch. Helm
+is not installed in this environment, so the vendored chart was repackaged directly
+and verified by extracting it and running CI's source-content comparison rather
+than `helm template`.
 
 ## Scope boundary
 
