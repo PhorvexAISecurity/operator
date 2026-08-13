@@ -12,6 +12,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"sync"
@@ -156,6 +157,11 @@ func (m *Manager) Remove(key types.NamespacedName) {
 
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
 func (m *Manager) Start(ctx context.Context) error {
+	// The exact-optimality claim depends on block-disjoint cover keys. Validate every
+	// registered recon profile once, before starting the sub-second tick path.
+	if err := recon.ValidateRegistryCoverKeys(); err != nil {
+		return fmt.Errorf("recon cover-key startup invariant failed: %w", err)
+	}
 	if m.BaseInterval <= 0 {
 		m.BaseInterval = 10 * time.Second
 	}
