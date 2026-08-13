@@ -147,8 +147,10 @@ installed (harmless).
 
 - Optimizer is the **greedy top-B** (the PRD's stated MVP form); the offline
   Stackelberg/Markov-game mixed-strategy solver is a later phase.
-- **CVSS/CVE utilities** are a roadmap input; P0 risk = physics residual + exposure +
-  threat posture + blast radius (all live).
+- **CVSS/CVE utilities** are a roadmap input. This historical P0 risk blend consumed
+  threat posture; the default P1 coverage engine does not. P1 consumes raw event
+  severity once through kill-chain P(hold)/stage urgency and records the derived
+  `ThreatPosture` scalar for audit only (PHORVEXSEC-58).
 - **Prometheus ingest is real but was not exercised live** — the kind cluster has no
   Prometheus, so the run used K8s-only signals and reported telemetry absent (never
   fabricated). The `prometheus-http` source is implemented and wired (`--prometheus-url`).
