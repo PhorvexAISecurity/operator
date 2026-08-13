@@ -12,6 +12,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"sync"
@@ -173,11 +174,17 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	m.mu.Unlock()
 	if e != nil {
 		metrics.ResetTenant(e.tenant)
+		metrics.ResetKillSwitchStatus(e.key.Namespace, e.key.Name)
 	}
 }
 
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
 func (m *Manager) Start(ctx context.Context) error {
+	// The exact-optimality claim depends on block-disjoint cover keys. Validate every
+	// registered recon profile once, before starting the sub-second tick path.
+	if err := recon.ValidateRegistryCoverKeys(); err != nil {
+		return fmt.Errorf("recon cover-key startup invariant failed: %w", err)
+	}
 	if m.BaseInterval <= 0 {
 		m.BaseInterval = 10 * time.Second
 	}
@@ -519,6 +526,11 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 			Fingerprints: map[string]string{
 				model.VarPodIdentity:   p.UID,
 				model.VarNodePlacement: p.Node,
+				// [PHVX-67] The session clock. kv-reset leaves the pod alive, so podIdentity never
+				// moves and the anti-over-rotation guard could never fire for it — measured on the
+				// live cluster as a 20s median interval against a 15m budget, 2360 times in 10h on
+				// one pod.
+				model.VarSession: p.SessionEpoch,
 			},
 		}, snap.Now)
 		keep[exposure.SlotKey(pol.Tenant, p.Namespace, p.Name)] = struct{}{}

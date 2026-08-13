@@ -124,11 +124,11 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     cap = cfg["capture"]
     started = datetime.now(timezone.utc)
     n = notifier or Notifier(enabled=False)
-    log(f"● ترابری: {t.describe()}   حالت: {mode}")
+    log(f"● transport: {t.describe()}   mode: {mode}")
     n.start(mode, target_name, t.describe(), ctx_lines=[run_label] if run_label else [])
 
     # ── 0 · preflight ────────────────────────────────────────────────────────
-    log("\n[0/6] پیش‌پرواز")
+    log("\n[0/6] preflight")
     n.running(0)
     ctx.preflight["health"] = console.get_json("/api/health")
     ctx.preflight["version"] = console.get_json("/api/version")
@@ -139,17 +139,17 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
     ctx.preflight["auditWriter"] = {"metricsUrl": metrics.describe(), "killSwitchEngaged": ks}
     if ks is not None:
-        log(f"نویسنده‌ی حسابرسی: کلید توقف = {'فعال (فقط تصمیم، بدون اقدام)' if ks else 'خاموش'}", 1)
+        log(f"audit writer: kill switch = {'engaged (decide only, no action)' if ks else 'off'}", 1)
     for name, meta in ctx.controller_pods.items():
         log(f"{name}: {meta['phase']} · restarts={meta['restarts']}", 1)
-    log(f"کنسول {ctx.preflight['version'].get('console')} · "
-        f"اپراتور {ctx.preflight['version'].get('operator')}", 1)
+    log(f"console {ctx.preflight['version'].get('console')} · "
+        f"operator {ctx.preflight['version'].get('operator')}", 1)
 
     if target_name:
         ctx.target = next((x for x in cfg["targets"] if x["name"] == target_name), None)
         if not ctx.target:
-            raise SystemExit(f"هدف ناشناخته: {target_name} "
-                             f"(موجود: {', '.join(x['name'] for x in cfg['targets'])})")
+            raise SystemExit(f"unknown target: {target_name} "
+                             f"(available: {', '.join(x['name'] for x in cfg['targets'])})")
         ns = ctx.target["namespace"]
         ctx.baseline_pods = cluster.pod_uids(ns)
         ctx.max_moves_per_tick, ctx.policy_mode, ctx.policy_dryrun = read_policy(cluster, ns)
@@ -157,7 +157,7 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
             st = cluster.pod_is_stateful(ns, pod)
             if st is not None:
                 ctx.stateful_by_pod[(ns, pod)] = st
-        log(f"هدف {ctx.target['name']} · {len(ctx.baseline_pods)} پاد · "
+        log(f"target {ctx.target['name']} · {len(ctx.baseline_pods)} pods · "
             f"stateful={sum(1 for v in ctx.stateful_by_pod.values() if v)} · "
             f"maxMovesPerTick={ctx.max_moves_per_tick} · mode={ctx.policy_mode} "
             f"· dryRun={ctx.policy_dryrun}", 1)
@@ -171,29 +171,29 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
             f"console {ctx.preflight['version'].get('console', '?')} · "
             f"operator {ctx.preflight['version'].get('operator', '?')} · "
             f"{len(ctx.controller_pods)} controller"
-            + (f" · {len(sick)} ناسالم" if sick else ""))
+            + (f" · {len(sick)} unhealthy" if sick else ""))
 
     # ── 1 · baseline capture ─────────────────────────────────────────────────
     secs = stream_override or cap["stream_seconds"]
-    log(f"\n[1/6] ضبط پایه ({secs} ثانیه از جریان تصمیم)")
+    log(f"\n[1/6] baseline capture ({secs}s of the decision stream)")
     n.running(1, f"{secs}s")
     pre, malformed = console.stream_decisions(secs, cap["max_bytes"])
     ctx.pre_records = dedupe(pre)
-    log(f"{len(ctx.pre_records)} رکورد یکتا"
-        f"{f' ({malformed} خط ناقص از برش)' if malformed else ''}", 1)
+    log(f"{len(ctx.pre_records)} unique records"
+        f"{f' ({malformed} malformed lines from the cut)' if malformed else ''}", 1)
     # No records at all is a failed capture, not an empty one — every check downstream would
     # skip, and a board of skips reads as a pass.
     n.stage(1, "ok" if ctx.pre_records else "fail",
-            f"{len(ctx.pre_records)} رکورد"
-            + (f" · {malformed} ناقص" if malformed else ""))
+            f"{len(ctx.pre_records)} records"
+            + (f" · {malformed} malformed" if malformed else ""))
 
     # ── 2 · fire ─────────────────────────────────────────────────────────────
     attack_response = None
     if mode == "attack":
         if not ctx.target:
-            raise SystemExit("حالت attack به --target نیاز دارد")
+            raise SystemExit("attack mode requires --target")
         a = ctx.target["attack"]
-        log(f"\n[2/6] شلیک حمله‌ی واقعی → POST {a['path']} {json.dumps(a['body'])}")
+        log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
         n.running(2, ctx.target["name"])
         attack_response = console.post_json(a["path"], a["body"])
         ctx.attack_fired = True
@@ -206,35 +206,35 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
                  if fired else str(attack_response.get("error") or attack_response)[:80]))
         time.sleep(cap["settle_seconds"])
     else:
-        log("\n[2/6] شلیک — رد شد (حالت observe؛ کلاستر دست‌نخورده می‌ماند)")
-        n.stage(2, "skip", "حالت observe")
+        log("\n[2/6] fire — skipped (observe mode; the cluster is left untouched)")
+        n.stage(2, "skip", "observe mode")
 
     # ── 3 · post capture ─────────────────────────────────────────────────────
     win = cap["post_attack_seconds"] if mode == "attack" else 0
     if win:
-        log(f"\n[3/6] ضبط پس از حمله ({win} ثانیه)")
+        log(f"\n[3/6] post-attack capture ({win}s)")
         n.running(3, f"{win}s")
         post, _ = console.stream_decisions(win, cap["max_bytes"])
         pre_keys = {(r.get("time"), r.get("pod"), r.get("action")) for r in ctx.pre_records}
         ctx.post_records = [r for r in dedupe(post)
                             if (r.get("time"), r.get("pod"), r.get("action")) not in pre_keys]
-        log(f"{len(ctx.post_records)} رکورد تازه پس از شلیک", 1)
+        log(f"{len(ctx.post_records)} fresh records after firing", 1)
         # An attack that produced no new decision at all is a finding: either the signal
         # never reached ingest or the operator stopped ticking. Warn rather than fail —
         # the check catalogue at [5/6] is what decides the run.
         n.stage(3, "ok" if ctx.post_records else "warn",
-                f"{len(ctx.post_records)} رکورد تازه")
+                f"{len(ctx.post_records)} fresh records")
     else:
-        log("\n[3/6] ضبط پس از حمله — رد شد")
-        n.stage(3, "skip", "بدون شلیک")
+        log("\n[3/6] post-attack capture — skipped")
+        n.stage(3, "skip", "nothing fired")
 
     ctx.records = dedupe(ctx.pre_records + ctx.post_records)
 
     # ── 4 · ground truth ─────────────────────────────────────────────────────
-    log("\n[4/6] راستی‌آزمایی مستقل با کلاستر")
+    log("\n[4/6] independent verification against the cluster")
     acted = [r for r in ctx.records if r.get("actuated")]
     if acted:
-        n.running(4, f"{len(acted)} اقدام")
+        n.running(4, f"{len(acted)} actions")
         ctx.ground_truth = verify(cluster, acted, ctx.baseline_pods)
         for g in ctx.ground_truth:
             log(f"{g['verdict']:14s} {g['action']:16s} {g['pod']}: {g['detail']}", 1)
@@ -248,18 +248,18 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
         n.stage(4, "fail" if bad else ("warn" if gt.get("unverifiable") else "ok"),
                 " · ".join(f"{k}={v}" for k, v in sorted(gt.items())))
     else:
-        log("هیچ اقدامی در پنجره اجرا نشد — چیزی برای راستی‌آزمایی نیست", 1)
-        n.stage(4, "skip", "هیچ اقدامی اجرا نشد")
+        log("nothing was actuated in the window — there is nothing to verify", 1)
+        n.stage(4, "skip", "nothing actuated")
 
     # ── 5 · checks ───────────────────────────────────────────────────────────
-    log("\n[5/6] اجرای چک‌ها")
+    log("\n[5/6] running the checks")
     n.running(5)
     results = []
     for c in checks_mod.registry():
         try:
             r = c["fn"](ctx)
         except Exception as e:                        # a broken check is a finding, not a crash
-            r = checks_mod.result(checks_mod.FAIL, f"خودِ چک خطا داد: {type(e).__name__}: {e}")
+            r = checks_mod.result(checks_mod.FAIL, f"the check itself errored: {type(e).__name__}: {e}")
         results.append({**{k: v for k, v in c.items() if k != "fn"}, **r})
         mark = {"pass": "✔", "fail": "✘", "warn": "!", "skip": "–"}[r["status"]]
         log(f"{mark} {c['id']:5s} {c['title']}  —  {r['summary']}", 1)
@@ -283,22 +283,22 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     # tolerated.
     stale = [r["id"] for r in results if r["status"] == "pass" and r["id"] in known]
     for cid in baselined:
-        log(f"↷ {cid} از پیش شناخته‌شده است — {known[cid].get('reason', '')[:110]}", 1)
+        log(f"↷ {cid} is already known — {known[cid].get('reason', '')[:110]}", 1)
     for cid in stale:
-        log(f"! {cid} دیگر خطا نمی‌دهد — ورودی‌اش را از baseline.json حذف کنید", 1)
+        log(f"! {cid} no longer fails — remove its entry from baseline.json", 1)
 
     n.stage(5, "fail" if new_failures else ("warn" if (soft or hard) else "ok"),
             f"✔{tally['pass']} ✘{tally['fail']} !{tally['warn']} –{tally['skip']}"
-            + (f" ({len(baselined)} شناخته‌شده)" if baselined else ""))
+            + (f" ({len(baselined)} known)" if baselined else ""))
 
     # ── 6 · clear + report ───────────────────────────────────────────────────
     n.running(6)
     if ctx.attack_fired and ctx.target.get("clear"):
         cl = ctx.target["clear"]
-        log(f"\n[6/6] پاک‌سازی سیگنال حمله → POST {cl['path']} {json.dumps(cl['body'])}")
+        log(f"\n[6/6] clearing the attack signal → POST {cl['path']} {json.dumps(cl['body'])}")
         log(str(console.post_json(cl["path"], cl["body"]))[:250], 1)
     else:
-        log("\n[6/6] پاک‌سازی — لازم نبود")
+        log("\n[6/6] clear — not needed")
 
     traces = [trace_of(r) for r in ctx.records]
 
@@ -341,12 +341,12 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     (out_dir / "latest.html").write_text(render(run_doc), encoding="utf-8")
     n.stage(6, "ok", hpath.name)
 
-    log(f"\n══ نتیجه: {verdict}  "
+    log(f"\n══ verdict: {verdict}  "
         f"(✔{tally['pass']}  ✘{tally['fail']}  !{tally['warn']}  –{tally['skip']})")
     if baselined:
-        log(f"   {len(baselined)} خطای شناخته‌شده: {', '.join(baselined)}")
+        log(f"   {len(baselined)} known failures: {', '.join(baselined)}")
     if new_failures:
-        log(f"   {len(new_failures)} خطای تازه: {', '.join(new_failures)}")
+        log(f"   {len(new_failures)} new failures: {', '.join(new_failures)}")
     log(f"   {jpath}")
     log(f"   {hpath}")
 
@@ -355,9 +355,9 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     url = report_url.replace("{stamp}", stamp) if report_url else None
     extra = []
     if baselined:
-        extra.append(f"از پیش شناخته‌شده: {', '.join(baselined)}")
+        extra.append(f"already known: {', '.join(baselined)}")
     if stale:
-        extra.append(f"baseline کهنه (حذف شود): {', '.join(stale)}")
+        extra.append(f"stale baseline (delete): {', '.join(stale)}")
     n.finish(verdict, tally, url,
              failures=[r["id"] for r in results if r["status"] == "fail"], extra=extra)
 
@@ -394,7 +394,7 @@ def main():
             print(f"{tg['name']:20s} ns={tg['namespace']:18s} kind={tg['kind']}")
         return 0
     if a.mode == "attack" and not a.target:
-        ap.error("--mode attack به --target نیاز دارد (فهرست: --list-targets)")
+        ap.error("--mode attack requires --target (list them with --list-targets)")
 
     baseline = None
     if a.baseline:
@@ -403,22 +403,22 @@ def main():
         # looks like a real regression.
         baseline = json.loads(Path(a.baseline).read_text(encoding="utf-8"))
         n_known = len((baseline.get("checks") or {}))
-        log(f"● baseline: {a.baseline} ({n_known} چک شناخته‌شده)")
+        log(f"● baseline: {a.baseline} ({n_known} known checks)")
 
     n = Notifier(enabled=a.telegram, log=lambda m: log(m, 1))
     if a.telegram and not n.enabled:
-        log("هشدار: --telegram داده شد ولی TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID تنظیم نیست "
-            "— اعلان‌ها خاموش‌اند")
+        log("warning: --telegram was passed but TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are unset "
+            "— notifications are off")
     try:
         _, rc = run(cfg, a.mode, a.target, Path(a.out), a.stream_seconds,
                     notifier=n, run_label=a.run_label, report_url=a.report_url,
                     baseline=baseline)
         return rc
     except TransportError as e:
-        log(f"خطای ترابری: {e}")
+        log(f"transport error: {e}")
         # A transport failure kills the run before any stage reports, so the board would
         # sit on "pending" forever. Say what happened instead of leaving it hanging.
-        n.alert(f"❌ <b>Phorvex E2E</b> — خطای ترابری\n<code>{e}</code>"
+        n.alert(f"❌ <b>Phorvex E2E</b> — transport error\n<code>{e}</code>"
                 + (f"\n{a.run_label}" if a.run_label else ""))
         return 2
 

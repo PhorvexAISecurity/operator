@@ -168,10 +168,11 @@ func TestPart2_RLSIsFrozenPriorUnlessObserved(t *testing.T) {
 	if c.RLS.Primed() {
 		t.Error("RLS reports primed with no observations")
 	}
-	// and it DOES move when explicitly observed (the mechanism works; it is just unwired)
+	// It DOES move when explicitly observed. The live runner wiring is covered in
+	// runner/rotation_observation_test.go.
 	c.ObserveRotation(v, 1.9)
 	if got := c.ECost(v, model.Move{Action: model.ActionRotate}, pol); got == first {
-		t.Error("ObserveRotation did not change C_flow — the calibrator is inert, not merely unwired")
+		t.Error("ObserveRotation did not change respawn C_flow")
 	}
 }
 

@@ -8,11 +8,14 @@
     "",
     "Every entry needs a 'clears_when'. A baseline without an exit condition is just a",
     "disabled check, and the pipeline warns when a baselined check starts passing so the",
-    "entry gets deleted instead of quietly becoming a permanent blind spot."
+    "entry gets deleted instead of quietly becoming a permanent blind spot.",
+    "",
+    "'checks' is deliberately EMPTY: there is no known failure to excuse. Keep the file —",
+    "CI passes --baseline baseline.json and a missing file is fatal by design, so that a",
+    "typo in the path cannot silently turn into 'no known failures'."
   ],
   "_system_under_test": [
-    "This suite now tests the IN-CLUSTER stack — the one ArgoCD deploys — so both entries",
-    "below clear on a rollout of the current images.",
+    "This suite tests the IN-CLUSTER stack — the one ArgoCD deploys.",
     "",
     "It previously drove a console at localhost:8095 on the jump host: a systemd service",
     "running a binary built from a loose, un-versioned copy of the source at",
@@ -25,17 +28,16 @@
     "baked into its own image, decisions from a kind cluster dated two months earlier).",
     "The console now runs as a container in the operator's pod, sharing the audit volume.",
     "",
-    "The jump-host services are still running and are now redundant. Retire them once a",
-    "few runs have gone green against the cluster."
+    "The move is complete and verified. Against console/operator 0.4.19 the run is 37 pass,",
+    "0 fail: the in-cluster console fired a real foothold at voice, the operator selected",
+    "and actuated rotate under maxMovesPerTick=1, and kubectl confirmed the pod was",
+    "replaced. A05 and A07 were the last two baselined entries and both now pass, so both",
+    "were deleted rather than left to rot into a permanent hole in the gate.",
+    "",
+    "The jump-host services that stack used are now dead weight and can be retired:",
+    "phorvex-console.service, phorvex-operator.service, phorvex-operator-vcluster.service,",
+    "and phorvex-prom-forward.service — whose only consumer was phorvex-operator.service's",
+    "--prometheus-url=http://127.0.0.1:7066."
   ],
-  "checks": {
-    "A07": {
-      "reason": "The deployed operator predates the killSwitch stamp on model.Decision / audit.Record / runner.processTenant, so a kill-switched decision is byte-identical in the audit to one whose actuator failed. Note the in-cluster operator runs with the kill switch OFF (phorvex_kill_switch_engaged 0) and does actuate, so this check may resolve differently against it than it did against the kill-switched jump-host operator.",
-      "clears_when": "an operator image built from this source is rolled out by ArgoCD"
-    },
-    "A05": {
-      "reason": "The deployed console predates voice being added to armedWorkloads, so it answers the attack POST with 'namespace not armed for live attack: voice'. Read from attackResponse in the run JSON, not inferred from the absence of a reaction. The in-cluster console additionally had no kubectl in its image and no rights to write SecurityEvents, so it could never have fired an attack at all — both are fixed in this change.",
-      "clears_when": "a console image built from this source is rolled out by ArgoCD"
-    }
-  }
+  "checks": {}
 }

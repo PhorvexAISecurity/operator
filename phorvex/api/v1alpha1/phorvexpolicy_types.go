@@ -308,8 +308,14 @@ type PhorvexPolicyStatus struct {
 
 	// KillSwitchEngaged reflects the global kill-switch (FR8): when engaged the
 	// engine decides + logs but suppresses all actuation regardless of Mode.
+	//
+	// NOT omitempty (PHVX-17). With it, `false` was indistinguishable from "never written": the
+	// field simply vanished, so an operator reading the CR could not tell a running defence from a
+	// status that had never been reconciled. Measured on the live fleet — all four policies showed
+	// the field ABSENT while the sentinel said engaged=false, i.e. the healthy case and the silent
+	// case looked identical. An explicit `false` is the whole point of a safety-control readout.
 	// +kubebuilder:validation:Optional
-	KillSwitchEngaged bool `json:"killSwitchEngaged,omitempty"`
+	KillSwitchEngaged bool `json:"killSwitchEngaged"`
 
 	// Conditions includes Ready, DryRun, ValidationError, KillSwitch, ActionsSupported.
 	// +kubebuilder:validation:Optional

@@ -192,6 +192,7 @@ func main() {
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
 	if engineName == "p0" {
+		setupLog.Info("the p0 greedy baseline is deprecated and will be removed in the next release; p1-coverage is the supported brain")
 		rmgr.Optimizer = decision.NewEngine()
 	} else {
 		rmgr.Optimizer = decision.NewCoverageEngine()

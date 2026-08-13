@@ -61,127 +61,133 @@ def _bounded(ctx, key, lo, hi, optional=False):
         if not _in_range(v, lo, hi):
             bad.append(f"{r.get('pod')} @ {r.get('time')}: {key}={v!r}")
     if seen == 0:
-        return result(SKIP, f"هیچ رکوردی فیلد {key} را نداشت")
+        return result(SKIP, f"no record carried the {key} field")
     if bad:
-        return result(FAIL, f"{len(bad)} رکورد از {seen} رکورد خارج از بازه‌ی [{lo}, {hi}]", bad[:10])
-    return result(PASS, f"هر {seen} رکورد داخل [{lo}, {hi}]")
+        return result(FAIL, f"{len(bad)} of {seen} records fall outside [{lo}, {hi}]", bad[:10])
+    return result(PASS, f"all {seen} records inside [{lo}, {hi}]")
 
 
 # ─────────────────────────── 0 · preflight ───────────────────────────
 
-@check("P01", "preflight", "کنسول و اپراتور در دسترس‌اند",
-       "نقطه‌ی ورودِ خودِ تست سالم است؛ بقیه‌ی نتایج بی‌معنا می‌شد اگر نبود", "critical")
+@check("P01", "preflight", "console and operator are reachable",
+       "the test's own entry point is healthy; every other result would be meaningless without it",
+       "critical")
 def p01(ctx):
     h = ctx.preflight.get("health") or {}
     v = ctx.preflight.get("version") or {}
     if not h.get("ok"):
-        return result(FAIL, "«/api/health» ok=true برنگرداند", [repr(h)[:300]])
-    return result(PASS, f"کنسول {v.get('console','?')} · اپراتور {v.get('operator','?')}",
+        return result(FAIL, "/api/health did not return ok=true", [repr(h)[:300]])
+    return result(PASS, f"console {v.get('console','?')} · operator {v.get('operator','?')}",
                   [f"image={v.get('operatorImage','?')}"])
 
 
-@check("P02", "preflight", "نسخه‌ی کنسول و اپراتور یکی است",
-       "داشبورد و موتور از یک بیلد می‌آیند، پس فیلدی که تست انتظارش را دارد واقعاً وجود دارد", "minor")
+@check("P02", "preflight", "console and operator report the same version",
+       "dashboard and engine come from one build, so a field the test expects genuinely exists",
+       "minor")
 def p02(ctx):
     v = ctx.preflight.get("version") or {}
     c, o = v.get("console"), v.get("operator")
     if not c or not o:
-        return result(SKIP, "نسخه گزارش نشد")
+        return result(SKIP, "no version was reported")
     if c != o:
-        return result(WARN, f"ناهماهنگی نسخه: کنسول {c} در برابر اپراتور {o}")
-    return result(PASS, f"هر دو روی {c}")
+        return result(WARN, f"version mismatch: console {c} against operator {o}")
+    return result(PASS, f"both on {c}")
 
 
-@check("P03", "preflight", "حلقه‌ی تیک زنده است",
-       "اپراتور واقعاً دارد تصمیم می‌گیرد؛ رکوردها بایگانی نیستند", "critical")
+@check("P03", "preflight", "the tick loop is alive",
+       "the operator is genuinely deciding; the records are not an archive", "critical")
 def p03(ctx):
     if not ctx.records:
-        return result(FAIL, "هیچ رکورد تصمیمی در پنجره‌ی ضبط نیامد")
+        return result(FAIL, "no decision record arrived during the capture window")
     fresh = ctx.freshest_age_sec
     if fresh is None:
-        return result(WARN, "زمان رکوردها قابل تفسیر نبود")
+        return result(WARN, "record timestamps could not be parsed")
     if fresh > ctx.stale_after_sec:
-        return result(FAIL, f"تازه‌ترین رکورد {fresh:.0f} ثانیه قدیمی است (آستانه {ctx.stale_after_sec}s)")
-    return result(PASS, f"{len(ctx.records)} رکورد، تازه‌ترین {fresh:.1f} ثانیه پیش")
+        return result(FAIL, f"the freshest record is {fresh:.0f}s old (threshold {ctx.stale_after_sec}s)")
+    return result(PASS, f"{len(ctx.records)} records, freshest {fresh:.1f}s ago")
 
 
-@check("P04", "preflight", "پادهای هدف در کلاستر آماده‌اند",
-       "حمله به چیزی می‌خورد که واقعاً سرویس می‌دهد", "critical")
+@check("P04", "preflight", "the target pods are ready in the cluster",
+       "the attack lands on something that is actually serving", "critical")
 def p04(ctx):
     if not ctx.baseline_pods:
-        return result(SKIP, "پایه‌ی kubectl گرفته نشد (حالت observe بدون هدف)")
+        return result(SKIP, "no kubectl baseline was taken (observe mode with no target)")
     ready = [p for p, m in ctx.baseline_pods.items() if m["phase"] == "Running"]
     if not ready:
-        return result(FAIL, "هیچ پاد Running در نیم‌اسپیس هدف نیست",
+        return result(FAIL, "no Running pod in the target namespace",
                       [f"{p}: {m['phase']}" for p, m in ctx.baseline_pods.items()][:10])
-    return result(PASS, f"{len(ready)} پاد Running",
+    return result(PASS, f"{len(ready)} pods Running",
                   [f"{p} uid={m['uid'][:8]} owner={m['owner']}" for p, m in ctx.baseline_pods.items()][:10])
 
 
-@check("P05", "preflight", "هیچ کنترلری در حال crash نیست",
-       "اپراتوری که مدام ری‌استارت می‌شود تصمیم می‌گیرد ولی دستش به کلاستر نمی‌رسد — "
-       "و چون اپراتور دیگری همچنان لاگ می‌نویسد، داشبورد سالم به‌نظر می‌رسد", "critical")
+@check("P05", "preflight", "no controller is crash-looping",
+       "an operator that keeps restarting still decides but never reaches the cluster — and "
+       "because another operator keeps writing logs, the dashboard looks healthy", "critical")
 def p05(ctx):
     if not ctx.controller_pods:
-        return result(SKIP, "وضعیت پادهای کنترلر خوانده نشد")
+        return result(SKIP, "controller pod status could not be read")
     bad = [f"{p}: {m['phase']} · restarts={m['restarts']}" for p, m in ctx.controller_pods.items()
            if m["phase"] != "Running" or m["restarts"] > ctx.max_restarts]
     if bad:
-        return result(FAIL, f"{len(bad)} کنترلر ناسالم", bad)
-    return result(PASS, f"{len(ctx.controller_pods)} کنترلر سالم",
+        return result(FAIL, f"{len(bad)} unhealthy controllers", bad)
+    return result(PASS, f"{len(ctx.controller_pods)} healthy controllers",
                   [f"{p}: {m['phase']} · restarts={m['restarts']}" for p, m in ctx.controller_pods.items()])
 
 
 # ─────────────────────────── 1 · ingest ───────────────────────────
 
-@check("I01", "ingest", "هر رکورد هویت کامل دارد",
-       "ورود، پاد را واقعاً دیده — رکورد بی‌نام‌ونشان یعنی snapshot ناقص بوده", "critical")
+@check("I01", "ingest", "every record carries a complete identity",
+       "ingest genuinely saw the pod — an anonymous record means the snapshot was incomplete",
+       "critical")
 def i01(ctx):
-    bad = [f"@{r.get('time')}: {k} خالی"
+    bad = [f"@{r.get('time')}: {k} empty"
            for r in ctx.records for k in ("tenant", "namespace", "pod")
            if not str(r.get(k, "")).strip()]
     if bad:
-        return result(FAIL, f"{len(bad)} فیلد هویتی خالی", bad[:10])
-    return result(PASS, f"هر {len(ctx.records)} رکورد tenant/namespace/pod دارد")
+        return result(FAIL, f"{len(bad)} empty identity fields", bad[:10])
+    return result(PASS, f"all {len(ctx.records)} records carry tenant/namespace/pod")
 
 
-@check("I02", "ingest", "زمان تیک‌ها رو به جلوست",
-       "فایل حسابرسی در حال نوشته‌شدن است و رکوردها پشت‌هم‌اند، نه درهم", "minor")
+@check("I02", "ingest", "tick timestamps move forward",
+       "the audit file is being written and the records are sequential rather than interleaved",
+       "minor")
 def i02(ctx):
     ts = [ctx.parse_time(r.get("time")) for r in ctx.records]
     ts = [t for t in ts if t is not None]
     if len(ts) < 2:
-        return result(SKIP, "کمتر از دو رکورد زمان‌دار")
+        return result(SKIP, "fewer than two timestamped records")
     back = sum(1 for a, b in zip(ts, ts[1:]) if b < a - 0.001)
     if back:
-        return result(WARN, f"{back} پرش به عقب در ترتیب جریان")
-    return result(PASS, f"{len(ts)} مهر زمانی، بدون پرش به عقب")
+        return result(WARN, f"{back} backward jumps in stream order")
+    return result(PASS, f"{len(ts)} timestamps, no backward jumps")
 
 
-@check("I03", "ingest", "هدف در جریان تصمیم دیده می‌شود",
-       "ورود این نیم‌اسپیس را پوشش می‌دهد؛ سکوتِ بعدی یعنی «تصمیم گرفت کاری نکند»، نه «ندید»", "critical")
+@check("I03", "ingest", "the target appears in the decision stream",
+       "ingest covers this namespace, so later silence means \"it decided to do nothing\", "
+       "not \"it never saw it\"", "critical")
 def i03(ctx):
     if not ctx.target:
-        return result(SKIP, "بدون هدف اجرا شد")
+        return result(SKIP, "ran without a target")
     ns = ctx.target["namespace"]
     hit = [r for r in ctx.records if r.get("namespace") == ns]
     if not hit:
-        return result(FAIL, f"هیچ تصمیمی برای نیم‌اسپیس {ns} در پنجره نیامد",
+        return result(FAIL, f"no decision for namespace {ns} arrived in the window",
                       sorted({r.get("namespace", "") for r in ctx.records})[:12])
     pods = sorted({r.get("pod") for r in hit})
-    return result(PASS, f"{len(hit)} تصمیم روی {len(pods)} پاد در {ns}", pods[:8])
+    return result(PASS, f"{len(hit)} decisions across {len(pods)} pods in {ns}", pods[:8])
 
 
 # ─────────────────────────── 2 · physics ───────────────────────────
 
-@check("PH01", "physics", "residual همیشه متناهی و در [0,1] است",
-       "همان کلاس باگی که NaN را تا بهینه‌ساز می‌برد و انتخاب را بی‌صدا به noop می‌انداخت", "critical")
+@check("PH01", "physics", "residual is always finite and inside [0,1]",
+       "the same bug class that carried a NaN into the optimiser and silently turned the "
+       "selection into a noop", "critical")
 def ph01(ctx):
     return _bounded(ctx, "residual", 0.0, 1.0)
 
 
-@check("PH02", "physics", "هیچ عدد نامتناهی در هیچ فیلدی نیست",
-       "جاروی سراسری NaN/Inf روی کل رکورد، نه فقط فیلدهایی که انتظارش را داریم", "critical")
+@check("PH02", "physics", "no non-finite number in any field",
+       "a global NaN/Inf sweep over the whole record, not only the fields we expect", "critical")
 def ph02(ctx):
     bad = []
     for r in ctx.records:
@@ -189,37 +195,37 @@ def ph02(ctx):
             if not math.isfinite(v):
                 bad.append(f"{r.get('pod')} @ {r.get('time')}: {k}={v}")
     if bad:
-        return result(FAIL, f"{len(bad)} مقدار نامتناهی", bad[:10])
+        return result(FAIL, f"{len(bad)} non-finite values", bad[:10])
     n = sum(len(all_numeric_fields(r)) for r in ctx.records)
-    return result(PASS, f"{n} مقدار عددی در {len(ctx.records)} رکورد، همه متناهی")
+    return result(PASS, f"{n} numeric values across {len(ctx.records)} records, all finite")
 
 
-@check("PH03", "physics", "residual بالا بدون رویداد امنیتی، تصمیم را نمی‌سازد",
-       "فیزیک فقط گزارش می‌دهد؛ اهمیت‌دادن کار زمینه است", "minor")
+@check("PH03", "physics", "a high residual with no security event does not drive a decision",
+       "physics only reports; deciding that it matters is context's job", "minor")
 def ph03(ctx):
-    odd = [f"{r.get('pod')}: residual={r.get('residual')} ولی threatPosture=0 و انتخاب شد"
+    odd = [f"{r.get('pod')}: residual={r.get('residual')} but threatPosture=0, and it was selected"
            for r in ctx.records
            if r.get("selected") and _num(r, "residual") > 0.5 and _num(r, "threatPosture") == 0]
     if odd:
-        return result(WARN, f"{len(odd)} انتخاب فقط بر پایه‌ی فیزیک", odd[:6])
-    return result(PASS, "هیچ انتخابی صرفاً از ناهنجاری فیزیکی نیامد")
+        return result(WARN, f"{len(odd)} selections driven by physics alone", odd[:6])
+    return result(PASS, "no selection came from a physical anomaly alone")
 
 
 # ─────────────────────────── 3 · context ───────────────────────────
 
-@check("C01", "context", "assetValue متناهی و نامنفی است", "ارزش دارایی قابل استفاده است", "major")
+@check("C01", "context", "assetValue is finite and non-negative", "the asset value is usable", "major")
 def c01(ctx):
     return _bounded(ctx, "assetValue", 0.0, 1e6)
 
 
-@check("C02", "context", "blastRadius در [0,1] است",
-       "امتیاز گراف نرمال‌شده است؛ خارج از بازه یعنی نرمال‌سازی شکسته", "major")
+@check("C02", "context", "blastRadius is inside [0,1]",
+       "the graph score is normalised; out of range means the normalisation is broken", "major")
 def c02(ctx):
     return _bounded(ctx, "blastRadius", 0.0, 1.0)
 
 
-@check("C03", "context", "سیگنال‌های زمینه در [0,1] هستند",
-       "threatPosture / exposure / sloHeadroom / belief همه بی‌بعد و کران‌دارند", "major")
+@check("C03", "context", "context signals are inside [0,1]",
+       "threatPosture / exposure / sloHeadroom / belief are all dimensionless and bounded", "major")
 def c03(ctx):
     parts, worst = [], PASS
     for k in ("threatPosture", "exposure", "sloHeadroom", "belief"):
@@ -227,34 +233,37 @@ def c03(ctx):
         parts.append(f"{k}: {r['summary']}")
         if r["status"] == FAIL:
             worst = FAIL
-    return result(worst, "چهار سیگنال بررسی شد", parts)
+    return result(worst, "four signals checked", parts)
 
 
-@check("C04", "context", "phase یکی از فازهای شناخته‌شده است",
-       "فاز مستقیم وارد ویژگی‌های RLS می‌شود؛ فاز ناشناخته یعنی هزینه‌ی چرخش غلط", "major")
+@check("C04", "context", "phase is one of the known phases",
+       "phase feeds straight into the RLS features; an unknown phase means the rotation cost "
+       "is wrong", "major")
 def c04(ctx):
     known = set(ctx.inv["known_phases"])
     bad = [f"{r.get('pod')}: phase={r.get('phase')!r}" for r in ctx.records
            if r.get("phase") and r["phase"] not in known]
     if bad:
-        return result(FAIL, f"{len(bad)} فاز ناشناخته", bad[:8])
-    return result(PASS, f"همه در {sorted(known)}")
+        return result(FAIL, f"{len(bad)} unknown phases", bad[:8])
+    return result(PASS, f"all within {sorted(known)}")
 
 
-@check("C05", "context", "stage یکی از ۹ مرحله‌ی تعریف‌شده است",
-       "شامل زنجیره‌ی موازی AI؛ مرحله‌ی ناشناخته یعنی طبقه‌بندی رویداد شکسته", "major")
+@check("C05", "context", "stage is one of the 9 defined stages",
+       "the parallel AI chain included; an unknown stage means event classification is broken",
+       "major")
 def c05(ctx):
     known = set(ctx.inv["known_stages"])
     bad = [f"{r.get('pod')}: stage={r.get('stage')!r}" for r in ctx.records
            if r.get("stage") and r["stage"] not in known]
     if bad:
-        return result(FAIL, f"{len(bad)} مرحله‌ی ناشناخته", bad[:8])
+        return result(FAIL, f"{len(bad)} unknown stages", bad[:8])
     seen = sorted({r.get("stage") for r in ctx.records if r.get("stage")})
-    return result(PASS, f"مراحل دیده‌شده: {', '.join(seen) or '—'}")
+    return result(PASS, f"stages seen: {', '.join(seen) or '—'}")
 
 
-@check("C06", "context", "nextStage جانشین قانونی stage است",
-       "یا جانشین خطی، یا جهش به lateral از فشار همسایه، یا نقشه‌ی AI — نه هر چیز دیگری", "major")
+@check("C06", "context", "nextStage is a legal successor of stage",
+       "either the linear successor, a lateral jump under neighbour pressure, or the AI map — "
+       "nothing else", "major")
 def c06(ctx):
     generic = ["recon", "exploit", "persist", "lateral", "impact"]
     ai_map = {"gpu-side-channel": "model-theft", "model-theft": "impact",
@@ -276,14 +285,15 @@ def c06(ctx):
         if not ok:
             bad.append(f"{r.get('pod')}: {s} → {n}")
     if seen == 0:
-        return result(SKIP, "هیچ رکوردی هر دو فیلد را نداشت")
+        return result(SKIP, "no record carried both fields")
     if bad:
-        return result(FAIL, f"{len(bad)} گذارِ غیرقانونی", bad[:8])
-    return result(PASS, f"هر {seen} گذار قانونی است")
+        return result(FAIL, f"{len(bad)} illegal transitions", bad[:8])
+    return result(PASS, f"all {seen} transitions are legal")
 
 
-@check("C07", "context", "hazard و pHold و preemptMargin در [0,1] هستند",
-       "هر سه احتمال‌اند؛ خارج از بازه یعنی وایبول یا پسین بتا شکسته", "major")
+@check("C07", "context", "hazard, pHold and preemptMargin are inside [0,1]",
+       "all three are probabilities; out of range means the Weibull or the Beta posterior "
+       "is broken", "major")
 def c07(ctx):
     parts, worst = [], PASS
     for k in ("stageHazard", "pHold", "preemptMargin"):
@@ -291,13 +301,13 @@ def c07(ctx):
         parts.append(f"{k}: {r['summary']}")
         if r["status"] == FAIL:
             worst = FAIL
-    return result(worst, "سه احتمال بررسی شد", parts)
+    return result(worst, "three probabilities checked", parts)
 
 
-@check("C08", "context", "حاشیه‌ی مرحله‌ی بعد با خطر جهش سازگار است",
-       "این عدد مدت زمان نیست، یک حاشیه‌ی علامت‌دار است: منفی یعنی «از موعد گذشته» "
-       "(hazard.go:327). هر دو از یک وایبول می‌آیند، پس یک رابطه‌ی دقیق بینشان برقرار است "
-       "که با هم دررفتنشان را می‌گیرد", "major")
+@check("C08", "context", "the next-stage margin agrees with the jump hazard",
+       "this number is not a duration, it is a signed margin: negative means \"overdue\" "
+       "(hazard.go:327). Both come from the same Weibull, so an exact relation holds between "
+       "them that catches the two drifting apart", "major")
 def c08(ctx):
     # margin = median − exposure, and hazard = weibullCDF(exposure). At exposure = median,
     # hazard = 1 − exp(−(−ln 0.5)) = 0.5 exactly — independent of scale and of the stage.
@@ -306,26 +316,27 @@ def c08(ctx):
     band = 0.001
     have = [r for r in ctx.records if is_finite_number(r.get("projectedNextStageSec"))]
     if not have:
-        return result(SKIP, "فیلد در هیچ رکوردی نبود")
+        return result(SKIP, "the field was absent from every record")
     bad = []
     for r in have:
         m, h = r["projectedNextStageSec"], _num(r, "stageHazard")
         if abs(h - 0.5) <= band:
             continue  # exactly at the median; either sign is legal
         if (m < 0) != (h > 0.5):
-            bad.append(f"{r.get('namespace')}/{r.get('pod')}: margin={m:.0f}s با hazard={h:.4f} "
-                       f"نمی‌خواند (margin<0 باید دقیقاً معادل hazard>0.5 باشد)")
+            bad.append(f"{r.get('namespace')}/{r.get('pod')}: margin={m:.0f}s disagrees with "
+                       f"hazard={h:.4f} (margin<0 must be exactly equivalent to hazard>0.5)")
     if bad:
-        return result(FAIL, f"{len(bad)} ناسازگاری بین حاشیه و خطر جهش", bad[:8])
+        return result(FAIL, f"{len(bad)} disagreements between margin and jump hazard", bad[:8])
     overdue = sum(1 for r in have if r["projectedNextStageSec"] < 0)
-    return result(PASS, f"هر {len(have)} رکورد اتحاد را برقرار می‌کند "
-                        f"({overdue} تا از موعد گذشته و hazard هر کدام > ۰٫۵)")
+    return result(PASS, f"all {len(have)} records satisfy the identity "
+                        f"({overdue} overdue, each with hazard > 0.5)")
 
 
 # ─────────────────────────── 4 · brain ───────────────────────────
 
-@check("B01", "brain", "اتحاد خالص برقرار است: net = risk − λ×cost",
-       "قلب تصمیم؛ اگر این نخواند، عددی که داشبورد نشان می‌دهد از جای دیگری آمده", "critical")
+@check("B01", "brain", "the net identity holds: net = risk − λ×cost",
+       "the heart of the decision; if this does not add up, the number the dashboard shows "
+       "came from somewhere else", "critical")
 def b01(ctx):
     tol = ctx.inv["net_identity_tolerance"]
     bad, seen = [], 0
@@ -336,85 +347,92 @@ def b01(ctx):
         expect = _num(r, "risk") - _num(r, "lambda") * _num(r, "cost")
         if abs(expect - _num(r, "net")) > tol:
             bad.append(f"{r.get('pod')}: risk={r['risk']} λ={_num(r,'lambda')} "
-                       f"cost={r['cost']} → انتظار {expect:.4f} ولی net={r['net']}")
+                       f"cost={r['cost']} → expected {expect:.4f} but net={r['net']}")
     if seen == 0:
-        return result(SKIP, "هیچ رکوردی هر سه عدد را نداشت")
+        return result(SKIP, "no record carried all three numbers")
     if bad:
-        return result(FAIL, f"{len(bad)} نقض از {seen}", bad[:8])
-    return result(PASS, f"هر {seen} رکورد در تلورانس ±{tol}")
+        return result(FAIL, f"{len(bad)} violations out of {seen}", bad[:8])
+    return result(PASS, f"all {seen} records within ±{tol}")
 
 
-@check("B02", "brain", "موتور تصمیم شناخته‌شده است", "رکورد از همان موتوری آمده که مستند شده", "minor")
+@check("B02", "brain", "the decision engine is a known one",
+       "the record came from the engine that is documented", "minor")
 def b02(ctx):
     known = set(ctx.inv["known_engines"])
     bad = [f"{r.get('pod')}: engine={r.get('engine')!r}" for r in ctx.records
            if r.get("engine") and r["engine"] not in known]
     if bad:
-        return result(FAIL, f"{len(bad)} موتور ناشناخته", bad[:6])
+        return result(FAIL, f"{len(bad)} unknown engines", bad[:6])
     seen = sorted({r.get("engine") for r in ctx.records if r.get("engine")})
-    return result(PASS, f"موتور: {', '.join(seen) or '—'}")
+    return result(PASS, f"engine: {', '.join(seen) or '—'}")
 
 
-@check("B03", "brain", "اقدام‌ها از فهرست ۱۷ اقدام تعریف‌شده‌اند",
-       "اقدام خارج از فهرست یعنی چیزی صادر شده که هیچ handlerی ندارد", "critical")
+@check("B03", "brain", "actions come from the defined list of 17",
+       "an action off the list means something was issued that has no handler at all", "critical")
 def b03(ctx):
     known = set(ctx.inv["known_actions"])
     bad = [f"{r.get('pod')}: action={r.get('action')!r}" for r in ctx.records
            if r.get("action") and r["action"] not in known]
     if bad:
-        return result(FAIL, f"{len(bad)} اقدام ناشناخته", bad[:8])
+        return result(FAIL, f"{len(bad)} unknown actions", bad[:8])
     seen = sorted({r.get("action") for r in ctx.records if r.get("action")})
-    return result(PASS, f"اقدام‌های دیده‌شده: {', '.join(seen) or '—'}")
+    return result(PASS, f"actions seen: {', '.join(seen) or '—'}")
 
 
-@check("B04", "brain", "λ متناهی و نامنفی است", "قیمت سایه از حل دوگانه سالم بیرون آمده", "major")
+@check("B04", "brain", "λ is finite and non-negative",
+       "the shadow price came out of the dual solve intact", "major")
 def b04(ctx):
     return _bounded(ctx, "lambda", 0.0, 1e6, optional=True)
 
 
-@check("B05", "brain", "هر تصمیم انتخاب‌شده امکان‌پذیر هم هست",
-       "نقض قرارداد: مغز هرگز نباید حرکتی را انتخاب کند که دروازه‌ی ایمنی ردش کرده", "critical")
+@check("B05", "brain", "every selected decision is also feasible",
+       "a contract violation: the brain must never select a move the safety gate rejected",
+       "critical")
 def b05(ctx):
     bad = [f"{r.get('namespace')}/{r.get('pod')} action={r.get('action')} why={r.get('infeasibleWhy','')!r}"
            for r in ctx.records if r.get("selected") and not r.get("feasible")]
     if bad:
-        return result(FAIL, f"{len(bad)} تصمیمِ انتخاب‌شده‌ی ناممکن", bad[:8])
+        return result(FAIL, f"{len(bad)} selected-but-infeasible decisions", bad[:8])
     sel = sum(1 for r in ctx.records if r.get("selected"))
-    return result(PASS, f"{sel} انتخاب، همه امکان‌پذیر")
+    return result(PASS, f"{sel} selections, all feasible")
 
 
-@check("B06", "brain", "هر تصمیم یک «چرایی» ناتهی دارد",
-       "چیزی که داشبورد نشان می‌دهد باید از خود تصمیم آمده باشد، نه از یک متن ثابت", "major")
+@check("B06", "brain", "every decision carries a non-empty \"why\"",
+       "what the dashboard shows must come from the decision itself, not from a fixed string",
+       "major")
 def b06(ctx):
     empty = [f"{r.get('pod')} action={r.get('action')}" for r in ctx.records
              if not str(r.get("reason", "")).strip()]
     if empty:
-        return result(FAIL, f"{len(empty)} تصمیم بدون چرایی", empty[:8])
+        return result(FAIL, f"{len(empty)} decisions with no reason", empty[:8])
     # A reason that never varies is a hardcoded string, not an explanation.
     uniq = {r.get("reason") for r in ctx.records}
     if len(ctx.records) >= 8 and len(uniq) == 1:
-        return result(WARN, "همه‌ی رکوردها یک متن یکسان دارند — احتمالاً ثابت است", list(uniq)[:1])
-    return result(PASS, f"{len(uniq)} متن متمایز در {len(ctx.records)} رکورد")
+        return result(WARN, "every record carries the identical text — probably hardcoded",
+                      list(uniq)[:1])
+    return result(PASS, f"{len(uniq)} distinct texts across {len(ctx.records)} records")
 
 
-@check("B07", "brain", "سقف MaxMovesPerTick رعایت شده",
-       "بودجه‌ی هر تیک یک سقف سخت است؛ شکستنش یعنی حلقه‌ی حریصانه زودتر متوقف نشده", "critical")
+@check("B07", "brain", "the MaxMovesPerTick cap is respected",
+       "the per-tick budget is a hard ceiling; breaking it means the greedy loop did not stop "
+       "when it should have", "critical")
 def b07(ctx):
     if ctx.max_moves_per_tick is None:
-        return result(SKIP, "سقف سیاست خوانده نشد")
+        return result(SKIP, "the policy cap could not be read")
     per = {}
     for r in ctx.records:
         if r.get("selected"):
             per.setdefault((r.get("tenant"), r.get("time")), []).append(r.get("pod"))
-    bad = [f"tenant={t} @ {ts}: {len(p)} انتخاب ({', '.join(p[:4])})"
+    bad = [f"tenant={t} @ {ts}: {len(p)} selections ({', '.join(p[:4])})"
            for (t, ts), p in per.items() if len(p) > ctx.max_moves_per_tick]
     if bad:
-        return result(FAIL, f"{len(bad)} تیک از سقف {ctx.max_moves_per_tick} عبور کرد", bad[:6])
-    return result(PASS, f"{len(per)} تیکِ دارای انتخاب، همه ≤ {ctx.max_moves_per_tick}")
+        return result(FAIL, f"{len(bad)} ticks exceeded the cap of {ctx.max_moves_per_tick}", bad[:6])
+    return result(PASS, f"{len(per)} ticks with a selection, all ≤ {ctx.max_moves_per_tick}")
 
 
-@check("B08", "brain", "هر دارایی در هر تیک حداکثر یک اقدام می‌گیرد",
-       "قید افراز در حلقه‌ی حریصانه؛ دو اقدام روی یک پاد یعنی selectedAsset کار نکرده", "critical")
+@check("B08", "brain", "each asset gets at most one action per tick",
+       "the partition constraint in the greedy loop; two actions on one pod means selectedAsset "
+       "did not hold", "critical")
 def b08(ctx):
     per = {}
     for r in ctx.records:
@@ -422,26 +440,28 @@ def b08(ctx):
             per.setdefault((r.get("time"), r.get("namespace"), r.get("pod")), []).append(r.get("action"))
     bad = [f"{ns}/{pod} @ {t}: {acts}" for (t, ns, pod), acts in per.items() if len(acts) > 1]
     if bad:
-        return result(FAIL, f"{len(bad)} دارایی با بیش از یک اقدام", bad[:6])
-    return result(PASS, f"{len(per)} جفت (تیک، دارایی)، همه یکتا")
+        return result(FAIL, f"{len(bad)} assets with more than one action", bad[:6])
+    return result(PASS, f"{len(per)} (tick, asset) pairs, all unique")
 
 
-@check("B09", "brain", "پادافکن R6 برای هر تصمیم ثبت شده",
-       "مقایسه‌ی سه‌طرفه‌ی داشبورد از همین می‌آید؛ نبودش یعنی مقایسه ساختگی است", "minor")
+@check("B09", "brain", "the R6 counterfactual is recorded for every decision",
+       "the dashboard's three-way comparison comes from this; without it the comparison is "
+       "fabricated", "minor")
 def b09(ctx):
     known = set(ctx.inv["known_actions"])
     missing = [f"{r.get('pod')}" for r in ctx.records if not r.get("r6Counterfactual")]
     bad = [f"{r.get('pod')}: {r.get('r6Counterfactual')!r}" for r in ctx.records
            if r.get("r6Counterfactual") and r["r6Counterfactual"] not in known]
     if bad:
-        return result(FAIL, f"{len(bad)} پادافکن نامعتبر", bad[:6])
+        return result(FAIL, f"{len(bad)} invalid counterfactuals", bad[:6])
     if missing:
-        return result(WARN, f"{len(missing)} رکورد بدون پادافکن", missing[:6])
-    return result(PASS, f"هر {len(ctx.records)} رکورد پادافکن دارد")
+        return result(WARN, f"{len(missing)} records with no counterfactual", missing[:6])
+    return result(PASS, f"all {len(ctx.records)} records carry a counterfactual")
 
 
-@check("B10", "brain", "سهم‌های انتساب متناهی‌اند",
-       "جدول انتساب مستقیم روی داشبورد می‌رود؛ NaN آنجا نامرئی است", "major")
+@check("B10", "brain", "attribution contributions are finite",
+       "the attribution table goes straight onto the dashboard; a NaN is invisible there",
+       "major")
 def b10(ctx):
     bad, n = [], 0
     for r in ctx.records:
@@ -452,14 +472,15 @@ def b10(ctx):
                     if not math.isfinite(v):
                         bad.append(f"{r.get('pod')}: attribution[{i}].{k}={v}")
     if bad:
-        return result(FAIL, f"{len(bad)} سهم نامتناهی", bad[:8])
-    return result(PASS if n else SKIP, f"{n} سهم عددی، همه متناهی" if n else "هیچ رکوردی انتساب نداشت")
+        return result(FAIL, f"{len(bad)} non-finite contributions", bad[:8])
+    return result(PASS if n else SKIP,
+                  f"{n} numeric contributions, all finite" if n else "no record carried attribution")
 
 
 # ─────────────────────────── 5 · feasibility ───────────────────────────
 
-@check("F01", "feasibility", "هر ردّ امکان‌سنجی قانونِ نام‌برده دارد",
-       "«ناممکن» بدون دلیل، قابل بازبینی نیست", "major")
+@check("F01", "feasibility", "every feasibility rejection names a law",
+       "\"infeasible\" without a reason cannot be audited", "major")
 def f01(ctx):
     prefixes = ctx.inv["law_reason_prefixes"]
     bad, unknown, matched, n = [], [], {}, 0
@@ -477,115 +498,122 @@ def f01(ctx):
         else:
             unknown.append(f"{r.get('pod')}: {why[:90]}")
     if bad:
-        return result(FAIL, f"{len(bad)} ردّ بدون دلیل", bad[:8])
+        return result(FAIL, f"{len(bad)} rejections with no reason", bad[:8])
     if unknown:
-        return result(FAIL, f"{len(unknown)} دلیل که به هیچ قانون شناخته‌شده‌ای نگاشت نشد", unknown[:6])
+        return result(FAIL, f"{len(unknown)} reasons that map to no known law", unknown[:6])
     return result(PASS if n else SKIP,
-                  f"{n} ردّ، همه به قانون نگاشت شدند" if n else "در این پنجره هیچ ردّی رخ نداد",
+                  f"{n} rejections, all mapped to a law" if n else "no rejection occurred in this window",
                   [f"{k}: {v}" for k, v in sorted(matched.items())])
 
 
-@check("F02", "feasibility", "هیچ اقدامِ ناممکنی اجرا نشده",
-       "دروازه در مرز صدور هم اجرا می‌شود؛ عبور از آن یعنی fail-closed شکسته", "critical")
+@check("F02", "feasibility", "no infeasible action was actuated",
+       "the gate also runs at the issue boundary; getting past it means fail-closed is broken",
+       "critical")
 def f02(ctx):
     bad = [f"{r.get('namespace')}/{r.get('pod')} action={r.get('action')} why={r.get('infeasibleWhy')!r}"
            for r in ctx.records if r.get("actuated") and r.get("feasible") is False]
     if bad:
-        return result(FAIL, f"{len(bad)} اجرای ناممکن", bad)
-    return result(PASS, "هیچ اقدام ردشده‌ای به اجرا نرسید")
+        return result(FAIL, f"{len(bad)} infeasible actuations", bad)
+    return result(PASS, "no rejected action reached actuation")
 
 
-@check("F03", "feasibility", "روی پاد stateful هیچ rotate صادر نشده",
-       "قانون stateful-integrity؛ راستی‌آزمایی با kubectl، نه با ادعای خود رکورد", "critical")
+@check("F03", "feasibility", "no rotate was issued against a stateful pod",
+       "the stateful-integrity law; verified with kubectl, not with the record's own claim",
+       "critical")
 def f03(ctx):
     if not ctx.stateful_by_pod:
-        return result(SKIP, "وضعیت stateful پادها از kubectl خوانده نشد")
+        return result(SKIP, "pod stateful status could not be read from kubectl")
     bad = []
     for r in ctx.records:
         if r.get("action") != "rotate" or not (r.get("selected") or r.get("actuated")):
             continue
         st = ctx.stateful_by_pod.get((r.get("namespace"), r.get("pod")))
         if st is True:
-            bad.append(f"{r.get('namespace')}/{r.get('pod')} rotate روی پاد stateful "
+            bad.append(f"{r.get('namespace')}/{r.get('pod')} rotate against a stateful pod "
                        f"(selected={r.get('selected')}, actuated={r.get('actuated')})")
     if bad:
-        return result(FAIL, f"{len(bad)} نقض یکپارچگی state", bad)
+        return result(FAIL, f"{len(bad)} state-integrity violations", bad)
     n = sum(1 for v in ctx.stateful_by_pod.values() if v)
     if n == 0:
         # Passing on an empty set is the "green board built on nothing" failure mode.
-        return result(SKIP, "هیچ پاد statefulی در نیم‌اسپیس هدف نیست — چیزی برای آزمودن نبود")
-    return result(PASS, f"{n} پاد stateful بررسی شد، هیچ rotate صادر نشد")
+        return result(SKIP, "no stateful pod in the target namespace — there was nothing to test")
+    return result(PASS, f"{n} stateful pods checked, no rotate issued")
 
 
 # ─────────────────────────── 6 · actuator ───────────────────────────
 
-@check("A01", "actuator", "اجرا فقط پس از انتخاب و امکان‌پذیری رخ داده",
-       "زنجیره‌ی مجوز کامل است: انتخاب → امکان‌پذیر → غیر dryRun → اجرا", "critical")
+@check("A01", "actuator", "actuation happened only after selection and feasibility",
+       "the authorisation chain is intact: selected → feasible → not dryRun → actuated", "critical")
 def a01(ctx):
     bad = []
     for r in ctx.records:
         if not r.get("actuated"):
             continue
         if not r.get("selected"):
-            bad.append(f"{r.get('pod')}: اجرا شد ولی انتخاب نشده بود")
+            bad.append(f"{r.get('pod')}: actuated but never selected")
         if r.get("dryRun"):
-            bad.append(f"{r.get('pod')}: اجرا شد با وجود dryRun")
+            bad.append(f"{r.get('pod')}: actuated despite dryRun")
     if bad:
-        return result(FAIL, f"{len(bad)} نقض زنجیره‌ی مجوز", bad[:8])
+        return result(FAIL, f"{len(bad)} authorisation-chain violations", bad[:8])
     n = sum(1 for r in ctx.records if r.get("actuated"))
-    return result(PASS, f"{n} اجرا، همه با مجوز کامل" if n else "در این پنجره اجرایی رخ نداد")
+    return result(PASS, f"{n} actuations, all fully authorised" if n
+                  else "no actuation occurred in this window")
 
 
-@check("A02", "actuator", "هر اجرا اثر انگشت قابل بازبینی دارد",
-       "handler و اشیای لمس‌شده؛ اجرای بی‌ردّ همان چیزی است که «فیک» به‌نظر می‌رسد", "major")
+@check("A02", "actuator", "every actuation leaves an auditable fingerprint",
+       "the handler and the objects touched; a traceless actuation is exactly what looks \"fake\"",
+       "major")
 def a02(ctx):
     acted = [r for r in ctx.records if r.get("actuated")]
     if not acted:
-        return result(SKIP, "در این پنجره اجرایی رخ نداد")
+        return result(SKIP, "no actuation occurred in this window")
     phoenix = set(ctx.inv["phoenix_actions"])
     bad = []
     for r in acted:
         if r.get("action") in phoenix:
             continue  # Phoenix path emits an AMTD CR; A03 verifies it in the cluster
         if not r.get("handler") and not r.get("objectsTouched"):
-            bad.append(f"{r.get('pod')} action={r.get('action')}: نه handler، نه شیء لمس‌شده")
+            bad.append(f"{r.get('pod')} action={r.get('action')}: no handler, no object touched")
     if bad:
-        return result(FAIL, f"{len(bad)} اجرای بدون اثر انگشت", bad)
-    return result(PASS, f"هر {len(acted)} اجرا اثر انگشت دارد",
+        return result(FAIL, f"{len(bad)} actuations with no fingerprint", bad)
+    return result(PASS, f"all {len(acted)} actuations carry a fingerprint",
                   [f"{r.get('pod')} → {r.get('handler') or r.get('action')} "
                    f"{r.get('objectsTouched') or ''}" for r in acted][:8])
 
 
-@check("A03", "actuator", "کلاستر تغییرِ ادعاشده را تأیید می‌کند",
-       "زمین حقیقتِ مستقل: UID پاد، مالکیت AMTD، یا لاگ خودِ سرویس — نه گزارش خود Phorvex", "critical")
+@check("A03", "actuator", "the cluster confirms the claimed change",
+       "independent ground truth: the pod UID, AMTD ownership, or the service's own log — "
+       "never Phorvex's own report", "critical")
 def a03(ctx):
     if not ctx.ground_truth:
-        return result(SKIP, "راستی‌آزمایی مستقل اجرا نشد (اجرایی رخ نداد یا حالت observe بود)")
+        return result(SKIP, "no independent verification ran (nothing actuated, or observe mode)")
     fails = [g for g in ctx.ground_truth if g["verdict"] == "contradicted"]
     unknown = [g for g in ctx.ground_truth if g["verdict"] == "unverifiable"]
-    ev = [f"{g['action']} روی {g['pod']}: {g['detail']}" for g in ctx.ground_truth]
+    ev = [f"{g['action']} on {g['pod']}: {g['detail']}" for g in ctx.ground_truth]
     if fails:
-        return result(FAIL, f"{len(fails)} ادعا با کلاستر نمی‌خواند", ev)
+        return result(FAIL, f"{len(fails)} claims disagree with the cluster", ev)
     if unknown and len(unknown) == len(ctx.ground_truth):
-        return result(WARN, "هیچ ادعایی مستقل قابل تأیید نبود", ev)
-    return result(PASS, f"{len(ctx.ground_truth) - len(unknown)} ادعا مستقل تأیید شد", ev)
+        return result(WARN, "no claim could be independently confirmed", ev)
+    return result(PASS, f"{len(ctx.ground_truth) - len(unknown)} claims independently confirmed", ev)
 
 
-@check("A04", "actuator", "در حالت dryRun هیچ اجرایی رخ نداده",
-       "قرارداد dryRun؛ شکستنش یعنی یک اجرای غیرمنتظره روی کلاستر واقعی", "critical")
+@check("A04", "actuator", "nothing was actuated under dryRun",
+       "the dryRun contract; breaking it means an unexpected actuation against a live cluster",
+       "critical")
 def a04(ctx):
     bad = [f"{r.get('namespace')}/{r.get('pod')} action={r.get('action')}"
            for r in ctx.records if r.get("dryRun") and r.get("actuated")]
     if bad:
-        return result(FAIL, f"{len(bad)} اجرا در dryRun", bad)
+        return result(FAIL, f"{len(bad)} actuations under dryRun", bad)
     n = sum(1 for r in ctx.records if r.get("dryRun"))
-    return result(PASS, f"{n} تصمیم dryRun، هیچ‌کدام اجرا نشد" if n else "هیچ تصمیم dryRunی در پنجره نبود")
+    return result(PASS, f"{n} dryRun decisions, none actuated" if n
+                  else "no dryRun decision in the window")
 
 
-@check("A06", "actuator", "نبودِ اقدام با وضعیت واقعیِ نویسنده‌ی حسابرسی می‌خواند",
-       "«انتخاب شد ولی اجرا نشد» دو علت کاملاً متفاوت دارد: کلید توقفِ عمدی، یا actuator خراب. "
-       "این چک آن دو را با متریکِ خودِ اپراتور از هم جدا می‌کند به‌جای اینکه از روی نبودِ اقدام حدس بزند",
-       "critical")
+@check("A06", "actuator", "the absence of action matches the audit writer's real state",
+       "\"selected but not actuated\" has two completely different causes: a deliberate kill "
+       "switch, or a broken actuator. This check separates them using the operator's own metric "
+       "instead of guessing from the absence of action", "critical")
 def a06(ctx):
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
     live = [r for r in ctx.records
@@ -595,73 +623,82 @@ def a06(ctx):
 
     if ks is None:
         if not live:
-            return result(SKIP, "نه متریکی خوانده شد نه حرکت زنده‌ای بود")
+            return result(SKIP, "no metric was read and there was no live move either")
         if acted:
-            return result(PASS, f"{len(acted)} از {len(live)} حرکتِ زنده اجرا شد")
+            return result(PASS, f"{len(acted)} of {len(live)} live moves were actuated")
         return result(WARN,
-                      f"{len(live)} حرکت انتخاب شد و هیچ‌کدام اجرا نشد، ولی وضعیت کلید توقف خوانده نشد",
-                      ["بدون متریکِ نویسنده نمی‌شود گفت این سرکوبِ عمدی است یا خرابی — "
-                       "audit_writer.metrics_url را تنظیم کنید"])
+                      f"{len(live)} moves were selected and none actuated, but the kill-switch "
+                      f"state could not be read",
+                      ["without the writer's metric there is no telling deliberate suppression "
+                       "from a fault — set audit_writer.metrics_url"])
 
     if ks >= 1:
-        ev = [f"phorvex_kill_switch_engaged = {ks:g} → این اپراتور عمداً فقط تصمیم می‌گیرد",
-              f"{len(live)} حرکت انتخاب شد، {len(acted)} اجرا — مطابق انتظار"]
+        ev = [f"phorvex_kill_switch_engaged = {ks:g} → this operator deliberately only decides",
+              f"{len(live)} moves selected, {len(acted)} actuated — as expected"]
         if acted:
-            return result(FAIL, "کلید توقف فعال است ولی اقدام اجرا شده — سرکوب کار نکرده",
+            return result(FAIL, "the kill switch is engaged yet an action was actuated — "
+                                "suppression did not work",
                           ev + [f"{r.get('namespace')}/{r.get('pod')} → {r.get('action')}" for r in acted])
-        return result(PASS, "کلید توقف فعال است، پس نبودِ اقدام درست است — actuator خراب نیست", ev)
+        return result(PASS, "the kill switch is engaged, so the absence of action is correct — "
+                            "the actuator is not broken", ev)
 
     if not live:
-        return result(SKIP, "کلید توقف خاموش است ولی در این پنجره حرکت زنده‌ای نبود")
+        return result(SKIP, "the kill switch is off but there was no live move in this window")
     if acted:
-        return result(PASS, f"کلید توقف خاموش، {len(acted)} از {len(live)} حرکت اجرا شد")
+        return result(PASS, f"kill switch off, {len(acted)} of {len(live)} moves actuated")
     by_action = {}
     for r in live:
         by_action[r.get("action")] = by_action.get(r.get("action"), 0) + 1
     return result(FAIL,
-                  f"کلید توقف خاموش است ولی هیچ‌کدام از {len(live)} حرکت اجرا نشد",
-                  [f"{a}: {n} بار انتخاب، صفر اجرا" for a, n in sorted(by_action.items())]
-                  + ["actuator این اپراتور یا وجود ندارد یا این نوع اقدام را پشتیبانی نمی‌کند "
-                     "(مسیر Phoenix فقط rotate/quarantine را می‌شناسد)"])
+                  f"the kill switch is off yet none of the {len(live)} moves was actuated",
+                  [f"{a}: selected {n}×, actuated zero" for a, n in sorted(by_action.items())]
+                  + ["this operator's actuator is either absent or does not support this action "
+                     "type (the Phoenix path only knows rotate/quarantine)"])
 
 
-@check("A07", "actuator", "منبع داشبورد مشخص است: آینه‌ی تصمیم یا اپراتورِ اقدام‌کننده",
-       "اگر جریانی که داشبورد نشان می‌دهد از یک اپراتورِ kill-switched بیاید، بیننده «تصمیم» را "
-       "«اقدام» می‌خواند — ریشه‌ی این برداشت که «actuatorها فیک‌اند»", "major")
+@check("A07", "actuator", "the dashboard's source is unambiguous: decision mirror or "
+       "actuating operator",
+       "if the stream the dashboard shows comes from a kill-switched operator, the viewer reads "
+       "a \"decision\" as an \"action\" — the root of the impression that \"the actuators are fake\"",
+       "major")
 def a07(ctx):
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
     if ks is None:
-        return result(SKIP, "متریک نویسنده‌ی حسابرسی خوانده نشد")
+        return result(SKIP, "the audit writer's metric could not be read")
     stamped = sum(1 for r in ctx.records if r.get("killSwitch"))
     if ks < 1:
-        return result(PASS, "نویسنده‌ی این حسابرسی اپراتورِ اقدام‌کننده است")
+        return result(PASS, "the writer of this audit is the actuating operator")
     if stamped == len(ctx.records) and ctx.records:
-        return result(PASS, f"آینه‌ی تصمیم است و هر {stamped} رکورد killSwitch=true دارد")
+        return result(PASS, f"it is a decision mirror and all {stamped} records carry killSwitch=true")
     return result(FAIL,
-                  f"آینه‌ی تصمیم است ولی فقط {stamped} از {len(ctx.records)} رکورد آن را ثبت کرده",
-                  ["رکوردی با selected=true، dryRun=false، actuated=false و بدون killSwitch "
-                   "از یک actuator خراب قابل تفکیک نیست",
-                   "رفع در مخزن انجام شد (model/types.go · audit/log.go · runner/manager.go) "
-                   "ولی تا بیلد و استقرار مجدد اثر نمی‌کند"])
+                  f"it is a decision mirror but only {stamped} of {len(ctx.records)} records "
+                  f"recorded that",
+                  ["a record with selected=true, dryRun=false, actuated=false and no killSwitch "
+                   "cannot be told apart from a broken actuator",
+                   "fixed in the repository (model/types.go · audit/log.go · runner/manager.go) "
+                   "but it takes effect only after a rebuild and redeploy"])
 
 
-@check("A05", "actuator", "حمله واکنشی تولید کرد",
-       "پایان‌به‌پایانِ واقعی: سیگنال وارد شد و در همان پنجره اقدامی بیرون آمد", "major")
+@check("A05", "actuator", "the attack produced a reaction",
+       "genuine end-to-end: a signal went in and an action came out within the same window",
+       "major")
 def a05(ctx):
     if not ctx.attack_fired:
-        return result(SKIP, "حالت observe — حمله‌ای شلیک نشد")
+        return result(SKIP, "observe mode — no attack was fired")
     ns = ctx.target["namespace"]
     after = [r for r in ctx.post_records if r.get("namespace") == ns]
     acted = [r for r in after if r.get("actuated")]
     selected = [r for r in after if r.get("selected")]
     posture = [r for r in after if _num(r, "threatPosture") > 0]
-    ev = [f"پس از شلیک: {len(after)} تصمیم، {len(posture)} با تهدید>0، "
-          f"{len(selected)} انتخاب، {len(acted)} اجرا"]
+    ev = [f"after firing: {len(after)} decisions, {len(posture)} with threat>0, "
+          f"{len(selected)} selected, {len(acted)} actuated"]
     if acted:
-        return result(PASS, f"{len(acted)} اقدام روی {ns}",
+        return result(PASS, f"{len(acted)} actions on {ns}",
                       ev + [f"{r.get('pod')} → {r.get('action')} ({r.get('handler') or 'phoenix'})" for r in acted])
     if selected:
-        return result(WARN, "اقدام انتخاب شد ولی اجرا نشد — سیاست را در حالت dryRun بررسی کنید", ev)
+        return result(WARN, "an action was selected but never actuated — check the policy for "
+                            "dryRun mode", ev)
     if posture:
-        return result(WARN, "تهدید دیده شد ولی هیچ حرکتی صرف نکرد (ممکن است تصمیم درست باشد)", ev)
-    return result(FAIL, f"سیگنال حمله در {ns} به هیچ تغییری در تصمیم منجر نشد", ev)
+        return result(WARN, "the threat was seen but no move was spent (this may be the correct "
+                            "decision)", ev)
+    return result(FAIL, f"the attack signal in {ns} led to no change in any decision", ev)

@@ -42,7 +42,7 @@ an `AdaptiveMovingTargetDefense` strategy). Phorvex **never writes pods**.
 |----|-------------|-------|--------|
 | **FR1** | Ingest: Prometheus, SecurityEvents, K8s graph (pods/labels/NetworkPolicy/RBAC/nodes/MIG) | [internal/ingest/](internal/ingest/) (`kube.go`, `events.go`, `prometheus.go`, `metricssource.go`) | ✅ built |
 | **FR2** | Physics: feasibility set + switching-cost K per move | [internal/feasibility/](internal/feasibility/), [internal/cost/](internal/cost/) | ✅ built |
-| **FR3** | Context: CVE/value/blast-radius, kill-chain state, exposure timer, SLO headroom | [internal/ctxprov/](internal/ctxprov/), [internal/graph/](internal/graph/), [internal/exposure/](internal/exposure/), [internal/belief/](internal/belief/) | ✅ built (CVE/CVSS prior = roadmap; value/blast/exposure/posture live) |
+| **FR3** | Context: CVE/value/blast-radius, kill-chain state, exposure timer, SLO headroom | [internal/ctxprov/](internal/ctxprov/), [internal/graph/](internal/graph/), [internal/exposure/](internal/exposure/), [internal/belief/](internal/belief/) | ✅ built (CVE/CVSS prior = roadmap; posture is recorded for audit; raw event severity drives P1 through kill-chain P(hold)/stage urgency) |
 | **FR4** | Optimizer: argmax(E[sec] − λ·E[K]) s.t. feasibility + budget + anti-over-rotation; ranked + explainable | [internal/decision/engine.go](internal/decision/engine.go) | ✅ greedy top-B (the PRD's MVP form; mixed-strategy solver = later) |
 | **FR5** | Trigger: event-driven + proactive exposure floor (detection-independent) | [internal/belief/reconexposure.go](internal/belief/reconexposure.go), `budget.proactiveFloor` | ✅ built |
 | **FR6** | Actuation: emit SecurityEvent + maintain AMTD → Phoenix runs rotate\|quarantine | [internal/actuator/phoenix.go](internal/actuator/phoenix.go) | ✅ built (Seam 1) |
@@ -98,8 +98,9 @@ go run ./cmd/main.go --integration-emit \
 
 - The optimizer is the **greedy top-B** the PRD calls the MVP form; the offline
   mixed-strategy (Stackelberg/Markov-game) solver is a later phase.
-- **CVSS/CVE utilities** are a roadmap input; P0 derives risk from physics residual +
-  exposure + posture + blast radius (all live).
+- **CVSS/CVE utilities** are a roadmap input. The default P1 engine targets from
+  consequence-weighted recon facts, exposure, and kill-chain P(hold)/stage urgency;
+  `ThreatPosture` is a live audit scalar, not an additional targeting multiplier.
 - The **Prometheus** ingest is real but OPTIONAL; with no backend Phorvex runs on
   K8s-only signals and reports telemetry absent — it never fabricates a metric.
 - The **NativeActuator** is a stub that returns `ErrNotImplemented` (Phase 2).

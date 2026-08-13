@@ -311,6 +311,8 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	// are declared via annotations (a NIM/serving operator stamps these); honest-absent
 	// ("") for non-AI workloads so the generic kill-chain path is unchanged.
 	out.ModelID = p.Annotations["phorvex.ai/model-id"]
+	// Session epoch: either flush bumps it, and either resets the session exposure clock (PHVX-67).
+	out.SessionEpoch = p.Annotations["phorvex.ai/kv-reset-epoch"] + "|" + p.Annotations["phorvex.ai/kv-migrate-epoch"]
 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
 	out.RouteService = p.Annotations["phorvex.ai/route-service"]
 	out.ParallelSize, _ = strconv.Atoi(p.Annotations["phorvex.ai/parallel-size"])

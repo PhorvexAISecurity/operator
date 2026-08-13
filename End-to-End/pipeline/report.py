@@ -12,11 +12,9 @@ from datetime import datetime
 
 from trace import STAGE_LABEL, STAGE_ORDER
 
-STATUS_FA = {"pass": "قبول", "fail": "ردّ", "warn": "هشدار", "skip": "اجرا نشد"}
-SEV_FA = {"critical": "بحرانی", "major": "مهم", "minor": "جزئی"}
+STATUS_LABEL = {"pass": "pass", "fail": "fail", "warn": "warn", "skip": "skipped"}
 STAGE_OF_CHECK = ["preflight", "ingest", "physics", "context", "brain", "feasibility", "actuator"]
-CHECK_STAGE_LABEL = dict(STAGE_LABEL, preflight="۰ · پیش‌پرواز")
-VERDICT_FA = {"PASS": "قبول", "FAIL": "ردّ", "WARN": "با هشدار"}
+CHECK_STAGE_LABEL = dict(STAGE_LABEL, preflight="0 · Preflight")
 
 CSS = """
 :root{
@@ -226,7 +224,7 @@ def fmt(v, present):
     if not present or v is None:
         return "—", True
     if isinstance(v, bool):
-        return ("بله" if v else "خیر"), False
+        return ("yes" if v else "no"), False
     if isinstance(v, float):
         s = f"{v:.4f}".rstrip("0").rstrip(".")
         return (s or "0"), False
@@ -249,24 +247,24 @@ def _band(doc):
     pf = doc.get("preflight", {}).get("version", {}) or {}
     tgt = doc.get("target") or {}
     meta = [
-        ("حالت اجرا", doc["mode"]),
-        ("هدف", tgt.get("name", "—")),
-        ("نیم‌اسپیس", tgt.get("namespace", "—")),
-        ("کنسول / اپراتور", f"{pf.get('console','?')} / {pf.get('operator','?')}"),
-        ("رکوردهای تصمیم", doc["counts"]["records"]),
-        ("اقدام‌های اجراشده", doc["counts"]["actuated"]),
+        ("Mode", doc["mode"]),
+        ("Target", tgt.get("name", "—")),
+        ("Namespace", tgt.get("namespace", "—")),
+        ("Console / operator", f"{pf.get('console','?')} / {pf.get('operator','?')}"),
+        ("Decision records", doc["counts"]["records"]),
+        ("Actuations", doc["counts"]["actuated"]),
         ("MaxMovesPerTick", doc.get("policy", {}).get("maxMovesPerTick") or "—"),
-        ("ترابری", doc["transport"]),
-        ("شروع", doc["startedAt"][:19].replace("T", " ")),
-        ("پایان", doc["finishedAt"][:19].replace("T", " ")),
+        ("Transport", doc["transport"]),
+        ("Started", doc["startedAt"][:19].replace("T", " ")),
+        ("Finished", doc["finishedAt"][:19].replace("T", " ")),
     ]
     tiles = "".join(
-        f'<div class="tile {k}"><b>{t[k]}</b><span>{esc(STATUS_FA[k])}</span></div>'
+        f'<div class="tile {k}"><b>{t[k]}</b><span>{esc(STATUS_LABEL[k])}</span></div>'
         for k in ("pass", "fail", "warn", "skip"))
     cells = "".join(f"<div><dt>{esc(a)}</dt><dd>{esc(b)}</dd></div>" for a, b in meta)
     return f"""<section class="band">
   <div class="top">
-    <div><p class="vlabel">verdict</p><div class="vword {v}">{esc(VERDICT_FA.get(doc['verdict'], doc['verdict']))}</div></div>
+    <div><p class="vlabel">verdict</p><div class="vword {v}">{esc(doc['verdict'])}</div></div>
     <div class="tally">{tiles}</div>
   </div>
   <dl class="meta">{cells}</dl>
@@ -285,7 +283,7 @@ def _path(doc):
         line = " ".join(f"{k[0].upper()}{counts[k]}" for k in ("pass", "fail", "warn", "skip") if counts[k])
         segs.append(f'<div class="seg {w}"><h3>{esc(CHECK_STAGE_LABEL[st])}</h3>'
                     f'<p>{esc(line or "—")}</p></div>')
-    return ('<section class="sec"><div class="shead"><h2>مسیر سیگنال</h2>'
+    return ('<section class="sec"><div class="shead"><h2>Signal path</h2>'
             '<span class="sub">worst status per stage</span></div>'
             f'<div class="path">{"".join(segs)}</div></section>')
 
@@ -302,24 +300,24 @@ def _checks(doc):
         for c in by[st]:
             ev = ""
             if c.get("evidence"):
-                ev = ('<p class="lbl">شواهد</p><pre class="ev">'
+                ev = ('<p class="lbl">Evidence</p><pre class="ev">'
                       + esc("\n".join(str(e) for e in c["evidence"])) + "</pre>")
             rows.append(f"""<details class="chk {c['status']}" data-status="{c['status']}">
   <summary><span class="cid">{esc(c['id'])}</span>
     <span class="ctitle">{esc(c['title'])}</span>
-    <span class="pill {c['status']}">{esc(STATUS_FA[c['status']])}</span>
+    <span class="pill {c['status']}">{esc(STATUS_LABEL[c['status']])}</span>
     <span class="csum">{esc(c['summary'])}</span></summary>
   <div class="cbody">
-    <div><p class="lbl">قبول‌شدنش چه چیزی را ثابت می‌کند · شدت {esc(SEV_FA.get(c['severity'], c['severity']))}</p>
+    <div><p class="lbl">What a pass proves · severity {esc(c['severity'])}</p>
     <p>{esc(c['proves'])}</p></div>{ev}
   </div>
 </details>""")
         groups.append(f'<div class="grp"><h3>{esc(CHECK_STAGE_LABEL[st])}</h3>{"".join(rows)}</div>')
     filt = "".join(f'<button data-f="{k}">{esc(v)}</button>'
-                   for k, v in [("all", "همه"), ("fail", "ردّ"), ("warn", "هشدار"),
-                                ("pass", "قبول"), ("skip", "اجرا نشد")])
+                   for k, v in [("all", "all"), ("fail", "failed"), ("warn", "warnings"),
+                                ("pass", "passed"), ("skip", "skipped")])
     return f"""<section class="sec">
-  <div class="shead"><h2>چک‌ها</h2><span class="sub">{len(doc['checks'])} checks</span>
+  <div class="shead"><h2>Checks</h2><span class="sub">{len(doc['checks'])} checks</span>
     <div class="filters" id="filters">{filt}</div></div>
   {"".join(groups)}
 </section>"""
@@ -328,8 +326,8 @@ def _checks(doc):
 def _traces(doc):
     traces = doc.get("traces", [])
     if not traces:
-        return ('<section class="sec"><div class="shead"><h2>ردّ تصمیم‌ها</h2></div>'
-                '<div class="empty">هیچ رکورد تصمیمی ضبط نشد.</div></section>')
+        return ('<section class="sec"><div class="shead"><h2>Decision traces</h2></div>'
+                '<div class="empty">No decision record was captured.</div></section>')
     # Decisions that did something come first; they are what a reader opens the report for.
     ordered = sorted(traces, key=lambda t: (not t["actuated"], not t["selected"], t["time"]))
     # Every acted/selected trace is rendered. The no-action tail is overwhelmingly repeated
@@ -362,7 +360,7 @@ def _traces(doc):
                     f'<td class="src">{esc(f["source"])}</td>'
                     f'<td class="why">{esc(f["why"])}</td></tr>')
             stages.append(f"""<div class="stage"><h4>{esc(s['label'])}</h4><div class="tblwrap"><table>
-  <thead><tr><th>فیلد</th><th>یعنی چه</th><th>مقدار</th><th>بازه</th><th>تولیدکننده</th><th>چرا مهم است</th></tr></thead>
+  <thead><tr><th>Field</th><th>Meaning</th><th>Value</th><th>Range</th><th>Produced by</th><th>Why it matters</th></tr></thead>
   <tbody>{''.join(rows)}</tbody></table></div></div>""")
         attr = ""
         if tr["attribution"]:
@@ -371,11 +369,11 @@ def _traces(doc):
                 f'<td class="v">{esc(fmt(a.get("weight", a.get("value")), True)[0])}</td>'
                 f'<td>{esc(a.get("kind", a.get("note", "")))}</td></tr>'
                 for a in tr["attribution"])
-            attr = ('<div class="stage"><h4>انتساب — کدام حقیقت‌ها چقدر سهم داشتند</h4>'
-                    '<div class="tblwrap"><table><thead><tr><th>کلید</th><th>وزن</th><th>نوع</th></tr></thead>'
+            attr = ('<div class="stage"><h4>Attribution — which facts contributed, and how much</h4>'
+                    '<div class="tblwrap"><table><thead><tr><th>Key</th><th>Weight</th><th>Kind</th></tr></thead>'
                     f"<tbody>{ar}</tbody></table></div></div>")
-        state = ("اجرا شد" if tr["actuated"] else
-                 "انتخاب شد" if tr["selected"] else "بدون اقدام")
+        state = ("actuated" if tr["actuated"] else
+                 "selected" if tr["selected"] else "no action")
         pill = "pass" if tr["actuated"] else ("warn" if tr["selected"] else "skip")
         blocks.append(f"""<details class="trace">
   <summary><span class="tpod">{esc(tr['namespace'])}/{esc(tr['pod'])}</span>
@@ -385,10 +383,10 @@ def _traces(doc):
   {''.join(stages)}{attr}
 </details>""")
     more = ("" if not omitted else
-            f'<p class="empty">{omitted} تیکِ تکراریِ بدون اقدام روی همین پادها نمایش داده نشد '
-            f'— همه‌شان در فایل JSON همین اجرا هستند.</p>')
+            f'<p class="empty">{omitted} repeated no-action ticks on the same pods are not shown '
+            f'— all of them are in this run\'s JSON file.</p>')
     return f"""<section class="sec">
-  <div class="shead"><h2>ردّ تصمیم‌ها</h2>
+  <div class="shead"><h2>Decision traces</h2>
     <span class="sub">{len(shown)} of {len(ordered)} decisions · every value with its source</span></div>
   {''.join(blocks)}{more}
 </section>"""
@@ -397,20 +395,20 @@ def _traces(doc):
 def _ground(doc):
     gt = doc.get("groundTruth") or []
     if not gt:
-        body = ('<div class="empty">در این اجرا اقدامی روی کلاستر انجام نشد، '
-                'پس چیزی برای راستی‌آزمایی مستقل وجود نداشت.</div>')
+        body = ('<div class="empty">Nothing was actuated against the cluster in this run, '
+                'so there was nothing to verify independently.</div>')
     else:
         rows = []
         for g in gt:
             rows.append(f"""<div class="gtrow {esc(g['verdict'])}">
-  <h4><code>{esc(g['action'])}</code> روی <span class="ltr">{esc(g['namespace'])}/{esc(g['pod'])}</span>
-      — {esc({'confirmed': 'تأیید شد', 'contradicted': 'رد شد', 'unverifiable': 'قابل تأیید نبود'}[g['verdict']])}</h4>
+  <h4><code>{esc(g['action'])}</code> on <span class="ltr">{esc(g['namespace'])}/{esc(g['pod'])}</span>
+      — {esc({'confirmed': 'confirmed', 'contradicted': 'contradicted', 'unverifiable': 'unverifiable'}[g['verdict']])}</h4>
   <p>{esc(g['detail'])}</p>
-  <p class="lbl" style="margin-top:6px">انتظار: {esc(g['expected'])}</p>
+  <p class="lbl" style="margin-top:6px">Expected: {esc(g['expected'])}</p>
   {f'<pre class="ev">{esc(g["evidence"])}</pre>' if g.get("evidence") else ''}
 </div>""")
         body = f'<div class="gt">{"".join(rows)}</div>'
-    return ('<section class="sec"><div class="shead"><h2>راستی‌آزمایی مستقل</h2>'
+    return ('<section class="sec"><div class="shead"><h2>Independent verification</h2>'
             '<span class="sub">kubectl / workload logs — never Phorvex&#39;s own report</span></div>'
             + body + "</section>")
 
@@ -420,10 +418,11 @@ def render(doc, standalone=True):
     body = f"""<div class="wrap">
   <header>
     <p class="vlabel">Phorvex · End-to-End</p>
-    <h1 style="font-size:1.7rem;font-weight:800;margin-bottom:6px">گزارش تست پایان‌به‌پایان</h1>
+    <h1 style="font-size:1.7rem;font-weight:800;margin-bottom:6px">End-to-End test report</h1>
     <p style="margin:0;color:var(--ink-2);max-width:72ch">
-      یک اجرا از اولین مرحله (ورود سیگنال) تا آخرین مرحله (دستی که به کلاستر می‌خورد).
-      هر مقداری که موتور تولید کرده اینجا هست، کنار تابعی که آن را ساخته و دلیلی که به آن نیاز داریم.
+      One run, from the first stage (a signal entering ingest) to the last (a hand touching the
+      cluster). Every value the engine produced is here, next to the function that made it and
+      the reason we need it.
     </p>
   </header>
   {_band(doc)}
@@ -434,14 +433,14 @@ def render(doc, standalone=True):
   <footer>
     <span>schema {esc(doc['schema'])}</span>
     <span>{esc(doc['counts']['records'])} decision records</span>
-    <span>ساخته‌شده در {esc(datetime.now().strftime('%Y-%m-%d %H:%M'))}</span>
+    <span>generated {esc(datetime.now().strftime('%Y-%m-%d %H:%M'))}</span>
   </footer>
 </div>
 <script>{JS}</script>"""
     head = f"<title>{esc(title)}</title>\n<style>{CSS}</style>"
     if not standalone:
         return head + "\n" + body
-    return (f'<!doctype html>\n<html lang="fa" dir="rtl">\n<head>\n'
+    return (f'<!doctype html>\n<html lang="en" dir="ltr">\n<head>\n'
             f'<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f"{head}\n</head>\n<body>\n{body}\n</body>\n</html>\n")
