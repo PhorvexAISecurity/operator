@@ -31,8 +31,13 @@ func allAIEnabledPolicy() model.Policy {
 func supportedCapabilityFleet() ([]*model.WorkloadView, *ingest.Snapshot) {
 	leader := model.Pod{
 		Namespace: "ns", Name: "leader", HasGPU: true, MIGDevice: "1g.10gb", ModelID: "model",
+		Node: "gpu-a", MIGGPUID: "0", MIGTargetProfile: "2g.20gb", SuspectAdapter: "adapter-a",
 		Ready: true, ServingEndpointReady: true, RouteService: "infer", GuardrailVariants: 2,
-		Labels: map[string]string{"app": "infer", labelServing: "true", labelLoRAEnabled: "true"},
+		Labels: map[string]string{
+			"app": "infer", labelServing: "true", labelLoRAEnabled: "true",
+			labelGuardrailTier: "true",
+			labelWarmRole:      "leader", labelSwapGroup: "swap-a", labelModelShard: "shard-a",
+		},
 	}
 	swapShadow := model.Pod{
 		Namespace: "ns", Name: "swap-shadow", HasGPU: true, ModelID: "model", Ready: true,
@@ -46,6 +51,7 @@ func supportedCapabilityFleet() ([]*model.WorkloadView, *ingest.Snapshot) {
 	}
 	views := []*model.WorkloadView{{Pod: leader}, {Pod: swapShadow}, {Pod: shardShadow}}
 	snapshot := &ingest.Snapshot{
+		Pods: []model.Pod{leader, swapShadow, shardShadow},
 		Nodes: []ingest.NodeInfo{
 			{Name: "gpu-a", Schedulable: true, AllocatableGPU: 1},
 			{Name: "gpu-b", Schedulable: true, AllocatableGPU: 1},
@@ -93,19 +99,26 @@ func TestSpecificCapabilityPredicates(t *testing.T) {
 		want       []string
 	}{
 		{"mig", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.MIGDevice = "" }, []string{"mig-rebind"}},
+		{"mig-node", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.Node = "" }, []string{"mig-rebind"}},
+		{"mig-gpu-id", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.MIGGPUID = "" }, []string{"mig-rebind"}},
+		{"mig-profile", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.MIGTargetProfile = "" }, []string{"mig-rebind"}},
 		{"serving-endpoint", func(v []*model.WorkloadView, _ *ingest.Snapshot) {
 			for _, view := range v {
 				view.Pod.ServingEndpointReady = false
 			}
 		}, []string{"kv-migrate-invalidate", "kv-reset"}},
 		{"lora", func(v []*model.WorkloadView, _ *ingest.Snapshot) { delete(v[0].Pod.Labels, labelLoRAEnabled) }, []string{"adapter-rotate"}},
+		{"lora-adapter", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.SuspectAdapter = "" }, []string{"adapter-rotate"}},
 		{"guardrails", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.GuardrailVariants = 1 }, []string{"guardrail-rotate"}},
+		{"guardrail-tier", func(v []*model.WorkloadView, _ *ingest.Snapshot) { delete(v[0].Pod.Labels, labelGuardrailTier) }, []string{"guardrail-rotate"}},
 		{"route-service", func(v []*model.WorkloadView, _ *ingest.Snapshot) { v[0].Pod.RouteService = "" }, []string{"endpoint-rotate"}},
 		{"serving-selector", func(_ []*model.WorkloadView, s *ingest.Snapshot) { delete(s.Services[0].Selector, labelServing) }, []string{"request-drain"}},
 		{"gpu-nodes", func(_ []*model.WorkloadView, s *ingest.Snapshot) { s.Nodes = s.Nodes[:1] }, []string{"model-shard-replace", "warm-swap"}},
-		{"warm-pools", func(v []*model.WorkloadView, _ *ingest.Snapshot) {
+		{"warm-pools", func(v []*model.WorkloadView, s *ingest.Snapshot) {
 			v[1].Pod.Labels = map[string]string{}
 			v[2].Pod.Labels = map[string]string{}
+			s.Pods[1].Labels = map[string]string{}
+			s.Pods[2].Labels = map[string]string{}
 		}, []string{"model-shard-replace", "warm-swap"}},
 	}
 	for _, test := range tests {
@@ -118,6 +131,124 @@ func TestSpecificCapabilityPredicates(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestZeroMIGCapacityDoesNotCountAsAGPUNode(t *testing.T) {
+	views, snapshot := supportedCapabilityFleet()
+	snapshot.Nodes[1].AllocatableGPU = 0
+	snapshot.Nodes[1].MIGResources = map[string]int64{"nvidia.com/mig-1g.10gb": 0}
+
+	got := unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	want := []string{"model-shard-replace", "warm-swap"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("zero MIG capacity counted as a GPU node: unsupported=%v, want %v", got, want)
+	}
+}
+
+func TestCapabilityLabelsMustMatchActuatorValuesExactly(t *testing.T) {
+	views, snapshot := supportedCapabilityFleet()
+	views[0].Pod.Labels[labelLoRAEnabled] = "TRUE"
+	views[0].Pod.Labels[labelGuardrailTier] = "TRUE"
+	snapshot.Pods[1].Labels[labelModelLoaded] = "TRUE"
+	snapshot.Pods[2].Labels[labelModelLoaded] = "TRUE"
+
+	got := unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	want := []string{"adapter-rotate", "guardrail-rotate", "model-shard-replace", "warm-swap"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("non-canonical capability labels reported as supported: unsupported=%v, want %v", got, want)
+	}
+}
+
+func TestWarmPoolsMustMatchTheSelectedTargetGroup(t *testing.T) {
+	views, snapshot := supportedCapabilityFleet()
+	snapshot.Pods[1].Labels[labelSwapGroup] = "unrelated-swap-group"
+	snapshot.Pods[2].Labels[labelModelShard] = "unrelated-shard"
+
+	got := unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	want := []string{"model-shard-replace", "warm-swap"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("unrelated warm pools reported as usable: unsupported=%v, want %v", got, want)
+	}
+}
+
+func TestParallelModelShardPoolMustMatchTheTargetParallelGroup(t *testing.T) {
+	views, snapshot := supportedCapabilityFleet()
+	views[0].Pod.Labels[labelParallelGroup] = "parallel-a"
+	views[0].Pod.ParallelSize = 1
+	snapshot.Pods[0].Labels[labelParallelGroup] = "parallel-a"
+	snapshot.Pods[2].Labels[labelParallelGroup] = "parallel-b"
+	snapshot.Pods[2].Labels[labelRank] = "0"
+
+	got := unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	if !containsString(got, string(model.ActionModelShardReplace)) {
+		t.Fatalf("unrelated parallel-group shadow reported as usable: unsupported=%v", got)
+	}
+
+	snapshot.Pods[2].Labels[labelParallelGroup] = "parallel-a"
+	got = unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	if containsString(got, string(model.ActionModelShardReplace)) {
+		t.Fatalf("matching parallel-group shadow reported unsupported: %v", got)
+	}
+}
+
+func TestParallelModelShardPoolRequiresEveryDistinctRank(t *testing.T) {
+	views, snapshot := supportedCapabilityFleet()
+	views[0].Pod.Labels[labelParallelGroup] = "parallel-a"
+	views[0].Pod.ParallelSize = 2
+	snapshot.Pods[2].Labels[labelParallelGroup] = "parallel-a"
+	snapshot.Pods[2].Labels[labelRank] = "0"
+
+	got := unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	if !containsString(got, string(model.ActionModelShardReplace)) {
+		t.Fatalf("incomplete parallel shadow group reported as usable: unsupported=%v", got)
+	}
+
+	duplicateRank := snapshot.Pods[2]
+	duplicateRank.Name = "shard-shadow-duplicate-rank"
+	snapshot.Pods = append(snapshot.Pods, duplicateRank)
+	got = unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	if !containsString(got, string(model.ActionModelShardReplace)) {
+		t.Fatalf("duplicate parallel ranks reported as a complete group: unsupported=%v", got)
+	}
+
+	secondRank := duplicateRank
+	secondRank.Name = "shard-shadow-rank-1"
+	secondRank.Labels = cloneLabels(duplicateRank.Labels)
+	secondRank.Labels[labelRank] = "1"
+	snapshot.Pods = append(snapshot.Pods, secondRank)
+	got = unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	if containsString(got, string(model.ActionModelShardReplace)) {
+		t.Fatalf("complete parallel shadow group reported unsupported: %v", got)
+	}
+}
+
+func TestParallelModelShardPoolRequiresValidDeclaredSize(t *testing.T) {
+	views, snapshot := supportedCapabilityFleet()
+	views[0].Pod.Labels[labelParallelGroup] = "parallel-a"
+	snapshot.Pods[2].Labels[labelParallelGroup] = "parallel-a"
+	snapshot.Pods[2].Labels[labelRank] = "0"
+
+	got := unsupportedNames(unsupportedEnabledActions(allAIEnabledPolicy(), views, snapshot))
+	if !containsString(got, string(model.ActionModelShardReplace)) {
+		t.Fatalf("parallel group without a valid parallel-size reported as usable: unsupported=%v", got)
+	}
+}
+
+func cloneLabels(labels map[string]string) map[string]string {
+	cloned := make(map[string]string, len(labels))
+	for key, value := range labels {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestActionsSupportedDebouncesAndRecovers(t *testing.T) {

@@ -15,14 +15,14 @@ selection.
 
 | Enabled action | Observed support requirement |
 |---|---|
-| `warm-swap` | a Ready, model-loaded warm shadow in a swap pool and at least two schedulable GPU nodes |
-| `mig-rebind` | a selected AI pod with a MIG device |
+| `warm-swap` | a selected AI target with a Ready, model-loaded warm shadow in the same namespace and exact swap group, plus at least two schedulable GPU nodes |
+| `mig-rebind` | a selected pod with a MIG device, scheduled node, GPU id, and target MIG profile |
 | `kv-reset` | a Ready serving endpoint |
 | `endpoint-rotate` | a selected AI pod declaring `phorvex.ai/route-service` |
-| `model-shard-replace` | a Ready, model-loaded model-shard/parallel-group shadow and at least two schedulable GPU nodes |
-| `adapter-rotate` | a selected pod labeled `phorvex.ai/lora-enabled=true` |
+| `model-shard-replace` | an independent selected shard with a matching Ready/model-loaded shadow, or a TP/PP target with valid `parallel-size` and a complete matching replacement group containing distinct Ready ranks, plus at least two schedulable GPU nodes |
+| `adapter-rotate` | a selected pod labeled `phorvex.ai/lora-enabled=true` that names the adapter to rotate |
 | `request-drain` | a matching Service whose selector includes `phorvex.ai/serving` |
-| `guardrail-rotate` | at least two distinct declared guardrail variants |
+| `guardrail-rotate` | a selected `guardrail-tier=true` pod with at least two distinct declared guardrail variants |
 | `kv-migrate-invalidate` | a Ready serving endpoint |
 
 Every unsupported entry names the exact enabled action and the missing capability.
@@ -47,10 +47,12 @@ The debounce threshold is configurable with
 ## Kubernetes integration
 
 - `kubectl get phorvexpolicies` now includes an `Actions` printer column sourced
-  from the `ActionsSupported` condition.
+  from the `ActionsSupported` condition message, so unsupported action names and
+  their reasons are visible directly instead of only as `True`/`False`.
 - Snapshot ingest projects only the minimum read-only capability data: Service
   selectors, node readiness/schedulability, serving endpoint readiness, route
-  Service name, and guardrail variants.
+  Service name, guardrail variants, TP/PP group size, and the static MIG target
+  configuration already present on Pods.
 - RBAC adds read-only Service access and only `create;patch` for Kubernetes Events.
 - The chart and config CRD copies remain byte-identical.
 
@@ -60,13 +62,22 @@ The debounce threshold is configurable with
 - every action is named when its base AI capability is absent;
 - each capability predicate is independently removed and identifies only the
   affected action or action pair;
+- unrelated swap/model-shard pools cannot satisfy a selected target, and a
+  tensor/pipeline-parallel replacement must match the target's group and contain
+  every distinct rank required by a valid `parallel-size`;
+- MIG, adapter, and guardrail support requires every static precondition consumed
+  by the matching actuator on the same selected target;
+- zero-valued MIG capacity and non-canonical capability label values cannot produce
+  false-positive support;
+- the generated CRD test pins the `Actions` printer column to the condition message
+  and keeps the chart/config CRD copies byte-identical;
 - debounce, recovery, and policy-generation reset behavior;
 - one Warning Event for a stable failure, without per-tick duplication;
 - Pod, node, and Service capability projection.
 
 ## Verification
 
-- `go test -count=1 ./internal/ingest ./internal/runner`
+- `go test -count=1 ./api/v1alpha1 ./internal/ingest ./internal/runner`
 - `go test -race -count=1 ./internal/runner`
 - `go test -count=1 -skip TestScenariosExport ./...`
 - `go build ./...`

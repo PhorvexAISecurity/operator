@@ -16,15 +16,28 @@ func TestProjectPodCapabilityWitnesses(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "inference", Annotations: map[string]string{
 			"phorvex.ai/model-id": "model", "phorvex.ai/route-service": "infer",
-			"phorvex.ai/guardrail-variant": "v1", "phorvex.ai/guardrail-variants": "v1, v2, v2",
+			"phorvex.ai/parallel-size":      "2",
+			"phorvex.ai/gpu-id":             "0",
+			"phorvex.ai/mig-target-profile": "2g.20gb",
+			"phorvex.ai/guardrail-variant":  "v1", "phorvex.ai/guardrail-variants": "v1, v2, v2",
 		}},
 		Status: corev1.PodStatus{PodIP: "10.0.0.2", Conditions: []corev1.PodCondition{{
 			Type: corev1.PodReady, Status: corev1.ConditionTrue,
 		}}},
 	}
 	got := projectPod(pod, time.Unix(10, 0))
-	if !got.ServingEndpointReady || got.RouteService != "infer" || got.GuardrailVariants != 2 {
+	if !got.ServingEndpointReady || got.RouteService != "infer" || got.GuardrailVariants != 2 || got.ParallelSize != 2 ||
+		got.MIGGPUID != "0" || got.MIGTargetProfile != "2g.20gb" {
 		t.Fatalf("capability projection = %+v", got)
+	}
+}
+
+func TestProjectPodInvalidParallelSizeIsUnavailable(t *testing.T) {
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+		"phorvex.ai/parallel-size": "not-a-number",
+	}}}
+	if got := projectPod(pod, time.Unix(10, 0)).ParallelSize; got != 0 {
+		t.Fatalf("invalid parallel-size projected as %d, want 0", got)
 	}
 }
 

@@ -30,7 +30,7 @@ spec:
     - jsonPath: .status.decisionsTotal
       name: Decisions
       type: integer
-    - jsonPath: .status.conditions[?(@.type=="ActionsSupported")].status
+    - jsonPath: .status.conditions[?(@.type=="ActionsSupported")].message
       name: Actions
       type: string
     - jsonPath: .status.lastTickTime

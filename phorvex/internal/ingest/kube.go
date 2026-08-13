@@ -6,6 +6,7 @@ package ingest
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -312,6 +313,9 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out.ModelID = p.Annotations["phorvex.ai/model-id"]
 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
 	out.RouteService = p.Annotations["phorvex.ai/route-service"]
+	out.ParallelSize, _ = strconv.Atoi(p.Annotations["phorvex.ai/parallel-size"])
+	out.MIGGPUID = p.Annotations["phorvex.ai/gpu-id"]
+	out.MIGTargetProfile = p.Annotations["phorvex.ai/mig-target-profile"]
 	out.GuardrailVariants = distinctGuardrailVariants(
 		p.Annotations["phorvex.ai/guardrail-variant"],
 		p.Annotations["phorvex.ai/guardrail-variants"],

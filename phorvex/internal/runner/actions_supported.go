@@ -24,9 +24,11 @@ const (
 	labelSwapGroup                       = "phorvex.ai/swap-group"
 	labelModelShard                      = "phorvex.ai/model-shard"
 	labelParallelGroup                   = "phorvex.ai/parallel-group"
+	labelRank                            = "phorvex.ai/rank"
 	labelWarmRole                        = "phorvex.ai/role"
 	labelModelLoaded                     = "phorvex.ai/model-loaded"
 	labelLoRAEnabled                     = "phorvex.ai/lora-enabled"
+	labelGuardrailTier                   = "phorvex.ai/guardrail-tier"
 	labelServing                         = "phorvex.ai/serving"
 	warmShadowRole                       = "warm-shadow"
 )
@@ -51,42 +53,35 @@ type actionsSupportStatus struct {
 }
 
 func unsupportedEnabledActions(pol model.Policy, views []*model.WorkloadView, snap *ingest.Snapshot) []unsupportedAction {
-	hasAI, hasMIG, servingEndpoint, loraEnabled := false, false, false, false
+	hasAI, migRebindConfigured, servingEndpoint, adapterTarget := false, false, false, false
 	guardrailVariants, routeService := false, false
-	warmSwapPool, modelShardPool := false, false
 	for _, view := range views {
 		pod := &view.Pod
 		if pod.HasGPU || pod.ModelID != "" {
 			hasAI = true
 		}
-		if pod.MIGDevice != "" {
-			hasMIG = true
+		if pod.MIGDevice != "" && pod.Node != "" && pod.MIGGPUID != "" && pod.MIGTargetProfile != "" {
+			migRebindConfigured = true
 		}
 		if pod.ServingEndpointReady {
 			servingEndpoint = true
 		}
-		if strings.EqualFold(pod.Labels[labelLoRAEnabled], "true") {
-			loraEnabled = true
+		if pod.Labels[labelLoRAEnabled] == "true" && pod.SuspectAdapter != "" {
+			adapterTarget = true
 		}
-		if pod.GuardrailVariants >= 2 {
+		if pod.Labels[labelGuardrailTier] == "true" && pod.GuardrailVariants >= 2 {
 			guardrailVariants = true
 		}
 		if pod.RouteService != "" {
 			routeService = true
 		}
-		promotableShadow := pod.Ready && pod.Labels[labelWarmRole] == warmShadowRole &&
-			(strings.EqualFold(pod.Labels[labelModelLoaded], "true") || pod.ServingEndpointReady)
-		if promotableShadow && pod.Labels[labelSwapGroup] != "" {
-			warmSwapPool = true
-		}
-		if promotableShadow && (pod.Labels[labelModelShard] != "" || pod.Labels[labelParallelGroup] != "") {
-			modelShardPool = true
-		}
 	}
+	warmSwapPool := hasMatchingWarmSwapPool(views, snap.Pods)
+	modelShardPool := hasMatchingModelShardPool(views, snap.Pods)
 
 	schedulableGPUNodes := 0
 	for _, node := range snap.Nodes {
-		if node.Schedulable && (node.AllocatableGPU > 0 || len(node.MIGResources) > 0) {
+		if node.Schedulable && hasAllocatableGPU(node) {
 			schedulableGPUNodes++
 		}
 	}
@@ -103,15 +98,15 @@ func unsupportedEnabledActions(pol model.Policy, views []*model.WorkloadView, sn
 		}
 		switch action {
 		case model.ActionMIGRebind:
-			if !hasMIG {
-				unsupported = append(unsupported, unsupportedAction{action, "no selected pod has a MIG device"})
+			if !migRebindConfigured {
+				unsupported = append(unsupported, unsupportedAction{action, "no selected pod has a MIG device, scheduled node, GPU id, and target profile"})
 			}
 		case model.ActionWarmSwap:
-			if reason := warmPoolReason(warmSwapPool, schedulableGPUNodes, "swap-group"); reason != "" {
+			if reason := warmPoolReason(warmSwapPool, schedulableGPUNodes, "matching swap-group"); reason != "" {
 				unsupported = append(unsupported, unsupportedAction{action, reason})
 			}
 		case model.ActionModelShardReplace:
-			if reason := warmPoolReason(modelShardPool, schedulableGPUNodes, "model-shard/parallel-group"); reason != "" {
+			if reason := warmPoolReason(modelShardPool, schedulableGPUNodes, "matching model-shard/parallel-group"); reason != "" {
 				unsupported = append(unsupported, unsupportedAction{action, reason})
 			}
 		case model.ActionKVReset, model.ActionKVMigrateInvalidate:
@@ -119,12 +114,12 @@ func unsupportedEnabledActions(pol model.Policy, views []*model.WorkloadView, sn
 				unsupported = append(unsupported, unsupportedAction{action, "no selected pod has a Ready serving endpoint"})
 			}
 		case model.ActionAdapterRotate:
-			if !loraEnabled {
-				unsupported = append(unsupported, unsupportedAction{action, "no selected pod is labeled phorvex.ai/lora-enabled=true"})
+			if !adapterTarget {
+				unsupported = append(unsupported, unsupportedAction{action, "no selected pod is LoRA-enabled and names an adapter to rotate"})
 			}
 		case model.ActionGuardrailRotate:
 			if !guardrailVariants {
-				unsupported = append(unsupported, unsupportedAction{action, "no selected pod declares at least 2 distinct guardrail variants"})
+				unsupported = append(unsupported, unsupportedAction{action, "no selected guardrail-tier pod declares at least 2 distinct guardrail variants"})
 			}
 		case model.ActionEndpointRotate:
 			if !routeService {
@@ -138,6 +133,103 @@ func unsupportedEnabledActions(pol model.Policy, views []*model.WorkloadView, sn
 	}
 	sort.Slice(unsupported, func(i, j int) bool { return unsupported[i].action < unsupported[j].action })
 	return unsupported
+}
+
+// hasMatchingWarmSwapPool mirrors the actuator's warm-swap lookup: a selected,
+// non-shadow AI target must declare a swap group, and the observed namespace must
+// contain a different Ready, model-loaded warm shadow in that exact group. Looking
+// for an arbitrary shadow anywhere in the selected fleet can report a false positive
+// even though warmCutover would fail closed for the actual target.
+func hasMatchingWarmSwapPool(views []*model.WorkloadView, fleet []model.Pod) bool {
+	for _, view := range views {
+		target := &view.Pod
+		group := target.Labels[labelSwapGroup]
+		if !capabilityTarget(target) || group == "" {
+			continue
+		}
+		if hasMatchingPromotableShadow(target, fleet, func(shadow *model.Pod) bool {
+			return shadow.Labels[labelSwapGroup] == group
+		}) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasMatchingModelShardPool mirrors both actuator paths. An independent shard needs
+// one matching promotable shadow. A tensor/pipeline-parallel target needs a valid
+// parallel-size and a complete replacement group with one distinct Ready shadow rank
+// per member; otherwise groupCoherentCutover fails closed without flipping anything.
+func hasMatchingModelShardPool(views []*model.WorkloadView, fleet []model.Pod) bool {
+	for _, view := range views {
+		target := &view.Pod
+		shard := target.Labels[labelModelShard]
+		if !capabilityTarget(target) || shard == "" {
+			continue
+		}
+		parallel := target.Labels[labelParallelGroup]
+		if parallel != "" {
+			if hasCompleteParallelShadowGroup(target, fleet, shard, parallel) {
+				return true
+			}
+			continue
+		}
+		if hasMatchingPromotableShadow(target, fleet, func(shadow *model.Pod) bool {
+			return shadow.Labels[labelModelShard] == shard
+		}) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCompleteParallelShadowGroup(target *model.Pod, fleet []model.Pod, shard, parallel string) bool {
+	if target.ParallelSize <= 0 {
+		return false
+	}
+	readyRanks := make(map[string]struct{}, target.ParallelSize)
+	for i := range fleet {
+		shadow := &fleet[i]
+		rank := shadow.Labels[labelRank]
+		if shadow.Namespace != target.Namespace || shadow.Name == target.Name ||
+			!shadow.Ready || shadow.Labels[labelWarmRole] != warmShadowRole ||
+			shadow.Labels[labelModelLoaded] != "true" || rank == "" ||
+			shadow.Labels[labelModelShard] != shard || shadow.Labels[labelParallelGroup] != parallel {
+			continue
+		}
+		readyRanks[rank] = struct{}{}
+	}
+	return len(readyRanks) >= target.ParallelSize
+}
+
+func capabilityTarget(pod *model.Pod) bool {
+	return pod != nil && pod.Labels[labelWarmRole] != warmShadowRole &&
+		(pod.HasGPU || pod.ModelID != "")
+}
+
+func hasMatchingPromotableShadow(target *model.Pod, fleet []model.Pod, samePool func(*model.Pod) bool) bool {
+	for i := range fleet {
+		shadow := &fleet[i]
+		if shadow.Namespace != target.Namespace || shadow.Name == target.Name ||
+			!shadow.Ready || shadow.Labels[labelWarmRole] != warmShadowRole ||
+			shadow.Labels[labelModelLoaded] != "true" || !samePool(shadow) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func hasAllocatableGPU(node ingest.NodeInfo) bool {
+	if node.AllocatableGPU > 0 {
+		return true
+	}
+	for _, count := range node.MIGResources {
+		if count > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func warmPoolReason(pool bool, gpuNodes int, group string) string {
