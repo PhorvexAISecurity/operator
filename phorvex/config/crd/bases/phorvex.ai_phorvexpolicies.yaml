@@ -30,6 +30,9 @@ spec:
     - jsonPath: .status.decisionsTotal
       name: Decisions
       type: integer
+    - jsonPath: .status.conditions[?(@.type=="ActionsSupported")].status
+      name: Actions
+      type: string
     - jsonPath: .status.lastTickTime
       name: LastTick
       type: date
@@ -348,7 +351,7 @@ spec:
                   possible in active mode). Stays false for the whole P0 dry-run lifetime.
                 type: boolean
               conditions:
-                description: Conditions includes Ready, DryRun, ValidationError, KillSwitch.
+                description: Conditions includes Ready, DryRun, ValidationError, KillSwitch, ActionsSupported.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

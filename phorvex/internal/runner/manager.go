@@ -20,6 +20,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
@@ -43,6 +44,10 @@ type policyEntry struct {
 	spec      v1alpha1.PhorvexPolicySpec
 	selector  labels.Selector
 	lastTick  time.Time
+
+	generation                  int64
+	actionsUnsupportedTicks     int
+	actionsUnsupportedSignature string
 }
 
 // pendingRotation holds the pre-action features until Kubernetes proves that a
@@ -73,6 +78,11 @@ type Manager struct {
 	PerTickTimeout time.Duration
 	Log            logr.Logger
 
+	Recorder record.EventRecorder
+	// ActionsSupportedDebounce is the number of consecutive mismatching policy ticks
+	// required before status becomes False. <=0 uses the default.
+	ActionsSupportedDebounce int
+
 	mu       sync.RWMutex
 	policies map[string]*policyEntry
 	// Accessed only by the single tick loop. Entries are resolved on a later
@@ -97,6 +107,8 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		BaseInterval:  10 * time.Second,
 		Log:           log.WithName("runner"),
 		policies:      map[string]*policyEntry{},
+
+		ActionsSupportedDebounce: DefaultActionsSupportedDebounceTicks,
 	}
 }
 
@@ -129,8 +141,14 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	defer m.mu.Unlock()
 	existing := m.policies[key.String()]
 	last := time.Time{}
+	unsupportedTicks := 0
+	unsupportedSignature := ""
 	if existing != nil {
 		last = existing.lastTick
+		if existing.generation == p.Generation {
+			unsupportedTicks = existing.actionsUnsupportedTicks
+			unsupportedSignature = existing.actionsUnsupportedSignature
+		}
 	}
 	m.policies[key.String()] = &policyEntry{
 		key:       key,
@@ -139,6 +157,10 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 		spec:      *p.Spec.DeepCopy(),
 		selector:  sel,
 		lastTick:  last,
+
+		generation:                  p.Generation,
+		actionsUnsupportedTicks:     unsupportedTicks,
+		actionsUnsupportedSignature: unsupportedSignature,
 	}
 	return nil
 }
@@ -524,6 +546,7 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 			InfectionFrontier:  infectionFrontier(nbKeys, infected),
 		})
 	}
+	actionsSupport := m.debounceActionsSupported(e, unsupportedEnabledActions(pol, views, snap))
 
 	decisions := m.Optimizer.Decide(views, pol)
 
@@ -581,7 +604,7 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 	metrics.PublishTick(pol.Tenant, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
 	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode, killEngaged)
 	m.Clock.RetainTenant(pol.Tenant, keep)
-	m.updateStatus(ctx, e, len(views), selected, actuated, killEngaged, snap.Now)
+	m.updateStatus(ctx, e, len(views), selected, actuated, killEngaged, snap.Now, actionsSupport)
 
 	m.mu.Lock()
 	if cur := m.policies[e.key.String()]; cur != nil {

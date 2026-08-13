@@ -8,6 +8,7 @@ import (
 	"context"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -27,7 +28,9 @@ func metav1SelAsSel(sel *metav1.LabelSelector) (labels.Selector, error) {
 // updateStatus writes the operational tick result back onto the PhorvexPolicy status
 // subresource. Conflicts (the controller also touches status) are ignored — the next
 // tick re-writes. protected = pods covered; moves = decisions selected this tick.
-func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, moves, actuated int, killEngaged bool, now time.Time) {
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
+func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, moves, actuated int, killEngaged bool, now time.Time, actions actionsSupportStatus) {
 	var p v1alpha1.PhorvexPolicy
 	if err := m.Client.Get(ctx, e.key, &p); err != nil {
 		return
@@ -45,6 +48,9 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		p.Status.Actuated = true
 	}
 	p.Status.KillSwitchEngaged = killEngaged
+	previous := meta.FindStatusCondition(p.Status.Conditions, ConditionActionsSupported)
+	emitUnsupportedEvent := actions.status == metav1.ConditionFalse &&
+		(previous == nil || previous.Status != actions.status || previous.Message != actions.message)
 
 	meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
 		Type:               "Ready",
@@ -65,6 +71,18 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		Message:            dryMsg,
 		ObservedGeneration: p.Generation,
 	})
+	meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
+		Type:               ConditionActionsSupported,
+		Status:             actions.status,
+		Reason:             actions.reason,
+		Message:            actions.message,
+		ObservedGeneration: p.Generation,
+	})
 
-	_ = m.Client.Status().Update(ctx, &p)
+	if err := m.Client.Status().Update(ctx, &p); err != nil {
+		return
+	}
+	if emitUnsupportedEvent && m.Recorder != nil {
+		m.Recorder.Event(&p, corev1.EventTypeWarning, actionsUnsupportedReason, actions.message)
+	}
 }

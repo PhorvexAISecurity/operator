@@ -206,6 +206,11 @@ type Pod struct {
 	ModelID          string  // served model identity/version fingerprint (AI; "" if not a model server)
 	EndpointPath     string  // inference endpoint/API route the attacker can map (AI; "" if none)
 	SuspectAdapter   string  // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
+
+	// Typed capability witnesses used only for operator-facing ActionsSupported status.
+	ServingEndpointReady bool   // Ready AI pod with an assigned PodIP / serving endpoint
+	RouteService         string // phorvex.ai/route-service annotation
+	GuardrailVariants    int    // distinct current+alternate guardrail variants declared
 }
 
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as

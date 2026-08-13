@@ -30,7 +30,7 @@ metadata:
 # secrets, no pods/exec, no pods/log, no impersonate.
 rules:
   - apiGroups: [""]
-    resources: ["pods", "namespaces", "nodes"]          # kube.go:72 / :76 / :181
+    resources: ["pods", "namespaces", "nodes", "services"] # kube.go read-only fleet/capability scan
     verbs: ["get", "list", "watch"]
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets"]                  # kube.go:208 (manager-role lacks PDBs)

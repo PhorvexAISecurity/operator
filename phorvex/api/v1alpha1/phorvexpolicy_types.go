@@ -31,6 +31,7 @@ import (
 // +kubebuilder:printcolumn:name="Mode",type=string,JSONPath=`.spec.mode`
 // +kubebuilder:printcolumn:name="Selected",type=integer,JSONPath=`.status.selectedPods`
 // +kubebuilder:printcolumn:name="Decisions",type=integer,JSONPath=`.status.decisionsTotal`
+// +kubebuilder:printcolumn:name="Actions",type=string,JSONPath=`.status.conditions[?(@.type=="ActionsSupported")].status`
 // +kubebuilder:printcolumn:name="LastTick",type=date,JSONPath=`.status.lastTickTime`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type PhorvexPolicy struct {
@@ -310,7 +311,7 @@ type PhorvexPolicyStatus struct {
 	// +kubebuilder:validation:Optional
 	KillSwitchEngaged bool `json:"killSwitchEngaged,omitempty"`
 
-	// Conditions includes Ready, DryRun, ValidationError, KillSwitch.
+	// Conditions includes Ready, DryRun, ValidationError, KillSwitch, ActionsSupported.
 	// +kubebuilder:validation:Optional
 	// +listType=map
 	// +listMapKey=type
