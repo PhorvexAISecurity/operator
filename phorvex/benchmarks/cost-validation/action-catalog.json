@@ -1,0 +1,19 @@
+[
+  {"action":"rotate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["norm","flow","state","gpu","availability"],"unexecuted_classification":"not executable"},
+  {"action":"quarantine","candidate_generated":true,"cost_model_available":true,"cost_components_used":["norm","flow","availability"],"unexecuted_classification":"not executable"},
+  {"action":"debugger","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow"],"unexecuted_classification":"not executable"},
+  {"action":"custom-inject","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow"],"unexecuted_classification":"not executable"},
+  {"action":"disable","candidate_generated":false,"cost_model_available":true,"cost_components_used":["flow","availability"],"unexecuted_classification":"not implemented"},
+  {"action":"identity-rotate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow"],"unexecuted_classification":"not executable"},
+  {"action":"route-rotate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow"],"unexecuted_classification":"not executable"},
+  {"action":"warm-swap","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","state","gpu"],"unexecuted_classification":"not executable"},
+  {"action":"mig-rebind","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","state","gpu","availability"],"unexecuted_classification":"not executable"},
+  {"action":"kv-reset","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","state","gpu"],"unexecuted_classification":"not executable"},
+  {"action":"endpoint-rotate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow"],"unexecuted_classification":"not executable"},
+  {"action":"model-shard-replace","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","state","gpu"],"unexecuted_classification":"not executable"},
+  {"action":"adapter-rotate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","gpu"],"unexecuted_classification":"not executable"},
+  {"action":"request-drain","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","availability"],"unexecuted_classification":"not executable"},
+  {"action":"guardrail-rotate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow"],"unexecuted_classification":"not executable"},
+  {"action":"kv-migrate-invalidate","candidate_generated":true,"cost_model_available":true,"cost_components_used":["flow","state","gpu"],"unexecuted_classification":"not executable"},
+  {"action":"noop","candidate_generated":true,"cost_model_available":true,"cost_components_used":[],"unexecuted_classification":"not executable"}
+]

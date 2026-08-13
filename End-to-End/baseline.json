@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Checks that are KNOWN to fail right now, with the reason and the condition that",
+    "clears them. A baselined check still shows as FAIL in the report and in the pull",
+    "request comment — this file never changes what is reported, only whether CI treats",
+    "the run as a REGRESSION. The gate asks 'did this change break something new', which",
+    "is a question a red baseline can still answer.",
+    "",
+    "Every entry needs a 'clears_when'. A baseline without an exit condition is just a",
+    "disabled check, and the pipeline warns when a baselined check starts passing so the",
+    "entry gets deleted instead of quietly becoming a permanent blind spot.",
+    "",
+    "'checks' is deliberately EMPTY: there is no known failure to excuse. Keep the file —",
+    "CI passes --baseline baseline.json and a missing file is fatal by design, so that a",
+    "typo in the path cannot silently turn into 'no known failures'."
+  ],
+  "_system_under_test": [
+    "This suite tests the IN-CLUSTER stack — the one ArgoCD deploys.",
+    "",
+    "It previously drove a console at localhost:8095 on the jump host: a systemd service",
+    "running a binary built from a loose, un-versioned copy of the source at",
+    "/home/hami/phorvex-src, never built by CI and never deployed by ArgoCD. Asserting",
+    "contracts against code that cannot be traced to a commit proves nothing about what",
+    "ships, so the target moved to console.phorvex.ai.",
+    "",
+    "That move required the operator to actually write an audit (the console streams",
+    "/api/live from a FILE, and in-cluster there was none — it was serving the snapshot",
+    "baked into its own image, decisions from a kind cluster dated two months earlier).",
+    "The console now runs as a container in the operator's pod, sharing the audit volume.",
+    "",
+    "The move is complete and verified. Against console/operator 0.4.19 the run is 37 pass,",
+    "0 fail: the in-cluster console fired a real foothold at voice, the operator selected",
+    "and actuated rotate under maxMovesPerTick=1, and kubectl confirmed the pod was",
+    "replaced. A05 and A07 were the last two baselined entries and both now pass, so both",
+    "were deleted rather than left to rot into a permanent hole in the gate.",
+    "",
+    "The jump-host services that stack used are now dead weight and can be retired:",
+    "phorvex-console.service, phorvex-operator.service, phorvex-operator-vcluster.service,",
+    "and phorvex-prom-forward.service — whose only consumer was phorvex-operator.service's",
+    "--prometheus-url=http://127.0.0.1:7066."
+  ],
+  "checks": {}
+}

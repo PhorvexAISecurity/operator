@@ -65,6 +65,27 @@ func (s Stage) String() string {
 }
 
 // consequence is the normalized cost-if-this-stage-completes (0..1, increasing).
+// minConsequence is the floor every stage's consequence shares — consequence() never returns less,
+// including its default arm. It is exported through BaselineStageUrgency below because callers need
+// to know what "no evidence at all" actually scores.
+const minConsequence = 0.1
+
+// BaselineStageUrgency is the StageUrgency of an asset carrying NO kill-chain evidence: earliest
+// stage, zero hazard. Since StageUrgency = 0.5*consequence(stage) + 0.5*hazard*consequence(next)
+// and consequence() floors at minConsequence, StageUrgency can never be 0 — its minimum is this.
+//
+// This matters because a caller testing `StageUrgency > 0` to mean "has evidence" is testing a
+// condition that is ALWAYS true, i.e. testing nothing. Compare against this baseline instead.
+// Derived from the model rather than hardcoded so it cannot drift if consequence() changes.
+const BaselineStageUrgency = 0.5 * minConsequence
+
+// NOTE (PHVX-72): a scalar StageUrgency threshold was evaluated for the anti-decoy gate and
+// REJECTED. Measurement showed it cannot discriminate evidence: a low- or medium-severity event on
+// the pod leaves the stage at Recon, so its urgency is identical to an asset with no evidence at
+// all (0.0504 at 90s), and a compromised neighbour only reaches 0.0511. Any threshold able to
+// discount a fresh decoy would therefore also discount a genuinely-attacked pod. The gate uses
+// Assessment.HasEvidence instead. See reports/phvx-fixes-20260809/PHORVEXSEC-128-*.
+
 func consequence(s Stage) float64 {
 	switch s {
 	case StageRecon:
@@ -86,18 +107,24 @@ func consequence(s Stage) float64 {
 	case StagePromptInjectPersist:
 		return 0.65 // injected agent state, survives a wipe
 	}
-	return 0.1
+	return minConsequence
 }
 
 // Assessment is the per-asset kill-chain belief output.
 type Assessment struct {
-	Stage          Stage
-	StageName      string
-	NextStage      Stage
-	NextStageName  string
-	Hazard         float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
-	PHold          float64 // P(attacker still holds the foothold) in [0,1]
-	StageUrgency   float64 // [0,1] current-consequence blended with predictive (hazard*next)
+	Stage         Stage
+	StageName     string
+	NextStage     Stage
+	NextStageName string
+	Hazard        float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
+	PHold         float64 // P(attacker still holds the foothold) in [0,1]
+	StageUrgency  float64 // [0,1] current-consequence blended with predictive (hazard*next)
+	// HasEvidence is TRUE when this assessment rests on a REAL observation rather than on the
+	// passage of time: a SecurityEvent on this pod, a compromised graph neighbour, an AI kill-chain
+	// signature, or a poisoned adapter. It is the anti-decoy discriminator (PHVX-72): StageUrgency
+	// CANNOT serve that role, because a low/medium direct event and a compromised neighbour both
+	// leave the stage at Recon, giving them the SAME urgency as an asset with no evidence at all.
+	HasEvidence    bool
 	LateralUrgency float64 // [0,1] specifically the about-to-pivot-here pressure
 
 	// --- P-CONTEXT predictive-horizon: the MOVED-BEFORE-NEXT-STAGE measurable. ---
@@ -236,7 +263,7 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, proactiveFloorSec float64) Assessment {
 	// --- stage belief from events (this pod) + neighbor pressure ---
 	stage := StageRecon
-	eventAlpha := 0.0   // held-evidence pseudo-counts for the Beta posterior
+	eventAlpha := 0.0 // held-evidence pseudo-counts for the Beta posterior
 	lateralPressure := 0.0
 	for _, e := range view.Events {
 		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / 4.0
@@ -276,6 +303,11 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	// StageUrgency = blend(current consequence, hazard * next consequence): we invalidate
 	// the recon the attacker is ABOUT TO exploit, not only what they hold now.
 	stageUrg := clamp01(0.5*consequence(stage) + 0.5*hazard*consequence(next))
+	// Evidence is the PRESENCE of a real observation, independent of how severe it is or how much
+	// urgency it happens to produce. eventAlpha>0 covers every event targeting this pod (any
+	// severity); lateralPressure>0 covers a compromised neighbour; aiClassified covers an AI
+	// signature; SuspectAdapter covers a poisoned adapter.
+	hasEvidence := eventAlpha > 0 || lateralPressure > 0 || aiClassified || view.Pod.SuspectAdapter != ""
 	// Lateral urgency rises with neighbor pressure and an imminent lateral transition.
 	latUrg := clamp01(math.Max(lateralPressure, hazard*boolf(next == StageLateral)))
 
@@ -317,6 +349,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		Hazard:                hazard,
 		PHold:                 pHold,
 		StageUrgency:          stageUrg,
+		HasEvidence:           hasEvidence,
 		LateralUrgency:        latUrg,
 		PreemptMargin:         preempt,
 		ProjectedNextStageSec: projNext,

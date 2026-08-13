@@ -1,0 +1,17 @@
+# Reports outlive the pod that serves them: a rollout of the nginx image must not wipe the
+# history a pull-request comment already links to. gp2-csi is the cluster default and
+# supports volume expansion, so this can grow without a re-create.
+#
+# ReadWriteOnce is deliberate — one nginx replica owns the volume, and CI writes through
+# `kubectl cp` into that pod rather than by mounting the volume a second time.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ci-reports
+  namespace: ci-reports
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2-csi
+  resources:
+    requests:
+      storage: 5Gi

@@ -43,11 +43,17 @@ const (
 	// Excluded from MutatingActions (never generatable) but a handler exists so the
 	// completeness enumeration stays green. Never fabricated behaviour.
 	ActionDisable Action = "disable"
-	// ActionIdentityRotate rotates pod identity (labels/SA-token/IP) — lighter than a
-	// full respawn (advanced K8s; native-only).
+	// ActionIdentityRotate writes a fresh `phorvex.ai/identity-epoch` LABEL on the pod
+	// (advanced K8s; native-only). It does NOT change the SA token, the UID or the IP —
+	// the SA-token branch is a deliberate no-op because projected tokens rotate on their
+	// own — so it does not invalidate the podIdentity recon fact. See handlers_k8s.go and
+	// recon/profile.go, where the cover grant was removed for exactly this reason.
 	ActionIdentityRotate Action = "identity-rotate"
-	// ActionRouteRotate repoints Service selector / EndpointSlice — stales the learned
-	// route without denying all traffic (advanced K8s; native-only).
+	// ActionRouteRotate writes a fresh `phorvex.ai/route-epoch` LABEL (advanced K8s;
+	// native-only). It does NOT restitch a Service selector and does NOT touch
+	// EndpointSlices — `endpoint-rotate` is the action that re-keys a declared Service —
+	// so the attacker's learned route is NOT staled and the networkIdentity cover grant
+	// was removed.
 	ActionRouteRotate Action = "route-rotate"
 	// ActionWarmSwap rotates WITHOUT the cold-load: provision a Ready warm replacement
 	// then retire (provision-before-retire). [SP-0-PENDING] magnitude=ColdLoadSec.
@@ -175,25 +181,30 @@ type Telemetry struct {
 
 // Pod is the K8s-observed state of one protected pod.
 type Pod struct {
-	Namespace      string
-	Name           string
-	UID            string
-	Labels         map[string]string
-	Node           string
-	Phase          string // raw K8s pod phase
-	Ready          bool
-	StartedAt      time.Time
-	ReadyAt        time.Time // PodReady=True transition; zero when unavailable/not Ready
-	Age            time.Duration
-	MountedSecrets []string // distinct Secret names referenced by the pod spec (names only)
-	ServiceAccount string
-	OwnerKind      string
-	OwnerName      string
+	Namespace       string
+	Name            string
+	UID             string
+	Labels          map[string]string
+	Node            string
+	Phase           string // raw K8s pod phase
+	Ready           bool
+	StartedAt       time.Time
+	ReadyAt         time.Time // PodReady=True transition; zero when unavailable/not Ready
+	Age             time.Duration
+	MountedSecrets  []string // distinct Secret names referenced by the pod spec (names only)
+	ServiceAccount  string
+	OwnerKind       string
+	OwnerName       string
 	DesiredReplicas int
 	ReadyReplicas   int
-	HasGPU         bool
-	MIGDevice      string
-	Stateful       bool // owned by a StatefulSet or mounts a PVC / Job
+	HasGPU          bool
+	MIGDevice       string
+	// SessionEpoch is the concatenated kv-reset / kv-migrate epoch annotations. It changes every
+	// time an actuator flushes this pod's KV-cache or agent session, and is what clocks
+	// model.VarSession — WITHOUT it, a session-affecting action has no exposure clock of its own
+	// and falls through to podIdentity, which it never changes (PHVX-67).
+	SessionEpoch string
+	Stateful     bool // owned by a StatefulSet or mounts a PVC / Job
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
@@ -242,24 +253,24 @@ type PhysicsWitness struct {
 	Scanned bool // a platform adapter produced this witness (else all-neutral)
 
 	// --- K8s, measurable now (recon-EMR dispersion multipliers, >=1.0; 1.0 = neutral) ---
-	ImageRarity   float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
-	CoResidency   float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
-	EPSS          float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
-	SchedulerSlack float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
-	PDBMinAvailable int    // live PodDisruptionBudget minAvailable resolved for the owner (-1 = none)
-	PDBDisruptionsAllowed int // live PDB status.disruptionsAllowed (-1 = none)
-	MIGGeometryValid bool   // the pod's MIG partition is a legal device-plugin geometry
+	ImageRarity           float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
+	CoResidency           float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
+	EPSS                  float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
+	SchedulerSlack        float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
+	PDBMinAvailable       int     // live PodDisruptionBudget minAvailable resolved for the owner (-1 = none)
+	PDBDisruptionsAllowed int     // live PDB status.disruptionsAllowed (-1 = none)
+	MIGGeometryValid      bool    // the pod's MIG partition is a legal device-plugin geometry
 
 	// --- AI / inference, DCGM-live when GPUPresent=true ---
-	GPUPresent     bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
-	VRAMFraction   float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
-	SMOccupancy    float64 // pod SM compute share [0,1] (0 if !GPUPresent)
-	SMSource       string  // exact DCGM metric used; distinguishes occupancy from duty-cycle fallback
-	LinkBandwidth  float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
-	LinkSource     string  // exact interconnect metric pair used for LinkBandwidth
-	ModelRarity    float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
-	KVRebuildSec   float64 // KV-cache rebuild seconds vs session length (0 = [SP-0-PENDING])
-	ColdLoadSec    float64 // model cold/warm-load seconds (0 = [SP-0-PENDING])
+	GPUPresent    bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
+	VRAMFraction  float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
+	SMOccupancy   float64 // pod SM compute share [0,1] (0 if !GPUPresent)
+	SMSource      string  // exact DCGM metric used; distinguishes occupancy from duty-cycle fallback
+	LinkBandwidth float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
+	LinkSource    string  // exact interconnect metric pair used for LinkBandwidth
+	ModelRarity   float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
+	KVRebuildSec  float64 // KV-cache rebuild seconds vs session length (0 = [SP-0-PENDING])
+	ColdLoadSec   float64 // model cold/warm-load seconds (0 = [SP-0-PENDING])
 }
 
 // NeutralPhysics is the honest-absent witness (all multipliers 1.0, no capacity, no
@@ -330,32 +341,38 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	Tenant         string
-	Namespace      string
-	Pod            string
-	Node           string
-	Risk           float64
-	Cost           float64
-	Net            float64 // Risk - Lambda*Cost
-	AssetValue     float64
-	Residual       float64
-	ThreatPosture  float64
-	Exposure       float64
-	Belief         float64
-	BlastRadius    float64
-	SLOHeadroom    float64
-	Phase          WorkloadPhase
-	Action         Action
-	Selected       bool   // chosen within the budget this tick
-	Feasible       bool   // all hard constraints passed for the chosen action
-	InfeasibleWhy  string // first blocking constraint, when not feasible
-	Reason         string // short human explanation (attribution)
-	R6Counterfactual Action // what R6's blind timer/exact-match would have done
-	CounterfactualNote string // why Phorvex's choice differs from R6's blind action
-	BlindCost      float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
-	DryRun         bool
-	Actuated       bool
-	DecidedAt      time.Time
+	Tenant             string
+	Namespace          string
+	Pod                string
+	Node               string
+	Risk               float64
+	Cost               float64
+	Net                float64 // Risk - Lambda*Cost
+	AssetValue         float64
+	Residual           float64
+	ThreatPosture      float64
+	Exposure           float64
+	Belief             float64
+	BlastRadius        float64
+	SLOHeadroom        float64
+	Phase              WorkloadPhase
+	Action             Action
+	Selected           bool    // chosen within the budget this tick
+	Feasible           bool    // all hard constraints passed for the chosen action
+	InfeasibleWhy      string  // first blocking constraint, when not feasible
+	Reason             string  // short human explanation (attribution)
+	R6Counterfactual   Action  // what R6's blind timer/exact-match would have done
+	CounterfactualNote string  // why Phorvex's choice differs from R6's blind action
+	BlindCost          float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
+	DryRun             bool
+	// KillSwitch records that the GLOBAL kill switch suppressed actuation on this tick.
+	// Without it a kill-switched decision is byte-identical in the audit to one whose
+	// actuator silently failed — both read selected=true, dryRun=false, actuated=false —
+	// so a decision-only mirror looks exactly like a broken actuator. Kill-switch and
+	// dry-run are separate gates and must stay separately visible.
+	KillSwitch bool
+	Actuated   bool
+	DecidedAt  time.Time
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---

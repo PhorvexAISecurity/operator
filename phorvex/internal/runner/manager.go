@@ -218,6 +218,16 @@ func (m *Manager) tick(ctx context.Context) {
 	killEngaged := m.KillSwitch.Engaged(ctx)
 	metrics.SetKillSwitch(killEngaged)
 
+	// [PHVX-2] Online cost calibration has its own off-switch, evaluated every tick from the same
+	// sentinel ConfigMap so it takes effect without a restart. `ok=false` means the sentinel could
+	// not be read; hold the current state rather than discard every tenant's calibration on a
+	// transient API error.
+	if frozen, ok := m.KillSwitch.CalibrationFrozen(ctx); ok {
+		if ce, isCoverage := m.Optimizer.(*decision.CoverageEngine); isCoverage {
+			ce.SetCostCalibrationFrozen(frozen)
+		}
+	}
+
 	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
 	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
 	// engaged (a deliberate global freeze) or actuation is unavailable.
@@ -487,6 +497,11 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 			Fingerprints: map[string]string{
 				model.VarPodIdentity:   p.UID,
 				model.VarNodePlacement: p.Node,
+				// [PHVX-67] The session clock. kv-reset leaves the pod alive, so podIdentity never
+				// moves and the anti-over-rotation guard could never fire for it — measured on the
+				// live cluster as a 20s median interval against a 15m budget, 2360 times in 10h on
+				// one pod.
+				model.VarSession: p.SessionEpoch,
 			},
 		}, snap.Now)
 		keep[exposure.SlotKey(pol.Tenant, p.Namespace, p.Name)] = struct{}{}
@@ -534,6 +549,15 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 	if effectiveDryRun {
 		for i := range decisions {
 			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
+		}
+	}
+	if killEngaged {
+		for i := range decisions {
+			// The kill switch is a SEPARATE gate from dry-run: it leaves DryRun false while
+			// suppressing actuation. Stamping it keeps a decision-only mirror (an operator
+			// run with --global-kill-switch to feed a dashboard) distinguishable from an
+			// operator whose actuator is failing. Both otherwise emit the identical record.
+			decisions[i].KillSwitch = true
 		}
 	}
 

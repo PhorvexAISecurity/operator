@@ -49,11 +49,9 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		s *= ph.ModelRarity
 	}
 	s = boundMult(s)
-	if s != 1.0 {
-		for i := range af.Facts {
-			af.Facts[i].Weight *= s
-		}
-	}
+	// NOTE: s is APPLIED AT THE END of this function, after the AI facts exist. Applying it here
+	// would scale only the six standardRecon facts, because every AI fact below is appended after
+	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
 
 	// AI recon facts — emitted on GPU/served-model assets. The Phase-2 reset actuators are now
 	// CROSSED into the coverage gate (opt-in): each AI fact is invalidated by its matching AI
@@ -92,12 +90,46 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// adapter on this pod. Weighted to DOMINATE (a poisoned adapter corrupts every response), and
 		// covered by ONLY adapter-rotate — so the engine selects adapter-rotate for THIS attack rather
 		// than a generic rotate/kv-reset. The fact vanishes once the adapter is evicted (move stops).
+		//
+		// The weight is MULTIPLICATIVE, like every other fact in this file (PHVX-75). It used to be
+		// `(base + 2.0) * urg * 3`, and that additive term caused three problems:
+		//
+		//   1. It survived PHold = 0. base is AssetValue*clamp01(PHold), so at PHold = 0 the additive
+		//      form still produced 2.0*urg*3 >= 3.0 — a fact about a provably-departed attacker sat at
+		//      the top of the objective, and no evidence could ever retire it.
+		//   2. It was not portable. AssetValue's scale is a policy choice, so +2.0 dominated a fleet
+		//      emitting O(1) values and was rounding noise on one emitting O(100). The same constant
+		//      meant different things on different clusters.
+		//   3. It was the only additive weight here, so it did not compose with the others.
+		//
+		// Dominance is preserved WITHOUT the floor: every other multiplier in this file is of the form
+		// 1 + clamp01(...) and is therefore bounded by 2 (ModelRarity and CoResidency both), while this
+		// one is 3. So a poisoned adapter outranks any other fact on the same asset structurally,
+		// rather than by an additive constant that happens to be large.
 		if view.Pod.SuspectAdapter != "" {
-			ai := Fact{Asset: asset, Kind: FactAdapterIntegrity, Weight: (base + 2.0) * urg * 3}
+			ai := Fact{Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
 			af.Facts = append(af.Facts, ai)
 			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 		}
 	}
+	// [PHVX-70] Apply the scarcity scalar HERE, not where it is computed.
+	//
+	// It used to be applied immediately after boundMult, which is before every AI fact is appended.
+	// The six standardRecon facts were therefore scaled and the AI facts were not, so on a GPU pod a
+	// base fact could carry up to MaxDispersionMult (4x) the weight of an AI fact describing the same
+	// asset — the engine was systematically steered toward generic moves over the AI-specific ones,
+	// on exactly the workloads the AI facts exist for.
+	//
+	// The doc comment above always claimed the scalar was applied "UNIFORMLY to every fact of the
+	// asset". That claim is what makes the EMR argument sound (a common factor preserves the
+	// within-asset ordering and only sharpens the cross-asset one); partial application breaks it.
+	// The comment was right and the code was wrong.
+	if s != 1.0 {
+		for i := range af.Facts {
+			af.Facts[i].Weight *= s
+		}
+	}
+
 	return af
 }
 

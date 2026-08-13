@@ -1,0 +1,102 @@
+{
+  "max_cost": 1.0,
+  "model": "C2 nonnegative unitless formula",
+  "schema_version": "phorvex.cost-validation-evaluation.v1",
+  "stability": {
+    "c_availability": {
+      "cv": 0.23370064670968488,
+      "mean": 0.14089670140024088,
+      "std": 0.03292765023649766
+    },
+    "c_flow": {
+      "cv": 0.14013195411429813,
+      "mean": 0.004701568669938053,
+      "std": 0.0006588400051209808
+    },
+    "c_gpu": {
+      "cv": null,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "c_norm": {
+      "cv": 0.37512172515245745,
+      "mean": 0.03869729717560997,
+      "std": 0.014516196875252131
+    },
+    "c_state": {
+      "cv": 0.37403717709478135,
+      "mean": 0.040127888846209644,
+      "std": 0.015009322266809417
+    }
+  },
+  "training_groups": [
+    [
+      "connections",
+      1
+    ],
+    [
+      "connections",
+      2
+    ],
+    [
+      "connections",
+      3
+    ],
+    [
+      "low-replica",
+      2
+    ],
+    [
+      "low-replica",
+      3
+    ],
+    [
+      "rag",
+      1
+    ],
+    [
+      "rag",
+      3
+    ],
+    [
+      "slo-hot",
+      1
+    ],
+    [
+      "slo-hot",
+      3
+    ],
+    [
+      "stateful",
+      1
+    ],
+    [
+      "stateful",
+      3
+    ],
+    [
+      "stateless-high",
+      2
+    ],
+    [
+      "stateless-high",
+      3
+    ],
+    [
+      "stateless-low",
+      1
+    ],
+    [
+      "stateless-low",
+      2
+    ]
+  ],
+  "training_samples": 35,
+  "weights": {
+    "availability": 0.2113627214495962,
+    "flow": 0.02839239708381956,
+    "gpu": 0.0,
+    "norm": 0.0,
+    "state": 0.003098326462646933
+  }
+}
