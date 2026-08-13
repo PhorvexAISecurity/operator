@@ -50,13 +50,50 @@ func priorTheta() [featureDim]float64 {
 	return [featureDim]float64{0.15, 0.85, 0.55, 0.0, 0.45, 0.20}
 }
 
+// maxThetaStep bounds how far a SINGLE observation may move any one weight of theta.
+//
+// The existing clamp in Predict bounds the OUTPUT; nothing bounded the PARAMETER. One pathological
+// measurement was therefore enough to reprice a tenant: a pod that took 300s to become Ready because
+// its node was draining is indistinguishable, at this layer, from a genuinely expensive rotation. RLS
+// with a forgetting factor is designed to track a moving cost, so it will happily follow that outlier
+// and then take many clean observations to walk back.
+//
+// 0.25 is a quarter of the largest prior weight (0.85), so a real trend still converges in a handful
+// of observations while a single sample cannot dominate. It is a rate limit, not a correctness bound.
+const maxThetaStep = 0.25
+
 // RLS is a recursive-least-squares estimator with a forgetting factor.
 type RLS struct {
 	theta  [featureDim]float64
 	p      [featureDim][featureDim]float64
 	ff     float64 // forgetting factor in (0,1]
 	primed bool
+	// frozen suppresses learning: Update becomes a no-op and Predict serves the prior. This is the
+	// documented off-switch PHVX-2 requires. It is deliberately NOT the same thing as the engine-wide
+	// KillSwitch, which stops ACTUATION and leaves the learner running.
+	frozen bool
 }
+
+// SetFrozen turns online cost calibration off or back on. Freezing REVERTS theta to the shipped prior
+// rather than holding the last learned value, so the effect is the documented, reproducible
+// nil-data behaviour rather than a snapshot of whatever was learned before the operator lost trust
+// in it. Unfreezing starts from the prior again — this is a safety control, not a pause button.
+func (r *RLS) SetFrozen(frozen bool) {
+	if frozen && !r.frozen {
+		r.theta = priorTheta()
+		r.primed = false
+		for i := 0; i < featureDim; i++ {
+			for j := 0; j < featureDim; j++ {
+				r.p[i][j] = 0
+			}
+			r.p[i][i] = 100 // restore the diffuse prior covariance
+		}
+	}
+	r.frozen = frozen
+}
+
+// Frozen reports whether online calibration is suppressed.
+func (r *RLS) Frozen() bool { return r.frozen }
 
 // NewRLS returns an RLS seeded at the flow-cost prior with a diffuse covariance.
 func NewRLS() *RLS {
@@ -93,6 +130,9 @@ func (r *RLS) Predict(f [featureDim]float64) float64 {
 // Update folds one (features, observedCost) sample into theta via the RLS recursion.
 // Called when a real rotation's disruption has been measured (offline cadence).
 func (r *RLS) Update(f [featureDim]float64, y float64) {
+	if r.frozen {
+		return // calibration is off: theta stays at the prior (PHVX-2 off-switch)
+	}
 	// Pf = P f
 	var pf [featureDim]float64
 	for i := 0; i < featureDim; i++ {
@@ -119,7 +159,15 @@ func (r *RLS) Update(f [featureDim]float64, y float64) {
 	pred := r.Predict(f)
 	e := y - pred
 	for i := 0; i < featureDim; i++ {
-		r.theta[i] += k[i] * e
+		step := k[i] * e
+		// Rate-limit a single observation (see maxThetaStep). Without this the OUTPUT clamp in
+		// Predict is the only guard, and it bounds the symptom rather than the parameter.
+		if step > maxThetaStep {
+			step = maxThetaStep
+		} else if step < -maxThetaStep {
+			step = -maxThetaStep
+		}
+		r.theta[i] += step
 	}
 	// P = (P - K Pf^T) / ff
 	for i := 0; i < featureDim; i++ {

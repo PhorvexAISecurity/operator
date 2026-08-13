@@ -92,8 +92,24 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// adapter on this pod. Weighted to DOMINATE (a poisoned adapter corrupts every response), and
 		// covered by ONLY adapter-rotate — so the engine selects adapter-rotate for THIS attack rather
 		// than a generic rotate/kv-reset. The fact vanishes once the adapter is evicted (move stops).
+		//
+		// The weight is MULTIPLICATIVE, like every other fact in this file (PHVX-75). It used to be
+		// `(base + 2.0) * urg * 3`, and that additive term caused three problems:
+		//
+		//   1. It survived PHold = 0. base is AssetValue*clamp01(PHold), so at PHold = 0 the additive
+		//      form still produced 2.0*urg*3 >= 3.0 — a fact about a provably-departed attacker sat at
+		//      the top of the objective, and no evidence could ever retire it.
+		//   2. It was not portable. AssetValue's scale is a policy choice, so +2.0 dominated a fleet
+		//      emitting O(1) values and was rounding noise on one emitting O(100). The same constant
+		//      meant different things on different clusters.
+		//   3. It was the only additive weight here, so it did not compose with the others.
+		//
+		// Dominance is preserved WITHOUT the floor: every other multiplier in this file is of the form
+		// 1 + clamp01(...) and is therefore bounded by 2 (ModelRarity and CoResidency both), while this
+		// one is 3. So a poisoned adapter outranks any other fact on the same asset structurally,
+		// rather than by an additive constant that happens to be large.
 		if view.Pod.SuspectAdapter != "" {
-			ai := Fact{Asset: asset, Kind: FactAdapterIntegrity, Weight: (base + 2.0) * urg * 3}
+			ai := Fact{Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
 			af.Facts = append(af.Facts, ai)
 			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 		}
