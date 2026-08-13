@@ -25,9 +25,46 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-// exactBruteForceAssetCap bounds the brute force (one move/asset, ≤B picks). Above it the exact is
-// skipped (ExactSkipped=true) rather than run an intractable enumeration.
-const exactBruteForceAssetCap = 18
+// exactWorkBudget bounds the brute force by the WORK it will do, not by the asset count. Above it the
+// exact arm is skipped (ExactSkipped=true) rather than run an intractable enumeration.
+//
+// The previous guard was a flat cap of 18 assets, which had no recorded derivation and was wrong in
+// BOTH directions — the enumeration cost is driven by the move budget B far more than by the fleet
+// size. Measured on the benchmark host (PHORVEXSEC-114; k = candidate actions per asset):
+//
+//	n=76   k=6  B=1  ->    0.98 ms      n=600  k=6  B=1  ->   28.7 ms
+//	n=76   k=6  B=2  ->  102    ms      n=300  k=6  B=2  ->    4.7 s
+//	n=76   k=6  B=3  ->   20.3 s        n=18   k=6  B=4  ->    2.8 s
+//
+// So at the live budget (every tenant policy sets maxMovesPerTick=1) the exact arm reaches a
+// 600-asset fleet in 29 ms, while the old cap blocked it at 19 — and at B=4 the same cap happily ran
+// a 2.8-second enumeration. Both failures disappear once the guard counts work.
+//
+// The enumeration visits sum over j<=B of C(n,j)*k^j candidate sets, at roughly 1-3 us each, so this
+// budget is about 0.2-0.6 s worst case. It sits on the on-demand ablation/console path, not the
+// per-tick decision loop.
+const exactWorkBudget = 200_000
+
+// exactWorkEstimate counts the candidate sets the enumeration will visit: choose at most B assets out
+// of n, and one of up to k actions for each. maxPerAsset is used as a conservative upper bound.
+// Returns +Inf on overflow so an enormous fleet always skips rather than wrapping to a small number.
+func exactWorkEstimate(n, b, maxPerAsset int) float64 {
+	if n <= 0 || b <= 0 {
+		return 1
+	}
+	if maxPerAsset < 1 {
+		maxPerAsset = 1
+	}
+	total, choose := 1.0, 1.0 // j=0: the empty set
+	for j := 1; j <= b && j <= n; j++ {
+		choose *= float64(n-j+1) / float64(j) // C(n,j) built incrementally
+		total += choose * math.Pow(float64(maxPerAsset), float64(j))
+		if math.IsInf(total, 1) || total > 1e18 {
+			return math.Inf(1)
+		}
+	}
+	return total
+}
 
 // provFn re-creates coverage.go's prov closure EXACTLY (the dispersion-steer decoy down-weighting), so
 // the exact arm scores the SAME objective the greedy maximizes. KEEP IN SYNC with coverage.go:152-167.
@@ -83,7 +120,13 @@ func exactObjective(set actionset.ActionSet, B int, prov func(string) float64, l
 		}
 		byAsset[c.Key] = append(byAsset[c.Key], c)
 	}
-	if len(order) > exactBruteForceAssetCap {
+	maxPerAsset := 0
+	for _, cs := range byAsset {
+		if len(cs) > maxPerAsset {
+			maxPerAsset = len(cs)
+		}
+	}
+	if exactWorkEstimate(len(order), B, maxPerAsset) > exactWorkBudget {
 		return 0, true
 	}
 	sort.Strings(order)
