@@ -69,13 +69,12 @@ func exactWorkEstimate(n, b, maxPerAsset int) float64 {
 // provFn re-creates coverage.go's prov closure EXACTLY (the dispersion-steer decoy down-weighting), so
 // the exact arm scores the SAME objective the greedy maximizes. KEEP IN SYNC with coverage.go:152-167.
 func provFn(ctxByKey map[string]assetCtx, floorSec float64) func(string) float64 {
-	const provFloor = 0.34
 	return func(key string) float64 {
 		if floorSec <= 0 {
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.StageUrgency > 0 {
+		if ac.exposure >= floorSec || ac.assess.HasEvidence {
 			return 1
 		}
 		r := ac.exposure / floorSec

@@ -1,0 +1,45 @@
+
+SWEEP — live tenant policy (antiOverRotation=1m30s, proactiveFloor=15m0s), gate = HasEvidence
+exposure    pHold   hazard   urgency stage    next        rawCover     prov   provCover   feas decoy?
+      0s   0.0000   0.0000    0.0500 recon    exploit        0.000    0.340       0.000  false  false
+     30s   0.1433   0.0003    0.0500 recon    exploit        0.000    0.362       0.000  false  false
+    1m0s   0.2190   0.0011    0.0502 recon    exploit        0.000    0.384       0.000  false  false
+   1m29s   0.2647   0.0024    0.0504 recon    exploit        0.000    0.405       0.000  false  false
+   1m30s   0.2661   0.0025    0.0504 recon    exploit       58.640    0.406      23.808   true  false
+    2m0s   0.3010   0.0044    0.0508 recon    exploit       66.374    0.428      28.408   true  false
+    3m0s   0.3591   0.0100    0.0517 recon    exploit       79.247    0.472      37.404   true  false
+    4m0s   0.4132   0.0176    0.0531 recon    exploit       91.299    0.516      47.110   true  false
+    5m0s   0.4666   0.0274    0.0548 recon    exploit      103.277    0.560      57.835   true   true
+    7m0s   0.5733   0.0530    0.0593 recon    exploit      127.427    0.648      82.573   true   true
+   10m0s   0.7333   0.1052    0.0684 recon    exploit      164.393    0.780     128.227   true   true
+   12m0s   0.8400   0.1479    0.0759 recon    exploit      189.622    0.868     164.592   true   true
+  14m59s   0.9991   0.2208    0.0886 recon    exploit      228.214    0.999     228.047   true   true
+   15m0s   1.0000   0.2212    0.0887 recon    exploit      228.433    1.000     228.433   true   true
+   20m0s   1.0000   0.3588    0.1128 recon    exploit      233.486    1.000     233.486   true   true
+
+first POSITIVE coverage      : 1m30s
+first BUDGET-COMPETITIVE     : 5m0s  (decoy actually takes the slot)
+note: coverage is 0 below antiOverRotationWindow because the candidate is INFEASIBLE
+
+PER-ASSET provenance factor (1.000 = full weight, lower = discounted as a decoy)
+asset                                     urg>0   t.0500   t.0625   t.0649   t.0700  EVIDNCE
+decoy (fresh, no evidence)                1.000    1.000    0.406    0.406    0.406    0.406
+decoy (5m, no evidence)                   1.000    1.000    0.560    0.560    0.560    0.560
+decoy (12m, no evidence)                  1.000    1.000    1.000    1.000    1.000    0.868
+aged, no evidence (legitimately due)      1.000    1.000    1.000    1.000    1.000    1.000
+GENUINE DIRECT low-severity event         1.000    1.000    0.406    0.406    0.406    1.000
+GENUINE DIRECT medium-severity event      1.000    1.000    0.406    0.406    0.406    1.000
+GENUINE NEIGHBOUR compromised (critica    1.000    1.000    0.406    0.406    0.406    1.000
+GENUINE DIRECT high-severity event        1.000    1.000    1.000    1.000    1.000    1.000
+
+SCORECARD
+gate                                                           suppressed falseAlarms  verdict
+original: StageUrgency > 0 (the tautology)                         0/4         0/4    inert
+baseline: StageUrgency > 0.0500                                    0/4         0/4    inert
+threshold 0.0625 (midpoint of 0.05 and 0.075)                      2/4         3/4    acts BUT penalises real threats
+threshold 0.0649 (S7 formula on the MEASURED U_competitive 0.0548)     2/4         3/4    acts BUT penalises real threats
+threshold 0.0700 (just under the weakest evidenced stage)          2/4         3/4    acts BUT penalises real threats
+SHIPPED: HasEvidence                                               3/4         0/4    acts, no false alarms
+
+note: 'aged, no evidence' is counted as a non-decoy target because a pod past its
+proactive floor is legitimately due; every gate returns 1 for it via the exposure arm.
