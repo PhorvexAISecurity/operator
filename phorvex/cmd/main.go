@@ -87,6 +87,7 @@ func main() {
 		auditMaxBytes    int64
 		auditMaxBackups  int
 		gpuEnvelopeMax   float64
+		supportDebounce  int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -103,6 +104,7 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address the health probe binds to.")
 	flag.BoolVar(&enableLeader, "leader-elect", false, "Enable leader election (single active controller).")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
+	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
@@ -125,6 +127,10 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
+		os.Exit(2)
+	}
+	if supportDebounce < 1 {
+		setupLog.Error(fmt.Errorf("must be at least 1"), "invalid actions-supported-debounce", "value", supportDebounce)
 		os.Exit(2)
 	}
 
@@ -183,6 +189,8 @@ func main() {
 
 	rmgr := runner.NewManager(mgr.GetClient(), ctrl.Log)
 	rmgr.BaseInterval = baseInterval
+	rmgr.ActionsSupportedDebounce = supportDebounce
+	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
 	if engineName == "p0" {
 		setupLog.Info("the p0 greedy baseline is deprecated and will be removed in the next release; p1-coverage is the supported brain")
 		rmgr.Optimizer = decision.NewEngine()

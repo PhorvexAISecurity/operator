@@ -1,6 +1,7 @@
 ---
 # Phorvex LEAST-PRIVILEGE ClusterRole (NFR4 / FR8). Phorvex writes ONLY its own
-# CRDs (phorvexpolicies) + Phoenix's SecurityEvent/AMTD CRs. It NEVER writes pods
+# CRDs (phorvexpolicies) + Phoenix's SecurityEvent/AMTD CRs + Kubernetes warning
+# Events on policy objects. It NEVER writes pods
 # (no create/delete/patch/update on pods) — actuation flows through Phoenix. All the
 # graph/context inputs (pods, namespaces, NetworkPolicy, RBAC) are READ-ONLY.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -8,13 +9,19 @@ kind: ClusterRole
 metadata:
   name: phorvex-manager-role
 rules:
-# --- READ-ONLY ingest: the K8s graph inputs (pods/labels/nodes/namespaces) ---
+# --- READ-ONLY ingest: K8s graph + dynamic capability inputs ---
 - apiGroups: [""]
   resources:
   - pods
   - namespaces
   - nodes
+  - services
   verbs: ["get", "list", "watch"]
+# --- Kubernetes Events: surface unsupported enabled actions on the policy object ---
+- apiGroups: [""]
+  resources:
+  - events
+  verbs: ["create", "patch"]
 # --- READ-ONLY: kill-switch ConfigMap (FR8) ---
 - apiGroups: [""]
   resources:

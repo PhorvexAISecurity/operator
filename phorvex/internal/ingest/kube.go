@@ -6,6 +6,7 @@ package ingest
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,9 @@ type Snapshot struct {
 	// the substrate the platform scanner turns into PhysicsWitness. ---
 	Nodes []NodeInfo
 	PDBs  []PDBInfo
+	// Services are projected read-only so capability status can verify that request-drain's
+	// target Service actually selects on phorvex.ai/serving.
+	Services []ServiceInfo
 
 	// GPUWitness is the live DCGM-via-Prometheus GPU half ("ns/pod" -> witness GPU fields:
 	// GPUPresent + VRAMFraction/SMOccupancy/LinkBandwidth). Populated by PopulateGPUWitness when
@@ -58,6 +62,14 @@ type NodeInfo struct {
 	AllocatableGPU      int64
 	MIGResources        map[string]int64  // nvidia.com/mig-* -> count (legal-partition geometry)
 	Labels              map[string]string // node labels (instance-type / cloud markers; within the existing `list nodes` RBAC — no privilege delta)
+	Schedulable         bool              // Ready and not spec.unschedulable
+}
+
+// ServiceInfo is the minimum read-only Service projection needed by capability status.
+type ServiceInfo struct {
+	Namespace string
+	Name      string
+	Selector  map[string]string
 }
 
 // PDBInfo is a live PodDisruptionBudget projection (Layer-A availability law, replacing
@@ -72,7 +84,7 @@ type PDBInfo struct {
 // gpuPrefix marks NVIDIA device-plugin resources (GPU / MIG slices).
 const gpuPrefix = "nvidia.com/"
 
-// CollectSnapshot reads pods, NetworkPolicies, RBAC, namespaces and SecurityEvents
+// CollectSnapshot reads pods, Services, NetworkPolicies, RBAC, namespaces and SecurityEvents
 // cluster-wide and projects them into a Snapshot. Read-only (least privilege).
 func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(p *model.Pod) float64) (*Snapshot, error) {
 	var podList corev1.PodList
@@ -178,6 +190,7 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	// (read-only, least-privilege); absence degrades the witness to honest-neutral.
 	snap.Nodes = collectNodes(ctx, c)
 	snap.PDBs = collectPDBs(ctx, c)
+	snap.Services = collectServices(ctx, c)
 	return snap, nil
 }
 
@@ -192,6 +205,12 @@ func collectNodes(ctx context.Context, c client.Client) []NodeInfo {
 	for i := range nodeList.Items {
 		n := &nodeList.Items[i]
 		ni := NodeInfo{Name: n.Name, MIGResources: map[string]int64{}, Labels: n.Labels}
+		for _, condition := range n.Status.Conditions {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue && !n.Spec.Unschedulable {
+				ni.Schedulable = true
+				break
+			}
+		}
 		alloc := n.Status.Allocatable
 		ni.AllocatableCPUMilli = alloc.Cpu().MilliValue()
 		ni.AllocatableMemBytes = alloc.Memory().Value()
@@ -206,6 +225,25 @@ func collectNodes(ctx context.Context, c client.Client) []NodeInfo {
 			}
 		}
 		out = append(out, ni)
+	}
+	return out
+}
+
+// collectServices projects selectors best-effort. Missing Service read permission must
+// degrade ActionsSupported status, never stop decision ingest or reject a policy.
+func collectServices(ctx context.Context, c client.Client) []ServiceInfo {
+	var serviceList corev1.ServiceList
+	if err := c.List(ctx, &serviceList); err != nil {
+		return nil
+	}
+	out := make([]ServiceInfo, 0, len(serviceList.Items))
+	for i := range serviceList.Items {
+		svc := &serviceList.Items[i]
+		selector := make(map[string]string, len(svc.Spec.Selector))
+		for key, value := range svc.Spec.Selector {
+			selector[key] = value
+		}
+		out = append(out, ServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Selector: selector})
 	}
 	return out
 }
@@ -276,6 +314,16 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	// Session epoch: either flush bumps it, and either resets the session exposure clock (PHVX-67).
 	out.SessionEpoch = p.Annotations["phorvex.ai/kv-reset-epoch"] + "|" + p.Annotations["phorvex.ai/kv-migrate-epoch"]
 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
+	out.RouteService = p.Annotations["phorvex.ai/route-service"]
+	out.ParallelSize, _ = strconv.Atoi(p.Annotations["phorvex.ai/parallel-size"])
+	out.MIGGPUID = p.Annotations["phorvex.ai/gpu-id"]
+	out.MIGTargetProfile = p.Annotations["phorvex.ai/mig-target-profile"]
+	out.GuardrailVariants = distinctGuardrailVariants(
+		p.Annotations["phorvex.ai/guardrail-variant"],
+		p.Annotations["phorvex.ai/guardrail-variants"],
+	)
+	out.ServingEndpointReady = out.Ready && p.Status.PodIP != "" &&
+		(out.HasGPU || out.ModelID != "" || p.Annotations["phorvex.ai/serving-port"] != "")
 	// A detector flags a poisoned/unauthorized LoRA via phorvex.ai/lora-adapter on a LoRA-enabled
 	// pod; surfacing it as SuspectAdapter lets recon mint the adapter-integrity fact that ONLY
 	// adapter-rotate covers (the same annotation/label the adapter-rotate handler consumes).
@@ -283,6 +331,16 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 		out.SuspectAdapter = p.Annotations["phorvex.ai/lora-adapter"]
 	}
 	return out
+}
+
+func distinctGuardrailVariants(current, alternatives string) int {
+	seen := map[string]struct{}{}
+	for _, value := range append([]string{current}, strings.Split(alternatives, ",")...) {
+		if value = strings.TrimSpace(value); value != "" {
+			seen[value] = struct{}{}
+		}
+	}
+	return len(seen)
 }
 
 // primaryImageID returns the running image digest of the first container (image-rarity

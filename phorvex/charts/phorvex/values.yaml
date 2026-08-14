@@ -5,6 +5,9 @@ phorvex:
     tag: "0.1.0-p0"
   # Base tick interval for the decision loop (per-tenant cadence honored on top).
   baseInterval: 10s
+  # Consecutive unsupported observations before ActionsSupported becomes False.
+  # Three policy ticks exceeds a normal single-pod restart while still surfacing drift promptly.
+  actionsSupportedDebounce: 3
   # Prometheus base URL for telemetry ingest. Empty => K8s-only signals (no
   # fabricated metrics).
   prometheusUrl: ""

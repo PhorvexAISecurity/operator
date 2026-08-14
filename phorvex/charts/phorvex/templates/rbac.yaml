@@ -7,7 +7,7 @@ metadata:
     {{- include "phorvex.labels" . | nindent 4 }}
 ---
 # LEAST-PRIVILEGE ClusterRole (NFR4): read-only ingest of the K8s graph; write ONLY
-# Phorvex's own CRDs + Phoenix SecurityEvent/AMTD. NEVER writes pods.
+# Phorvex's own CRDs + Phoenix SecurityEvent/AMTD + policy warning Events. NEVER writes pods.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -16,8 +16,11 @@ metadata:
     {{- include "phorvex.labels" . | nindent 4 }}
 rules:
 - apiGroups: [""]
-  resources: ["pods", "namespaces", "nodes", "configmaps"]
+  resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
   verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["get", "list", "watch"]

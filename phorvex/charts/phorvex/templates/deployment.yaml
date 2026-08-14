@@ -38,6 +38,7 @@ spec:
         imagePullPolicy: {{ .Values.phorvex.image.pullPolicy }}
         args:
         - --base-interval={{ .Values.phorvex.baseInterval }}
+        - --actions-supported-debounce={{ .Values.phorvex.actionsSupportedDebounce }}
         - --metrics-bind-address={{ .Values.phorvex.metricsBindAddress }}
         - --health-probe-bind-address={{ .Values.phorvex.healthProbeBindAddress }}
         - --leader-elect={{ .Values.phorvex.leaderElect }}
