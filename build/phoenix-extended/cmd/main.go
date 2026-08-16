@@ -56,9 +56,12 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var enableBaselineAdmission bool
 	var probeAddr string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableBaselineAdmission, "enable-baseline-admission-webhook", false,
+		"Enable the baseline admission webhook. Requires serving certificates mounted at the controller-runtime webhook certificate path.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -70,14 +73,13 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	managerOptions := ctrl.Options{
 		Scheme: scheme,
 		Metrics: server.Options{
 			BindAddress:    metricsAddr,
 			SecureServing:  true,
 			FilterProvider: filters.WithAuthenticationAndAuthorization,
 		},
-		WebhookServer:                 webhook.NewServer(webhook.Options{Port: 9443}),
 		HealthProbeBindAddress:        probeAddr,
 		LeaderElection:                enableLeaderElection,
 		LeaderElectionID:              "548c5e7b.r6security.com",
@@ -93,7 +95,11 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
-	})
+	}
+	if enableBaselineAdmission {
+		managerOptions.WebhookServer = webhook.NewServer(webhook.Options{Port: 9443})
+	}
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -177,9 +183,13 @@ func main() {
 	// :9443 webhook server. NOTE: a locally-run manager's webhook is hard for the kind
 	// apiserver to reach (host/WSL2 networking); the HANDLER is proven by unit/envtest
 	// and the PRIMARY live proof is the reconciler-detect + Regenerate-restore path.
-	if err = controller.RegisterBaselineAdmission(mgr); err != nil {
-		setupLog.Error(err, "unable to register webhook", "webhook", "baselineAdmission")
-		os.Exit(1)
+	if enableBaselineAdmission {
+		if err = controller.RegisterBaselineAdmission(mgr); err != nil {
+			setupLog.Error(err, "unable to register webhook", "webhook", "baselineAdmission")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("baseline admission webhook disabled; enable only with serving certificates installed")
 	}
 	// NodeRotation reconciler (cap#7, D25g/D26): progresses an in-flight node drain
 	// (Cordoning->Draining->Rescheduling->Pinning->Completed) created by a matched,
