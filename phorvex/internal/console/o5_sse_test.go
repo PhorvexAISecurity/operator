@@ -24,9 +24,9 @@ func TestO5_OwnerSSEStreamBytesRedacted(t *testing.T) {
 	// A decision laden with IP-internal fields (recon math, λ, per-$, attribution).
 	d := model.Decision{
 		Tenant: "acme", Namespace: "ns", Pod: "p1", Action: model.ActionRotate,
-		Selected: true, Risk: 3.74, Cost: 0.57, Net: 3.18, PerDollar: 13.23, Lambda: 0.6,
+		Selected: true, CoverageValue: 3.74, Cost: 0.57, Net: 3.18, PerDollar: 13.23, Lambda: 0.6,
 		CoveredWeight: 3.74, CoveredFacts: 4, AssetValue: 100, BlastRadius: 0.5, Exposure: 9000,
-		Belief: 0.9, PHold: 0.9, Stage: "recon", StageHazard: 0.2, ProactiveRate: 12.6,
+		PHold: 0.9, Stage: "recon", StageHazard: 0.2, ProactiveRate: 12.6,
 		ThreatPosture: 0.8, Reason: "submodular greedy picked this",
 	}
 	rec := audit.ToRecord(d)

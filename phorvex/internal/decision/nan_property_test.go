@@ -55,7 +55,7 @@ func nanPolicy() model.Policy {
 }
 
 // TestDecideNeverEmitsNonFiniteCost is the property: for every poisoned telemetry value, on every
-// engine, every emitted decision carries finite Cost / Risk / Net / CHi-derived numbers.
+// engine, every emitted decision carries finite Cost / value / Net / CHi-derived numbers.
 func TestDecideNeverEmitsNonFiniteCost(t *testing.T) {
 	pol := nanPolicy()
 	for _, v := range poisonValues {
@@ -80,7 +80,8 @@ func TestDecideNeverEmitsNonFiniteCost(t *testing.T) {
 							}
 						}
 						check("Cost", d.Cost)
-						check("Risk", d.Risk)
+						check("CoverageValue", d.CoverageValue)
+						check("ThreatRisk", d.ThreatRisk)
 						check("Net", d.Net)
 						check("AssetValue", d.AssetValue)
 						check("BlastRadius", d.BlastRadius)

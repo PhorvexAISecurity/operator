@@ -87,6 +87,9 @@ func TestCoverageZeroDayProactiveNoEvents(t *testing.T) {
 	v := covView("dweller", true, 3*time.Hour, false) // no Events on the view
 	ds := e.Decide([]*model.WorkloadView{v}, covPolicy(3))
 	d := ds[0]
+	if d.CoverageValue <= 0 || d.ThreatRisk != 0 || d.DecisionValue() != d.CoverageValue {
+		t.Fatalf("P1 value fields mixed coverage with deprecated threat risk: %+v", d)
+	}
 	if !d.Selected || d.Action == model.ActionNoop {
 		t.Errorf("long-exposed pod with NO detector event must still get a proactive move (criterion 5); got action=%s selected=%v perDollar=%.3f", d.Action, d.Selected, d.PerDollar)
 	}

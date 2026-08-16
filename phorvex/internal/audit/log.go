@@ -3,7 +3,7 @@
  */
 
 // Package audit is the explainable decision log (PRD FR7 / FR6): every decision is
-// recorded with its inputs (residual, context, belief, score), the chosen action and
+// recorded with its inputs (coverage value, observational context, pHold), the chosen action and
 // WHY, the R6 counterfactual (what the blind machinery would have done), and the
 // dry-run flag. Records go to the structured logger AND, optionally, as JSON Lines to
 // a writer (the demo/forensic artifact).
@@ -11,6 +11,7 @@ package audit
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -20,16 +21,12 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-const (
-	// SchemaVersionCurrent is written by every audit record produced by this release.
-	SchemaVersionCurrent = "phorvex.audit.v1"
-	// SchemaVersionLegacy identifies pre-versioning JSONL records when they are replayed.
-	SchemaVersionLegacy = "phorvex.audit.v0"
-)
-
 // Record is the serialized form of one decision (stable JSON for the audit trail).
 type Record struct {
 	SchemaVersion    string    `json:"schemaVersion"`
+	// SourceSchemaVersion records the input contract used by the old-to-new read shim.
+	// It is process metadata, not part of the v2 wire representation.
+	SourceSchemaVersion string    `json:"-"`
 	Kind             string    `json:"kind"`
 	Time             time.Time `json:"time"`
 	Tenant           string    `json:"tenant"`
@@ -45,13 +42,14 @@ type Record struct {
 	// normal tick, and a suppressed decision is no longer indistinguishable from a failed one.
 	KillSwitch       bool      `json:"killSwitch,omitempty"`
 	Actuated         bool      `json:"actuated"`
-	Risk             float64   `json:"risk"`
+	CoverageValue    float64   `json:"coverageValue"`
+	ThreatRisk       float64   `json:"threatRisk,omitempty"`
 	Cost             float64   `json:"cost"`
 	Net              float64   `json:"net"`
-	Residual         float64   `json:"residual"`
-	ThreatPosture    float64   `json:"threatPosture"`
+	Residual         float64   `json:"residual"`      // observational under P1
+	ThreatPosture    float64   `json:"threatPosture"` // observational under P1
 	Exposure         float64   `json:"exposure"`
-	Belief           float64   `json:"belief"`
+	PHold            float64   `json:"pHold"`
 	AssetValue       float64   `json:"assetValue"`
 	BlastRadius      float64   `json:"blastRadius"`
 	SLOHeadroom      float64   `json:"sloHeadroom"`
@@ -69,7 +67,6 @@ type Record struct {
 	Stage         string                  `json:"stage,omitempty"`
 	NextStage     string                  `json:"nextStage,omitempty"`
 	StageHazard   float64                 `json:"stageHazard,omitempty"`
-	PHold         float64                 `json:"pHold,omitempty"`
 	Lambda        float64                 `json:"lambda,omitempty"`
 	ProactiveRate float64                 `json:"proactiveRate,omitempty"`
 	Attribution   []model.AttributionTerm `json:"attribution,omitempty"`
@@ -88,27 +85,71 @@ type Record struct {
 	AIClassified          bool    `json:"aiClassified,omitempty"`
 }
 
-// MarshalJSON guarantees that every newly serialized audit record declares its contract version,
-// including records constructed directly by tests and internal tooling rather than via ToRecord.
+// MarshalJSON is the only write direction: canonical v2. Legacy compatibility is intentionally
+// old-to-new on read; this package never writes a downgraded v0/v1 record.
 func (r Record) MarshalJSON() ([]byte, error) {
 	type recordAlias Record
-	if r.SchemaVersion == "" {
-		r.SchemaVersion = SchemaVersionCurrent
-	}
+	r.SchemaVersion = SchemaVersionCurrent
+	r.Attribution = canonicalizeAttribution(r.Attribution)
 	return json.Marshal(recordAlias(r))
 }
 
-// UnmarshalJSON keeps the shipped, pre-versioning JSONL corpus replayable. An absent version is
-// explicit legacy v0 after decode; it is never confused with the current version.
+// UnmarshalJSON translates v0/v1 records into the canonical v2 in-memory shape. The shim expires
+// when ReadTranslationExpiresAt becomes current; extending it requires an explicit schema decision.
 func (r *Record) UnmarshalJSON(data []byte) error {
 	type recordAlias Record
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
 	var decoded recordAlias
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
-	if decoded.SchemaVersion == "" {
-		decoded.SchemaVersion = SchemaVersionLegacy
+	sourceVersion := decoded.SchemaVersion
+	if sourceVersion == "" {
+		sourceVersion = SchemaVersionLegacy
 	}
+	switch sourceVersion {
+	case SchemaVersionCurrent:
+		if _, oldRisk := fields["risk"]; oldRisk {
+			return fmt.Errorf("%s record contains retired field %q", SchemaVersionCurrent, "risk")
+		}
+		if _, oldBelief := fields["belief"]; oldBelief {
+			return fmt.Errorf("%s record contains retired field %q", SchemaVersionCurrent, "belief")
+		}
+		for _, term := range decoded.Attribution {
+			if term.Source == "cover:modelFingerprint" || term.Source == "cover:nodePlacement" {
+				return fmt.Errorf("%s record contains retired attribution source %q", SchemaVersionCurrent, term.Source)
+			}
+		}
+	case SchemaVersionLegacy, SchemaVersionPrevious:
+		var oldRisk float64
+		if raw, ok := fields["risk"]; ok {
+			if err := json.Unmarshal(raw, &oldRisk); err != nil {
+				return fmt.Errorf("translate risk: %w", err)
+			}
+		}
+		if decoded.Engine == "p1-coverage" {
+			decoded.CoverageValue = oldRisk
+		} else {
+			decoded.ThreatRisk = oldRisk
+		}
+		// pHold is authoritative when both old names exist. belief is only the
+		// compatibility fallback for P0 and early records that omitted pHold.
+		if _, hasPHold := fields["pHold"]; !hasPHold {
+			if raw, hasBelief := fields["belief"]; hasBelief {
+				if err := json.Unmarshal(raw, &decoded.PHold); err != nil {
+					return fmt.Errorf("translate belief: %w", err)
+				}
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported audit schemaVersion %q", sourceVersion)
+	}
+	decoded.SchemaVersion = SchemaVersionCurrent
+	decoded.SourceSchemaVersion = sourceVersion
+	decoded.Attribution = canonicalizeAttribution(decoded.Attribution)
 	*r = Record(decoded)
 	return nil
 }
@@ -144,31 +185,32 @@ func New(log logr.Logger, jsonOut io.Writer) *Logger {
 // ToRecord converts a Decision to a Record.
 func ToRecord(d model.Decision) Record {
 	return Record{
-		SchemaVersion:    SchemaVersionCurrent,
-		Kind:             "phorvex.decision",
-		Time:             d.DecidedAt,
-		Tenant:           d.Tenant,
-		Namespace:        d.Namespace,
-		Pod:              d.Pod,
-		Node:             d.Node,
-		Action:           string(d.Action),
-		Selected:         d.Selected,
-		Feasible:         d.Feasible,
-		InfeasibleWhy:    d.InfeasibleWhy,
-		DryRun:           d.DryRun,
-		KillSwitch:       d.KillSwitch,
-		Actuated:         d.Actuated,
-		Risk:             round4(d.Risk),
-		Cost:             round4(d.Cost),
-		Net:              round4(d.Net),
-		Residual:         round4(d.Residual),
-		ThreatPosture:    round4(d.ThreatPosture),
-		Exposure:         round4(d.Exposure),
-		Belief:           round4(d.Belief),
-		AssetValue:       round4(d.AssetValue),
-		BlastRadius:      round4(d.BlastRadius),
-		SLOHeadroom:      round4(d.SLOHeadroom),
-		Phase:            string(d.Phase),
+		SchemaVersion:       SchemaVersionCurrent,
+		SourceSchemaVersion: SchemaVersionCurrent,
+		Kind:                "phorvex.decision",
+		Time:                d.DecidedAt,
+		Tenant:              d.Tenant,
+		Namespace:           d.Namespace,
+		Pod:                 d.Pod,
+		Node:                d.Node,
+		Action:              string(d.Action),
+		Selected:            d.Selected,
+		Feasible:            d.Feasible,
+		InfeasibleWhy:       d.InfeasibleWhy,
+		DryRun:              d.DryRun,
+		KillSwitch:          d.KillSwitch,
+		Actuated:            d.Actuated,
+		CoverageValue:       round4(d.CoverageValue),
+		ThreatRisk:          round4(d.ThreatRisk),
+		Cost:                round4(d.Cost),
+		Net:                 round4(d.Net),
+		Residual:            round4(d.Residual),
+		ThreatPosture:       round4(d.ThreatPosture),
+		Exposure:            round4(d.Exposure),
+		AssetValue:          round4(d.AssetValue),
+		BlastRadius:         round4(d.BlastRadius),
+		SLOHeadroom:         round4(d.SLOHeadroom),
+		Phase:               string(d.Phase),
 		Reason:             d.Reason,
 		R6Counterfactual:   string(d.R6Counterfactual),
 		CounterfactualNote: d.CounterfactualNote,
@@ -183,7 +225,7 @@ func ToRecord(d model.Decision) Record {
 		PHold:            round4(d.PHold),
 		Lambda:           round4(d.Lambda),
 		ProactiveRate:    round4(d.ProactiveRate),
-		Attribution:      d.Attribution,
+		Attribution:      canonicalizeAttribution(d.Attribution),
 		Handler:          d.Handler,
 		ObjectsTouched:   d.ObjectsTouched,
 		RollbackRef:      d.RollbackRef,

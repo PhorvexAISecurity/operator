@@ -447,13 +447,12 @@ func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Po
 			Namespace:             v.Pod.Namespace,
 			Pod:                   v.Pod.Name,
 			Node:                  v.Pod.Node,
-			Risk:                  cov, // recon value at stake
+			CoverageValue:         cov, // recon-fact value at stake
 			Cost:                  ecost,
 			Net:                   net,
 			AssetValue:            ac.sig.AssetValue,
 			ThreatPosture:         ac.sig.ThreatPosture,
 			Exposure:              ac.sig.Exposure,
-			Belief:                ac.assess.PHold,
 			BlastRadius:           v.BlastRadius,
 			SLOHeadroom:           ac.sig.SLOHeadroom,
 			Phase:                 v.Phase,

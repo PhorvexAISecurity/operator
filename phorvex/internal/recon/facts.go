@@ -20,7 +20,8 @@ import "github.com/phorvex/phorvex/internal/model"
 const (
 	// FactPodIdentity = pod name/UID/IP the attacker mapped (exposure: podIdentity).
 	FactPodIdentity = "podIdentity"
-	// FactSession = KV-cache / agent session / in-pod foothold state (exposure: session).
+	// FactSession = ephemeral in-process KV-cache / agent-session state (exposure: session).
+	// It does not represent pod identity, route knowledge, or generic compromise state.
 	FactSession = "session"
 	// FactInMemory = in-memory implant / loaded secrets / runtime state.
 	FactInMemory = "inMemory"

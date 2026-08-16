@@ -196,7 +196,9 @@ func PublishTick(tenant string, decisions []model.Decision, exposures map[string
 	selectedPods.WithLabelValues(tenant).Set(float64(selected))
 
 	for _, d := range decisions {
-		podRisk.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Risk)
+		// Keep the legacy Prometheus metric stable while the versioned Decision/audit
+		// contract separates P1 coverage value from deprecated P0 threat risk.
+		podRisk.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.DecisionValue())
 		podCost.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Cost)
 		podNet.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Net)
 		podBlast.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.BlastRadius)

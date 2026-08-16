@@ -733,7 +733,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
 			continue
 		}
-		score := decisions[i].Risk
+		score := decisions[i].DecisionValue()
 		if score > 1 {
 			score = 1
 		}
