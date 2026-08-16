@@ -27,8 +27,8 @@ func fullyLoadedRecord() audit.Record {
 		Action: "quarantine", Selected: true, Feasible: true, Actuated: true, MutationKind: "reversible",
 		Handler: "quarantine", ObjectsTouched: []string{"NetworkPolicy/prod/phorvex-quarantine-api-7", "Pod/prod/api-7"},
 		// --- IP-SENSITIVE (must NEVER reach the owner payload) ---
-		Risk: 0.731, Cost: 0.422, Net: 0.309, Residual: 0.555, ThreatPosture: 0.666, Exposure: 0.777,
-		Belief: 0.888, AssetValue: 0.999, BlastRadius: 0.444, SLOHeadroom: 0.222,
+		CoverageValue: 0.731, ThreatRisk: 0.888, Cost: 0.422, Net: 0.309, Residual: 0.555, ThreatPosture: 0.666, Exposure: 0.777,
+		AssetValue: 0.999, BlastRadius: 0.444, SLOHeadroom: 0.222,
 		PerDollar: 2.381, CoveredWeight: 1.234, CoveredFacts: 7, Lambda: 0.400, ProactiveRate: 0.123,
 		Stage: "exploit", NextStage: "lateral", StageHazard: 0.654, PHold: 0.842,
 		// the raw Reason inlines the EMR/per-$/lambda/hazard math verbatim — the worst leak vector:

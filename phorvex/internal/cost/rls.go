@@ -68,6 +68,9 @@ type RLS struct {
 	p      [featureDim][featureDim]float64
 	ff     float64 // forgetting factor in (0,1]
 	primed bool
+	// updates counts folded observations. Primed() answers WHETHER; this answers HOW MANY, which
+	// is what separates "one lucky match" from "genuinely calibrated" (PHVX-10c).
+	updates int
 	// frozen suppresses learning: Update becomes a no-op and Predict serves the prior. This is the
 	// documented off-switch PHVX-2 requires. It is deliberately NOT the same thing as the engine-wide
 	// KillSwitch, which stops ACTUATION and leaves the learner running.
@@ -176,11 +179,17 @@ func (r *RLS) Update(f [featureDim]float64, y float64) {
 		}
 	}
 	r.primed = true
+	r.updates++
 }
 
 // Primed reports whether at least one real observation has been folded in (else the
 // estimate is the prior — honest "uncalibrated" state).
 func (r *RLS) Primed() bool { return r.primed }
+
+// Updates is the number of real observations folded in since process start. In-process state: it
+// resets on restart, and that is deliberately visible — a calibrator that never survives long
+// enough to prime looks identical to one that never matches unless you can see this reset.
+func (r *RLS) Updates() int { return r.updates }
 
 func satRLS(x float64) float64 {
 	// NaN-SAFE (see sat() in switching.go): NaN compares false against everything, so without

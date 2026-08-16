@@ -11,8 +11,15 @@ import (
 	"time"
 )
 
-var requiredAuditKeys = []string{
+var currentRequiredAuditKeys = []string{
 	"schemaVersion", "kind", "time", "tenant", "namespace", "pod", "action",
+	"selected", "feasible", "dryRun", "actuated", "coverageValue", "cost", "net",
+	"residual", "threatPosture", "exposure", "pHold", "assetValue",
+	"blastRadius", "sloHeadroom", "phase", "reason", "r6Counterfactual",
+}
+
+var legacyRequiredAuditKeys = []string{
+	"kind", "time", "tenant", "namespace", "pod", "action",
 	"selected", "feasible", "dryRun", "actuated", "risk", "cost", "net",
 	"residual", "threatPosture", "exposure", "belief", "assetValue",
 	"blastRadius", "sloHeadroom", "phase", "reason", "r6Counterfactual",
@@ -41,7 +48,12 @@ func TestCurrentAuditRecordDeclaresSchemaAndRequiredKeys(t *testing.T) {
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		t.Fatal(err)
 	}
-	assertRequiredAuditKeys(t, fields, requiredAuditKeys, "current audit record")
+	assertRequiredAuditKeys(t, fields, currentRequiredAuditKeys, "current audit record")
+	for _, retired := range []string{"risk", "belief"} {
+		if _, ok := fields[retired]; ok {
+			t.Errorf("current audit record still emits retired key %q", retired)
+		}
+	}
 	var decoded Record
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatal(err)
@@ -85,17 +97,25 @@ func TestReplayEveryShippedAuditJSONL(t *testing.T) {
 				f.Close()
 				t.Fatalf("%s:%d does not decode as an audit object: %v", path, line, err)
 			}
-			// Legacy v0 predates schemaVersion, but every other stable contract key must
-			// be physically present on every shipped line rather than supplied as a Go zero value.
-			assertRequiredAuditKeys(t, fields, requiredAuditKeys[1:], path+":"+strconv.Itoa(line))
+			// The shipped corpus is v0/v1. Its old keys must be physically present before
+			// the read shim translates them, rather than supplied as Go zero values.
+			assertRequiredAuditKeys(t, fields, legacyRequiredAuditKeys, path+":"+strconv.Itoa(line))
 			var rec Record
 			if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
 				f.Close()
 				t.Fatalf("%s:%d does not decode as audit.Record: %v", path, line, err)
 			}
-			if rec.SchemaVersion != SchemaVersionLegacy && rec.SchemaVersion != SchemaVersionCurrent {
+			expectedSource := SchemaVersionLegacy
+			if rawVersion, ok := fields["schemaVersion"]; ok {
+				if err := json.Unmarshal(rawVersion, &expectedSource); err != nil {
+					f.Close()
+					t.Fatalf("%s:%d has invalid schemaVersion: %v", path, line, err)
+				}
+			}
+			if rec.SchemaVersion != SchemaVersionCurrent || rec.SourceSchemaVersion != expectedSource {
 				f.Close()
-				t.Fatalf("%s:%d has unsupported schemaVersion %q", path, line, rec.SchemaVersion)
+				t.Fatalf("%s:%d translated version = %q from %q, want %q from %q", path, line,
+					rec.SchemaVersion, rec.SourceSchemaVersion, SchemaVersionCurrent, expectedSource)
 			}
 			if rec.Kind == "" || rec.Time.IsZero() || rec.Tenant == "" || rec.Namespace == "" || rec.Pod == "" || rec.Action == "" {
 				f.Close()

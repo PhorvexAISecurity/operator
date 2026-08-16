@@ -349,18 +349,23 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	Tenant             string
-	Namespace          string
-	Pod                string
-	Node               string
-	Risk               float64
+	Tenant    string
+	Namespace string
+	Pod       string
+	Node      string
+	// CoverageValue is the recon-fact weight at stake under the P1 coverage engine.
+	// It never carries the deprecated P0 engine's threat-weighted risk.
+	CoverageValue float64
+	// ThreatRisk preserves the deprecated P0 engine's distinct threat-weighted value.
+	// It is zero under P1 and is serialized separately so one field never has two meanings.
+	ThreatRisk         float64
 	Cost               float64
-	Net                float64 // Risk - Lambda*Cost
+	Net                float64 // engine-specific value - Lambda*Cost
 	AssetValue         float64
-	Residual           float64
-	ThreatPosture      float64
+	Residual           float64 // observational under the default P1 coverage engine
+	ThreatPosture      float64 // observational under the default P1 coverage engine
 	Exposure           float64
-	Belief             float64
+	PHold              float64 // authoritative P(attacker still holds the foothold) [0,1]
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase
@@ -391,7 +396,6 @@ type Decision struct {
 	Stage         string            // most-likely kill-chain stage (semi-Markov)
 	StageHazard   float64           // stage-exit hazard h_s(t) (predictive horizon signal)
 	NextStage     string            // forward-projected next stage
-	PHold         float64           // P(attacker still holds the foothold) [0,1]
 	Lambda        float64           // solved budget shadow-price at decision time
 	ProactiveRate float64           // emergent per-asset rotation rate (1/sec); 0 if not due
 	Attribution   []AttributionTerm // SHAP-style decomposition of the move's value
@@ -408,6 +412,16 @@ type Decision struct {
 	ObjectsTouched []string // cluster objects created/mutated/deleted
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
+}
+
+// DecisionValue returns the engine's primary security-value field without merging their
+// meanings in the public Decision/audit contract. P1 uses recon CoverageValue; deprecated
+// P0 uses ThreatRisk.
+func (d Decision) DecisionValue() float64 {
+	if d.Engine == "p0-greedy" {
+		return d.ThreatRisk
+	}
+	return d.CoverageValue
 }
 
 // AttributionTerm is one explainable contributor to a decision's value (SHAP-style:

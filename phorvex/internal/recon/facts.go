@@ -20,7 +20,8 @@ import "github.com/phorvex/phorvex/internal/model"
 const (
 	// FactPodIdentity = pod name/UID/IP the attacker mapped (exposure: podIdentity).
 	FactPodIdentity = "podIdentity"
-	// FactSession = KV-cache / agent session / in-pod foothold state (exposure: session).
+	// FactSession = ephemeral in-process KV-cache / agent-session state (exposure: session).
+	// It does not represent pod identity, route knowledge, or generic compromise state.
 	FactSession = "session"
 	// FactInMemory = in-memory implant / loaded secrets / runtime state.
 	FactInMemory = "inMemory"
@@ -28,27 +29,41 @@ const (
 	FactNetworkIdentity = "networkIdentity"
 	// FactLateralEdge = a learned reachable edge to a specific neighbor (the Edge field).
 	FactLateralEdge = "lateralEdge"
-	// FactNodePlacement = which node the pod runs on (exposure: nodePlacement).
-	FactNodePlacement = "nodePlacement"
+	// FactNodePlacement was removed (PHVX-77): it had no producer, no consumer and no cover grant —
+	// two repo-wide references, both its own comment and declaration. The exposure VARIABLE
+	// model.VarNodePlacement is unrelated and still live; do not confuse the two if this is
+	// reintroduced.
 
 	// --- AI / inference recon facts (P-PHYSICS / UCW). The attacker's recon map of an
-	// inference workload. DEFINED NOW for both-products completeness; their RESET
-	// actions (model-swap, route-rotate, GPU/MIG-rebind) are Phase-2 actuators, so per
-	// the FALSIFIABILITY GATE they are emitted AUDIT-ONLY (not in CoverByAction) until
-	// those actions ship — they never inflate selectable cover. ---
+	// inference workload.
+	//
+	// These no longer share one blanket status. Cover is action- and capability-specific:
+	// model-shard-replace and endpoint-rotate carry their matching facts, while GPU contention
+	// is covered only for a MIG-capable pod and GPU co-location currently carries no grant.
+	// Anything genuinely cover-free must say so per-fact and be asserted in cover_test.
+	// Corrected under PHVX-76. ---
 
 	// FactModelFingerprint = served model identity/version the attacker fingerprinted
-	// (reset by NIM/model-rotation — Phase-2).
+	// (reset by model-shard-replace).
 	FactModelFingerprint = "modelFingerprint"
 	// FactEndpointPath = inference endpoint / API route the attacker mapped (reset by
-	// endpoint/route-rotation — Phase-2).
+	// endpoint-rotate; route-rotate only writes an unused label and earns no cover).
 	FactEndpointPath = "endpointPath"
-	// FactGPUColocation = shared-GPU/MIG co-residency observability (reset by GPU/MIG-
-	// rebind or node-rotate — Phase-2).
+	// FactGPUColocation = shared-GPU/MIG co-residency observability. AUDIT-ONLY: neither
+	// mig-rebind nor warm-swap proves relocation to a different node/device today.
 	FactGPUColocation = "gpuColocation"
-	// FactSideChannel = timing/power/GPU-util leakage of a co-tenant model (AUDIT-ONLY;
-	// no infrastructure move fully resets it).
-	FactSideChannel = "sideChannel"
+	// FactGPUContentionChannel = the shared-hardware CONTENTION path through which a co-tenant is
+	// observable: memory bandwidth, cache and SM contention on one physical device.
+	//
+	// Scoped deliberately (PHVX-26a). Power and thermal side channels are NOT claimed — MIG's
+	// isolation of those paths is a vendor claim and is contested in published work, so an action
+	// that repartitions the device cannot be said to erase them.
+	//
+	// Distinct from FactGPUColocation, which is the attacker's knowledge of WHICH workloads share
+	// their device. A MIG repartition severs the contention path without moving anything, so it
+	// erases this fact and leaves the co-residency knowledge intact. Renamed from FactSideChannel:
+	// the old name described a symptom class, not the thing an action can actually invalidate.
+	FactGPUContentionChannel = "gpuContentionChannel"
 	// FactAdapterIntegrity = an UNAUTHORIZED LoRA/adapter loaded on the serving stack (a detector
 	// flagged it). It exists ONLY while the poisoned adapter is present, and ONLY adapter-rotate
 	// (unload the adapter) covers it — so the engine selects adapter-rotate for THIS attack, not a
@@ -91,14 +106,14 @@ type NeighborRef struct {
 // FactContext is the per-asset conditioning the recon profile needs, supplied by the
 // context + kill-chain layers (so the recon profile stays a pure fact/cover map).
 type FactContext struct {
-	AssetValue   float64
-	PHold        float64 // P(attacker still holds) in [0,1]
-	StageUrgency float64 // [0,1] urgency from the predictive belief horizon
+	AssetValue     float64
+	PHold          float64 // P(attacker still holds) in [0,1]
+	StageUrgency   float64 // [0,1] urgency from the predictive belief horizon
 	LateralUrgency float64 // [0,1] specifically for lateral-movement-stage urgency
-	BlastRadius  float64 // [0,1] normalized graph blast radius
-	Neighbors    []NeighborRef
-	HasGPU       bool
-	Stateful     bool
+	BlastRadius    float64 // [0,1] normalized graph blast radius
+	Neighbors      []NeighborRef
+	HasGPU         bool
+	Stateful       bool
 }
 
 // AssetFacts is the recon profile's output for one asset: the facts it exposes and,

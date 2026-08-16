@@ -40,6 +40,29 @@ type CoverageEngine struct {
 	calibrationFrozen bool
 }
 
+// CalibrationState reports, per tenant, whether the RLS has left the shipped prior and how many
+// observations it has folded in. Exposed for metrics (PHVX-10c) rather than added to the audit
+// record: the audit output is an unversioned contract and PHVX-27 owns changes to it.
+func (e *CoverageEngine) CalibrationState() map[string]struct {
+	Primed  bool
+	Updates int
+} {
+	out := map[string]struct {
+		Primed  bool
+		Updates int
+	}{}
+	for tenant, c := range e.costByTenant {
+		if c == nil || c.RLS == nil {
+			continue
+		}
+		out[tenant] = struct {
+			Primed  bool
+			Updates int
+		}{Primed: c.RLS.Primed(), Updates: c.RLS.Updates()}
+	}
+	return out
+}
+
 // SetCostCalibrationFrozen applies the PHVX-2 off-switch to EVERY tenant bucket, present and future.
 // Buckets are created lazily per tenant, so the flag is remembered and applied on creation too —
 // otherwise a tenant first seen after the switch was thrown would quietly start learning again.
@@ -196,11 +219,21 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 
 // Decide runs the per-tick coverage optimization and returns one Decision per pod.
 func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) []model.Decision {
+	decisions, _ := e.DecideChecked(views, pol)
+	return decisions
+}
+
+// DecideChecked rejects a structurally invalid ActionSet before selection or learning.
+// The runner calls this checked seam and logs/counts the failure for the production tick.
+func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
 	now := e.now()
 	tcost := e.costFor(pol.Tenant)
 	lambda := tcost.Dual.Lambda()
 
 	set, ctxByKey := e.AssembleSet(views, pol)
+	if err := set.CollisionError(); err != nil {
+		return nil, err
+	}
 
 	candsByAsset := map[string][]int{}
 	for i := range set.Candidates {
@@ -414,13 +447,12 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 			Namespace:             v.Pod.Namespace,
 			Pod:                   v.Pod.Name,
 			Node:                  v.Pod.Node,
-			Risk:                  cov, // recon value at stake
+			CoverageValue:         cov, // recon-fact value at stake
 			Cost:                  ecost,
 			Net:                   net,
 			AssetValue:            ac.sig.AssetValue,
 			ThreatPosture:         ac.sig.ThreatPosture,
 			Exposure:              ac.sig.Exposure,
-			Belief:                ac.assess.PHold,
 			BlastRadius:           v.BlastRadius,
 			SLOHeadroom:           ac.sig.SLOHeadroom,
 			Phase:                 v.Phase,
@@ -464,7 +496,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		}
 	}
 
-	return decisions
+	return decisions, nil
 }
 
 // attributionOf decomposes a move's value into SHAP-style terms: per recon-fact-kind

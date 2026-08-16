@@ -2,8 +2,8 @@
  * Phorvex Console (P-DASHBOARD) — the IP-WALL (Requirement C).
  *
  * The platform-OWNER view leaks ZERO Phorvex IP, enforced SERVER-SIDE by a WHITELIST DTO.
- * VERIFIED NECESSITY: audit.Record carries every IP field inline (Risk/Cost/Net/Residual/
- * ThreatPosture/Exposure/Belief/AssetValue/BlastRadius/PerDollar/CoveredWeight/Lambda/
+ * VERIFIED NECESSITY: audit.Record carries every IP field inline (CoverageValue/ThreatRisk/
+ * Cost/Net/Residual/ThreatPosture/Exposure/PHold/AssetValue/BlastRadius/PerDollar/CoveredWeight/Lambda/
  * ProactiveRate/Attribution + the raw Reason, which itself inlines cov/$/per-$/lambda/hazard/
  * pHold math). A naive json.Marshal(Record) on the owner path would leak the entire moat.
  *
@@ -150,7 +150,7 @@ var redactedFieldNames = []string{
 	"perdollar", "lambda", "proactiverate", "costceiling", "shadowprice",
 	"residual", "threatposture", "exposure", "belief", "phold", "stagehazard",
 	"preemptmargin", "projectednextstagesec", "assetvalue", "blastradius",
-	"attribution", "\"risk\"", "\"cost\"", "\"net\"", "\"reason\"", "counterfactualnote",
+	"attribution", "coveragevalue", "threatrisk", "\"risk\"", "\"cost\"", "\"net\"", "\"reason\"", "counterfactualnote",
 	"submodular", "greedy",
 }
 

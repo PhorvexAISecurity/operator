@@ -93,10 +93,48 @@ var (
 		Help: "Decision ticks executed, by tenant.",
 	}, []string{"tenant"})
 
+	actionSetRejections = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_action_set_rejections_total",
+		Help: "Decision ticks rejected before optimization because the generated action set violated a structural invariant.",
+	}, []string{"tenant", "reason"})
+
 	tickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "phorvex_tick_duration_seconds",
 		Help:    "Wall-clock duration of a decision tick (NFR1: <1s for <=1000 pods).",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
+	}, []string{"tenant"})
+
+	// ---- RLS cost-calibrator observability (PHVX-10c / PHORVEXSEC-98) ----
+	//
+	// Primed() alone answers WHETHER the calibrator has learned anything. It does not answer WHY
+	// not, and "why not" is the whole question: the calibrator only updates when the loop pairs an
+	// emitted rotation with a newly-Ready replacement pod, and that pairing can fail for reasons
+	// with completely different fixes. The outcome label separates them:
+	//
+	//	matched   - a replacement was found; theta was updated from a real measurement.
+	//	censored  - no replacement became Ready inside the observation window; the rotation trains
+	//	            at the censored maximum instead of a measured value.
+	//	abandoned - the ORIGINAL pod UID was still alive when the window expired, so the actuation
+	//	            never took effect and nothing is learned. High counts here mean the emit path is
+	//	            failing, not the cost model.
+	//
+	// A high attempt count with near-zero `matched` is the failure mode PHVX-2 alleged, reached by a
+	// different mechanism, and it is invisible from Primed() alone.
+	rlsObservations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_rls_rotation_observations_total",
+		Help: "Rotation cost observations resolved, by outcome (matched|censored|abandoned).",
+	}, []string{"tenant", "outcome"})
+	rlsPending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_rls_rotations_pending",
+		Help: "Rotations awaiting a cost observation right now.",
+	}, []string{"tenant"})
+	rlsPrimed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_rls_primed",
+		Help: "1 when the tenant's RLS has folded in at least one real observation; 0 = still the shipped prior.",
+	}, []string{"tenant"})
+	rlsUpdates = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_rls_updates_total",
+		Help: "Observations folded into the tenant's RLS since process start (in-process state; resets on restart).",
 	}, []string{"tenant"})
 )
 
@@ -105,7 +143,8 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, tickDuration,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, tickDuration,
+		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
 }
 
@@ -157,7 +196,9 @@ func PublishTick(tenant string, decisions []model.Decision, exposures map[string
 	selectedPods.WithLabelValues(tenant).Set(float64(selected))
 
 	for _, d := range decisions {
-		podRisk.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Risk)
+		// Keep the legacy Prometheus metric stable while the versioned Decision/audit
+		// contract separates P1 coverage value from deprecated P0 threat risk.
+		podRisk.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.DecisionValue())
 		podCost.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Cost)
 		podNet.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Net)
 		podBlast.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.BlastRadius)
@@ -182,6 +223,11 @@ func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
 }
 
+// RecordActionSetRejection counts a fail-closed tick before any decision or actuation.
+func RecordActionSetRejection(tenant, reason string) {
+	actionSetRejections.WithLabelValues(tenant, reason).Inc()
+}
+
 func boolStr(b bool) string {
 	if b {
 		return "true"
@@ -196,4 +242,37 @@ func splitNSPod(s string) (string, string) {
 		}
 	}
 	return "", s
+}
+
+// Outcome labels for ObserveRotationOutcome. Kept as constants so a typo cannot silently create a
+// fourth series that nobody is looking at.
+const (
+	RLSMatched   = "matched"
+	RLSCensored  = "censored"
+	RLSAbandoned = "abandoned"
+)
+
+// ObserveRotationOutcome records how one pending rotation resolved. Call exactly once per rotation
+// that leaves the pending set — not once per tick it is examined, or the ratio becomes a function of
+// tick cadence rather than of matching success.
+func ObserveRotationOutcome(tenant, outcome string) {
+	rlsObservations.WithLabelValues(tenant, outcome).Inc()
+}
+
+// SetRotationsPending publishes the current backlog for a tenant.
+func SetRotationsPending(tenant string, n int) {
+	rlsPending.WithLabelValues(tenant).Set(float64(n))
+}
+
+// SetRLSState publishes whether a tenant's calibrator has left the prior, and how many observations
+// it has folded in. Both are in-process values and reset when the operator restarts — which is
+// itself worth seeing, because a calibrator that never survives long enough to prime is
+// indistinguishable from one that never matches.
+func SetRLSState(tenant string, primed bool, updates int) {
+	v := 0.0
+	if primed {
+		v = 1
+	}
+	rlsPrimed.WithLabelValues(tenant).Set(v)
+	rlsUpdates.WithLabelValues(tenant).Set(float64(updates))
 }

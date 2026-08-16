@@ -58,6 +58,9 @@ func TestRotateCheapLowBlastPod(t *testing.T) {
 		t.Fatalf("want 1 decision, got %d", len(ds))
 	}
 	d := ds[0]
+	if d.ThreatRisk <= 0 || d.CoverageValue != 0 || d.DecisionValue() != d.ThreatRisk {
+		t.Fatalf("P0 value fields mixed threat risk with P1 coverage: %+v", d)
+	}
 	if d.Action != model.ActionRotate {
 		t.Errorf("cheap, low-blast, long-exposed idle pod should ROTATE, got %s (net=%.3f)", d.Action, d.Net)
 	}

@@ -16,6 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -45,37 +46,55 @@ func (r *PhorvexPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := validate(&p); err != nil {
-		r.setCondition(ctx, &p, "ValidationError", metav1.ConditionTrue, "Invalid", err.Error())
 		// Do not register an invalid policy; surface the error and stop.
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.setCondition(ctx, &p, "ValidationError", metav1.ConditionTrue, "Invalid", err.Error())
 	}
 
 	if err := r.Manager.Upsert(&p); err != nil {
-		r.setCondition(ctx, &p, "ValidationError", metav1.ConditionTrue, "SelectorError", err.Error())
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.setCondition(ctx, &p, "ValidationError", metav1.ConditionTrue, "SelectorError", err.Error())
 	}
 
 	// Clear any prior validation error; the runner fills the operational status.
-	r.setCondition(ctx, &p, "ValidationError", metav1.ConditionFalse, "Valid", "policy accepted")
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.setCondition(ctx, &p, "ValidationError", metav1.ConditionFalse, "Valid", "policy accepted")
 }
 
-func (r *PhorvexPolicyReconciler) setCondition(ctx context.Context, p *v1alpha1.PhorvexPolicy, condType string, status metav1.ConditionStatus, reason, msg string) {
-	var fresh v1alpha1.PhorvexPolicy
-	if err := r.Get(ctx, client.ObjectKeyFromObject(p), &fresh); err != nil {
-		return
-	}
-	if fresh.Status.Tenant == "" {
-		fresh.Status.Tenant = p.EffectiveTenant()
-	}
-	meta.SetStatusCondition(&fresh.Status.Conditions, metav1.Condition{
-		Type:               condType,
-		Status:             status,
-		Reason:             reason,
-		Message:            msg,
-		ObservedGeneration: fresh.Generation,
+func (r *PhorvexPolicyReconciler) setCondition(ctx context.Context, p *v1alpha1.PhorvexPolicy, condType string, status metav1.ConditionStatus, reason, msg string) error {
+	key := client.ObjectKeyFromObject(p)
+	tenant := p.EffectiveTenant()
+
+	// The runner owns operational status while this reconciler owns ValidationError. Always
+	// re-read after a conflict so retrying this condition cannot put a stale runner snapshot (most
+	// importantly KillSwitchEngaged) back into the CR. Also skip an identical write: status updates
+	// themselves trigger reconciliation, and writing the same condition on every event creates a
+	// self-sustaining second status writer that competes with every runner tick.
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fresh v1alpha1.PhorvexPolicy
+		if err := r.Get(ctx, key, &fresh); err != nil {
+			return err
+		}
+
+		changed := false
+		if fresh.Status.Tenant == "" {
+			fresh.Status.Tenant = tenant
+			changed = true
+		}
+		current := meta.FindStatusCondition(fresh.Status.Conditions, condType)
+		if current == nil || current.Status != status || current.Reason != reason ||
+			current.Message != msg || current.ObservedGeneration != fresh.Generation {
+			meta.SetStatusCondition(&fresh.Status.Conditions, metav1.Condition{
+				Type:               condType,
+				Status:             status,
+				Reason:             reason,
+				Message:            msg,
+				ObservedGeneration: fresh.Generation,
+			})
+			changed = true
+		}
+		if !changed {
+			return nil
+		}
+		return r.Status().Update(ctx, &fresh)
 	})
-	_ = r.Status().Update(ctx, &fresh)
 }
 
 // validate checks the spec beyond CRD-level validation.

@@ -35,7 +35,9 @@
     "known_phases": [
       "ColdStarting",
       "Warm",
-      "Idle"
+      "Idle",
+      "Draining",
+      "Unknown"
     ],
     "known_stages": [
       "recon",

@@ -32,7 +32,7 @@ func o1Capture() string {
 		for _, d := range decs {
 			fmt.Fprintf(&b, "t%d %s/%s act=%s sel=%v pd=%.6f lam=%.6f net=%.6f cw=%.6f risk=%.6f phold=%.6f stage=%s rate=%.6f\n",
 				tick, d.Namespace, d.Pod, d.Action, d.Selected, d.PerDollar, d.Lambda, d.Net,
-				d.CoveredWeight, d.Risk, d.PHold, d.Stage, d.ProactiveRate)
+				d.CoveredWeight, d.CoverageValue, d.PHold, d.Stage, d.ProactiveRate)
 		}
 	}
 	return b.String()

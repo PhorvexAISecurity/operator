@@ -17,15 +17,33 @@ import "github.com/phorvex/phorvex/internal/model"
 //	             or  co-residency                      for network facts
 //
 // Each multiplier is a BOUNDED honest-absent=1.0 factor (rarity 1+(-log2 freq)/log2N,
-// EPSS 1+util, co-residency 1+tenants), so the objective stays submodular+monotone (the
-// greedy keeps 1-1/e, ZERO optimizer change) and at nil-data the weights are
+// EPSS 1+util, co-residency 1+tenants), so the COVERAGE term stays submodular and at nil-data the weights are
 // BYTE-IDENTICAL to standard-recon — the 1.62x ablation reproduces exactly. With real
 // dispersion the weights become heavy-tailed, which the submodular greedy provably
 // exploits and the uniform-random arm cannot (the separately-ablatable beat mechanism).
 //
 // It also EMITS the four AI recon facts (model fingerprint / endpoint / GPU co-location
-// / side-channel) AUDIT-ONLY — present in the fact universe for visibility, but absent
-// from CoverByAction because their reset actions are Phase-2 (the falsifiability gate).
+// / side-channel). These WERE audit-only while their reset actions were Phase-2; they are
+// NOT any more — the grants are made below (model-shard-replace, endpoint-rotate,
+// mig-rebind, warm-swap), so these facts DO enter CoverByAction and DO contribute
+// selectable cover. Corrected under PHVX-76; the previous text described an earlier phase.
+//
+// SCALING NOTE, since the ordering here is load-bearing: the scarcity scalar `s` is applied
+// to af.Facts BEFORE these AI facts are appended, so the AI facts are NOT scaled by it —
+// they carry their own weights instead. That asymmetry is deliberate at this revision but
+// is what PHVX-70 asks to revisit; do not "fix" it by moving the loop without reading that
+// ticket, or the base/AI weight ratio changes silently.
+//
+// OPTIMALITY BOUND (was asserted falsely here): the selection objective is
+// Σ w(facts covered) − λ·C(S), which is submodular but NOT monotone (the −λ·C term
+// decreases in S), and the constraint is a partition matroid (one move per asset) truncated
+// by the budget — not a cardinality constraint. So the classic monotone/cardinality 1−1/e
+// guarantee does NOT apply. The Fisher–Nemhauser–Wolsey 1/2 bound applies to the
+// monotone matroid case, not automatically to this cost-penalized objective. No replacement
+// approximation constant is claimed here without a proof tied to the implemented selection rule.
+//
+// The exact-vs-greedy ratios in optimality.go are bounded measurements, not a general approximation
+// theorem; inspect ExactSkipped and the recorded work budget before quoting them as evidence.
 type ucwRecon struct{}
 
 func (ucwRecon) Name() string { return "ucw-recon" }
@@ -53,12 +71,12 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// would scale only the six standardRecon facts, because every AI fact below is appended after
 	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
 
-	// AI recon facts — emitted on GPU/served-model assets. The Phase-2 reset actuators are now
-	// CROSSED into the coverage gate (opt-in): each AI fact is invalidated by its matching AI
-	// actuator, so the engine can select the gentle AI move (model-shard-replace / endpoint-rotate /
-	// mig-rebind / warm-swap / kv-migrate-invalidate) instead of a blunt rotate on an inference
-	// workload. These remain [SP-0-PENDING] for VALIDATION (the actuation needs a vLLM-shaped control
-	// plane to fire), but they are no longer hidden from selection.
+	// AI recon facts — emitted on GPU/served-model assets. Cover is granted per physical mechanism,
+	// not to the group as a whole: model-shard-replace and endpoint-rotate invalidate their matching
+	// facts; mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
+	// warm-swap and GPU co-location remain cover-free until anti-affinity proves relocation; and
+	// kv-migrate-invalidate maps to session state below. This keeps selectable cover narrower than
+	// the emitted audit universe whenever an actuator cannot guarantee the claimed effect.
 	if view.Pod.HasGPU || view.Pod.ModelID != "" {
 		asset := view.Pod.Namespace + "/" + view.Pod.Name
 		base := fctx.AssetValue * clamp01(fctx.PHold)
@@ -69,7 +87,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		mf := Fact{Asset: asset, Kind: FactModelFingerprint, Weight: base * urg * ph.ModelRarity}
 		ep := Fact{Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
 		gc := Fact{Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency}
-		sc := Fact{Asset: asset, Kind: FactSideChannel, Weight: base * urg}
+		sc := Fact{Asset: asset, Kind: FactGPUContentionChannel, Weight: base * urg}
 		// In-flight-request + guardrail-bypass recon on a serving pod — each invalidated by its own
 		// gentle AI actuator (request-drain / guardrail-rotate) so the engine can pick the surgical
 		// serving move over a blunt rotate. Distinct facts => distinct, meaningful cover per action.
@@ -81,9 +99,52 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		}
 		af.CoverByAction[model.ActionModelShardReplace] = append(af.CoverByAction[model.ActionModelShardReplace], mf.Key())
 		af.CoverByAction[model.ActionEndpointRotate] = append(af.CoverByAction[model.ActionEndpointRotate], ep.Key())
-		af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], gc.Key(), sc.Key())
-		af.CoverByAction[model.ActionWarmSwap] = append(af.CoverByAction[model.ActionWarmSwap], gc.Key(), sc.Key())
-		af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], ep.Key())
+		// [PHVX-26a] The GPU cover, corrected. These two actions used to receive byte-identical
+		// grants {gpuColocation, gpuContentionChannel}, which made them indistinguishable to the
+		// optimizer and asserted more than either performs.
+		//
+		// The soundness condition, confirmed by the math review on PHORVEXSEC-121/117: a fact may
+		// belong to CoverByAction[a] only if EVERY successful execution of a invalidates it. There
+		// is no probabilistic or expected-cover reading in this model.
+		//
+		//   mig-rebind  — repartitioning destroys the mapped GI/CI structure on the device, so the
+		//                 contention path is severed deterministically wherever the pod ends up. It
+		//                 does NOT move the pod, so co-residency knowledge survives: it never covers
+		//                 gpuColocation. Conditional on the pod actually having a MIG device.
+		//
+		//   warm-swap   — creates a shadow with NodeName cleared and identical constraints. Nothing
+		//                 in rewarmShadow expresses anti-affinity, so the scheduler may re-place it
+		//                 on the same node. "May relocate" cannot back a binary grant, and neither
+		//                 can a high empirical relocation rate or the mere existence of a second GPU
+		//                 node. Until required podAntiAffinity on kubernetes.io/hostname excludes
+		//                 the old node — deferred by PHVX-26a — warm-swap covers NOTHING here and
+		//                 both facts stay audit-only.
+		//
+		// Consequence, stated plainly: warm-swap becomes unselectable on this fleet, exactly as
+		// identity-rotate did under PHVX-9e. Its real value (a cutover with no cold load) is
+		// unaffected; only the co-residency claim was false.
+		if view.Pod.MIGDevice != "" {
+			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
+		}
+
+		// The session fact is produced by standardRecon above; look it up by kind rather than
+		// re-minting one, so there is exactly one session fact per asset and the key cannot drift.
+		sessKey := ""
+		for _, f := range af.Facts {
+			if f.Kind == FactSession {
+				sessKey = f.Key()
+				break
+			}
+		}
+
+		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
+		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
+		// route they learned, which is what endpointPath represents and what endpoint-rotate erases.
+		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
+		// class as PHVX-9e.
+		if sessKey != "" {
+			af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], sessKey)
+		}
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
 		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
 		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
