@@ -257,6 +257,11 @@ func (m *Manager) tick(ctx context.Context) {
 		}
 	}
 
+	// [PHVX-10c] Publish calibrator state after applying the switch, including explicit zeroes when
+	// a tenant's pending queue drains. Without the zero update, the gauge remains stuck at its last
+	// nonzero value forever.
+	m.publishRLSMetrics()
+
 	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
 	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
 	// engaged (a deliberate global freeze) or actuation is unavailable.
@@ -292,6 +297,26 @@ func (m *Manager) tick(ctx context.Context) {
 
 	for _, e := range due {
 		m.processTenant(ctx, snap, e, killEngaged)
+	}
+}
+
+func (m *Manager) publishRLSMetrics() {
+	pendingByTenant := map[string]int{}
+	for _, p := range m.pendingRotations {
+		pendingByTenant[p.tenant]++
+	}
+
+	if ce, isCoverage := m.Optimizer.(*decision.CoverageEngine); isCoverage {
+		for tenant, st := range ce.CalibrationState() {
+			metrics.SetRLSState(tenant, st.Primed, st.Updates)
+			metrics.SetRotationsPending(tenant, pendingByTenant[tenant])
+			delete(pendingByTenant, tenant)
+		}
+	}
+	// A pending rotation can be registered before its tenant bucket is visible. Publish those too;
+	// they will move through the calibrated-state loop on subsequent ticks.
+	for tenant, n := range pendingByTenant {
+		metrics.SetRotationsPending(tenant, n)
 	}
 }
 
@@ -378,6 +403,9 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			// still alive. Retire an unexecuted event after the observation window.
 			if elapsed >= 2*cost.ReadyDelayReference {
 				delete(m.pendingRotations, ref.key)
+				// The actuation never took effect — the target is still alive. Nothing is learned,
+				// and this is a DIFFERENT failure from "no replacement became Ready" (PHVX-10c).
+				metrics.ObserveRotationOutcome(p.tenant, metrics.RLSAbandoned)
 				m.Log.Info("rotation cost observation unavailable; original UID still present",
 					"tenant", p.tenant,
 					"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
@@ -428,6 +456,13 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 		}
 		measuredFlow := cost.NormalizeReadyDelay(elapsed)
 		observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+		// Recorded once per rotation LEAVING the pending set, not once per tick it is examined —
+		// otherwise the matched/censored ratio would measure tick cadence instead of matching.
+		outcome := metrics.RLSMatched
+		if censored {
+			outcome = metrics.RLSCensored
+		}
+		metrics.ObserveRotationOutcome(p.tenant, outcome)
 		delete(m.pendingRotations, ref.key)
 		replacementUID := ""
 		if replacement != nil {

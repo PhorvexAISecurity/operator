@@ -40,6 +40,29 @@ type CoverageEngine struct {
 	calibrationFrozen bool
 }
 
+// CalibrationState reports, per tenant, whether the RLS has left the shipped prior and how many
+// observations it has folded in. Exposed for metrics (PHVX-10c) rather than added to the audit
+// record: the audit output is an unversioned contract and PHVX-27 owns changes to it.
+func (e *CoverageEngine) CalibrationState() map[string]struct {
+	Primed  bool
+	Updates int
+} {
+	out := map[string]struct {
+		Primed  bool
+		Updates int
+	}{}
+	for tenant, c := range e.costByTenant {
+		if c == nil || c.RLS == nil {
+			continue
+		}
+		out[tenant] = struct {
+			Primed  bool
+			Updates int
+		}{Primed: c.RLS.Primed(), Updates: c.RLS.Updates()}
+	}
+	return out
+}
+
 // SetCostCalibrationFrozen applies the PHVX-2 off-switch to EVERY tenant bucket, present and future.
 // Buckets are created lazily per tenant, so the flag is remembered and applied on creation too —
 // otherwise a tenant first seen after the switch was thrown would quietly start learning again.
