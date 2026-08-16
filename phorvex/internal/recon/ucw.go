@@ -83,7 +83,24 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.CoverByAction[model.ActionEndpointRotate] = append(af.CoverByAction[model.ActionEndpointRotate], ep.Key())
 		af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], gc.Key(), sc.Key())
 		af.CoverByAction[model.ActionWarmSwap] = append(af.CoverByAction[model.ActionWarmSwap], gc.Key(), sc.Key())
-		af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], ep.Key())
+		// The session fact is produced by standardRecon above; look it up by kind rather than
+		// re-minting one, so there is exactly one session fact per asset and the key cannot drift.
+		sessKey := ""
+		for _, f := range af.Facts {
+			if f.Kind == FactSession {
+				sessKey = f.Key()
+				break
+			}
+		}
+
+		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
+		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
+		// route they learned, which is what endpointPath represents and what endpoint-rotate erases.
+		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
+		// class as PHVX-9e.
+		if sessKey != "" {
+			af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], sessKey)
+		}
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
 		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
 		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA

@@ -28,8 +28,10 @@ const (
 	FactNetworkIdentity = "networkIdentity"
 	// FactLateralEdge = a learned reachable edge to a specific neighbor (the Edge field).
 	FactLateralEdge = "lateralEdge"
-	// FactNodePlacement = which node the pod runs on (exposure: nodePlacement).
-	FactNodePlacement = "nodePlacement"
+	// FactNodePlacement was removed (PHVX-77): it had no producer, no consumer and no cover grant —
+	// two repo-wide references, both its own comment and declaration. The exposure VARIABLE
+	// model.VarNodePlacement is unrelated and still live; do not confuse the two if this is
+	// reintroduced.
 
 	// --- AI / inference recon facts (P-PHYSICS / UCW). The attacker's recon map of an
 	// inference workload. DEFINED NOW for both-products completeness; their RESET
@@ -91,14 +93,14 @@ type NeighborRef struct {
 // FactContext is the per-asset conditioning the recon profile needs, supplied by the
 // context + kill-chain layers (so the recon profile stays a pure fact/cover map).
 type FactContext struct {
-	AssetValue   float64
-	PHold        float64 // P(attacker still holds) in [0,1]
-	StageUrgency float64 // [0,1] urgency from the predictive belief horizon
+	AssetValue     float64
+	PHold          float64 // P(attacker still holds) in [0,1]
+	StageUrgency   float64 // [0,1] urgency from the predictive belief horizon
 	LateralUrgency float64 // [0,1] specifically for lateral-movement-stage urgency
-	BlastRadius  float64 // [0,1] normalized graph blast radius
-	Neighbors    []NeighborRef
-	HasGPU       bool
-	Stateful     bool
+	BlastRadius    float64 // [0,1] normalized graph blast radius
+	Neighbors      []NeighborRef
+	HasGPU         bool
+	Stateful       bool
 }
 
 // AssetFacts is the recon profile's output for one asset: the facts it exposes and,
