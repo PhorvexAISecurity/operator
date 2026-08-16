@@ -571,7 +571,7 @@ def a02(ctx):
     bad = []
     for r in acted:
         if r.get("action") in phoenix:
-            continue  # Phoenix path emits an AMTD CR; A03 verifies it in the cluster
+            continue  # Phoenix emits a SecurityEvent; A03 verifies the resulting cluster mutation
         if not r.get("handler") and not r.get("objectsTouched"):
             bad.append(f"{r.get('pod')} action={r.get('action')}: no handler, no object touched")
     if bad:
@@ -582,7 +582,7 @@ def a02(ctx):
 
 
 @check("A03", "actuator", "the cluster confirms the claimed change",
-       "independent ground truth: the pod UID, AMTD ownership, or the service's own log — "
+       "independent ground truth: the pod UID, active NetworkPolicy isolation, or the service's own log — "
        "never Phorvex's own report", "critical")
 def a03(ctx):
     if not ctx.ground_truth:

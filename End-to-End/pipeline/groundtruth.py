@@ -7,7 +7,7 @@ under test. A move we cannot check is reported as `unverifiable` — never as co
 
 VERIFIABLE = {
     "rotate": "the pod must come back with a fresh UID",
-    "quarantine": "the pod must be adopted by the AMTD CR",
+    "quarantine": "a deny-all NetworkPolicy must actively select the pod",
     "kv-reset": "vLLM must record reset_prefix_cache in its own log",
     "adapter-rotate": "vLLM must record an adapter unload/load in its own log",
 }
@@ -45,16 +45,18 @@ def verify(cluster, actuated_records, baseline_pods):
                               "a rotate was reported but the UID is untouched", f"uid={now[:8]}"))
 
         elif action == "quarantine":
-            owner = cluster.pod_uids(ns).get(pod, {}).get("owner", "")
-            if owner == "AdaptiveMovingTargetDefense":
+            state = cluster.quarantine_state(ns, pod)
+            if state is None:
+                out.append(_v(action, ns, pod, "unverifiable",
+                              "the pod or quarantine policy could not be read"))
+            elif state["active"]:
                 out.append(_v(action, ns, pod, "confirmed",
-                              "the pod moved out of the main set and into the AMTD CR", f"ownerKind={owner}"))
-            elif owner:
-                out.append(_v(action, ns, pod, "contradicted",
-                              "a quarantine was reported but the owner is still the main controller",
-                              f"ownerKind={owner}"))
+                              "the deny-all NetworkPolicy actively selects the pod",
+                              state["evidence"]))
             else:
-                out.append(_v(action, ns, pod, "unverifiable", "the pod's owner could not be read"))
+                out.append(_v(action, ns, pod, "contradicted",
+                              "a quarantine was reported but the deny-all policy does not select the pod",
+                              state["evidence"]))
 
         elif action in ("kv-reset", "adapter-rotate"):
             needle = "reset_prefix_cache" if action == "kv-reset" else "lora"

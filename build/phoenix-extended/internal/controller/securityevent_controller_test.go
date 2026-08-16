@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -150,6 +151,83 @@ func TestSecurityEventReconciler_ExactMatch_DeleteStillWorks(t *testing.T) {
 	var after corev1.Pod
 	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(pod), &after); err == nil {
 		t.Error("exact {timed,info,TimeBasedTrigger} -> delete should still delete the pod")
+	}
+}
+
+// TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod
+// covers the production regression where a deterministic deny-all NetworkPolicy
+// survived an older pod. The replacement pod had no selector label, and the
+// quarantine branch skipped all relabeling merely because the policy already
+// existed, so a SecurityEvent was recorded as applied without isolating anything.
+func TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod(t *testing.T) {
+	ctx := context.Background()
+	rule := amtdv1beta1.Rule{Type: "phorvex.quarantine", ThreatLevel: "high", Source: "PhorvexController"}
+	amtd := &amtdv1beta1.AdaptiveMovingTargetDefense{
+		ObjectMeta: metav1.ObjectMeta{Name: "phorvex-nats", Namespace: "nats", UID: "amtd-uid"},
+		Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
+			PodSelector: map[string]string{"r6th.io/rotation-target": "true"},
+			Strategy: []amtdv1beta1.ResponseStrategy{{
+				Rule:   rule,
+				Action: amtdv1beta1.AMTDAction{Quarantine: &amtdv1beta1.QuarantineAction{}},
+			}},
+		},
+	}
+	pod := managedPod("nats-0", "nats", "nats", "phorvex-nats")
+	pod.Labels = map[string]string{
+		"app":                     "nats",
+		"r6th.io/rotation-target": "true",
+	}
+	isController := true
+	pod.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "apps/v1", Kind: "StatefulSet", Name: "nats", UID: "statefulset-uid", Controller: &isController,
+	}}
+	event := &amtdv1beta1.SecurityEvent{
+		ObjectMeta: metav1.ObjectMeta{Name: "quarantine-event"},
+		Spec: amtdv1beta1.SecurityEventSpec{
+			Targets: []string{"nats/nats-0"}, Rule: rule, Description: "stateful quarantine",
+		},
+	}
+	policyName := "nats-nats-0-policy"
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: "nats"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{AMTD_NETWORK_POLICY: policyName}},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
+			Ingress:     []networkingv1.NetworkPolicyIngressRule{},
+			Egress:      []networkingv1.NetworkPolicyEgressRule{},
+		},
+	}
+
+	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(amtd, pod, event, policy).Build()
+	r := &SecurityEventReconciler{Client: cl, Scheme: seTestScheme}
+	result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: crclient.ObjectKey{Name: event.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.RequeueAfter == 0 {
+		t.Fatal("expected requeue while the StatefulSet still owns the isolated pod")
+	}
+
+	var gotPod corev1.Pod
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(pod), &gotPod); err != nil {
+		t.Fatalf("get quarantined pod: %v", err)
+	}
+	if got := gotPod.Labels[AMTD_NETWORK_POLICY]; got != policyName {
+		t.Fatalf("quarantine selector label = %q, want %q", got, policyName)
+	}
+	if gotPod.Labels["app"] != "" || gotPod.Annotations["app"] != "nats" {
+		t.Fatalf("non-AMTD label was not preserved under annotations: labels=%v annotations=%v", gotPod.Labels, gotPod.Annotations)
+	}
+
+	var gotPolicy networkingv1.NetworkPolicy
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(policy), &gotPolicy); err != nil {
+		t.Fatalf("get reused NetworkPolicy: %v", err)
+	}
+	if got := gotPolicy.Spec.PodSelector.MatchLabels[AMTD_NETWORK_POLICY]; got != policyName {
+		t.Fatalf("NetworkPolicy selector = %q, want %q", got, policyName)
+	}
+	if len(gotPolicy.Spec.Ingress) != 0 || len(gotPolicy.Spec.Egress) != 0 {
+		t.Fatalf("quarantine policy must remain deny-all: ingress=%v egress=%v", gotPolicy.Spec.Ingress, gotPolicy.Spec.Egress)
 	}
 }
 

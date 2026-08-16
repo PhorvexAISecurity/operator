@@ -347,13 +347,16 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			networkPolicyName := fmt.Sprintf("%s-%s-%s", pod.Namespace, pod.Name, "policy")
 
 			networkPolicy := &v1.NetworkPolicy{}
-			err = r.Client.Get(context.Background(), types.NamespacedName{
+			err = r.Client.Get(ctx, types.NamespacedName{
 				Namespace: pod.Namespace,
 				Name:      networkPolicyName,
 			}, networkPolicy)
 
-			if err != nil && errors.IsNotFound(err) {
-				networkPolicy := &v1.NetworkPolicy{
+			if err != nil {
+				if !errors.IsNotFound(err) {
+					return ctrl.Result{}, fmt.Errorf("get quarantine NetworkPolicy %s/%s: %w", pod.Namespace, networkPolicyName, err)
+				}
+				networkPolicy = &v1.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      networkPolicyName,
 						Namespace: pod.Namespace,
@@ -381,32 +384,34 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					)
 				}
 
-				err = r.Create(ctx, networkPolicy)
-				if err != nil {
-					log.Error(err, "Failed to create Networkpolicy in the cluster",
+				if err = r.Create(ctx, networkPolicy); err != nil {
+					log.Error(err, "Failed to create NetworkPolicy in the cluster",
 						"NetworkPolicy", networkPolicy.Name,
 						"Namespace", networkPolicy.Namespace)
-				}
-
-				// Relabel pod:
-				// i) move labels under annotations to preserve them - except those that belong to AMTD management,
-				for key, value := range pod.ObjectMeta.Labels {
-					if !isSetContain(AMTD.Spec.PodSelector, map[string]string{key: value}) {
-						pod.ObjectMeta.Annotations[key] = value
-						delete(pod.ObjectMeta.Labels, key)
-					}
-				}
-				// ii) add new label that match networkPolicy podSelector
-				pod.ObjectMeta.Labels[AMTD_NETWORK_POLICY] = networkPolicyName
-
-				err = r.Client.Update(ctx, pod)
-				if err != nil {
-					log.Error(err, fmt.Sprintf(`Failed to update pod: "%s": %s`, pod.Name, err.Error()))
 					return ctrl.Result{}, err
 				}
-
-				log.Info(fmt.Sprintf(`Pod %s was put in quarantine`, pod.Name))
 			}
+
+			// Relabel on every quarantine event, not only when the NetworkPolicy is first
+			// created. A recreated pod can outlive the deterministic policy name and lose
+			// this selector label; treating the existing policy as a completed quarantine
+			// then records success while no pod is isolated.
+			// i) move labels under annotations to preserve them - except those that belong to AMTD management,
+			for key, value := range pod.ObjectMeta.Labels {
+				if !isSetContain(AMTD.Spec.PodSelector, map[string]string{key: value}) {
+					pod.ObjectMeta.Annotations[key] = value
+					delete(pod.ObjectMeta.Labels, key)
+				}
+			}
+			// ii) add the label that makes the deny-all policy select this pod
+			pod.ObjectMeta.Labels[AMTD_NETWORK_POLICY] = networkPolicyName
+
+			if err = r.Client.Update(ctx, pod); err != nil {
+				log.Error(err, fmt.Sprintf(`Failed to update pod: "%s": %s`, pod.Name, err.Error()))
+				return ctrl.Result{}, err
+			}
+
+			log.Info(fmt.Sprintf(`Pod %s was put in quarantine`, pod.Name))
 
 			// Set AMTD instance as the owner and controller for the Pod - this
 			// step cannot combined into a single update with relabel, because

@@ -235,19 +235,19 @@ jobs:
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
-  # ── 5. Extended Phoenix operator (optional — BUILD_PHOENIX gate) ───────────
+  # ── 5. Extended Phoenix operator (always built for PR changes; optional elsewhere) ──
   build-phoenix:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.phoenix == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     env:
-      BUILD_PHOENIX: ${{ vars.BUILD_PHOENIX || 'false' }}
+      BUILD_PHOENIX: ${{ github.event_name == 'pull_request' && 'true' || vars.BUILD_PHOENIX || 'false' }}
     steps:
       - name: Skip if BUILD_PHOENIX != true
         if: env.BUILD_PHOENIX != 'true'
         run: |
           echo "BUILD_PHOENIX is not 'true' — skipping extended Phoenix build."
-          echo "Set the BUILD_PHOENIX repository variable to 'true' to enable."
+          echo "PRs that change Phoenix always build it; set the BUILD_PHOENIX repository variable to 'true' to enable it for other events."
 
       - uses: actions/checkout@v4
         if: env.BUILD_PHOENIX == 'true'
