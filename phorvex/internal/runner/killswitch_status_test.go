@@ -10,10 +10,12 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -69,12 +71,12 @@ func (*killSwitchOptimizer) Decide(views []*model.WorkloadView, _ model.Policy) 
 	}
 	p := views[0].Pod
 	return []model.Decision{{
-		Namespace: p.Namespace,
-		Pod:       p.Name,
-		Action:    model.ActionRotate,
-		Selected:  true,
-		Feasible:  true,
-		Risk:      0.5,
+		Namespace:     p.Namespace,
+		Pod:           p.Name,
+		Action:        model.ActionRotate,
+		Selected:      true,
+		Feasible:      true,
+		CoverageValue: 0.5,
 	}}
 }
 
@@ -273,5 +275,74 @@ func TestKillSwitchStatusDisagreementSurvivesFailedTransition(t *testing.T) {
 		"namespace": policy.Namespace, "policy": policy.Name,
 	}); got != 1 {
 		t.Fatalf("failed kill-switch status transition disagreement gauge = %v, want 1", got)
+	}
+}
+
+func TestOperationalStatusRetriesConflictAndPreservesControllerCondition(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	policy := &v1.PhorvexPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "status-race", Name: "policy", Generation: 7},
+	}
+	attempts := 0
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithStatusSubresource(&v1.PhorvexPolicy{}).
+		WithObjects(policy).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, delegate client.Client, subresource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				attempts++
+				if attempts == 1 {
+					// Simulate the validation reconciler winning the first write. The runner must
+					// re-read this status before retrying, or it either drops the kill-switch
+					// transition or erases ValidationError with a stale snapshot.
+					var concurrent v1.PhorvexPolicy
+					if err := delegate.Get(ctx, client.ObjectKeyFromObject(obj), &concurrent); err != nil {
+						return err
+					}
+					meta.SetStatusCondition(&concurrent.Status.Conditions, metav1.Condition{
+						Type:               "ValidationError",
+						Status:             metav1.ConditionFalse,
+						Reason:             "Valid",
+						Message:            "policy accepted",
+						ObservedGeneration: concurrent.Generation,
+					})
+					if err := delegate.Status().Update(ctx, &concurrent); err != nil {
+						return err
+					}
+					return apierrors.NewConflict(
+						schema.GroupResource{Group: "phorvex.ai", Resource: "phorvexpolicies"},
+						obj.GetName(), errors.New("injected concurrent status writer"),
+					)
+				}
+				return delegate.SubResource(subresource).Update(ctx, obj, opts...)
+			},
+		}).Build()
+
+	m := &Manager{Client: c, Log: logr.Discard()}
+	e := &policyEntry{
+		key:    types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
+		tenant: "tenant-a",
+	}
+	m.updateStatus(context.Background(), e, 3, 1, 0, true, time.Now())
+
+	if attempts != 2 {
+		t.Fatalf("status update attempts = %d, want 2 (one conflict and one retry)", attempts)
+	}
+	var got v1.PhorvexPolicy
+	if err := c.Get(context.Background(), e.key, &got); err != nil {
+		t.Fatal(err)
+	}
+	validation := meta.FindStatusCondition(got.Status.Conditions, "ValidationError")
+	killSwitch := meta.FindStatusCondition(got.Status.Conditions, "KillSwitch")
+	if validation == nil || validation.Status != metav1.ConditionFalse {
+		t.Fatalf("runner retry erased the controller-owned ValidationError condition: %+v", got.Status.Conditions)
+	}
+	if !got.Status.KillSwitchEngaged || killSwitch == nil || killSwitch.Status != metav1.ConditionTrue {
+		t.Fatalf("kill-switch transition was lost after status conflict: %+v", got.Status)
+	}
+	if got.Status.DecisionsTotal != 1 {
+		t.Fatalf("conflict retry counted the same decision more than once: got %d, want 1", got.Status.DecisionsTotal)
 	}
 }
