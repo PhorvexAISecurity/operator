@@ -268,6 +268,38 @@ class Cluster:
         owner, _, claims = out.strip("'").partition("|")
         return owner in ("StatefulSet", "Job") or bool(claims.strip())
 
+    def quarantine_state(self, namespace, pod):
+        """Read the real Phoenix quarantine effect: a deny-all policy selecting the pod."""
+        policy = f"{namespace}-{pod}-policy"
+        rc, pod_out, _ = self.kubectl(
+            f"-n {shlex.quote(namespace)} get pod {shlex.quote(pod)} -o json")
+        if rc != 0:
+            return None
+        rc, policy_out, _ = self.kubectl(
+            f"-n {shlex.quote(namespace)} get networkpolicy {shlex.quote(policy)} -o json")
+        if rc != 0:
+            return {"active": False, "policy": policy,
+                    "evidence": f"NetworkPolicy {policy} is missing"}
+        try:
+            pod_doc, policy_doc = json.loads(pod_out), json.loads(policy_out)
+        except json.JSONDecodeError:
+            return None
+
+        label_key = "amtd.r6security.com/network-policy"
+        pod_label = (pod_doc.get("metadata", {}).get("labels", {}) or {}).get(label_key, "")
+        spec = policy_doc.get("spec", {}) or {}
+        selector = ((spec.get("podSelector", {}) or {}).get("matchLabels", {}) or {}).get(label_key, "")
+        policy_types = set(spec.get("policyTypes", []) or [])
+        deny_all = not (spec.get("ingress") or []) and not (spec.get("egress") or [])
+        active = (pod_label == policy and selector == policy and deny_all and
+                  {"Ingress", "Egress"}.issubset(policy_types))
+        return {
+            "active": active,
+            "policy": policy,
+            "evidence": (f"podLabel={pod_label or '<missing>'}; selector={selector or '<missing>'}; "
+                         f"denyAll={str(deny_all).lower()}; policyTypes={','.join(sorted(policy_types)) or '<missing>'}"),
+        }
+
     def container_log(self, namespace, pod, since="3m", grep=None, tail=400):
         cmd = f"-n {shlex.quote(namespace)} logs {shlex.quote(pod)} --since={since} --tail={tail}"
         rc, out, _ = self.kubectl(cmd, timeout=35)
