@@ -605,7 +605,19 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 	}
 	actionsSupport := m.debounceActionsSupported(e, unsupportedEnabledActions(pol, views, snap))
 
-	decisions := m.Optimizer.Decide(views, pol)
+	decisions, err := decideTick(m.Optimizer, views, pol)
+	if err != nil {
+		metrics.RecordActionSetRejection(pol.Tenant, "cross-block-collision")
+		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
+			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name())
+		m.Clock.RetainTenant(pol.Tenant, keep)
+		m.mu.Lock()
+		if cur := m.policies[e.key.String()]; cur != nil {
+			cur.lastTick = snap.Now
+		}
+		m.mu.Unlock()
+		return
+	}
 
 	// Effective actuation gate (FR8): a tenant is dry-run if its policy says so OR its
 	// namespace is annotated phorvex.ai/dry-run; the global kill-switch suppresses on top.
@@ -668,6 +680,13 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 		cur.lastTick = snap.Now
 	}
 	m.mu.Unlock()
+}
+
+func decideTick(optimizer decision.Optimizer, views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
+	if checked, ok := optimizer.(decision.CheckedOptimizer); ok {
+		return checked.DecideChecked(views, pol)
+	}
+	return optimizer.Decide(views, pol), nil
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, viewByKey map[string]*model.WorkloadView) int {

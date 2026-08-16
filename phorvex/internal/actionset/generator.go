@@ -12,6 +12,8 @@
 package actionset
 
 import (
+	"fmt"
+
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
@@ -32,9 +34,35 @@ type Candidate struct {
 type ActionSet struct {
 	Candidates  []Candidate
 	FactWeights map[string]float64
+	// CrossBlockCollisions records the structural violations that make this entire
+	// tick unsafe to optimize. Rejected is fail-closed: no candidate may be selected.
+	CrossBlockCollisions []CrossBlockCollision
+	Rejected             bool
 	// Excluded records (asset,action,reason) pairs pruned by a hard constraint —
 	// surfaced for the audit/inviolability proof, never selectable.
 	Excluded []Exclusion
+}
+
+// CrossBlockCollision is one recon key claimed by two distinct pod decision blocks.
+// Reuse by multiple actions inside one block is legal under the partition constraint;
+// reuse across blocks breaks modularity and voids the exact-optimality guarantee.
+type CrossBlockCollision struct {
+	Key              string
+	ExistingBlock    string
+	ConflictingBlock string
+}
+
+func (c CrossBlockCollision) Error() string {
+	return fmt.Sprintf("cross-block recon-key collision: key %q belongs to both %q and %q",
+		c.Key, c.ExistingBlock, c.ConflictingBlock)
+}
+
+// CollisionError returns the first structural error that rejected this set.
+func (s ActionSet) CollisionError() error {
+	if len(s.CrossBlockCollisions) == 0 {
+		return nil
+	}
+	return s.CrossBlockCollisions[0]
 }
 
 // Exclusion is one pruned move and the hard constraint that pruned it.
@@ -87,12 +115,44 @@ func GeneratableActions() []model.Action {
 // The set provably changes with state and contains NO hard-constraint-violating move.
 func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
 	out := ActionSet{FactWeights: map[string]float64{}}
+	keyOwners := map[string]string{}
+	claim := func(factKey, block string) bool {
+		owner, exists := keyOwners[factKey]
+		if !exists {
+			keyOwners[factKey] = block
+			return true
+		}
+		if owner == block {
+			return true // legal within-pod overlap across facts/actions
+		}
+		out.CrossBlockCollisions = append(out.CrossBlockCollisions, CrossBlockCollision{
+			Key: factKey, ExistingBlock: owner, ConflictingBlock: block,
+		})
+		out.Rejected = true
+		// Leave no partially generated candidates behind. Even a caller that forgets
+		// to inspect CollisionError cannot select from a structurally invalid set.
+		out.Candidates = nil
+		return false
+	}
 	for _, v := range views {
 		key := v.Pod.Namespace + "/" + v.Pod.Name
 		af := d.Recon.AssetFacts(v, d.FactContext(v))
 		for _, f := range af.Facts {
-			if w := f.Weight; w > out.FactWeights[f.Key()] {
-				out.FactWeights[f.Key()] = w
+			factKey := f.Key()
+			if !claim(factKey, key) {
+				return out
+			}
+			if w := f.Weight; w > out.FactWeights[factKey] {
+				out.FactWeights[factKey] = w
+			}
+		}
+		// Scan every declared cover, including disabled actions. A topology-conditional
+		// collision is a taxonomy violation independent of this tenant's current policy.
+		for _, coverKeys := range af.CoverByAction {
+			for _, factKey := range coverKeys {
+				if !claim(factKey, key) {
+					return out
+				}
 			}
 		}
 		for _, action := range enabledActions(pol) {

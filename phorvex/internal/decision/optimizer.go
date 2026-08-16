@@ -16,6 +16,14 @@ type Optimizer interface {
 	Decide(views []*model.WorkloadView, pol model.Policy) []model.Decision
 }
 
+// CheckedOptimizer is implemented by brains whose dynamic substrate can be structurally
+// invalid. The runner uses this seam to reject the whole tick instead of treating an
+// invalid empty set as an ordinary no-op decision.
+type CheckedOptimizer interface {
+	Optimizer
+	DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error)
+}
+
 // RotationObserver is the optional feedback seam implemented by an optimizer with
 // an online rotation-cost learner. The runner invokes it only for completed,
 // measured live rotations; P0 and other stateless optimizers need not implement it.
@@ -28,4 +36,5 @@ func (*Engine) Name() string { return "p0-greedy" }
 
 var _ Optimizer = (*Engine)(nil)
 var _ Optimizer = (*CoverageEngine)(nil)
+var _ CheckedOptimizer = (*CoverageEngine)(nil)
 var _ RotationObserver = (*CoverageEngine)(nil)

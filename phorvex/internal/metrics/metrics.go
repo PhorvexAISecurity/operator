@@ -93,6 +93,11 @@ var (
 		Help: "Decision ticks executed, by tenant.",
 	}, []string{"tenant"})
 
+	actionSetRejections = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_action_set_rejections_total",
+		Help: "Decision ticks rejected before optimization because the generated action set violated a structural invariant.",
+	}, []string{"tenant", "reason"})
+
 	tickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "phorvex_tick_duration_seconds",
 		Help:    "Wall-clock duration of a decision tick (NFR1: <1s for <=1000 pods).",
@@ -138,7 +143,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, tickDuration,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
 }
@@ -214,6 +219,11 @@ func PublishTick(tenant string, decisions []model.Decision, exposures map[string
 // RecordActuation counts a real emit to Phoenix (active mode).
 func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
+}
+
+// RecordActionSetRejection counts a fail-closed tick before any decision or actuation.
+func RecordActionSetRejection(tenant, reason string) {
+	actionSetRejections.WithLabelValues(tenant, reason).Inc()
 }
 
 func boolStr(b bool) string {

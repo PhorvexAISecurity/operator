@@ -219,11 +219,21 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 
 // Decide runs the per-tick coverage optimization and returns one Decision per pod.
 func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) []model.Decision {
+	decisions, _ := e.DecideChecked(views, pol)
+	return decisions
+}
+
+// DecideChecked rejects a structurally invalid ActionSet before selection or learning.
+// The runner calls this checked seam and logs/counts the failure for the production tick.
+func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
 	now := e.now()
 	tcost := e.costFor(pol.Tenant)
 	lambda := tcost.Dual.Lambda()
 
 	set, ctxByKey := e.AssembleSet(views, pol)
+	if err := set.CollisionError(); err != nil {
+		return nil, err
+	}
 
 	candsByAsset := map[string][]int{}
 	for i := range set.Candidates {
@@ -487,7 +497,7 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 		}
 	}
 
-	return decisions
+	return decisions, nil
 }
 
 // attributionOf decomposes a move's value into SHAP-style terms: per recon-fact-kind
