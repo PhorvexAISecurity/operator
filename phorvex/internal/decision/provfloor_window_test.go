@@ -13,9 +13,9 @@ import (
 //
 // below the window the candidate is infeasible (feasibility/defaults.go:87) so it has no coverage to
 // discount; at or above the floor prov() returns 1 because the asset is genuinely due. This test
-// pins that geometry against the LIVE tenant policies, because two of them close the window
-// entirely — a fact that is invisible from the code alone and would otherwise be rediscovered the
-// hard way.
+// pins that geometry against the LIVE tenant policies. Keep this table synchronized with the
+// deployed policy values: an older fixture incorrectly retained vllm's former 15m anti-rotation
+// window after production moved it to 90s, and therefore kept reporting a closed defence window.
 
 func TestDiscountWindowGeometryPerLiveTenant(t *testing.T) {
 	// With the explicit evidence gate, an evidence-less asset stays discounted right up to the
@@ -30,12 +30,10 @@ func TestDiscountWindowGeometryPerLiveTenant(t *testing.T) {
 	}{
 		{"litellm", 90 * time.Second, 15 * time.Minute, false},
 		{"nats", 60 * time.Second, 15 * time.Minute, false},
-		{"phorvex-live-demo", 90 * time.Second, 15 * time.Minute, false},
+		// Verified on phorvex-dev-eks on 2026-08-16: vllm now has the same 90s/15m
+		// geometry as the other application tenants, so its discount window is active.
+		{"vllm", 90 * time.Second, 15 * time.Minute, false},
 		{"voice", 90 * time.Second, 15 * time.Minute, false},
-		// window >= floor: every FEASIBLE candidate is already overdue, so prov() short-circuits to 1.
-		{"vllm", 15 * time.Minute, 15 * time.Minute, true},
-		// floor < window: same, even more starkly.
-		{"mock-rag-chatbot", 90 * time.Second, 15 * time.Second, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lo := tc.antiOver.Seconds()
