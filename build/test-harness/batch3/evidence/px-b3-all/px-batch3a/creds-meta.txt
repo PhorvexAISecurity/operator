@@ -1,0 +1,2 @@
+litellm key length: 9 (masked) | model: gpt-4o-mini
+GET /v1/models -> 400

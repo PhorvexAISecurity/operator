@@ -1,0 +1,2 @@
+["rotate"] reactiveOnly=true
+controller pod: phorvex-phorvex-84b9d85485-rf542

@@ -1,0 +1,5 @@
+attacker pod: voice-bot-555795c9-bwrrm
+refused    chroma.document-store.svc.cluster.local:8000
+refused    litellm.litellm.svc.cluster.local:4000
+refused    mongo.document-store.svc.cluster.local:27017
+refused    mcp-server.mcp.svc.cluster.local:8000

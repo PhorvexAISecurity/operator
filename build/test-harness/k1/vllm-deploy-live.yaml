@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "8"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"vllm","r6th.io/rotation-target":"true"},"name":"vllm","namespace":"vllm"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"vllm"}},"template":{"metadata":{"annotations":{"phorvex.ai/health-path":"/health","phorvex.ai/kv-reset-path":"/reset_prefix_cache","phorvex.ai/model-id":"Qwen2.5-0.5B-Instruct","phorvex.ai/serving-port":"8000"},"labels":{"app":"vllm","r6th.io/rotation-target":"true"}},"spec":{"containers":[{"args":["--model","Qwen/Qwen2.5-0.5B-Instruct","--dtype","half","--max-model-len","4096","--gpu-memory-utilization","0.3","--enable-prefix-caching","--port","8000"],"env":[{"name":"HF_HUB_DISABLE_TELEMETRY","value":"1"}],"image":"vllm/vllm-openai:v0.6.6.post1","name":"vllm","ports":[{"containerPort":8000}],"readinessProbe":{"failureThreshold":60,"httpGet":{"path":"/health","port":8000},"initialDelaySeconds":60,"periodSeconds":10},"resources":{"limits":{"cpu":"2","memory":"6Gi","nvidia.com/gpu":1},"requests":{"cpu":"1","memory":"3Gi","nvidia.com/gpu":1}}}],"tolerations":[{"effect":"NoSchedule","key":"nvidia.com/gpu","operator":"Exists"}]}}}}
+  creationTimestamp: "2026-06-28T22:03:53Z"
+  generation: 11
+  labels:
+    app: vllm
+    r6th.io/rotation-target: "true"
+  name: vllm
+  namespace: vllm
+  resourceVersion: "32884685"
+  uid: 7a53807a-74a4-4684-a47a-93c9593eb663
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: vllm
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        phorvex.ai/health-path: /health
+        phorvex.ai/kv-reset-path: /reset_prefix_cache
+        phorvex.ai/model-id: Qwen2.5-0.5B-Instruct
+        phorvex.ai/serving-port: "8000"
+      labels:
+        app: vllm
+        r6th.io/rotation-target: "true"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: vllm
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      containers:
+      - args:
+        - --model
+        - Qwen/Qwen2.5-0.5B-Instruct
+        - --dtype
+        - half
+        - --max-model-len
+        - "4096"
+        - --gpu-memory-utilization
+        - "0.35"
+        - --swap-space
+        - "0"
+        - --enable-prefix-caching
+        - --enable-lora
+        - --max-loras
+        - "4"
+        - --max-lora-rank
+        - "16"
+        - --port
+        - "8000"
+        env:
+        - name: VLLM_SERVER_DEV_MODE
+          value: "1"
+        - name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
+          value: "1"
+        - name: HF_HUB_DISABLE_TELEMETRY
+          value: "1"
+        image: vllm/vllm-openai:v0.7.3
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: vllm
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: "2"
+            memory: 10Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "1"
+            memory: 3Gi
+            nvidia.com/gpu: "1"
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      enableServiceLinks: false
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+status:
+  availableReplicas: 2
+  conditions:
+  - lastTransitionTime: "2026-06-28T22:14:08Z"
+    lastUpdateTime: "2026-08-03T09:36:54Z"
+    message: ReplicaSet "vllm-7569b4d888" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  - lastTransitionTime: "2026-08-03T15:18:22Z"
+    lastUpdateTime: "2026-08-03T15:18:22Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 11
+  readyReplicas: 2
+  replicas: 2
+  terminatingReplicas: 0
+  updatedReplicas: 2

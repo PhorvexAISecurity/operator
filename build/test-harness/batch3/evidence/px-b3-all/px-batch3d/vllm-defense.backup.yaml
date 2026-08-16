@@ -1,0 +1,74 @@
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"phorvex.ai/v1alpha1","kind":"PhorvexPolicy","metadata":{"annotations":{},"creationTimestamp":"2026-06-28T22:30:23Z","generation":19,"name":"vllm-defense","namespace":"vllm","resourceVersion":"37152470","uid":"58e0ea92-ab50-41ba-acd8-42f4b4fe3547"},"spec":{"actions":{"enabled":["kv-reset","adapter-rotate"]},"assetValue":{"blastRadiusFromGraph":true,"fromLabels":{"data-class":{"internal":"0.4","public":"0.1","restricted":"1.0"}},"weightSecrets":"0.8"},"budget":{"antiOverRotationWindow":"15m","maxMovesPerTick":1,"proactiveFloor":"15m","tickInterval":"10s"},"mode":"active","objective":{"costWeights":{"flowDisruption":"0.6","normSparsity":"0.4"},"lambda":"0.5"},"selector":{"matchLabels":{"r6th.io/rotation-target":"true"}},"slo":{"minAvailableReplicas":1},"tenant":"vllm","triggers":{"eventDriven":true,"reactiveOnly":false}},"status":{"actuated":true,"conditions":[{"lastTransitionTime":"2026-06-28T22:30:23Z","message":"policy accepted","observedGeneration":19,"reason":"Valid","status":"False","type":"ValidationError"},{"lastTransitionTime":"2026-06-28T22:30:24Z","message":"phorvex is ingesting, scoring and logging decisions","observedGeneration":19,"reason":"Ticking","status":"True","type":"Ready"},{"lastTransitionTime":"2026-07-30T15:31:23Z","message":"actuation enabled","observedGeneration":19,"reason":"Active","status":"False","type":"DryRun"}],"decisionsTotal":445024,"killSwitchEngaged":true,"lastDecisionTime":"2026-08-10T12:01:51Z","lastTickTime":"2026-08-10T12:02:02Z","observedGeneration":19,"selectedPods":2,"tenant":"vllm"}}
+  creationTimestamp: "2026-08-10T12:11:26Z"
+  generation: 13
+  name: vllm-defense
+  namespace: vllm
+  resourceVersion: "37941777"
+  uid: 7bf5e5d4-e073-433e-9d5e-0cd4b6fa23ea
+spec:
+  actions:
+    enabled:
+    - kv-reset
+    - adapter-rotate
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: "0.4"
+        public: "0.1"
+        restricted: "1.0"
+    weightSecrets: "0.8"
+  budget:
+    antiOverRotationWindow: 15m
+    maxMovesPerTick: 1
+    proactiveFloor: 15m
+    tickInterval: 10s
+  mode: active
+  objective:
+    costWeights:
+      flowDisruption: "0.6"
+      normSparsity: "0.4"
+    lambda: "0.5"
+  selector:
+    matchLabels:
+      r6th.io/rotation-target: "true"
+  slo:
+    minAvailableReplicas: 1
+  tenant: vllm
+  triggers:
+    eventDriven: true
+    reactiveOnly: false
+status:
+  actuated: true
+  conditions:
+  - lastTransitionTime: "2026-08-10T12:11:26Z"
+    message: policy accepted
+    observedGeneration: 13
+    reason: Valid
+    status: "False"
+    type: ValidationError
+  - lastTransitionTime: "2026-08-10T12:11:31Z"
+    message: phorvex is ingesting, scoring and logging decisions
+    observedGeneration: 13
+    reason: Ticking
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-08-10T12:11:31Z"
+    message: actuation enabled
+    observedGeneration: 13
+    reason: Active
+    status: "False"
+    type: DryRun
+  decisionsTotal: 13841
+  killSwitchEngaged: true
+  lastDecisionTime: "2026-08-11T17:58:42Z"
+  lastTickTime: "2026-08-11T17:58:42Z"
+  movesThisWindow: 1
+  observedGeneration: 13
+  selectedPods: 1
+  tenant: vllm

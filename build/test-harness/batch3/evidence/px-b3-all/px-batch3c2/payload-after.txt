@@ -1,0 +1,5 @@
+--- bootmark-5d4fc4c669-qgsgk ---
+SPEC-BORNE-PAYLOAD booted=17:55:50Z
+--- bootmark-5d4fc4c669-tsw8k ---
+SPEC-BORNE-PAYLOAD booted=17:57:21Z
+(a payload with a boot time AFTER the event time on a NEW uid = spec-borne poison re-executed post-rotation)

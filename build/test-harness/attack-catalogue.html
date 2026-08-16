@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phorvex Attack Evaluation — general-purpose + AI voice agent</title>
+<style>
+  :root {
+    --ground: #eef0f4;
+    --surface: #ffffff;
+    --surface-2: #f7f8fb;
+    --ink: #161a22;
+    --ink-soft: #3c4656;
+    --muted: #5c6675;
+    --line: #d9dde6;
+    --accent: #34407a;
+    --accent-soft: #e7e9f4;
+    --kill: #1f8a6d;
+    --kill-bg: #e2f2ec;
+    --bound: #a9701a;
+    --bound-bg: #f5ecd9;
+    --miss: #bd4436;
+    --miss-bg: #f6e4e0;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --maxw: 940px;
+    --readw: 720px;
+  }
+  :root { --ink-soft: #3c4656; --muted: #5c6675; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0d1016;
+      --surface: #161b23;
+      --surface-2: #1c222c;
+      --ink: #e8ebf2;
+      --ink-soft: #c3cad6;
+      --muted: #939eae;
+      --line: #2a313d;
+      --accent: #8b95e8;
+      --accent-soft: #232a44;
+      --kill: #4bc79e;
+      --kill-bg: #14302a;
+      --bound: #e0a64b;
+      --bound-bg: #322915;
+      --miss: #e5786b;
+      --miss-bg: #37211e;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #eef0f4; --surface: #ffffff; --surface-2: #f7f8fb; --ink: #161a22;
+    --ink-soft: #3c4656; --muted: #5c6675; --line: #d9dde6; --accent: #34407a;
+    --accent-soft: #e7e9f4; --kill: #1f8a6d; --kill-bg: #e2f2ec; --bound: #a9701a;
+    --bound-bg: #f5ecd9; --miss: #bd4436; --miss-bg: #f6e4e0;
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1016; --surface: #161b23; --surface-2: #1c222c; --ink: #e8ebf2;
+    --ink-soft: #c3cad6; --muted: #939eae; --line: #2a313d; --accent: #8b95e8;
+    --accent-soft: #232a44; --kill: #4bc79e; --kill-bg: #14302a; --bound: #e0a64b;
+    --bound-bg: #322915; --miss: #e5786b; --miss-bg: #37211e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-sans); line-height: 1.62;
+    -webkit-font-smoothing: antialiased; font-size: 17px;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .prose { max-width: var(--readw); }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  h1 { font-size: clamp(2rem, 5vw, 2.7rem); line-height: 1.08; letter-spacing: -0.02em;
+       font-weight: 800; margin: 0.5rem 0 0; text-wrap: balance; }
+  h2 { font-size: 1.55rem; letter-spacing: -0.01em; font-weight: 750; margin: 0 0 0.2rem;
+       text-wrap: balance; }
+  h3 { font-size: 1.02rem; font-weight: 700; margin: 0 0 0.3rem; }
+  p { margin: 0.7rem 0; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 680; }
+  a { color: var(--accent); }
+
+  header.hero {
+    border-bottom: 1px solid var(--line); background: var(--surface);
+    padding: clamp(48px, 8vw, 92px) 0 40px;
+  }
+  .hero .lede { font-size: 1.24rem; color: var(--ink-soft); max-width: 40ch; margin-top: 1rem; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 26px;
+    font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted);
+  }
+  .meta-row span { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  section { padding: 52px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+
+  /* stat tiles */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0 4px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+          padding: 20px 20px 18px; }
+  .stat .n { font-family: var(--font-mono); font-size: 2.1rem; font-weight: 700;
+             letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .k { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+  .stat.kill .n { color: var(--kill); }
+  .stat.miss .n { color: var(--miss); }
+
+  /* callout */
+  .callout {
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 4px solid var(--accent); border-radius: 12px;
+    padding: 22px 24px; margin: 24px 0;
+  }
+  .callout.key { border-left-color: var(--miss); background: var(--surface); }
+  .callout h3 { color: var(--ink); }
+  .callout .big { font-size: 1.12rem; color: var(--ink); }
+
+  /* funnel */
+  .funnel { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch;
+            gap: 10px; margin: 28px 0 8px; }
+  .fstep { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+           padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .fstep .n { font-family: var(--font-mono); font-size: 1.7rem; font-weight: 700;
+              font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .fstep .lab { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.1em;
+                text-transform: uppercase; color: var(--muted); }
+  .fstep .d { font-size: 0.86rem; color: var(--ink-soft); }
+  .fstep.final { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .farrow { align-self: center; color: var(--muted); font-family: var(--font-mono);
+            font-size: 1.3rem; }
+
+  /* old vs new */
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; }
+  .card2 { border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--surface); }
+  .card2.old { border-top: 3px solid var(--miss); }
+  .card2.new { border-top: 3px solid var(--kill); }
+  .card2 .tag { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em;
+                text-transform: uppercase; font-weight: 600; }
+  .card2.old .tag { color: var(--miss); }
+  .card2.new .tag { color: var(--kill); }
+  .card2 ul { margin: 12px 0 0; padding-left: 18px; }
+  .card2 li { margin: 6px 0; color: var(--ink-soft); font-size: 0.95rem; }
+  .card2 code { font-family: var(--font-mono); font-size: 0.85em; background: var(--surface-2);
+                padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+  /* dimension list */
+  .dims { display: grid; gap: 12px; margin-top: 20px; }
+  .dim { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start;
+         background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .dim .num { font-family: var(--font-mono); font-weight: 700; color: var(--accent);
+              font-size: 0.95rem; padding-top: 2px; }
+  .dim h3 { margin-bottom: 2px; }
+  .dim p { margin: 0; font-size: 0.92rem; }
+
+  /* verdict legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 22px 0 4px;
+            font-size: 0.86rem; color: var(--ink-soft); }
+  .legend .item { display: inline-flex; align-items: center; gap: 8px; }
+
+  .chip { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+          letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px;
+          border-radius: 999px; white-space: nowrap; }
+  .chip.kill { color: var(--kill); background: var(--kill-bg); }
+  .chip.bound { color: var(--bound); background: var(--bound-bg); }
+  .chip.miss { color: var(--miss); background: var(--miss-bg); }
+
+  /* group header */
+  .grouphead { display: flex; align-items: baseline; justify-content: space-between;
+               gap: 12px; margin: 34px 0 14px; flex-wrap: wrap; }
+  .grouphead h3 { font-size: 1.18rem; margin: 0; }
+  .grouphead .sub { color: var(--muted); font-size: 0.9rem; }
+  .grouphead:first-of-type { margin-top: 8px; }
+
+  /* attack grid */
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .atk { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+         padding: 16px 18px; border-left: 4px solid var(--line); display: flex;
+         flex-direction: column; gap: 7px; }
+  .atk.kill { border-left-color: var(--kill); }
+  .atk.bound { border-left-color: var(--bound); }
+  .atk.miss { border-left-color: var(--miss); }
+  .atk .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .atk .id { font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted);
+             font-weight: 600; letter-spacing: 0.04em; }
+  .atk h4 { margin: 0; font-size: 1rem; font-weight: 700; line-height: 1.25; }
+  .atk p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); line-height: 1.5; }
+  .atk .foot { margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .cve { font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted);
+         border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+
+  .say { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px;
+         padding: 22px 24px; }
+  .say p { color: var(--ink); }
+  .say .q { font-size: 1.05rem; font-style: italic; }
+
+  footer { padding: 40px 0 60px; color: var(--muted); font-size: 0.82rem;
+           font-family: var(--font-mono); }
+
+  @media (max-width: 720px) {
+    body { font-size: 16px; }
+    .stats { grid-template-columns: 1fr; }
+    .funnel { grid-template-columns: 1fr; }
+    .farrow { transform: rotate(90deg); }
+    .vs { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { opacity: 0; transform: translateY(8px); animation: rise 0.5s ease forwards; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+  }
+</style>
+
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Phorvex · red-team evaluation · assume-breach</div>
+    <h1>Where a moving-target defense wins — and where it can't</h1>
+    <p class="lede">The full picture: the general-purpose intrusion attacks Phorvex is built to stop, and the AI voice agent's semantic &amp; data risks it can't reach.</p>
+    <div class="meta-row">
+      <span><span class="dot" style="background:var(--kill)"></span>KILL — Phorvex stops it</span>
+      <span><span class="dot" style="background:var(--bound)"></span>BOUND — only limits it</span>
+      <span><span class="dot" style="background:var(--miss)"></span>MISS — can't touch it</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <div class="eyebrow">The organizing idea</div>
+    <h2>One law decides every verdict</h2>
+    <div class="callout">
+      <p class="big"><strong>Phorvex wins exactly when the attacker's payload is ephemeral, in-pod state</strong> — a shell, an implant, a miner, a live hands-on session. Rotation destroys that on a clock, detector or not. It <strong>loses</strong> when the payload lives elsewhere: data at rest, a stable Service address, a static or cloud credential, or a one-shot grab.</p>
+    </div>
+    <p class="prose">That one line sorts every attack into two threat models — and Phorvex is specialized for one of them:</p>
+    <div class="vs">
+      <div class="card2 new">
+        <div class="tag">Phorvex's home turf</div>
+        <h3 style="margin-top:8px">Interactive intrusion</h3>
+        <ul>
+          <li>Someone's in a pod and wants to <strong>stay, persist, move, phone home</strong></li>
+          <li>Payload = ephemeral in-pod state → <strong>motion wipes it</strong></li>
+          <li>Workload-agnostic — any service or job</li>
+          <li>→ <strong>Part I</strong> — 10 general-purpose attacks</li>
+        </ul>
+      </div>
+      <div class="card2 old">
+        <div class="tag">Out of motion's reach</div>
+        <h3 style="margin-top:8px">App-semantic &amp; data abuse</h3>
+        <ul>
+          <li>Front-door abuse, or theft of data / credentials</li>
+          <li>Payload = stable address / data-at-rest / one-shot → <strong>motion can't touch it</strong></li>
+          <li>Needs app + edge defenses</li>
+          <li>→ <strong>Part II</strong> — 32 voice-app attacks</li>
+        </ul>
+      </div>
+    </div>
+    <p class="prose" style="margin-top:16px; font-size:0.92rem; color:var(--muted)">Two different views, counted <strong>separately — not summed</strong>: Part I is the general attack <em>classes</em> Phorvex faces on any workload; Part II is the voice app's specific <em>attacks</em> (several of which are just the voice version of the Part I foothold classes).</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Part I — general-purpose · any workload</div>
+    <h2>Where Phorvex earns its keep</h2>
+    <p class="prose">The threat it's actually built for: an attacker already inside a pod, trying to persist and pivot. These <strong>ten patterns</strong> hit a compromised service, ML job, or backend the same way — nothing here is app-specific. This is where motion is the right tool, and where the defense finally reads <span style="color:var(--kill); font-weight:700">green</span>.</p>
+    <div class="legend">
+      <span class="item"><span class="chip kill">kill</span> rotation destroys it</span>
+      <span class="item"><span class="chip bound">bound</span> rotation limits it</span>
+      <span class="item"><span class="chip miss">needs actuator</span> not enabled yet</span>
+    </div>
+    <div class="grid">
+      <div class="atk kill"><div class="top"><span class="id">GP1</span><span class="chip kill">kill/bound</span></div><h4>Interactive RCE foothold → dwell</h4><p>Attacker gets a shell in any pod and works hands-on. Proactive rotation caps how long they last and forces re-exploitation every cycle. The canonical MTD win.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">GP2</span><span class="chip kill">kill</span></div><h4>In-pod backdoor / persistence</h4><p>A webshell, cron job, or dropped implant in the pod's ephemeral filesystem — a fresh rotated pod simply has none of it.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">GP3</span><span class="chip kill">kill</span></div><h4>Fileless / in-memory implant</h4><p>Reflective load, no disk artifact — rotation kills the process and the in-memory state with it.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">GP4</span><span class="chip kill">kill</span></div><h4>Detected compromise → eviction</h4><p>A Falco/EDR alert fires; Phorvex rotates that exact pod within seconds. The reactive leg working as designed.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">GP5</span><span class="chip kill">kill/bound</span></div><h4>Cryptomining / resource hijack</h4><p>A miner dropped in a compromised pod is killed on every rotation → the attacker must re-drop, and their yield is capped.</p></div>
+      <div class="atk bound"><div class="top"><span class="id">GP6</span><span class="chip bound">bound</span></div><h4>Lateral movement</h4><p>Hop from a compromised pod to a neighbor; rotating the source/target changes its IP/identity and disrupts the hop.</p></div>
+      <div class="atk bound"><div class="top"><span class="id">GP7</span><span class="chip bound">bound</span></div><h4>C2 beacon</h4><p>A long-lived call-home channel is dropped each rotation cycle, forcing the attacker to re-establish.</p></div>
+      <div class="atk bound"><div class="top"><span class="id">GP8</span><span class="chip bound">bound</span></div><h4>Recon / environment mapping</h4><p>The attacker's map of pods and identities goes stale every interval — a standing re-reconnaissance cost.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">GP9</span><span class="chip miss">needs actuator</span></div><h4>Stolen SA-token reuse</h4><p>Reusing a stolen pod token over time. Identity-rotate would expire it on a clock — but that actuator isn't enabled today.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">GP10</span><span class="chip kill">✓ correct</span></div><h4>Stateful workload compromise</h4><p>Phorvex correctly <em>quarantines</em> a database or training pod instead of rotating it — contains the attacker without destroying data.</p></div>
+    </div>
+    <p class="prose" style="margin-top:16px; font-size:0.9rem; color:var(--muted)"><strong>Honest edges:</strong> Service DNS blunts GP6–8 unless the attacker pinned to a pod IP; GP9 needs an identity-rotate actuator that isn't on; and motion caps <em>dwell</em>, so a smash-and-grab that finishes inside one interval still gets through. The clean, workload-agnostic wins are the in-pod-state ones (GP1–5) plus the stateful-quarantine judgment (GP10).</p>
+
+    <div class="eyebrow" style="margin-top:30px">Proven on the live cluster · 2026-08-09</div>
+    <h3 style="margin-top:6px">Not just reasoned — executed against real Phorvex</h3>
+    <p class="prose"><strong>7 of these have been run for real</strong> on the live cluster (full log: <code>ATTACKS_OUTCOMES.md</code>). Result: <strong>4 defended · 3 not</strong> — exactly the boundary this page predicts. Wins are ephemeral in-pod state and the stateful-quarantine judgment; gaps are static credentials and data-at-rest.</p>
+    <div class="grid">
+      <div class="atk kill"><div class="top"><span class="id">T4·T5</span><span class="chip kill">🟢 verified</span></div><h4>Foothold dwell-cap (GP1/GP5)</h4><p>Reactive eviction ~10s <em>and</em> proactive rotate with <em>no detector</em> (~36s, <code>hazard=0.00</code>) — protection without detection, live.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">T4</span><span class="chip kill">🟢 verified</span></div><h4>Detected → eviction (GP4)</h4><p>SecurityEvent → the exact pod rotated in ~10s; foothold gone, 2 replicas stayed up.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">T6</span><span class="chip kill">🟢 verified</span></div><h4>Stateful → quarantine (GP10)</h4><p>On a StatefulSet+PVC the brain chose <em>quarantine</em> over rotate; pods stayed up, data intact — it logged "R6 would DELETE…destroying data; Phorvex quarantined to preserve state."</p></div>
+      <div class="atk miss"><div class="top"><span class="id">T2</span><span class="chip miss">🔴 gap</span></div><h4>Static-credential theft</h4><p>Phorvex rotated the pod; 5/5 stolen keys still valid — the same Secret re-mounts. Needs proactive cred-rotation.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">T3</span><span class="chip miss">🔴 gap</span></div><h4>Data-at-rest · transcript exfil</h4><p>Mongo data survived bot- <em>and</em> Mongo-pod rotation; the PVC re-mounts. Needs a data-layer control.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">T7</span><span class="chip miss">🔴 gap</span></div><h4>Data-at-rest · RAG poisoning</h4><p>Poisoned KB doc retrievable (rank #2 for a caller query); survived rotating both Chroma and the bot.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Part II — the AI voice agent · why a smaller catalogue is stronger</div>
+    <h2>We didn't shrink the catalogue. We replaced it.</h2>
+    <div class="prose">
+      <p>The old ~59 were never attacks — they were <strong>plumbing tests against fake servers</strong>. The "prompt injection" test never touched a language model; it wrote a string to a temp file and checked the file existed. It told us the harness worked, not whether an attacker could do anything to our real system.</p>
+      <p>The 32 are <strong>real, end-to-end attacks against the actual deployed voice agent</strong> — real phone calls, the real in-cluster LLM, the real Chroma and Mongo, real published vulnerabilities (every CVE checked against the national database), and a real measure of success. Fewer entries, but each one is something a real attacker on our network could actually do.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">32</div><div class="k">real attacks <strong>on the voice agent</strong> (replacing ~59 mock tests) — Part I's 10 are counted separately</div></div>
+      <div class="stat kill"><div class="n">100%</div><div class="k">of cited CVEs verified real against NVD — zero fabricated</div></div>
+      <div class="stat miss"><div class="n">5 / 32</div><div class="k">attacks Phorvex's current actuator can meaningfully touch</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Your boss's question, answered</div>
+    <h2>What made the old ones "unrealistic"</h2>
+    <p class="prose">Four things, and every old test had all four. "Realistic" just means we removed them.</p>
+    <div class="dims">
+      <div class="dim"><div class="num">01</div><div><h3>Fake targets</h3><p>They ran against mock servers (a stand-in "MockInferenceServer"), not the real litellm, Chroma, Mongo, or vLLM the app actually uses.</p></div></div>
+      <div class="dim"><div class="num">02</div><div><h3>Wrong starting point</h3><p>They assumed the attacker was <em>already inside a pod</em> — e.g. dropping a marker file in <code>/tmp</code>. If you can write to <code>/tmp</code> you've already won; the attack skipped the hard part.</p></div></div>
+      <div class="dim"><div class="num">03</div><div><h3>Fake success</h3><p>"Success" was <em>a marker file exists</em> — not a real outcome like keys stolen, a database dumped, or the bot's voice actually speaking attacker text.</p></div></div>
+      <div class="dim"><div class="num">04</div><div><h3>No real chain, no real vuln</h3><p>Each tested one isolated mechanic in the abstract — not an end-to-end path built on an actual known vulnerability or misconfiguration of our stack.</p></div></div>
+    </div>
+
+    <h3 style="margin-top:34px">The same attack, old vs. new</h3>
+    <div class="vs">
+      <div class="card2 old">
+        <div class="tag">Old · ai1-prompt-injection</div>
+        <ul>
+          <li>Deploys a <strong>fake</strong> LLM server</li>
+          <li>"Injects" by writing to <code>/tmp/inject</code></li>
+          <li>Passes if that <strong>file exists</strong></li>
+          <li>Never speaks to a real model</li>
+        </ul>
+      </div>
+      <div class="card2 new">
+        <div class="tag">New · spoken prompt injection</div>
+        <ul>
+          <li>A <strong>real phone call</strong> → real speech-to-text</li>
+          <li>Into the <strong>real in-cluster LLM</strong>, no guardrail</li>
+          <li>Passes if the <strong>real voice speaks</strong> the leaked system prompt</li>
+          <li>What an actual caller could do today</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Why 32 — not 59, not 84</div>
+    <h2>The number went down because rigor went up</h2>
+    <p class="prose">Two AI workflows generated <strong>~84 raw attack ideas</strong> for the real app. Turning ideas into a real catalogue means removing the duplicates, the unverifiable, and the impossible. 32 is what <em>survives</em> that — not what's left after loss.</p>
+    <div class="funnel">
+      <div class="fstep"><div class="lab">Old catalogue</div><div class="n">~59</div><div class="d">mock-target toys, many near-duplicates &amp; auto-generated variants</div></div>
+      <div class="farrow">+</div>
+      <div class="fstep"><div class="lab">Workflow ideas</div><div class="n">~84</div><div class="d">raw findings across two runs (voice + generic)</div></div>
+      <div class="farrow">→</div>
+      <div class="fstep final"><div class="lab">Real attacks</div><div class="n">32</div><div class="d">after dedup, CVE verification, dropping the impossible, and the 2026 framework refresh</div></div>
+    </div>
+    <p class="prose" style="margin-top:18px">What got removed, and why it's the right call:</p>
+    <div class="dims">
+      <div class="dim"><div class="num">—</div><div><h3>Duplicates collapsed</h3><p>The old set had many variants of one idea (several "dwell/rotation" tests, several "embedding" tests, generators that spawn copies). The same attack also surfaced from multiple workflow agents. One attack = one entry.</p></div></div>
+      <div class="dim"><div class="num">—</div><div><h3>Impossible-on-our-config dropped</h3><p>A path-traversal bug isn't reachable (our bot runs its normal command); a code-execution bug is already patched in our version. Keeping them would be padding the count with things that can't happen here.</p></div></div>
+      <div class="dim"><div class="num">—</div><div><h3>Infra-blocked deferred</h3><p>A handful (e.g. attacks on an "MCP server") need a target we haven't deployed. Honestly parked, not counted as done.</p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">The 32, in plain language</div>
+    <h2>What each attack does</h2>
+    <p class="prose">Grouped by the only thing that matters for the defense: <strong>can Phorvex's motion do anything about it?</strong> Threat model is assume-breach — the attacker is already past the firewall, on our network, and has seen our internal addresses.</p>
+    <div class="legend">
+      <span class="item"><span class="chip kill">kill</span> rotation stops the chain</span>
+      <span class="item"><span class="chip bound">bound</span> rotation only limits it</span>
+      <span class="item"><span class="chip miss">miss</span> rotation is irrelevant</span>
+    </div>
+
+    <div class="grouphead">
+      <h3>Group A — where Phorvex fights back</h3>
+      <span class="sub">7 attacks · all the wins are the same case: an attacker foothold <em>inside</em> a pod</span>
+    </div>
+    <div class="grid">
+      <div class="atk kill"><div class="top"><span class="id">A1</span><span class="chip kill">kill/bound</span></div><h4>Chroma code-execution → foothold</h4><p>Trick the vector database into running attacker code, landing a shell inside its pod. Rotation wipes that shell — if it rotates before the attacker moves on.</p><div class="foot"><span class="cve">CVE-2026-45833</span></div></div>
+      <div class="atk kill"><div class="top"><span class="id">A2</span><span class="chip kill">kill/bound</span></div><h4>vLLM model-load → foothold</h4><p>Feed the GPU model-server a booby-trapped model file; loading it runs attacker code. Rotation wipes the foothold — but re-loads the same poisoned model.</p><div class="foot"><span class="cve">CVE-2025-24357</span></div></div>
+      <div class="atk kill"><div class="top"><span class="id">A3</span><span class="chip kill">kill/bound</span></div><h4>litellm injection → foothold</h4><p>Chain a database-injection bug into code execution on the LLM proxy. Rotation caps how long the shell lives — but the API keys were already stolen a step earlier.</p><div class="foot"><span class="cve">CVE-2026-42203</span></div></div>
+      <div class="atk kill"><div class="top"><span class="id">A4</span><span class="chip kill">kill</span></div><h4>Detected eviction</h4><p>A "loud" foothold trips a detector, which tells Phorvex to kill that exact pod within seconds. The clean reactive win — when a detector exists.</p></div>
+      <div class="atk kill"><div class="top"><span class="id">A5</span><span class="chip kill">kill/bound</span></div><h4>Dwell cap (the core win)</h4><p>An attacker who gets a quiet foothold and just sits there is evicted anyway — Phorvex rotates on a timer whether or not anyone noticed.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">A6</span><span class="chip miss">miss*</span></div><h4>Stolen pod-identity reuse</h4><p>Steal the pod's Kubernetes token and reuse it over time. Phorvex <em>could</em> expire it by rotating identities — but that actuator isn't turned on, so today it works. <em>*bound if identity-rotate were enabled.</em></p></div>
+      <div class="atk bound"><div class="top"><span class="id">A7</span><span class="chip bound">bound</span></div><h4>Lateral movement &amp; call-home</h4><p>Hop from one pod to another, or keep a call-home channel alive across rotations. Rotation disrupts it only by luck of timing.</p></div>
+    </div>
+
+    <div class="grouphead">
+      <h3>Group B — reachable from the phone</h3>
+      <span class="sub">8 attacks · a caller or a raw socket client is the whole entry · all MISS</span>
+    </div>
+    <div class="grid">
+      <div class="atk miss"><div class="top"><span class="id">B1</span><span class="chip miss">miss</span></div><h4>Spoken prompt injection</h4><p>Say a jailbreak out loud on the call to make the bot leak its hidden instructions and its list of tools.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B2</span><span class="chip miss">miss</span></div><h4>Knowledge-base exfiltration</h4><p>Ask the bot cleverly until it reads out internal knowledge-base documents it was never meant to share.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B3</span><span class="chip miss">miss</span></div><h4>Deepfake password reset</h4><p>Call with a cloned voice and say "reset password" — there's no caller verification, so the bot starts the reset for someone else's account.</p></div>
+      <div class="atk bound"><div class="top"><span class="id">B4</span><span class="chip bound">bound</span></div><h4>Denial-of-wallet: flood</h4><p>Open thousands of fake call connections; each burns paid speech-to-text, LLM, and text-to-speech — running up the bill and knocking real callers offline.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B5</span><span class="chip miss">miss</span></div><h4>Denial-of-wallet: amplify</h4><p>One crafted call that forces the bot into a huge, expensive loop of tool-calls and long spoken answers.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B6</span><span class="chip miss">miss</span></div><h4>Unauthenticated socket hijack</h4><p>Skip Twilio entirely — connect straight to the bot's audio socket, pretend to be a call, and drive the whole pipeline for free.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B7</span><span class="chip miss">miss</span></div><h4>Call-control hijack</h4><p>Connect, claim someone else's call ID, and make the bot hang up that victim's live call — using our own Twilio credentials.</p><div class="foot"><span class="cve">CVE-2026-54695</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B8</span><span class="chip miss">miss</span></div><h4>Transcript forgery</h4><p>Fake a call and let the bot itself write an attacker-authored transcript into the database, under any call ID.</p></div>
+    </div>
+
+    <div class="grouphead">
+      <h3>Group B — reachable on the network</h3>
+      <span class="sub">12 attacks · the reconned attacker connects to internal services by name · all MISS</span>
+    </div>
+    <div class="grid">
+      <div class="atk miss"><div class="top"><span class="id">B9</span><span class="chip miss">miss</span></div><h4>litellm key dump (SQLi)</h4><p>One crafted request tricks the LLM proxy's login check into dumping every stored API key.</p><div class="foot"><span class="cve">CVE-2026-42208</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B10</span><span class="chip miss">miss</span></div><h4>litellm key theft (SSRF)</h4><p>Tell the proxy to "call home" to an attacker URL — it attaches its real OpenAI key and hands it over.</p><div class="foot"><span class="cve">CVE-2024-6587</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B11</span><span class="chip miss">miss</span></div><h4>SSRF → cloud credentials</h4><p>The same trick pointed at the cloud metadata address steals the node's AWS credentials — a whole cloud account.</p><div class="foot"><span class="cve">CVE-2024-6587</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B12</span><span class="chip miss">miss</span></div><h4>litellm config implant</h4><p>Quietly reconfigure the proxy so every future LLM call is copied to the attacker and answers can be rewritten. Survives rotation — it's saved in the proxy's database.</p><div class="foot"><span class="cve">CVE-2026-42208</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B13</span><span class="chip miss">miss</span></div><h4>Knowledge-base poisoning</h4><p>Write a booby-trapped document into the knowledge base; every future caller who asks a matching question hears the attacker's script.</p><div class="foot"><span class="cve">CVE-2026-45830</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B14</span><span class="chip miss">miss</span></div><h4>Cross-tenant KB theft</h4><p>Use an authorization bug to read the entire knowledge base with any low-privilege token.</p><div class="foot"><span class="cve">CVE-2026-45830</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B15</span><span class="chip miss">miss</span></div><h4>Transcript database dump</h4><p>Connect to the password-less transcript database and copy every saved call — all the caller PII — off the cluster.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B16</span><span class="chip miss">miss</span></div><h4>Database memory leak</h4><p>Send a malformed request that makes the database leak chunks of its own memory — including other callers' transcripts.</p><div class="foot"><span class="cve">CVE-2025-14847</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">B17</span><span class="chip miss">miss</span></div><h4>Sidecar injection</h4><p>Edit the app's deployment blueprint to add a malicious extra container. Rotation actually <em>re-creates</em> it from the poisoned blueprint every cycle.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B18</span><span class="chip miss">miss</span></div><h4>Escape to the node</h4><p>Break out of a pod onto the underlying machine and persist there — the machine isn't something rotation touches.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B19</span><span class="chip miss">miss</span></div><h4>Container-image tampering</h4><p>With stolen cloud credentials, overwrite the app's container image with a backdoored one; it's pulled cluster-wide on the next deploy.</p></div>
+      <div class="atk miss"><div class="top"><span class="id">B20</span><span class="chip miss">miss</span></div><h4>Supply-chain poisoning</h4><p>Poison a dependency or model the app downloads; it runs attacker code the moment the pod starts — and rotation just re-downloads the poison.</p></div>
+    </div>
+
+    <div class="grouphead">
+      <h3>New — 2026 OWASP / MITRE refresh</h3>
+      <span class="sub">5 pickups from ATLAS v5.4.0 + OWASP LLM Top-10 2026 + Agentic ASI01–10 · all MISS · mostly agentic &amp; voice</span>
+    </div>
+    <div class="grid">
+      <div class="atk miss"><div class="top"><span class="id">28</span><span class="chip miss">miss</span></div><h4>Barge-in / interruption injection</h4><p>Interrupt the bot mid-reply so an injected instruction lands while its context is half-built → unauthorized tool calls. <em>Unique to voice — no chat equivalent.</em></p><div class="foot"><span class="cve">ASI01</span><span class="cve">AML.T0053</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">29</span><span class="chip miss">miss</span></div><h4>Agent-config recon</h4><p>Probe by voice to fingerprint the bot's setup — its tools, trigger phrases, and hidden knowledge-base schema — before attacking.</p><div class="foot"><span class="cve">AML.T0084</span><span class="cve">LLM08:2026</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">30</span><span class="chip miss">miss</span></div><h4>RAG credential harvesting</h4><p>Coax the bot into reading out credentials that leaked into the knowledge base — not just documents.</p><div class="foot"><span class="cve">AML.T0082</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">31</span><span class="chip miss">miss</span></div><h4>Caller-ID / ANI spoofing</h4><p>Spoof the phone number to defeat "known caller" trust — and supercharge the deepfake password-reset. Carrier auth (STIR/SHAKEN) doesn't identify the speaker.</p><div class="foot"><span class="cve">T9</span><span class="cve">ASI03</span></div></div>
+      <div class="atk miss"><div class="top"><span class="id">32</span><span class="chip miss">miss</span></div><h4>Human manipulation of callers</h4><p>Weaponize the <em>trusted</em> bot (via injection or a poisoned knowledge base) to socially-engineer its own callers. Harm flows outward.</p><div class="foot"><span class="cve">T15</span><span class="cve">ASI09</span></div></div>
+    </div>
+    <p class="prose" style="margin-top:16px; font-size:0.9rem; color:var(--muted)"><strong>Deliberately excluded (N/A to a phone bot):</strong> ultrasonic voice commands (DolphinAttack / NUIT) — no microphone, and the telephony codec strips them; and DTMF touch-tone injection — the bot gathers no tones. Marked so nobody wastes a sprint.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">The finding that matters</div>
+    <h2>"Seen our IP" mostly doesn't help the attacker — or Phorvex</h2>
+    <div class="callout key">
+      <h3>Why only ~5 of 32 are touchable</h3>
+      <p class="big">In Kubernetes, everything is addressed by a <strong>stable name</strong> (a Service), not a pod's IP. When Phorvex rotates a pod, a fresh one appears behind the same name — so the attacker's recon never goes stale. And the only actuator turned on is pod-rotation.</p>
+      <p>The result: rotation is irrelevant to <strong>reaching, exploiting, and stealing</strong>. Its one real bite is <strong>capping how long an attacker's foothold survives inside a pod</strong> — which is exactly Group A, and nothing else.</p>
+    </div>
+    <p class="prose"><strong>This is not a bug in Phorvex — it's the actuator set.</strong> The rest win because they ride a stable address, target data sitting on disk, steal a static or cloud credential, or finish in a single shot — none of which "moving a pod" affects. Closing that gap means <em>new</em> moves: rotating identities and credentials, rerouting services, and encrypting data at rest.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">How to say it in the meeting</div>
+    <h2>Your two-minute version</h2>
+    <div class="say prose">
+      <p class="q">"The old 59 weren't attacks — they were tests against fake servers that checked whether a marker file appeared. They proved the harness ran, not that our system was defensible."</p>
+      <p class="q">"The 32 are real: real phone calls, the real LLM and databases, real published CVEs we verified against the national database, and success measured as real damage. They start where a real attacker starts — already on our network."</p>
+      <p class="q">"It's fewer because we removed duplicates, dropped the ones that can't happen on our config, and merged the same attack that appeared many ways. Fewer, but every one is real."</p>
+      <p class="q">"And they told us something 59 toys never could: on the voice app Phorvex meaningfully stops about five of them — the in-pod footholds. The rest slip past, not because Phorvex is broken, but because it only has one move. That's the case for building the rest of the actuators."</p>
+      <p class="q">"But that's the voice app — the worst-case target for it. Point Phorvex at what it's built for — someone getting into a pod and trying to stay, on any workload — and it wins cleanly (Part I). It's not weak, it's specialized. The real job is matching the tool to the threat, and building the actuators for the gaps we can't move."</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  Phorvex voice-agent red-team · assume-breach model · sources: VOICE_AGENT_ATTACK_CATALOGUE.md · GENERIC_CATALOGUE_REALISM.md · BUILD_PLAN.md · all CVEs verified against nvd.nist.gov
+</footer>
+
+<script>
+  (function () {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var els = document.querySelectorAll("section, .hero h1, .hero .lede");
+    els.forEach(function (el, i) {
+      el.classList.add("reveal");
+      el.style.animationDelay = Math.min(i * 60, 360) + "ms";
+    });
+  })();
+</script>
+</body>
+</html>

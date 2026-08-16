@@ -1,0 +1,9 @@
+2026-08-11T17:37:41Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 17}
+2026-08-11T17:37:51Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 40}
+2026-08-11T17:38:11Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 17}
+2026-08-11T17:38:21Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 16}
+2026-08-11T17:38:41Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 20}
+2026-08-11T17:39:01Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 17}
+2026-08-11T17:39:11Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 25}
+2026-08-11T17:39:21Z	INFO	audit	tick	{"tenant": "litellm", "pods": 2, "selected": 0, "infeasible": 0, "mode": "active", "killSwitch": false, "durationMs": 36}
+(selected:0 / no decision lines = calm = correct; this layer is None by design)
