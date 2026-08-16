@@ -53,12 +53,52 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	ac := prof.AssetFacts(ai, fctx).CoverByAction
 	for _, a := range []model.Action{
 		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset, model.ActionEndpointRotate,
-		model.ActionModelShardReplace, model.ActionMIGRebind, model.ActionWarmSwap, model.ActionKVMigrateInvalidate,
-		model.ActionAdapterRotate,
+		model.ActionModelShardReplace, model.ActionKVMigrateInvalidate, model.ActionAdapterRotate,
 	} {
 		if len(ac[a]) == 0 {
 			t.Errorf("AI serving pod: %q has EMPTY cover set — optimizer can never select it", a)
 		}
+	}
+
+	// [PHVX-26a] warm-swap and mig-rebind were removed from the list above ON PURPOSE, and the
+	// obvious "fix" for this test is to put them back — which would restore exactly the false grants
+	// the split removed. That is the trap PHVX-9e fell into, so both are asserted explicitly:
+	//
+	//   warm-swap  — covers NOTHING until required podAntiAffinity excludes the old node. Without it
+	//                the scheduler may re-place the shadow on the same device, so "may relocate"
+	//                cannot back a binary grant. Both facts stay audit-only.
+	//   mig-rebind — covers gpuContentionChannel ONLY, and only on a pod that has a MIG device.
+	//                It never covers gpuColocation: repartitioning severs the contention path
+	//                without moving the pod, so co-residency knowledge survives.
+	if got := ac[model.ActionWarmSwap]; len(got) != 0 {
+		t.Errorf("warm-swap must have NO cover until anti-affinity lands (PHVX-26a); got %v", got)
+	}
+	if got := ac[model.ActionMIGRebind]; len(got) != 0 {
+		t.Errorf("mig-rebind must have no cover on a pod with no MIG device; got %v", got)
+	}
+
+	// The same pod WITH a MIG device: mig-rebind gets exactly the contention channel, nothing else.
+	migPod := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil",
+		MIGDevice: "MIG-abc",
+	}}
+	mc := prof.AssetFacts(migPod, fctx)
+	byKey := map[string]string{}
+	for _, f := range mc.Facts {
+		byKey[f.Key()] = f.Kind
+	}
+	got := mc.CoverByAction[model.ActionMIGRebind]
+	if len(got) != 1 || byKey[got[0]] != FactGPUContentionChannel {
+		kinds := []string{}
+		for _, k := range got {
+			kinds = append(kinds, byKey[k])
+		}
+		t.Errorf("mig-rebind on a MIG-capable pod must cover exactly {%s}; got %v",
+			FactGPUContentionChannel, kinds)
+	}
+	if len(mc.CoverByAction[model.ActionWarmSwap]) != 0 {
+		t.Errorf("warm-swap must stay coverless even on MIG-capable hardware (PHVX-26a); got %v",
+			mc.CoverByAction[model.ActionWarmSwap])
 	}
 
 	// debugger + custom-inject are manual-by-design: assert they DO stay coverless (documents intent).

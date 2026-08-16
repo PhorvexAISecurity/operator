@@ -18,7 +18,6 @@ import (
 // self-expiring when its cause disappears.
 
 var knownIdenticalPairs = map[string]string{
-	pairKey(model.ActionMIGRebind, model.ActionWarmSwap):          "PHORVEXSEC-121 owns the GPU cover split",
 	pairKey(model.ActionKVMigrateInvalidate, model.ActionKVReset): "remote KV migration is not built; both actions currently invalidate only local session state",
 }
 

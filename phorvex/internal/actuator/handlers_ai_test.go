@@ -52,8 +52,10 @@ type mockMIG struct {
 	calls            [][3]string
 }
 
-func (m *mockMIG) Available(_ context.Context, _ string) error                    { return m.availErr }
-func (m *mockMIG) CurrentProfile(_ context.Context, _, _ string) (string, error) { return "1g.10gb", nil }
+func (m *mockMIG) Available(_ context.Context, _ string) error { return m.availErr }
+func (m *mockMIG) CurrentProfile(_ context.Context, _, _ string) (string, error) {
+	return "1g.10gb", nil
+}
 func (m *mockMIG) Repartition(_ context.Context, node, gpu, profile string) error {
 	m.calls = append(m.calls, [3]string{node, gpu, profile})
 	return m.repErr
@@ -276,6 +278,25 @@ func TestMIGRebindRealRepartitionEvictsPod(t *testing.T) {
 	}
 	if !containsStr(hr.Note, "evicted") || !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
 		t.Errorf("note must record eviction + pending, %q", hr.Note)
+	}
+}
+
+// PHORVEXSEC-121 Mode-C discipline: a failed physical repartition must never be
+// reported as an emitted defence. The optimizer may have selected the candidate,
+// but manager records actuation/credit only for Emitted=true.
+func TestMIGRebindRepartitionFailureEmitsNothing(t *testing.T) {
+	pod := migPod("ns", "infer")
+	c := fakeC(pod)
+	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{
+		Client: c,
+		MIG:    &mockMIG{repErr: errors.New("live CUDA context blocks repartition")},
+		VLLM:   &mockVLLM{},
+	}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionMIGRebind})
+	if err == nil {
+		t.Fatal("failed repartition must return an error")
+	}
+	if hr.Emitted {
+		t.Fatalf("failed repartition received actuation credit: %+v", hr)
 	}
 }
 

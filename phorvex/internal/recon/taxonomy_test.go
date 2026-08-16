@@ -133,27 +133,3 @@ func declaredFactKinds(t *testing.T) map[string]string {
 	})
 	return out
 }
-
-// TestIdenticalCoverIsStillOutstanding records items 2 and 4 rather than silently leaving them.
-// They are NOT fixed here: PHORVEXSEC-121 owns the warm-swap/mig-rebind split, specifies it in
-// detail, and carries a math question that is not mine to answer. This test asserts the CURRENT
-// state, so when 121 lands it fails and forces this note to be revisited.
-func TestIdenticalCoverIsStillOutstanding(t *testing.T) {
-	cover := aiCover(t)
-	ws, mr := cover[model.ActionWarmSwap], cover[model.ActionMIGRebind]
-	same := len(ws) == len(mr) && len(ws) > 0
-	if same {
-		for i := range ws {
-			if ws[i] != mr[i] {
-				same = false
-				break
-			}
-		}
-	}
-	if !same {
-		t.Skip("warm-swap and mig-rebind no longer share identical cover — PHORVEXSEC-121 has " +
-			"landed; delete this test and close PHVX-77 items 2 and 4")
-	}
-	t.Logf("KNOWN, NOT FIXED HERE: warm-swap and mig-rebind still share byte-identical cover %v. "+
-		"PHORVEXSEC-121 owns the split and is waiting on its math item.", kindsOf(t, ws))
-}

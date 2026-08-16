@@ -45,10 +45,23 @@ func expectedActuatorsFor(name string) []string {
 		return []string{"model-shard-replace", "guardrail-rotate"}
 	case has("llm-jacking", "query-extraction", "excessive-agency"):
 		return []string{"request-drain", "route-rotate", "endpoint-rotate"}
-	case has("side-channel", "co-location"):
-		return []string{"mig-rebind", "warm-swap"}
+	// [PHVX-25a/26a] Narrow claim. Neither action breaks GPU CO-LOCATION on this fleet:
+	//   mig-rebind severs the memory/cache/SM CONTENTION path by repartitioning the device, but the
+	//   pod does not move, so the attacker's knowledge of who shares it survives — and MIG
+	//   reconfiguration needs zero CUDA contexts device-wide, so it works on an idle GPU, not during
+	//   a live multi-tenant incident.
+	//   warm-swap performs a cutover with no cold load. Valuable, and unrelated to co-residency:
+	//   nothing constrains where the scheduler places the shadow, so it may land on the same device.
+	// mig-rebind is listed for the side-channel case only, and only as the contention-path remedy.
+	case has("side-channel"):
+		return []string{"mig-rebind"}
+	case has("co-location"):
+		// No autonomous remedy today. Co-residency is a PROVISIONING property — the real fix is
+		// device-plugin capacity, not a moving-target action. Listing an actuator here would name a
+		// defence that cannot deliver.
+		return []string{}
 	case has("gpu"):
-		return []string{"mig-rebind", "warm-swap"}
+		return []string{"mig-rebind"}
 	case has("rag", "retrieval", "embedding"):
 		return []string{"guardrail-rotate", "adapter-rotate"}
 	case has("mcp", "tool-poisoning", "rogue-server", "response-injection"):
