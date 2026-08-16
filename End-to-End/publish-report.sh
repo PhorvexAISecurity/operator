@@ -58,13 +58,16 @@ scp_ "$REPORT" "$USER_@$HOST:$REMOTE_TMP/run-$STAMP.html"
 # and a dangling link would serve a 404 from the one URL people bookmark.
 scp_ "$REPORT" "$USER_@$HOST:$REMOTE_TMP/latest.html"
 
-# `kubectl cp` needs a concrete pod name, and the deployment is Recreate/1-replica so there
-# is exactly one. Resolving it per run means a rollout between runs is not a broken publish.
+# `kubectl cp` needs a concrete pod name. A restarted node can leave a completed pod with
+# the deployment label behind, so select only a running pod and wait for it to be ready.
+# Sorting newest-first also avoids choosing a terminating predecessor during a rollout.
 ssh_ bash -s <<REMOTE
 set -euo pipefail
 POD="\$(kubectl get pod -n '$NS' -l app.kubernetes.io/name=ci-reports \
-        -o jsonpath='{.items[0].metadata.name}')"
-if [ -z "\$POD" ]; then echo "no ci-reports pod in namespace $NS" >&2; exit 1; fi
+        --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[-1:].metadata.name}')"
+if [ -z "\$POD" ]; then echo "no running ci-reports pod in namespace $NS" >&2; exit 1; fi
+kubectl wait -n '$NS' --for=condition=Ready "pod/\$POD" --timeout=60s >/dev/null
 kubectl exec -n '$NS' "\$POD" -- mkdir -p "/usr/share/nginx/html/$PREFIX"
 for f in '$REMOTE_TMP'/*; do
   kubectl cp "\$f" "$NS/\$POD:/usr/share/nginx/html/$PREFIX/\$(basename "\$f")"
