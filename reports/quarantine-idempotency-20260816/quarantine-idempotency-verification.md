@@ -51,6 +51,23 @@ Five Python tests cover active, inactive, and unreadable quarantine ground truth
   - Phorvex containers: ready, zero restarts
   - NATS StatefulSet: **3/3 ready**
 
-## Deployment note
+## Production deployment verification
 
-The candidate was not patched into the production controller during PR validation. A final live NATS attack test should run after merge and deployment to confirm both `F03` and `A03` against the deployed image.
+The first production candidate exposed two image/startup defects that CI had not caught:
+
+- the Phoenix image used Go 1.24 although the module requires Go 1.26.1, and copied only `internal/controller` while the build also needs `internal/scheduler`;
+- four extended controllers started by default even though production does not yet install their CRDs/RBAC, causing repeated cache-sync and `Forbidden` errors.
+
+The Dockerfile now uses Go 1.26 and copies all of `internal/`. The baseline admission webhook and extended controllers are disabled by default behind explicit opt-in flags. This keeps the current production controller set compatible while preserving the new capabilities for environments that install their prerequisites.
+
+Production image `sha256:44f911592bff11cd9cfd5cdfe634f332c25eb02f6b46fd5409d421f26bd16c94` was deployed with automatic rollback protection and verified on AWS:
+
+- Phoenix deployment: **1/1 ready**, zero restarts;
+- startup logs: extended controllers and admission webhook intentionally disabled;
+- RBAC/cache-sync errors after startup: **0**;
+- manual NATS attack E2E, without Telegram: **36 passed, 0 failed, 1 warning, 2 not applicable**;
+- `F03`: passed — no rotate against any of the three stateful NATS pods;
+- `A03`: passed — the claimed change was independently confirmed in Kubernetes;
+- NATS after cleanup: **3/3 ready**, zero restarts, and the deny-all policy selects `nats-0` through the restored label.
+
+The one warning was expected availability behavior: the new foothold signal targeted a NATS pod while the namespace had no headroom above its two-replica availability floor, so Phorvex correctly vetoed spending another move. It is not a quarantine regression.
