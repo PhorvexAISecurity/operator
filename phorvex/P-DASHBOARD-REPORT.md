@@ -457,7 +457,7 @@ source. Build nothing until you approve the scope.
 | 6 | **Configs editor** (edit policy/budget/mode/targets/scenarios from the UI) | Protect/Run | `PhorvexPolicySpec` via **NEW `/api/config` write `[PENDING-wire]`** | Op |
 | 7 | **Health** (CRD Status: lastTick/selectedPods/decisions/killSwitch + tick NFR1<1s) | Protect/Run (status header) | `PhorvexPolicyStatus` + tick metrics via **NEW endpoints `[PENDING-wire]`** | Op |
 | 8 | **Methodology** (no-LLM narrative · flagged-knob registry w/ provenance · CI disclosure · MEASURED/MODELED/PENDING legend · determinism/seed) | Report | the `*-DECISION.md` + the knob registry `[PENDING-surface]` | Inv/Op (owner: narrative+legend) |
-| 9 | **Ablation** (live seed-pinned 1.62× per-dollar · submodular 1−1/e · scarcity-lift) | Prove (tab) | **NEW `/api/ablation` execs `--ablation` `[PENDING-wire]`** (today a static report number) | Inv/Op |
+| 9 | **Ablation** (live seed-pinned per-dollar ratio · deterministic greedy · scarcity-lift; no generic approximation ratio claimed) | Prove (tab) | **NEW `/api/ablation` execs `--ablation` `[PENDING-wire]`** (today a static report number) | Inv/Op |
 | 10 | **Risk heatmap + exposure clocks** | Discovered/Protect overlay | Prometheus per-pod gauges via **`/metrics` scrape `[PENDING-wire]`** | Op |
 | 11 | **AI Context + AI Actuator** (4 AI stages · 5 AI handlers fail-closed · kv-reset = the only wipe-surviving counter) | Discovered + Protect (AI sub) | Record AI fields + `handlers_ai.go`; magnitudes `[SP-0-PENDING-P4]` | Inv/Op |
 | 12 | **AI threat-matrix + split-oracle + Schwartau + reuse** | Prove (Threat-coverage) | `metrics.jsonl` AtlasIDs/OwaspIDs/SplitOracle/Schwartau/Reuse `[PENDING-decode]` | Inv/Op |
@@ -624,4 +624,3 @@ sources, docked inside the journey, IP-walled, nothing hardcoded-labeled-real.
 - Brain/actuator/harness unchanged.
 
 **INCREMENT 2 COMPLETE — Phase 3 (all subsystem panels) done. Stopping for your on-screen review.**
-

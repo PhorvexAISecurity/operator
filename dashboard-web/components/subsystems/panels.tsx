@@ -261,7 +261,7 @@ export function AblationPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: stri
             <div className="rounded-md border border-border/60 px-3 py-2">PX per-$ <span className="tabular font-medium">{d.p1PerDollar.toFixed(3)}</span></div>
             <div className="rounded-md border border-border/60 px-3 py-2">random per-$ <span className="tabular font-medium">{d.randomPerDollar.toFixed(3)}</span></div>
           </div>
-          <div className="mt-3"><Badge variant="accent">submodular (1 − 1/e) guarantee</Badge></div>
+          <div className="mt-3"><Badge variant="accent">deterministic greedy · empirical ratio shown</Badge></div>
           {flat ? (
             <div className="mt-3 rounded-md border border-warning/30 bg-warning/[0.05] px-3 py-2 text-[12px] text-muted-foreground">
               <span className="font-medium text-warning">Flat-fleet result ({d.ratio.toFixed(2)}×).</span> On a uniform namespace there's no asset tail for the scarcity weighting to exploit, so PX ties random. The headline <span className="font-mono">1.62×</span> is the heavy-tailed designed-fleet result (a Go test) — honestly NOT reproduced on an arbitrary cluster, and never hardcoded into this number.
