@@ -33,9 +33,11 @@ func TestActionFlowFamiliesUseSeparateShapes(t *testing.T) {
 			model.ActionWarmSwap, model.ActionModelShardReplace,
 			model.ActionEndpointRotate, model.ActionRequestDrain,
 		}, want: estimatedCutoverBase},
+		{name: "kv-reset-measured", actions: []model.Action{
+			model.ActionKVReset,
+		}, want: measuredKVResetTTFTPenaltyFraction},
 		{name: "serving-state", actions: []model.Action{
-			model.ActionKVReset, model.ActionKVMigrateInvalidate,
-			model.ActionAdapterRotate, model.ActionGuardrailRotate,
+			model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate,
 		}, want: estimatedServingStateBase},
 		{name: "lightweight", actions: []model.Action{
 			model.ActionIdentityRotate, model.ActionRouteRotate,
@@ -75,7 +77,7 @@ func TestRotationObservationOnlyRepricesRespawnFamily(t *testing.T) {
 	}
 }
 
-func TestCutoverAndServingStateEstimatesRespondOnlyToBoundedServingLoad(t *testing.T) {
+func TestCutoverAndUnmeasuredServingStateEstimatesRespondOnlyToBoundedServingLoad(t *testing.T) {
 	c := NewP1Cost()
 	view := bareView()
 	view.Phase = model.PhaseColdStarting // must not leak the respawn phase prior
@@ -87,12 +89,30 @@ func TestCutoverAndServingStateEstimatesRespondOnlyToBoundedServingLoad(t *testi
 		estimatedCutoverBase+estimatedCutoverLoadSpan; math.Abs(got-want) > eps {
 		t.Errorf("loaded warm-swap cost = %.6f, want bounded cutover estimate %.6f", got, want)
 	}
-	if got, want := c.ECost(view, model.Move{Action: model.ActionKVReset}, pol),
+	if got, want := c.ECost(view, model.Move{Action: model.ActionKVMigrateInvalidate}, pol),
 		estimatedServingStateBase+estimatedServingLoadSpan; math.Abs(got-want) > eps {
-		t.Errorf("loaded kv-reset cost = %.6f, want bounded serving-state estimate %.6f", got, want)
+		t.Errorf("loaded unmeasured serving-state cost = %.6f, want bounded estimate %.6f", got, want)
 	}
 	if got := c.ECost(view, model.Move{Action: model.ActionRequestDrain}, pol); got > 0.25+eps {
 		t.Errorf("request-drain count pressure escaped its own bounded cutover model: %.6f", got)
+	}
+}
+
+func TestKVResetUsesMeasuredTTFTPenaltyNotServingLoadEstimate(t *testing.T) {
+	c := NewP1Cost()
+	pol := model.Policy{FlowDisruption: 1}
+	idle := bareView()
+	loaded := bareView()
+	loaded.Telemetry = model.Telemetry{Present: true, ReqRate: 1e9, ConnCount: 1e9}
+	move := model.Move{Action: model.ActionKVReset}
+
+	want := (measuredKVResetPostResetTTFTMilliseconds - measuredKVResetCachedTTFTMilliseconds) /
+		measuredKVResetPostResetTTFTMilliseconds
+	if got := c.ECost(idle, move, pol); math.Abs(got-want) > eps {
+		t.Fatalf("idle kv-reset C_flow = %.12f, want measured penalty fraction %.12f", got, want)
+	}
+	if got := c.ECost(loaded, move, pol); math.Abs(got-want) > eps {
+		t.Fatalf("loaded kv-reset C_flow = %.12f, want same measured value %.12f; do not extrapolate an unmeasured load curve", got, want)
 	}
 }
 
