@@ -167,3 +167,56 @@ func (s *PhorvexPolicySpec) SourceAllowed(source string) bool {
 	}
 	return false
 }
+
+// ── SLO error budgets (PHVX-60a) ───────────────────────────────────────────────
+// Deliberately NO code defaults here. Lambda or the cost weights have a documented
+// baseline that reproduces the PRD example, so falling back to it is harmless. A
+// budget has no such baseline: inventing one would put a denominator under the SLO
+// cost model that nobody measured, and every ratio computed from it would look
+// authoritative while meaning nothing. Unset therefore means unset.
+
+// BudgetsConfigured reports whether this service has enough SLO budget
+// configuration for the budget path to run at all: a window, plus at least one
+// dimension budget inside it.
+//
+// This is the per-service switch. While it is false the SLO cost model stays off
+// for the service and behaviour is exactly what it was before the budgets existed.
+// The alternative — treating "no budget" as "no remaining budget" — would block
+// every action on every unconfigured service and silently stop Phorvex defending
+// anything, which is a far worse failure than not yet having the feature.
+func (s *PhorvexPolicySpec) BudgetsConfigured() bool {
+	if s.SLO.Window.Duration <= 0 {
+		return false
+	}
+	return s.SLO.AvailabilityBudget.Duration > 0 ||
+		s.SLO.DisruptionBudgetReplicaSeconds > 0 ||
+		ParseDecimal(s.SLO.LatencyBudget, 0) > 0
+}
+
+// EffectiveReserveFraction is the share of each total budget withheld from
+// Phorvex, clamped to [0,1). Unset, unparseable or out-of-range means no reserve;
+// a value at or above 1 would reserve the entire budget and is treated as
+// misconfiguration rather than as a way to disable actuation (Mode and the
+// kill-switch already do that, explicitly).
+func (s *PhorvexPolicySpec) EffectiveReserveFraction() float64 {
+	f := ParseDecimal(s.SLO.ReserveFraction, 0)
+	if f <= 0 || f >= 1 {
+		return 0
+	}
+	return f
+}
+
+// UsableBudget applies the reserve and the consumption already on record:
+//
+//	usable = (1 - reserveFraction) * total - consumed
+//
+// Consumed is what actually happened BEFORE the move being scored; the cost of
+// that move is the numerator of the ratio, never part of this denominator.
+// A negative result is clamped to zero: the budget is spent, not owed.
+func (s *PhorvexPolicySpec) UsableBudget(total, consumed float64) float64 {
+	usable := (1-s.EffectiveReserveFraction())*total - consumed
+	if usable < 0 {
+		return 0
+	}
+	return usable
+}

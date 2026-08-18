@@ -36,6 +36,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/recon"
+	"github.com/phorvex/phorvex/internal/slo"
 )
 
 type policyEntry struct {
@@ -84,6 +85,11 @@ type Manager struct {
 	// required before status becomes False. <=0 uses the default.
 	ActionsSupportedDebounce int
 
+	// Disruption is the ledger of disruption Phorvex itself caused, in unavailable
+	// replica-seconds. Written when a rotation's recovery is measured below. Nil
+	// disables recording; the ledger observes and never gates.
+	Disruption *slo.Ledger
+
 	mu       sync.RWMutex
 	policies map[string]*policyEntry
 	// Accessed only by the single tick loop. Entries are resolved on a later
@@ -107,7 +113,11 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		KillSwitch:    &KillSwitch{Client: c},
 		BaseInterval:  10 * time.Second,
 		Log:           log.WithName("runner"),
-		policies:      map[string]*policyEntry{},
+		// Retains a month, the longest SLO window anyone has proposed, so an entry
+		// can never be evicted while a ratio could still be computed from it. The
+		// ledger observes only: nothing reads it to gate a move yet.
+		Disruption: slo.NewLedger(30 * 24 * time.Hour),
+		policies:   map[string]*policyEntry{},
 
 		ActionsSupportedDebounce: DefaultActionsSupportedDebounceTicks,
 	}
@@ -463,6 +473,26 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			outcome = metrics.RLSCensored
 		}
 		metrics.ObserveRotationOutcome(p.tenant, outcome)
+		// The same measurement, in the SLO's unit. A rotation removes exactly one
+		// Ready serving replica (feasibility.RemovesReadyReplica) and `elapsed` is
+		// how long it stayed removed, so this is one unavailable-replica-second
+		// reading — measured, not modelled. Censored readings are kept and marked:
+		// discarding them would understate consumption exactly when recovery was
+		// worst. Abandoned rotations are excluded, above, because nothing was ever
+		// removed and so nothing was consumed.
+		if m.Disruption != nil {
+			m.Disruption.Record(slo.Entry{
+				Tenant:     p.tenant,
+				Namespace:  p.view.Pod.Namespace,
+				Pod:        p.view.Pod.Name,
+				Action:     model.ActionRotate,
+				Cause:      slo.CausePhorvex,
+				Replicas:   1,
+				Duration:   elapsed,
+				ObservedAt: snap.Now,
+				Censored:   censored,
+			})
+		}
 		delete(m.pendingRotations, ref.key)
 		replacementUID := ""
 		if replacement != nil {
