@@ -3,6 +3,7 @@
 Date: 2026-08-18  
 Base: `origin/main` at `7d2be46` (`v0.4.30`)  
 Branch: `fix/phvx-85-t4-honest-absent`
+Pull request: https://github.com/PhorvexSecurity/operator/pull/52
 
 ## Scope
 
