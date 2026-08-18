@@ -8,13 +8,16 @@ model. P1 now routes every mutating action explicitly:
 | respawn | `rotate`, `mig-rebind` | existing rotation-trained RLS; `mig-rebind` is a lower-bound proxy until repartition timing exists |
 | quarantine | `quarantine` | existing connection-pressure model |
 | cutover | `warm-swap`, `model-shard-replace`, `endpoint-rotate`, `request-drain` | `0.10 + 0.15 × bounded serving-load pressure` |
-| serving state | `kv-reset`, `kv-migrate-invalidate`, `adapter-rotate`, `guardrail-rotate` | `0.05 + 0.10 × bounded serving-load pressure` |
+| measured serving state | `kv-reset` | measured TTFT penalty fraction `0.820526` (paired median penalty `1486.686 ms`; raw AWS evidence in `benchmarks/kv-reset-ttft`) |
+| unmeasured serving state | `kv-migrate-invalidate`, `adapter-rotate`, `guardrail-rotate` | `0.05 + 0.10 × bounded serving-load pressure` |
 | lightweight | `identity-rotate`, `route-rotate`, `debugger`, `custom-inject` | constant `0.02` |
 
-The cutover, serving-state, and lightweight values are dimensionless disruption
+The cutover, unmeasured-serving-state, and lightweight values are dimensionless disruption
 losses and are marked **`[ESTIMATE-UNVALIDATED]`**. They are not fabricated
 durations and do not convert aborted-request counts into replacement-PodReady
-seconds. PHVX-9d supplies the first empirical replacement: kv-reset TTFT penalty.
+seconds. PHVX-9d supplied the first empirical replacement: `kv-reset` uses the
+measured fraction of first-post-reset TTFT attributable to the reset penalty. It
+does not extrapolate a load curve that the idle AWS run did not measure.
 
 Two safeguards prevent recurrence:
 

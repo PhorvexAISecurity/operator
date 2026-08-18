@@ -14,6 +14,7 @@ const (
 	flowRespawn
 	flowQuarantine
 	flowCutover
+	flowKVResetMeasured
 	flowServingState
 	flowLightweight
 )
@@ -21,10 +22,10 @@ const (
 // These are dimensionless disruption-loss priors, NOT fabricated durations and
 // NOT conversions to replacement PodReady seconds.
 //
-// [ESTIMATE-UNVALIDATED] Replace cutover and serving-state values with per-action
-// measurements as the fleet makes them observable (PHVX-9d starts with kv-reset
-// TTFT). The ordering is deliberate: a live serving-state refresh is cheaper than
-// route drain/reconvergence, which is cheaper than a full respawn prior.
+// [ESTIMATE-UNVALIDATED] Cutover and the remaining serving-state values need their
+// own per-action measurements as the fleet makes them observable. kv-reset is no
+// longer in that bucket: PHVX-9d measured its paired TTFT penalty on the live AWS
+// vLLM endpoint and records the raw samples under benchmarks/kv-reset-ttft.
 const (
 	estimatedCutoverBase      = 0.10
 	estimatedCutoverLoadSpan  = 0.15
@@ -32,6 +33,16 @@ const (
 	estimatedServingLoadSpan  = 0.10
 	estimatedLightweightFlow  = 0.02
 	unknownActionFlowMax      = 2.00
+
+	// Twenty paired samples on Qwen2.5-7B-Instruct-AWQ/vLLM 0.7.3 measured an
+	// idle cached median TTFT of 325.196 ms and first-post-reset median TTFT of
+	// 1811.871 ms. The paired median penalty was 1486.686 ms (95% bootstrap CI
+	// 1484.418–1494.930 ms; 20/20 positive). C_flow is a dimensionless disruption
+	// loss, so encode the measured fraction of post-reset TTFT spent on the reset
+	// penalty, not raw milliseconds in a mixed-unit objective.
+	measuredKVResetCachedTTFTMilliseconds    = 325.196398422122
+	measuredKVResetPostResetTTFTMilliseconds = 1811.8705251254141
+	measuredKVResetTTFTPenaltyFraction       = (measuredKVResetPostResetTTFTMilliseconds - measuredKVResetCachedTTFTMilliseconds) / measuredKVResetPostResetTTFTMilliseconds
 )
 
 // flowFamilyForAction is the single exhaustive routing table. New mutating
@@ -49,8 +60,9 @@ func flowFamilyForAction(action model.Action) flowFamily {
 	case model.ActionWarmSwap, model.ActionModelShardReplace,
 		model.ActionEndpointRotate, model.ActionRequestDrain:
 		return flowCutover
-	case model.ActionKVReset, model.ActionKVMigrateInvalidate,
-		model.ActionAdapterRotate, model.ActionGuardrailRotate:
+	case model.ActionKVReset:
+		return flowKVResetMeasured
+	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate:
 		return flowServingState
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:
@@ -76,6 +88,8 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 		return flow
 	case flowCutover:
 		return estimatedCutoverBase + estimatedCutoverLoadSpan*servingLoadPressure(view)
+	case flowKVResetMeasured:
+		return measuredKVResetTTFTPenaltyFraction
 	case flowServingState:
 		return estimatedServingStateBase + estimatedServingLoadSpan*servingLoadPressure(view)
 	case flowLightweight:
