@@ -1,0 +1,4 @@
+TARGET ROTATED at 17:57:54Z
+event redteam-v17b-1786470960 deleted immediately after rotation (stops the F15 loop)
+"pod": "pxv17/bootmark-5d4fc4c669-czzfp", "action": "rotate", "selected": true
+"pod": "pxv17/bootmark-5d4fc4c669-czzfp", "action": "rotate", "selected": true

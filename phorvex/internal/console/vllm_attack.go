@@ -3,20 +3,72 @@
  *
  * POST /api/vllm/attack {action} launches a REAL attack on the live vLLM so the operator's actuator
  * SELECTION is visible right below in Live Theatre — no CLI. The console can't reach pod IPs, so it
- * shells kubectl (exec into the pod for the serving-stack call; label/annotate for the detector flag).
- * Read-only-ish: it only touches the dedicated `vllm` demo workload.
+ * shells kubectl: exec into the pod for the serving-stack call, label/annotate for a detector flag,
+ * and temp-file + `apply` for a SecurityEvent (execText has no stdin — same path as workload_attack.go).
+ *
+ * poison (adapter-rotate) and kvcache (kv-reset) fire PROACTIVELY under the baseline policy. The
+ * served-model actuators below each SCOPE the policy to [rotate, X] + reactiveOnly and fire a matching
+ * SecurityEvent, so X is the sole feasible candidate and the pick is attributable to the click. "reset"
+ * clears everything and restores the baseline. The demo fixtures (guardrail sidecar + warm-pool stand-in
+ * on the vllm pod/ns) must be standing — see build/test-harness/guardrail/*-deploy.sh. warm-swap and
+ * model-shard-replace are DESTRUCTIVE (they retire the leader; the Deployment recreates it in minutes).
  */
 
 package console
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
 const vllmAttackNS = "vllm"
+
+// vllmBaselinePolicy is the calm hygiene state "reset" returns to: the two always-on AI actuators,
+// single-replica floor, proactive (poison/kvcache need no event).
+const vllmBaselinePolicy = `{"spec":{"actions":{"enabled":["kv-reset","adapter-rotate"]},"slo":{"minAvailableReplicas":1},"triggers":{"eventDriven":true,"reactiveOnly":false}}}`
+
+// scopeVllmPolicy merge-patches vllm-defense so ONE surgical actuator is the sole feasible candidate
+// (+ reactiveOnly so the pick is attributable to the fired event). Fire-and-forget.
+func (s *Server) scopeVllmPolicy(mergePatch string) {
+	_, _ = s.cfg.execText(8*time.Second, "kubectl", "-n", vllmAttackNS, "patch", "phorvexpolicy", "vllm-defense", "--type", "merge", "-p", mergePatch)
+}
+
+// fireVllmEvent applies a Phoenix SecurityEvent CR (the detector stand-in) targeting the pod, so the
+// workload becomes actionable and the reactive pick is attributable. Labeled phorvex.ai/redteam=true so
+// "reset" can delete it. Mirrors workload_attack.go (execText has no stdin -> temp file + apply).
+func (s *Server) fireVllmEvent(pod, evType, desc, anomaly string) error {
+	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
+kind: SecurityEvent
+metadata:
+  name: redteam-vllm-%s
+  namespace: %s
+  labels:
+    phorvex.ai/redteam: "true"
+spec:
+  description: %q
+  targets: ["%s/%s"]
+  rule:
+    type: %q
+    threatLevel: "critical"
+    source: "redteam"
+  anomalyScore: %q
+`, strings.ToLower(evType), vllmAttackNS, desc, vllmAttackNS, pod, evType, anomaly)
+	f, ferr := os.CreateTemp("", "phorvex-vllm-se-*.yaml")
+	if ferr != nil {
+		return ferr
+	}
+	defer os.Remove(f.Name())
+	_, _ = f.WriteString(yaml)
+	_ = f.Close()
+	if out, e := s.cfg.execText(10*time.Second, "kubectl", "-n", vllmAttackNS, "apply", "-f", f.Name()); e != nil {
+		return fmt.Errorf("apply SecurityEvent: %s", strings.TrimSpace(out))
+	}
+	return nil
+}
 
 func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -34,8 +86,8 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "vLLM pod not found (is the vllm demo up?): " + strings.TrimSpace(pod)})
 		return
 	}
-	execIn := func(curl string) (string, error) {
-		return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "--", "sh", "-c", curl)
+	execIn := func(sh string) (string, error) {
+		return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "--", "sh", "-c", sh)
 	}
 	kctl := func(args ...string) { _, _ = s.cfg.execText(8*time.Second, "kubectl", append([]string{"-n", vllmAttackNS}, args...)...) }
 
@@ -59,17 +111,108 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	case "kvcache":
 		// ATTACK: prime a secret prefix into the shared prefix-cache. kv-reset (proactive hygiene)
 		// flushes it; the timing-oracle leak/close numbers are the CLI oracle.
-		_, _ = execIn(`curl -s -o /dev/null http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","prompt":"SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal","max_tokens":1}'`)
+		_, _ = execIn(`curl -s -o /dev/null http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal","max_tokens":1}'`)
 		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kvcache",
 			"message": "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
+
+	case "endpoint-rotate":
+		// ATTACK: attacker pins the serving route (route-key=ep-old) for model-extraction/SSRF.
+		// endpoint-rotate re-keys the pod AND restitches the Service selector — the route follows the
+		// pod (zero downtime) while the attacker's pinned identity goes stale. minAvail:2 prunes rotate.
+		kctl("label", "pod", pod, "phorvex.ai/route-key=ep-old", "--overwrite")
+		kctl("annotate", "pod", pod, "phorvex.ai/route-service=vllm-infer", "--overwrite")
+		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/route-key":"ep-old"}}}`)
+		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","endpoint-rotate"]},"slo":{"minAvailableReplicas":2},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
+		if e := s.fireVllmEvent(pod, "EndpointPinning", "attacker pinned the vLLM serving route (route-key=ep-old) for model extraction / SSRF", "0.95"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Inference-endpoint pinning", "endpoint-rotate", "SSRF / model-extraction", "endpoint-rotate", false, base)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "endpoint-rotate",
+			"message": "Endpoint pinned on " + pod + " — Phorvex re-keys the route + restitches the Service (endpoint-rotate); the route follows the pod with zero downtime. Watch the vllm tenant below; Reset restores the route."})
+
+	case "guardrail-rotate":
+		// ATTACK: a many-shot jailbreak that the ACTIVE guardrail variant misses. Set active=pgv1 (the
+		// weak one) so guardrail-rotate visibly swaps to pgv2 and the same probe is then blocked.
+		_, _ = execIn(`curl -s -o /dev/null -X POST http://localhost:8000/v1/guardrail/reload -H 'Content-Type: application/json' -d '{"variant":"pgv1"}'`)
+		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","guardrail-rotate"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
+		if e := s.fireVllmEvent(pod, "GuardrailBypass", "many-shot jailbreak bypasses the active safety-guardrail variant", "0.95"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Guardrail bypass (jailbreak)", "guardrail-rotate", "OWASP LLM01 / ASI01", "guardrail-rotate", false, base)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "guardrail-rotate",
+			"message": "Guardrail set to the weak variant + GuardrailBypass fired on " + pod + " — Phorvex hot-swaps the guardrail variant (guardrail-rotate); the same jailbreak is then blocked, pod never restarts. Watch the vllm tenant below."})
+
+	case "request-drain":
+		// ATTACK: expensive-turn flood (denial-of-wallet). request-drain aborts the in-flight flood
+		// without restarting the pod. Flood is best-effort/background (evidence, not the selection driver).
+		_, _ = execIn(`for n in 1 2 3 4 5 6; do curl -s -o /dev/null --max-time 90 http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Write a very long detailed essay about the history of computing.","max_tokens":400}' & done; sleep 2`)
+		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","request-drain"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
+		if e := s.fireVllmEvent(pod, "DenialOfWallet", "expensive-turn flood saturating the vLLM pod (denial-of-wallet)", "0.9"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Denial-of-wallet flood", "request-drain", "OWASP LLM10", "request-drain", false, base)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "request-drain",
+			"message": "Expensive-request flood started + DenialOfWallet fired on " + pod + " — Phorvex drains/aborts the in-flight requests (request-drain) without restarting the pod. Watch the vllm tenant below."})
+
+	case "kv-migrate-invalidate":
+		// ATTACK: plant a distinctive long prefix (2nd send = cache HIT) — poisoned KV. kv-migrate-invalidate
+		// evicts the planted cache state locally without restarting the pod.
+		_, _ = execIn(`PFX='ZQX-DEMO stable system context block for the disaggregated serving rig padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding'; for n in 1 2; do curl -s -o /dev/null http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d "{\"model\":\"Qwen/Qwen2.5-7B-Instruct-AWQ\",\"messages\":[{\"role\":\"user\",\"content\":\"$PFX reply with OK\"}],\"max_tokens\":4}"; sleep 1; done`)
+		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","kv-migrate-invalidate"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
+		if e := s.fireVllmEvent(pod, "KVPoisoning", "poisoned KV migrated from a prefill worker (disaggregated serving)", "0.9"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Disaggregated-KV poisoning", "kv-migrate-invalidate", "CWE-208 / KV poisoning", "kv-migrate-invalidate", false, base)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "kv-migrate-invalidate",
+			"message": "Crafted prefix planted + KVPoisoning fired on " + pod + " — Phorvex invalidates the poisoned KV locally (kv-migrate-invalidate); the planted cache state is evicted, pod never restarts. Watch the vllm tenant below."})
+
+	case "warm-swap":
+		// ATTACK: hostile co-tenant GPU pressure. warm-swap promotes the warm stand-in with zero cold-load
+		// and retires the leader. DESTRUCTIVE: retires the 7B leader (Deployment recreates it in minutes;
+		// serving continues via the smaller stand-in meanwhile). Start a long in-flight request as drain evidence.
+		_, _ = execIn(`curl -s -o /dev/null --max-time 180 http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","messages":[{"role":"user","content":"Count from 1 to 200, one number per line."}],"max_tokens":600}' & sleep 2`)
+		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","warm-swap"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
+		if e := s.fireVllmEvent(pod, "GPUEviction", "hostile co-tenant pressure on the shared GPU — evict without cold-load", "0.9"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "GPU co-tenant eviction", "warm-swap", "GPU co-residency", "warm-swap", false, base)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "warm-swap",
+			"message": "GPUEviction fired on " + pod + " — Phorvex promotes the warm stand-in with zero cold-load and retires the leader (warm-swap). DESTRUCTIVE: the 7B leader is retired (the Deployment recreates it over a few minutes); serving continues via the smaller stand-in meanwhile. Reset after the leader is back."})
+
+	case "model-shard-replace":
+		// ATTACK: served-model weight tamper (fingerprint drift). model-shard-replace swaps in the known-good
+		// shard shadow with zero cold-load. DESTRUCTIVE (same as warm-swap: retires the leader). The shard
+		// labels are persisted on both Deployment templates, so no live-pod re-labeling is needed here.
+		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","model-shard-replace"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
+		if e := s.fireVllmEvent(pod, "ModelTampering", "served-model weight tamper indicated by fingerprint drift — replace the shard cleanly", "0.9"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
+		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Model weight tamper / extraction", "model-shard-replace", "OWASP LLM05 / supply-chain", "model-shard-replace", false, base)
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "model-shard-replace",
+			"message": "ModelTampering fired on " + pod + " — Phorvex swaps in the known-good shard shadow with zero cold-load (model-shard-replace). DESTRUCTIVE: the 7B leader is retired (recreated over a few minutes). Reset after the leader is back."})
+
 	case "reset":
+		// clear detector flags + fired events, unload the poisoned adapter, un-stage route/serving labels,
+		// restitch the infer Service to the leader, and restore the demo baseline policy.
 		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter-")
 		kctl("label", "pod", pod, "phorvex.ai/lora-enabled-")
 		_, _ = execIn(`curl -s -o /dev/null -X POST http://localhost:8000/v1/unload_lora_adapter -H 'Content-Type: application/json' -d '{"lora_name":"evil"}'`)
+		kctl("delete", "securityevent", "-l", "phorvex.ai/redteam=true", "--ignore-not-found")
+		kctl("label", "pod", pod, "phorvex.ai/route-key-", "phorvex.ai/serving-")
+		kctl("annotate", "pod", pod, "phorvex.ai/route-service-")
+		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/role":"leader"}}}`)
+		s.scopeVllmPolicy(vllmBaselinePolicy)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "reset",
-			"message": "Reset — detector flag cleared, poisoned adapter unloaded; Phorvex returns to kv-reset hygiene."})
+			"message": "Reset — detector flags + fired events cleared, poisoned adapter unloaded, route/serving labels un-staged, policy back to the hygiene baseline (kv-reset + adapter-rotate, proactive). If a warm-swap/model-shard-replace ran, the Deployment is recreating the 7B leader (a few minutes)."})
+
 	default:
-		writeJSON(w, 400, map[string]string{"error": "unknown action (poison|kvcache|reset)"})
+		writeJSON(w, 400, map[string]string{"error": "unknown action (poison|kvcache|endpoint-rotate|guardrail-rotate|request-drain|kv-migrate-invalidate|warm-swap|model-shard-replace|reset)"})
 	}
 }

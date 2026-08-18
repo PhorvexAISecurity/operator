@@ -1,0 +1,2 @@
+payload in bootmark-76466c7c55-6h927 BEFORE rotate:
+SPEC-BORNE-PAYLOAD booted=17:51:41Z

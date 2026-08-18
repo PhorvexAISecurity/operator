@@ -1,0 +1,9 @@
+--- POST / with forged From=+15550077, CallSid=CA_FORGED_V16_001, NO X-Twilio-Signature ---
+HTTP/1.1 200 OK
+date: Tue, 11 Aug 2026 17:39:31 GMT
+server: uvicorn
+content-length: 174
+content-type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://voicebot.phorvex.ai/ws"><Parameter name="caller" value="+15550077"/></Stream></Connect></Response>
+(200 + TwiML echoing our forged caller = webhook accepts unsigned, caller-spoofed requests)

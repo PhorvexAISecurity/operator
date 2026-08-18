@@ -1,0 +1,6 @@
+--- routes on the live bot (from /tmp/live-bot.py) ---
+447:@app.get("/healthz")
+457:@app.get("/web-ui")
+465:@app.post("/")
+486:@app.websocket("/ws")
+NOTE: no hang-up/call-control route exists on the bot; the V2 (CVE-2026-54695) hang-up path runs through the Twilio REST API using the TWILIO_AUTH_TOKEN in the pod env — shown readable in T30. Full live hang-up proof needs an active call (human-in-loop).

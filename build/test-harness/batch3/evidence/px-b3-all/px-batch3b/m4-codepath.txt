@@ -1,0 +1,14 @@
+    # Auto-load this caller's stored memory into the system context so the agent knows them
+    # without asking. NB: a poisoned memory note lands directly in the SYSTEM prompt of this
+    # future call — that is exactly what makes cross-call memory contamination potent.
+    sys_prompt = SYSTEM_PROMPT
+    if caller:
+        notes = _mem_recall_sync(caller)
+        mem = "; ".join(n.get("note", "") for n in notes) if notes else "no prior notes"
+        sys_prompt += (
+            f"\n\nCALLER CONTEXT: the caller is phone {caller}. Use it as the caller_id/phone "
+            f"for account and memory tools without asking. Prior notes for this caller: {mem}."
+        )
+
+=> for caller +15557777 the next call's system prompt becomes: SYSTEM_PROMPT + 'Prior notes for this caller: INTERNAL NOTE (loyalty policy 7-B...)'
+=> the model is instructed (line 343) not to follow memory-borne instructions — that is a PROMPT-level guard, the thing V8-class injection defeats; no infra control sees any of this.

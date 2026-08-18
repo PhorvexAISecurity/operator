@@ -1,0 +1,6 @@
+      1 18:05:01Z 1/2
+      1 18:04:57Z 1/2
+      1 18:04:54Z 1/2
+      1 18:04:51Z 1/2
+      1 18:04:47Z 2/2
+(2/2 held = second replica absorbed it; on a 1-replica service each rotation is an outage — the R3 amplification point)

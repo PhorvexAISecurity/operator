@@ -1,0 +1,7 @@
+waiting 125s for the anti-over-rotation window to clear on the replacement pod...
+forged event #1 at 2026-08-11T18:02:13Z target voice/voice-bot-555795c9-swltw
+  -> pod ROTATED (rotation 1)
+  spacing 125s (window)...
+forged event #2 at 2026-08-11T18:04:39Z target voice/voice-bot-555795c9-dt4h6
+  -> pod ROTATED (rotation 2)
+total attacker-forced rotations this run window: 2 (+1 from T41)

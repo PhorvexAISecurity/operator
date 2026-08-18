@@ -1,0 +1,2 @@
+payload in target bootmark-5d4fc4c669-czzfp BEFORE:
+SPEC-BORNE-PAYLOAD booted=17:55:50Z
