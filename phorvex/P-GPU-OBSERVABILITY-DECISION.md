@@ -43,14 +43,41 @@ no code change. See "Decision" at the end.
 | `DCGM_FI_PROF_GR_ENGINE_ACTIVE` | graphics/compute engine active fraction | no independent engine-busy cross-check |
 | `DCGM_FI_PROF_DRAM_ACTIVE` | device-memory bandwidth utilization | memory-bandwidth pressure is unobservable |
 
-These are all `DCGM_FI_PROF_*` (DCP profiling) fields. On this fleet, profiling is effectively
-limited to the PCIe counters: the two PCIe byte counters answer, the four above do not.
+### Why they are absent: the exporter's counter list, not the hardware
 
-**Do not read this table as "these arrive on Ampere."** Availability of DCP fields depends on the
-GPU architecture, the driver, the DCGM version, and whether profiling is enabled in the exporter
-— all four differ between our T4 pool and any newer pool. If the fleet gains non-Turing nodes,
-**re-measure before relying on any row above.** The correct first step is to query the exporter
-directly for `DCGM_FI_PROF_SM_ACTIVE` on the new node and check for a non-empty series.
+This was checked on the live cluster rather than assumed, and the answer is **configuration**.
+
+`dcgm-exporter` runs as a DaemonSet in `gpu-telemetry` with no `--collectors` argument and no
+mounted counter file, so it uses the counter list baked into its image,
+`/etc/dcgm-exporter/default-counters.csv`. That file is 65 lines and contains exactly **two**
+profiling fields:
+
+```
+DCGM_FI_PROF_PCIE_TX_BYTES,  counter, Total number of bytes transmitted through PCIe TX via NVML.
+DCGM_FI_PROF_PCIE_RX_BYTES,  counter, Total number of bytes received through PCIe RX via NVML.
+```
+
+`DCGM_FI_PROF_SM_ACTIVE` does not appear in it at all. In the other two counter files shipped in
+the same image it is present but **commented out**:
+
+```
+# DCGM_FI_PROF_SM_ACTIVE,          gauge, The ratio of cycles an SM has at least 1 warp assigned.
+# DCGM_FI_PROF_SM_OCCUPANCY,       gauge, The ratio of number of warps resident on an SM.
+```
+
+So the metric is missing because **nothing asks for it**. And because the two PCIe fields are
+themselves `PROF_*` and do return data, DCP profiling demonstrably functions on this T4 — the
+hardware is not the constraint we assumed it was.
+
+**What is still unproven:** that `SM_ACTIVE` will produce data once uncommented. NVIDIA ships
+those lines commented for a reason, and profiling fields can still be refused per device, driver
+or DCGM version. The claim here is narrower and evidence-backed: *the observed absence is fully
+explained by the counter list, and the hardware hypothesis is not supported.* Enabling it is the
+experiment that settles it.
+
+**Do not read the absent-metrics table as "these arrive on Ampere" either.** Availability depends
+on architecture, driver, DCGM version and the exporter's counter list. If the fleet gains
+non-Turing nodes, re-measure rather than assume.
 
 ---
 
@@ -94,11 +121,12 @@ What is consciously accepted until then: on the T4 pool the model-theft gate con
 duty-cycle number as occupancy, and `SMSource` records that it did. The audit therefore shows
 which decisions were taken on the degraded signal, so they can be re-examined afterwards.
 
-**Follow-up that closes this properly:** enable the `DCGM_FI_PROF_*` counters on the fleet — they
-are not in the exporter's default counter set — then re-run the verification below and flip the
-`SMOccupancy` row of the table above. That is a cluster-side change; the exporter configuration is
-not owned by this repository. Only if it turns out the counters cannot be enabled at all does the
-question become a calibration one, and only then does the threshold need revisiting.
+**Follow-up that closes this properly:** enable `DCGM_FI_PROF_SM_ACTIVE` in the exporter's counter
+list — it is absent from the default file and commented out in the others, as shown above — then
+re-run the verification below and flip the `SMOccupancy` row of the table. That is a cluster-side
+change; the exporter configuration is not owned by this repository. Only if the counter turns out
+to be unproducible once enabled does the question become a calibration one, and only then does the
+threshold need revisiting.
 
 ---
 
@@ -136,6 +164,17 @@ curl -sG "$PROM/api/v1/query" --data-urlencode 'query=DCGM_FI_PROF_DRAM_ACTIVE'
 
 The single time-sliced T4 series can move between `vllm` and `mock-rag-chatbot`, so query the
 currently DCGM-labelled pod rather than assuming a fixed pod label.
+
+To check the counter list itself rather than its output:
+
+```bash
+kubectl -n gpu-telemetry exec ds/dcgm-exporter -- \
+  grep -i 'sm_active\|prof' /etc/dcgm-exporter/default-counters.csv
+```
+
+**Caveat on any historical check.** The `gpu-telemetry` Prometheus runs with
+`--storage.tsdb.retention.time=2h` and has no PVC, so nothing survives a pod restart. Every
+statement above is about the present state; there is no long window to appeal to.
 
 ---
 
