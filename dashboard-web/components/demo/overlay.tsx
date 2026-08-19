@@ -15,7 +15,7 @@ export const DEMO_BEATS: Beat[] = [
     investor: "We connect to your live AWS EKS cluster, reproducible at seed 1337. K8s defense is proven live on EKS; GPU magnitudes are pending a GPU node pool.",
     customer: "First we connect to your environment. Today that's a live Kubernetes cluster; your cloud and GPU clusters slot in next." },
   { step: "scan", dwell: 12000,
-    investor: "One scan derives the platform's real physics — image-rarity, co-residency, scheduler slack, EPSS — plus the kill-chain context. No hardcoded inputs; it's all discovered.",
+    investor: "One scan derives the platform's real physics — image-rarity, co-residency, scheduler slack — plus the kill-chain context, measured live from your cluster rather than assumed. Exploitability (EPSS) is loaded from a public feed where we have it, and reads neutral where we don't.",
     customer: "One click maps your platform — what's running, what's exposed, and where the risk concentrates." },
   { step: "discovered", dwell: 16000,
     investor: "The discovered map: your crown jewels, each workload's kill-chain stage, and the blast radius. This asset-aware, stage-aware context is what makes the defense targeted, not blind.",
