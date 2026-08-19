@@ -1,7 +1,7 @@
 # P-OPTIMIZE-RATIO — search + decision (STOP for approval before building)
 
-**Question.** Maximize recon-per-dollar beyond the current 1.62×, AND answer rigorously: is the submodular
-greedy selection actually near-optimal (1−1/e) vs an exact solve? Verify submodularity, benchmark greedy-vs-exact
+**Question.** Maximize recon-per-dollar beyond the current 1.62×, AND answer rigorously: does any generic
+submodular approximation bound apply to the implemented cost-penalized greedy vs an exact solve? Verify submodularity, benchmark greedy-vs-exact
 on dispersed (heavy-tailed) fleets, prove any lift by ablation — measured, not asserted.
 
 **Method.** Deep multi-agent search (11 agents: understand → analyze → adversarially verify → synthesize) over
@@ -14,8 +14,9 @@ code changed this pass.**
 ## Headline (and it's stronger + more honest than the premise)
 
 **The greedy is not merely near-optimal — it is EXACTLY optimal (ratio 1.000) on both shipped profiles.** The
-textbook 1−1/e (cardinality) and 1/2 (partition-matroid) bounds quoted in the code comments are **loose** here:
-they are valid upper bounds on the gap, not tight. So the "is greedy near-optimal vs exact?" question resolves
+textbook monotone/cardinality and monotone/matroid bounds quoted in the old code comments do **not apply**
+to the implemented non-monotone cost-penalized objective. Instead, the shipped profile has a separate
+block-ownership proof. So the "is greedy near-optimal vs exact?" question resolves
 to **greedy = exact, gap = 0** on the real system — there is **structurally zero headroom** for any
 selection-combinatorics improvement on the shipped profiles.
 
@@ -49,7 +50,8 @@ round-by-round top-B-by-net-value selection over a partition matroid is then **e
 
 **Greedy regime:** cost-benefit greedy of `marginal·prov − λ·ECost` over a **partition matroid** (one move/asset)
 under a **cardinality** budget `B = MaxMovesPerTick`, λ frozen per tick, strict-`>` first-seen tie-break. Not
-knapsack; not lazy. The 1/2 and 1−1/e bounds become operative **only** under a deliberately-overlapping profile.
+knapsack; not lazy. No generic approximation constant is claimed for a deliberately-overlapping profile;
+that case requires an algorithm-specific proof or exact measurement.
 
 ---
 
