@@ -64,6 +64,7 @@ func main() {
 		baseInterval     time.Duration
 		promURL          string
 		epssCachePath    string
+		epssCacheRefresh time.Duration
 		killSwitch       bool
 		auditJSON        string
 		operatorNS       string
@@ -108,6 +109,7 @@ func main() {
 	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
+	flag.DurationVar(&epssCacheRefresh, "epss-cache-refresh", 0, "Re-read --epss-cache at this interval so a scanner pipeline that owns the ConfigMap is actually observed (0 = read once at startup, the previous behaviour). A failed read keeps the existing cache.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", 256<<20, "[audit-json] rotate when the live file exceeds this many bytes (0 = unbounded). Default 256 MiB.")
@@ -229,6 +231,29 @@ func main() {
 	if err = mgr.Add(rmgr); err != nil {
 		setupLog.Error(err, "unable to add the phorvex tick loop")
 		os.Exit(1)
+	}
+
+	// Re-read the exploitability cache while running. Off by default: with a hand-curated
+	// ConfigMap there is nothing to observe, and a startup-only read is the honest description
+	// of that. It is turned on where a scanner pipeline owns the file (PHVX-14b).
+	if epssCachePath != "" && epssCacheRefresh > 0 {
+		refresher := &platform.EPSSRefresher{
+			Path:     epssCachePath,
+			Interval: epssCacheRefresh,
+			OnReload: func(entries int, changed bool) {
+				if changed {
+					setupLog.Info("epss: exploitability cache reloaded", "images", entries, "path", epssCachePath)
+				}
+			},
+			OnError: func(err error) {
+				setupLog.Error(err, "epss-cache refresh failed (previous cache kept in force)", "path", epssCachePath)
+			},
+		}
+		if err = mgr.Add(refresher); err != nil {
+			setupLog.Error(err, "unable to add the epss cache refresher")
+			os.Exit(1)
+		}
+		setupLog.Info("epss: cache refresh enabled", "interval", epssCacheRefresh, "path", epssCachePath)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
