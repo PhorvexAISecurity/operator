@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +37,7 @@ import (
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/epssfeed"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -65,6 +67,15 @@ func main() {
 		promURL          string
 		epssCachePath    string
 		epssCacheRefresh time.Duration
+		epssFeed         bool
+		epssFeedApply    bool
+		epssFeedPartial  bool
+		epssFeedNS       string
+		epssFeedCM       string
+		epssFeedKey      string
+		epssFeedFIRSTURL string
+		epssFeedTrivy    string
+		epssFeedTimeout  time.Duration
 		killSwitch       bool
 		auditJSON        string
 		operatorNS       string
@@ -110,6 +121,15 @@ func main() {
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
 	flag.DurationVar(&epssCacheRefresh, "epss-cache-refresh", 0, "Re-read --epss-cache at this interval so a scanner pipeline that owns the ConfigMap is actually observed (0 = read once at startup, the previous behaviour). A failed read keeps the existing cache.")
+	flag.BoolVar(&epssFeed, "epss-feed", false, "One-shot: scan running images with Trivy, resolve CVEs through FIRST EPSS, and refresh the EPSS ConfigMap.")
+	flag.BoolVar(&epssFeedApply, "epss-feed-apply", false, "[epss-feed] apply the generated cache; false is a non-mutating dry-run.")
+	flag.BoolVar(&epssFeedPartial, "epss-feed-allow-partial", false, "[epss-feed] permit apply when an image scan fails; the default rejects partial refreshes.")
+	flag.StringVar(&epssFeedNS, "epss-feed-namespace", os.Getenv("POD_NAMESPACE"), "[epss-feed] namespace containing the EPSS ConfigMap.")
+	flag.StringVar(&epssFeedCM, "epss-feed-configmap", "phorvex-epss", "[epss-feed] ConfigMap to read/update.")
+	flag.StringVar(&epssFeedKey, "epss-feed-key", "epss-cache.json", "[epss-feed] ConfigMap data key to read/update.")
+	flag.StringVar(&epssFeedFIRSTURL, "epss-feed-first-url", "https://api.first.org/data/v1/epss", "[epss-feed] FIRST EPSS API endpoint.")
+	flag.StringVar(&epssFeedTrivy, "epss-feed-trivy", "/trivy", "[epss-feed] path to the Trivy executable.")
+	flag.DurationVar(&epssFeedTimeout, "epss-feed-scan-timeout", 10*time.Minute, "[epss-feed] maximum duration for each image scan.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", 256<<20, "[audit-json] rotate when the live file exceeds this many bytes (0 = unbounded). Default 256 MiB.")
@@ -134,6 +154,13 @@ func main() {
 	if supportDebounce < 1 {
 		setupLog.Error(fmt.Errorf("must be at least 1"), "invalid actions-supported-debounce", "value", supportDebounce)
 		os.Exit(2)
+	}
+	if epssFeed {
+		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
+			setupLog.Error(err, "epss-feed failed; last-known-good cache was not changed")
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Seed the exploitability (EPSS/CVSS) cache from the scanner export, if wired. This makes the
@@ -270,6 +297,38 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, firstURL, trivyPath string, scanTimeout time.Duration) error {
+	if namespace == "" {
+		return fmt.Errorf("epss-feed-namespace is required (set POD_NAMESPACE in-cluster)")
+	}
+	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	if err != nil {
+		return err
+	}
+	result, err := epssfeed.Run(ctrl.SetupSignalHandler(), epssfeed.Options{
+		Client: clientset,
+		Scanner: epssfeed.TrivyScanner{
+			Path: trivyPath, CacheDir: "/tmp/trivy", Timeout: scanTimeout,
+		},
+		EPSS:      epssfeed.FIRSTClient{BaseURL: firstURL},
+		Namespace: namespace, ConfigMapName: configMapName, ConfigMapKey: configMapKey,
+		Apply: apply, AllowPartial: allowPartial,
+		Progress: func(image string, done, total int) {
+			if image == "" {
+				setupLog.Info("epss-feed: image scans complete", "completed", done, "total", total)
+				return
+			}
+			setupLog.Info("epss-feed: scanning image", "image", image, "completed", done, "total", total)
+		},
+	})
+	if result.Mode != "" {
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
+			return encodeErr
+		}
+	}
+	return err
 }
 
 // runIntegrationEmit proves Seam 1 without the full operator: it ensures the tenant

@@ -65,16 +65,15 @@ func (r *EPSSRefresher) Start(ctx context.Context) error {
 
 // refreshOnce performs one read. Split out so the failure semantics are directly testable.
 func (r *EPSSRefresher) refreshOnce() {
-	before := EPSSLoaded()
-	if err := LoadEPSSFromFile(r.Path); err != nil {
+	entries, changed, err := RefreshEPSSFromFile(r.Path)
+	if err != nil {
 		// The cache is untouched: LoadEPSSFromFile only calls SeedEPSS after a successful parse.
 		if r.OnError != nil {
 			r.OnError(err)
 		}
 		return
 	}
-	after := EPSSLoaded()
 	if r.OnReload != nil {
-		r.OnReload(after, after != before)
+		r.OnReload(entries, changed)
 	}
 }

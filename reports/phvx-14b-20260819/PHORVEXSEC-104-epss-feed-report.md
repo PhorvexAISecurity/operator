@@ -1,21 +1,18 @@
-# PHORVEXSEC-104 (PHVX-14b) — EPSS feed: refresh, aggregation rule, cache builder — report
+# PHORVEXSEC-104 (PHVX-14b) — complete EPSS feed wiring — report
 
 Date: 2026-08-19 · Branch `feat/phvx-14b-epss-cache-refresh` · PR #59
-Commits `d5075cc`, `d22439f`, `b1e255c`
 
 Follows `reports/phvx-14b-20260810/`, which measured the impact of wiring EPSS. This covers the
-three pieces the feed still needed.
+the complete feed path: runtime refresh, aggregation, cluster inventory, Trivy scanning, FIRST
+lookup, controlled ConfigMap update, and deployment resources.
 
 ## Headline
 
-**The task was in `Test` but its central deliverable did not exist.** What is wired is the
-file-loading path (`--epss-cache`, `cmd/main.go:140`) plus a hand-maintained ConfigMap with four
-digests, one of which points at a workload retired from the cluster. There is no scanning CronJob in
-the repo or the cluster, and coverage is **2 of 71 live pods (2.8%)** — worse than the 9.2% the
-ticket records. PHORVEXSEC-59 (`SeedEPSS` unwired) was genuinely fixed; 104 appears to have been
-marked alongside it. Moved back to `In Progress`.
-
-Three pieces landed here. The fourth — the CronJob itself — is deliberately deferred; see §4.
+The previously missing central deliverable now exists. A dedicated CronJob inventories running
+image digests, scans them with pinned Trivy, resolves CVEs through FIRST, applies the measured P99
+aggregation rule, and updates the mounted cache through narrowly-scoped RBAC. Every operator replica
+then observes projected-file updates without a restart. The EKS overlay enables the complete job in
+dry-run mode; applying generated data remains an explicit reviewed switch.
 
 ## 1. The cache is now re-read while running
 
@@ -30,13 +27,13 @@ the pipeline was worth building.
 cache is per-process package state, so gating refresh on leadership would leave standby replicas
 serving stale scores and then promote one of them.
 
-**A failed read never clears a good cache.** `LoadEPSSFromFile` only seeds after a successful parse,
-so a truncated, malformed or deleted file leaves the previous entries in force and reports the
-error. The alternative is every pod in the fleet silently dropping to `EPSS = 1.0` because one read
-caught the file mid-edit — a fleet-wide loss of signal caused by the mechanism meant to supply it.
+**A failed read never clears a good cache.** A truncated, malformed or deleted configured file
+leaves the previous entries in force and invokes the error path. A missing file remains a nil no-op
+only during optional startup. Runtime change detection compares cache contents, not entry count, so
+a same-count score update is observable.
 
-`--epss-cache-refresh` defaults to `0`, i.e. exactly today's behaviour. Nothing changes at runtime
-until a deployment sets it.
+`--epss-cache-refresh` defaults to `0`, preserving standalone behaviour. The chart sets 30 seconds
+when EPSS is enabled.
 
 ## 2. The aggregation rule, settled by measurement
 
@@ -85,8 +82,9 @@ which is driven by set size and holds for real images.
 
 ## 3. The cache builder
 
-`internal/epssfeed` has no I/O: scanning, the HTTP fetch and the ConfigMap write stay in the caller,
-so the part that decides what an image's score *is* can be tested offline. Verified end-to-end
+`internal/epssfeed/feed.go` keeps scoring independent of I/O, while `sync.go` supplies the explicitly
+one-shot Kubernetes/Trivy/FIRST adapter. This keeps the scoring rule offline-testable without
+pretending the deployment pipeline does not exist. Verified end-to-end
 against the actual FIRST.org file on images of 8, 120 and 380 CVEs, producing multipliers
 **1.27 / 1.35 / 1.56** — real spread with no saturation, against a flat 1.0 on 69 of 71 pods today.
 
@@ -104,32 +102,38 @@ rather than "we have no data".
 Smaller decisions of the same shape: images with no digest are skipped rather than keyed by tag (a
 tag moves, and the scores would follow it to the wrong image); a CVE appearing in several package
 layers collapses to its highest severity so a duplicate cannot shift the percentile by being
-duplicated; an empty corpus is an **error**, since proceeding would rebuild the cache with every
-image unscored and wipe the feed on the next refresh. Output is key-sorted and byte-stable so an
-unchanged fleet does not rewrite the ConfigMap and churn the mount every run.
+duplicated; an empty corpus or a zero-score FIRST response for a non-empty CVE set is an **error**,
+since proceeding would rebuild the cache with every image unscored and wipe the feed on the next
+refresh. Output is key-sorted and byte-stable. The ConfigMap is still updated after a successful
+unchanged run so its `epss-last-success` evidence remains truthful.
 
-## 4. The CronJob, and why it is not here
+## 4. CronJob, RBAC, and ownership
 
-Three reasons to land it separately rather than blind:
+`epss-feed.yaml` adds a dedicated ServiceAccount, cluster-wide `pods/list` for inventory, and
+namespace-local `get/update` restricted by `resourceNames` to the EPSS ConfigMap. It cannot read
+Secrets or mutate workloads. The operator image runs a one-shot `--epss-feed`; a pinned Trivy init
+container supplies the scanner binary through an `emptyDir`.
 
-**CI cannot validate it.** GitHub Actions is failing at job-start org-wide on a billing error, so a
-chart change would go in unverified — and a chart change also requires re-packing the vendored
-subchart, which the `chart-sync` job is the only thing that checks.
+The chart bootstraps the ConfigMap so the Deployment always has a mountable object. When the feed is
+enabled, the CronJob owns its runtime data and annotations; the ArgoCD Application uses
+`RespectIgnoreDifferences` and ignores exactly those fields. This prevents self-heal from restoring
+the four seed entries after every generated refresh while keeping the object itself in GitOps.
 
-**It needs an ownership switch, not just a new object.** The live ConfigMap is ArgoCD-managed. The
-chart already anticipated this — `epss-configmap.yaml` says *"If you later point this at a real EPSS
-pipeline, set `create: false` and let that pipeline own the ConfigMap instead"* — so the pipeline
-landing must flip that flag in the same change, or ArgoCD and the CronJob will fight over the
-object.
+The EKS overlay schedules the real job daily with `apply=false`, `allowPartial=false`. Before
+activation, a read-only ECR IRSA role must be attached for private images and the dry-run
+before/after distribution reviewed. This is an explicit activation gate, not missing wiring.
 
-**It adds cluster write privilege** (update on a ConfigMap) and a new scheduled workload, worth
-reviewing on its own rather than buried under logic changes.
+## 5. Regression corrections
 
-No new container image is needed when it lands: the operator binary already uses a one-shot-flag
-pattern (`--scan`, `--ablation`), so the sync can run as another mode with Trivy as an init
-container.
+- Trivy JSON arrays and newline-delimited objects both parse as documented.
+- A deleted configured feed invokes `OnError`, never `OnReload`.
+- Same-count score changes report `changed=true`.
+- Failed and partial scans retain the last-known-good cache; partial application is rejected by
+  default.
+- A successful-but-empty FIRST response cannot erase a good cache, and pod coverage still counts
+  correctly when the first declared container is stopped but a later container is running.
 
-## 5. Related, fixed here
+## 6. Related
 
 The investor demo script claimed the scan derives EPSS with *"no hardcoded inputs; it's all
 discovered"* (`dashboard-web/components/demo/overlay.tsx:18`). That is false and visible in any
@@ -137,5 +141,6 @@ demo; PHVX-14b asked for the fix and it had not been made. Corrected under PHVX-
 
 ## Verification
 
-`go build ./...`, `go vet ./...`, full `go test ./...` green; `go test ./internal/platform -race`
-clean. 24 new tests across the three pieces.
+`go build ./...`, `go vet ./...`, full `go test ./...`, race tests for `internal/epssfeed` and
+`internal/platform`, Helm lint/template, and vendored-chart synchronization are required before
+handoff. The exact results are recorded after the final combined verification.

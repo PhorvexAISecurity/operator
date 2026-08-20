@@ -1,14 +1,14 @@
-{{- if and .Values.phorvex.epss.enabled .Values.phorvex.epss.create }}
-# The EPSS exploit-probability cache the operator mounts at startup.
+{{- if and .Values.phorvex.epss.enabled (or .Values.phorvex.epss.create .Values.phorvex.epss.feed.enabled) }}
+# The EPSS exploit-probability cache the operator mounts and reloads.
 #
 # This is created by the chart rather than left as a hand-applied object because the
 # Deployment MOUNTS it: without the ConfigMap the pod never starts, it just sits waiting
 # for a volume that does not exist. A startup dependency that lives nowhere in git is a
 # cluster you cannot rebuild, so it is desired state whether or not it looks like data.
 #
-# It is deliberately SMALL and hand-curated (a few image digests scored by hand), not a
-# feed. If you later point this at a real EPSS pipeline, set `create: false` and let that
-# pipeline own the ConfigMap instead — the mount keeps working either way.
+# With epss.feed enabled this is the bootstrap/last-known-good object that the CronJob
+# refreshes. ArgoCD installations must ignore /data for this runtime-owned ConfigMap;
+# otherwise self-heal would replace generated scores with the bootstrap content.
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -95,10 +95,43 @@ func TestDeletedFeedKeepsThePreviousCache(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	(&EPSSRefresher{Path: path, Interval: time.Millisecond}).refreshOnce()
+	var gotErr error
+	reloads := 0
+	(&EPSSRefresher{
+		Path: path, Interval: time.Millisecond,
+		OnError:  func(err error) { gotErr = err },
+		OnReload: func(int, bool) { reloads++ },
+	}).refreshOnce()
 
 	if got := EPSSLoaded(); got != before {
 		t.Fatalf("cache went from %d to %d entries after the file vanished", before, got)
+	}
+	if gotErr == nil || reloads != 0 {
+		t.Fatalf("deleted configured feed: error=%v reloads=%d, want one error and no successful reload", gotErr, reloads)
+	}
+}
+
+func TestReloadDetectsSameCountScoreChanges(t *testing.T) {
+	defer SeedEPSS(nil)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "epss.json")
+	writeFile(t, path, `{"sha256:aaa":{"epss":0.1,"cvss":4.0}}`)
+
+	var changes []bool
+	r := &EPSSRefresher{Path: path, Interval: time.Millisecond,
+		OnReload: func(_ int, changed bool) { changes = append(changes, changed) }}
+	r.refreshOnce()
+	before := epssMultiplier("sha256:aaa")
+
+	writeFile(t, path, `{"sha256:aaa":{"epss":0.9,"cvss":9.0}}`)
+	r.refreshOnce()
+	after := epssMultiplier("sha256:aaa")
+
+	if len(changes) != 2 || !changes[0] || !changes[1] {
+		t.Fatalf("same-count score update flags = %v, want [true true]", changes)
+	}
+	if before == after {
+		t.Fatalf("same-count score update left multiplier unchanged at %v", before)
 	}
 }
 

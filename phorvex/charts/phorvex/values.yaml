@@ -45,6 +45,9 @@ phorvex:
     configMapName: phorvex-epss
     mountPath: /etc/phorvex
     fileName: epss-cache.json
+    # Projected ConfigMaps update asynchronously. Every operator replica re-reads
+    # the mounted file and retains its last-known-good cache on a bad update.
+    refreshInterval: 30s
     # Create the ConfigMap from `data` below, rather than expecting it to already exist.
     # The Deployment mounts it, so a missing ConfigMap means the pod never starts — which
     # makes it a startup dependency, and a startup dependency that exists only as a
@@ -52,6 +55,34 @@ phorvex:
     # Set false when an external pipeline owns the ConfigMap instead.
     create: false
     data: ""
+    # Automated running-image inventory -> Trivy -> FIRST EPSS -> ConfigMap refresh.
+    # It uses a dedicated ServiceAccount with pod-list plus get/update on only the
+    # named ConfigMap. `apply: false` performs the full job as a safe dry-run.
+    feed:
+      enabled: false
+      schedule: "17 3 * * *"
+      suspend: false
+      apply: false
+      allowPartial: false
+      firstURL: https://api.first.org/data/v1/epss
+      trivyPath: /tools/trivy
+      trivy:
+        image:
+          repository: aquasec/trivy
+          tag: "0.65.0"
+          pullPolicy: IfNotPresent
+      scanTimeout: 10m
+      activeDeadlineSeconds: 3600
+      serviceAccount:
+        annotations: {}
+      imagePullSecrets: []
+      extraEnv: []
+      resources:
+        limits: { cpu: "2", memory: 2Gi }
+        requests: { cpu: 100m, memory: 256Mi }
+      nodeSelector: {}
+      tolerations: []
+      affinity: {}
   # Write the decision audit to a JSONL file. The console streams /api/live from a FILE,
   # so without this there is nothing live to stream — which is why the in-cluster console
   # could only ever serve the stale snapshot baked into its image.

@@ -40,6 +40,8 @@ spec:
       # The Phoenix CRDs are large enough to blow the 262144-byte annotation limit that
       # client-side apply uses to store last-applied-configuration.
       - ServerSideApply=true
+      # Preserve the CronJob-owned cache during unrelated self-heal syncs.
+      - RespectIgnoreDifferences=true
     retry:
       limit: 3
       backoff:
@@ -52,3 +54,14 @@ spec:
       kind: CustomResourceDefinition
       jsonPointers:
         - /status
+    # The chart bootstraps this object; the EPSS CronJob owns its runtime data.
+    - group: ""
+      kind: ConfigMap
+      name: phorvex-epss
+      namespace: phorvex-system
+      jsonPointers:
+        - /data
+        - /metadata/annotations/phorvex.ai~1epss-last-success
+        - /metadata/annotations/phorvex.ai~1epss-entries
+        - /metadata/annotations/phorvex.ai~1epss-images-scanned
+        - /metadata/annotations/phorvex.ai~1epss-images-failed

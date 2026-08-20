@@ -42,6 +42,18 @@ func parse(t *testing.T) []ScanResult {
 	return got
 }
 
+func TestParseTrivyReportsAcceptsNewlineDelimitedObjects(t *testing.T) {
+	ndjson := `{"ArtifactName":"a","Metadata":{"RepoDigests":["repo/a@sha256:aaaa"]},"Results":[]}
+{"ArtifactName":"b","Metadata":{"RepoDigests":["repo/b@sha256:bbbb"]},"Results":[]}`
+	got, err := ParseTrivyReports(strings.NewReader(ndjson))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Digest != "repo/a@sha256:aaaa" || got[1].Digest != "repo/b@sha256:bbbb" {
+		t.Fatalf("NDJSON parsed as %+v, want two ordered reports", got)
+	}
+}
+
 // An image with no digest cannot be keyed to a running pod's ImageID. Guessing from the tag
 // would attach scores to the wrong image the moment a tag moved, so it is skipped.
 func TestImagesWithoutADigestAreSkipped(t *testing.T) {

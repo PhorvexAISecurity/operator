@@ -24,6 +24,7 @@
 package epssfeed
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -80,24 +81,35 @@ type ScanResult struct {
 // the conservative reading and it is applied per CVE, so the pair stays attached to one real
 // vulnerability.
 func ParseTrivyReports(r io.Reader) ([]ScanResult, error) {
-	dec := json.NewDecoder(r)
-	var out []ScanResult
-
-	// Tolerate both a top-level array and a stream of objects: `trivy image -f json` emits one
-	// object per invocation, and a scan loop naturally concatenates them.
-	tok, err := dec.Token()
+	payload, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("read trivy report: %w", err)
 	}
-	if d, ok := tok.(json.Delim); !ok || d != '[' {
-		// Not an array: rewind is impossible, so decode this first value then continue streaming.
-		return nil, fmt.Errorf("trivy report must be a JSON array of reports (got %v); pipe scans through `jq -s .`", tok)
+	payload = bytes.TrimSpace(payload)
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("read trivy report: empty input")
 	}
-	for dec.More() {
-		var rep trivyReport
-		if err := dec.Decode(&rep); err != nil {
-			return nil, fmt.Errorf("decode trivy report: %w", err)
+
+	var reports []trivyReport
+	if payload[0] == '[' {
+		if err := json.Unmarshal(payload, &reports); err != nil {
+			return nil, fmt.Errorf("decode trivy report array: %w", err)
 		}
+	} else {
+		dec := json.NewDecoder(bytes.NewReader(payload))
+		for {
+			var rep trivyReport
+			if err := dec.Decode(&rep); err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, fmt.Errorf("decode newline-delimited trivy report: %w", err)
+			}
+			reports = append(reports, rep)
+		}
+	}
+
+	out := make([]ScanResult, 0, len(reports))
+	for _, rep := range reports {
 		digest := pickDigest(rep)
 		if digest == "" {
 			// No digest means nothing can key this scan to a running pod's ImageID. Skipping is
