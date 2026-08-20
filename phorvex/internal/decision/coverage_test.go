@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -15,6 +16,7 @@ func covPolicy(b int) model.Policy {
 	return model.Policy{
 		Tenant:                 "t",
 		DryRun:                 true,
+		Lambda:                 cost.DefaultLambdaSeed,
 		NormSparsity:           0.4,
 		FlowDisruption:         0.6,
 		WeightSecrets:          0.8,
@@ -52,6 +54,38 @@ func countSelected(ds []model.Decision) int {
 		}
 	}
 	return n
+}
+
+func TestCoverageUsesPolicyLambdaAsPerTenantDualSeed(t *testing.T) {
+	e := NewCoverageEngine()
+	view := covView("lambda-seed", true, 2*time.Hour, false)
+
+	polA := covPolicy(1)
+	polA.Tenant = "tenant-a"
+	polA.Lambda = 0.2
+	set, _ := e.AssembleSet([]*model.WorkloadView{view}, polA)
+	if len(set.Candidates) == 0 {
+		t.Fatal("lambda seed test produced no candidates")
+	}
+	if got := e.costFor(polA.Tenant).Dual.Lambda(); got != 0.2 {
+		t.Fatalf("tenant A dual seed = %v, want policy lambda 0.2", got)
+	}
+
+	polB := covPolicy(1)
+	polB.Tenant = "tenant-b"
+	polB.Lambda = 0.9
+	decisions := e.Decide([]*model.WorkloadView{view}, polB)
+	if len(decisions) == 0 || decisions[0].Lambda != 0.9 {
+		t.Fatalf("tenant B first decision did not use policy lambda: %+v", decisions)
+	}
+
+	// Lambda is an initial condition for the adaptive dual, not a reset switch. A
+	// reconcile with a different value must not erase already-learned tenant state.
+	polA.Lambda = 1.7
+	e.AssembleSet([]*model.WorkloadView{view}, polA)
+	if got := e.costFor(polA.Tenant).Dual.Lambda(); got != 0.2 {
+		t.Fatalf("existing tenant dual was reset by policy reconcile: got %v, want 0.2", got)
+	}
 }
 
 func TestCoverageBudgetAndPartition(t *testing.T) {
