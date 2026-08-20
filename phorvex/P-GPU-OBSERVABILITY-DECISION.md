@@ -10,13 +10,15 @@ interval. Everything below was observed against that exporter, not inferred from
 documentation.
 
 **One-line summary.** Everything the witness needs is measurable on T4 **except true SM
-occupancy**. `DCGM_FI_PROF_SM_ACTIVE` is not exposed by the live exporter, so `SMOccupancy` is
-carried by the `DCGM_FI_DEV_GPU_UTIL` duty-cycle fallback and is **not** an occupancy number.
+occupancy**. `DCGM_FI_PROF_SM_ACTIVE` is not exposed by the live exporter, so `SMOccupancy=0` and
+`SMSource=""` remain honest-absent. `DCGM_FI_DEV_GPU_UTIL` is retained as general GPU telemetry but
+is not substituted for occupancy.
 
-**This gap is treated as temporary.** The team intends to enable DCP profiling on the fleet, now
-or later. Everything below is written for that: the formula is left alone, and the code path
-already prefers `PROF_SM_ACTIVE`, so the day the series appears the witness corrects itself with
-no code change. See "Decision" at the end.
+**This gap is treated as temporary.** The team intends to enable the profiling counter on the
+fleet. The formula remains calibrated for true occupancy, and the collector accepts only
+`PROF_SM_ACTIVE`, so the day the series appears the witness corrects itself without another code
+change. See "Decision" at the end. This document assumes the honest-absence code change in PR #52
+lands before or with this documentation PR.
 
 ---
 
@@ -26,8 +28,8 @@ no code change. See "Decision" at the end.
 |---|---|---|---|
 | `GPUPresent` | any DCGM series answering for the node's pods | **yes** | `true` when a scan answered; `false` on kind |
 | `VRAMFraction` | `DCGM_FI_DEV_FB_USED`, `DCGM_FI_DEV_FB_FREE` | **yes** | `used / (used + free)`, `prometheus.go:350-351` |
-| `SMOccupancy` | `DCGM_FI_PROF_SM_ACTIVE` (true occupancy) | **NO** | falls back to `DCGM_FI_DEV_GPU_UTIL / 100`, a duty cycle, `prometheus.go:356-358` |
-| `SMSource` | — | — | records which of the two above actually fed `SMOccupancy` |
+| `SMOccupancy` | `DCGM_FI_PROF_SM_ACTIVE` (true occupancy) | **NO** | remains `0` (honest-absent); `GPU_UTIL` is not an occupancy fallback |
+| `SMSource` | — | — | `DCGM_FI_PROF_SM_ACTIVE` when measured; empty when absent |
 | `LinkBandwidth` | `DCGM_FI_PROF_PCIE_RX_BYTES` + `DCGM_FI_PROF_PCIE_TX_BYTES` | **yes** | rate-summed and normalized by the PCIe ceiling, `prometheus.go:360-362` |
 | `LinkSource` | — | — | records the exact interconnect metric pair used |
 | `ModelRarity` | none — derived from served `ModelID` across the fleet | n/a | hardware-independent |
@@ -38,7 +40,7 @@ no code change. See "Decision" at the end.
 
 | Absent metric | What it would measure | Consequence |
 |---|---|---|
-| `DCGM_FI_PROF_SM_ACTIVE` | fraction of SMs with at least one active warp — true occupancy | `SMOccupancy` is a duty cycle instead |
+| `DCGM_FI_PROF_SM_ACTIVE` | fraction of SMs with at least one active warp — true occupancy | `SMOccupancy` remains honest-absent |
 | `DCGM_FI_PROF_SM_OCCUPANCY` | resident warps / maximum resident warps | no finer occupancy signal available |
 | `DCGM_FI_PROF_GR_ENGINE_ACTIVE` | graphics/compute engine active fraction | no independent engine-busy cross-check |
 | `DCGM_FI_PROF_DRAM_ACTIVE` | device-memory bandwidth utilization | memory-bandwidth pressure is unobservable |
@@ -92,34 +94,25 @@ if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1.3 && leakage > 0.8 {
 }
 ```
 
-It reads `SMOccupancy` **without consulting `SMSource`**. On T4 that means a duty-cycle number is
-summed into the gate as if it were occupancy — exactly the conflation `prometheus.go:75-77` flags
-as load-bearing. While the fallback is in use, the gate can read high for a workload that is busy
-for much of the wall clock but occupies very little of the device.
-
-The magnitude, so the risk is on record: the observed production `VRAMFraction` is **0.66**, and
-the gate fires above `0.8`. So the duty-cycle term only has to contribute `0.14` to trip it. A
-small, persistent kernel — the shape a side-channel probe actually has — can supply that under
-`GPU_UTIL` while occupying almost none of the SMs.
+It reads `SMOccupancy` without consulting `SMSource`, so passing `GPU_UTIL` through this field would
+silently treat duty cycle as occupancy. PR #52 removes that substitution. While the true counter is
+absent, the leakage term therefore contains only the measured VRAM fraction. This is conservative:
+the model-theft gate can miss an SM-dependent signal, but it cannot manufacture one from a metric
+with different semantics.
 
 ## Decision
 
-**Leave the formula and the `0.8` threshold alone. Do not drop the SM term. Do not re-derive the
-threshold.**
+**Leave the formula and the `0.8` threshold calibrated for true occupancy. Do not re-derive the
+threshold against `GPU_UTIL`, and do not substitute `GPU_UTIL` into the SM term.**
 
-The threshold was set for true occupancy. Re-deriving it for the fallback would mean deriving it
-twice — once now, once again when profiling is enabled — and would leave a number in the tree that
-is correct for neither state. Deleting the SM term has the same problem in reverse: it would have
-to be put back.
+The threshold was set for true occupancy. Re-deriving it for a duty-cycle proxy would leave a
+number that is correct for neither signal. PR #52 therefore makes the unavailable term
+honest-absent while preserving the formula for the genuine counter. **The day DCP profiling is
+enabled, `SMOccupancy` becomes a true occupancy number with no code change or re-calibration.**
 
-What makes this safe to defer is that the wiring is already correct. `prometheus.go:353-358` tries
-`PROF_SM_ACTIVE` first and only falls back when the series is missing, and it records which one it
-used in `SMSource`. **The day DCP profiling is enabled, `SMOccupancy` becomes a true occupancy
-number and the gate becomes correct — with no code change and no re-calibration.**
-
-What is consciously accepted until then: on the T4 pool the model-theft gate consumes a
-duty-cycle number as occupancy, and `SMSource` records that it did. The audit therefore shows
-which decisions were taken on the degraded signal, so they can be re-examined afterwards.
+What is consciously accepted until then is a visible loss of one signal, not a mislabeled proxy.
+`GPU_UTIL` remains available through `Telemetry.GPUUtil` for uses that actually require device duty
+cycle.
 
 **Follow-up that closes this properly:** enable `DCGM_FI_PROF_SM_ACTIVE` in the exporter's counter
 list — it is absent from the default file and commented out in the others, as shown above — then
@@ -135,8 +128,8 @@ threshold need revisiting.
 From the PHORVEXSEC-55 read-only AWS validation (merged as PR #5, production revision `589fa1b`):
 
 - `VRAMFraction = 0.66`, from `9996 / (9996 + 5098)` MiB of live `FB_USED` / `FB_FREE`.
-- `SMSource = DCGM_FI_DEV_GPU_UTIL` — the labelled fallback, because the live exporter exposes no
-  `PROF_SM_ACTIVE` series.
+- Before PR #52, `SMSource = DCGM_FI_DEV_GPU_UTIL` exposed the historical fallback. After PR #52,
+  the same absent `PROF_SM_ACTIVE` series yields `SMOccupancy=0` and `SMSource=""`.
 - `LinkSource = DCGM_FI_PROF_PCIE_RX_BYTES+DCGM_FI_PROF_PCIE_TX_BYTES`. The previous NVLink-based
   template returned nothing: a T4 is PCIe-attached, so those counters do not exist here.
 - The PCIe normalization ceiling is `2 x 15.754 GB/s = 31.508 GB/s`, PCIe Gen3 x16 in both
