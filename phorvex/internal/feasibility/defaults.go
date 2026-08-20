@@ -21,7 +21,13 @@ import (
 // guardrail rotate change identity/config, not the replica count. Gating those by the
 // availability floor is the action-blind bug that makes Phorvex unable to defend a
 // SINGLE-replica GPU/LLM server with its gentlest actuator (ready=1-1 < minAvail=1).
-func removesReadyReplica(a model.Action) bool {
+func removesReadyReplica(a model.Action) bool { return RemovesReadyReplica(a) }
+
+// RemovesReadyReplica is the exported form, so the SLO disruption bound
+// (internal/slo) derives "how many Ready replicas can this action take out" from
+// the SAME predicate the availability floor gates on, rather than keeping a second
+// copy of the list that would drift the first time an action is added.
+func RemovesReadyReplica(a model.Action) bool {
 	switch a {
 	case model.ActionRotate, model.ActionQuarantine:
 		return true

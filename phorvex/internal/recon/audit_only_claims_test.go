@@ -93,7 +93,23 @@ func TestAIFactCoverClaimsMatchCapabilities(t *testing.T) {
 // a cardinality constraint. The monotone/cardinality 1−1/e guarantee therefore does not apply, and
 // asserting it in shipped source is a claim a customer or reviewer can check and disprove.
 func TestNoSourceClaimsTheOneMinusOneOverEBound(t *testing.T) {
-	for _, f := range []string{"ucw.go", "profile.go", "facts.go"} {
+	// Keep this list explicit: these are the customer-facing methodology/report and UI
+	// surfaces that previously repeated the false bound, plus the source files where it
+	// first appeared. Reports under reports/ are point-in-time audit evidence and are not
+	// shipped product claims.
+	for _, f := range []string{
+		"ucw.go",
+		"profile.go",
+		"facts.go",
+		"../../METHOD-DECISION.md",
+		"../../P-DASHBOARD-REPORT.md",
+		"../../P-OPTIMIZE-RATIO-DECISION.md",
+		"../../P-PHYSICS-DECISION.md",
+		"../../P-REDTEAM-DECISION.md",
+		"../../P5-FINAL-REPORT.md",
+		"../../../dashboard-web/components/subsystems/panels.tsx",
+		"../../../dashboard-web/components/steps/bench.tsx",
+	} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
@@ -115,8 +131,9 @@ func TestNoSourceClaimsTheOneMinusOneOverEBound(t *testing.T) {
 			}
 			ctx := strings.ToLower(strings.Join(lines[lo:hi], " "))
 			disclaimed := false
-			for _, neg := range []string{"does not apply", "not monotone", "guarantee does not",
-				"was asserted falsely", "not a cardinality"} {
+			for _, neg := range []string{"does not apply", "do not apply", "not monotone",
+				"guarantee does not", "was asserted falsely", "not a cardinality",
+				"no generic", "not a generic"} {
 				if strings.Contains(ctx, neg) {
 					disclaimed = true
 					break

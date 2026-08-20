@@ -123,12 +123,12 @@ telemetry input by design** — the 1.62× gate is structural heavy-tail and Pro
 
 ### DCGM-via-Prometheus GPU path — DESIGNED, values [SP-0-PENDING-P4]
 GPU telemetry is scraped **through Prometheus (read-only HTTP GET), not the kube API → zero additional K8s
-verb.** Today `DefaultPromQueries` ships exactly **one** DCGM query (`DCGM_FI_DEV_GPU_UTIL`) + `nim_tokens_total`;
-the six GPU witness floats stay 0 (`GPUPresent=false`, honest-absent). The designed GPU-adapter `Derive()`
-override adds these query STRINGS (no DCGM value ever hardcoded into a witness float):
+verb.** `DefaultPromQueries` keeps `DCGM_FI_DEV_GPU_UTIL` as general duty-cycle telemetry, while
+`PopulateGPUWitness` independently runs the DCGM witness queries below. Missing series remain
+honest-absent; no DCGM value is hardcoded into a witness float:
 - **VRAMFraction** = `FB_USED / (FB_USED + FB_FREE)`; demand = `Pod.VRAMRequestBytes` (today unpopulated → the [SP-0-PENDING] input).
-- **SMOccupancy** = prefer `DCGM_FI_PROF_SM_ACTIVE` (true occupancy; needs DCP profiling) and **LABEL the source**; fall back to `GPU_UTIL/100` (coarse duty-cycle) only if profiling is off. *Conflating duty-cycle with occupancy would overstate the AI kill-chain model-theft leakage gate (hazard.go:215) — load-bearing, not cosmetic.*
-- **LinkBandwidth** = `rate(DCGM_FI_PROF_NVLINK_TX+RX_BYTES)`; KVRebuildSec/ColdLoadSec from serving counters.
+- **SMOccupancy** = only `DCGM_FI_PROF_SM_ACTIVE` (true occupancy; needs DCP profiling), with the source recorded. If that series is unavailable—as on the live Tesla T4 stack—the value stays honest-absent. `GPU_UTIL/100` remains separate duty-cycle telemetry and is never substituted. *Conflating duty-cycle with occupancy would overstate the AI kill-chain model-theft leakage gate (hazard.go:239) — load-bearing, not cosmetic.*
+- **LinkBandwidth** = normalized `rate(DCGM_FI_PROF_PCIE_RX_BYTES + DCGM_FI_PROF_PCIE_TX_BYTES)` on the live PCIe-attached T4; KVRebuildSec/ColdLoadSec remain separate serving-counter inputs.
 
 ---
 

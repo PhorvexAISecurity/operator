@@ -58,7 +58,8 @@ measured on a GPU — and we label every such claim as exactly that.*
 
 ### 2.2 Greedy proven EXACTLY optimal — the corrected, stronger claim (PROVEN + MEASURED-REAL)
 A deep search + brute-force exact solve (`P-OPTIMIZE-RATIO-DECISION.md`, §9.20) established that the greedy is
-**not merely near-optimal (1−1/e) — it is *exactly* optimal, OptimalityRatio = 1.000000, gap 0**. Reason:
+**exactly optimal for the shipped asset-keyed profiles, OptimalityRatio = 1.000000, gap 0**. This is a
+profile-specific structural result, not a generic submodular approximation bound. Reason:
 `recon.Fact.Key` prefixes every cover key with its owning asset (`facts.go:65`), so distinct candidates have
 **asset-disjoint cover universes**, the objective is **modular** (the strongest case), and matroid-greedy on a
 modular objective is exact. Turned into a reproducible test: `TestGreedyIsExactOnShippedFleets` asserts
@@ -162,7 +163,7 @@ overclaim. **None of the AI/GPU magnitudes are claimed reduced-to-practice on ha
    recon-per-dollar.* (`coverage.go`, `dual.go`; gate `ratio>1.0`, 1.62×–5.87×.) **[strongest]**
 2. **Provably exactly-optimal selection via an asset-keyed modular reduction** (proof scale-free; measured to 76 assets at B=1) — keying recon facts by owning
    asset makes the coverage objective *modular*, so the budgeted partition-matroid greedy is *exactly* optimal
-   (ratio 1.000), not merely 1−1/e — a deterministic, certifiable optimality guarantee for an MTD selector.
+   (ratio 1.000) — a deterministic, certifiable, profile-specific optimality guarantee for an MTD selector.
    *Novel framing + proof.* (`facts.go:65`, `optimality.go`; §9.20.) **[strongest]**
 3. **Decoy-resistant provenance-weighted selection** — weighting selection gain by a provenance factor a decoy
    *cannot manufacture* (aged exposure / real kill-chain evidence), so adversarial manufactured-coverage decoys

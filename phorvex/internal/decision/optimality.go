@@ -30,7 +30,7 @@ import (
 //
 // The previous guard was a flat cap of 18 assets, which had no recorded derivation and was wrong in
 // BOTH directions — the enumeration cost is driven by the move budget B far more than by the fleet
-// size. Measured on the benchmark host (PHORVEXSEC-114; k = candidate actions per asset):
+// size. Originally measured at k=6 (PHORVEXSEC-114; k = candidate actions per asset):
 //
 //	n=76   k=6  B=1  ->    0.98 ms      n=600  k=6  B=1  ->   28.7 ms
 //	n=76   k=6  B=2  ->  102    ms      n=300  k=6  B=2  ->    4.7 s
@@ -40,10 +40,36 @@ import (
 // 600-asset fleet in 29 ms, while the old cap blocked it at 19 — and at B=4 the same cap happily ran
 // a 2.8-second enumeration. Both failures disappear once the guard counts work.
 //
-// The enumeration visits sum over j<=B of C(n,j)*k^j candidate sets, at roughly 1-3 us each, so this
-// budget is about 0.2-0.6 s worst case. It sits on the on-demand ablation/console path, not the
-// per-tick decision loop.
-const exactWorkBudget = 200_000
+// Those figures are PRE-PRUNE and are kept only as the record of why the flat cap died; they are no
+// longer what the code does. They also do not compare with the fixture below: productionScaleFleet
+// yields k=2, and k enters as k^j, so the same (n,B) is ~3^B cheaper there. Reading a k=6 row as if
+// it described the k=2 fixture is what made B=3/n=76 look like a 20 s wall when the fixture runs it
+// in ~2 s. Current numbers are in the CALIBRATION block below.
+//
+// CALIBRATION (PHORVEXSEC-114). The time budget for the exact check is 500 ms -- ruled by the math
+// owner on 2026-08-11, in answer to "how many seconds should the exact-check budget be". The guard
+// is what enforces it, so the constant is derived FROM that ruling rather than guessed:
+//
+//	worst admitted case measured at the boundary   ->  375 ms   (n=10  k=2 B=7, work 289,695)
+//	                                                   314 ms   (n=50k k=2 B=1, work 100,001)
+//	                                                   237 ms   (n=19  k=2 B=4, work 281,964)
+//	first skipped case just above the boundary     ->  n=274 k=2 B=2, work 300,306
+//
+// so 300_000 units lands the worst admitted run at ~375 ms, inside the 500 ms ruling with headroom
+// for a slower host. Everything the ticket depends on stays admitted: the live fleet at the live
+// budget (n=76 B=1, 0.8 ms), 8x the fleet (n=600 B=1, 8.6 ms), n=76 B=2 (30 ms) and even n=5000 B=1
+// (26 ms). Retune by re-running TestExactArmHonorsTheTimeRuling, which measures these directly.
+//
+// Two earlier errors are worth keeping visible, because both made the guard claim a bound it did not
+// enforce -- it admitted runs of 0.68 s, 1.06 s and 1.12 s while reporting them as inside budget:
+//   - the per-set cost was taken as O(1). It is O(B) (see the *= b above), so high-B fleets were
+//     under-counted by up to 7x.
+//   - the enumeration walked every remaining asset after the move budget was spent, making each set
+//     cost an extra O(n). That is now pruned in exactObjective, which is where the headroom came from
+//     (n=5000 B=1 went 1.06 s -> 26 ms).
+//
+// It sits on the on-demand ablation/console path, not the per-tick decision loop.
+const exactWorkBudget = 300_000
 
 // exactWorkEstimate counts the candidate sets the enumeration will visit: choose at most B assets out
 // of n, and one of up to k actions for each. maxPerAsset is used as a conservative upper bound.
@@ -62,6 +88,14 @@ func exactWorkEstimate(n, b, maxPerAsset int) float64 {
 		if math.IsInf(total, 1) || total > 1e18 {
 			return math.Inf(1)
 		}
+	}
+	// Scale by B: visiting a candidate set is NOT O(1). Each node copies the running pick slice and
+	// setObjective re-scores all of it, so a set of j<=B picks costs O(B), not O(1). Counting sets
+	// alone made the estimate a poor predictor of time -- at B=6 a fleet well inside the budget still
+	// took 1.12 s, because 6x the per-set cost was invisible to the guard (PHVX-23).
+	total *= float64(b)
+	if math.IsInf(total, 1) || total > 1e18 {
+		return math.Inf(1)
 	}
 	return total
 }
@@ -111,6 +145,14 @@ func setObjective(picks []actionset.Candidate, w map[string]float64, prov func(s
 // for setObjective, returning (max f, skipped). The empty selection (f=0) is always feasible, so the
 // exact is ≥ 0. Deterministic: assets are visited in sorted order.
 func exactObjective(set actionset.ActionSet, B int, prov func(string) float64, lambda float64) (float64, bool) {
+	return exactObjectiveWithBudget(set, B, prov, lambda, exactWorkBudget)
+}
+
+// exactObjectiveWithBudget is exactObjective with the work guard supplied rather than baked in. It
+// exists so the exactness measurement (PHORVEXSEC-114) can be REPRODUCED at shapes the shipped guard
+// declines to run: those runs are the evidence for the exactness claim, and evidence that only ever
+// existed in a report is evidence that rots. Production always goes through exactObjective.
+func exactObjectiveWithBudget(set actionset.ActionSet, B int, prov func(string) float64, lambda float64, workBudget float64) (float64, bool) {
 	byAsset := map[string][]actionset.Candidate{}
 	var order []string
 	for _, c := range set.Candidates {
@@ -125,14 +167,19 @@ func exactObjective(set actionset.ActionSet, B int, prov func(string) float64, l
 			maxPerAsset = len(cs)
 		}
 	}
-	if exactWorkEstimate(len(order), B, maxPerAsset) > exactWorkBudget {
+	if exactWorkEstimate(len(order), B, maxPerAsset) > workBudget {
 		return 0, true
 	}
 	sort.Strings(order)
 	best := 0.0
 	var rec func(i, budget int, picks []actionset.Candidate)
 	rec = func(i, budget int, picks []actionset.Candidate) {
-		if i == len(order) {
+		// Once the move budget is spent, every remaining asset can only be skipped, so the whole
+		// subtree below this node collapses to the single leaf `picks`. Evaluating it here is
+		// OUTPUT-IDENTICAL to walking down to i == len(order), and it is what makes the work
+		// estimate honest: without it each candidate set costs O(n) skip-frames rather than O(1),
+		// and the guard under-counts the real cost by a factor of the fleet size (PHVX-23).
+		if i == len(order) || budget == 0 {
 			if v := setObjective(picks, set.FactWeights, prov, lambda); v > best {
 				best = v
 			}

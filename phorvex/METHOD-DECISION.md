@@ -38,7 +38,7 @@ scores.
 
 | Axis | **Winner** | One-line why |
 |---|---|---|
-| **Decision** | **Cost-weighted Submodular Recon-Coverage maximization** over a *dynamically-generated* feasible action set, with a **Lagrangian budget-dual (λ)** that makes per-asset rotation **rate** an emergent decision variable | Criterion (4) *is its literal objective* — facts-invalidated-per-dollar — with a provable (1−1/e) guarantee, microsecond online greedy (no MINLP), and hard-constraints-by-construction. |
+| **Decision** | **Cost-weighted Submodular Recon-Coverage maximization** over a *dynamically-generated* feasible action set, with a **Lagrangian budget-dual (λ)** that makes per-asset rotation **rate** an emergent decision variable | Criterion (4) *is its literal objective* — facts-invalidated-per-dollar — with deterministic online greedy (no MINLP), hard-constraints-by-construction, and exactness proved only for the shipped asset-keyed profiles. |
 | **Context** | **Semi-Markov kill-chain belief with explicit sojourn-time hazard** (= the predictive belief horizon) + **Beta-Bernoulli P(hold)** + **per-tenant conjugate memory**, over the **P0 reachability graph** | The stage-exit hazard `h_s(t)` *is* the forward projection (fires before the next stage), is detector-independent, deterministic, and explainable. |
 | **Cost** | **RLS self-calibrating** `C = λ₁·C_norm + λ₂·C_flow` with a **dual-descent budget shadow-price** (λ *solved*, not hand-set), hardened by **conformal robust upper-bounds** for the `[SP-0-PENDING]` GPU/KV-cache terms | Learns cost from telemetry online; λ is the timing knob; the unmeasured GPU term enters as a *provable* robust envelope (never fabricated), keeping SLO feasibility provable. |
 
@@ -70,9 +70,12 @@ node placement, image digest, network/lateral edge, KV/session state — weighte
 quarantine on asset *i*) **covers** (invalidates) the subset `cover(m) ⊆ F`: a rotate
 wipes identity + in-memory + session facts; a quarantine invalidates reachability/
 lateral-edge facts without wiping local state. The recon-invalidation value
-`g(S) = w(⋃_{m∈S} cover(m))` is **monotone submodular**; maximizing `g(S) − Σ cost`
-under the move budget is the cost-benefit **greedy with the classic (1−1/e) guarantee**,
-and **lazy-greedy** (Minoux/CELF) runs in microseconds for ≤1000 assets.
+`g(S) = w(⋃_{m∈S} cover(m))` is **monotone submodular**, but the implemented objective
+`g(S) − λ·C(S)` is **non-monotone** because of the cost penalty and is constrained by a
+truncated partition matroid. The classic monotone/cardinality approximation guarantee therefore
+does **not** apply. The shipped asset-keyed profiles have a separate, stronger structural proof:
+their covers are block-owned, making the objective modular and the deterministic greedy exact.
+Any future overlapping profile requires a new proof; no generic approximation constant is claimed.
 
 **Why it wins (the six criteria + the P1 hard requirements):**
 - **(4) per-dollar recon — its literal objective.** "facts-invalidated-per-dollar" is a
@@ -225,7 +228,7 @@ exposure clock ─┐                          ┌─ FeasibilityConstraint regi
                 │
                 ▼
  DECISION: submodular greedy  max Σ w(facts covered by S) − λ·C(S)   over the generated set, until budget B / λ-crossing
-                │  (marginal-gain log = SHAP-style attribution; (1−1/e) guarantee; no MINLP)
+                │  (marginal-gain log = SHAP-style attribution; no generic ratio claimed; no MINLP)
                 ▼
         Seam 1: emit SecurityEvent + maintain AMTD  →  Phoenix runs delete | quarantine
 ```
@@ -280,8 +283,8 @@ Per your spec, as **modular swappable interfaces** (each = one file, zero core c
 
 **Open risks carried honestly:** (a) the **fact-universe taxonomy** is the IP-critical
 modeling step — facts must be crisply tied to measured exposure variables or the per-dollar
-number is unfalsifiable; (b) **correlated facts** can loosen the (1−1/e) bound — needs
-careful `cover()` sets; (c) **SP-0 unmeasured** → GPU/KV cost stays a conformal envelope,
+number is unfalsifiable; (b) **correlated facts** remove the shipped modular/exact structure —
+they need careful `cover()` sets and a fresh proof; (c) **SP-0 unmeasured** → GPU/KV cost stays a conformal envelope,
 no fabricated number; (d) Whittle/dual optimality is **asymptotic** — validated empirically
 at small N, not over-claimed; (e) the held-out-CVE benchmark must show the **hazard floor**
 (not stage classification) shrinks dwell, or (5) reduces to "smarter reactive."

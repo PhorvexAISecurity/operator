@@ -135,7 +135,12 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		}
 		// CVE/EPSS exploitability prior (offline cache; honest-absent = 1.0)
 		w.EPSS = epssMultiplier(p.ImageID)
-		// model-rarity (AI fact dispersion); 1.0 when no model servers in the fleet
+		// model-rarity (AI fact dispersion). rarity() is population-relative, so ModelRarity is 1.0 in
+		// TWO cases, not one: when the fleet has no model servers at all, and — the more common one —
+		// when every model-serving pod runs the SAME model, because that model then occupies 100% of
+		// its own population. A sole model scoring 1.0 is correct and must not be "fixed" to 2.0; see
+		// TestRarityIsPopulationRelative. It lifts as soon as the population diversifies: measured on
+		// the live fleet 2026-08-19, two distinct models on two pods make each 1-of-2, scoring 2.0.
 		if p.ModelID != "" {
 			tot := 0
 			for _, c := range modelFreq {

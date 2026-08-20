@@ -52,10 +52,13 @@ simultaneously grounds the cost denominator, the feasibility gate, and the EMR w
 > multipliers: image/model **rarity** `bits = -log₂(freq)`, per-node/GPU **co-residency**, and
 > CVE/**EPSS** exploitability. Maximize **invalidated-recon-bits per defender-dollar**.
 
-Because every new factor is `≥1.0` and collapses to `1.0` at nil-data, the objective stays
-**submodular + monotone** → the greedy keeps its `1−1/e` guarantee with **zero optimizer
-touch**, and at nil-data the FactWeights are **byte-identical to `standardRecon`** (provable
-tie). The K8s fact universe is finished (emit `FactImage`/`FactNodePlacement` with measured
+Because every new factor is `≥1.0` and collapses to `1.0` at nil-data, the weighted coverage
+term stays monotone submodular, while the implemented `coverage − λ·cost` objective remains
+non-monotone. The classic monotone/cardinality approximation guarantee does **not** apply under
+the truncated partition constraint. These multipliers require **zero optimizer touch**, and at
+nil-data the FactWeights are **byte-identical to `standardRecon`** (provable tie). Exactness for
+the shipped asset-keyed profiles comes separately from block ownership/modularity; no generic
+ratio is claimed for future overlapping profiles. The K8s fact universe is finished (emit `FactImage`/`FactNodePlacement` with measured
 dispersion); **4 new AI fact-kinds are DEFINED NOW**: `FactModelFingerprint` (reset by
 NIM/model-rotate), `FactEndpointPath` (endpoint/route-rotate), `FactGPUColocation`
 (MIG-rebind/node-rotate), `FactSideChannel` (audit-only). Per the **falsifiability gate**, a
