@@ -114,6 +114,30 @@ func TestCoverageBudgetAndPartition(t *testing.T) {
 	}
 }
 
+func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
+	e := NewCoverageEngine()
+	views := []*model.WorkloadView{covView("a", true, 2*time.Hour, false)}
+	pol := covPolicy(1)
+	beforeLambda := e.Cost.Dual.Lambda()
+	beforePrior := e.Killchain.Memory.PriorMean(pol.Tenant)
+
+	shadow, err := e.DecideShadowChecked(views, pol)
+	if err != nil || countSelected(shadow) != 1 {
+		t.Fatalf("shadow decision unavailable: selected=%d err=%v", countSelected(shadow), err)
+	}
+	if got := e.Cost.Dual.Lambda(); got != beforeLambda {
+		t.Fatalf("shadow advanced dual state: %v -> %v", beforeLambda, got)
+	}
+	if got := e.Killchain.Memory.PriorMean(pol.Tenant); got != beforePrior {
+		t.Fatalf("shadow advanced kill-chain memory: %v -> %v", beforePrior, got)
+	}
+
+	e.Decide(views, pol)
+	if got := e.Killchain.Memory.PriorMean(pol.Tenant); got == beforePrior {
+		t.Fatal("control production decision did not advance learning; isolation test is vacuous")
+	}
+}
+
 func TestCoverageZeroDayProactiveNoEvents(t *testing.T) {
 	// No SecurityEvents at all, but long exposure (past the proactive floor) => a
 	// net-positive move is still selected: detector-INDEPENDENT proactive firing.

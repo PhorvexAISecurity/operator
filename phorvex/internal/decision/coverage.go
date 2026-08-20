@@ -231,6 +231,15 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 // DecideChecked rejects a structurally invalid ActionSet before selection or learning.
 // The runner calls this checked seam and logs/counts the failure for the production tick.
 func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
+	return e.decideChecked(views, pol, true)
+}
+
+// DecideShadowChecked evaluates a counterfactual without advancing any learned production state.
+func (e *CoverageEngine) DecideShadowChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
+	return e.decideChecked(views, pol, false)
+}
+
+func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Policy, persist bool) ([]model.Decision, error) {
 	now := e.now()
 	tcost := e.costFor(pol.Tenant, pol.Lambda)
 	lambda := tcost.Dual.Lambda()
@@ -488,16 +497,18 @@ func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Po
 		})
 	}
 
-	// --- persist stateful learning (dual price + conjugate memory) ---
-	tcost.Dual.Step(demand, len(selectedAsset), B)
-	for key := range selectedAsset {
-		if ac, ok := ctxByKey[key]; ok {
-			// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
-			// evidence this tenant's footholds tend to be real (alpha up); acting on a
-			// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
-			// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
-			// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
-			e.Killchain.Memory.Observe(pol.Tenant, 0.5*(ac.assess.PHold-0.5))
+	if persist {
+		// --- persist stateful learning (dual price + conjugate memory) ---
+		tcost.Dual.Step(demand, len(selectedAsset), B)
+		for key := range selectedAsset {
+			if ac, ok := ctxByKey[key]; ok {
+				// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
+				// evidence this tenant's footholds tend to be real (alpha up); acting on a
+				// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
+				// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
+				// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
+				e.Killchain.Memory.Observe(pol.Tenant, 0.5*(ac.assess.PHold-0.5))
+			}
 		}
 	}
 

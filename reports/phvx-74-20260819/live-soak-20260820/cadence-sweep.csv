@@ -1,0 +1,5 @@
+evidence_source,interval,windows,skipped,max_at_ceiling,mean_at_ceiling,max_scale_drift,ready_comparisons,max_ready_hard_saturation,optimizer_comparisons,max_optimizer_change_ratio,availability_violations,slo_violations,optimizer_stable,clears_threshold
+runtime_cluster_snapshot,5m0s,12,0,0.05714285714285714,0.056079066994559966,0,0,0,1059,0,0,0,true,false
+runtime_cluster_snapshot,15m0s,4,0,0.05714285714285714,0.05627780180564174,0,0,0,880,0,0,0,true,false
+runtime_cluster_snapshot,30m0s,2,0,0.05714285714285714,0.05667447306791569,0,0,0,617,0,0,0,true,false
+runtime_cluster_snapshot,1h0m0s,1,0,0.05714285714285714,0.05714285714285714,0,0,0,82,0,0,0,true,false

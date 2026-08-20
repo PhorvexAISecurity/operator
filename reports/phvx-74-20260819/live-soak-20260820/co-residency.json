@@ -1,0 +1,72 @@
+{
+  "generatedAt": "2026-08-20T17:27:17.762983974Z",
+  "evidenceSource": "runtime_cluster_snapshot",
+  "evidenceNote": "collected by the running operator from its Kubernetes snapshot; learned values remain shadow-only",
+  "scale": {
+    "Name": "co_residency",
+    "Value": 8,
+    "Source": "measured",
+    "Reason": "",
+    "Percentile": 0.95,
+    "Floor": 1,
+    "FlooredUp": false,
+    "Clip": {
+      "N": 5,
+      "AtCeiling": 1,
+      "StrictlyClipped": 0
+    },
+    "ComputedAt": "2026-08-20T17:27:17.762983974Z"
+  },
+  "rows": [
+    {
+      "node": "ip-172-27-11-103.us-east-2.compute.internal",
+      "namespaceCount": 2,
+      "xNode": 1,
+      "podCount": 6,
+      "eligible": true,
+      "candidateScale": 8,
+      "candidateMultiplier": 1.125,
+      "shippedMultiplier": 1.25
+    },
+    {
+      "node": "ip-172-27-11-153.us-east-2.compute.internal",
+      "namespaceCount": 8,
+      "xNode": 7,
+      "podCount": 17,
+      "eligible": true,
+      "candidateScale": 8,
+      "candidateMultiplier": 1.875,
+      "shippedMultiplier": 2
+    },
+    {
+      "node": "ip-172-27-12-134.us-east-2.compute.internal",
+      "namespaceCount": 9,
+      "xNode": 8,
+      "podCount": 26,
+      "eligible": true,
+      "candidateScale": 8,
+      "candidateMultiplier": 2,
+      "shippedMultiplier": 2
+    },
+    {
+      "node": "ip-172-27-12-137.us-east-2.compute.internal",
+      "namespaceCount": 5,
+      "xNode": 4,
+      "podCount": 13,
+      "eligible": true,
+      "candidateScale": 8,
+      "candidateMultiplier": 1.5,
+      "shippedMultiplier": 2
+    },
+    {
+      "node": "ip-172-27-12-51.us-east-2.compute.internal",
+      "namespaceCount": 4,
+      "xNode": 3,
+      "podCount": 8,
+      "eligible": true,
+      "candidateScale": 8,
+      "candidateMultiplier": 1.375,
+      "shippedMultiplier": 1.75
+    }
+  ]
+}

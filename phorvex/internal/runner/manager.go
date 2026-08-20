@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
@@ -56,11 +58,13 @@ type policyEntry struct {
 // controller-created replacement UID reached Ready. knownUIDs prevents an already
 // Ready sibling from being mistaken for the replacement.
 type pendingRotation struct {
-	tenant       string
-	startedAt    time.Time
-	view         model.WorkloadView
-	knownUIDs    map[string]struct{}
-	costObserved bool
+	tenant           string
+	startedAt        time.Time
+	referenceAtStart time.Duration
+	censorDeadline   time.Time
+	view             model.WorkloadView
+	knownUIDs        map[string]struct{}
+	costObserved     bool
 }
 
 // Manager owns the tenant registry and the tick loop.
@@ -80,6 +84,9 @@ type Manager struct {
 	// goroutine indefinitely (P4b livelock fix). 0 => defaulted in Start.
 	PerTickTimeout time.Duration
 	Log            logr.Logger
+	// Calibration runs the PHVX-74 scale fit in shadow. Its values are exported and
+	// monitored but never read by production scoring.
+	Calibration *calib.Runtime
 
 	Recorder record.EventRecorder
 	// ActionsSupportedDebounce is the number of consecutive mismatching policy ticks
@@ -115,6 +122,7 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		KillSwitch:    &KillSwitch{Client: c},
 		BaseInterval:  10 * time.Second,
 		Log:           log.WithName("runner"),
+		Calibration:   calib.NewRuntime(calib.RuntimeConfig{}, log),
 		// Retains a month, the longest SLO window anyone has proposed, so an entry
 		// can never be evicted while a ratio could still be computed from it. The
 		// ledger observes only: nothing reads it to gate a move yet.
@@ -285,7 +293,8 @@ func (m *Manager) tick(ctx context.Context) {
 		m.reconcileWedged(ctx, nss)
 	}
 
-	if len(due) == 0 {
+	calibrationDue := m.Calibration != nil && m.Calibration.Due(now)
+	if len(due) == 0 && !calibrationDue {
 		return
 	}
 
@@ -307,8 +316,17 @@ func (m *Manager) tick(ctx context.Context) {
 	// already collects, never by waiting inside Actuate.
 	m.observeReadyRotations(snap)
 
+	// Derive the full-cluster witness once. It is shared by every tenant and by the
+	// shadow calibrator; repeated derivation would make refresh cost grow with tenant count.
+	_, physicsByKey := platform.Derive(snap)
+	if calibrationDue {
+		if _, _, err := m.Calibration.ObserveSnapshot(snap, physicsByKey); err != nil {
+			m.Log.Error(err, "shadow calibration export failed; metrics and in-memory result remain available")
+		}
+	}
+
 	for _, e := range due {
-		m.processTenant(ctx, snap, e, killEngaged)
+		m.processTenantWithPhysics(ctx, snap, e, killEngaged, physicsByKey)
 	}
 }
 
@@ -351,8 +369,21 @@ func rotationObservationKey(tenant string, view *model.WorkloadView) string {
 // consume feedback. Without a controller identity there is no honest way to match
 // a replacement, so the observation remains unavailable rather than fabricated.
 func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, startedAt time.Time) {
-	if _, ok := m.Optimizer.(decision.RotationObserver); !ok || view == nil ||
-		view.Pod.OwnerKind == "" || view.Pod.OwnerName == "" || view.Pod.UID == "" {
+	_, costObserver := m.Optimizer.(decision.RotationObserver)
+	if (!costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
+		return
+	}
+	if view.Pod.OwnerKind == "" || view.Pod.OwnerName == "" || view.Pod.UID == "" {
+		if m.Calibration != nil {
+			m.Calibration.ObserveRotation(calib.RotationRecord{
+				ID:     fmt.Sprintf("%s/%s/%s@%d", tenant, view.Pod.Namespace, view.Pod.Name, startedAt.UnixNano()),
+				Tenant: tenant, Namespace: view.Pod.Namespace, Pod: view.Pod.Name, Action: string(model.ActionRotate),
+				StartedAt: startedAt, RecordedAt: startedAt, Outcome: calib.OutcomeInvalid,
+				InvalidReason:    "controller owner or pod UID unavailable; replacement cannot be matched",
+				ReferenceAtStart: cost.ReadyDelayReference,
+				CensorDeadline:   startedAt.Add(2 * cost.ReadyDelayReference),
+			})
+		}
 		return
 	}
 	known := map[string]struct{}{}
@@ -370,7 +401,10 @@ func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allView
 		return // repeated Phoenix emits must not reset the original recovery clock
 	}
 	m.pendingRotations[key] = pendingRotation{
-		tenant: tenant, startedAt: startedAt, view: *view, knownUIDs: known,
+		tenant: tenant, startedAt: startedAt,
+		referenceAtStart: cost.ReadyDelayReference,
+		censorDeadline:   startedAt.Add(2 * cost.ReadyDelayReference),
+		view:             *view, knownUIDs: known,
 	}
 }
 
@@ -380,8 +414,8 @@ func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allView
 // disruption ledger is enabled, tracking continues so an outage lasting longer
 // than that modelling window is not permanently undercounted at 800 seconds.
 func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
-	observer, ok := m.Optimizer.(decision.RotationObserver)
-	if !ok || snap == nil || len(m.pendingRotations) == 0 {
+	observer, costObserver := m.Optimizer.(decision.RotationObserver)
+	if (!costObserver && m.Calibration == nil && m.Disruption == nil) || snap == nil || len(m.pendingRotations) == 0 {
 		return
 	}
 	type pendingRef struct {
@@ -414,11 +448,22 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			// Phoenix reports that the SecurityEvent was emitted, not that Delete
 			// executed. Never train on a scale-up/rollout while the target UID is
 			// still alive. Retire an unexecuted event after the observation window.
-			if elapsed >= 2*cost.ReadyDelayReference {
+			if !snap.Now.Before(p.censorDeadline) {
 				delete(m.pendingRotations, ref.key)
 				// The actuation never took effect — the target is still alive. Nothing is learned,
 				// and this is a DIFFERENT failure from "no replacement became Ready" (PHVX-10c).
-				metrics.ObserveRotationOutcome(p.tenant, metrics.RLSAbandoned)
+				if costObserver {
+					metrics.ObserveRotationOutcome(p.tenant, metrics.RLSAbandoned)
+				}
+				if m.Calibration != nil {
+					m.Calibration.ObserveRotation(calib.RotationRecord{
+						ID: ref.key, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+						Action: string(model.ActionRotate), StartedAt: p.startedAt, RecordedAt: snap.Now,
+						Elapsed: elapsed, Outcome: calib.OutcomeInvalid,
+						InvalidReason:    "original pod UID remained present through the observation deadline",
+						ReferenceAtStart: p.referenceAtStart, CensorDeadline: p.censorDeadline,
+					})
+				}
 				m.Log.Info("rotation cost observation unavailable; original UID still present",
 					"tenant", p.tenant,
 					"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
@@ -452,33 +497,68 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			}
 		}
 
-		censored := false
+		calibrationCensored := false
+		ledgerCensored := false
 		observationEnd := snap.Now
 		if replacement != nil {
 			claimed[replacement.UID] = true
 			if !replacement.ReadyAt.IsZero() {
 				elapsed = replacement.ReadyAt.Sub(p.startedAt)
 				observationEnd = replacement.ReadyAt
+				calibrationCensored = replacement.ReadyAt.After(p.censorDeadline)
 			}
-		} else if elapsed >= 2*cost.ReadyDelayReference {
-			censored = true
+		} else if !snap.Now.Before(p.censorDeadline) {
+			calibrationCensored = true
+			ledgerCensored = true
 		} else {
 			continue
 		}
 		if elapsed < 0 {
 			elapsed = 0
 		}
-		measuredFlow := cost.NormalizeReadyDelay(elapsed)
-		newOutcome := !p.costObserved
+		calibrationElapsed := elapsed
+		if calibrationCensored {
+			calibrationElapsed = p.censorDeadline.Sub(p.startedAt)
+			if calibrationElapsed < 0 {
+				calibrationElapsed = 0
+			}
+		}
+		newOutcome := !p.costObserved && (costObserver || m.Calibration != nil)
 		if newOutcome {
-			observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+			measuredFlow := (calib.RotationRecord{
+				Elapsed: calibrationElapsed, ReferenceAtStart: p.referenceAtStart,
+			}).Normalized()
+			if costObserver {
+				observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+			}
+			if m.Calibration != nil {
+				calibrationOutcome := calib.OutcomeObserved
+				if calibrationCensored {
+					calibrationOutcome = calib.OutcomeCensored
+				}
+				record := calib.RotationRecord{
+					ID: ref.key, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+					Action: string(model.ActionRotate), StartedAt: p.startedAt,
+					Elapsed: calibrationElapsed, Outcome: calibrationOutcome,
+					ReferenceAtStart: p.referenceAtStart, CensorDeadline: p.censorDeadline,
+				}
+				if calibrationCensored {
+					record.RecordedAt = p.censorDeadline
+				} else if replacement != nil && !replacement.ReadyAt.IsZero() {
+					record.ReadyAt = replacement.ReadyAt
+					record.RecordedAt = replacement.ReadyAt
+				}
+				m.Calibration.ObserveRotation(record)
+			}
 			// The RLS outcome is recorded once. A censored rotation can remain in the
 			// pending map for ledger updates without inflating the match-rate denominator.
-			outcome := metrics.RLSMatched
-			if censored {
-				outcome = metrics.RLSCensored
+			if costObserver {
+				outcome := metrics.RLSMatched
+				if calibrationCensored {
+					outcome = metrics.RLSCensored
+				}
+				metrics.ObserveRotationOutcome(p.tenant, outcome)
 			}
-			metrics.ObserveRotationOutcome(p.tenant, outcome)
 			p.costObserved = true
 			m.pendingRotations[ref.key] = p
 		}
@@ -501,10 +581,10 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				Duration:   elapsed,
 				StartedAt:  p.startedAt,
 				ObservedAt: observationEnd,
-				Censored:   censored,
+				Censored:   ledgerCensored,
 			})
 		}
-		if censored {
+		if ledgerCensored {
 			if m.Disruption == nil {
 				delete(m.pendingRotations, ref.key)
 			}
@@ -528,8 +608,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			"oldUID", p.view.Pod.UID,
 			"replacementUID", replacementUID,
 			"timeToReadySeconds", elapsed.Seconds(),
-			"measuredFlow", measuredFlow,
-			"censored", censored)
+			"calibrationCensored", calibrationCensored)
 	}
 }
 
@@ -570,13 +649,16 @@ func infectionFrontier(nbKeys []string, infected map[string]bool) float64 {
 }
 
 func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool) {
+	_, physicsByKey := platform.Derive(snap)
+	m.processTenantWithPhysics(ctx, snap, e, killEngaged, physicsByKey)
+}
+
+func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool, physicsByKey map[string]model.PhysicsWitness) {
 	start := time.Now()
 	pol := buildPolicy(e)
 
-	// P-PHYSICS (UCW): derive the discovered per-pod physics from the live scan, so the
-	// recon-EMR + GPU-conservation laws read measured supply/demand + dispersion instead
-	// of hand-specced constants. Honest-absent (NeutralPhysics) when no scan answers.
-	_, physicsByKey := platform.Derive(snap)
+	// P-PHYSICS (UCW): the caller derives one discovered witness map for the shared snapshot.
+	// Honest-absent (NeutralPhysics) when no scan answers.
 	infected := buildInfectedSet(snap) // P-CONTEXT live-beta Tier-1 frontier
 
 	// Select this tenant's pods.
@@ -659,6 +741,21 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 	}
 	actionsSupport := m.debounceActionsSupported(e, unsupportedEnabledActions(pol, views, snap))
 
+	var shadowDecisions []model.Decision
+	shadowAvailable := false
+	if m.Calibration != nil {
+		if shadowViews, ok := m.Calibration.ShadowViews(views); ok {
+			if shadow, supported := m.Optimizer.(decision.ShadowCheckedOptimizer); supported {
+				var shadowErr error
+				shadowDecisions, shadowErr = shadow.DecideShadowChecked(shadowViews, pol)
+				shadowAvailable = shadowErr == nil
+				if shadowErr != nil {
+					m.Log.Error(shadowErr, "shadow scale optimizer comparison unavailable", "tenant", pol.Tenant)
+				}
+			}
+		}
+	}
+
 	decisions, err := decideTick(m.Optimizer, views, pol)
 	if err != nil {
 		metrics.RecordActionSetRejection(pol.Tenant, "cross-block-collision")
@@ -671,6 +768,17 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 		}
 		m.mu.Unlock()
 		return
+	}
+	if shadowAvailable {
+		availabilityViolations, sloViolations := shadowSafetyViolations(shadowDecisions, views, pol)
+		m.Calibration.ObserveValidation(calib.SelectionComparison{
+			At:               snap.Now,
+			Tenant:           pol.Tenant,
+			Production:       selectedDecisionKeys(decisions),
+			Shadow:           selectedDecisionKeys(shadowDecisions),
+			ProductionScores: decisionScores(decisions),
+			ShadowScores:     decisionScores(shadowDecisions),
+		}, availabilityViolations, sloViolations)
 	}
 
 	// Effective actuation gate (FR8): a tenant is dry-run if its policy says so OR its
@@ -741,6 +849,59 @@ func decideTick(optimizer decision.Optimizer, views []*model.WorkloadView, pol m
 		return checked.DecideChecked(views, pol)
 	}
 	return optimizer.Decide(views, pol), nil
+}
+
+func selectedDecisionKeys(decisions []model.Decision) []string {
+	keys := make([]string, 0, len(decisions))
+	for _, d := range decisions {
+		if d.Selected {
+			keys = append(keys, d.Namespace+"/"+d.Pod+":"+string(d.Action))
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func decisionScores(decisions []model.Decision) []calib.DecisionScore {
+	scores := make([]calib.DecisionScore, 0, len(decisions))
+	for _, d := range decisions {
+		scores = append(scores, calib.DecisionScore{
+			Key: d.Namespace + "/" + d.Pod, Action: string(d.Action), Selected: d.Selected,
+			CoverageValue: d.CoverageValue, Cost: d.Cost, Net: d.Net,
+		})
+	}
+	sort.Slice(scores, func(i, j int) bool { return scores[i].Key < scores[j].Key })
+	return scores
+}
+
+func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadView, pol model.Policy) (availability, slo int) {
+	viewByKey := make(map[string]*model.WorkloadView, len(views))
+	for _, view := range views {
+		if view != nil {
+			viewByKey[view.Pod.Namespace+"/"+view.Pod.Name] = view
+		}
+	}
+	for _, d := range decisions {
+		if !d.Selected {
+			continue
+		}
+		view := viewByKey[d.Namespace+"/"+d.Pod]
+		if view == nil {
+			availability++
+			continue
+		}
+		verdict := feasibility.Evaluate(view, model.Move{Action: d.Action}, pol)
+		if verdict.Feasible {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(verdict.Reason, "slo:"), strings.HasPrefix(verdict.Reason, "tokens/sec"):
+			slo++
+		default:
+			availability++
+		}
+	}
+	return availability, slo
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, viewByKey map[string]*model.WorkloadView) int {
@@ -832,26 +993,28 @@ func buildPolicy(e *policyEntry) model.Policy {
 		enabled[model.ActionQuarantine] = true
 	}
 	return model.Policy{
-		Tenant:                 e.tenant,
-		Namespace:              e.namespace,
-		Mode:                   s.EffectiveMode(),
-		DryRun:                 s.IsDryRun(),
-		Lambda:                 s.EffectiveLambda(),
-		NormSparsity:           s.EffectiveNormSparsity(),
-		FlowDisruption:         s.EffectiveFlowDisruption(),
-		WeightSecrets:          s.EffectiveWeightSecrets(),
-		BlastRadiusFromGraph:   s.AssetValue.BlastRadiusFromGraph,
-		MaxMovesPerTick:        s.EffectiveMaxMovesPerTick(),
-		TickInterval:           s.EffectiveTickInterval(),
-		AntiOverRotationWindow: s.EffectiveAntiOverRotationWindow(),
-		ProactiveFloor:         s.EffectiveProactiveFloor(),
-		MinAvailableReplicas:   s.EffectiveMinAvailableReplicas(),
-		P99Ms:                  s.SLO.P99Ms,
-		MinTokensPerSec:        s.SLO.MinTokensPerSec,
-		EventDriven:            s.Triggers.EventDriven,
-		ReactiveOnly:           s.Triggers.ReactiveOnly,
-		EnabledActions:         enabled,
-		AssetWeightFromLabels:  s.AssetWeightFromLabels,
+		Tenant:                       e.tenant,
+		Namespace:                    e.namespace,
+		Mode:                         s.EffectiveMode(),
+		DryRun:                       s.IsDryRun(),
+		Lambda:                       s.EffectiveLambda(),
+		NormSparsity:                 s.EffectiveNormSparsity(),
+		FlowDisruption:               s.EffectiveFlowDisruption(),
+		WeightSecrets:                s.EffectiveWeightSecrets(),
+		BlastRadiusFromGraph:         s.AssetValue.BlastRadiusFromGraph,
+		MaxMovesPerTick:              s.EffectiveMaxMovesPerTick(),
+		TickInterval:                 s.EffectiveTickInterval(),
+		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
+		ProactiveFloor:               s.EffectiveProactiveFloor(),
+		MinAvailableReplicas:         s.EffectiveMinAvailableReplicas(),
+		P99Ms:                        s.SLO.P99Ms,
+		MinTokensPerSec:              s.SLO.MinTokensPerSec,
+		EventDriven:                  s.Triggers.EventDriven,
+		ReactiveOnly:                 s.Triggers.ReactiveOnly,
+		KillChainSojournScaleSeconds: s.EffectiveSojournScaleSeconds(),
+		KillChainShape:               s.EffectiveKillChainShape(),
+		EnabledActions:               enabled,
+		AssetWeightFromLabels:        s.AssetWeightFromLabels,
 	}
 }
 

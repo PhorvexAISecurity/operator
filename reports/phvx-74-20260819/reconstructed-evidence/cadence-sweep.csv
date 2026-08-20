@@ -1,0 +1,5 @@
+evidence_source,interval,windows,skipped,max_at_ceiling,mean_at_ceiling,max_scale_drift,ready_comparisons,max_ready_hard_saturation,optimizer_comparisons,max_optimizer_change_ratio,availability_violations,slo_violations,optimizer_stable,clears_threshold
+reconstructed_fixture_not_live,5m0s,48,0,0.11267605633802817,0.11267605633802809,0,0,0,0,0,0,0,false,false
+reconstructed_fixture_not_live,15m0s,16,0,0.11267605633802817,0.1126760563380282,0,0,0,0,0,0,0,false,false
+reconstructed_fixture_not_live,30m0s,8,0,0.11267605633802817,0.11267605633802816,0,0,0,0,0,0,0,false,false
+reconstructed_fixture_not_live,1h0m0s,4,0,0.11267605633802817,0.11267605633802817,0,0,0,0,0,0,0,false,false
