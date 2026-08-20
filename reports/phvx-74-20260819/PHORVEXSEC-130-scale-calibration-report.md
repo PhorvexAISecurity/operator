@@ -97,7 +97,7 @@ exact match and does not produce a passing cadence.
 | Counterfactual optimizer effects measured without learning side effects | Pass in code/tests; live evidence pending |
 | Sojourn defaults backward-compatible and overrides reach hazard model | Pass |
 | Availability/SLO violations remain zero | Not established live; counters implemented |
-| Exact benchmark and skipped semantics | Pending PHORVEXSEC-114 / PR #55 |
+| Exact benchmark and skipped semantics | Complete in separate PHORVEXSEC-114 / PR #55; not claimed as PR #58 work |
 | Raw live data delivered | Blocked by absent cluster access; reconstructed bundle is not a substitute |
 
 ## Verification
@@ -120,11 +120,17 @@ helm lint phorvex/charts/phorvex
 helm template phorvex-test phorvex/charts/phorvex --namespace phorvex-system
 helm lint deploy/helm/phorvex-stack
 helm template phorvex-stack-test deploy/helm/phorvex-stack --namespace phorvex-system
+helm lint deploy/helm/phorvex-stack -f deploy/helm/phorvex-stack/values-eks.yaml
+helm template phorvex-stack-test deploy/helm/phorvex-stack -f deploy/helm/phorvex-stack/values-eks.yaml
 ```
 
 Both charts linted and rendered successfully. Generated CRD equals the source-chart CRD, and the
 CRD extracted from `deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz` is byte-identical to it.
 No `.github/workflows/` file was changed.
+
+The GitHub Actions jobs triggered on 2026-08-20 did not start because GitHub reported an
+organization billing/spending-limit problem. Local and combined checks above are the available
+verification evidence; the infrastructure failure is not represented as a code failure.
 
 ## Remaining blockers and decisions
 
@@ -133,4 +139,5 @@ No `.github/workflows/` file was changed.
    live export while retaining provenance.
 2. Choose percentile/cadence only after that walk-forward evidence exists. No candidate is
    activated by this PR.
-3. Finish the exact runtime matrix and explicit statuses in PHORVEXSEC-114 / PR #55.
+3. PHORVEXSEC-114 / PR #55 now supplies the exact runtime matrix and explicit skipped semantics;
+   retain that dependency when integrating the PRs.
