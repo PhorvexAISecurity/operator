@@ -1,9 +1,9 @@
 # PHORVEXSEC-104 (PHVX-14b) — complete EPSS feed wiring — report
 
-Date: 2026-08-19 · Branch `feat/phvx-14b-epss-cache-refresh` · PR #59
+Updated: 2026-08-20 · Branch `feat/phvx-14b-epss-cache-refresh` · PR #59
 
 Follows `reports/phvx-14b-20260810/`, which measured the impact of wiring EPSS. This covers the
-the complete feed path: runtime refresh, aggregation, cluster inventory, Trivy scanning, FIRST
+complete feed path: runtime refresh, aggregation, cluster inventory, Trivy scanning, FIRST
 lookup, controlled ConfigMap update, and deployment resources.
 
 ## Headline
@@ -141,6 +141,19 @@ demo; PHVX-14b asked for the fix and it had not been made. Corrected under PHVX-
 
 ## Verification
 
-`go build ./...`, `go vet ./...`, full `go test ./...`, race tests for `internal/epssfeed` and
-`internal/platform`, Helm lint/template, and vendored-chart synchronization are required before
-handoff. The exact results are recorded after the final combined verification.
+Completed on the final combined PR #52–#59 integration:
+
+- `go build ./...`, `go vet ./...`, `go test ./...`, and `go test -race ./...`;
+- targeted EPSS feed/cache/platform tests, including last-known-good retention, partial-scan
+  rejection, same-count reload detection, empty-FIRST-response rejection, and coverage when the
+  first declared container is stopped;
+- the dashboard production build;
+- Helm 3.17.3 lint/template checks for the source chart and parent stack, including
+  `deploy/helm/phorvex-stack/values-eks.yaml`;
+- byte-identical generated/source-chart CRDs and matching vendored chart content (apart from Helm's
+  normal `Chart.yaml` formatting normalization); and
+- `git diff --check` plus confirmation that this PR does not modify `.github/workflows/`.
+
+The GitHub Actions jobs triggered on 2026-08-20 did not start because GitHub reported an
+organization billing/spending-limit problem. The local/combined checks above passed; the CI
+infrastructure failure is not represented as a code failure.
