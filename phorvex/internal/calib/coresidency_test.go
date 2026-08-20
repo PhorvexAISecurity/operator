@@ -14,11 +14,9 @@ import (
 
 func at0() time.Time { return time.Unix(1_700_000_000, 0).UTC() }
 
-// liveFleet is the EKS cluster as measured on 2026-08-19 — real node names, real namespace and
-// pod counts, all five nodes Ready and schedulable, 71 running pods. Kept as the fixture because
-// the whole ticket is an argument about THIS distribution; a synthetic one would let the argument
-// drift away from the cluster it is about.
-func liveFleet() []NodeObservation {
+// reconstructedFleet is a deterministic fixture rebuilt from the aggregate EKS figures reported
+// on 2026-08-19. It is not a raw cluster export and must not be presented as live evidence.
+func reconstructedFleet() []NodeObservation {
 	return []NodeObservation{
 		{Name: "ip-172-27-12-138", Namespaces: 2, Pods: 6, Schedulable: true},
 		{Name: "ip-172-27-12-51", Namespaces: 4, Pods: 9, Schedulable: true},
@@ -28,11 +26,11 @@ func liveFleet() []NodeObservation {
 	}
 }
 
-// The shipped cap is 4.0, so any node with 5+ namespaces pins the multiplier at 2.0. On the live
-// fleet that is three of five nodes — the "effectively constant" state the ticket describes,
+// The shipped cap is 4.0, so any node with 5+ namespaces pins the multiplier at 2.0. In the
+// reconstructed fixture that is three of five nodes — the "effectively constant" state,
 // reproduced here from the formula rather than asserted.
-func TestShippedCapSaturatesTheLiveFleet(t *testing.T) {
-	r := CalibrateCoResidency(liveFleet(), 0.95, 1, at0())
+func TestShippedCapSaturatesTheReconstructedFleet(t *testing.T) {
+	r := CalibrateCoResidency(reconstructedFleet(), 0.95, 1, at0())
 	if r.ShippedAtCeiling != 3 {
 		t.Fatalf("nodes pinned under the shipped cap = %d, want 3", r.ShippedAtCeiling)
 	}
@@ -46,7 +44,7 @@ func TestShippedCapSaturatesTheLiveFleet(t *testing.T) {
 // is the property that means co-residency is ranking nodes again instead of labelling most of
 // them identically.
 func TestCalibratedScaleWidensTheMultiplier(t *testing.T) {
-	r := CalibrateCoResidency(liveFleet(), 0.95, 1, at0())
+	r := CalibrateCoResidency(reconstructedFleet(), 0.95, 1, at0())
 
 	if !r.Scale.IsMeasured() {
 		t.Fatalf("scale reported %q with reason %q, want a measured scale", r.Scale.Source, r.Scale.Reason)
@@ -65,11 +63,11 @@ func TestCalibratedScaleWidensTheMultiplier(t *testing.T) {
 
 // The saturation alarm the ticket asks for, at the threshold the math owner set (>10%).
 //
-// It fires on the live fleet BOTH before and after co-residency is recalibrated, and that is the
+// It fires on the reconstructed fleet BOTH before and after co-residency is recalibrated, and that is the
 // finding, not a bug in the test: 1 of 5 nodes still sits at the ceiling under P95, which is 20%.
 // Recalibrating this one scale is not sufficient to clear the invariant.
 func TestSaturationAlarmStillFiresAfterCoResidencyAlone(t *testing.T) {
-	r := CalibrateCoResidency(liveFleet(), 0.95, 1, at0())
+	r := CalibrateCoResidency(reconstructedFleet(), 0.95, 1, at0())
 	const threshold = 0.10
 
 	if !r.Scale.Saturated(threshold) {
@@ -84,7 +82,7 @@ func TestSaturationAlarmStillFiresAfterCoResidencyAlone(t *testing.T) {
 // A percentile over a handful of nodes is a number but not an estimate. Below the minimum the
 // scale must come back as the shipped constant with a stated reason, never as a confident value.
 func TestTooFewNodesFallsBackWithAReason(t *testing.T) {
-	r := CalibrateCoResidency(liveFleet(), 0.95, 20, at0())
+	r := CalibrateCoResidency(reconstructedFleet(), 0.95, 20, at0())
 	if r.Scale.IsMeasured() {
 		t.Fatal("5 nodes produced a measured scale against a minimum of 20")
 	}
@@ -99,7 +97,7 @@ func TestTooFewNodesFallsBackWithAReason(t *testing.T) {
 // Unschedulable nodes are excluded: a draining node's tenancy describes an event, not how the
 // cluster packs tenants.
 func TestUnschedulableNodesAreExcluded(t *testing.T) {
-	nodes := append(liveFleet(), NodeObservation{Name: "drain", Namespaces: 40, Pods: 90, Schedulable: false})
+	nodes := append(reconstructedFleet(), NodeObservation{Name: "drain", Namespaces: 40, Pods: 90, Schedulable: false})
 	r := CalibrateCoResidency(nodes, 0.95, 1, at0())
 	if r.Excluded != 1 {
 		t.Fatalf("excluded = %d, want 1", r.Excluded)
@@ -112,7 +110,7 @@ func TestUnschedulableNodesAreExcluded(t *testing.T) {
 // An empty schedulable node is a real X=0 observation and must be counted. Dropping it would
 // bias the fleet to look more tenant-dense than it is — the direction that hides the problem.
 func TestEmptyNodesCountAsZeroAndAreReported(t *testing.T) {
-	nodes := append(liveFleet(), NodeObservation{Name: "fresh", Namespaces: 0, Pods: 0, Schedulable: true})
+	nodes := append(reconstructedFleet(), NodeObservation{Name: "fresh", Namespaces: 0, Pods: 0, Schedulable: true})
 	r := CalibrateCoResidency(nodes, 0.95, 1, at0())
 	if r.Empty != 1 {
 		t.Fatalf("empty = %d, want 1", r.Empty)

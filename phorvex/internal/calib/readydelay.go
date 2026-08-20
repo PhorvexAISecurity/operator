@@ -58,6 +58,9 @@ type RotationRecord struct {
 	Action    string
 
 	StartedAt time.Time
+	// RecordedAt is when the outcome became known. It drives the seven-day lookback;
+	// StartedAt alone would retain a long-running censored observation for the wrong window.
+	RecordedAt time.Time
 	// ReadyAt is zero unless Outcome is OutcomeObserved.
 	ReadyAt time.Time
 	// Elapsed is the actual latency when observed, or the censoring time when censored.
@@ -230,7 +233,7 @@ func CalibrateReadyDelay(records []RotationRecord, quantiles []float64, activate
 	rep.Eligible = len(eligible)
 
 	if rep.Eligible == 0 {
-		rep.Reference = Fallback("ready_delay", float64(ShippedReadyDelayReference), "no eligible rotations", at)
+		rep.Reference = Fallback("ready_delay", ShippedReadyDelayReference.Seconds(), "no eligible rotations", at)
 		return rep
 	}
 	rep.CensoringRatio = float64(rep.Censored) / float64(rep.Eligible)
@@ -267,10 +270,10 @@ func CalibrateReadyDelay(records []RotationRecord, quantiles []float64, activate
 	target, identifiable := kmQuantile(curve, activateAt)
 	switch {
 	case rep.Eligible < MinReadyDelayObservations:
-		rep.Reference = Fallback("ready_delay", float64(ShippedReadyDelayReference),
+		rep.Reference = Fallback("ready_delay", ShippedReadyDelayReference.Seconds(),
 			"insufficient eligible outcomes", at)
 	case !identifiable:
-		rep.Reference = Fallback("ready_delay", float64(ShippedReadyDelayReference),
+		rep.Reference = Fallback("ready_delay", ShippedReadyDelayReference.Seconds(),
 			"requested percentile not identifiable under censoring", at)
 	default:
 		v := target
@@ -278,8 +281,8 @@ func CalibrateReadyDelay(records []RotationRecord, quantiles []float64, activate
 			v = ReadyDelayFloor
 		}
 		rep.Reference = Scale{
-			Name: "ready_delay", Value: float64(v), Source: SourceMeasured,
-			Percentile: activateAt, Floor: float64(ReadyDelayFloor),
+			Name: "ready_delay", Value: v.Seconds(), Source: SourceMeasured,
+			Percentile: activateAt, Floor: ReadyDelayFloor.Seconds(),
 			FlooredUp: target < ReadyDelayFloor, ComputedAt: at,
 		}
 	}

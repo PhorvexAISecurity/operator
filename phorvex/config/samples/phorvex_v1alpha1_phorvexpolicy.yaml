@@ -39,4 +39,15 @@ spec:
     killChainSource: ["FalcoIntegrator", "prometheus"]
   actions:
     enabled: ["rotate", "quarantine"]
+  # Optional deterministic brain overrides. Units are explicit seconds; omitted
+  # fields preserve NewModel's exact shipped defaults.
+  brain:
+    killChain:
+      shape: "2.0"
+      sojournScaleSeconds:
+        recon: 1800
+        exploit: 600
+        persist: 3600
+        lateral: 1200
+        impact: 600
   mode: dryRun

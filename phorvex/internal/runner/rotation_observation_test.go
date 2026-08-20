@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -130,6 +131,63 @@ func TestUnresolvedRotationUsesCensoredMaximum(t *testing.T) {
 	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
 	if len(opt.observations) != 1 || opt.observations[0].flow != 2 {
 		t.Fatalf("censored observation = %+v, want one flow=2 record", opt.observations)
+	}
+}
+
+func TestPendingRotationFreezesReferenceAndCensorDeadline(t *testing.T) {
+	opt := &observingOptimizer{}
+	m := &Manager{Optimizer: opt, Log: logr.Discard()}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+	}}
+	m.trackRotation("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+	m.trackRotation("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt.Add(time.Minute))
+
+	for _, pending := range m.pendingRotations {
+		if pending.referenceAtStart != cost.ReadyDelayReference {
+			t.Fatalf("frozen reference = %v, want %v", pending.referenceAtStart, cost.ReadyDelayReference)
+		}
+		if want := startedAt.Add(2 * cost.ReadyDelayReference); !pending.censorDeadline.Equal(want) {
+			t.Fatalf("censor deadline = %v, want frozen %v", pending.censorDeadline, want)
+		}
+	}
+}
+
+func TestShadowCalibrationReceivesObservedCensoredAndInvalidRotations(t *testing.T) {
+	runtime := calib.NewRuntime(calib.RuntimeConfig{}, logr.Discard())
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+	}}
+
+	observed := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
+	observed.trackRotation("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+	observed.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(70 * time.Second), Pods: []model.Pod{{
+		Namespace: "ns", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
+		ReadyAt: startedAt.Add(60 * time.Second),
+	}}})
+
+	censored := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
+	censored.trackRotation("tenant-b", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+	censored.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
+
+	invalid := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
+	invalid.trackRotation("tenant-c", &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "ownerless"}}, nil, startedAt)
+
+	records := runtime.RotationRecords(startedAt.Add(2 * cost.ReadyDelayReference))
+	if len(records) != 3 {
+		t.Fatalf("rotation records = %+v, want three outcomes", records)
+	}
+	want := map[calib.Outcome]bool{calib.OutcomeObserved: true, calib.OutcomeCensored: true, calib.OutcomeInvalid: true}
+	for _, record := range records {
+		delete(want, record.Outcome)
+		if record.ReferenceAtStart != cost.ReadyDelayReference || !record.CensorDeadline.Equal(record.StartedAt.Add(2*cost.ReadyDelayReference)) {
+			t.Fatalf("record did not preserve frozen reference/deadline: %+v", record)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing outcomes: %+v", want)
 	}
 }
 

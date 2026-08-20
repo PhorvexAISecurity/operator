@@ -66,7 +66,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	if view.Pod.ModelID != "" || view.Pod.HasGPU {
 		s *= ph.ModelRarity
 	}
-	s = boundMult(s)
+	s = boundMultAt(s, ph.DispersionCap)
 	// NOTE: s is APPLIED AT THE END of this function, after the AI facts exist. Applying it here
 	// would scale only the six standardRecon facts, because every AI fact below is appended after
 	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
@@ -195,11 +195,20 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 }
 
 func boundMult(m float64) float64 {
+	return boundMultAt(m, 0)
+}
+
+// boundMultAt keeps the production default when cap is zero. A positive alternate
+// cap is carried only by cloned shadow witnesses used for PHVX-74 counterfactuals.
+func boundMultAt(m, cap float64) float64 {
+	if cap <= 0 {
+		cap = MaxDispersionMult
+	}
 	if m < 1 {
 		return 1
 	}
-	if m > MaxDispersionMult {
-		return MaxDispersionMult
+	if m > cap {
+		return cap
 	}
 	return m
 }

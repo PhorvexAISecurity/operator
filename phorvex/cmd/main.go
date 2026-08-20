@@ -33,6 +33,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
@@ -58,36 +59,41 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr      string
-		probeAddr        string
-		enableLeader     bool
-		baseInterval     time.Duration
-		promURL          string
-		epssCachePath    string
-		killSwitch       bool
-		auditJSON        string
-		operatorNS       string
-		integrationEmit  bool
-		emitNamespace    string
-		emitPod          string
-		emitAction       string
-		emitTenant       string
-		emitMatchLabels  string
-		engineName       string
-		ablation         bool
-		ablationNS       string
-		ablationSelector string
-		ablationBudget   int
-		ablationSeeds    int
-		scan             bool
-		scanNS           string
-		kubeContext      string
-		nativeDemo       bool
-		nativeDemoNS     string
-		auditMaxBytes    int64
-		auditMaxBackups  int
-		gpuEnvelopeMax   float64
-		supportDebounce  int
+		metricsAddr          string
+		probeAddr            string
+		enableLeader         bool
+		baseInterval         time.Duration
+		promURL              string
+		epssCachePath        string
+		killSwitch           bool
+		auditJSON            string
+		operatorNS           string
+		integrationEmit      bool
+		emitNamespace        string
+		emitPod              string
+		emitAction           string
+		emitTenant           string
+		emitMatchLabels      string
+		engineName           string
+		ablation             bool
+		ablationNS           string
+		ablationSelector     string
+		ablationBudget       int
+		ablationSeeds        int
+		scan                 bool
+		scanNS               string
+		kubeContext          string
+		nativeDemo           bool
+		nativeDemoNS         string
+		auditMaxBytes        int64
+		auditMaxBackups      int
+		gpuEnvelopeMax       float64
+		supportDebounce      int
+		calibrationShadow    bool
+		calibrationRefresh   time.Duration
+		calibrationSample    time.Duration
+		calibrationLookback  time.Duration
+		calibrationExportDir string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -105,6 +111,11 @@ func main() {
 	flag.BoolVar(&enableLeader, "leader-elect", false, "Enable leader election (single active controller).")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
+	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
+	flag.DurationVar(&calibrationRefresh, "calibration-refresh", calib.DefaultRefreshInterval, "Shadow scale refresh interval.")
+	flag.DurationVar(&calibrationSample, "calibration-sample", calib.DefaultSampleInterval, "Snapshot sampling interval used by walk-forward cadence evaluation.")
+	flag.DurationVar(&calibrationLookback, "calibration-lookback", calib.DefaultLookback, "Maximum age of calibration samples and ready-delay outcomes.")
+	flag.StringVar(&calibrationExportDir, "calibration-export-dir", "", "Directory for raw calibration CSV/JSON evidence (empty disables file export; metrics remain enabled).")
 	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
 	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
@@ -131,6 +142,11 @@ func main() {
 	}
 	if supportDebounce < 1 {
 		setupLog.Error(fmt.Errorf("must be at least 1"), "invalid actions-supported-debounce", "value", supportDebounce)
+		os.Exit(2)
+	}
+	if calibrationShadow && (calibrationRefresh <= 0 || calibrationSample <= 0 || calibrationLookback <= 0 || calibrationSample > calibrationRefresh) {
+		setupLog.Error(fmt.Errorf("durations must be positive and sample must not exceed refresh"), "invalid calibration cadence",
+			"sample", calibrationSample, "refresh", calibrationRefresh, "lookback", calibrationLookback)
 		os.Exit(2)
 	}
 
@@ -191,6 +207,17 @@ func main() {
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
+	if calibrationShadow {
+		rmgr.Calibration = calib.NewRuntime(calib.RuntimeConfig{
+			RefreshInterval: calibrationRefresh, SampleInterval: calibrationSample,
+			Lookback: calibrationLookback, ExportDir: calibrationExportDir,
+		}, ctrl.Log)
+		setupLog.Info("scale calibration shadow enabled", "sample", calibrationSample,
+			"refresh", calibrationRefresh, "lookback", calibrationLookback, "exportDir", calibrationExportDir)
+	} else {
+		rmgr.Calibration = nil
+		setupLog.Info("scale calibration shadow disabled")
+	}
 	if engineName == "p0" {
 		setupLog.Info("the p0 greedy baseline is deprecated and will be removed in the next release; p1-coverage is the supported brain")
 		rmgr.Optimizer = decision.NewEngine()

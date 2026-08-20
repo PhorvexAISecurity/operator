@@ -154,8 +154,30 @@ func TestFallbackCountsAsAFailedRefreshNotASuccess(t *testing.T) {
 	if got := counterValue(t, refreshTotal, "t_count", "success"); got != before {
 		t.Fatalf("success counter moved from %v to %v on a fallback", before, got)
 	}
-	if got := counterValue(t, refreshTotal, "t_count", "fallback"); got != 1 {
-		t.Fatalf("fallback counter = %v, want 1", got)
+	if got := counterValue(t, refreshTotal, "t_count", "failure"); got != 1 {
+		t.Fatalf("failure counter = %v, want 1", got)
+	}
+}
+
+func TestFallbackOnlyScaleAgeRisesAndLastSuccessStaysZero(t *testing.T) {
+	tr := NewTracker(0.10, 3)
+	now := at0()
+	tr.ObserveScale(Fallback("t_only_fallback", 4, "no observations", now), now)
+	tr.ObserveScale(Fallback("t_only_fallback", 4, "no observations", now), now.Add(7*time.Minute))
+
+	if got := gaugeValue(t, scaleAge, "t_only_fallback"); got != 420 {
+		t.Fatalf("fallback-only age = %v, want 420", got)
+	}
+	if got := gaugeValue(t, lastSuccessfulRefresh, "t_only_fallback"); got != 0 {
+		t.Fatalf("fallback-only last success = %v, want 0", got)
+	}
+}
+
+func TestInvalidCountIsPublishedForSnapshotScales(t *testing.T) {
+	tr := NewTracker(0.10, 3)
+	tr.ObserveScaleWithInvalid(measuredScale("t_invalid", 4, 5, 1), at0(), 3)
+	if got := gaugeValue(t, scaleInvalid, "t_invalid"); got != 3 {
+		t.Fatalf("invalid count = %v, want 3", got)
 	}
 }
 

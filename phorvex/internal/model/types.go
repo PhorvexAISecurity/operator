@@ -261,9 +261,13 @@ type PhysicsWitness struct {
 	Scanned bool // a platform adapter produced this witness (else all-neutral)
 
 	// --- K8s, measurable now (recon-EMR dispersion multipliers, >=1.0; 1.0 = neutral) ---
-	ImageRarity           float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
-	CoResidency           float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
-	EPSS                  float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
+	ImageRarity float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
+	CoResidency float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
+	EPSS        float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
+	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
+	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
+	// learned cap accidentally.
+	DispersionCap         float64
 	SchedulerSlack        float64 // node headroom sum(allocatable-requests)/sum(allocatable) [0,1]
 	PDBMinAvailable       int     // live PodDisruptionBudget minAvailable resolved for the owner (-1 = none)
 	PDBDisruptionsAllowed int     // live PDB status.disruptionsAllowed (-1 = none)
@@ -324,26 +328,28 @@ type ContextSignals struct {
 // controller builds from a v1alpha1.PhorvexPolicy once per tick, then passes to the
 // interfaces — so interface packages never import the API package.
 type Policy struct {
-	Tenant                 string
-	Namespace              string
-	Mode                   string
-	DryRun                 bool
-	Lambda                 float64
-	NormSparsity           float64
-	FlowDisruption         float64
-	WeightSecrets          float64
-	BlastRadiusFromGraph   bool
-	MaxMovesPerTick        int
-	TickInterval           time.Duration
-	AntiOverRotationWindow time.Duration
-	ProactiveFloor         time.Duration
-	MinAvailableReplicas   int
-	P99Ms                  int64
-	MinTokensPerSec        int64
-	EventDriven            bool
-	ReactiveOnly           bool
-	EnabledActions         map[Action]bool
-	AssetWeightFromLabels  func(labels map[string]string) float64
+	Tenant                       string
+	Namespace                    string
+	Mode                         string
+	DryRun                       bool
+	Lambda                       float64
+	NormSparsity                 float64
+	FlowDisruption               float64
+	WeightSecrets                float64
+	BlastRadiusFromGraph         bool
+	MaxMovesPerTick              int
+	TickInterval                 time.Duration
+	AntiOverRotationWindow       time.Duration
+	ProactiveFloor               time.Duration
+	MinAvailableReplicas         int
+	P99Ms                        int64
+	MinTokensPerSec              int64
+	EventDriven                  bool
+	ReactiveOnly                 bool
+	KillChainSojournScaleSeconds map[string]float64
+	KillChainShape               float64
+	EnabledActions               map[Action]bool
+	AssetWeightFromLabels        func(labels map[string]string) float64
 }
 
 // Decision is the per-pod outcome of one tick — the unit written to the audit log

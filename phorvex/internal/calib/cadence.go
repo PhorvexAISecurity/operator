@@ -24,9 +24,39 @@ import (
 
 // CadenceSample is one observation of the fleet at a point in time.
 type CadenceSample struct {
-	At     time.Time
-	Nodes  []NodeObservation
-	Assets []AssetObservation
+	At         time.Time
+	Nodes      []NodeObservation
+	Assets     []AssetObservation
+	ReadyDelay []RotationRecord
+
+	// OptimizerComparisons contains production-vs-shadow selections observed in this
+	// interval. An empty slice is unavailable evidence, not an implicit exact match.
+	OptimizerComparisons   []SelectionComparison
+	AvailabilityViolations int
+	SLOViolations          int
+}
+
+// SelectionComparison is one production/shadow optimizer outcome over the same substrate.
+type SelectionComparison struct {
+	At                     time.Time       `json:"at"`
+	Tenant                 string          `json:"tenant"`
+	Production             []string        `json:"productionSelected"`
+	Shadow                 []string        `json:"shadowSelected"`
+	ProductionScores       []DecisionScore `json:"productionScores"`
+	ShadowScores           []DecisionScore `json:"shadowScores"`
+	AvailabilityViolations int             `json:"availabilityViolations"`
+	SLOViolations          int             `json:"sloViolations"`
+}
+
+// DecisionScore is the raw per-asset optimizer counterfactual. Selection keys alone show whether
+// the chosen set changed; these values show how far the candidate scales moved the ranking.
+type DecisionScore struct {
+	Key           string  `json:"key"`
+	Action        string  `json:"action"`
+	Selected      bool    `json:"selected"`
+	CoverageValue float64 `json:"coverageValue"`
+	Cost          float64 `json:"cost"`
+	Net           float64 `json:"net"`
 }
 
 // CadenceRow is one candidate interval's held-out result.
@@ -50,10 +80,40 @@ type CadenceRow struct {
 	// saturation low by re-fitting constantly is moving the ground under the optimizer.
 	MaxScaleDrift float64
 
+	// Ready-delay, optimizer, and safety are evaluated in the same held-out window. A cadence
+	// cannot qualify merely because dispersion stayed under its cap.
+	ReadyComparisons        int
+	MaxReadyHardSaturation  float64
+	OptimizerComparisons    int
+	MaxOptimizerChangeRatio float64
+	AvailabilityViolations  int
+	SLOViolations           int
+	OptimizerStable         bool
+
 	// ClearsThreshold is true when MaxAtCeiling stayed within the saturation threshold across
 	// every evaluated window — not merely on average, because an average hides the interval in
 	// which the alarm actually fired.
 	ClearsThreshold bool
+}
+
+func selectionChangeRatio(a, b []string) float64 {
+	union := map[string]bool{}
+	intersection := map[string]bool{}
+	left := map[string]bool{}
+	for _, key := range a {
+		left[key] = true
+		union[key] = true
+	}
+	for _, key := range b {
+		union[key] = true
+		if left[key] {
+			intersection[key] = true
+		}
+	}
+	if len(union) == 0 {
+		return 0
+	}
+	return 1 - float64(len(intersection))/float64(len(union))
 }
 
 // cadenceWindows splits a time-ordered history into (fit, evaluate) pairs at the given interval.
@@ -101,7 +161,7 @@ func EvaluateCadence(
 	out := make([]CadenceRow, 0, len(intervals))
 
 	for _, iv := range intervals {
-		row := CadenceRow{Interval: iv, ClearsThreshold: true}
+		row := CadenceRow{Interval: iv, ClearsThreshold: true, OptimizerStable: true}
 		fits, evals := cadenceWindows(samples, iv)
 
 		sum := 0.0
@@ -116,6 +176,15 @@ func EvaluateCadence(
 			// state the refresh would have seen.
 			last := fit[len(fit)-1]
 			j := CalibrateJoint(last.Nodes, last.Assets, coResidencyP, dispersionP, minObservations, last.At)
+			var fitReady []RotationRecord
+			for _, sample := range fit {
+				fitReady = append(fitReady, sample.ReadyDelay...)
+			}
+			ready := CalibrateReadyDelay(fitReady, []float64{0.50, 0.75, 0.90, 0.95, 0.975, 0.99}, 0.95, last.At)
+			readyRef := time.Duration(ready.Reference.Value * float64(time.Second))
+			if readyRef <= 0 {
+				readyRef = ShippedReadyDelayReference
+			}
 
 			if prevScale > 0 {
 				drift := (j.Dispersion.Value - prevScale) / prevScale
@@ -130,6 +199,7 @@ func EvaluateCadence(
 
 			// Score on the future only: apply the FROZEN scales to assets observed after the fit.
 			pinned, total := 0, 0
+			readyHard, readyTotal := 0, 0
 			for _, e := range eval {
 				for _, a := range e.Assets {
 					total++
@@ -137,6 +207,24 @@ func EvaluateCadence(
 						pinned++
 					}
 				}
+				for _, record := range e.ReadyDelay {
+					if record.Outcome != OutcomeObserved && record.Outcome != OutcomeCensored {
+						continue
+					}
+					readyTotal++
+					if record.Elapsed >= 2*readyRef {
+						readyHard++
+					}
+				}
+				for _, comparison := range e.OptimizerComparisons {
+					change := selectionChangeRatio(comparison.Production, comparison.Shadow)
+					if change > row.MaxOptimizerChangeRatio {
+						row.MaxOptimizerChangeRatio = change
+					}
+					row.OptimizerComparisons++
+				}
+				row.AvailabilityViolations += e.AvailabilityViolations
+				row.SLOViolations += e.SLOViolations
 			}
 			if total == 0 {
 				row.Skipped++
@@ -148,10 +236,20 @@ func EvaluateCadence(
 			}
 			sum += ratio
 			row.Windows++
+			if readyTotal > 0 {
+				ratio := float64(readyHard) / float64(readyTotal)
+				if ratio > row.MaxReadyHardSaturation {
+					row.MaxReadyHardSaturation = ratio
+				}
+				row.ReadyComparisons += readyTotal
+			}
 		}
 		if row.Windows > 0 {
 			row.MeanAtCeiling = sum / float64(row.Windows)
-			row.ClearsThreshold = row.MaxAtCeiling <= threshold
+			row.OptimizerStable = row.OptimizerComparisons > 0 && row.MaxOptimizerChangeRatio == 0
+			row.ClearsThreshold = row.MaxAtCeiling <= threshold &&
+				row.ReadyComparisons > 0 && row.MaxReadyHardSaturation <= threshold &&
+				row.OptimizerStable && row.AvailabilityViolations == 0 && row.SLOViolations == 0
 		} else {
 			// No window could be evaluated. That is not a pass: an interval the history cannot
 			// test has no evidence either way, and reporting it as clearing would be the same

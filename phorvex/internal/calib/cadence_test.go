@@ -15,12 +15,17 @@ func history(n int, spacing time.Duration, drift float64) []CadenceSample {
 	base := at0()
 	var out []CadenceSample
 	for i := 0; i < n; i++ {
-		assets := liveAssets()
+		assets := reconstructedAssets()
 		f := 1 + drift*float64(i)
 		for k := range assets {
 			assets[k].EPSS = f
 		}
-		out = append(out, CadenceSample{At: base.Add(time.Duration(i) * spacing), Nodes: liveFleet(), Assets: assets})
+		at := base.Add(time.Duration(i) * spacing)
+		out = append(out, CadenceSample{
+			At: at, Nodes: reconstructedFleet(), Assets: assets,
+			ReadyDelay:           []RotationRecord{{ID: "r", StartedAt: at.Add(-100 * time.Second), Elapsed: 100 * time.Second, Outcome: OutcomeObserved}},
+			OptimizerComparisons: []SelectionComparison{{Production: []string{"ns/p"}, Shadow: []string{"ns/p"}}},
+		})
 	}
 	return out
 }
@@ -165,6 +170,34 @@ func TestEmptyHistoryProducesNoWindows(t *testing.T) {
 	rows := EvaluateCadence(nil, []time.Duration{15 * time.Minute}, 0.95, 0.95, 1, 0.10)
 	if len(rows) != 1 || rows[0].Windows != 0 || rows[0].ClearsThreshold {
 		t.Fatalf("empty history produced %+v, want zero windows and no pass", rows)
+	}
+}
+
+func TestCadenceIncludesReadyOptimizerAndSafetyGates(t *testing.T) {
+	samples := history(12, 5*time.Minute, 0)
+	rows := EvaluateCadence(samples, []time.Duration{15 * time.Minute}, 0.95, 0.975, 1, 0.10)
+	if len(rows) != 1 || rows[0].ReadyComparisons == 0 || rows[0].OptimizerComparisons == 0 {
+		t.Fatalf("missing held-out dimensions: %+v", rows)
+	}
+
+	bad := history(12, 5*time.Minute, 0)
+	bad[6].OptimizerComparisons[0].Shadow = []string{"ns/other"}
+	bad[6].AvailabilityViolations = 1
+	bad[6].SLOViolations = 1
+	rows = EvaluateCadence(bad, []time.Duration{15 * time.Minute}, 0.95, 0.975, 1, 0.10)
+	if rows[0].ClearsThreshold || rows[0].MaxOptimizerChangeRatio == 0 || rows[0].AvailabilityViolations == 0 || rows[0].SLOViolations == 0 {
+		t.Fatalf("cadence ignored optimizer/safety failure: %+v", rows[0])
+	}
+}
+
+func TestCadenceWithoutOptimizerEvidenceCannotQualify(t *testing.T) {
+	samples := history(12, 5*time.Minute, 0)
+	for i := range samples {
+		samples[i].OptimizerComparisons = nil
+	}
+	rows := EvaluateCadence(samples, []time.Duration{15 * time.Minute}, 0.95, 0.975, 1, 0.10)
+	if rows[0].ClearsThreshold || rows[0].OptimizerStable {
+		t.Fatalf("missing optimizer evidence counted as stable: %+v", rows[0])
 	}
 }
 

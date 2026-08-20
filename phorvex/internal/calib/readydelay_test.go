@@ -145,7 +145,7 @@ func TestGateOpensWithEnoughCleanObservations(t *testing.T) {
 	if rep.CensoringRatio != 0 {
 		t.Errorf("censoring ratio = %v, want 0", rep.CensoringRatio)
 	}
-	t.Logf("measured reference = %v (P95), eligible=%d", time.Duration(rep.Reference.Value), rep.Eligible)
+	t.Logf("measured reference = %v (P95), eligible=%d", time.Duration(rep.Reference.Value*float64(time.Second)), rep.Eligible)
 }
 
 // Exceedance and hard saturation are different questions and the spec asks for both. The
@@ -249,5 +249,15 @@ func TestReadyDelayReferenceAgreesWithCost(t *testing.T) {
 	if ShippedReadyDelayReference != cost.ReadyDelayReference {
 		t.Fatalf("calib says %v, cost says %v — the shadow compares against the wrong baseline",
 			ShippedReadyDelayReference, cost.ReadyDelayReference)
+	}
+}
+
+func TestReadyDelayScaleValueIsSecondsNotNanoseconds(t *testing.T) {
+	rep := CalibrateReadyDelay(nil, []float64{0.95}, 0.95, at0())
+	if rep.Reference.Value != ShippedReadyDelayReference.Seconds() {
+		t.Fatalf("fallback scale value = %v, want %v seconds", rep.Reference.Value, ShippedReadyDelayReference.Seconds())
+	}
+	if rep.Reference.Floor != 0 {
+		t.Fatalf("fallback floor = %v, want zero because no measured percentile was floored", rep.Reference.Floor)
 	}
 }

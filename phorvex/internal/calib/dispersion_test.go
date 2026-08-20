@@ -12,14 +12,10 @@ import (
 	"github.com/phorvex/phorvex/internal/recon"
 )
 
-// liveAssets reproduces the fleet's dispersion inputs as measured on 2026-08-19: 71 pods across
-// nodes carrying 2/4/5/8/9 namespaces, ImageRarity taking the four observed values, EPSS honest-
-// absent on all but two pods, and the two vLLM pods each 1-of-2 in the model population so both
-// score ModelRarity 2.0.
-//
-// Built from the measured distribution rather than invented, because every threshold in this file
-// is an argument about THIS fleet.
-func liveAssets() []AssetObservation {
+// reconstructedAssets is a deterministic fixture rebuilt from the aggregate distribution reported
+// on 2026-08-19: 71 pods, the reported node tenancy, and four reported rarity values. Per-pod
+// placement is reconstructed, not a raw cluster export, and EPSS stays neutral here.
+func reconstructedAssets() []AssetObservation {
 	nsByNode := []int{2, 4, 5, 8, 9}
 	podsByNode := []int{6, 9, 13, 17, 26}
 	rarities := []float64{1.6224, 1.7423, 1.8374, 2.0}
@@ -53,7 +49,7 @@ func liveAssets() []AssetObservation {
 // of exactly 2.0, so the pods that set the upper percentiles are numerically identical either way.
 // Recalibrating co-residency moves the BODY of the distribution and leaves its tail alone.
 func TestCoResidencyScaleMovesTheBodyNotTheTail(t *testing.T) {
-	assets := liveAssets()
+	assets := reconstructedAssets()
 	r4, r8 := uncappedAll(assets, 4.0), uncappedAll(assets, 8.0)
 
 	// The distributions genuinely differ...
@@ -108,10 +104,10 @@ func uncappedAll(assets []AssetObservation, scale float64) []float64 {
 }
 
 // The spec forbids computing percentiles from values already capped at 4.0. This checks the
-// reconstruction actually escapes the cap: on the live fleet the uncapped product exceeds 4.0, so
+// reconstruction actually escapes the cap: in this fixture the uncapped product exceeds 4.0, so
 // a stored (capped) multiplier would have truncated it.
 func TestPercentileIsTakenFromUncappedValues(t *testing.T) {
-	assets := liveAssets()
+	assets := reconstructedAssets()
 	raw := uncappedAll(assets, ShippedCoResidencyCap)
 
 	over := 0
@@ -149,11 +145,11 @@ func TestPercentileIsTakenFromUncappedValues(t *testing.T) {
 // product piles up on a few points. A large mass sits at exactly 2.0 x 2.0 = 4.0, and both P90 and
 // P95 land inside it.
 //
-// This test asserts the situation as measured. When the EPSS feed lands the distribution moves and
-// this should be re-derived — if it starts failing, that is the signal to re-fit, not a regression.
+// This test pins the reconstructed scenario. It is a regression fixture, not evidence that the
+// current cluster still has this distribution.
 func TestP95DispersionIsANoOpAndMissesTheThreshold(t *testing.T) {
 	const threshold = 0.10
-	j := CalibrateJoint(liveFleet(), liveAssets(), 0.95, 0.95, 1, at0())
+	j := CalibrateJoint(reconstructedFleet(), reconstructedAssets(), 0.95, 0.95, 1, at0())
 
 	if j.CoResidency.Value != 8 {
 		t.Fatalf("co-residency scale = %v, want 8", j.CoResidency.Value)
@@ -175,7 +171,7 @@ func TestP95DispersionIsANoOpAndMissesTheThreshold(t *testing.T) {
 // That fragility is the trade-off the choice carries, and it is measured here rather than asserted.
 func TestSmallestClearingPercentileIsSetByVeryFewAssets(t *testing.T) {
 	const threshold = 0.10
-	raw := uncappedAll(liveAssets(), 8.0)
+	raw := uncappedAll(reconstructedAssets(), 8.0)
 
 	var clearing float64
 	for _, p := range []float64{0.90, 0.95, 0.975, 0.99} {
@@ -207,10 +203,10 @@ func TestSmallestClearingPercentileIsSetByVeryFewAssets(t *testing.T) {
 // the fleet with two distinct multipliers, which is a constant with extra steps — the ticket's
 // actual complaint. The fit has to widen the term, not just stop clipping it.
 func TestJointFitWidensTheTermNotJustTheCeiling(t *testing.T) {
-	j := CalibrateJoint(liveFleet(), liveAssets(), 0.95, 0.95, 1, at0())
+	j := CalibrateJoint(reconstructedFleet(), reconstructedAssets(), 0.95, 0.95, 1, at0())
 
 	shippedDistinct := map[float64]bool{}
-	for _, a := range liveAssets() {
+	for _, a := range reconstructedAssets() {
 		shippedDistinct[Capped(a.Uncapped(ShippedCoResidencyCap), ShippedMaxDispersionMult)] = true
 	}
 	if j.DistinctCapped <= len(shippedDistinct) {
@@ -224,7 +220,7 @@ func TestJointFitWidensTheTermNotJustTheCeiling(t *testing.T) {
 // is actually checked with. It must be monotone in the cap and identify a smallest clearing value.
 func TestSweepFindsTheSmallestClearingCap(t *testing.T) {
 	const threshold = 0.10
-	rows := SweepDispersion(liveAssets(), 8.0, []float64{3, 4, 5, 6, 7, 8}, threshold)
+	rows := SweepDispersion(reconstructedAssets(), 8.0, []float64{3, 4, 5, 6, 7, 8}, threshold)
 
 	prev := math.Inf(1)
 	first := -1.0
@@ -245,7 +241,7 @@ func TestSweepFindsTheSmallestClearingCap(t *testing.T) {
 
 // A cap of zero assets must fall back rather than invent a number.
 func TestNoAssetsFallsBack(t *testing.T) {
-	j := CalibrateJoint(liveFleet(), nil, 0.95, 0.95, 1, at0())
+	j := CalibrateJoint(reconstructedFleet(), nil, 0.95, 0.95, 1, at0())
 	if j.Dispersion.IsMeasured() {
 		t.Fatal("an empty fleet produced a measured dispersion scale")
 	}

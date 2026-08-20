@@ -52,10 +52,9 @@ func TestPercentileDoesNotMutateInput(t *testing.T) {
 	}
 }
 
-// This is the live fleet on 2026-08-19: 5 nodes carrying 2, 4, 5, 8 and 9 namespaces, so
-// X_node = [1,3,4,7,8]. It is the case the spec warns about directly ("do not assume P95
-// automatically produces exactly 5% at the ceiling"), and it fails in two separate ways.
-func TestLiveFleetPercentileGridHasNoResolution(t *testing.T) {
+// This reconstructs the aggregate fleet shape reported on 2026-08-19: 5 nodes carrying 2, 4, 5,
+// 8 and 9 namespaces, so X_node = [1,3,4,7,8]. It is not a raw live snapshot.
+func TestReconstructedFleetPercentileGridHasNoResolution(t *testing.T) {
 	X := []float64{1, 3, 4, 7, 8}
 
 	grid := Identifiable(X, []float64{0.90, 0.95, 0.975, 0.99})

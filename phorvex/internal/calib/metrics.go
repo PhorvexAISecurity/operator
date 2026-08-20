@@ -84,6 +84,11 @@ var (
 		Help: "Age of the value in force. Keeps rising while refreshes fail, which is the signal a stalled calibrator gives.",
 	}, []string{"scale"})
 
+	lastSuccessfulRefresh = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_calib_last_successful_refresh_timestamp_seconds",
+		Help: "Unix timestamp of the last measured refresh. Zero means this process has never produced a measured value for the scale.",
+	}, []string{"scale"})
+
 	scaleChangeRatio = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_calib_scale_change_ratio",
 		Help: "Relative change from the previous refresh, |new-old|/old — the churn a shorter cadence buys.",
@@ -138,7 +143,7 @@ func Register() {
 		crmetrics.Registry.MustRegister(
 			scaleValue, scaleSource, scalePercentile, scaleObservations, scaleInvalid,
 			atCeilingCount, atCeilingRatio, strictlyClippedCount, strictlyClippedRatio,
-			refreshTotal, scaleAge, scaleChangeRatio,
+			refreshTotal, scaleAge, lastSuccessfulRefresh, scaleChangeRatio,
 			fallbackActive, fallbackReason,
 			saturationWarning, saturationStreak,
 			readyDelayCensoring, readyDelayExceedance, readyDelayHardSaturation, readyDelayUnidentifiable,
@@ -165,6 +170,7 @@ type Tracker struct {
 
 	prev      map[string]float64
 	lastFresh map[string]time.Time
+	firstSeen map[string]time.Time
 	streak    map[string]int
 	reason    map[string]string
 }
@@ -176,7 +182,7 @@ func NewTracker(threshold float64, persistence int) *Tracker {
 	}
 	return &Tracker{
 		Persistence: persistence, Threshold: threshold,
-		prev: map[string]float64{}, lastFresh: map[string]time.Time{},
+		prev: map[string]float64{}, lastFresh: map[string]time.Time{}, firstSeen: map[string]time.Time{},
 		streak: map[string]int{}, reason: map[string]string{},
 	}
 }
@@ -185,6 +191,12 @@ func NewTracker(threshold float64, persistence int) *Tracker {
 //
 // now is the observation clock, passed rather than read so a replayed history reproduces exactly.
 func (t *Tracker) ObserveScale(s Scale, now time.Time) {
+	t.ObserveScaleWithInvalid(s, now, 0)
+}
+
+// ObserveScaleWithInvalid publishes a scale plus observations excluded before its raw
+// distribution was built (for example unschedulable nodes or pods without a physics witness).
+func (t *Tracker) ObserveScaleWithInvalid(s Scale, now time.Time, invalid int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -192,6 +204,7 @@ func (t *Tracker) ObserveScale(s Scale, now time.Time) {
 	scaleValue.WithLabelValues(name).Set(s.Value)
 	scalePercentile.WithLabelValues(name).Set(s.Percentile)
 	scaleObservations.WithLabelValues(name).Set(float64(s.Clip.N))
+	scaleInvalid.WithLabelValues(name).Set(float64(invalid))
 	atCeilingCount.WithLabelValues(name).Set(float64(s.Clip.AtCeiling))
 	atCeilingRatio.WithLabelValues(name).Set(s.Clip.AtCeilingRatio())
 	strictlyClippedCount.WithLabelValues(name).Set(float64(s.Clip.StrictlyClipped))
@@ -223,7 +236,7 @@ func (t *Tracker) ObserveScale(s Scale, now time.Time) {
 	// look healthy.
 	result := "success"
 	if !s.IsMeasured() {
-		result = "fallback"
+		result = "failure"
 	}
 	refreshTotal.WithLabelValues(name, result).Inc()
 
@@ -242,11 +255,16 @@ func (t *Tracker) ObserveScale(s Scale, now time.Time) {
 	// back — which is precisely the situation a freshness alert should catch.
 	if s.IsMeasured() {
 		t.lastFresh[name] = now
+		lastSuccessfulRefresh.WithLabelValues(name).Set(float64(now.Unix()))
+	}
+	if _, ok := t.firstSeen[name]; !ok {
+		t.firstSeen[name] = now
 	}
 	if last, ok := t.lastFresh[name]; ok {
 		scaleAge.WithLabelValues(name).Set(now.Sub(last).Seconds())
 	} else {
-		scaleAge.WithLabelValues(name).Set(0)
+		scaleAge.WithLabelValues(name).Set(now.Sub(t.firstSeen[name]).Seconds())
+		lastSuccessfulRefresh.WithLabelValues(name).Set(0)
 	}
 
 	// Saturation streak and the persisted warning.
@@ -270,11 +288,7 @@ func (t *Tracker) ObserveReadyDelay(rep ReadyDelayReport, now time.Time) {
 	readyDelayHardSaturation.Set(rep.HardSaturationRatio)
 	readyDelayUnidentifiable.Set(float64(len(rep.Unidentifiable)))
 
-	t.mu.Lock()
-	scaleInvalid.WithLabelValues(rep.Reference.Name).Set(float64(rep.Invalid))
-	t.mu.Unlock()
-
-	t.ObserveScale(rep.Reference, now)
+	t.ObserveScaleWithInvalid(rep.Reference, now, rep.Invalid)
 }
 
 // SaturationStreak reports the current consecutive-over-threshold count, for tests and for the
