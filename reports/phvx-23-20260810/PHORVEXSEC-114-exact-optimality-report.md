@@ -1,123 +1,114 @@
-# PHORVEXSEC-114 (PHVX-23) — items 1, 2 and 4 — report
+# PHORVEXSEC-114 (PHVX-23) — exact-check completion report
 
-Date: 2026-08-10 · Branch `fix/phvx-23-exact-skipped` · Commits `df6e407`, `ecfaaf9`, `f5ba9f3`
-Item 3 (bounding the gap) belongs to the ticket's math owner and is **not** covered here — but its
-premise has moved; see §5.
+Updated: 2026-08-20
 
-## Headline
+Branch: `fix/phvx-23-work-guard-calibration` · PR #55
 
-The exactness claim is now **measured at production scale**: 76 assets at the live move budget,
-`ratio = 1.000000000000, gap = 0`. The ticket's central complaint — *"your central technical claim has
-never been verified at production scale"* — is answered by measurement rather than by argument.
+Runtime-matrix commit: `47ee2ed`
 
-That became possible because item 2 turned out not to be a tuning exercise. The cap was on the wrong
-variable.
+## Result
 
-## 1. Item 1 — a skipped solve rendered as a perfect score
+All four ticket items are implemented and testable:
 
-The ticket predicted `ratio = 0` being mistaken for a measured zero. There are two code paths, and the
-live one was worse than that.
+1. An exact solve that did not run carries `ExactSkipped` and never renders as a measured zero or
+   perfect score.
+2. The flat 18-asset cap was replaced by a work estimate and an active budget of `300_000`, derived
+   against the product owner's 500ms ruling.
+3. The 76-asset falsification check is direct brute force at B=1 and B=2; no relaxation or
+   extrapolation is used for those rows.
+4. External claims separate the scale-free structural proof from the bounded empirical range.
 
-| path | behaviour above the cap |
-|---|---|
-| `computeOptimality` (ablation) | correct — sets `ExactSkipped`, leaves ratios at 0 |
-| `probeArm` (optimizer probe) | **discarded the flag** |
+The exact arm is present in the shipped binary's explicit ablation, console benchmark, and
+apply-fix safety paths, and in tests/benchmarks. It does **not** run on the ordinary per-tick
+production decision path.
 
-`probeArm` dropped `skipped`, so the resulting `exObj = 0` fell into the branch meaning *"the exact
-solve ran and correctly selected nothing, so the ratio is 1"* — and the arm reported
-`greedyRatio = swapRatio = 1.0000`. The dashboard rendered that green. A computation that never ran
-was displayed as a perfect score, which is the *"stale 1.0 with no signal"* the ticket warns about and
-is worse than a bare 0: a 0 at least looks wrong.
+## Correct skip semantics
 
-**Root cause:** `exObj == 0` carries two meanings that were conflated —
+The previous optimizer-probe path discarded the skip flag, then treated `exactObjective == 0` as
+"the solve completed and correctly selected nothing," producing a green ratio of 1.0. The two
+states are now separate:
 
-- *skipped* → nothing was measured;
-- *not skipped* → the solve ran and correctly selected nothing, where 1 is genuinely right.
+- `completed` with a true zero objective may report ratio 1 and gap 0;
+- `skipped`, `timeout`, or `failed` has no numeric optimality ratio or gap.
 
-Now separate branches. `TestZeroObjectiveIsNotConfusedWithSkipped` pins the second so the fix cannot
-silently swallow a real measurement.
+The dashboard renders an unmeasured exact result as `n/a`. Regression tests cover both the skipped
+and genuinely-completed-zero cases.
 
-`OptimizerProbeArm` carries `ExactSkipped`; the dashboard's `ProbeArm` renders `n/a` instead of a
-number, matching what the ablation table at `bench.tsx:239` already did.
+## Guard and runtime model
 
-**Reachability, stated honestly:** the shipped probe fixtures hold 4 assets against a cap of 18, so
-this did not fire in production. It was latent. The ticket flags item 1 as a prerequisite for PHVX-28
-precisely because promoting node/model to their own blocks raises the block count.
+Enumeration work is estimated as candidate sets through B picks, conservatively using the maximum
+actions per asset, then scaled by B because copying/scoring a picked set is O(B). Overflow returns
+positive infinity and therefore skips. Recursion stops immediately after the move budget is spent;
+an independent exhaustive implementation verifies that this prune does not change the optimum.
 
-The regression test fails against **both** pre-fix shapes — flag discarded, and flag kept with the old
-ratio logic.
+`exactWorkBudget = 300_000`. The old flat cap was wrong in both directions: it blocked cheap large
+B=1 fleets and admitted expensive high-B cases. The current matrix enforces expected statuses in
+subprocesses with a hard 500ms deadline. The wall-clock matrix is skipped under `go test -race`
+because startup of the race-instrumented test binary alone can exceed 500ms; all decision tests,
+including the solver, still run race-clean.
 
-## 2. Item 2 — the cap was on the wrong variable
+## Reproducible runtime matrix
 
-`exactBruteForceAssetCap = 18` had no recorded derivation. Measuring the runtime curve
-(k = candidate actions per asset):
+Raw and summary artifacts are committed under:
 
-| n | k | B | exact solve |
-|---|---|---|---|
-| 76 | 6 | 1 | **0.98 ms** |
-| 600 | 6 | 1 | 28.7 ms |
-| 76 | 6 | 2 | 102 ms |
-| 300 | 6 | 2 | 4.7 s |
-| 76 | 6 | 3 | 20.3 s |
-| 18 | 6 | 4 | 2.8 s |
+`reports/phvx-23-20260810/exact-runtime-20260820/`
 
-Cost is driven by the **move budget B**, not fleet size. So a flat asset cap was wrong in both
-directions:
+Configuration: Go 1.26.1, linux/amd64, 6 CPUs, seeds `23001` and `23002`, three repetitions per
+seed, active work cap `300_000`, subprocess timeout 500ms. P50/P95/max use nearest rank over all six
+runs of each case.
 
-- **too strict** — every live tenant policy sets `maxMovesPerTick = 1`, and at B=1 the solve reaches a
-  600-asset fleet in 29 ms. The cap refused at 19. *This is the concrete reason the claim had never
-  been measured at production scale.*
-- **too loose** — at B=4, 18 assets is "under the cap" and takes 2.8 s.
+| case | n | k | B | overlap / feasibility | status (6/6) | P50 | P95=max | max completed gap |
+|---|---:|---:|---:|---|---|---:|---:|---:|
+| production-76-b1 | 76 | 2 | 1 | disjoint, feasible | completed | 0.281ms | 0.836ms | 0 |
+| production-76-b2 | 76 | 2 | 2 | disjoint, feasible | completed | 16.698ms | 21.165ms | 0 |
+| actions-24-k3 | 24 | 3 | 2 | disjoint, feasible | completed | 3.439ms | 5.254ms | 0 |
+| within-asset-overlap | 24 | 3 | 2 | shared facts within each legal asset block | completed | 5.454ms | 6.901ms | 0 |
+| partially-infeasible | 30 | 3 | 2 | every fourth asset excluded | completed | 4.352ms | 6.774ms | 0 |
+| fully-infeasible | 30 | 3 | 2 | all candidates excluded | completed-zero | 0.003ms | 0.006ms | 0 |
+| cross-block-rejected | 20 | 2 | 2 | illegal shared key across assets | skipped | 0 | 0 | n/a |
+| guard-skipped | 80 | 4 | 4 | 1,640,774,404 estimated work | skipped | 0.246ms | 0.372ms | n/a |
+| same case, guard disabled | 80 | 4 | 4 | disjoint, feasible | timeout | 505.469ms | 509.777ms | n/a |
 
-The guard now estimates the work the enumeration will actually do — `Σ_{j≤B} C(n,j)·k^j` candidate
-sets — and skips above 200 000, roughly 0.2–0.6 s worst case at the measured 1–3 µs per set. It sits
-on the on-demand ablation/console path, not the per-tick decision loop. Overflow returns `+Inf`, so a
-huge fleet always skips rather than wrapping to a small number.
+`failed` is an explicit schema status and was not observed. Every non-completed raw row has blank
+`optimality_ratio` and `optimality_gap` cells in CSV and omitted fields in JSONL. The numeric zero
+runtime on the structurally-rejected row is dispatch time, not an optimality gap.
 
-`TestWorkBudgetReachesTheLiveFleet` pins each measured point against the guard, so the derivation
-cannot drift away from the numbers it was built from.
+## Exactness result and scope
 
-## 3. The measurement this unlocked
+For the current asset-keyed production substrate, cross-asset cover keys are rejected and the
+remaining objective is modular under a truncated partition matroid. Under those verified
+conditions, the proof is scale-free. The runtime matrix separately measures the implementation:
+all completed disjoint and legal within-asset-overlap cases returned maximum gap 0.
 
-`TestGreedyIsExactAtProductionScale`, direct brute force at the live budget:
+At 76 assets the direct exact check completed for both B=1 and B=2. These are deterministic
+synthetic fixtures at production **scale**, not a replay of live pods. No claim is made that the
+fixture is the live fleet or that brute force is tractable for arbitrary B. The 80-asset B=4 case
+demonstrates the opposite: the guard skips it and the unguarded subprocess times out.
 
+Cross-block fact overlap is not benchmarked as a legal optimizer input because production rejects
+that structure before selection. Its explicit `skipped` rows make that boundary visible.
+
+## Commands
+
+```text
+PHVX_EXACT_RESULTS_DIR=<dir> go test ./internal/decision -run TestExactRuntimeMatrix -count=1 -v
+go build ./...
+go vet ./...
+go test ./...
+go test -race ./internal/decision
+git diff --check
 ```
-18 assets, B=1: ratio=1.000000000000 gap=0 disjoint=true
-40 assets, B=1: ratio=1.000000000000 gap=0 disjoint=true
-76 assets, B=1: ratio=1.000000000000 gap=0 disjoint=true
-```
 
-This is a real brute-force comparison, not a bound and not an extrapolation.
+All passed on 2026-08-20. No `.github/workflows/` file was changed.
 
-## 4. Item 4 — the claim, restated
+## Deliverables
 
-The proof is the strong part and is scale-free; the measurement was the weak part and was being quoted
-as though it were not. Every surface now states both:
+- Work guard and prune: `a15bda9`.
+- Executable item-3 sweep and guard tests: `a15bda9`.
+- Runtime/status matrix and raw CSV/JSONL: `47ee2ed`.
+- Manifest with seeds, repetitions, host/runtime, command, cap, and timeout.
+- Corrected external wording and skipped display from the earlier PHVX-23 commits.
 
-> Exact optimality is **proven structurally** — with block-ownership plus the partition constraint the
-> objective is modular over a truncated partition matroid, so the greedy is exact by Rado–Edmonds, and
-> that does not depend on fleet size. The empirical check is separate and bounded, and is measured at
-> **76 assets, B=1: 1.000000000000, gap 0**.
-
-Swept: `P5-FINAL-REPORT.md` (headline, evidence table, claim list), `P-OPTIMIZE-RATIO-DECISION.md`,
-`PROJECT-LOG.md`, `NEXT-SESSION.md`, and the dashboard bench tooltip.
-
-Statements of the form *"asset-disjoint ⇒ modular ⇒ provably optimal"* were **left unchanged** — they
-are claims about the proof and were already correct. The dashboard tooltip now also says `n/a` means
-*not measured*, never a score.
-
-## 5. Effect on item 3 (not mine — flagging only)
-
-Item 3 reads *"Brute force won't reach 76. Choose a bounding method (LP relaxation, randomized upper
-bound…)"*. At the live budget it **does** reach 76, in under a millisecond, and the measured ratio is
-exactly 1. So the falsification test item 3 asks for can be run directly rather than relaxed — at
-least for B=1. A bound is still the right tool for larger B (B=3 at 76 assets is 20 s), so the item is
-not obsolete, only narrowed. That call belongs to the ticket's math owner.
-
-## 6. Not claimed
-
-- Not that the exact arm is tractable in general. It is bounded, and the bound is now honest.
-- Not that the 76-asset fixture is the live fleet. It mirrors the shipped fixture's shape at live
-  scale; the live pods are not replayed here.
-- The dashboard change was **not typechecked** — `node_modules` is not installed in this environment.
-  The edit adds one required field to an interface fed only by the API; no mock constructs it.
+No runtime-budget product decision remains open: 500ms was ruled on 2026-08-11 and is now enforced
+by the subprocess matrix. Increasing the active work cap requires re-running this matrix and
+showing that every guard-admitted case still completes inside that ruling.
