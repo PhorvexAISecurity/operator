@@ -1,7 +1,7 @@
 # PHORVEXSEC-85 — Tesla T4 SM occupancy honest-absence
 
-Date: 2026-08-18  
-Base: `origin/main` at `7d2be46` (`v0.4.30`)  
+Date: 2026-08-18
+Base: `origin/main` at `7d2be46` (`v0.4.30`)
 Branch: `fix/phvx-85-t4-honest-absent`
 Pull request: https://github.com/PhorvexSecurity/operator/pull/52
 
@@ -55,4 +55,8 @@ No Kubernetes resource was changed during this validation.
 
 ## Remaining PHORVEXSEC-85 work
 
-Real SM occupancy still requires an Ampere-or-newer/DCP-capable environment (or another exporter configuration that genuinely exposes `PROF_SM_ACTIVE`). Until that infrastructure is available, T4 reports the signal as absent instead of fabricating a proxy.
+Real SM occupancy requires an exporter counter configuration that genuinely exposes
+`DCGM_FI_PROF_SM_ACTIVE`. The live T4 exporter currently uses a default counter list that omits
+that field; the two working `PROF_PCIE_*` counters show that T4 hardware alone is not the proven
+constraint. Until `SM_ACTIVE` is enabled and re-measured, T4 reports the signal as absent instead
+of fabricating a proxy.
