@@ -198,4 +198,119 @@ func TestEmittedButUnexecutedRotationDoesNotTrain(t *testing.T) {
 	}
 }
 
+func TestRotationLedgerRecordsAvailabilityBreachSeparately(t *testing.T) {
+	opt := &observingOptimizer{}
+	ledger := slo.NewLedger(0)
+	m := &Manager{Optimizer: opt, Log: logr.Discard(), Disruption: ledger}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+		ReadyReplicas: 1,
+	}}
+	m.trackRotationWithFloor("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, 1, startedAt)
+	m.observeReadyRotations(&ingest.Snapshot{
+		Now: startedAt.Add(30 * time.Second),
+		Pods: []model.Pod{{
+			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+			Ready: true, ReadyAt: startedAt.Add(20 * time.Second),
+		}},
+	})
+
+	got := ledger.ConsumedImpact("tenant-a", startedAt)
+	if got.ReplicaSeconds != 20 || got.AvailabilityBreachSeconds != 20 {
+		t.Fatalf("rotation ledger impact = %+v, want separate 20/20 values", got)
+	}
+	entries := ledger.Entries("tenant-a", startedAt)
+	if len(entries) != 1 || !entries[0].AvailabilityMeasured || entries[0].MinAvailableReplicas != 1 {
+		t.Fatalf("availability context not frozen/readable: %+v", entries)
+	}
+}
+
+func TestActionLedgerRetainsStructuralZeroAndSelectionContract(t *testing.T) {
+	ledger := slo.NewLedger(0)
+	m := &Manager{Log: logr.Discard(), Disruption: ledger}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "api", UID: "uid", ReadyReplicas: 2,
+	}}
+	m.recordActionOutcome("tenant-a", view, model.ActionIdentityRotate, 1, startedAt, startedAt.Add(time.Second), slo.OutcomeCompleted)
+
+	entries := ledger.Entries("tenant-a", startedAt)
+	if len(entries) != 1 {
+		t.Fatalf("zero-impact action ledger entries = %+v, want one", entries)
+	}
+	entry := entries[0]
+	if entry.Outcome != slo.OutcomeCompleted || entry.SelectionBoundStatus != slo.StatusZero || !entry.SelectionBoundFinite {
+		t.Fatalf("selection contract was not frozen: %+v", entry)
+	}
+	if value, measured := entry.MeasuredReplicaSeconds(); !measured || value != 0 {
+		t.Fatalf("identity-rotate impact = %v, %v; want measured zero", value, measured)
+	}
+}
+
+func TestActuateWritesCompletedStructuralZeroToLedger(t *testing.T) {
+	ledger := slo.NewLedger(0)
+	m := &Manager{Actuator: &fakeActuator{}, Log: logr.Discard(), Disruption: ledger}
+	e := &policyEntry{namespace: "ns"}
+	pol := model.Policy{
+		Tenant: "tenant-a", MinAvailableReplicas: 1,
+		EnabledActions: map[model.Action]bool{model.ActionIdentityRotate: true},
+	}
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "api", UID: "uid", ReadyReplicas: 2, DesiredReplicas: 2,
+	}}
+	decisions := []model.Decision{{
+		Selected: true, Feasible: true, Action: model.ActionIdentityRotate, Namespace: "ns", Pod: "api",
+	}}
+	if got := m.actuate(context.Background(), e, pol, decisions, map[string]*model.WorkloadView{"ns/api": view}); got != 1 {
+		t.Fatalf("actuated = %d, want one", got)
+	}
+	entries := ledger.Entries("tenant-a", time.Time{})
+	if len(entries) != 1 || entries[0].Outcome != slo.OutcomeCompleted || entries[0].SelectionBoundStatus != slo.StatusZero {
+		t.Fatalf("actuation ledger = %+v", entries)
+	}
+}
+
+func TestActionLedgerRetainsUnknownImpactWithoutNumericZero(t *testing.T) {
+	ledger := slo.NewLedger(0)
+	m := &Manager{Log: logr.Discard(), Disruption: ledger}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "api", UID: "uid", ReadyReplicas: 2,
+	}}
+	m.recordActionOutcome("tenant-a", view, model.ActionQuarantine, 1, startedAt, startedAt.Add(time.Second), slo.OutcomeEmitted)
+
+	entry := ledger.Entries("tenant-a", startedAt)[0]
+	if entry.SelectionBoundStatus != slo.StatusUnknown || entry.SelectionBoundFinite {
+		t.Fatalf("unknown selection contract became finite: %+v", entry)
+	}
+	if value, measured := entry.MeasuredReplicaSeconds(); measured || value != 0 {
+		t.Fatalf("unknown impact = %v, %v; want explicit unavailable", value, measured)
+	}
+}
+
+func TestRotationLedgerWorksWithoutRLSTrainingObserver(t *testing.T) {
+	ledger := slo.NewLedger(0)
+	m := &Manager{Log: logr.Discard(), Disruption: ledger}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+		ReadyReplicas: 2,
+	}}
+	if !m.trackRotationWithFloor("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, 1, startedAt) {
+		t.Fatal("ledger-only rotation was not tracked")
+	}
+	m.observeReadyRotations(&ingest.Snapshot{
+		Now: startedAt.Add(15 * time.Second),
+		Pods: []model.Pod{{
+			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+			Ready: true, ReadyAt: startedAt.Add(10 * time.Second),
+		}},
+	})
+	entries := ledger.Entries("tenant-a", startedAt)
+	if len(entries) != 1 || entries[0].Duration != 10*time.Second || entries[0].Outcome != slo.OutcomeCompleted {
+		t.Fatalf("ledger-only recovery = %+v", entries)
+	}
+}
+
 var _ actuator.Actuator = (*fakeActuator)(nil)

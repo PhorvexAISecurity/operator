@@ -150,3 +150,115 @@ func TestCauseDefaultsToPhorvex(t *testing.T) {
 		t.Fatalf("expected cause=%s, got %+v", CausePhorvex, e)
 	}
 }
+
+func TestReplicaDisruptionAndAvailabilityBreachAreSeparate(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	// One replica is unavailable for 30s, but the service stays at its floor.
+	l.Record(Entry{
+		ID: "headroom", Tenant: "t1", Action: model.ActionRotate,
+		Replicas: 1, Duration: 30 * time.Second, StartedAt: base, ObservedAt: base.Add(30 * time.Second),
+		ReadyReplicasBefore: 3, MinAvailableReplicas: 2, AvailabilityMeasured: true,
+	})
+	// The same disruption on a one-replica service breaches availability throughout.
+	l.Record(Entry{
+		ID: "breach", Tenant: "t1", Action: model.ActionRotate,
+		Replicas: 1, Duration: 20 * time.Second,
+		StartedAt: base.Add(time.Minute), ObservedAt: base.Add(80 * time.Second),
+		ReadyReplicasBefore: 1, MinAvailableReplicas: 1, AvailabilityMeasured: true,
+		AvailabilityBreachDuration:  20 * time.Second,
+		AvailabilityBreachStartedAt: base.Add(time.Minute), AvailabilityBreachObservedAt: base.Add(80 * time.Second),
+	})
+
+	got := l.ConsumedImpact("t1", base)
+	if got.ReplicaSeconds != 50 || got.AvailabilityBreachSeconds != 20 {
+		t.Fatalf("consumption mixed dimensions: %+v", got)
+	}
+	if got.AvailabilityMeasuredEntries != 2 || got.AvailabilityUnmeasuredEntries != 0 {
+		t.Fatalf("availability evidence counts = %+v", got)
+	}
+}
+
+func TestAvailabilityWindowCountsOnlyOverlappingBreach(t *testing.T) {
+	boundary := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	l.Record(Entry{
+		Tenant: "t1", Action: model.ActionRotate,
+		Replicas: 1, Duration: 20 * time.Second,
+		StartedAt: boundary.Add(-10 * time.Second), ObservedAt: boundary.Add(10 * time.Second),
+		AvailabilityMeasured: true, AvailabilityBreachDuration: 20 * time.Second,
+		AvailabilityBreachStartedAt:  boundary.Add(-10 * time.Second),
+		AvailabilityBreachObservedAt: boundary.Add(10 * time.Second),
+	})
+	got := l.ConsumedImpact("t1", boundary)
+	if got.ReplicaSeconds != 10 || got.AvailabilityBreachSeconds != 10 {
+		t.Fatalf("window overlap = %+v, want 10 replica-seconds and 10 breach-seconds", got)
+	}
+}
+
+func TestMissingAvailabilityEvidenceIsNotReportedAsMeasuredZero(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	l.Record(Entry{
+		Tenant: "t1", Action: model.ActionRotate, Replicas: 1,
+		Duration: 10 * time.Second, StartedAt: base, ObservedAt: base.Add(10 * time.Second),
+	})
+	got := l.ConsumedImpact("t1", base)
+	if got.AvailabilityMeasuredEntries != 0 || got.AvailabilityUnmeasuredEntries != 1 {
+		t.Fatalf("missing availability evidence was laundered to zero: %+v", got)
+	}
+	entry := l.Entries("t1", base)[0]
+	if value, measured := entry.AvailabilityBreachSeconds(); measured || value != 0 {
+		t.Fatalf("entry availability = %v, %v; want explicit unavailable", value, measured)
+	}
+}
+
+func TestCompletedStructuralZeroIsRetainedAsMeasuredZero(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	l.Record(Entry{
+		ID: "identity-zero", Tenant: "t1", Namespace: "ns", Pod: "api", Action: model.ActionIdentityRotate,
+		Outcome: OutcomeCompleted, ReplicaImpact: ImpactMeasured,
+		StartedAt: base, ObservedAt: base.Add(time.Second), Duration: time.Second,
+		AvailabilityMeasured: true,
+		SelectionBoundStatus: StatusZero, SelectionBoundFinite: true,
+		SelectionBoundReplicaSeconds: 0, SelectionBoundEvidence: "structural zero",
+	})
+	entries := l.Entries("t1", base)
+	if len(entries) != 1 {
+		t.Fatalf("completed zero-impact action was dropped: %+v", entries)
+	}
+	if value, measured := entries[0].MeasuredReplicaSeconds(); !measured || value != 0 {
+		t.Fatalf("zero impact = %v, %v; want measured zero", value, measured)
+	}
+	got := l.ConsumedImpact("t1", base)
+	if got.ReplicaMeasuredEntries != 1 || got.ReplicaUnmeasuredEntries != 0 || got.ReplicaSeconds != 0 {
+		t.Fatalf("zero-impact consumption provenance = %+v", got)
+	}
+}
+
+func TestUnknownImpactAndUnknownBoundAreNeverLaunderedToZero(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	l.Record(Entry{
+		ID: "unknown", Tenant: "t1", Namespace: "ns", Pod: "api", Action: model.ActionQuarantine,
+		Outcome: OutcomeEmitted, ReplicaImpact: ImpactUnmeasured,
+		StartedAt: base, ObservedAt: base.Add(time.Second), Duration: time.Second,
+		SelectionBoundStatus: StatusUnknown, SelectionBoundFinite: false,
+		SelectionBoundEvidence: "no bounded rollback deadline",
+	})
+	entries := l.Entries("t1", base)
+	if len(entries) != 1 {
+		t.Fatalf("unknown-impact action was dropped: %+v", entries)
+	}
+	if value, measured := entries[0].MeasuredReplicaSeconds(); measured || value != 0 {
+		t.Fatalf("unknown impact = %v, %v; want unavailable, not numeric zero", value, measured)
+	}
+	if entries[0].SelectionBoundFinite || entries[0].SelectionBoundStatus != StatusUnknown {
+		t.Fatalf("unknown selection bound was changed: %+v", entries[0])
+	}
+	got := l.ConsumedImpact("t1", base)
+	if got.ReplicaMeasuredEntries != 0 || got.ReplicaUnmeasuredEntries != 1 {
+		t.Fatalf("unknown impact missing from evidence counts: %+v", got)
+	}
+}

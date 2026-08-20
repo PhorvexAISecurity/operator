@@ -32,7 +32,29 @@ const (
 	CauseService Cause = "service"
 )
 
-// Entry is one observed disruption, in the unit the disruption budget uses.
+// Outcome is the action state known at the time an entry is written. It does not
+// turn an emitted asynchronous operation into a completed one.
+type Outcome string
+
+const (
+	OutcomeCompleted       Outcome = "completed"
+	OutcomeFailed          Outcome = "failed"
+	OutcomeDeadlineExpired Outcome = "deadline_expired"
+	OutcomeRolledBack      Outcome = "rolled_back"
+	OutcomeNotEmitted      Outcome = "not_emitted"
+	OutcomeEmitted         Outcome = "emitted_outcome_unobserved"
+	OutcomeRightCensored   Outcome = "right_censored"
+)
+
+// ImpactMeasurement distinguishes an observed zero from missing impact data.
+type ImpactMeasurement string
+
+const (
+	ImpactMeasured   ImpactMeasurement = "measured"
+	ImpactUnmeasured ImpactMeasurement = "unmeasured"
+)
+
+// Entry is one action observation and its disruption evidence.
 type Entry struct {
 	// ID identifies one disruption observation across updates. Censored entries are
 	// periodically replaced under the same ID until recovery is finally observed.
@@ -42,6 +64,7 @@ type Entry struct {
 	Pod       string
 	Action    model.Action
 	Cause     Cause
+	Outcome   Outcome
 
 	// Replicas is how many Ready serving replicas the action removed.
 	Replicas int
@@ -61,11 +84,66 @@ type Entry struct {
 	// dropping them would understate consumption precisely when recovery went
 	// worst, which is the direction that matters.
 	Censored bool
+
+	// ReplicaImpact records whether Replicas/Duration are an observation. Older
+	// positive-disruption entries predate this field and remain measured for
+	// backward compatibility; new zero-impact events set it explicitly.
+	ReplicaImpact ImpactMeasurement
+
+	// The deterministic contract is frozen at selection time. A historical
+	// observation can therefore never be mistaken for the bound used to admit the
+	// action, and an unknown bound cannot be serialized as a numeric zero.
+	SelectionBoundStatus         BoundStatus
+	SelectionBoundFinite         bool
+	SelectionBoundReplicaSeconds float64
+	SelectionBoundEvidence       string
+
+	// Availability is measured separately from disruption. A replica can be
+	// unavailable without breaching the service floor when siblings provide
+	// headroom, so Duration must never be copied into this field unconditionally.
+	ReadyReplicasBefore          int
+	MinAvailableReplicas         int
+	AvailabilityMeasured         bool
+	AvailabilityBreachDuration   time.Duration
+	AvailabilityBreachStartedAt  time.Time
+	AvailabilityBreachObservedAt time.Time
 }
 
 // ReplicaSeconds is the entry's consumption.
 func (e Entry) ReplicaSeconds() float64 {
 	return float64(e.Replicas) * e.Duration.Seconds()
+}
+
+// MeasuredReplicaSeconds returns a numeric value only when impact was observed.
+func (e Entry) MeasuredReplicaSeconds() (float64, bool) {
+	if !e.replicaImpactMeasured() {
+		return 0, false
+	}
+	return e.ReplicaSeconds(), true
+}
+
+func (e Entry) replicaImpactMeasured() bool {
+	return e.ReplicaImpact == ImpactMeasured || (e.ReplicaImpact == "" && e.Replicas > 0 && e.Duration > 0)
+}
+
+// AvailabilityBreachSeconds returns the separately observed time below
+// minAvailableReplicas. The boolean distinguishes a measured zero from absence.
+func (e Entry) AvailabilityBreachSeconds() (float64, bool) {
+	if !e.AvailabilityMeasured {
+		return 0, false
+	}
+	return e.AvailabilityBreachDuration.Seconds(), true
+}
+
+// Consumption keeps the two budget dimensions separate and makes unavailable
+// availability observations visible instead of silently counting them as zero.
+type Consumption struct {
+	ReplicaSeconds                float64
+	ReplicaMeasuredEntries        int
+	ReplicaUnmeasuredEntries      int
+	AvailabilityBreachSeconds     float64
+	AvailabilityMeasuredEntries   int
+	AvailabilityUnmeasuredEntries int
 }
 
 // Ledger accumulates Phorvex-caused disruption per tenant.
@@ -90,11 +168,14 @@ func NewLedger(retain time.Duration) *Ledger {
 	return &Ledger{byOwner: map[string][]Entry{}, Retain: retain}
 }
 
-// Record appends an observed disruption. Entries with no measured duration or no
-// removed replica are dropped: they consume nothing, and keeping them would only
-// pad the ledger.
+// Record appends an action observation. Legacy empty zero-impact records are
+// still dropped; an explicit outcome or impact-measurement status retains the
+// event so completed zero-impact and unknown-impact actions remain distinguishable.
 func (l *Ledger) Record(e Entry) {
-	if e.Replicas <= 0 || e.Duration <= 0 {
+	if e.Replicas < 0 || e.Duration < 0 {
+		return
+	}
+	if (e.Replicas == 0 || e.Duration == 0) && e.Outcome == "" && e.ReplicaImpact == "" {
 		return
 	}
 	if e.Cause == "" {
@@ -105,6 +186,14 @@ func (l *Ledger) Record(e Entry) {
 	}
 	if e.ObservedAt.IsZero() && !e.StartedAt.IsZero() {
 		e.ObservedAt = e.StartedAt.Add(e.Duration)
+	}
+	if e.AvailabilityMeasured && e.AvailabilityBreachDuration > 0 {
+		if e.AvailabilityBreachObservedAt.IsZero() {
+			e.AvailabilityBreachObservedAt = e.ObservedAt
+		}
+		if e.AvailabilityBreachStartedAt.IsZero() {
+			e.AvailabilityBreachStartedAt = e.AvailabilityBreachObservedAt.Add(-e.AvailabilityBreachDuration)
+		}
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -154,6 +243,47 @@ func overlapReplicaSeconds(e Entry, since time.Time) float64 {
 	return float64(e.Replicas) * d.Seconds()
 }
 
+func overlapsWindow(e Entry, since time.Time) bool {
+	start, end := e.StartedAt, e.ObservedAt
+	if start.IsZero() && !end.IsZero() {
+		start = end.Add(-e.Duration)
+	}
+	if end.IsZero() && !start.IsZero() {
+		end = start.Add(e.Duration)
+	}
+	if start.IsZero() && end.IsZero() {
+		return false
+	}
+	return end.After(since) || end.Equal(since)
+}
+
+func overlapAvailabilitySeconds(e Entry, since time.Time) float64 {
+	if !e.AvailabilityMeasured || e.AvailabilityBreachDuration <= 0 {
+		return 0
+	}
+	start, end := e.AvailabilityBreachStartedAt, e.AvailabilityBreachObservedAt
+	if start.IsZero() && !end.IsZero() {
+		start = end.Add(-e.AvailabilityBreachDuration)
+	}
+	if end.IsZero() && !start.IsZero() {
+		end = start.Add(e.AvailabilityBreachDuration)
+	}
+	if !end.After(since) {
+		return 0
+	}
+	if start.Before(since) {
+		start = since
+	}
+	d := end.Sub(start)
+	if d <= 0 {
+		return 0
+	}
+	if d > e.AvailabilityBreachDuration {
+		d = e.AvailabilityBreachDuration
+	}
+	return d.Seconds()
+}
+
 // Consumed totals the unavailable replica-seconds Phorvex caused for a tenant at
 // or after `since`.
 //
@@ -162,13 +292,33 @@ func overlapReplicaSeconds(e Entry, since time.Time) float64 {
 // ratio and never belongs in this total; adding it here would charge a move
 // against a budget it has not spent yet.
 func (l *Ledger) Consumed(tenant string, since time.Time) float64 {
+	return l.ConsumedImpact(tenant, since).ReplicaSeconds
+}
+
+// ConsumedImpact returns both observed dimensions and an explicit count of
+// entries for which availability could not be measured.
+func (l *Ledger) ConsumedImpact(tenant string, since time.Time) Consumption {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	var total float64
+	var out Consumption
 	for _, e := range l.byOwner[tenant] {
-		total += overlapReplicaSeconds(e, since)
+		if !overlapsWindow(e, since) {
+			continue
+		}
+		if e.replicaImpactMeasured() {
+			out.ReplicaMeasuredEntries++
+			out.ReplicaSeconds += overlapReplicaSeconds(e, since)
+		} else {
+			out.ReplicaUnmeasuredEntries++
+		}
+		if e.AvailabilityMeasured {
+			out.AvailabilityMeasuredEntries++
+			out.AvailabilityBreachSeconds += overlapAvailabilitySeconds(e, since)
+		} else {
+			out.AvailabilityUnmeasuredEntries++
+		}
 	}
-	return total
+	return out
 }
 
 // ConsumedByAction breaks the same total down per action, so it is visible which
