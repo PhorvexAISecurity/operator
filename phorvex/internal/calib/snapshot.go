@@ -7,6 +7,8 @@ package calib
 import (
 	"sort"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -14,6 +16,10 @@ import (
 // snapshot.go is the ONLY file in this package that knows about cluster types. Everything else
 // works on plain observations, so the calibration arithmetic can be tested and reviewed without
 // a cluster, and so this package has exactly one seam to audit for coupling.
+
+func isRunningCalibrationPod(p *model.Pod) bool {
+	return p != nil && p.Phase == string(corev1.PodRunning)
+}
 
 // NodesFromSnapshot projects a cluster snapshot into co-residency observations.
 //
@@ -29,7 +35,7 @@ func NodesFromSnapshot(snap *ingest.Snapshot) []NodeObservation {
 	pods := map[string]int{}
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
-		if p.Node == "" {
+		if !isRunningCalibrationPod(p) || p.Node == "" {
 			continue // unscheduled: belongs to no node's tenancy yet
 		}
 		if tenants[p.Node] == nil {
@@ -69,7 +75,7 @@ func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsW
 	tenants := map[string]map[string]struct{}{}
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
-		if p.Node == "" {
+		if !isRunningCalibrationPod(p) || p.Node == "" {
 			continue
 		}
 		if tenants[p.Node] == nil {
@@ -81,6 +87,9 @@ func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsW
 	out := make([]AssetObservation, 0, len(snap.Pods))
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
+		if !isRunningCalibrationPod(p) {
+			continue
+		}
 		key := p.Namespace + "/" + p.Name
 		w, ok := witness[key]
 		if !ok || !w.Scanned {

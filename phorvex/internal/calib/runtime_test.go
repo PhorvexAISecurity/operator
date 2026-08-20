@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
@@ -18,9 +19,9 @@ func runtimeSnapshot(at time.Time) (*ingest.Snapshot, map[string]model.PhysicsWi
 		Now:   at,
 		Nodes: []ingest.NodeInfo{{Name: "n1", Schedulable: true}, {Name: "n2", Schedulable: true}},
 		Pods: []model.Pod{
-			{Namespace: "a", Name: "p1", Node: "n1"},
-			{Namespace: "b", Name: "p2", Node: "n1", HasGPU: true},
-			{Namespace: "c", Name: "p3", Node: "n2"},
+			{Namespace: "a", Name: "p1", Node: "n1", Phase: string(corev1.PodRunning)},
+			{Namespace: "b", Name: "p2", Node: "n1", Phase: string(corev1.PodRunning), HasGPU: true},
+			{Namespace: "c", Name: "p3", Node: "n2", Phase: string(corev1.PodRunning)},
 		},
 	}
 	witness := map[string]model.PhysicsWitness{

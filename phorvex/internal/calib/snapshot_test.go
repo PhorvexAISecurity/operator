@@ -7,12 +7,14 @@ package calib
 import (
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
 func pod(ns, name, node string) model.Pod {
-	return model.Pod{Namespace: ns, Name: name, Node: node}
+	return model.Pod{Namespace: ns, Name: name, Node: node, Phase: string(corev1.PodRunning)}
 }
 
 // Namespaces are counted DISTINCT per node: ten pods of one tenant are not co-residency, they
@@ -87,5 +89,33 @@ func TestProjectionIsSortedByName(t *testing.T) {
 func TestNilSnapshotIsEmptyNotPanic(t *testing.T) {
 	if got := NodesFromSnapshot(nil); len(got) != 0 {
 		t.Fatalf("nil snapshot produced %d observations", len(got))
+	}
+}
+
+func TestTerminalPodsAreExcludedFromCalibrationProjection(t *testing.T) {
+	runningA := pod("a", "running-a", "n1")
+	runningB := pod("b", "running-b", "n1")
+	succeeded := pod("terminal-success", "old-job", "n1")
+	succeeded.Phase = string(corev1.PodSucceeded)
+	failed := pod("terminal-failure", "old-failure", "n1")
+	failed.Phase = string(corev1.PodFailed)
+	snap := &ingest.Snapshot{
+		Nodes: []ingest.NodeInfo{{Name: "n1", Schedulable: true}},
+		Pods:  []model.Pod{runningA, runningB, succeeded, failed},
+	}
+	witness := map[string]model.PhysicsWitness{}
+	for _, p := range snap.Pods {
+		witness[p.Namespace+"/"+p.Name] = model.PhysicsWitness{
+			Scanned: true, ImageRarity: 1.5, EPSS: 1.2, ModelRarity: 1,
+		}
+	}
+
+	nodes := NodesFromSnapshot(snap)
+	if len(nodes) != 1 || nodes[0].Pods != 2 || nodes[0].Namespaces != 2 {
+		t.Fatalf("terminal pods contaminated node projection: %+v", nodes)
+	}
+	assets := AssetsFromSnapshot(snap, witness)
+	if len(assets) != 2 || assets[0].Key != "a/running-a" || assets[1].Key != "b/running-b" {
+		t.Fatalf("terminal pods contaminated asset projection: %+v", assets)
 	}
 }
