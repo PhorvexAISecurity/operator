@@ -5,6 +5,27 @@ import (
 	"testing"
 )
 
+func TestDualPolicySeedIsAppliedDefensively(t *testing.T) {
+	tests := []struct {
+		name string
+		seed float64
+		want float64
+	}{
+		{name: "zero is valid", seed: 0, want: 0},
+		{name: "configured", seed: 0.9, want: 0.9},
+		{name: "negative falls back", seed: -1, want: DefaultLambdaSeed},
+		{name: "nan falls back", seed: math.NaN(), want: DefaultLambdaSeed},
+		{name: "above solver range clamps", seed: 12, want: 10},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NewDualSolverWithSeed(tc.seed).Lambda(); got != tc.want {
+				t.Fatalf("lambda seed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestDualResistsDecoyStarvation — P-REDTEAM λ-fix: a manufactured-demand (decoy) flood can no longer
 // rocket λ to the clamp. With the OLD subgradient g=(demand-budget), 6 decoys drove λ 0.6→3.6 in 12
 // ticks (and on to the clamp), starving the proactive gate. With the fix the rise is capped to

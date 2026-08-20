@@ -4,6 +4,8 @@
 
 package cost
 
+import "math"
+
 // dual.go solves lambda as the BUDGET SHADOW-PRICE (not a hand-set constant) via
 // projected-subgradient dual descent on the move-budget constraint (METHOD-DECISION
 // cost winner, RC-DD): lambda rises when the optimizer is over-spending the budget and
@@ -20,10 +22,26 @@ type DualSolver struct {
 	max    float64
 }
 
+// DefaultLambdaSeed preserves the shipped objective price when policy.lambda is omitted.
+const DefaultLambdaSeed = 0.6
+
 // NewDualSolver returns a solver seeded at the P0 default lambda (0.6) — so untuned
 // behavior matches P0 — that then adapts to the realized budget pressure.
 func NewDualSolver() *DualSolver {
-	return &DualSolver{lambda: 0.6, step: 0.05, min: 0, max: 10}
+	return NewDualSolverWithSeed(DefaultLambdaSeed)
+}
+
+// NewDualSolverWithSeed starts the adaptive price from the tenant policy's lambda.
+// The seed is read once when the tenant bucket is created; subsequent policy reconciles
+// do not erase the dual state learned from realized budget pressure.
+func NewDualSolverWithSeed(seed float64) *DualSolver {
+	if math.IsNaN(seed) || math.IsInf(seed, 0) || seed < 0 {
+		seed = DefaultLambdaSeed
+	}
+	if seed > 10 {
+		seed = 10
+	}
+	return &DualSolver{lambda: seed, step: 0.05, min: 0, max: 10}
 }
 
 // Lambda returns the current shadow-price.

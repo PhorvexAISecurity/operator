@@ -213,7 +213,7 @@ type OptimizerProbeArm struct {
 	ExactObjective  float64 `json:"exactObjective"`
 	GreedyRatio     float64 `json:"greedyRatio"`
 	SwapRatio       float64 `json:"swapRatio"`
-	// ExactSkipped is TRUE when the fixture exceeded exactBruteForceAssetCap, so no exact solve ran
+	// ExactSkipped is TRUE when the fixture exceeded exactWorkBudget, so no exact solve ran
 	// and BOTH ratios are unmeasured. It must be checked before either ratio is read or displayed:
 	// an unmeasured arm is not a passing arm. (PHVX-23 / PHORVEXSEC-114)
 	ExactSkipped   bool     `json:"exactSkipped"`

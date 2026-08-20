@@ -38,7 +38,13 @@ type P1Components struct {
 
 // NewP1Cost constructs the P1 cost model seeded at the P0-equivalent prior.
 func NewP1Cost() *P1Cost {
-	return &P1Cost{RLS: NewRLS(), Conformal: NewConformalBound(), Dual: NewDualSolver()}
+	return NewP1CostWithLambda(DefaultLambdaSeed)
+}
+
+// NewP1CostWithLambda constructs an isolated tenant cost bucket whose adaptive
+// dual price starts from the tenant policy's lambda value.
+func NewP1CostWithLambda(lambdaSeed float64) *P1Cost {
+	return &P1Cost{RLS: NewRLS(), Conformal: NewConformalBound(), Dual: NewDualSolverWithSeed(lambdaSeed)}
 }
 
 // normCost is the structural C_norm = fraction of live exposure variables a move
