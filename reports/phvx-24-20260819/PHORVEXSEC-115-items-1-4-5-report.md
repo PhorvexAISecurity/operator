@@ -145,9 +145,25 @@ Completed directly on PR #57 after the λ fix:
 - `go test ./internal/cost ./internal/decision`
 - `git diff --check`
 
-The report and line references were also reviewed against the combined PR #52–#59 integration.
-Full combined build/vet/test/race, dashboard, Helm, CRD synchronization, and workflow-scope checks
-are the final release gate before this report is attached to Plane.
+The report and line references were also reviewed against a combined PR #52–#59 integration based
+on `origin/main` at `880d2e4`. That integration passed:
+
+- `go build ./...`, `go vet ./...`, `go test ./...`, and `go test -race ./...`;
+- the targeted runner/calibration, SLO-ledger, cost, and decision tests;
+- the dashboard production build, run sequentially after dependency installation;
+- Helm 3.17.3 lint and template checks for the source chart and parent stack, including
+  `deploy/helm/phorvex-stack/values-eks.yaml`;
+- byte-for-byte generated/source-chart CRD synchronization;
+- vendored-chart comparison (the only `Chart.yaml` differences are Helm's normalized field order,
+  folded description, and unquoted `appVersion`; all other packaged source files match); and
+- `git diff --check` plus confirmation that PRs #52–#59 do not modify `.github/workflows/`.
+
+The standalone dashboard `npm run lint` command is not automation-ready because this checkout has
+no ESLint configuration and Next.js opens its interactive setup prompt. The successful production
+build still completed its configured compile/type checks. `npm audit` also reports three existing
+dependency findings (two high and one critical, principally against Next 14.2.15); npm's offered
+fix is a scope-expanding major upgrade to Next 16.3.1, so that dependency migration is not claimed
+as part of PHVX-24.
 
 ## Conclusion
 
