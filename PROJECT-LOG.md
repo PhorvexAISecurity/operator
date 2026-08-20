@@ -815,8 +815,9 @@ call, **no write/secrets/exec/impersonate**, **disjoint from the actuator write 
 node-label projection:** detection keyed on real `eks.amazonaws.com/*` labels (not registration-order luck),
 GPU `Derive()` override absent ⇒ `GPUPresent=false`. **M3 — `--prometheus-url` wired into `runScan`** (was
 nil/**telemetry-blind**), feeding cost/continuity/feasibility/context; `nilSource` stays default. **M4 — the
-designed `DCGMWitnessQueries()`** (FB_USED/FB_FREE, **PROF_SM_ACTIVE preferred + GPU_UTIL fallback,
-source-labeled**, NVLINK) — query strings only, `[SP-0-PENDING-P4]`. **M5 — plug-and-play:** `ClusterTargets()`
+live `DCGMWitnessQueries()`** (FB_USED/FB_FREE, **PROF_SM_ACTIVE only for SM occupancy**, T4 PCIe
+RX+TX). Missing PROF_SM_ACTIVE stays honest-absent; GPU_UTIL remains separate duty-cycle telemetry and is
+never substituted. **M5 — plug-and-play:** `ClusterTargets()`
 **DERIVES** targets from the live kubeconfig contexts (the do-not-hardcode tripwire), `phorvex --context`
 honors a derived context, `/api/scan` threads `context` + SSRF-validated `prometheus-url`. **Honesty:** the
 inert surfaces `SeedEPSS` (0 callers ⇒ EPSS≡1.0) + `ObserveRotation` (0 callers ⇒ C_flow stays a prior) are
