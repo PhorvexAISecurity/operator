@@ -1,145 +1,157 @@
-# PHORVEXSEC-115 (PHVX-24) — items 1, 4 and 5 — report
+# PHORVEXSEC-115 (PHVX-24) — items 1, 4 and 5 report
 
-Date: 2026-08-19 · Branches `docs/phvx-24-constants-registry` (PR #57, commit `05a5a8e`) and
-`feat/phvx-24-rarity-population` (PR #56)
+Updated: 2026-08-20
 
-Items 2 and 6 belong to the ticket's math owner. Item 3 is PHORVEXSEC-104 and is reported in
-`reports/phvx-14b-20260819/`. A measurement brief for item 2 is attached to the ticket itself.
+Primary branches:
 
-## Headline
+- PR #57 — `docs/phvx-24-constants-registry`
+- PR #56 — `feat/phvx-24-rarity-population`
 
-Items 1, 4 and 5 are complete. **Item 5 was already done before this work started** — λ,
-`MaxMovesPerTick`, `TickInterval` and `ProactiveFloor` are all `PhorvexPolicy` fields — so the
-registry records them as defaults rather than constants.
+Related work verified in the combined review: PR #55 (`exactWorkBudget`), PR #58 (shadow scale
+calibration and kill-chain policy overrides), and PR #59 (PHORVEXSEC-104 EPSS feed).
 
-The registry turned up **two things the ticket's own table does not have**, and checking item 4
-against the cluster turned up **two stale premises**.
+## Correct status
 
-## 1. Item 1 — the constants registry
+| Item | Status | Evidence / blocker |
+|---|---|---|
+| 1 — constants registry | **Complete for the PHVX-24 scope** | `phorvex/CONSTANTS-REGISTRY.md`, rechecked against the combined PR #52–#59 tree |
+| 2 — re-fit clamp/caps | **Open, math-owned** | PR #58 is shadow-only; committed calibration evidence is reconstructed, not live |
+| 3 — EPSS coverage | **Separate task in review** | PHORVEXSEC-104 / PR #59 |
+| 4 — ModelRarity | **Partially complete** | Formula tests and source comment are complete in PR #56; requested deployment annotation remains unresolved because its target was retired |
+| 5 — operational dials | **Complete after a P1 wiring fix in PR #57** | B, Δ, ProactiveFloor, and weights were already consumed; λ existed in policy but P1 ignored it until this review |
+| 6 — offline sweep | **Open, math-owned** | Must retain the task's prerequisite ordering |
 
-`phorvex/CONSTANTS-REGISTRY.md`. One row per shipped constant: value, `file:line`, meaning, whether
-it is a tuning dial, and **whether it has ever been validated against anything**.
+PHORVEXSEC-115 as a whole must therefore remain **In Progress**. The earlier report's statement that
+items 1, 4, and 5 were all complete was wrong.
 
-The last column is the point. The answer is stark: **only two rows are backed by a recorded
-measurement** — `MeasuredT4GPUEnvelopeMax` (worst observed T4 replacement) and `rarity()` (verified
-formula, now pinned by test). Every row in the *Scales* table — the ones the ticket's own
-portability rule says are dangerous — is unvalidated. Constants are grouped by that rule (portable
-iff dimensionless) rather than by package, so the rows that break on another cluster sit together.
+## 1. Item 1 — corrected constants registry
 
-### The cost ceiling is ten constants, not one
+The registry records value, current combined-tree location, meaning, whether the value is fixed or
+configurable, and a typed evidence status. It no longer treats assertion-backed formulas,
+task-reported aggregates, reconstructed fixtures, and raw live measurements as interchangeable.
 
-The ticket records it as *"the `0.2` has no name, no comment, no derivation"*. The flow-disruption
-path (`internal/cost/switching.go:71-99`) holds **ten** unnamed, underived numbers — five phase
-priors, two GPU tax terms, a load coefficient and two blend weights. They set the entire rotate-cost
-prior, so they decide *which* pod gets rotated as much as any weight in the objective does.
+### Evidence boundary
 
-One of them is a **scale**: the `200.0` request-rate normalizer at `:97` carries units, which is
-exactly what the ticket's portability rule flags. A service normally serving 2000 req/s saturates
-that term permanently; a 5 req/s service never moves it. It is not listed in the ticket and not
-covered by PHVX-74.
+The task's 2026-08-19 note reports these cluster aggregates:
 
-### That block saturates too
+- 71 pods and five nodes;
+- namespaces/node `[2,4,5,8,9]`;
+- 56/71 pods at the co-residency ceiling;
+- uncapped products `2.03–8.00`, with 19/71 pods at the dispersion cap.
 
-It reads as a convex combination and is not one. `sat()` bounds the GPU term at 0.9, so the
-pre-clamp total peaks at `0.55·1.0 + 0.35·0.9 + 0.2 = 1.065` and `clamp01c` absorbs the overflow.
-**Worst-case rotate cost is flat at 1.0 across a band of genuinely different situations** — the same
-saturation complaint PHVX-24 makes about the UCW clamp, in a second place nobody has measured.
+Those are useful **reported aggregates**, but the raw live snapshot is not committed in this
+repository. PR #58's committed evidence manifest correctly labels its inputs
+`reconstructed_fixture_not_live`. This report does not promote either source into a raw live claim.
 
-**Open question for the math owner:** does this belong inside item 2's re-fit, or should it be filed
-as separate measured work? It is a clamp discarding spread, so the same class of problem; but it is
-on the cost side, not the physics side, and item 2 was scoped to the UCW clamp.
+### Scale-sensitive constants outside PHVX-74
 
-### Line numbers were re-verified, not copied
+The current P1 path normalizes request rate by `200 req/s` and connection count by `100` in
+`internal/cost/action_flow.go`; the RLS feature path repeats the request normalizer, and the legacy
+P0 switching model repeats both. These are unit-carrying service scales with no cited derivation.
+They are not covered by PHVX-74.
 
-| ticket says | actual |
-|---|---|
-| `CoResidencyCap` at `ucw.go:35` | `platform.go:46` — different **file** |
-| `MaxDispersionMult` at `ucw.go:35` | `ucw.go:53` |
-| `provFloor` at `coverage.go:179` | `coverage.go:160` |
-| `rarity()` at `platform.go:169-176` | `platform.go:170-176` |
-| `exactBruteForceAssetCap = 18` at `optimality.go:30` | **does not exist** — removed by PHVX-23 |
+The action-set generator also has its own fixed `+0.2` cost-ceiling margin. This is separate from
+the old `flowCost` blend. The previous report incorrectly described the ten constants in
+`internal/cost/switching.go` as if they were the current P1 rotate path; they belong to the legacy
+P0 switching model. P1 uses the action-specific priors in `internal/cost/action_flow.go`.
 
-Worth noting alongside item 5: the default `MaxMovesPerTick = 3` against the live `1` on every
-tenant policy. A policy that omits the field lands in a materially more expensive regime for the
-exact-optimality arm.
+### What PR #58 changed — and did not change
 
-## 2. Item 4 — rarity is population-relative
+PR #58 wires startup/5-minute sampling/30-minute refresh/7-day lookback shadow calibration,
+censoring-aware ready-delay records, raw exports, metrics, and read-only production-vs-shadow
+comparisons. Production scoring still uses the shipped co-residency, dispersion, and ready-delay
+constants.
 
-Settled as *keep the formula, it is correct*. The risk that leaves behind is that **the correct
-answer looks like a bug**: a fleet's sole model scores 1.0, and the obvious "fix" is 2.0. That would
-assert scarcity at frequency 1.0 and inflate every GPU pod on single-model fleets — the most common
-deployment shape.
+PR #58 also wires `spec.brain.killChain.shape` and per-stage
+`sojournScaleSeconds` into the hazard consumer. The registry's old statement that those values were
+only “overridable in principle” is stale. The override path is tested; the default magnitudes are
+still unmeasured.
 
-`TestRarityIsPopulationRelative` pins the five cases from the ticket, each with its reasoning in the
-failure message. Two further tests carry the argument the settlement rests on: that ImageRarity and
-ModelRarity are the *same function* differing only in population (so a model does score 2.0 when its
-population makes it rare, and a live 1.0 is a statement about the fleet, not the formula), and that
-occupancy and rarity move in opposite directions — an inverted sign would reverse every dispersion
-ranking while still returning plausible values inside [1,2].
+## 2. Item 4 — formula complete, deployment subtask open
 
-The comment at `platform.go:138` claimed ModelRarity is 1.0 "when no model servers in the fleet". It
-is also 1.0 when every model-serving pod runs the same model — both the more common case and the one
-mistaken for a bug. Corrected.
+PR #56 keeps `rarity()` unchanged and adds:
 
-### Two stale premises found against the cluster
+- `TestRarityIsPopulationRelative` for all five ticket cases;
+- a test proving ImageRarity and ModelRarity use the same function with different populations;
+- a monotonicity test guarding the occupancy/rarity direction;
+- the corrected ModelRarity source comment.
 
-**`ModelRarity` is no longer ≡ 1.0.** The ticket records it as 1.0 everywhere because both
-model-serving pods ran the same model. Measured 2026-08-19 they run **two distinct models**
-(`Qwen2.5-7B-Instruct-AWQ`, `qwen2.5:0.5b`), so each is 1-of-2 and scores **2.0**. The term lifted on
-its own once the population diversified, which is item 4's claim behaving exactly as stated. No code
-consequence; the ticket's explanatory text is what is stale.
+This establishes the intended formula semantics. It is not described as a live measurement.
 
-This does change item 2's inputs. The ticket warns that *"at `MaxDispersionMult = 8`, vllm sits at
-5.07 unclamped"*. With ModelRarity at 2.0 the figures are:
+The task's later cluster note reports two distinct model IDs on two model-serving pods, which would
+make each 1-of-2 and therefore score `2.0`. The raw live snapshot is unavailable here, so this is
+kept as a reported aggregate rather than independent verification.
 
-| pod | ImageRarity | CoResidency | ModelRarity | uncapped |
-|---|---|---|---|---|
-| `vllm/vllm` | 1.7423 | 2.00 | 2.00 | **6.97** |
-| `vllm/vllm-standin` | 2.0000 | 2.00 | 2.00 | **8.00** |
+### Why the annotation was not invented
 
-`vllm-standin` sits at **exactly 8.00**, not 5.07 — the un-clamping trap is closer than written.
+The task asks for:
 
-**Item 4's third sub-task is not actionable as written.** It asks for
-`phorvex.ai/model-id: sentence-transformers/all-MiniLM-L6-v2` on the `mock-rag-chatbot` Deployment.
-That workload **no longer exists** — retired with `litellm` and `phorvex-live-demo` when ArgoCD took
-that capacity (`deploy/argocd/README.md`), with `voice-bot` replacing it as the rotate target.
+`phorvex.ai/model-id: sentence-transformers/all-MiniLM-L6-v2`
 
-The annotation was **not** retargeted. The nearest candidates are `document-store/chroma` (no
-`device: cuda`; embeds via ONNX) and `voice/voice-bot`, which *calls* `gpt-4o-mini` remotely through
-LiteLLM rather than serving it. Annotating either would inject a model identity the pod does not
-have and corrupt the very population `rarity()` measures — the opposite of the sub-task's stated
-purpose ("an honest input"). Flagged for a decision rather than invented.
+on the `mock-rag-chatbot` Deployment. That Deployment no longer exists; it was retired together
+with `litellm` and `phorvex-live-demo` when ArgoCD took that capacity.
 
-## 3. Item 5 — already complete
+The nearby workloads are not honest substitutes:
 
-| dial | default | declared at | policy field |
-|---|---|---|---|
-| λ | 0.6 | `api/v1alpha1/defaults.go:16` | `spec.objective.lambda` |
-| `MaxMovesPerTick` | 3 | `:20` | `spec.budget.maxMovesPerTick` |
-| `TickInterval` | 20s | `:22` | `spec.budget.tickInterval` |
-| `ProactiveFloor` | 1h | `:24` | `spec.budget.proactiveFloor` |
-| `FlowDisruption` | 0.6 | `:18` | `spec.objective.flowDisruption` |
+- `document-store/chroma` embeds through ONNX and has no `device: cuda` model-serving identity;
+- `voice/voice-bot` calls a remote model through LiteLLM rather than serving that model in the pod.
 
-The λ **seed** is not a tuning target: `NewDualSolver` starts at 0.6 with step 0.05
-(`internal/cost/dual.go:26`) and then self-calibrates against realized spend — the recorded trace
-drives λ from 0.6 to 3.6 in 12 ticks. The seed sets where the search starts, not where it lands.
+Annotating either would fabricate the population that `rarity()` is supposed to measure. The
+subtask remains open until the owner selects a real model-serving deployment or explicitly removes
+the retired-target requirement.
 
-## 4. Also corrected here
+## 3. Item 5 — the policy field existed, but λ was not wired to P1
 
-**The investor demo script was false.** `overlay.tsx:18` claimed the scan derives EPSS with *"no
-hardcoded inputs; it's all discovered"*. EPSS is loaded from a hand-maintained 4-entry cache
-covering 2 of 71 live pods, one entry of which points at a retired workload. PHVX-14b explicitly
-asked for this fix and it had not been made.
+The following fields were already externalized and consumed:
 
-**`localsearch.go:216` still named `exactBruteForceAssetCap`**, which PHVX-23 removed.
+| Dial | Default | Policy field |
+|---|---:|---|
+| `MaxMovesPerTick` (B) | `3` | `spec.budget.maxMovesPerTick` |
+| Tick interval (Δ) | `20s` | `spec.budget.tickInterval` |
+| `ProactiveFloor` | `1h` | `spec.budget.proactiveFloor` |
+| flow-disruption weight | `0.6` | `spec.objective.costWeights.flowDisruption` |
 
-## 5. Note on the repository
+λ was different. `buildPolicy` copied `spec.objective.lambda`, but `CoverageEngine` ignored
+`model.Policy.Lambda` and always constructed every tenant's dual solver at hardcoded `0.6`.
+Therefore item 5 was not complete despite the CRD field existing.
 
-`internal/decision/scenarios_export_test.go` fails on a clean checkout because it writes to an
-untracked `internal/decision/bin/` directory that git does not carry. Reproduced on pristine `main`,
-so it is pre-existing — but it means `go test ./...` is red out of the box. Worth a separate fix
-(`os.MkdirAll`); not touched here.
+PR #57 now:
+
+- exposes the shipped `DefaultLambdaSeed = 0.6`;
+- constructs each tenant's isolated P1 cost bucket from that tenant policy's λ;
+- accepts `0` as a valid seed, falls back defensively for negative/NaN/Inf values, and clamps values
+  above the solver range;
+- consumes the seed only when the tenant bucket is created, so a routine policy reconcile cannot
+  erase adaptive dual state;
+- tests two tenants with distinct λ values and the no-reset behavior.
+
+λ remains an adaptive budget shadow price. The policy controls its initial condition, not every
+future value.
+
+## 4. Other corrections retained in PR #57
+
+- The demo overlay no longer says EPSS has “no hardcoded inputs; it's all discovered.” Before PR #59,
+  EPSS came from a small maintained cache; after PR #59, the feed can refresh that cache, but absent
+  coverage still remains honest-absent.
+- The stale `exactBruteForceAssetCap` comment now names `exactWorkBudget` and `ExactSkipped`.
+- The old clean-checkout failure claim for `scenarios_export_test.go` was removed. The test now skips
+  when `SCEN_OUT` is unset and creates its output directory when explicitly requested.
+- The registry uses `exactWorkBudget = 300_000` from PR #55, not the old `200_000` value.
 
 ## Verification
 
-`go build ./...`, `go vet`, full `go test ./...` green (with the `bin/` directory present).
+Completed directly on PR #57 after the λ fix:
+
+- `go test ./internal/cost ./internal/decision`
+- `git diff --check`
+
+The report and line references were also reviewed against the combined PR #52–#59 integration.
+Full combined build/vet/test/race, dashboard, Helm, CRD synchronization, and workflow-scope checks
+are the final release gate before this report is attached to Plane.
+
+## Conclusion
+
+PR #57 closes the registry and operational-dial work honestly. PR #56 closes the formula and
+comment portion of item 4. It does **not** close PHORVEXSEC-115: items 2 and 6 remain math-owned,
+item 3 remains PHORVEXSEC-104, and item 4 still needs an owner decision on the retired deployment
+target.
