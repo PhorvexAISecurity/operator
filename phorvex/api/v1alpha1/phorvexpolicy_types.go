@@ -174,6 +174,58 @@ type SLOSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=1
 	MinAvailableReplicas int `json:"minAvailableReplicas,omitempty"`
+
+	// ── SLO error budgets (PHVX-60a) ────────────────────────────────────────────
+	// The three fields above are THRESHOLDS: they say what "healthy" means at an
+	// instant. The four below are BUDGETS: how much unhealthiness the window may
+	// absorb in total. The SLO cost model needs budgets, because its unit is the
+	// fraction of the remaining budget a move would spend.
+	//
+	// All four default to zero/empty, which means "not configured".
+	// BudgetsConfigured() then reports false and the budget path stays switched
+	// off, leaving existing behaviour unchanged. That is deliberate: a cluster
+	// with no SLO budgets must decide exactly as it does today, not block every
+	// move for want of a denominator.
+
+	// Window is the rolling window the budgets below are stated over — the same
+	// window the service's own SLO uses, e.g. 720h for "rolling 30 days". Zero
+	// disables the budget path for this service.
+	// +kubebuilder:validation:Optional
+	Window metav1.Duration `json:"window,omitempty"`
+
+	// AvailabilityBudget is how long in total, across Window, the workload may sit
+	// below MinAvailableReplicas before its availability budget is exhausted.
+	// Consumption is measured the same way: the summed time readyReplicas was under
+	// the floor, whatever caused it.
+	// +kubebuilder:validation:Optional
+	AvailabilityBudget metav1.Duration `json:"availabilityBudget,omitempty"`
+
+	// LatencyBudget is the fraction of requests in Window permitted to exceed
+	// P99Ms, as a PRD-convention decimal string — "0.01" for the usual 99% target.
+	// Empty disables the latency dimension.
+	// +kubebuilder:validation:Optional
+	LatencyBudget string `json:"latencyBudget,omitempty"`
+
+	// DisruptionBudgetReplicaSeconds is the total unavailable replica-seconds
+	// Window may absorb: replicas removed from service multiplied by how long they
+	// stayed out. It is its own budget and is NOT derived from the objective cost
+	// weights — the betas price a move against the objective, which is a different
+	// question from what the SLO can afford.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=0
+	DisruptionBudgetReplicaSeconds int64 `json:"disruptionBudgetReplicaSeconds,omitempty"`
+
+	// ReserveFraction is the share of each TOTAL budget that Phorvex may never
+	// spend, as a decimal string in [0,1). It is withheld from the total before
+	// consumption is subtracted, so the usable remainder is
+	//
+	//	usable = (1 - reserveFraction) * total - consumed
+	//
+	// A fraction of the TOTAL, not of the remainder: a fraction of the remainder
+	// would shrink as the budget burns and so would never reserve anything.
+	// Empty or unparseable means no reserve.
+	// +kubebuilder:validation:Optional
+	ReserveFraction string `json:"reserveFraction,omitempty"`
 }
 
 // AssetValueSpec derives per-pod consequence weighting (PRD assetValue{...}; FR3).
