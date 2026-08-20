@@ -19,7 +19,7 @@ import (
 	"github.com/phorvex/phorvex/internal/recon"
 )
 
-// Candidate is one feasible (asset, action) with its recon cover set and costs.
+// Candidate is one feasible (asset, action) with a non-empty recon cover set and costs.
 type Candidate struct {
 	Key       string // "ns/pod"
 	View      *model.WorkloadView
@@ -38,8 +38,8 @@ type ActionSet struct {
 	// tick unsafe to optimize. Rejected is fail-closed: no candidate may be selected.
 	CrossBlockCollisions []CrossBlockCollision
 	Rejected             bool
-	// Excluded records (asset,action,reason) pairs pruned by a hard constraint —
-	// surfaced for the audit/inviolability proof, never selectable.
+	// Excluded records (asset,action,reason) pairs pruned by structural relevance or
+	// a hard constraint — surfaced for audit/inviolability, never selectable.
 	Excluded []Exclusion
 }
 
@@ -65,12 +65,14 @@ func (s ActionSet) CollisionError() error {
 	return s.CrossBlockCollisions[0]
 }
 
-// Exclusion is one pruned move and the hard constraint that pruned it.
+// Exclusion is one pruned move and the structural or hard-constraint reason.
 type Exclusion struct {
 	Key    string
 	Action model.Action
 	Reason string
 }
+
+const emptyReconCoverReason = "recon-cover: action invalidates no facts for this asset"
 
 // Deps are the per-tick collaborators the generator binds (supplied by the engine so
 // the generator stays free of context/cost/killchain imports).
@@ -106,11 +108,13 @@ func GeneratableActions() []model.Action {
 
 // Generate builds the live feasible action set. Steps per (asset, enabled action):
 //
-//  1. Layer-A hard feasibility (PDB/availability, SLO-p99, anti-over-rotation,
+//  1. Structural recon relevance — an action that invalidates no facts for this
+//     asset is EXCLUDED before cost/feasibility work and cannot contaminate demand.
+//  2. Layer-A hard feasibility (PDB/availability, SLO-p99, anti-over-rotation,
 //     stateful-integrity) via the registry — an infeasible move is EXCLUDED.
-//  2. Conformal SLO-cost gate — if the worst-case cost CHi exceeds CostCeiling the
+//  3. Conformal SLO-cost gate — if the worst-case cost CHi exceeds CostCeiling the
 //     move could breach the disruption budget, so it is EXCLUDED.
-//  3. Survivors enter the set with their recon cover keys + costs.
+//  4. Survivors enter the set with their non-empty recon cover keys + costs.
 //
 // The set provably changes with state and contains NO hard-constraint-violating move.
 func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
@@ -156,13 +160,23 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			}
 		}
 		for _, action := range enabledActions(pol) {
+			coverKeys := af.CoverByAction[action]
+			// A move with no cover has zero marginal security gain by construction. Letting
+			// it through cannot improve the objective, but does inflate candidate/demand and
+			// audit counts (adapter-rotate on an unflagged pod was the live example).
+			if len(coverKeys) == 0 {
+				out.Excluded = append(out.Excluded, Exclusion{
+					Key: key, Action: action, Reason: emptyReconCoverReason,
+				})
+				continue
+			}
 			move := model.Move{Action: action}
-			// (1) Layer-A hard feasibility.
+			// (2) Layer-A hard feasibility.
 			if verdict := feasibility.Evaluate(v, move, pol); !verdict.Feasible {
 				out.Excluded = append(out.Excluded, Exclusion{Key: key, Action: action, Reason: verdict.Reason})
 				continue
 			}
-			// (2) Conformal SLO-cost gate (worst-case disruption must fit the budget).
+			// (3) Conformal SLO-cost gate (worst-case disruption must fit the budget).
 			chi := d.CHi(v, move, pol)
 			if d.CostCeiling > 0 && chi > d.CostCeiling {
 				out.Excluded = append(out.Excluded, Exclusion{Key: key, Action: action,
@@ -173,7 +187,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				Key:       key,
 				View:      v,
 				Action:    action,
-				CoverKeys: af.CoverByAction[action],
+				CoverKeys: coverKeys,
 				ECost:     d.ECost(v, move, pol),
 				CHi:       chi,
 			})

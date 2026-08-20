@@ -24,6 +24,24 @@ func bstr(b bool) string {
 	return "false"
 }
 
+type updateFailClient struct {
+	client.Client
+	err error
+}
+
+func (c updateFailClient) Update(context.Context, client.Object, ...client.UpdateOption) error {
+	return c.err
+}
+
+type recordingGuardrail struct {
+	variants []string
+}
+
+func (g *recordingGuardrail) ApplyVariant(_ context.Context, _ servingEndpoint, variant string) error {
+	g.variants = append(g.variants, variant)
+	return nil
+}
+
 // ===== adapter-rotate =====
 func adapterPod(ns, name string, clean bool) *corev1.Pod {
 	p := aiPod(ns, name, map[string]string{labelLoRAEnabled: "true"})
@@ -201,14 +219,68 @@ func TestGuardrailRotateFailClosedNotTier(t *testing.T) {
 	}
 }
 
-func TestGuardrailRotateUnreachableRekeysInK8s(t *testing.T) {
+func TestGuardrailRotateUnreachableIsNotCreditedOrRecorded(t *testing.T) {
 	c := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
 	hr, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{applyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
 	if err != nil {
-		t.Fatalf("unreachable guardrail must not error (K8s re-key real): %v", err)
+		t.Fatalf("unreachable guardrail must return an honest unconfirmed result: %v", err)
 	}
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+	if hr.Emitted || hr.MutationKind != "none" {
+		t.Errorf("unconfirmed live change must not be credited, got emitted=%v mutation=%q", hr.Emitted, hr.MutationKind)
+	}
+	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") || !containsStr(hr.Note, "NOT credited") {
 		t.Errorf("note: %q", hr.Note)
+	}
+	var p corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "guard"}, &p); err != nil {
+		t.Fatalf("guardrail pod must still exist: %v", err)
+	}
+	if got := p.Annotations[annoGuardrailVariant]; got != "v1" {
+		t.Errorf("unconfirmed change must preserve stored variant v1, got %q", got)
+	}
+	if p.Annotations[annoGuardrailSnap] != "" {
+		t.Error("unconfirmed change must not write a rollback snapshot")
+	}
+	if p.Labels["phorvex.ai/guardrail-epoch"] != "" {
+		t.Error("unconfirmed change must not write a false guardrail epoch")
+	}
+}
+
+func TestGuardrailRotateReachableFailureDoesNotRecordTransition(t *testing.T) {
+	c := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{applyErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	if err == nil {
+		t.Fatal("reachable guardrail failure must fail closed")
+	}
+	var p corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "guard"}, &p); err != nil {
+		t.Fatalf("guardrail pod must still exist: %v", err)
+	}
+	if got := p.Annotations[annoGuardrailVariant]; got != "v1" {
+		t.Errorf("failed live change must preserve stored variant v1, got %q", got)
+	}
+	if p.Annotations[annoGuardrailSnap] != "" || p.Labels["phorvex.ai/guardrail-epoch"] != "" {
+		t.Error("failed live change must not write snapshot or epoch")
+	}
+}
+
+func TestGuardrailRotateRestoresLiveVariantWhenRecordFails(t *testing.T) {
+	base := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
+	c := updateFailClient{Client: base, err: errors.New("Kubernetes write failed")}
+	g := &recordingGuardrail{}
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: g}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	if err == nil {
+		t.Fatal("an unrecordable live transition must fail")
+	}
+	if len(g.variants) != 2 || g.variants[0] != "v2" || g.variants[1] != "v1" {
+		t.Fatalf("failed Kubernetes record must restore live variant v1, apply sequence=%v", g.variants)
+	}
+	var p corev1.Pod
+	if err := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "guard"}, &p); err != nil {
+		t.Fatalf("guardrail pod must still exist: %v", err)
+	}
+	if got := p.Annotations[annoGuardrailVariant]; got != "v1" {
+		t.Errorf("failed record must leave stored variant v1, got %q", got)
 	}
 }
 

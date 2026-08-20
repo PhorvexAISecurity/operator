@@ -57,6 +57,17 @@ func testDeps() Deps {
 	}
 }
 
+func ucwTestDeps(t *testing.T) Deps {
+	t.Helper()
+	d := testDeps()
+	rp, ok := recon.Registry.Get("ucw-recon")
+	if !ok {
+		t.Fatal("ucw-recon profile is not registered")
+	}
+	d.Recon = rp
+	return d
+}
+
 func actionsFor(set ActionSet, key string) map[model.Action]bool {
 	out := map[model.Action]bool{}
 	for _, c := range set.Candidates {
@@ -141,5 +152,69 @@ func TestExcludedMovesAreNeverCandidates(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("stateful rotate should be recorded in Excluded with a reason")
+	}
+}
+
+func TestAdapterRotateWithoutSuspectAdapterIsStructurallyExcluded(t *testing.T) {
+	d := ucwTestDeps(t)
+	pol := testPolicy()
+	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
+	clean := baseView("clean-lora")
+	clean.Pod.ModelID = "model-a"
+
+	set := d.Generate([]*model.WorkloadView{clean}, pol)
+	if len(set.Candidates) != 0 {
+		t.Fatalf("adapter-rotate without an adapter-integrity fact must emit no candidates, got %+v", set.Candidates)
+	}
+	found := false
+	for _, ex := range set.Excluded {
+		if ex.Key == "ns/clean-lora" && ex.Action == model.ActionAdapterRotate && ex.Reason == emptyReconCoverReason {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("adapter-rotate must be audited as structurally excluded, got %+v", set.Excluded)
+	}
+}
+
+func TestAdapterRotateWithSuspectAdapterHasNonEmptyCover(t *testing.T) {
+	d := ucwTestDeps(t)
+	pol := testPolicy()
+	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
+	poisoned := baseView("poisoned-lora")
+	poisoned.Pod.ModelID = "model-a"
+	poisoned.Pod.SuspectAdapter = "evil-adapter"
+
+	set := d.Generate([]*model.WorkloadView{poisoned}, pol)
+	if len(set.Candidates) != 1 {
+		t.Fatalf("flagged adapter must produce one adapter-rotate candidate, got candidates=%+v excluded=%+v", set.Candidates, set.Excluded)
+	}
+	cand := set.Candidates[0]
+	if cand.Action != model.ActionAdapterRotate || len(cand.CoverKeys) == 0 {
+		t.Fatalf("flagged adapter candidate must carry adapter-integrity cover, got %+v", cand)
+	}
+}
+
+func TestGenerateNeverEmitsAnEmptyCoverCandidate(t *testing.T) {
+	d := ucwTestDeps(t)
+	pol := testPolicy()
+	pol.EnabledActions = make(map[model.Action]bool, len(model.MutatingActions))
+	for _, action := range model.MutatingActions {
+		pol.EnabledActions[action] = true
+	}
+	v := baseView("all-actions")
+	v.Pod.HasGPU = true
+	v.Pod.ModelID = "model-a"
+	v.Pod.MIGDevice = "1g.10gb"
+	v.Pod.SuspectAdapter = "evil-adapter"
+
+	set := d.Generate([]*model.WorkloadView{v}, pol)
+	if len(set.Candidates) == 0 {
+		t.Fatal("invariant fixture must exercise at least one emitted candidate")
+	}
+	for _, cand := range set.Candidates {
+		if len(cand.CoverKeys) == 0 {
+			t.Errorf("generator emitted empty-cover candidate %s/%s", cand.Key, cand.Action)
+		}
 	}
 }

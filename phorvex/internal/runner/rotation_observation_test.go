@@ -13,6 +13,7 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/slo"
 )
 
 type rotationObservation struct {
@@ -188,6 +189,85 @@ func TestShadowCalibrationReceivesObservedCensoredAndInvalidRotations(t *testing
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing outcomes: %+v", want)
+	}
+}
+
+func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) {
+	opt := &observingOptimizer{}
+	ledger := slo.NewLedger(0)
+	m := &Manager{Optimizer: opt, Log: logr.Discard(), Disruption: ledger}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+	}}
+	m.trackRotation("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+
+	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(800 * time.Second)})
+	if got := ledger.Consumed("tenant-a", startedAt); got != 800 {
+		t.Fatalf("first censored floor = %v, want 800 replica-seconds", got)
+	}
+	if len(m.pendingRotations) != 1 {
+		t.Fatal("ledger-enabled censored rotation was retired before recovery")
+	}
+
+	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(1200 * time.Second)})
+	if got := ledger.Consumed("tenant-a", startedAt); got != 1200 {
+		t.Fatalf("extended censored floor = %v, want 1200 replica-seconds", got)
+	}
+	if len(opt.observations) != 1 {
+		t.Fatalf("RLS censoring was counted %d times, want once", len(opt.observations))
+	}
+
+	m.observeReadyRotations(&ingest.Snapshot{
+		Now: startedAt.Add(1400 * time.Second),
+		Pods: []model.Pod{{
+			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+			Ready: true, ReadyAt: startedAt.Add(1300 * time.Second),
+		}},
+	})
+	if got := ledger.Consumed("tenant-a", startedAt); got != 1300 {
+		t.Fatalf("final disruption = %v, want measured 1300 replica-seconds", got)
+	}
+	entries := ledger.Entries("tenant-a", startedAt)
+	if len(entries) != 1 || entries[0].Censored {
+		t.Fatalf("final recovery did not replace censored entry: %+v", entries)
+	}
+	if len(m.pendingRotations) != 0 {
+		t.Fatal("recovered disruption remained pending")
+	}
+}
+
+func TestRecoveryAfterFrozenDeadlineIsCensoredForCalibrationButMeasuredForLedger(t *testing.T) {
+	opt := &observingOptimizer{}
+	ledger := slo.NewLedger(0)
+	runtime := calib.NewRuntime(calib.RuntimeConfig{}, logr.Discard())
+	m := &Manager{Optimizer: opt, Log: logr.Discard(), Disruption: ledger, Calibration: runtime}
+	startedAt := time.Unix(1_700_000_000, 0).UTC()
+	view := &model.WorkloadView{Pod: model.Pod{
+		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+	}}
+	m.trackRotation("tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+	m.observeReadyRotations(&ingest.Snapshot{
+		Now: startedAt.Add(900 * time.Second),
+		Pods: []model.Pod{{
+			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+			Ready: true, ReadyAt: startedAt.Add(850 * time.Second),
+		}},
+	})
+
+	records := runtime.RotationRecords(startedAt.Add(900 * time.Second))
+	if len(records) != 1 || records[0].Outcome != calib.OutcomeCensored || records[0].Elapsed != 800*time.Second {
+		t.Fatalf("calibration outcome = %+v, want one frozen 800s right-censored record", records)
+	}
+	if len(opt.observations) != 1 || opt.observations[0].flow != 2 {
+		t.Fatalf("RLS outcome = %+v, want one censored flow=2", opt.observations)
+	}
+	entries := ledger.Entries("tenant-a", startedAt)
+	if len(entries) != 1 || entries[0].Censored || entries[0].Duration != 850*time.Second {
+		t.Fatalf("ledger outcome = %+v, want final measured 850s recovery", entries)
+	}
+	if len(m.pendingRotations) != 0 {
+		t.Fatal("late recovered rotation remained pending")
 	}
 }
 

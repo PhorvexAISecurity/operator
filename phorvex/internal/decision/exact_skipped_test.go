@@ -123,6 +123,18 @@ func TestWorkBudgetReachesTheLiveFleet(t *testing.T) {
 		{76, 2, 6, false, "measured 102ms"},
 		{76, 3, 6, true, "measured 20.3s — must skip"},
 		{40, 4, 6, true, "measured 5.8s at only k=3 — must skip"},
+
+		// Cases the guard USED to admit while they ran far past the 500ms ruling, because the
+		// per-set cost was modelled as O(1) instead of O(B). Each is pinned at the shape and
+		// measured time that exposed it, so re-flattening the estimate fails here first.
+		{13, 6, 2, true, "ran 1.12s while reporting itself inside budget — must skip"},
+		{24, 4, 2, true, "ran 695ms while reporting itself inside budget — must skip"},
+		{11, 7, 2, true, "ran 646ms while reporting itself inside budget — must skip"},
+		{52, 3, 2, true, "ran 540ms while reporting itself inside budget — must skip"},
+
+		// The prune is what bought the headroom: this one took 1.06s before it and 26ms after, so
+		// it must stay ADMITTED. If the budget is ever cut without re-measuring, this fails.
+		{5000, 1, 2, false, "26ms post-prune — must stay reachable"},
 	} {
 		t.Run(fmt.Sprintf("n=%d/B=%d/k=%d", tc.n, tc.b, tc.k), func(t *testing.T) {
 			got := exactWorkEstimate(tc.n, tc.b, tc.k) > exactWorkBudget

@@ -167,8 +167,8 @@ Phorvex deprioritizes the real asset **by its own provable optimality criterion*
 the rule stays frozen.
 
 ## D. WHOLE-PHORVEX WEAKNESS HUNT (honest — not whitewashed)
-**The single deepest weakness: the INPUT-INTEGRITY boundary of its own optimality.** `Decide` is provably
-near-optimal (submodular 1−1/e) **given its inputs** — but three inputs are slow stateful integrators the
+**The single deepest weakness: the INPUT-INTEGRITY boundary of its own objective.** `Decide` deterministically
+optimizes the supplied score and is exact for the shipped block-owned profiles **given its inputs** — but three inputs are slow stateful integrators the
 attacker partly authors: (1) physics dispersion (attacker-spawned pods), (2) the dual λ (manufactured decoy
 demand — **cheaper than thought:** `coverage.go:187` counts any net-positive candidate, selected or not), (3)
 the Beta prior (low-PHold decoy acts). **The optimizer faithfully optimizes a poisoned objective.** The deepest
