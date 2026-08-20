@@ -1,6 +1,8 @@
 # PHORVEXSEC-141 (PHVX-60a) — SLO disruption bound and Phorvex disruption ledger — report
 
-Date: 2026-08-19 · Branch `feat/phvx-60a-slo-bound-ledger` · PR #54 · Commit `f02cd20`
+Updated: 2026-08-20 · Branch `feat/phvx-60a-slo-bound-ledger` · PR #54
+
+Implementation commits: `f02cd20`, `9a2e225`
 
 ## Headline
 
@@ -90,6 +92,12 @@ must stay uncalibrated until the metric, retention and policy fields are ready"*
 
 ## Verification
 
-`go build ./...`, `go vet`, full `go test ./...` green. 24 new tests. CRD regenerated in **both**
-copies and the vendored subchart re-packaged, so the `chart-sync` and vendored-subchart CI checks
-pass.
+`go build ./...`, `go vet ./...`, full `go test ./...`, and the combined PR #52–#59 race suite are
+green. The targeted runner/SLO integration tests also pass, including the one-time right-censor,
+continued-ledger-accrual, later-recovery, and no-double-count behavior. CRD copies are byte-identical;
+Helm 3.17.3 lint/template checks and the vendored-chart comparison pass locally, including the EKS
+values render. `git diff --check` passes and this PR does not modify `.github/workflows/`.
+
+The GitHub Actions jobs triggered on 2026-08-20 did not start because GitHub reported an
+organization billing/spending-limit problem. That infrastructure failure is not represented here
+as a code or chart failure.
