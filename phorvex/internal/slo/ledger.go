@@ -34,6 +34,9 @@ const (
 
 // Entry is one observed disruption, in the unit the disruption budget uses.
 type Entry struct {
+	// ID identifies one disruption observation across updates. Censored entries are
+	// periodically replaced under the same ID until recovery is finally observed.
+	ID        string
 	Tenant    string
 	Namespace string
 	Pod       string
@@ -45,9 +48,12 @@ type Entry struct {
 	// Duration is how long they stayed removed — MEASURED, from actuation to the
 	// replacement becoming Ready.
 	Duration time.Duration
+	// StartedAt is when the Ready replica was removed. It is required for exact
+	// overlap accounting at a rolling-window boundary.
+	StartedAt time.Time
 
-	// ObservedAt is when the disruption was resolved and this entry written, not
-	// when the action fired.
+	// ObservedAt is the end of the known interval: recovery time for an observed
+	// event, or the latest observation time for an ongoing censored event.
 	ObservedAt time.Time
 
 	// Censored marks an entry whose recovery was never observed, so Duration is a
@@ -94,13 +100,58 @@ func (l *Ledger) Record(e Entry) {
 	if e.Cause == "" {
 		e.Cause = CausePhorvex
 	}
+	if e.StartedAt.IsZero() && !e.ObservedAt.IsZero() {
+		e.StartedAt = e.ObservedAt.Add(-e.Duration)
+	}
+	if e.ObservedAt.IsZero() && !e.StartedAt.IsZero() {
+		e.ObservedAt = e.StartedAt.Add(e.Duration)
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.byOwner == nil {
 		l.byOwner = map[string][]Entry{}
 	}
-	l.byOwner[e.Tenant] = append(l.byOwner[e.Tenant], e)
+	entries := l.byOwner[e.Tenant]
+	if e.ID != "" {
+		for i := range entries {
+			if entries[i].ID == e.ID {
+				entries[i] = e
+				l.byOwner[e.Tenant] = entries
+				l.evictLocked(e.Tenant, e.ObservedAt)
+				return
+			}
+		}
+	}
+	l.byOwner[e.Tenant] = append(entries, e)
 	l.evictLocked(e.Tenant, e.ObservedAt)
+}
+
+// overlapReplicaSeconds returns only the part of an entry that intersects the
+// rolling window [since, ObservedAt]. An outage that starts ten seconds before
+// the boundary and ends ten seconds after it consumes ten in-window seconds,
+// not the full twenty.
+func overlapReplicaSeconds(e Entry, since time.Time) float64 {
+	start, end := e.StartedAt, e.ObservedAt
+	if start.IsZero() && !end.IsZero() {
+		start = end.Add(-e.Duration)
+	}
+	if end.IsZero() && !start.IsZero() {
+		end = start.Add(e.Duration)
+	}
+	if !end.After(since) {
+		return 0
+	}
+	if start.Before(since) {
+		start = since
+	}
+	d := end.Sub(start)
+	if d <= 0 {
+		return 0
+	}
+	if e.Duration > 0 && d > e.Duration {
+		d = e.Duration
+	}
+	return float64(e.Replicas) * d.Seconds()
 }
 
 // Consumed totals the unavailable replica-seconds Phorvex caused for a tenant at
@@ -115,10 +166,7 @@ func (l *Ledger) Consumed(tenant string, since time.Time) float64 {
 	defer l.mu.RUnlock()
 	var total float64
 	for _, e := range l.byOwner[tenant] {
-		if e.ObservedAt.Before(since) {
-			continue
-		}
-		total += e.ReplicaSeconds()
+		total += overlapReplicaSeconds(e, since)
 	}
 	return total
 }
@@ -130,10 +178,9 @@ func (l *Ledger) ConsumedByAction(tenant string, since time.Time) map[model.Acti
 	defer l.mu.RUnlock()
 	out := map[model.Action]float64{}
 	for _, e := range l.byOwner[tenant] {
-		if e.ObservedAt.Before(since) {
-			continue
+		if consumed := overlapReplicaSeconds(e, since); consumed > 0 {
+			out[e.Action] += consumed
 		}
-		out[e.Action] += e.ReplicaSeconds()
 	}
 	return out
 }

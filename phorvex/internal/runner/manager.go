@@ -56,10 +56,11 @@ type policyEntry struct {
 // controller-created replacement UID reached Ready. knownUIDs prevents an already
 // Ready sibling from being mistaken for the replacement.
 type pendingRotation struct {
-	tenant    string
-	startedAt time.Time
-	view      model.WorkloadView
-	knownUIDs map[string]struct{}
+	tenant       string
+	startedAt    time.Time
+	view         model.WorkloadView
+	knownUIDs    map[string]struct{}
+	costObserved bool
 }
 
 // Manager owns the tenant registry and the tick loop.
@@ -92,8 +93,9 @@ type Manager struct {
 
 	mu       sync.RWMutex
 	policies map[string]*policyEntry
-	// Accessed only by the single tick loop. Entries are resolved on a later
-	// snapshot or capped after the RLS [0,2] recovery window.
+	// Accessed only by the single tick loop. The RLS outcome is capped after its
+	// [0,2] observation window, but ledger-enabled censored entries remain here so
+	// their disruption floor keeps increasing until recovery is actually observed.
 	pendingRotations map[string]pendingRotation
 }
 
@@ -374,8 +376,9 @@ func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allView
 
 // observeReadyRotations resolves pending rotations one-to-one against new Ready
 // UIDs owned by the same controller. At two reference windows an unresolved
-// recovery is a truthful right-censored maximum (C_flow=2), and the entry is
-// retired so a failed replacement cannot leak memory indefinitely.
+// recovery produces one truthful right-censored RLS outcome (C_flow=2). When the
+// disruption ledger is enabled, tracking continues so an outage lasting longer
+// than that modelling window is not permanently undercounted at 800 seconds.
 func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 	observer, ok := m.Optimizer.(decision.RotationObserver)
 	if !ok || snap == nil || len(m.pendingRotations) == 0 {
@@ -450,14 +453,15 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 		}
 
 		censored := false
+		observationEnd := snap.Now
 		if replacement != nil {
 			claimed[replacement.UID] = true
 			if !replacement.ReadyAt.IsZero() {
 				elapsed = replacement.ReadyAt.Sub(p.startedAt)
+				observationEnd = replacement.ReadyAt
 			}
 		} else if elapsed >= 2*cost.ReadyDelayReference {
 			censored = true
-			elapsed = 2 * cost.ReadyDelayReference
 		} else {
 			continue
 		}
@@ -465,14 +469,19 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			elapsed = 0
 		}
 		measuredFlow := cost.NormalizeReadyDelay(elapsed)
-		observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
-		// Recorded once per rotation LEAVING the pending set, not once per tick it is examined —
-		// otherwise the matched/censored ratio would measure tick cadence instead of matching.
-		outcome := metrics.RLSMatched
-		if censored {
-			outcome = metrics.RLSCensored
+		newOutcome := !p.costObserved
+		if newOutcome {
+			observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+			// The RLS outcome is recorded once. A censored rotation can remain in the
+			// pending map for ledger updates without inflating the match-rate denominator.
+			outcome := metrics.RLSMatched
+			if censored {
+				outcome = metrics.RLSCensored
+			}
+			metrics.ObserveRotationOutcome(p.tenant, outcome)
+			p.costObserved = true
+			m.pendingRotations[ref.key] = p
 		}
-		metrics.ObserveRotationOutcome(p.tenant, outcome)
 		// The same measurement, in the SLO's unit. A rotation removes exactly one
 		// Ready serving replica (feasibility.RemovesReadyReplica) and `elapsed` is
 		// how long it stayed removed, so this is one unavailable-replica-second
@@ -482,6 +491,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 		// removed and so nothing was consumed.
 		if m.Disruption != nil {
 			m.Disruption.Record(slo.Entry{
+				ID:         ref.key,
 				Tenant:     p.tenant,
 				Namespace:  p.view.Pod.Namespace,
 				Pod:        p.view.Pod.Name,
@@ -489,9 +499,23 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				Cause:      slo.CausePhorvex,
 				Replicas:   1,
 				Duration:   elapsed,
-				ObservedAt: snap.Now,
+				StartedAt:  p.startedAt,
+				ObservedAt: observationEnd,
 				Censored:   censored,
 			})
+		}
+		if censored {
+			if m.Disruption == nil {
+				delete(m.pendingRotations, ref.key)
+			}
+			if newOutcome {
+				m.Log.Info("rotation cost observation censored; disruption tracking continues",
+					"tenant", p.tenant,
+					"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
+					"oldUID", p.view.Pod.UID,
+					"timeUnavailableSeconds", elapsed.Seconds())
+			}
+			continue
 		}
 		delete(m.pendingRotations, ref.key)
 		replacementUID := ""

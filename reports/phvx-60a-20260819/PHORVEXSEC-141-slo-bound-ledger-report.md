@@ -68,11 +68,16 @@ that was out is out, so the *total* budget must count every outage of the servic
 contribution is tracked separately with a cause, so the question "how much of this budget did we
 spend" stays answerable.
 
-The ledger is fed from the recovery time `observeReadyRotations` **already measured**. No new
-observation mechanism was added; the runner stamps entries with the snapshot clock rather than wall
-time, so a replayed snapshot reproduces exactly. Retention is one month — the longest SLO window
-anyone has proposed — so an entry can never be evicted while a ratio could still be computed from
-it.
+The ledger is fed from the recovery path `observeReadyRotations` already measures. Each entry now
+stores both the disruption start and the known end of the interval. Rolling-window reads count only
+the overlap with the requested window; a 20-second outage crossing the boundary by 10 seconds
+therefore consumes 10 in-window replica-seconds.
+
+Right-censored recovery is not frozen at the RLS model's 800-second observation ceiling. The RLS
+outcome is emitted once at that ceiling, while the ledger upserts the same disruption ID on later
+snapshots. If recovery is eventually observed, the measured endpoint replaces the censored floor.
+This keeps match-rate metrics stable while preventing a long outage from remaining permanently
+undercounted. Retention is one month — the longest SLO window anyone has proposed.
 
 The ledger observes only. Nothing reads it to gate a move.
 
@@ -85,6 +90,6 @@ must stay uncalibrated until the metric, retention and policy fields are ready"*
 
 ## Verification
 
-`go build ./...`, `go vet`, full `go test ./...` green. 18 new tests. CRD regenerated in **both**
+`go build ./...`, `go vet`, full `go test ./...` green. 24 new tests. CRD regenerated in **both**
 copies and the vendored subchart re-packaged, so the `chart-sync` and vendored-subchart CI checks
 pass.

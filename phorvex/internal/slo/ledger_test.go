@@ -41,6 +41,20 @@ func TestConsumedRespectsTheWindowStart(t *testing.T) {
 	}
 }
 
+func TestConsumedCountsOnlyDurationOverlappingWindow(t *testing.T) {
+	boundary := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	l.Record(Entry{
+		Tenant: "t1", Action: model.ActionRotate, Replicas: 1,
+		StartedAt: boundary.Add(-10 * time.Second), ObservedAt: boundary.Add(10 * time.Second),
+		Duration: 20 * time.Second,
+	})
+
+	if got, want := l.Consumed("t1", boundary), 10.0; got != want {
+		t.Fatalf("boundary-crossing consumption = %v, want only %v in-window replica-seconds", got, want)
+	}
+}
+
 // A censored reading is a floor on how bad recovery was, not a reason to forget
 // it. Dropping censored entries would understate consumption exactly when
 // recovery went worst.
@@ -49,12 +63,36 @@ func TestCensoredEntriesStillConsumeBudget(t *testing.T) {
 	l := NewLedger(0)
 	l.Record(Entry{Tenant: "t1", Action: model.ActionRotate, Replicas: 1, Duration: 800 * time.Second, ObservedAt: base, Censored: true})
 
-	if got, want := l.Consumed("t1", base), 800.0; got != want {
+	if got, want := l.Consumed("t1", base.Add(-800*time.Second)), 800.0; got != want {
 		t.Fatalf("censored entry must still count: got %v want %v", got, want)
 	}
 	e := l.Entries("t1", base)
 	if len(e) != 1 || !e[0].Censored {
 		t.Fatalf("censored flag lost on read back: %+v", e)
+	}
+}
+
+func TestCensoredEntryIsUpdatedInsteadOfPermanentlyUndercounted(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0).UTC()
+	l := NewLedger(0)
+	l.Record(Entry{ID: "rotation-1", Tenant: "t1", Action: model.ActionRotate, Replicas: 1,
+		StartedAt: base, ObservedAt: base.Add(800 * time.Second), Duration: 800 * time.Second, Censored: true})
+	l.Record(Entry{ID: "rotation-1", Tenant: "t1", Action: model.ActionRotate, Replicas: 1,
+		StartedAt: base, ObservedAt: base.Add(1200 * time.Second), Duration: 1200 * time.Second, Censored: true})
+
+	if got, want := l.Consumed("t1", base), 1200.0; got != want {
+		t.Fatalf("updated censored consumption = %v, want %v", got, want)
+	}
+	entries := l.Entries("t1", base)
+	if len(entries) != 1 || entries[0].Duration != 1200*time.Second {
+		t.Fatalf("censored upsert produced %+v, want one extended entry", entries)
+	}
+
+	l.Record(Entry{ID: "rotation-1", Tenant: "t1", Action: model.ActionRotate, Replicas: 1,
+		StartedAt: base, ObservedAt: base.Add(1300 * time.Second), Duration: 1300 * time.Second})
+	entries = l.Entries("t1", base)
+	if len(entries) != 1 || entries[0].Censored || entries[0].Duration != 1300*time.Second {
+		t.Fatalf("final recovery did not replace censored floor: %+v", entries)
 	}
 }
 
