@@ -82,10 +82,31 @@ phorvex:
       configMapName: phorvex-epss
       mountPath: /etc/phorvex
       fileName: epss-cache.json
+      refreshInterval: 30s
       # Was a hand-applied ConfigMap that existed in no repository. The operator MOUNTS it,
       # so losing it means the pod never starts — recovered from the live cluster and put
       # under GitOps here.
       create: true
+      # Run the complete pipeline daily in dry-run mode. Applying remains gated until
+      # the private ECR images have a dedicated read-only IRSA role and the resulting
+      # dispersion/cap impact has been reviewed under PHORVEXSEC-115.
+      feed:
+        enabled: true
+        schedule: "17 3 * * *"
+        suspend: false
+        apply: false
+        allowPartial: false
+        serviceAccount:
+          annotations: {}
+          # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/<ecr-read-role>
+        extraEnv:
+          - name: AWS_REGION
+            value: us-east-2
+        tolerations:
+          - key: CriticalAddonsOnly
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
       data: |
         {
           "docker.io/vllm/vllm-openai@sha256:4f4037303e8c7b69439db1077bb849a0823517c0f785b894dc8e96d58ef3a0c2": {

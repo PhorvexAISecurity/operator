@@ -54,6 +54,7 @@ spec:
         {{- end }}
         {{- if .Values.phorvex.epss.enabled }}
         - --epss-cache={{ printf "%s/%s" (.Values.phorvex.epss.mountPath | trimSuffix "/") .Values.phorvex.epss.fileName }}
+        - --epss-cache-refresh={{ .Values.phorvex.epss.refreshInterval }}
         {{- end }}
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
