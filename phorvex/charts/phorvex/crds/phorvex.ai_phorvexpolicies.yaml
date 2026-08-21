@@ -270,6 +270,29 @@ spec:
                   SLO is the hard availability envelope; a move that would breach it is infeasible
                   and is never proposed. (PRD: slo{p99Ms,minTokensPerSec,minAvailableReplicas}.)
                 properties:
+                  availabilityBudget:
+                    description: |-
+                      AvailabilityBudget is how long in total, across Window, the workload may sit
+                      below MinAvailableReplicas before its availability budget is exhausted.
+                      Consumption is measured the same way: the summed time readyReplicas was under
+                      the floor, whatever caused it.
+                    type: string
+                  disruptionBudgetReplicaSeconds:
+                    description: |-
+                      DisruptionBudgetReplicaSeconds is the total unavailable replica-seconds
+                      Window may absorb: replicas removed from service multiplied by how long they
+                      stayed out. It is its own budget and is NOT derived from the objective cost
+                      weights — the betas price a move against the objective, which is a different
+                      question from what the SLO can afford.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  latencyBudget:
+                    description: |-
+                      LatencyBudget is the fraction of requests in Window permitted to exceed
+                      P99Ms, as a PRD-convention decimal string — "0.01" for the usual 99% target.
+                      Empty disables the latency dimension.
+                    type: string
                   minAvailableReplicas:
                     default: 1
                     description: |-
@@ -291,6 +314,24 @@ spec:
                     format: int64
                     minimum: 0
                     type: integer
+                  reserveFraction:
+                    description: |-
+                      ReserveFraction is the share of each TOTAL budget that Phorvex may never
+                      spend, as a decimal string in [0,1). It is withheld from the total before
+                      consumption is subtracted, so the usable remainder is
+
+                       usable = (1 - reserveFraction) * total - consumed
+
+                      A fraction of the TOTAL, not of the remainder: a fraction of the remainder
+                      would shrink as the budget burns and so would never reserve anything.
+                      Empty or unparseable means no reserve.
+                    type: string
+                  window:
+                    description: |-
+                      Window is the rolling window the budgets below are stated over — the same
+                      window the service's own SLO uses, e.g. 720h for "rolling 30 days". Zero
+                      disables the budget path for this service.
+                    type: string
                 type: object
               tenant:
                 description: |-

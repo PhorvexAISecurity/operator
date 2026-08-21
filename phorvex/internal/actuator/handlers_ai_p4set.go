@@ -322,30 +322,41 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	if next == "" {
 		return HandlerResult{}, fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur)
 	}
-	// (1) re-key the variant (K8s, real) + snapshot for rollback.
+	// (1) apply the variant to the live guardrail first. A K8s annotation is only a
+	// forensic record; it must never turn an unconfirmed filter change into a
+	// successful actuation.
+	aerr := ec.guardrail().ApplyVariant(ctx, endpointForPod(pod), next)
+	switch {
+	case aerr == nil:
+	case errors.Is(aerr, errStackUnreachable):
+		return HandlerResult{
+			Emitted: false, MutationKind: "none",
+			Note: "[PENDING-GPU-VALIDATION] guardrail-rotate outcome unconfirmed: guardrail service " +
+				"unreachable at " + req.Namespace + "/" + req.Pod + " — live filter change was NOT " +
+				"credited and no variant/epoch record was written",
+		}, nil
+	default:
+		return HandlerResult{}, fmt.Errorf("guardrail-rotate apply %q: %w", next, aerr)
+	}
+
+	// (2) persist the confirmed live transition and its rollback snapshot. If this
+	// write fails, restore the live filter so runtime and Kubernetes do not diverge.
 	pod.Annotations = ensureMap(pod.Annotations)
 	pod.Annotations[annoGuardrailSnap] = cur
 	pod.Annotations[annoGuardrailVariant] = next
 	pod.Labels = ensureMap(pod.Labels)
 	pod.Labels["phorvex.ai/guardrail-epoch"] = pod.ResourceVersion
 	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate relabel %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	// (2) apply the variant to the guardrail service (stack call, tri-state).
-	note := "variant " + cur + " -> " + next
-	aerr := ec.guardrail().ApplyVariant(ctx, endpointForPod(pod), next)
-	switch {
-	case aerr == nil:
-		note += " applied to the guardrail service (bypass staled)"
-	case errors.Is(aerr, errStackUnreachable):
-		note += " [PENDING-GPU-VALIDATION]: guardrail service unreachable (variant re-keyed in K8s, not applied to the live filter)"
-	default:
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate apply %q: %w", next, aerr)
+		persistErr := fmt.Errorf("guardrail-rotate record %s/%s: %w", req.Namespace, req.Pod, err)
+		if restoreErr := ec.guardrail().ApplyVariant(ctx, endpointForPod(pod), cur); restoreErr != nil {
+			return HandlerResult{}, errors.Join(persistErr, fmt.Errorf("restore live variant %q: %w", cur, restoreErr))
+		}
+		return HandlerResult{}, persistErr
 	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
 		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "guardrail-rotate: " + note,
+		Note:           "guardrail-rotate: variant " + cur + " -> " + next + " applied to the guardrail service (bypass staled)",
 	}, nil
 }
 

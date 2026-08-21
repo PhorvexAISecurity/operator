@@ -1,0 +1,10 @@
+case,asset_count,actions_per_asset,move_budget,overlap_shape,infeasible_every,completed,timeout,failed,skipped,p50_runtime_ns,p95_runtime_ns,max_runtime_ns,max_completed_optimality_gap
+production-76-b1,76,2,1,disjoint,0,6,0,0,0,281477,835879,835879,0
+production-76-b2,76,2,2,disjoint,0,6,0,0,0,16697517,21165324,21165324,0
+actions-24-k3,24,3,2,disjoint,0,6,0,0,0,3438602,5253808,5253808,0
+within-asset-overlap,24,3,2,within_asset_shared,0,6,0,0,0,5453686,6900916,6900916,0
+partially-infeasible,30,3,2,within_asset_shared,4,6,0,0,0,4352108,6773712,6773712,0
+fully-infeasible,30,3,2,disjoint,1,6,0,0,0,3165,6055,6055,0
+cross-block-rejected,20,2,2,cross_asset_shared,0,0,0,0,6,0,0,0,
+guard-skipped,80,4,4,disjoint,0,0,0,0,6,246420,371901,371901,
+unguarded-timeout,80,4,4,disjoint,0,0,6,0,0,505469219,509777362,509777362,

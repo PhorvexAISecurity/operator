@@ -50,7 +50,7 @@ env:
 jobs:
   # ── 1. Detect which parts of the monorepo changed ──────────────────────────
   changes:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       operator: ${{ steps.filter.outputs.operator }}
       console:  ${{ steps.filter.outputs.console }}
@@ -80,7 +80,7 @@ jobs:
   # a GitOps sync would have DELETED those fields from the live CRD and broken every policy
   # using them. CD makes a stale vendored CRD destructive, so it is now a build error.
   chart-sync:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -144,7 +144,7 @@ jobs:
   build-operator:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.operator == 'true' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -167,8 +167,23 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # A FIRST-RUN bootstrap, not a per-build necessity: phorvex, phorvex-console and
+      # phoenix-amtd-operator all exist already, so this is a no-op on every run today.
+      #
+      # It is also the ONLY thing in this workflow that shells out to the `aws` binary —
+      # configure-aws-credentials and amazon-ecr-login both use the AWS SDK, never the CLI.
+      # That made it the single step that died with `aws: command not found` (exit 127) on a
+      # self-hosted runner while the ECR login either side of it worked fine.
+      #
+      # Guarded rather than deleted, so bootstrapping a NEW repository still works on any
+      # runner that does have the CLI. The skip is announced — a silent no-op here would
+      # turn a genuinely missing repository into a confusing push failure later.
       - name: Ensure ECR repo
         run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "::notice::aws CLI absent on this runner — skipping ECR bootstrap; assuming the repository exists."
+            exit 0
+          fi
           aws ecr describe-repositories --repository-names phorvex \
             >/dev/null 2>&1 || \
           aws ecr create-repository --repository-name phorvex \
@@ -189,7 +204,7 @@ jobs:
   build-console:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.console == 'true' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -212,8 +227,13 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # See build-operator's copy for why this is guarded on the CLI being present.
       - name: Ensure ECR repo
         run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "::notice::aws CLI absent on this runner — skipping ECR bootstrap; assuming the repository exists."
+            exit 0
+          fi
           aws ecr describe-repositories --repository-names phorvex-console \
             >/dev/null 2>&1 || \
           aws ecr create-repository --repository-name phorvex-console \
@@ -239,7 +259,7 @@ jobs:
   build-phoenix:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.phoenix == 'true' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       BUILD_PHOENIX: ${{ github.event_name == 'pull_request' && 'true' || vars.BUILD_PHOENIX || 'false' }}
     steps:
@@ -275,9 +295,14 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # See build-operator's copy for why this is guarded on the CLI being present.
       - name: Ensure ECR repo
         if: env.BUILD_PHOENIX == 'true'
         run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "::notice::aws CLI absent on this runner — skipping ECR bootstrap; assuming the repository exists."
+            exit 0
+          fi
           aws ecr describe-repositories --repository-names phoenix-amtd-operator \
             >/dev/null 2>&1 || \
           aws ecr create-repository --repository-name phoenix-amtd-operator \
@@ -308,7 +333,7 @@ jobs:
     if: |
       github.event_name == 'pull_request'
       || (github.event_name == 'workflow_dispatch' && !inputs.force_release)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     # The pipeline fires REAL attacks and reads a shared audit stream. Two runs at once
     # would interleave their attacks in the same capture window and make attribution
     # meaningless — exactly the failure the suite exists to detect. Serialise, and never
@@ -430,7 +455,7 @@ jobs:
         (github.event_name == 'push' && github.ref == 'refs/heads/main')
         || (github.event_name == 'workflow_dispatch' && inputs.force_release)
       )
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     concurrency:
       group: phorvex-deploy-main
       cancel-in-progress: false
@@ -641,7 +666,7 @@ jobs:
         || (github.event_name == 'workflow_dispatch' && inputs.force_release)
       )
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     concurrency:
       group: phorvex-e2e-live
       cancel-in-progress: false
