@@ -64,6 +64,26 @@ func TestScarcityScalesEveryFactUniformly(t *testing.T) {
 	}
 }
 
+func TestShadowDispersionCapDoesNotChangeShippedDefault(t *testing.T) {
+	fctx := FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, HasGPU: true}
+	view := gpuView()
+	view.Physics.EPSS = 2 // raw product = 8
+
+	shipped := factsByKind(ucwRecon{}.AssetFacts(view, fctx).Facts)
+	view.Physics.DispersionCap = 6
+	shadow := factsByKind(ucwRecon{}.AssetFacts(view, fctx).Facts)
+	neutral := gpuView()
+	neutral.Physics = model.NeutralPhysics()
+	base := factsByKind(ucwRecon{}.AssetFacts(neutral, fctx).Facts)
+
+	if got := shipped[FactPodIdentity] / base[FactPodIdentity]; math.Abs(got-MaxDispersionMult) > 1e-9 {
+		t.Fatalf("zero override changed shipped cap: lift=%v want=%v", got, MaxDispersionMult)
+	}
+	if got := shadow[FactPodIdentity] / base[FactPodIdentity]; math.Abs(got-6) > 1e-9 {
+		t.Fatalf("shadow cap did not reach recon multiplier: lift=%v want=6", got)
+	}
+}
+
 // TestScarcityPreservesWithinAssetOrdering states the property the uniformity exists to protect.
 //
 // It compares only facts whose weight is the plain `base * urg` form. Three facts deliberately carry

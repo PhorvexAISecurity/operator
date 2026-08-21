@@ -40,6 +40,15 @@ func TestEffectiveDefaults(t *testing.T) {
 	if !s.IsDryRun() {
 		t.Errorf("default mode must be dryRun")
 	}
+	if got := s.EffectiveKillChainShape(); got != 2.0 {
+		t.Errorf("kill-chain shape default = %v, want 2.0", got)
+	}
+	wantSojourn := map[string]float64{"recon": 1800, "exploit": 600, "persist": 3600, "lateral": 1200, "impact": 600, "gpu-side-channel": 300, "model-theft": 180, "llm-jacking": 900, "prompt-inject-persist": 3600}
+	for stage, want := range wantSojourn {
+		if got := s.EffectiveSojournScaleSeconds()[stage]; got != want {
+			t.Errorf("%s sojourn default = %v, want %v", stage, got, want)
+		}
+	}
 }
 
 func TestEffectiveOverrides(t *testing.T) {
@@ -52,6 +61,9 @@ func TestEffectiveOverrides(t *testing.T) {
 			ProactiveFloor:         metav1.Duration{Duration: 2 * time.Hour},
 		},
 		Mode: ModeActive,
+		Brain: BrainSpec{KillChain: KillChainSpec{
+			Shape: "1.5", SojournScaleSeconds: SojournScaleSpec{Recon: 90, ModelTheft: 45},
+		}},
 	}
 	if s.EffectiveLambda() != 0.9 || s.EffectiveNormSparsity() != 0.2 || s.EffectiveFlowDisruption() != 0.8 {
 		t.Errorf("objective overrides not applied")
@@ -61,6 +73,21 @@ func TestEffectiveOverrides(t *testing.T) {
 	}
 	if s.IsDryRun() {
 		t.Errorf("active mode must not be dry-run")
+	}
+	if s.EffectiveKillChainShape() != 1.5 || s.EffectiveSojournScaleSeconds()["recon"] != 90 || s.EffectiveSojournScaleSeconds()["model-theft"] != 45 {
+		t.Errorf("kill-chain overrides not applied")
+	}
+	if s.EffectiveSojournScaleSeconds()["exploit"] != 600 {
+		t.Errorf("partial override did not preserve exploit default")
+	}
+}
+
+func TestInvalidKillChainOverridesFallBackDefensively(t *testing.T) {
+	s := PhorvexPolicySpec{Brain: BrainSpec{KillChain: KillChainSpec{
+		Shape: "NaN", SojournScaleSeconds: SojournScaleSpec{Recon: -10},
+	}}}
+	if s.EffectiveKillChainShape() != 2 || s.EffectiveSojournScaleSeconds()["recon"] != 1800 {
+		t.Fatalf("invalid override escaped defensive defaults: shape=%v scales=%v", s.EffectiveKillChainShape(), s.EffectiveSojournScaleSeconds())
 	}
 }
 

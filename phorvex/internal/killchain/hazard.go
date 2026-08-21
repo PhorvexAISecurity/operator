@@ -288,10 +288,17 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 
 	// --- predictive belief horizon: hazard of imminent next-stage transition ---
 	scale := m.SojournScale[stage]
+	if configured := pol.KillChainSojournScaleSeconds[stage.String()]; configured > 0 {
+		scale = configured
+	}
 	if scale <= 0 {
 		scale = 1800
 	}
-	hazard := weibullCDF(exposureSec, scale, m.Shape)
+	shape := pol.KillChainShape
+	if shape <= 0 || math.IsNaN(shape) || math.IsInf(shape, 0) {
+		shape = m.Shape
+	}
+	hazard := weibullCDF(exposureSec, scale, shape)
 
 	next := successorOf(stage)
 	// Neighbor pressure forward-projects a LATERAL transition (generic chain only; the
@@ -331,15 +338,15 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	case stage == StagePromptInjectPersist:
 		damping = 1.0 // persisted implant survives the wipe
 	case aiClassified || view.Pod.ModelID != "" || view.Pod.HasGPU:
-		damping = 1 - math.Exp(-math.Pow(exposureSec/math.Max(m.RecoverScale, 1), m.Shape))
+		damping = 1 - math.Exp(-math.Pow(exposureSec/math.Max(m.RecoverScale, 1), shape))
 	default:
 		damping = 1 - math.Exp(-exposureSec/math.Max(m.RecoverScale, 1)) // P1 baseline, unchanged
 	}
 	pHold := clamp01(pHoldRaw * damping)
 
 	// --- predictive horizon: the MOVED-BEFORE-NEXT-STAGE measurable (closed-form) ---
-	preempt := 1 - weibullCDF(exposureSec, scale, m.Shape) // survival; moveLatency=0 (flagged)
-	projNext := projectedNextStageSec(scale, m.Shape, exposureSec)
+	preempt := 1 - weibullCDF(exposureSec, scale, shape) // survival; moveLatency=0 (flagged)
+	projNext := projectedNextStageSec(scale, shape, exposureSec)
 
 	return Assessment{
 		Stage:                 stage,

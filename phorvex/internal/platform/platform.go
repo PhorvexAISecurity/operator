@@ -21,6 +21,7 @@ package platform
 import (
 	"math"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -74,8 +75,15 @@ func Derive(snap *ingest.Snapshot) (string, map[string]model.PhysicsWitness) {
 // =false) — a DCGM/NVML-equipped adapter (CoreWeave/EKS-GPU) overrides those.
 type genericK8s struct{}
 
-func (genericK8s) Name() string                          { return "generic-k8s" }
-func (genericK8s) Detected(_ *ingest.Snapshot) bool      { return true }
+func (genericK8s) Name() string                     { return "generic-k8s" }
+func (genericK8s) Detected(_ *ingest.Snapshot) bool { return true }
+
+// contributesToFleetPhysics excludes completed/failed workload history from the CURRENT fleet
+// statistics. An empty phase is accepted for synthetic callers and old unit fixtures; Kubernetes
+// snapshots always carry an explicit phase.
+func contributesToFleetPhysics(p *model.Pod) bool {
+	return p != nil && (p.Phase == "" || p.Phase == string(corev1.PodRunning))
+}
 
 func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness {
 	out := make(map[string]model.PhysicsWitness, len(snap.Pods))
@@ -90,6 +98,9 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 	withImage := 0
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
+		if !contributesToFleetPhysics(p) {
+			continue
+		}
 		if p.ImageID != "" {
 			imgFreq[p.ImageID]++
 			withImage++
@@ -114,6 +125,9 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 	nodeReqMem := map[string]int64{}
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
+		if !contributesToFleetPhysics(p) {
+			continue
+		}
 		if p.Node != "" {
 			nodeReqCPU[p.Node] += p.CPURequestMilli
 			nodeReqMem[p.Node] += p.MemRequestBytes

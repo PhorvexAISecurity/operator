@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-08-20T17:27:17.762983974Z",
+  "evidenceSource": "runtime_cluster_snapshot",
+  "evidenceNote": "collected by the running operator from its Kubernetes snapshot; learned values remain shadow-only",
+  "rows": [
+    {
+      "Interval": 300000000000,
+      "Windows": 12,
+      "Skipped": 0,
+      "MaxAtCeiling": 0.05714285714285714,
+      "MeanAtCeiling": 0.056079066994559966,
+      "MaxScaleDrift": 0,
+      "ReadyComparisons": 0,
+      "MaxReadyHardSaturation": 0,
+      "OptimizerComparisons": 1059,
+      "MaxOptimizerChangeRatio": 0,
+      "AvailabilityViolations": 0,
+      "SLOViolations": 0,
+      "OptimizerStable": true,
+      "ClearsThreshold": false
+    },
+    {
+      "Interval": 900000000000,
+      "Windows": 4,
+      "Skipped": 0,
+      "MaxAtCeiling": 0.05714285714285714,
+      "MeanAtCeiling": 0.05627780180564174,
+      "MaxScaleDrift": 0,
+      "ReadyComparisons": 0,
+      "MaxReadyHardSaturation": 0,
+      "OptimizerComparisons": 880,
+      "MaxOptimizerChangeRatio": 0,
+      "AvailabilityViolations": 0,
+      "SLOViolations": 0,
+      "OptimizerStable": true,
+      "ClearsThreshold": false
+    },
+    {
+      "Interval": 1800000000000,
+      "Windows": 2,
+      "Skipped": 0,
+      "MaxAtCeiling": 0.05714285714285714,
+      "MeanAtCeiling": 0.05667447306791569,
+      "MaxScaleDrift": 0,
+      "ReadyComparisons": 0,
+      "MaxReadyHardSaturation": 0,
+      "OptimizerComparisons": 617,
+      "MaxOptimizerChangeRatio": 0,
+      "AvailabilityViolations": 0,
+      "SLOViolations": 0,
+      "OptimizerStable": true,
+      "ClearsThreshold": false
+    },
+    {
+      "Interval": 3600000000000,
+      "Windows": 1,
+      "Skipped": 0,
+      "MaxAtCeiling": 0.05714285714285714,
+      "MeanAtCeiling": 0.05714285714285714,
+      "MaxScaleDrift": 0,
+      "ReadyComparisons": 0,
+      "MaxReadyHardSaturation": 0,
+      "OptimizerComparisons": 82,
+      "MaxOptimizerChangeRatio": 0,
+      "AvailabilityViolations": 0,
+      "SLOViolations": 0,
+      "OptimizerStable": true,
+      "ClearsThreshold": false
+    }
+  ]
+}

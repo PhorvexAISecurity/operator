@@ -90,6 +90,11 @@ type PhorvexPolicySpec struct {
 	// +kubebuilder:validation:Required
 	Actions ActionsSpec `json:"actions"`
 
+	// Brain configures deterministic model parameters owned by the Phorvex decision
+	// engine. Empty preserves the exact shipped model defaults.
+	// +kubebuilder:validation:Optional
+	Brain BrainSpec `json:"brain,omitempty"`
+
 	// Mode is the safety gate. "dryRun" (the default) decides + logs + emits metrics
 	// but NEVER actuates; "active" additionally drives Phoenix. P0 ships and runs in
 	// dryRun. (PRD: mode: dryRun.)
@@ -97,6 +102,56 @@ type PhorvexPolicySpec struct {
 	// +kubebuilder:validation:Enum=dryRun;active
 	// +kubebuilder:default=dryRun
 	Mode string `json:"mode,omitempty"`
+}
+
+// BrainSpec is the policy-owned configuration surface for the deterministic brain.
+type BrainSpec struct {
+	// KillChain configures the semi-Markov stage hazard model.
+	// +kubebuilder:validation:Optional
+	KillChain KillChainSpec `json:"killChain,omitempty"`
+}
+
+// KillChainSpec configures Weibull stage-transition hazards. Sojourn values are seconds;
+// Shape is the dimensionless Weibull shape parameter. Every override must be positive.
+type KillChainSpec struct {
+	// +kubebuilder:validation:Optional
+	SojournScaleSeconds SojournScaleSpec `json:"sojournScaleSeconds,omitempty"`
+	// Shape is a positive decimal string. Empty preserves the shipped value 2.0.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$`
+	Shape string `json:"shape,omitempty"`
+}
+
+// SojournScaleSpec gives the characteristic dwell of each kill-chain stage in seconds.
+// Fields are explicit so the CRD validates every override and rejects misspelled stage names.
+type SojournScaleSpec struct {
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	Recon int64 `json:"recon,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	Exploit int64 `json:"exploit,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	Persist int64 `json:"persist,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	Lateral int64 `json:"lateral,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	Impact int64 `json:"impact,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	GPUSideChannel int64 `json:"gpuSideChannel,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	ModelTheft int64 `json:"modelTheft,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	LLMJacking int64 `json:"llmJacking,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	PromptInjectPersist int64 `json:"promptInjectPersist,omitempty"`
 }
 
 // ObjectiveSpec is the cost-weighted objective (PRD objective{lambda,costWeights}).

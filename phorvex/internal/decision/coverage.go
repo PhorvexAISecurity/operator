@@ -81,20 +81,25 @@ func (e *CoverageEngine) SetCostCalibrationFrozen(frozen bool) {
 // CostCalibrationFrozen reports the current state (audit/observability).
 func (e *CoverageEngine) CostCalibrationFrozen() bool { return e.calibrationFrozen }
 
-// costFor resolves the per-tenant cost bucket (DEFAULT-TO-OLD-SCALAR: the first tenant IS the original
-// singleton; additional tenants get a fresh, identically-seeded, fully-isolated bucket).
-func (e *CoverageEngine) costFor(tenant string) *cost.P1Cost {
+// costFor resolves the per-tenant cost bucket. An optional lambda seed is consumed only
+// when the bucket is first created; later calls preserve the adaptive dual state.
+func (e *CoverageEngine) costFor(tenant string, lambdaSeed ...float64) *cost.P1Cost {
 	if e.costByTenant == nil {
 		e.costByTenant = map[string]*cost.P1Cost{}
 	}
 	if c := e.costByTenant[tenant]; c != nil {
 		return c
 	}
+	seed := cost.DefaultLambdaSeed
+	if len(lambdaSeed) > 0 {
+		seed = lambdaSeed[0]
+	}
 	var c *cost.P1Cost
 	if len(e.costByTenant) == 0 && e.Cost != nil {
-		c = e.Cost // bit-identical single-tenant default
+		c = e.Cost
+		c.Dual = cost.NewDualSolverWithSeed(seed)
 	} else {
-		c = cost.NewP1Cost() // isolated per-tenant bucket, zero cross-feed
+		c = cost.NewP1CostWithLambda(seed) // isolated per-tenant bucket, zero cross-feed
 	}
 	if c != nil && c.RLS != nil {
 		c.RLS.SetFrozen(e.calibrationFrozen)
@@ -205,7 +210,7 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 		}
 	}
 
-	tcost := e.costFor(pol.Tenant)
+	tcost := e.costFor(pol.Tenant, pol.Lambda)
 	costCeiling := pol.NormSparsity + pol.FlowDisruption + 0.2 // worst-case single-move budget
 	deps := actionset.Deps{
 		Recon:       e.Recon,
@@ -226,8 +231,17 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 // DecideChecked rejects a structurally invalid ActionSet before selection or learning.
 // The runner calls this checked seam and logs/counts the failure for the production tick.
 func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
+	return e.decideChecked(views, pol, true)
+}
+
+// DecideShadowChecked evaluates a counterfactual without advancing any learned production state.
+func (e *CoverageEngine) DecideShadowChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
+	return e.decideChecked(views, pol, false)
+}
+
+func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Policy, persist bool) ([]model.Decision, error) {
 	now := e.now()
-	tcost := e.costFor(pol.Tenant)
+	tcost := e.costFor(pol.Tenant, pol.Lambda)
 	lambda := tcost.Dual.Lambda()
 
 	set, ctxByKey := e.AssembleSet(views, pol)
@@ -483,16 +497,18 @@ func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Po
 		})
 	}
 
-	// --- persist stateful learning (dual price + conjugate memory) ---
-	tcost.Dual.Step(demand, len(selectedAsset), B)
-	for key := range selectedAsset {
-		if ac, ok := ctxByKey[key]; ok {
-			// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
-			// evidence this tenant's footholds tend to be real (alpha up); acting on a
-			// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
-			// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
-			// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
-			e.Killchain.Memory.Observe(pol.Tenant, 0.5*(ac.assess.PHold-0.5))
+	if persist {
+		// --- persist stateful learning (dual price + conjugate memory) ---
+		tcost.Dual.Step(demand, len(selectedAsset), B)
+		for key := range selectedAsset {
+			if ac, ok := ctxByKey[key]; ok {
+				// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
+				// evidence this tenant's footholds tend to be real (alpha up); acting on a
+				// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
+				// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
+				// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
+				e.Killchain.Memory.Observe(pol.Tenant, 0.5*(ac.assess.PHold-0.5))
+			}
 		}
 	}
 

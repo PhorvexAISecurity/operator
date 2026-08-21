@@ -24,6 +24,14 @@ type CheckedOptimizer interface {
 	DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error)
 }
 
+// ShadowCheckedOptimizer evaluates the same state and substrate without persisting dual-price
+// or kill-chain-memory updates. It lets calibration compare candidate scales without teaching the
+// production optimizer from a decision that was never actuated.
+type ShadowCheckedOptimizer interface {
+	CheckedOptimizer
+	DecideShadowChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error)
+}
+
 // RotationObserver is the optional feedback seam implemented by an optimizer with
 // an online rotation-cost learner. The runner invokes it only for completed,
 // measured live rotations; P0 and other stateless optimizers need not implement it.
@@ -37,4 +45,5 @@ func (*Engine) Name() string { return "p0-greedy" }
 var _ Optimizer = (*Engine)(nil)
 var _ Optimizer = (*CoverageEngine)(nil)
 var _ CheckedOptimizer = (*CoverageEngine)(nil)
+var _ ShadowCheckedOptimizer = (*CoverageEngine)(nil)
 var _ RotationObserver = (*CoverageEngine)(nil)

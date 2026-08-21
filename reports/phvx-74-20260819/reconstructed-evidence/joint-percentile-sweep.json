@@ -1,0 +1,183 @@
+{
+  "generatedAt": "2026-08-19T12:00:00Z",
+  "evidenceSource": "reconstructed_fixture_not_live",
+  "evidenceNote": "rebuilt from reported 2026-08-19 aggregate counts; per-pod rows are synthetic, and no live ready-delay or optimizer observations were available",
+  "rows": [
+    {
+      "coPercentile": 0.9,
+      "dispersionPercentile": 0.9,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.9,
+      "dispersionPercentile": 0.95,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.9,
+      "dispersionPercentile": 0.975,
+      "coScale": 8,
+      "dispersionCap": 6.9692,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.028169014084507043,
+      "dispersionStrictlyClippedRatio": 0.014084507042253521,
+      "distinctCapped": 21,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.9,
+      "dispersionPercentile": 0.99,
+      "coScale": 8,
+      "dispersionCap": 8,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.014084507042253521,
+      "dispersionStrictlyClippedRatio": 0,
+      "distinctCapped": 22,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.95,
+      "dispersionPercentile": 0.9,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.95,
+      "dispersionPercentile": 0.95,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.95,
+      "dispersionPercentile": 0.975,
+      "coScale": 8,
+      "dispersionCap": 6.9692,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.028169014084507043,
+      "dispersionStrictlyClippedRatio": 0.014084507042253521,
+      "distinctCapped": 21,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.95,
+      "dispersionPercentile": 0.99,
+      "coScale": 8,
+      "dispersionCap": 8,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.014084507042253521,
+      "dispersionStrictlyClippedRatio": 0,
+      "distinctCapped": 22,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.975,
+      "dispersionPercentile": 0.9,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.975,
+      "dispersionPercentile": 0.95,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.975,
+      "dispersionPercentile": 0.975,
+      "coScale": 8,
+      "dispersionCap": 6.9692,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.028169014084507043,
+      "dispersionStrictlyClippedRatio": 0.014084507042253521,
+      "distinctCapped": 21,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.975,
+      "dispersionPercentile": 0.99,
+      "coScale": 8,
+      "dispersionCap": 8,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.014084507042253521,
+      "dispersionStrictlyClippedRatio": 0,
+      "distinctCapped": 22,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.99,
+      "dispersionPercentile": 0.9,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.99,
+      "dispersionPercentile": 0.95,
+      "coScale": 8,
+      "dispersionCap": 4,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.11267605633802817,
+      "dispersionStrictlyClippedRatio": 0.028169014084507043,
+      "distinctCapped": 20,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.99,
+      "dispersionPercentile": 0.975,
+      "coScale": 8,
+      "dispersionCap": 6.9692,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.028169014084507043,
+      "dispersionStrictlyClippedRatio": 0.014084507042253521,
+      "distinctCapped": 21,
+      "clearsSaturationLimit": false
+    },
+    {
+      "coPercentile": 0.99,
+      "dispersionPercentile": 0.99,
+      "coScale": 8,
+      "dispersionCap": 8,
+      "coAtCeilingRatio": 0.2,
+      "dispersionAtCeilingRatio": 0.014084507042253521,
+      "dispersionStrictlyClippedRatio": 0,
+      "distinctCapped": 22,
+      "clearsSaturationLimit": false
+    }
+  ]
+}

@@ -92,26 +92,23 @@ spec:
                       and quarantine (Phoenix Quarantine); noop is always implicitly available.
                     items:
                       description: |-
-                        ActionType is one enabled mutation. P0 maps rotate->Phoenix Delete,
-                        quarantine->Phoenix Quarantine.
+                        ActionType is one enabled mutation. The native actuator (P-ACTUATOR) enacts the full
+                        vocabulary; rotate/quarantine also map to Phoenix Delete/Quarantine via the optional
+                        adapter. The advanced/AI moves are native-only and opt-in (a nil/empty Enabled set
+                        defaults to rotate+quarantine — the historical behaviour).
                       enum:
                       - rotate
                       - quarantine
                       - noop
                       - debugger
                       - custom-inject
-                      - disable
                       - identity-rotate
                       - route-rotate
-                      - endpoint-rotate
                       - warm-swap
                       - mig-rebind
                       - kv-reset
+                      - endpoint-rotate
                       - model-shard-replace
-                      - adapter-rotate
-                      - request-drain
-                      - guardrail-rotate
-                      - kv-migrate-invalidate
                       type: string
                     minItems: 1
                     type: array
@@ -146,6 +143,64 @@ spec:
                       (read from the pod spec's volumes/envFrom — Phorvex never reads secret
                       CONTENTS). Empty defaults to "0.8".
                     type: string
+                type: object
+              brain:
+                description: |-
+                  Brain configures deterministic model parameters owned by the Phorvex decision
+                  engine. Empty preserves the exact shipped model defaults.
+                properties:
+                  killChain:
+                    description: KillChain configures the semi-Markov stage hazard
+                      model.
+                    properties:
+                      shape:
+                        description: Shape is a positive decimal string. Empty preserves
+                          the shipped value 2.0.
+                        pattern: ^([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$
+                        type: string
+                      sojournScaleSeconds:
+                        description: |-
+                          SojournScaleSpec gives the characteristic dwell of each kill-chain stage in seconds.
+                          Fields are explicit so the CRD validates every override and rejects misspelled stage names.
+                        properties:
+                          exploit:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          gpuSideChannel:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          impact:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          lateral:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          llmJacking:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          modelTheft:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          persist:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          promptInjectPersist:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                          recon:
+                            format: int64
+                            minimum: 1
+                            type: integer
+                        type: object
+                    type: object
                 type: object
               budget:
                 description: |-
@@ -365,12 +420,12 @@ spec:
                   reactiveOnly:
                     default: false
                     description: |-
-                      ReactiveOnly suppresses PROACTIVE (exposure-only) moves: when true, an asset
-                      is actionable ONLY while a real attack signal targets it (a non-Phorvex
-                      SecurityEvent, a compromised neighbor, or an AI poison marker). The
-                      hygiene-floor proactive rotation/quarantine cadence is disabled, so the
-                      workload stays CALM until attacked and the response is a clean, attributable
-                      reaction. Default false preserves proactive moving-target defense.
+                      ReactiveOnly suppresses PROACTIVE (exposure-only) moves: when true, an asset is
+                      actionable ONLY while a real attack signal targets it (a non-Phorvex SecurityEvent,
+                      a compromised neighbor, or an AI poison marker). The hygiene-floor proactive
+                      rotation/quarantine cadence is disabled, so the workload stays CALM until attacked
+                      and the response is a clean, attributable reaction. Default false preserves the
+                      proactive moving-target-defense behavior.
                     type: boolean
                 type: object
             required:
@@ -392,7 +447,8 @@ spec:
                   possible in active mode). Stays false for the whole P0 dry-run lifetime.
                 type: boolean
               conditions:
-                description: Conditions includes Ready, DryRun, ValidationError, KillSwitch, ActionsSupported.
+                description: Conditions includes Ready, DryRun, ValidationError, KillSwitch,
+                  ActionsSupported.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -461,9 +517,11 @@ spec:
                   KillSwitchEngaged reflects the global kill-switch (FR8): when engaged the
                   engine decides + logs but suppresses all actuation regardless of Mode.
 
-                  NOT omitempty (PHVX-17). With it, `false` was indistinguishable from "never
-                  written": the field simply vanished, so an operator reading the CR could not tell
-                  a running defence from a status that had never been reconciled.
+                  NOT omitempty (PHVX-17). With it, `false` was indistinguishable from "never written": the
+                  field simply vanished, so an operator reading the CR could not tell a running defence from a
+                  status that had never been reconciled. Measured on the live fleet — all four policies showed
+                  the field ABSENT while the sentinel said engaged=false, i.e. the healthy case and the silent
+                  case looked identical. An explicit `false` is the whole point of a safety-control readout.
                 type: boolean
               lastDecisionTime:
                 description: |-
