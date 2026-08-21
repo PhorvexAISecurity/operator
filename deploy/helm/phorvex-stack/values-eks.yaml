@@ -43,7 +43,20 @@ phorvex:
     baseInterval: 10s
     leaderElect: true
     globalKillSwitch: false
-    prometheusUrl: http://prometheus.gpu-telemetry.svc.cluster.local:9090
+    # Points at the kube-prometheus-stack in `monitoring`, NOT the old gpu-telemetry
+    # Prometheus. That one scraped exactly one target (dcgm-exporter) and held 23 metric
+    # names, so every cAdvisor and HTTP series ingest/prometheus.go asks for came back
+    # empty and Telemetry.Present stayed false for non-GPU pods. Physics measured that
+    # directly: residual was 0 on all 118 records of the last end-to-end run, across all
+    # four namespaces — the whole flow/queue/fanout half of littleslaw.go was dead.
+    #
+    # The new stack is a strict superset: it carries the same dcgm job, adds kubelet
+    # cAdvisor (BytesIn/BytesOut), a standalone cAdvisor for container_network_tcp_usage_total
+    # (ConnCount — the kubelet does not expose it), kube-state-metrics, node-exporter, and
+    # vLLM's native histograms. Recording rules in the `phorvex-physics-bridge`
+    # PrometheusRule map real series onto the names DefaultPromQueries() hardcodes,
+    # because cmd/main.go passes a nil query map and there is no override hook.
+    prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
     gpuEnvelopeMax: 0.2925
     operatorNamespace: phorvex-system
     # hybrid drives Phoenix CRs and the direct path. This was an env var patched onto the

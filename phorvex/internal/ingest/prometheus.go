@@ -55,6 +55,23 @@ func DefaultPromQueries() map[string]string {
 		SigBytesOut:     `sum by (pod) (rate(container_network_transmit_bytes_total{namespace="{namespace}"}[1m]))`,
 		SigGPUUtil:      `avg by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace="{namespace}"}) / 100`,
 		SigTokensPerSec: `sum by (pod) (rate(nim_tokens_total{namespace="{namespace}"}[1m]))`,
+
+		// QueueDepth feeds the queue term of the physics residual (littleslaw.go:51 —
+		// "queue depth large relative to arrival rate means items pile up"). It had NO
+		// entry here at all, so t.QueueDepth was always 0 and that entire term of
+		// Residual() was dead code in every deployment.
+		//
+		// The `or` chain keeps a vendor-neutral name FIRST so a site exporting its own
+		// gauge wins outright, then falls back to the serving stacks. PromQL `or` yields
+		// the left side wherever it has samples and the right side only for series the
+		// left does not cover, so a fallback can never overwrite a real generic reading.
+		//
+		// SigSyscallRate is deliberately absent: nothing in the codebase reads
+		// Telemetry.SyscallRate, so giving it a query would cost a scrape per tick per
+		// namespace and change no decision.
+		SigQueueDepth: `sum by (pod) (workload_queue_depth{namespace="{namespace}"})` +
+			` or sum by (pod) (vllm:num_requests_waiting{namespace="{namespace}"})` +
+			` or sum by (pod) (nv_inference_pending_request_count{namespace="{namespace}"})`,
 	}
 }
 
