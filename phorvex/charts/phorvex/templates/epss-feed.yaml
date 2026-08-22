@@ -1,0 +1,183 @@
+{{- if and .Values.phorvex.epss.enabled .Values.phorvex.epss.feed.enabled }}
+{{- $name := printf "%s-epss-feed" (include "phorvex.fullname" .) | trunc 63 | trimSuffix "-" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+  {{- with .Values.phorvex.epss.feed.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+# Inventory only. The feed cannot mutate workloads or read Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+# Kubernetes cannot resourceName-restrict list/create, so the chart bootstraps the
+# ConfigMap and grants this ServiceAccount only get/update on that exact object.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ .Values.phorvex.epss.configMapName | quote }}]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: epss-feed
+spec:
+  schedule: {{ .Values.phorvex.epss.feed.schedule | quote }}
+  suspend: {{ .Values.phorvex.epss.feed.suspend }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ .Values.phorvex.epss.feed.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "phorvex.labels" . | nindent 12 }}
+            app.kubernetes.io/component: epss-feed
+        spec:
+          serviceAccountName: {{ $name }}
+          restartPolicy: Never
+          automountServiceAccountToken: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          {{- with .Values.phorvex.epss.feed.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          initContainers:
+          - name: trivy
+            image: "{{ .Values.phorvex.epss.feed.trivy.image.repository }}:{{ .Values.phorvex.epss.feed.trivy.image.tag }}"
+            imagePullPolicy: {{ .Values.phorvex.epss.feed.trivy.image.pullPolicy }}
+            command: ["/bin/sh", "-ec"]
+            args: ["cp /usr/local/bin/trivy /tools/trivy"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            volumeMounts:
+            - name: trivy-bin
+              mountPath: /tools
+          containers:
+          - name: feed
+            image: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+            imagePullPolicy: {{ .Values.phorvex.image.pullPolicy }}
+            args:
+            - --epss-feed=true
+            - --epss-feed-apply={{ .Values.phorvex.epss.feed.apply }}
+            - --epss-feed-allow-partial={{ .Values.phorvex.epss.feed.allowPartial }}
+            - --epss-feed-namespace={{ .Release.Namespace }}
+            - --epss-feed-configmap={{ .Values.phorvex.epss.configMapName }}
+            - --epss-feed-key={{ .Values.phorvex.epss.fileName }}
+            - --epss-feed-first-url={{ .Values.phorvex.epss.feed.firstURL }}
+            - --epss-feed-trivy={{ .Values.phorvex.epss.feed.trivyPath }}
+            - --epss-feed-scan-timeout={{ .Values.phorvex.epss.feed.scanTimeout }}
+            env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- with .Values.phorvex.epss.feed.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              {{- toYaml .Values.phorvex.epss.feed.resources | nindent 14 }}
+            volumeMounts:
+            - name: trivy-cache
+              mountPath: /tmp
+            - name: trivy-bin
+              mountPath: /tools
+              readOnly: true
+          volumes:
+          - name: trivy-cache
+            emptyDir: {}
+          - name: trivy-bin
+            emptyDir: {}
+          {{- with .Values.phorvex.epss.feed.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.phorvex.epss.feed.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.phorvex.epss.feed.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+

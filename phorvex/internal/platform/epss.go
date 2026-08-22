@@ -6,7 +6,9 @@ package platform
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"reflect"
 	"sync"
 )
 
@@ -44,12 +46,11 @@ func SeedEPSS(m map[string]struct {
 	EPSS float64
 	CVSS float64
 }) {
-	epssMu.Lock()
-	defer epssMu.Unlock()
-	epssCache = map[string]epssEntry{}
+	next := make(map[string]epssEntry, len(m))
 	for k, v := range m {
-		epssCache[k] = epssEntry{EPSS: clamp01(v.EPSS), CVSS: v.CVSS}
+		next[k] = epssEntry{EPSS: clamp01(v.EPSS), CVSS: v.CVSS}
 	}
+	replaceEPSS(next)
 }
 
 // LoadEPSSFromFile seeds the exploitability cache from a JSON file mapping image reference/digest ->
@@ -57,35 +58,53 @@ func SeedEPSS(m map[string]struct {
 // or the file is missing, so a cluster with no scan feed keeps EPSS honest-absent (1.0) rather than
 // fabricating. Deterministic + offline: the decision path never touches the network.
 func LoadEPSSFromFile(path string) error {
+	_, _, err := loadEPSSFromFile(path, true)
+	return err
+}
+
+// RefreshEPSSFromFile is the runtime variant: a configured file disappearing is
+// an error, not an honest-absent startup. The previous cache remains in force.
+func RefreshEPSSFromFile(path string) (entries int, changed bool, err error) {
+	return loadEPSSFromFile(path, false)
+}
+
+func loadEPSSFromFile(path string, missingOK bool) (entries int, changed bool, err error) {
 	if path == "" {
-		return nil
+		return EPSSLoaded(), false, nil
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil // honest-absent: no feed wired
+		if missingOK && os.IsNotExist(err) {
+			return EPSSLoaded(), false, nil // startup honest-absence: no feed wired
 		}
-		return err
+		return EPSSLoaded(), false, err
 	}
 	var raw map[string]struct {
 		EPSS float64 `json:"epss"`
 		CVSS float64 `json:"cvss"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
-		return err
+		return EPSSLoaded(), false, err
 	}
-	m := make(map[string]struct {
-		EPSS float64
-		CVSS float64
-	}, len(raw))
+	next := make(map[string]epssEntry, len(raw))
 	for k, v := range raw {
-		m[k] = struct {
-			EPSS float64
-			CVSS float64
-		}{EPSS: v.EPSS, CVSS: v.CVSS}
+		if k == "" || v.EPSS < 0 || v.EPSS > 1 || v.CVSS < 0 || v.CVSS > 10 {
+			return EPSSLoaded(), false, fmt.Errorf("invalid EPSS cache entry %q: epss=%v cvss=%v", k, v.EPSS, v.CVSS)
+		}
+		next[k] = epssEntry{EPSS: v.EPSS, CVSS: v.CVSS}
 	}
-	SeedEPSS(m)
-	return nil
+	changed = replaceEPSS(next)
+	return len(next), changed, nil
+}
+
+func replaceEPSS(next map[string]epssEntry) bool {
+	epssMu.Lock()
+	defer epssMu.Unlock()
+	changed := !reflect.DeepEqual(epssCache, next)
+	if changed {
+		epssCache = next
+	}
+	return changed
 }
 
 // EPSSLoaded reports how many image entries are currently seeded (for scan/audit visibility).

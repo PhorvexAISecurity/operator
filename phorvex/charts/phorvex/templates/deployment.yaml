@@ -39,6 +39,13 @@ spec:
         args:
         - --base-interval={{ .Values.phorvex.baseInterval }}
         - --actions-supported-debounce={{ .Values.phorvex.actionsSupportedDebounce }}
+        - --calibration-shadow={{ .Values.phorvex.calibration.enabled }}
+        {{- if .Values.phorvex.calibration.enabled }}
+        - --calibration-sample={{ .Values.phorvex.calibration.sampleInterval }}
+        - --calibration-refresh={{ .Values.phorvex.calibration.refreshInterval }}
+        - --calibration-lookback={{ .Values.phorvex.calibration.lookback }}
+        - --calibration-export-dir={{ .Values.phorvex.calibration.exportDir }}
+        {{- end }}
         - --metrics-bind-address={{ .Values.phorvex.metricsBindAddress }}
         - --health-probe-bind-address={{ .Values.phorvex.healthProbeBindAddress }}
         - --leader-elect={{ .Values.phorvex.leaderElect }}
@@ -47,6 +54,7 @@ spec:
         {{- end }}
         {{- if .Values.phorvex.epss.enabled }}
         - --epss-cache={{ printf "%s/%s" (.Values.phorvex.epss.mountPath | trimSuffix "/") .Values.phorvex.epss.fileName }}
+        - --epss-cache-refresh={{ .Values.phorvex.epss.refreshInterval }}
         {{- end }}
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
@@ -101,7 +109,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -111,6 +119,10 @@ spec:
         {{- if .Values.phorvex.audit.enabled }}
         - name: audit
           mountPath: {{ .Values.phorvex.audit.path | dir }}
+        {{- end }}
+        {{- if .Values.phorvex.calibration.enabled }}
+        - name: calibration-evidence
+          mountPath: {{ .Values.phorvex.calibration.exportDir }}
         {{- end }}
         {{- end }}
 {{- if .Values.phorvex.console.enabled }}
@@ -163,7 +175,7 @@ spec:
         - name: console-tmp
           mountPath: /tmp
 {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled .Values.phorvex.calibration.enabled }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -181,6 +193,10 @@ spec:
       {{- end }}
       {{- if .Values.phorvex.console.enabled }}
       - name: console-tmp
+        emptyDir: {}
+      {{- end }}
+      {{- if .Values.phorvex.calibration.enabled }}
+      - name: calibration-evidence
         emptyDir: {}
       {{- end }}
       {{- end }}

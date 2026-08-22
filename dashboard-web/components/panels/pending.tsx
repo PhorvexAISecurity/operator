@@ -13,7 +13,7 @@ const SLOTS: Record<string, { title: string; sub: string; stage: string; bullets
   physics: {
     title: "Platform Physics Scan", stage: "Wave 3 · data ready (phorvex --scan)",
     sub: "The discovered PhysicsWitness per pod — image-rarity dispersion, co-residency, scheduler slack, MIG geometry, EPSS, and the residual r_i.",
-    bullets: ["Values real-now on K8s (imgRarity/coRes/slack/PDB/migValid/epss)", "GPU half [SP-0-PENDING-P4]", "EMR scarcity scalar is Investor/Operator-only (owner-redacted)"],
+    bullets: ["Values real-now on K8s (imgRarity/coRes/slack/PDB/migValid)", "EPSS reads neutral where the feed has no entry for an image", "GPU half [SP-0-PENDING-P4]", "EMR scarcity scalar is Investor/Operator-only (owner-redacted)"],
   },
   context: {
     title: "Context / Kill-Chain", stage: "Wave 3 · audit + --scan",

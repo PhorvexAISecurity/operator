@@ -18,7 +18,7 @@ an `AdaptiveMovingTargetDefense` strategy). Phorvex **never writes pods**.
 
 - **`PhorvexPolicy` CRD** (`phorvex.ai/v1alpha1`) — exactly the PRD PART 7 spec
   (`selector / objective{lambda,costWeights} / budget{maxMovesPerTick,tickInterval,
-  antiOverRotationWindow,proactiveFloor} / slo / assetValue / triggers / actions /
+  antiOverRotationWindow,proactiveFloor} / slo / assetValue / triggers / actions / brain{killChain} /
   mode:dryRun`). **Namespace-scoped = per-tenant from line one** so vcluster
   multi-tenancy is not a retrofit.
 - **Ingest** (FR1): Prometheus metrics (pluggable, honest-absent), the SecurityEvent

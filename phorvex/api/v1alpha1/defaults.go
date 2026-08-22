@@ -5,9 +5,17 @@
 package v1alpha1
 
 import (
+	"math"
 	"strconv"
 	"time"
 )
+
+const defaultKillChainShape = 2.0
+
+var defaultSojournScaleSeconds = map[string]float64{
+	"recon": 1800, "exploit": 600, "persist": 3600, "lateral": 1200, "impact": 600,
+	"gpu-side-channel": 300, "model-theft": 180, "llm-jacking": 900, "prompt-inject-persist": 3600,
+}
 
 // Code defaults for the decimal-string / Duration knobs. These are FLAGGED design
 // proposals that trace the PRD PART 7 example values; they are NEVER inherited from
@@ -116,6 +124,38 @@ func (s *PhorvexPolicySpec) EffectiveMode() string {
 		return ModeDryRun
 	}
 	return s.Mode
+}
+
+// EffectiveKillChainShape returns the positive dimensionless Weibull shape. Empty or
+// invalid values preserve NewModel's exact 2.0 default even when an object bypasses CRD validation.
+func (s *PhorvexPolicySpec) EffectiveKillChainShape() float64 {
+	v, err := strconv.ParseFloat(s.Brain.KillChain.Shape, 64)
+	if s.Brain.KillChain.Shape == "" || err != nil || v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return defaultKillChainShape
+	}
+	return v
+}
+
+// EffectiveSojournScaleSeconds resolves every stage independently. A missing or non-positive
+// field preserves that stage's exact NewModel default.
+func (s *PhorvexPolicySpec) EffectiveSojournScaleSeconds() map[string]float64 {
+	out := make(map[string]float64, len(defaultSojournScaleSeconds))
+	for stage, value := range defaultSojournScaleSeconds {
+		out[stage] = value
+	}
+	configured := s.Brain.KillChain.SojournScaleSeconds
+	overrides := map[string]int64{
+		"recon": configured.Recon, "exploit": configured.Exploit,
+		"persist": configured.Persist, "lateral": configured.Lateral, "impact": configured.Impact,
+		"gpu-side-channel": configured.GPUSideChannel, "model-theft": configured.ModelTheft,
+		"llm-jacking": configured.LLMJacking, "prompt-inject-persist": configured.PromptInjectPersist,
+	}
+	for stage, value := range overrides {
+		if value > 0 {
+			out[stage] = float64(value)
+		}
+	}
+	return out
 }
 
 // IsDryRun reports whether actuation is suppressed by Mode.
