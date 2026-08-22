@@ -12,6 +12,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -58,13 +59,15 @@ type policyEntry struct {
 // controller-created replacement UID reached Ready. knownUIDs prevents an already
 // Ready sibling from being mistaken for the replacement.
 type pendingRotation struct {
-	tenant           string
-	startedAt        time.Time
-	referenceAtStart time.Duration
-	censorDeadline   time.Time
-	view             model.WorkloadView
-	knownUIDs        map[string]struct{}
-	costObserved     bool
+	tenant               string
+	startedAt            time.Time
+	referenceAtStart     time.Duration
+	censorDeadline       time.Time
+	view                 model.WorkloadView
+	knownUIDs            map[string]struct{}
+	minAvailableReplicas int
+	selectionBound       slo.Bound
+	costObserved         bool
 }
 
 // Manager owns the tenant registry and the tick loop.
@@ -93,9 +96,9 @@ type Manager struct {
 	// required before status becomes False. <=0 uses the default.
 	ActionsSupportedDebounce int
 
-	// Disruption is the ledger of disruption Phorvex itself caused, in unavailable
-	// replica-seconds. Written when a rotation's recovery is measured below. Nil
-	// disables recording; the ledger observes and never gates.
+	// Disruption is the Phorvex action/impact ledger. It records completed
+	// structural-zero actions, explicit unknown-impact outcomes, and measured or
+	// censored rotation disruption. Nil disables recording; it observes and never gates.
 	Disruption *slo.Ledger
 
 	mu       sync.RWMutex
@@ -368,10 +371,17 @@ func rotationObservationKey(tenant string, view *model.WorkloadView) string {
 // trackRotation records only controller-owned rotations for optimizers that can
 // consume feedback. Without a controller identity there is no honest way to match
 // a replacement, so the observation remains unavailable rather than fabricated.
-func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, startedAt time.Time) {
+func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, startedAt time.Time) bool {
+	return m.trackRotationWithFloor(tenant, view, allViews, -1, startedAt)
+}
+
+// trackRotationWithFloor freezes the service's availability threshold at action
+// start so the disruption ledger can record breach-seconds separately from
+// replica-seconds. A negative floor means the threshold was unavailable.
+func (m *Manager) trackRotationWithFloor(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time) bool {
 	_, costObserver := m.Optimizer.(decision.RotationObserver)
 	if (!costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
-		return
+		return false
 	}
 	if view.Pod.OwnerKind == "" || view.Pod.OwnerName == "" || view.Pod.UID == "" {
 		if m.Calibration != nil {
@@ -384,7 +394,7 @@ func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allView
 				CensorDeadline:   startedAt.Add(2 * cost.ReadyDelayReference),
 			})
 		}
-		return
+		return false
 	}
 	known := map[string]struct{}{}
 	for _, other := range allViews {
@@ -398,14 +408,71 @@ func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allView
 	}
 	key := rotationObservationKey(tenant, view)
 	if _, alreadyPending := m.pendingRotations[key]; alreadyPending {
-		return // repeated Phoenix emits must not reset the original recovery clock
+		return true // repeated Phoenix emits must not reset the original recovery clock
 	}
 	m.pendingRotations[key] = pendingRotation{
 		tenant: tenant, startedAt: startedAt,
-		referenceAtStart: cost.ReadyDelayReference,
-		censorDeadline:   startedAt.Add(2 * cost.ReadyDelayReference),
-		view:             *view, knownUIDs: known,
+		referenceAtStart:     cost.ReadyDelayReference,
+		censorDeadline:       startedAt.Add(2 * cost.ReadyDelayReference),
+		view:                 *view,
+		knownUIDs:            known,
+		minAvailableReplicas: minAvailableReplicas,
+		selectionBound:       selectionBound(model.ActionRotate),
 	}
+	return true
+}
+
+func selectionBound(action model.Action) slo.Bound {
+	if bound, ok := slo.Classify(action); ok {
+		return bound
+	}
+	return slo.Bound{
+		Action: action, Status: slo.StatusUnknown,
+		MissingBound: "action has no deterministic-impact classification",
+	}
+}
+
+func selectionBoundEvidence(bound slo.Bound) string {
+	if bound.MissingBound == "" {
+		return bound.Evidence
+	}
+	if bound.Evidence == "" {
+		return bound.MissingBound
+	}
+	return bound.Evidence + "; missing: " + bound.MissingBound
+}
+
+// recordActionOutcome retains every actuation outcome for which the runner has a
+// terminal synchronous result. Non-zero actions are explicitly unmeasured here:
+// a return from Actuate does not prove that asynchronous serving impact ended.
+// Rotate is recorded by observeReadyRotations instead, when recovery is observed.
+func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, action model.Action, minAvailableReplicas int, startedAt, observedAt time.Time, outcome slo.Outcome) {
+	if m.Disruption == nil || view == nil {
+		return
+	}
+	bound := selectionBound(action)
+	boundValue, boundFinite := bound.ReplicaSeconds()
+	impact := slo.ImpactUnmeasured
+	availabilityMeasured := false
+	if bound.Status == slo.StatusZero {
+		impact = slo.ImpactMeasured
+		availabilityMeasured = true
+	}
+	duration := observedAt.Sub(startedAt)
+	if duration < 0 {
+		duration = 0
+	}
+	m.Disruption.Record(slo.Entry{
+		ID:     fmt.Sprintf("%s/%s/%s/%d", tenant, view.Pod.Namespace+"/"+view.Pod.Name, action, startedAt.UnixNano()),
+		Tenant: tenant, Namespace: view.Pod.Namespace, Pod: view.Pod.Name,
+		Action: action, Cause: slo.CausePhorvex, Outcome: outcome,
+		Duration: duration, StartedAt: startedAt, ObservedAt: observedAt,
+		ReplicaImpact:        impact,
+		SelectionBoundStatus: bound.Status, SelectionBoundFinite: boundFinite,
+		SelectionBoundReplicaSeconds: boundValue, SelectionBoundEvidence: selectionBoundEvidence(bound),
+		ReadyReplicasBefore: view.Pod.ReadyReplicas, MinAvailableReplicas: minAvailableReplicas,
+		AvailabilityMeasured: availabilityMeasured,
+	})
 }
 
 // observeReadyRotations resolves pending rotations one-to-one against new Ready
@@ -570,25 +637,49 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 		// worst. Abandoned rotations are excluded, above, because nothing was ever
 		// removed and so nothing was consumed.
 		if m.Disruption != nil {
+			availabilityMeasured := p.minAvailableReplicas >= 0 && p.view.Pod.ReadyReplicas > 0
+			breachDuration := time.Duration(0)
+			breachStartedAt, breachObservedAt := time.Time{}, time.Time{}
+			if availabilityMeasured && p.view.Pod.ReadyReplicas-1 < p.minAvailableReplicas {
+				breachDuration = elapsed
+				breachStartedAt, breachObservedAt = p.startedAt, observationEnd
+			}
+			boundValue, boundFinite := p.selectionBound.ReplicaSeconds()
+			outcome := slo.OutcomeCompleted
+			if ledgerCensored {
+				outcome = slo.OutcomeRightCensored
+			}
 			m.Disruption.Record(slo.Entry{
-				ID:         ref.key,
-				Tenant:     p.tenant,
-				Namespace:  p.view.Pod.Namespace,
-				Pod:        p.view.Pod.Name,
-				Action:     model.ActionRotate,
-				Cause:      slo.CausePhorvex,
-				Replicas:   1,
-				Duration:   elapsed,
-				StartedAt:  p.startedAt,
-				ObservedAt: observationEnd,
-				Censored:   ledgerCensored,
+				ID:                           ref.key,
+				Tenant:                       p.tenant,
+				Namespace:                    p.view.Pod.Namespace,
+				Pod:                          p.view.Pod.Name,
+				Action:                       model.ActionRotate,
+				Cause:                        slo.CausePhorvex,
+				Replicas:                     1,
+				Duration:                     elapsed,
+				StartedAt:                    p.startedAt,
+				ObservedAt:                   observationEnd,
+				Censored:                     ledgerCensored,
+				Outcome:                      outcome,
+				ReplicaImpact:                slo.ImpactMeasured,
+				SelectionBoundStatus:         p.selectionBound.Status,
+				SelectionBoundFinite:         boundFinite,
+				SelectionBoundReplicaSeconds: boundValue,
+				SelectionBoundEvidence:       selectionBoundEvidence(p.selectionBound),
+				ReadyReplicasBefore:          p.view.Pod.ReadyReplicas,
+				MinAvailableReplicas:         p.minAvailableReplicas,
+				AvailabilityMeasured:         availabilityMeasured,
+				AvailabilityBreachDuration:   breachDuration,
+				AvailabilityBreachStartedAt:  breachStartedAt,
+				AvailabilityBreachObservedAt: breachObservedAt,
 			})
 		}
 		if ledgerCensored {
 			if m.Disruption == nil {
 				delete(m.pendingRotations, ref.key)
 			}
-			if newOutcome {
+			if newOutcome && costObserver {
 				m.Log.Info("rotation cost observation censored; disruption tracking continues",
 					"tenant", p.tenant,
 					"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
@@ -962,6 +1053,11 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			Score:     score,
 		})
 		if err != nil {
+			outcome := slo.OutcomeFailed
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				outcome = slo.OutcomeDeadlineExpired
+			}
+			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
 			continue
 		}
@@ -975,8 +1071,18 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
-				m.trackRotation(pol.Tenant, v, viewByKey, actuationStarted)
+				if !m.trackRotationWithFloor(pol.Tenant, v, viewByKey, pol.MinAvailableReplicas, actuationStarted) {
+					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted)
+				}
+			} else {
+				outcome := slo.OutcomeEmitted
+				if selectionBound(decisions[i].Action).Status == slo.StatusZero {
+					outcome = slo.OutcomeCompleted
+				}
+				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			}
+		} else {
+			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}
 	return actuated
