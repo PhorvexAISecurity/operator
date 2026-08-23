@@ -29,6 +29,27 @@ func TestRLSConvergesToObservedCost(t *testing.T) {
 	}
 }
 
+func TestCalibratorsRejectNonFiniteObservations(t *testing.T) {
+	r := NewRLS()
+	before := r.theta
+	f := [featureDim]float64{1, 0, 0, 0, 0, 0}
+	for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		r.Update(f, bad)
+	}
+	f[0] = math.NaN()
+	r.Update(f, 0.5)
+	if r.theta != before || r.Primed() || r.Updates() != 0 {
+		t.Fatalf("non-finite observation poisoned RLS: before=%v after=%v", before, r.theta)
+	}
+
+	b := NewConformalBound()
+	b.Observe(math.NaN())
+	b.Observe(math.Inf(1))
+	if len(b.residuals) != 0 || b.Quantile() != ColdStartSlack {
+		t.Fatalf("non-finite residual poisoned conformal bound: %+v", b.residuals)
+	}
+}
+
 func TestComponentsExactlyRecomposeECost(t *testing.T) {
 	c := NewP1Cost()
 	pol := model.Policy{NormSparsity: 0.4, FlowDisruption: 0.6}
@@ -102,7 +123,7 @@ func TestDualLambdaRespondsToBudgetPressure(t *testing.T) {
 func TestCHiPrunesUncalibratedGPURotate(t *testing.T) {
 	c := NewP1Cost()
 	pol := model.Policy{NormSparsity: 0.4, FlowDisruption: 0.6}
-	ceiling := pol.NormSparsity + pol.FlowDisruption + 0.2
+	ceiling := EffectiveCostCeiling(pol)
 
 	gpu := &model.WorkloadView{Pod: model.Pod{HasGPU: true}, Phase: model.PhaseWarm}
 	cpu := &model.WorkloadView{Pod: model.Pod{}, Phase: model.PhaseWarm}

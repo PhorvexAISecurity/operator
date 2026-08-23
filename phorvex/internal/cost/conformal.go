@@ -65,6 +65,9 @@ func NewConformalBound() *ConformalBound {
 
 // Observe records one absolute residual.
 func (c *ConformalBound) Observe(residual float64) {
+	if math.IsNaN(residual) || math.IsInf(residual, 0) {
+		return
+	}
 	if residual < 0 {
 		residual = -residual
 	}

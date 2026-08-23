@@ -42,7 +42,6 @@ func baseView(name string) *model.WorkloadView {
 func testDeps() Deps {
 	rp, _ := recon.Registry.Default()
 	pc := cost.NewP1Cost()
-	pol := testPolicy()
 	return Deps{
 		Recon: rp,
 		FactContext: func(v *model.WorkloadView) recon.FactContext {
@@ -53,7 +52,7 @@ func testDeps() Deps {
 		},
 		ECost:       pc.ECost,
 		CHi:         pc.CHi,
-		CostCeiling: pol.NormSparsity + pol.FlowDisruption + 0.2,
+		CostCeiling: cost.DefaultCostCeiling,
 	}
 }
 
@@ -192,6 +191,55 @@ func TestAdapterRotateWithSuspectAdapterHasNonEmptyCover(t *testing.T) {
 	cand := set.Candidates[0]
 	if cand.Action != model.ActionAdapterRotate || len(cand.CoverKeys) == 0 {
 		t.Fatalf("flagged adapter candidate must carry adapter-integrity cover, got %+v", cand)
+	}
+}
+
+func TestExtendedActionIsPrunedAboveImportedCostCeiling(t *testing.T) {
+	d := ucwTestDeps(t)
+	d.CostCeiling = cost.DefaultCostCeiling
+	d.Evaluate = func(_ *model.WorkloadView, _ model.Move, _ model.Policy) (float64, float64, string, string) {
+		return 1.0, cost.DefaultCostCeiling + 0.01, "", ""
+	}
+	pol := testPolicy()
+	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
+	view := baseView("costly-adapter")
+	view.Pod.ModelID = "model-a"
+	view.Pod.SuspectAdapter = "evil-adapter"
+
+	set := d.Generate([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 0 {
+		t.Fatalf("extended action above ceiling leaked into candidates: %+v", set.Candidates)
+	}
+	found := false
+	for _, ex := range set.Excluded {
+		if ex.Action == model.ActionAdapterRotate && ex.Reason != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("extended action ceiling exclusion missing: %+v", set.Excluded)
+	}
+}
+
+func TestNaNCostIsDistinctUnfooledExclusion(t *testing.T) {
+	d := ucwTestDeps(t)
+	d.Evaluate = func(_ *model.WorkloadView, _ model.Move, _ model.Policy) (float64, float64, string, string) {
+		return cost.NaNFailConservativeCost, cost.NaNFailConservativeCost,
+			cost.UnactionableNaNCategory, "telemetry.reqRate"
+	}
+	pol := testPolicy()
+	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
+	view := baseView("nan-adapter")
+	view.Pod.ModelID = "model-a"
+	view.Pod.SuspectAdapter = "evil-adapter"
+
+	set := d.Generate([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 0 || len(set.Excluded) != 1 {
+		t.Fatalf("NaN action must be excluded exactly once: %+v", set)
+	}
+	ex := set.Excluded[0]
+	if ex.Category != cost.UnactionableNaNCategory || ex.Detail != "telemetry.reqRate" {
+		t.Fatalf("NaN exclusion category/detail lost: %+v", ex)
 	}
 }
 

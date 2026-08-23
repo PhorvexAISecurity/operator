@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -275,6 +276,7 @@ func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 		_ = ec.Client.Update(ctx, pod)
 		return HandlerResult{}, fmt.Errorf("request-drain abort %s/%s: %w", req.Namespace, req.Pod, derr)
 	}
+	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, aborted)
 	note := fmt.Sprintf("admits stopped; %d in-flight aborted", aborted)
 	if pending {
 		note = "admits stopped (K8s readiness-drain); in-flight abort [PENDING-GPU-VALIDATION] (serving stack unreachable)"

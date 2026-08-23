@@ -98,6 +98,17 @@ var (
 		Help: "Decision ticks rejected before optimization because the generated action set violated a structural invariant.",
 	}, []string{"tenant", "reason"})
 
+	costNaNUnactionable = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_cost_nan_unactionable_total",
+		Help: "Actions excluded fail-conservative because an action-relevant cost feature was NaN.",
+	}, []string{"tenant", "namespace", "pod", "action", "feature"})
+
+	requestDrainAborted = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "phorvex_request_drain_aborted_requests",
+		Help:    "In-flight requests aborted by each successful request-drain actuation.",
+		Buckets: []float64{0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000},
+	}, []string{"tenant", "namespace", "pod"})
+
 	tickDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "phorvex_tick_duration_seconds",
 		Help:    "Wall-clock duration of a decision tick (NFR1: <1s for <=1000 pods).",
@@ -143,7 +154,8 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, tickDuration,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections,
+		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
 }
@@ -226,6 +238,22 @@ func RecordActuation(tenant, action string) {
 // RecordActionSetRejection counts a fail-closed tick before any decision or actuation.
 func RecordActionSetRejection(tenant, reason string) {
 	actionSetRejections.WithLabelValues(tenant, reason).Inc()
+}
+
+// RecordCostNaNUnactionable makes every fail-conservative NaN exclusion visible
+// with enough bounded context to identify the broken signal and affected action.
+func RecordCostNaNUnactionable(tenant, namespace, pod, action, feature string) {
+	costNaNUnactionable.WithLabelValues(tenant, namespace, pod, action, feature).Inc()
+}
+
+// RecordRequestDrainAborted preserves the per-actuation abort count as a
+// histogram rather than burying it in a note string. The sum/count series are the
+// direct measurement seam for the future cutover-flow model.
+func RecordRequestDrainAborted(tenant, namespace, pod string, aborted int) {
+	if aborted < 0 {
+		aborted = 0
+	}
+	requestDrainAborted.WithLabelValues(tenant, namespace, pod).Observe(float64(aborted))
 }
 
 func boolStr(b bool) string {

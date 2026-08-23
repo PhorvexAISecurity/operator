@@ -817,8 +817,10 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		if !okPh {
 			ph = model.NeutralPhysics()
 		}
+		viewPod := *p
+		viewPod.RouteServiceReady = declaredRouteServiceExists(p, snap.Services)
 		views = append(views, &model.WorkloadView{
-			Pod:                *p,
+			Pod:                viewPod,
 			Telemetry:          t,
 			Phase:              ingest.PhaseOf(*p, t),
 			BlastRadius:        snap.Graph.BlastRadius(p.Namespace, p.Name),
@@ -933,6 +935,18 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		cur.lastTick = snap.Now
 	}
 	m.mu.Unlock()
+}
+
+func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) bool {
+	if p == nil || p.RouteService == "" {
+		return false
+	}
+	for _, service := range services {
+		if service.Namespace == p.Namespace && service.Name == p.RouteService {
+			return true
+		}
+	}
+	return false
 }
 
 func decideTick(optimizer decision.Optimizer, views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
@@ -1106,6 +1120,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		Lambda:                       s.EffectiveLambda(),
 		NormSparsity:                 s.EffectiveNormSparsity(),
 		FlowDisruption:               s.EffectiveFlowDisruption(),
+		CostCeiling:                  s.EffectiveCostCeiling(),
 		WeightSecrets:                s.EffectiveWeightSecrets(),
 		BlastRadiusFromGraph:         s.AssetValue.BlastRadiusFromGraph,
 		MaxMovesPerTick:              s.EffectiveMaxMovesPerTick(),

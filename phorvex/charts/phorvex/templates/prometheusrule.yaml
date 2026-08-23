@@ -1,4 +1,4 @@
-{{- if .Values.phorvex.alerts.enabled }}
+{{- if or .Values.phorvex.alerts.enabled .Values.phorvex.costNaNAlert.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -11,8 +11,9 @@ metadata:
     {{- end }}
 spec:
   groups:
-  - name: phorvex.kill-switch
+  - name: phorvex.safety
     rules:
+    {{- if .Values.phorvex.alerts.enabled }}
     - alert: PhorvexKillSwitchStatusDisagreement
       expr: max(phorvex_kill_switch_status_disagreement) > 0
       for: {{ .Values.phorvex.alerts.disagreementFor }}
@@ -39,4 +40,18 @@ spec:
           The manager container restarted at least {{ .Values.phorvex.alerts.restartThreshold }}
           times within {{ .Values.phorvex.alerts.restartWindow }}. Repeated restarts can make a stale
           kill-switch status look authoritative between reconciliations.
+    {{- end }}
+    {{- if .Values.phorvex.costNaNAlert.enabled }}
+    - alert: PhorvexCostNaNUnactionable
+      expr: sum by (tenant, namespace, pod, action, feature) (increase(phorvex_cost_nan_unactionable_total[5m])) > 0
+      labels:
+        severity: warning
+      annotations:
+        summary: Phorvex refused an action because a cost feature was NaN
+        description: >-
+          The {{ "{{" }} $labels.action {{ "}}" }} action for
+          {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} was excluded
+          fail-conservative because {{ "{{" }} $labels.feature {{ "}}" }} was NaN. This is an
+          actionable data-quality failure, not an ordinary no-feasible-action result.
+    {{- end }}
 {{- end }}

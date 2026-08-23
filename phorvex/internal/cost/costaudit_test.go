@@ -29,39 +29,105 @@ func bareView() *model.WorkloadView {
 // ---------- Part 1 — C_norm ----------
 
 func TestPart1_CNorm(t *testing.T) {
-	live := len(model.LiveExposureVariables)
-	if live != 2 {
-		t.Fatalf("spec assumes len(LiveExposureVariables)=2, got %d", live)
+	if got := len(structuralComponents); got != 3 {
+		t.Fatalf("structural component registry has %d entries, want 3", got)
 	}
-	if got := normCostP1(model.Move{Action: model.ActionRotate}); got != 1.0 {
+	view := bareView()
+	if got := normCostP1(view, model.Move{Action: model.ActionRotate}); got != 1.0 {
 		t.Errorf("C_norm(rotate) = %v, want exactly 1.0", got)
 	}
-	wantQ := 1.0 / float64(live+1) // tracks live, not a hardcoded 0.333
-	got := normCostP1(model.Move{Action: model.ActionQuarantine})
+	wantQ := 1.0 / float64(len(structuralComponents))
+	got := normCostP1(view, model.Move{Action: model.ActionQuarantine})
 	if math.Abs(got-wantQ) > eps {
-		t.Errorf("C_norm(quarantine) = %v, want 1/(live+1) = %v", got, wantQ)
+		t.Errorf("C_norm(quarantine) = %v, want 1/registered-components = %v", got, wantQ)
 	}
 	if math.Abs(got-0.3333333333333333) > 1e-9 {
 		t.Errorf("C_norm(quarantine) = %v, want 0.333… at live=2", got)
 	}
-	if got := normCostP1(model.Move{Action: model.ActionNoop}); got != 0 {
+	if got := normCostP1(view, model.Move{Action: model.ActionNoop}); got != 0 {
 		t.Errorf("C_norm(noop) = %v, want exactly 0", got)
 	}
 }
 
-// C_norm must be structural only: identical for a telemetry-rich and a bare view.
+// C_norm may read structural workload context, but never telemetry.
 func TestPart1_CNormIsPurelyStructural(t *testing.T) {
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine, model.ActionNoop} {
-		v := normCostP1(model.Move{Action: a})
-		if v < 0 || v > 1 || math.IsNaN(v) || math.IsInf(v, 0) {
-			t.Errorf("C_norm(%s) = %v, want finite in [0,1]", a, v)
+	bare := bareView()
+	rich := bareView()
+	rich.Telemetry = model.Telemetry{Present: true, ConnCount: 88, ReqRate: 144}
+	for _, a := range append([]model.Action{model.ActionNoop}, model.MutatingActions...) {
+		got := normCostP1(bare, model.Move{Action: a})
+		if got < 0 || math.IsNaN(got) || math.IsInf(got, 0) {
+			t.Errorf("C_norm(%s) = %v, want finite non-negative", a, got)
+		}
+		if richGot := normCostP1(rich, model.Move{Action: a}); richGot != got {
+			t.Errorf("C_norm(%s) changed with telemetry: bare=%v rich=%v", a, got, richGot)
 		}
 	}
-	// normCostP1 takes ONLY a Move — it cannot read telemetry. Assert the signature contract holds
-	// by confirming repeated calls are identical (no hidden state).
+	// Repeated calls are deterministic (no hidden state).
 	for i := 0; i < 100; i++ {
-		if normCostP1(model.Move{Action: model.ActionQuarantine}) != 1.0/3.0 {
+		if normCostP1(bare, model.Move{Action: model.ActionQuarantine}) != 1.0/3.0 {
 			t.Fatal("C_norm(quarantine) is not deterministic")
+		}
+	}
+}
+
+func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
+	view := bareView()
+	view.Pod.RouteService = "model-route"
+	view.Pod.RouteServiceReady = true
+	view.Pod.ParallelSize = 4
+	want := map[model.Action]float64{
+		model.ActionRotate:              1.00,
+		model.ActionQuarantine:          1.0 / 3.0,
+		model.ActionDebugger:            0.10,
+		model.ActionCustomInject:        0.10,
+		model.ActionIdentityRotate:      0.15,
+		model.ActionRouteRotate:         0.10,
+		model.ActionWarmSwap:            1.00,
+		model.ActionMIGRebind:           1.25,
+		model.ActionKVReset:             0.20,
+		model.ActionEndpointRotate:      0.35,
+		model.ActionModelShardReplace:   4.00,
+		model.ActionAdapterRotate:       0.25,
+		model.ActionRequestDrain:        0.10,
+		model.ActionGuardrailRotate:     0.20,
+		model.ActionKVMigrateInvalidate: 0.20,
+	}
+	for _, action := range model.MutatingActions {
+		got := normCostP1(view, model.Move{Action: action})
+		if got <= 0 {
+			t.Errorf("mutating action %s has non-positive C_norm %v", action, got)
+		}
+		if got != want[action] {
+			t.Errorf("C_norm(%s)=%v, want %v", action, got, want[action])
+		}
+	}
+	if normCostP1(view, model.Move{Action: model.ActionMIGRebind}) <= normCostP1(view, model.Move{Action: model.ActionRotate}) {
+		t.Error("mig-rebind must remain structurally above the rotate anchor")
+	}
+	if normCostP1(view, model.Move{Action: model.ActionKVReset}) >= normCostP1(view, model.Move{Action: model.ActionMIGRebind}) {
+		t.Error("kv-reset must remain structurally below mig-rebind")
+	}
+}
+
+func TestPart1_ContextDependentStructuralCosts(t *testing.T) {
+	view := bareView()
+	if got := normCostP1(view, model.Move{Action: model.ActionEndpointRotate}); got != 0.10 {
+		t.Fatalf("label-only endpoint path C_norm=%v, want 0.10", got)
+	}
+	view.Pod.RouteService = "model-route"
+	view.Pod.RouteServiceReady = true
+	if got := normCostP1(view, model.Move{Action: model.ActionEndpointRotate}); got != 0.35 {
+		t.Fatalf("effective Service re-key C_norm=%v, want 0.35", got)
+	}
+	for _, size := range []int{-1, 0, 1, 2, 8} {
+		view.Pod.ParallelSize = size
+		want := float64(size)
+		if want < 1 {
+			want = 1
+		}
+		if got := normCostP1(view, model.Move{Action: model.ActionModelShardReplace}); got != want {
+			t.Errorf("parallelSize=%d C_norm=%v, want %v", size, got, want)
 		}
 	}
 }
@@ -233,9 +299,9 @@ func TestPart3_CHiNeverBelowECost(t *testing.T) {
 
 func TestPart3_CostCeilingValue(t *testing.T) {
 	pol := defaultPolicy()
-	ceiling := pol.NormSparsity + pol.FlowDisruption + 0.2
-	if math.Abs(ceiling-1.2) > 1e-9 {
-		t.Errorf("cost ceiling = %v, want 1.2 at default weights", ceiling)
+	ceiling := EffectiveCostCeiling(pol)
+	if ceiling != DefaultCostCeiling {
+		t.Errorf("cost ceiling = %v, want imported default %v", ceiling, DefaultCostCeiling)
 	}
 	// A GPU pod with an unprimed RLS gets the worst-case envelope: assert it is the case that
 	// actually approaches/【exceeds】the ceiling, which is what the SLO gate is there to catch.
@@ -247,7 +313,9 @@ func TestPart3_CostCeilingValue(t *testing.T) {
 	if hi <= 0 || math.IsNaN(hi) || math.IsInf(hi, 0) {
 		t.Fatalf("CHi not finite/positive: %v", hi)
 	}
-	t.Logf("CHi(rotate, GPU cold, unprimed) = %.4f vs ceiling %.2f -> dropped=%v", hi, ceiling, hi > ceiling)
+	if hi <= ceiling {
+		t.Fatalf("GPU cold rotate CHi %.4f must exceed ceiling %.2f", hi, ceiling)
+	}
 }
 
 // ---------- Always-true invariants ----------
@@ -302,6 +370,20 @@ func TestInvariants_GarbageTelemetryDoesNotPoisonCost(t *testing.T) {
 				t.Errorf("telemetry=%v action=%s: ECost = %v, want finite non-negative", bad, a, got)
 			}
 		}
+	}
+}
+
+func TestNaNFeatureFailsConservativeWithDistinctCategory(t *testing.T) {
+	c := NewP1Cost()
+	pol := defaultPolicy()
+	view := bareView()
+	view.Telemetry = model.Telemetry{Present: true, ReqRate: math.NaN()}
+	eval := c.Evaluation(view, model.Move{Action: model.ActionRotate}, pol)
+	if eval.Total != NaNFailConservativeCost || eval.CHi != NaNFailConservativeCost {
+		t.Fatalf("NaN evaluation did not use max cost: %+v", eval)
+	}
+	if eval.UnactionableCategory != UnactionableNaNCategory || eval.NaNFeature != "telemetry.reqRate" {
+		t.Fatalf("NaN classification lost: %+v", eval)
 	}
 }
 

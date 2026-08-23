@@ -67,9 +67,11 @@ func (s ActionSet) CollisionError() error {
 
 // Exclusion is one pruned move and the structural or hard-constraint reason.
 type Exclusion struct {
-	Key    string
-	Action model.Action
-	Reason string
+	Key      string
+	Action   model.Action
+	Reason   string
+	Category string
+	Detail   string
 }
 
 const emptyReconCoverReason = "recon-cover: action invalidates no facts for this asset"
@@ -81,6 +83,10 @@ type Deps struct {
 	FactContext func(*model.WorkloadView) recon.FactContext
 	ECost       func(*model.WorkloadView, model.Move, model.Policy) float64
 	CHi         func(*model.WorkloadView, model.Move, model.Policy) float64
+	// Evaluate optionally computes both costs once and carries a distinct
+	// unactionable category/detail (for example a NaN feature). Existing swappable
+	// test models may leave it nil and continue using ECost/CHi.
+	Evaluate func(*model.WorkloadView, model.Move, model.Policy) (ecost, chi float64, category, detail string)
 	// CostCeiling is the worst-case (CHi) cost above which a move is deemed SLO-unsafe
 	// and pruned (the conformal SLO gate). The engine derives it from the policy.
 	CostCeiling float64
@@ -112,9 +118,11 @@ func GeneratableActions() []model.Action {
 //     asset is EXCLUDED before cost/feasibility work and cannot contaminate demand.
 //  2. Layer-A hard feasibility (PDB/availability, SLO-p99, anti-over-rotation,
 //     stateful-integrity) via the registry — an infeasible move is EXCLUDED.
-//  3. Conformal SLO-cost gate — if the worst-case cost CHi exceeds CostCeiling the
+//  3. Cost-data validity — a NaN-bearing action is excluded fail-conservative in
+//     its own observable category, never silently folded into ordinary infeasibility.
+//  4. Conformal SLO-cost gate — if the worst-case cost CHi exceeds CostCeiling the
 //     move could breach the disruption budget, so it is EXCLUDED.
-//  4. Survivors enter the set with their non-empty recon cover keys + costs.
+//  5. Survivors enter the set with their non-empty recon cover keys + costs.
 //
 // The set provably changes with state and contains NO hard-constraint-violating move.
 func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
@@ -176,8 +184,26 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				out.Excluded = append(out.Excluded, Exclusion{Key: key, Action: action, Reason: verdict.Reason})
 				continue
 			}
-			// (3) Conformal SLO-cost gate (worst-case disruption must fit the budget).
-			chi := d.CHi(v, move, pol)
+			// (3) Evaluate cost. A data-quality failure is a distinct fail-closed
+			// category, not ordinary physical infeasibility and not a cheap default.
+			ecost, chi := 0.0, 0.0
+			category, detail := "", ""
+			if d.Evaluate != nil {
+				ecost, chi, category, detail = d.Evaluate(v, move, pol)
+			} else {
+				ecost, chi = d.ECost(v, move, pol), d.CHi(v, move, pol)
+			}
+			if category != "" {
+				reason := category
+				if detail != "" {
+					reason += ": " + detail
+				}
+				out.Excluded = append(out.Excluded, Exclusion{
+					Key: key, Action: action, Reason: reason, Category: category, Detail: detail,
+				})
+				continue
+			}
+			// (4) Conformal SLO-cost gate (worst-case disruption must fit the budget).
 			if d.CostCeiling > 0 && chi > d.CostCeiling {
 				out.Excluded = append(out.Excluded, Exclusion{Key: key, Action: action,
 					Reason: "conformal-slo: worst-case cost " + ftoa(chi) + " > ceiling " + ftoa(d.CostCeiling)})
@@ -188,7 +214,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				View:      v,
 				Action:    action,
 				CoverKeys: coverKeys,
-				ECost:     d.ECost(v, move, pol),
+				ECost:     ecost,
 				CHi:       chi,
 			})
 		}

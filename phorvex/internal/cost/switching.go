@@ -30,6 +30,9 @@ func (switching) Switching(view *model.WorkloadView, move model.Move, pol model.
 	cNorm := normCost(view, move)
 	cFlow := flowCost(view, move)
 	k := pol.NormSparsity*cNorm + pol.FlowDisruption*cFlow
+	if math.IsNaN(k) {
+		return NaNFailConservativeCost
+	}
 	if k < 0 {
 		return 0
 	}
@@ -40,20 +43,7 @@ func (switching) Switching(view *model.WorkloadView, move model.Move, pol model.
 // pod identity + node placement + in-pod state; quarantine resets only network
 // reachability. Normalized by the count of live-tracked variables.
 func normCost(view *model.WorkloadView, move model.Move) float64 {
-	live := len(model.LiveExposureVariables)
-	if live == 0 {
-		live = 1
-	}
-	switch move.Action {
-	case model.ActionRotate:
-		// Pod identity + node placement (both live) move on a delete+respawn.
-		return float64(live) / float64(live) // = 1.0: a rotate moves all live variables
-	case model.ActionQuarantine:
-		// Quarantine flips network identity only (a single variable share).
-		return 1.0 / float64(live+1)
-	default:
-		return 0
-	}
+	return normCostP1(view, move)
 }
 
 // flowCost: live-disruption cost, dominated by GPU/LLM warm state.
@@ -105,7 +95,7 @@ func sat(x float64) float64 {
 	// through and RETURN NaN — poisoning ECost and making the optimizer compare NaN costs. A
 	// NaN/absent telemetry field must read as NEUTRAL (0), never propagate.
 	if math.IsNaN(x) {
-		return 0
+		return 1
 	}
 	if x < 0 {
 		return 0
