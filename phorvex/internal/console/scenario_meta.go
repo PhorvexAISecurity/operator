@@ -113,7 +113,7 @@ func deriveScenarioMeta(name, product string, caps []string) ScenarioMeta {
 	}
 	if capSet["CapGPU"] {
 		prereqs = append(prereqs, "a GPU node pool")
-		notes = append(notes, "Needs a GPU node (Tesla T4+); GPU magnitudes are [SP-0-PENDING] in the sandbox, so the oracle may not fully land here.")
+		notes = append(notes, "Needs a GPU node (Tesla T4+); GPU magnitudes are not hardware-validated in the sandbox (PHORVEXSEC-87), so the oracle may not fully land here.")
 	}
 	if capSet["CapMultiNode"] {
 		prereqs = append(prereqs, "≥2 nodes")
@@ -132,7 +132,7 @@ func deriveScenarioMeta(name, product string, caps []string) ScenarioMeta {
 	if capSet["CapGPU"] && capSet["CapMultiNode"] {
 		runnable = "Requires a GPU node pool AND ≥2 nodes."
 	} else if capSet["CapGPU"] {
-		runnable = "Requires a GPU node pool (the GPU oracle is [SP-0-PENDING] in the sandbox)."
+		runnable = "Requires a GPU node pool (GPU oracle hardware validation: PHORVEXSEC-87)."
 	} else if capSet["CapMultiNode"] {
 		runnable = "Requires ≥2 nodes."
 	} else if product == "ai" {

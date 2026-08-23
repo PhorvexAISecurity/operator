@@ -23,7 +23,7 @@ import (
 // PromQL per signal with a {namespace} placeholder, expecting a result vector keyed
 // by a "pod" label, and folds the vectors into per-pod Telemetry. It is configured
 // (URL + optional query overrides) by the operator; when no URL is set the default
-// nilSource is used instead, so an unconfigured cluster yields honest Present=false.
+// absentSource is used instead, so an unconfigured cluster yields honest Present=false.
 type PromHTTP struct {
 	BaseURL string
 	Client  *http.Client

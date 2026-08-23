@@ -29,6 +29,10 @@ WORKDIR /workspace
 COPY phorvex/ phorvex/
 WORKDIR /workspace/phorvex
 
+# PHORVEXSEC-83: fail the same build CI already runs if unfinished-work markers
+# enter production paths, lose their Plane owner, or drift from the inventory.
+RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
+
 # Static, stripped manager binary. GOARCH left to BuildKit so the binary matches the
 # image platform (amd64 on x86 EKS nodes, arm64 on Graviton).
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \

@@ -29,13 +29,13 @@ type MetricsSource interface {
 // SourceRegistry holds the registered metrics sources.
 var SourceRegistry = registry.New[MetricsSource]()
 
-// nilSource is the default: no telemetry backend configured.
-type nilSource struct{}
+// absentSource is the explicit default: no telemetry backend configured.
+type absentSource struct{}
 
-func (nilSource) Name() string { return "none" }
+func (absentSource) Name() string { return "none" }
 
-func (nilSource) PodMetrics(_ context.Context, _ string, _ []string) (map[string]model.Telemetry, error) {
+func (absentSource) PodMetrics(_ context.Context, _ string, _ []string) (map[string]model.Telemetry, error) {
 	return map[string]model.Telemetry{}, nil
 }
 
-func init() { SourceRegistry.Register(nilSource{}) }
+func init() { SourceRegistry.Register(absentSource{}) }

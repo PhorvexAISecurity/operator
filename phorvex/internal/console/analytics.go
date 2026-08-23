@@ -172,7 +172,7 @@ type AISurface struct {
 func (c *Config) AISurfaceDecode() AISurface {
 	rows, ok := readMetrics(c.harnessOut("out-ai-bench"))
 	a := AISurface{MTDEffect: map[string]int{}, SplitOracle: map[string]int{}, AtlasIDs: []string{}, OwaspIDs: []string{},
-		Note: "AI ATTACK-SURFACE decode (ATLAS/OWASP, split-oracle, Schwartau timing, reuse). These describe the THREAT, never PX defense efficacy — AI defense is [SP-0-PENDING-P4]."}
+		Note: "AI ATTACK-SURFACE decode (ATLAS/OWASP, split-oracle, Schwartau timing, reuse). These describe the THREAT, never PX defense efficacy — AI defense hardware validation is tracked by PHORVEXSEC-87."}
 	if !ok {
 		return a
 	}

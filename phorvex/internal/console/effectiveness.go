@@ -5,7 +5,7 @@
  * exist (Wilson/t CIs), and surfaces the stated-with-provenance numbers (explainability
  * 139/139, 1.62x, native actuator 13/13) from their report files. Every Stat carries its
  * Source + Status (real | modeled | pending) so the UI can label honestly. AI-defense stats
- * are ALWAYS pending [SP-0-PENDING-P4] — NEVER derived from attack-surface rows.
+ * remain unvalidated under PHORVEXSEC-87 — NEVER derived from attack-surface rows.
  */
 
 package console
@@ -132,7 +132,7 @@ func (c *Config) Effectiveness() []Stat {
 		}
 		out = append(out, Stat{Key: "native-actuator", Label: "Generatable actions covered", Value: fmt.Sprintf("%d/%d", covered, rv.Generatables), Unit: "",
 			Source: "actuator.HandlerRegistry vs actionset.GeneratableActions() (live MissingHandlers)", Status: st, Product: "both",
-			Note: fmt.Sprintf("computed; %d handlers registered, %d missing; GPU handlers fail-closed [SP-0-PENDING-P4]", rv.Count, len(rv.Missing))})
+			Note: fmt.Sprintf("computed; %d handlers registered, %d missing; GPU handlers fail-closed; validation tracked by PHORVEXSEC-87", rv.Count, len(rv.Missing))})
 	}
 	// recon-per-$ is NOT stated here — it is computed LIVE by `phorvex --ablation` (/api/ablation,
 	// the Prove → Recon-per-$ panel). On an arbitrary fleet the ratio is ~1.0×; the 1.62× is a
@@ -141,7 +141,7 @@ func (c *Config) Effectiveness() []Stat {
 		// AI-defense is ALWAYS pending — NEVER derived from attack-surface rows.
 		Stat{Key: "ai-defense", Label: "AI/inference defense efficacy", Value: "—", Unit: "",
 			Source: "out-ai-bench (attack surface real; d-phorvex-slot is a stub, disruptionVsOracle=0)", Status: "pending", Product: "ai",
-			Note: "[SP-0-PENDING-P4] — validated on real GPU at P4; never implied proven"},
+			Note: "Unvalidated on real GPU; PHORVEXSEC-87; never implied proven"},
 	)
 	return out
 }

@@ -23,7 +23,8 @@ const (
 
 	// --- AI/inference kill-chain (P-CONTEXT). A PARALLEL chain classified by AI
 	// signature in Assess; honest-absent (never fires) when ModelID=="" && !HasGPU, so
-	// the generic 5-stage path is byte-identical. Magnitudes are [SP-0-PENDING]. ---
+	// the generic 5-stage path is byte-identical. Magnitude calibration is tracked by
+	// PHORVEXSEC-115. ---
 	StageGPUSideChannel      // 5 B2 recon-class leakage primitive (co-resident GPU)
 	StageModelTheft          // 6 B2 near-impact: weights reconstructed via side-channel
 	StageLLMJacking          // 7 B1 persist-class: compute/endpoint hijack
@@ -167,7 +168,7 @@ func NewModel() *Model {
 			StagePersist: 3600,
 			StageLateral: 1200,
 			StageImpact:  600,
-			// AI sojourns [SP-0-PENDING] — flagged proposals, calibrate on a real GPU fleet.
+			// AI sojourns are provisional; PHORVEXSEC-115 owns real-fleet calibration.
 			StageGPUSideChannel:      300,
 			StageModelTheft:          180,
 			StageLLMJacking:          900,
@@ -212,7 +213,8 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 // type. Returns (stage, true) on a match. HONEST-ABSENT: returns false when the pod is
 // not an AI workload (ModelID=="" && !HasGPU), so the generic chain is byte-identical.
 // Precedence is by consequence/specificity (theft > side-channel > persist > jacking).
-// GPU-leakage stages need HasGPU (so they stay [SP-0-PENDING] on a CPU-only cluster);
+// GPU-leakage stages need HasGPU (so they stay absent on a CPU-only cluster);
+// PHORVEXSEC-115 owns their magnitude calibration.
 // ModelID/EndpointPath stages fire on a model-annotated pod + the event stream (live).
 func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 	p := view.Pod
@@ -236,7 +238,7 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 			exploitEvent = true
 		}
 	}
-	leakage := ph.SMOccupancy + ph.VRAMFraction // [0,2]; 0 on kind ([SP-0-PENDING])
+	leakage := ph.SMOccupancy + ph.VRAMFraction // [0,2]; 0 on kind; PHORVEXSEC-115
 
 	// (1) model theft in progress: co-resident GPU reconstructing a rare model.
 	if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1.3 && leakage > 0.8 {

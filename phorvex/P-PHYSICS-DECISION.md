@@ -58,13 +58,14 @@ non-monotone. The classic monotone/cardinality approximation guarantee does **no
 the truncated partition constraint. These multipliers require **zero optimizer touch**, and at
 nil-data the FactWeights are **byte-identical to `standardRecon`** (provable tie). Exactness for
 the shipped asset-keyed profiles comes separately from block ownership/modularity; no generic
-ratio is claimed for future overlapping profiles. The K8s fact universe is finished (emit `FactImage`/`FactNodePlacement` with measured
-dispersion); **4 new AI fact-kinds are DEFINED NOW**: `FactModelFingerprint` (reset by
-NIM/model-rotate), `FactEndpointPath` (endpoint/route-rotate), `FactGPUColocation`
-(MIG-rebind/node-rotate), `FactSideChannel` (audit-only). Per the **falsifiability gate**, a
+ratio is claimed for future overlapping profiles. The current AI fact set includes
+`FactModelFingerprint`, `FactEndpointPath`, `FactGPUColocation`, and
+`FactGPUContentionChannel`, plus the action-specific adapter/request/guardrail facts. Per the
+**falsifiability gate**, a
 fact is selectable iff *(perturbable v)* AND *(an action provably resets v)* AND
-*(fingerprintable)* — so `FactSideChannel`/`FactNodePlacement`/`FactImage` stay **audit-only**
-until their reset actions ship (they never inflate selectable cover).
+*(fingerprintable)*. The current implementation grants `FactGPUContentionChannel` only to a
+MIG-capable `mig-rebind`, while `FactGPUColocation` stays audit-only because relocation is not
+guaranteed. `FactNodePlacement` was removed; `FactImage` remains action-specific.
 
 ### 2b. Both-products physics — measurable-NOW (K8s) vs structure-now/values-SP-0 (AI)
 
@@ -89,7 +90,7 @@ today only as the `GPUEnvelopeMax=1.0` fail-safe (never a measurement).
 | VRAM / SM / MIG-validity / interconnect conservation | bytes / fraction / valid / B·s⁻¹ | DCGM/NVML + device-plugin (Present iff GPU-Operator installed) |
 | modelColdLoadSec, kvCacheRebuildSec-vs-sessionLengthSec | seconds | SP-0 GPU run → `cost.ObserveRotation` (the **dominant** inference `C_flow`) |
 | p99 rotate-vs-warm-swap excursion, $/move | ms, $ | SP-0 |
-| FactModelFingerprint / FactEndpointPath / FactGPUColocation weights | recon-bits | model-version rarity + per-GPU co-residency (FactSideChannel = audit-only leakage-bits/s) |
+| FactModelFingerprint / FactEndpointPath / GPU fact weights | recon-bits | model-version rarity + per-GPU co-residency; GPU contention has conditional MIG cover, while GPU co-location remains audit-only |
 | AI feasibility: vramConservation, smBudget, migValidity, tokensFloor, p99/warm-swap | hard vetoes | structure-now / values-SP-0 |
 
 ---
@@ -162,7 +163,7 @@ already scraped). **The one genuine exception (flagged):** a new cost *feature* 
 7. **Carrier-field + NFR1 discipline** — `FactContext` is a fixed no-fleet-handle struct, so all
    fleet stats must precompute in the ONE O(pods+nodes) ingest pass (a per-asset recompute breaks
    the <1s/≤1000-pod budget). NodeList+PDBList reads must land in that single pass.
-8. **Falsifiability gate** — audit-only facts (`FactSideChannel` etc.) must not inflate selectable cover.
+8. **Falsifiability gate** — audit-only facts such as `FactGPUColocation` must not inflate selectable cover; capability-conditional facts such as `FactGPUContentionChannel` receive cover only when the capability witness is present.
 
 ---
 
