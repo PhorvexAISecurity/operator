@@ -255,7 +255,8 @@ type Posture struct {
 
 // PostureScore is a composite readiness grade — every K8s sub-score is COMPUTED from a real
 // source (no fixed 1.0). A sub with Score < 0 is honestly "pending/not-yet-computed" and is
-// EXCLUDED from the average. AI is [SP-0-PENDING-P4]; the grade never inflates it.
+// EXCLUDED from the average. AI validation is tracked by PHORVEXSEC-87; the grade never
+// inflates it.
 func (c *Config) PostureScore() Posture {
 	full, hasFull := readMetrics(c.harnessOut("out-p3-full"))
 	pact, hasPact := readMetrics(c.harnessOut("out-pactuator"))
@@ -296,7 +297,7 @@ func (c *Config) PostureScore() Posture {
 	// flat fleet, > 1 only on a heavy-tailed asset distribution), shown LIVE in the Prove →
 	// Recon-per-$ panel from `phorvex --ablation`. It is deliberately excluded from the grade.
 	// AI defense — pending, excluded from the grade.
-	subs = append(subs, PostureSub{"AI defense", -1, "[SP-0-PENDING-P4] — not yet validated on real GPU"})
+	subs = append(subs, PostureSub{"AI defense", -1, "Not yet validated on real GPU; PHORVEXSEC-87"})
 
 	// average ONLY the computed K8s subs (Score >= 0); pending (-1) excluded.
 	sum, n := 0.0, 0
@@ -321,7 +322,7 @@ func (c *Config) PostureScore() Posture {
 		grade = "B"
 	}
 	return Posture{Grade: grade, Score: score, Subs: subs,
-		Note: "K8s readiness grade — every sub computed from a real source; pending subs (incl. AI [SP-0-PENDING-P4]) are excluded, never inflated."}
+		Note: "K8s readiness grade — every sub computed from a real source; unvalidated subs (including AI, PHORVEXSEC-87) are excluded, never inflated."}
 }
 
 // --- Raw attack-log viewer (forensic transcript; path-validated) -------------------------

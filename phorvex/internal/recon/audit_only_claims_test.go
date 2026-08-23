@@ -2,7 +2,9 @@ package recon
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -93,23 +95,22 @@ func TestAIFactCoverClaimsMatchCapabilities(t *testing.T) {
 // a cardinality constraint. The monotone/cardinality 1−1/e guarantee therefore does not apply, and
 // asserting it in shipped source is a claim a customer or reviewer can check and disprove.
 func TestNoSourceClaimsTheOneMinusOneOverEBound(t *testing.T) {
-	// Keep this list explicit: these are the customer-facing methodology/report and UI
-	// surfaces that previously repeated the false bound, plus the source files where it
-	// first appeared. Reports under reports/ are point-in-time audit evidence and are not
-	// shipped product claims.
-	for _, f := range []string{
+	// Scan every shipped module-level document, not a hand-maintained sample. The earlier
+	// explicit list let stale claims survive in P-VCLUSTER and older physics documents.
+	files := []string{
 		"ucw.go",
 		"profile.go",
 		"facts.go",
-		"../../METHOD-DECISION.md",
-		"../../P-DASHBOARD-REPORT.md",
-		"../../P-OPTIMIZE-RATIO-DECISION.md",
-		"../../P-PHYSICS-DECISION.md",
-		"../../P-REDTEAM-DECISION.md",
-		"../../P5-FINAL-REPORT.md",
 		"../../../dashboard-web/components/subsystems/panels.tsx",
 		"../../../dashboard-web/components/steps/bench.tsx",
-	} {
+	}
+	docs, err := filepath.Glob("../../*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, docs...)
+	sort.Strings(files)
+	for _, f := range files {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
@@ -145,6 +146,26 @@ func TestNoSourceClaimsTheOneMinusOneOverEBound(t *testing.T) {
 			t.Errorf("%s:%d asserts a 1-1/e bound: %q\n  the objective is non-monotone (−λ·C) under a "+
 				"partition matroid; no replacement approximation constant should be claimed without a "+
 				"proof tied to the implemented selection rule", f, i+1, strings.TrimSpace(line))
+		}
+	}
+}
+
+// TestNoShippedDocumentUsesTheRetiredSideChannelClaim catches the other PHVX-76
+// failure class. FactSideChannel was renamed and split: GPU contention has conditional
+// MIG cover, while GPU co-location remains audit-only. Keeping the old umbrella name in
+// a document recreates the false claim that either both are covered or neither is.
+func TestNoShippedDocumentUsesTheRetiredSideChannelClaim(t *testing.T) {
+	docs, err := filepath.Glob("../../*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range docs {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), "Fact"+"SideChannel") {
+			t.Errorf("%s still uses the retired umbrella fact; name GPUContentionChannel or GPUColocation explicitly", f)
 		}
 	}
 }

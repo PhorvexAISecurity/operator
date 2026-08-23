@@ -240,7 +240,7 @@ func (rm *RunManager) Stop(id string) error {
 }
 
 // ClusterTargets returns the selectable run targets. kind is executable now; real clusters
-// are wired into the selector but execution is [PENDING-P4a] (guarded by the harness
+// are wired into the selector but execution remains tracked by PHORVEXSEC-151 (guarded by the harness
 // safety check). NOT hardcoded to kind — the binary is cluster-agnostic.
 type ClusterTarget struct {
 	ID       string `json:"id"`
@@ -254,7 +254,8 @@ type ClusterTarget struct {
 // ClusterTargets DERIVES the selectable targets from the operator's live kubeconfig contexts
 // (P4a — never a hardcoded context string). Each real context becomes a runnable read-only
 // scan target; EKS/CoreWeave are recognized for labeling but their GPU magnitudes stay
-// [SP-0-PENDING-P4]. If no kubeconfig resolves, the list is honestly empty (the UI shows a
+// GPU validation is tracked by PHORVEXSEC-87. If no kubeconfig resolves, the list is
+// honestly empty (the UI shows a
 // "no clusters found — point KUBECONFIG at a cluster" state).
 func (rm *RunManager) ClusterTargets() []ClusterTarget {
 	ctxs := kubeContexts()

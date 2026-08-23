@@ -168,7 +168,7 @@ choices. The model is split by product:
 | **O5** | **Owner IP-wall regression** | Extend `redaction_test.go` to the SSE/streaming path + every new `OwnerEvent` field; rename an IP field, assert the whitelist still emits zero redacted tokens AND zero sentinel values. |
 | **O6** | **Cross-tenant read denial** | Authenticated tenant A requests `?tenant=B`; assert 403/empty, never B's events. (Today demo-trust; the P4c fail-closed-on-empty stops the *empty* case, not the *named-other* case.) |
 | **O7** | **Cross-tenant actuation denial** | Inject `Request{Tenant:A, Namespace:B-ns}`; assert rejected at the Phorvex boundary (new assertion) AND at K8s RBAC. Two-layer. |
-| **O8** | **Co-residency count bound** | Assert a tenant's co-residency witness reveals at most the COARSE bucketed count, never co-tenant identities; GPU/MIG `FactSideChannel` stays AUDIT-ONLY (never actuates). |
+| **O8** | **Co-residency count bound** | Assert a tenant's co-residency witness reveals at most the COARSE bucketed count, never co-tenant identities; `FactGPUColocation` remains audit-only until relocation is guaranteed, while `FactGPUContentionChannel` has conditional MIG cover. |
 
 **Adversarial harness:** reuse the production RL red-team (which already found the λ-starvation + dispersion-steer
 attacks) as the cross-tenant attacker for O2/O3/O4.
@@ -228,7 +228,7 @@ attacks) as the cross-tenant attacker for O2/O3/O4.
 `audit` Record.Tenant; safe apply-fix write-path → `redteam.go`; co-residency count-only bound (O8) →
 `platform.go:147`; per-tenant DoS quotas → `runs.go`.
 
-**Deferred-disclosed (carried as residuals, not a pass):** GPU/MIG side-channel containment (AUDIT-ONLY);
+**Deferred-disclosed (carried as residuals, not a pass):** GPU/MIG physical co-location containment (`FactGPUColocation` remains audit-only);
 multi-tenant + cross-restart-durable co-training/operator (`[PENDING-INFRA]`); shared-budget DoS hardening;
 **independent premortem-survival verification of the whole model** (blocked — see caveat).
 
@@ -238,7 +238,7 @@ multi-tenant + cross-restart-durable co-training/operator (`[PENDING-INFRA]`); s
 
 - **R1 — GPU/MIG co-residency side-channel (HIGH).** Inherently cross-tenant on shared hardware; timing/power/
   SM-util leakage is **not reset by any logical move — only physical separation**. Design **contains**
-  (`FactSideChannel` AUDIT-ONLY, never actuates; Phase-2 mig-rebind/node-rotate as best-effort reset; deployment
+  (`FactGPUColocation` remains audit-only; `FactGPUContentionChannel` has conditional MIG-rebind cover; deployment
   guidance: don't co-host hostile GPU tenants on one physical GPU) — does **not close** it. The most explicit residual.
 - **R2 — Co-residency anonymized COUNT (MEDIUM).** Coarse, identity-free, but a multi-pod tenant can triangulate
   node placement. Accepted, bounded, disclosed — not eliminated.
