@@ -60,8 +60,8 @@ measured on a GPU — and we label every such claim as exactly that.*
 A deep search + brute-force exact solve (`P-OPTIMIZE-RATIO-DECISION.md`, §9.20) established that the greedy is
 **exactly optimal for the shipped asset-keyed profiles, OptimalityRatio = 1.000000, gap 0**. This is a
 profile-specific structural result, not a generic submodular approximation bound. Reason:
-`recon.Fact.Key` prefixes every cover key with its owning asset (`facts.go:65`), so distinct candidates have
-**asset-disjoint cover universes**, the objective is **modular** (the strongest case), and matroid-greedy on a
+`recon.Fact.Key` prefixes every selectable cover key with its scope and owning block (`internal/recon/facts.go`), so distinct candidates have
+**owning-block-disjoint cover universes**, the objective is **modular** (the strongest case), and matroid-greedy on a
 modular objective is exact. Turned into a reproducible test: `TestGreedyIsExactOnShippedFleets` asserts
 `ratio = 1.000000`; a self-check surfaces any shared key, and `TestGreedyExactGapSweep` shows the gap would
 reappear only under a deliberately-overlapping profile (worst min 0.53 at a binding budget). **Honest scope:**

@@ -13,7 +13,7 @@ func (sharedCoverRecon) Name() string { return "test-shared-cover" }
 func (sharedCoverRecon) AssetFacts(_ *model.WorkloadView, _ FactContext) AssetFacts {
 	return AssetFacts{
 		CoverByAction: map[model.Action][]string{
-			model.ActionRotate: {"shared-block|podIdentity"},
+			model.ActionRotate: {"pod|shared-block|podIdentity"},
 		},
 	}
 }
@@ -32,7 +32,7 @@ func TestCoverKeysAreBlockPrefixed(t *testing.T) {
 	if err == nil {
 		t.Fatal("deliberately shared cover key passed the block-prefix guard")
 	}
-	if !strings.Contains(err.Error(), "shared-block|podIdentity") {
+	if !strings.Contains(err.Error(), "pod|shared-block|podIdentity") {
 		t.Fatalf("guard error does not identify the shared key: %v", err)
 	}
 }

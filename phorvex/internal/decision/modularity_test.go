@@ -32,7 +32,7 @@ type minimalRecon struct{}
 func (minimalRecon) Name() string { return "test-minimal-recon" }
 func (minimalRecon) AssetFacts(v *model.WorkloadView, _ recon.FactContext) recon.AssetFacts {
 	asset := v.Pod.Namespace + "/" + v.Pod.Name
-	f := recon.Fact{Asset: asset, Kind: recon.FactPodIdentity, Weight: 1}
+	f := recon.Fact{Scope: recon.ScopePod, Asset: asset, Kind: recon.FactPodIdentity, Weight: 1}
 	return recon.AssetFacts{
 		Facts:         []recon.Fact{f},
 		CoverByAction: map[model.Action][]string{model.ActionRotate: {f.Key()}},
@@ -42,7 +42,7 @@ func (minimalRecon) AssetFacts(v *model.WorkloadView, _ recon.FactContext) recon
 // --- a new cost model (one file) ---
 type flatCost struct{}
 
-func (flatCost) Name() string { return "test-flat-cost" }
+func (flatCost) Name() string                                                          { return "test-flat-cost" }
 func (flatCost) Switching(_ *model.WorkloadView, _ model.Move, _ model.Policy) float64 { return 0.5 }
 
 func init() {

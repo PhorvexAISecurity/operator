@@ -34,9 +34,9 @@ func factsWithCover(t *testing.T) map[string]bool {
 	covered := map[string]bool{}
 	for _, keys := range af.CoverByAction {
 		for _, k := range keys {
-			// key shape is "<asset>|<kind>|..." — take the kind
-			if parts := strings.Split(k, "|"); len(parts) >= 2 {
-				covered[parts[1]] = true
+			// key shape is "<scope>|<asset>|<kind>|..." — take the kind.
+			if parts := strings.Split(k, "|"); len(parts) >= 3 {
+				covered[parts[2]] = true
 			}
 		}
 	}

@@ -566,20 +566,19 @@ func round4(x float64) float64 {
 	return float64(int64(x*10000+0.5)) / 10000
 }
 
-// factKind extracts the kind segment from a fact key "asset|kind[|edge]".
+// factKind extracts the kind segment from a scope-prefixed fact key
+// "scope|asset|kind[|edge]". The legacy branch is retained for synthetic benchmark fixtures whose
+// arbitrary keys predate the taxonomy; production recon keys always take the scoped branch.
 func factKind(key string) string {
-	start := -1
-	for i := 0; i < len(key); i++ {
-		if key[i] == '|' {
-			if start < 0 {
-				start = i + 1
-			} else {
-				return key[start:i]
-			}
+	parts := strings.Split(key, "|")
+	if len(parts) >= 3 {
+		switch recon.FactScope(parts[0]) {
+		case recon.ScopePod, recon.ScopeNode, recon.ScopeModel, recon.ScopeService:
+			return parts[2]
 		}
 	}
-	if start >= 0 {
-		return key[start:]
+	if len(parts) >= 2 {
+		return parts[1]
 	}
 	return key
 }

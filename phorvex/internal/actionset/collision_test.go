@@ -18,7 +18,7 @@ func (r collisionRecon) AssetFacts(view *model.WorkloadView, _ recon.FactContext
 	if r.crossBlock {
 		owner = "shared-block"
 	}
-	fact := recon.Fact{Asset: owner, Kind: recon.FactPodIdentity, Weight: 1}
+	fact := recon.Fact{Scope: recon.ScopePod, Asset: owner, Kind: recon.FactPodIdentity, Weight: 1}
 	return recon.AssetFacts{
 		Facts: []recon.Fact{fact},
 		CoverByAction: map[model.Action][]string{

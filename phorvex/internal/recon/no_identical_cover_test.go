@@ -27,35 +27,51 @@ type coverArchetype struct {
 	fctx FactContext
 }
 
-// coverArchetypes derives the boolean product of every workload predicate that
-// gates fact emission today. It is generated rather than hand-listed: HasGPU,
-// ModelID, Stateful and SuspectAdapter produce all 16 combinations.
+// coverArchetypes derives the boolean product of every workload predicate that gates fact emission
+// or cover today. It is generated rather than hand-listed: HasGPU, ModelID, Stateful,
+// SuspectAdapter, MIGDevice and RouteService exercise the production branches.
 func coverArchetypes() []coverArchetype {
 	bools := []bool{false, true}
-	out := make([]coverArchetype, 0, 16)
+	out := make([]coverArchetype, 0, 64)
 	for _, gpu := range bools {
 		for _, modelServer := range bools {
 			for _, stateful := range bools {
 				for _, poisoned := range bools {
-					pod := model.Pod{
-						Namespace: "ns", Name: "asset", HasGPU: gpu, Stateful: stateful,
+					for _, mig := range bools {
+						if mig && !gpu {
+							continue
+						}
+						for _, route := range bools {
+							pod := model.Pod{
+								Namespace: "ns", Name: "asset", Node: "node-a",
+								HasGPU: gpu, Stateful: stateful,
+							}
+							if modelServer {
+								pod.ModelID = "model-v1"
+							}
+							if poisoned {
+								pod.SuspectAdapter = "untrusted-lora"
+							}
+							if mig {
+								pod.MIGDevice = "MIG-abc"
+							}
+							if route {
+								pod.RouteService = "infer"
+								pod.GuardrailVariants = 2
+							}
+							name := fmt.Sprintf("gpu=%t/model=%t/stateful=%t/adapter=%t/mig=%t/route=%t",
+								gpu, modelServer, stateful, poisoned, mig, route)
+							out = append(out, coverArchetype{
+								name: name,
+								view: &model.WorkloadView{Pod: pod, Physics: model.NeutralPhysics()},
+								fctx: FactContext{
+									AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1,
+									HasGPU: gpu, Stateful: stateful,
+									Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}},
+								},
+							})
+						}
 					}
-					if modelServer {
-						pod.ModelID = "model-v1"
-					}
-					if poisoned {
-						pod.SuspectAdapter = "untrusted-lora"
-					}
-					name := fmt.Sprintf("gpu=%t/model=%t/stateful=%t/adapter=%t",
-						gpu, modelServer, stateful, poisoned)
-					out = append(out, coverArchetype{
-						name: name,
-						view: &model.WorkloadView{Pod: pod, Physics: model.NeutralPhysics()},
-						fctx: FactContext{
-							AssetValue: 10, PHold: 1, StageUrgency: 1,
-							HasGPU: gpu, Stateful: stateful,
-						},
-					})
 				}
 			}
 		}

@@ -9,8 +9,8 @@
  * substrate, the FROZEN per-tick λ (carried on every Decision as d.Lambda), and a prov() re-created
  * byte-for-byte from coverage.go:152-167 — so the only difference measured is the SELECTION RULE.
  *
- * Finding (P-OPTIMIZE-RATIO-DECISION.md): because recon.Fact.Key prefixes every cover key with its
- * owning asset (facts.go:65), distinct candidates have DISJOINT cover universes, the objective is
+ * Finding (P-OPTIMIZE-RATIO-DECISION.md): because recon.Fact.Key prefixes every selectable cover
+ * key with its scope and owning block, distinct blocks have DISJOINT cover universes, the objective is
  * MODULAR, and greedy == exact (ratio 1.000). This file turns that into a reproducible measured fact.
  */
 
@@ -197,8 +197,10 @@ func exactObjectiveWithBudget(set actionset.ActionSet, B int, prov func(string) 
 	return best, false
 }
 
-// coversDisjoint is the self-check: true iff no cover key is shared across ≥2 assets (the modular
-// condition under which greedy is provably exact). If shared, surfaces the offending key + assets.
+// coversDisjoint is the self-check: true iff no cover key is shared across ≥2 owning blocks (the
+// modular condition under which greedy is provably exact). Today candidates use pod blocks; the
+// wording deliberately does not promote shared node/model/service audit facts into decisions.
+// If shared, surfaces the offending key and blocks.
 func coversDisjoint(set actionset.ActionSet) (bool, string) {
 	owners := map[string]map[string]bool{}
 	for _, c := range set.Candidates {
@@ -219,13 +221,13 @@ func coversDisjoint(set actionset.ActionSet) (bool, string) {
 				names = append(names, a)
 			}
 			sort.Strings(names)
-			worst = fmt.Sprintf("cover key %q SHARED across %d assets %v — objective is genuinely submodular here; greedy may be suboptimal", k, len(as), names)
+			worst = fmt.Sprintf("cover key %q SHARED across %d owning blocks %v — objective is genuinely submodular here; greedy may be suboptimal", k, len(as), names)
 		}
 	}
 	if worst != "" {
 		return false, worst
 	}
-	return true, "all cover keys asset-disjoint (modular objective; greedy provably exact)"
+	return true, "all selectable cover keys owning-block-disjoint (modular objective; greedy provably exact)"
 }
 
 // greedyPicksOnSet re-implements coverage.go:175-207 EXACTLY (same marginal, gain=marginal·prov−λ·ECost,

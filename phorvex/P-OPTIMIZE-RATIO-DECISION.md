@@ -29,8 +29,8 @@ while the enumeration stays inside the work budget (`optimality.go`). Measured d
 the way. Above the work budget the exact arm reports `ExactSkipped`; it never reports a ratio it did
 not compute.
 
-**Why (verified):** `recon.Fact.Key() = Asset|Kind[|Edge]` ([facts.go:62-68](internal/recon/facts.go#L62-L68)) —
-every cover key is **prefixed by its owning asset**, and lateral edges are keyed on the **source** asset. So
+**Why (verified):** `recon.Fact.Key() = Scope|Asset|Kind[|Edge]` (`internal/recon/facts.go`) —
+every selectable cover key is **prefixed by its scope and owning block**, and lateral edges are keyed on the **source** pod. So
 distinct candidates have **provably disjoint cover-key universes**; the `!covered[k]` marginal discount
 ([coverage.go:184-188](internal/decision/coverage.go#L184-L188)) **never fires across the partition**. A
 coverage function over disjoint sets is **modular** (the strongest case, not merely submodular). Greedy's
@@ -42,7 +42,7 @@ round-by-round top-B-by-net-value selection over a partition matroid is then **e
 
 | Property | Verdict | Evidence |
 |---|---|---|
-| Coverage term Σ w(facts covered by S) | **Modular** (not strictly submodular) on shipped profiles | asset-prefixed keys ⇒ disjoint covers (`facts.go:65`) |
+| Coverage term Σ w(facts covered by S) | **Modular** (not strictly submodular) on shipped profiles | scope/owning-block-prefixed selectable keys ⇒ disjoint covers (`facts.go`) |
 | Diminishing returns (marginal non-increasing) | **Holds** (overlap only *decreases* gain) | search reproduction: 0/200000 violations, disjoint **and** adversarial-overlap |
 | Monotonicity | **FAILS** (objective can decrease) | the `−λ·ECost` term + `gain≤0` early stop (`coverage.go:197`) |
 | `prov(c.Key)` discount | **Preserves modularity** | per-candidate, tick-fixed, set-**independent** constant (`coverage.go:154-167` reads only exposure/urgency, never `covered`) |
@@ -136,8 +136,8 @@ whose zero-value = current behavior.
   exact); the (f) weight lift is **zero on a uniformly-dispersed fleet** and an adversary can neutralize it by
   authoring uniform dispersion.
 - **Profile dependence (the key fragility):** the entire exact/modular result holds **only** because lateral
-  edges are keyed on the owning asset (`facts.go:65`). A single future profile that re-keys any fact off a
-  shared neighbor/node (e.g. **co-residency keyed by node**) flips the objective to genuine submodular and drops
+  edges are keyed on the owning pod. A single future profile that grants selectable cover to a key shared by
+  multiple decision blocks flips the objective to genuine submodular and drops
   the guarantee to the matroid-1/2 / non-monotone regime — at which point (a)/(d) acquire real (still bounded)
   lift. **Read `recon/ucw.go` co-residency key construction before betting (d) is strictly a no-op.**
 - The test suite + a live ablation were **not executed** this pass (static + reproduction evidence only).

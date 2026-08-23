@@ -22,18 +22,18 @@ func TestAttributionOrderIsStableAcrossRuns(t *testing.T) {
 	// Cover keys spanning several fact kinds whose weights are ALL EQUAL — the tie case.
 	c := actionset.Candidate{
 		CoverKeys: []string{
-			"ns/pod|podIdentity|a",
-			"ns/pod|inMemory|b",
-			"ns/pod|session|c",
-			"ns/pod|networkIdentity|d",
+			"pod|ns/pod|podIdentity|a",
+			"pod|ns/pod|inMemory|b",
+			"pod|ns/pod|session|c",
+			"pod|ns/pod|networkIdentity|d",
 		},
 		ECost: 0.5,
 	}
 	weights := map[string]float64{
-		"ns/pod|podIdentity|a":     0,
-		"ns/pod|inMemory|b":        0,
-		"ns/pod|session|c":         0,
-		"ns/pod|networkIdentity|d": 0,
+		"pod|ns/pod|podIdentity|a":     0,
+		"pod|ns/pod|inMemory|b":        0,
+		"pod|ns/pod|session|c":         0,
+		"pod|ns/pod|networkIdentity|d": 0,
 	}
 
 	first, err := json.Marshal(attributionOf(c, weights, 0))
@@ -58,16 +58,16 @@ func TestAttributionOrderIsStableAcrossRuns(t *testing.T) {
 func TestAttributionOrdersByContributionThenSource(t *testing.T) {
 	c := actionset.Candidate{
 		CoverKeys: []string{
-			"ns/pod|podIdentity|a", // 0.10
-			"ns/pod|inMemory|b",    // 0.50  <- largest, must come first
-			"ns/pod|session|c",     // 0.10  <- ties with podIdentity, "session" sorts after
+			"pod|ns/pod|podIdentity|a", // 0.10
+			"pod|ns/pod|inMemory|b",    // 0.50  <- largest, must come first
+			"pod|ns/pod|session|c",     // 0.10  <- ties with podIdentity, "session" sorts after
 		},
 		ECost: 0,
 	}
 	weights := map[string]float64{
-		"ns/pod|podIdentity|a": 0.10,
-		"ns/pod|inMemory|b":    0.50,
-		"ns/pod|session|c":     0.10,
+		"pod|ns/pod|podIdentity|a": 0.10,
+		"pod|ns/pod|inMemory|b":    0.50,
+		"pod|ns/pod|session|c":     0.10,
 	}
 	terms := attributionOf(c, weights, 0)
 	if len(terms) != 4 { // 3 cover kinds + the cost term
