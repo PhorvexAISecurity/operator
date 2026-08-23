@@ -211,6 +211,15 @@ type BudgetSpec struct {
 
 // SLOSpec is the hard availability envelope (PRD slo{...}; FR2 feasibility).
 type SLOSpec struct {
+	// CostCeiling is the independent dimensionless hard ceiling applied to the
+	// conformal switching-cost bound. It is not derived from objective weights.
+	// [ESTIMATE-UNVALIDATED] Empty defaults to "1.2": one logical pod replacement
+	// plus the provisional structural margin from PHVX-9a/9b.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$`
+	// +kubebuilder:default="1.2"
+	CostCeiling string `json:"costCeiling,omitempty"`
+
 	// P99Ms is the p99 latency ceiling in milliseconds; a move whose predicted
 	// post-move p99 exceeds this is infeasible. 0 = unconstrained.
 	// +kubebuilder:validation:Optional

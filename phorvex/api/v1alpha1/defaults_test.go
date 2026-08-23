@@ -9,6 +9,8 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 func TestEffectiveDefaults(t *testing.T) {
@@ -21,6 +23,9 @@ func TestEffectiveDefaults(t *testing.T) {
 	}
 	if got := s.EffectiveFlowDisruption(); got != 0.6 {
 		t.Errorf("flowDisruption default = %v, want 0.6", got)
+	}
+	if got := s.EffectiveCostCeiling(); got != model.DefaultCostCeiling {
+		t.Errorf("costCeiling default = %v, want %v", got, model.DefaultCostCeiling)
 	}
 	if got := s.EffectiveMaxMovesPerTick(); got != 3 {
 		t.Errorf("maxMovesPerTick default = %v, want 3", got)
@@ -54,6 +59,7 @@ func TestEffectiveDefaults(t *testing.T) {
 func TestEffectiveOverrides(t *testing.T) {
 	s := PhorvexPolicySpec{
 		Objective: ObjectiveSpec{Lambda: "0.9", CostWeights: CostWeights{NormSparsity: "0.2", FlowDisruption: "0.8"}},
+		SLO:       SLOSpec{CostCeiling: "1.7"},
 		Budget: BudgetSpec{
 			MaxMovesPerTick:        5,
 			TickInterval:           metav1.Duration{Duration: 30 * time.Second},
@@ -67,6 +73,9 @@ func TestEffectiveOverrides(t *testing.T) {
 	}
 	if s.EffectiveLambda() != 0.9 || s.EffectiveNormSparsity() != 0.2 || s.EffectiveFlowDisruption() != 0.8 {
 		t.Errorf("objective overrides not applied")
+	}
+	if s.EffectiveCostCeiling() != 1.7 {
+		t.Errorf("cost ceiling override not applied")
 	}
 	if s.EffectiveMaxMovesPerTick() != 5 || s.EffectiveTickInterval() != 30*time.Second {
 		t.Errorf("budget overrides not applied")

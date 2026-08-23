@@ -5,12 +5,30 @@
 package decision
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/model"
 )
+
+func TestNaNCostReportsDistinctUnactionableCategory(t *testing.T) {
+	e := NewCoverageEngine()
+	view := covView("nan-cost", true, 2*time.Hour, false)
+	view.Telemetry = model.Telemetry{Present: true, ReqRate: math.NaN()}
+	pol := covPolicy(1)
+	pol.EnabledActions = map[model.Action]bool{model.ActionRotate: true}
+
+	decisions := e.Decide([]*model.WorkloadView{view}, pol)
+	if len(decisions) != 1 {
+		t.Fatalf("got %d decisions, want 1", len(decisions))
+	}
+	d := decisions[0]
+	if d.Feasible || d.InfeasibleWhy != cost.UnactionableNaNCategory+": telemetry.reqRate" {
+		t.Fatalf("NaN decision category not distinct: %+v", d)
+	}
+}
 
 func covPolicy(b int) model.Policy {
 	return model.Policy{

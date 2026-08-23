@@ -25,8 +25,7 @@ phorvex:
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false
-  # Optional Prometheus Operator rules for the two kill-switch observability failures that
-  # must not stay silent. Enable only where the monitoring.coreos.com CRDs are installed.
+  # Optional Prometheus Operator rules for kill-switch observability.
   alerts:
     enabled: false
     disagreementFor: 2m
@@ -34,6 +33,10 @@ phorvex:
     restartThreshold: 3
     restartFor: 2m
     additionalLabels: {}
+  # The PHVX-9b fail-conservative NaN-cost alert is independently switchable so
+  # enabling it does not silently activate unrelated alert policies.
+  costNaNAlert:
+    enabled: false
   # Leader election for HA (single active controller).
   leaderElect: false
   metricsBindAddress: ":8080"

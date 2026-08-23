@@ -11,6 +11,15 @@ package model
 
 import "time"
 
+// DefaultCostCeiling is the independent hard ceiling for the dimensionless
+// switching-cost gate. It is deliberately not derived from the objective
+// weights: those weights rank moves, while this value decides whether a move is
+// safe enough to generate at all.
+//
+// [ESTIMATE-UNVALIDATED] — one logical pod replacement (1.0) plus the provisional
+// structural margin agreed in PHVX-9a/9b. Policies may override it per service.
+const DefaultCostCeiling = 1.2
+
 // Action is the resolved mutation a decision selects. It mirrors the
 // v1alpha1.ActionType vocabulary but lives here so interface packages never import
 // the API package.
@@ -221,6 +230,7 @@ type Pod struct {
 	// Typed capability witnesses used only for operator-facing ActionsSupported status.
 	ServingEndpointReady bool   // Ready AI pod with an assigned PodIP / serving endpoint
 	RouteService         string // phorvex.ai/route-service annotation
+	RouteServiceReady    bool   // declared route Service exists in this namespace and can be restitched
 	GuardrailVariants    int    // distinct current+alternate guardrail variants declared
 	ParallelSize         int    // phorvex.ai/parallel-size; <=0 means absent or invalid
 	MIGGPUID             string // phorvex.ai/gpu-id annotation used by mig-rebind
@@ -335,6 +345,7 @@ type Policy struct {
 	Lambda                       float64
 	NormSparsity                 float64
 	FlowDisruption               float64
+	CostCeiling                  float64
 	WeightSecrets                float64
 	BlastRadiusFromGraph         bool
 	MaxMovesPerTick              int

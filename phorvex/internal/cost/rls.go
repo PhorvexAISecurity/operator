@@ -117,9 +117,10 @@ func (r *RLS) Predict(f [featureDim]float64) float64 {
 	// NaN-SAFE: a NaN anywhere in phi or theta makes the dot product NaN, and every comparison
 	// below would then be false — returning NaN straight into ECost, where the optimizer's
 	// `gain > best` is also always false and selection becomes undefined. NaN reads as the
-	// NEUTRAL LOW end so a poisoned signal can never inflate a cost either.
+	// conservative maximum; P1Cost.Evaluation additionally classifies and excludes it
+	// before optimization so the data failure is metric/audit visible.
 	if math.IsNaN(s) {
-		return 0
+		return unknownActionFlowMax
 	}
 	if s < 0 {
 		return 0
@@ -130,11 +131,28 @@ func (r *RLS) Predict(f [featureDim]float64) float64 {
 	return s
 }
 
+func (r *RLS) hasNaNParameter() bool {
+	for _, value := range r.theta {
+		if math.IsNaN(value) {
+			return true
+		}
+	}
+	return false
+}
+
 // Update folds one (features, observedCost) sample into theta via the RLS recursion.
 // Called when a real rotation's disruption has been measured (offline cadence).
 func (r *RLS) Update(f [featureDim]float64, y float64) {
 	if r.frozen {
 		return // calibration is off: theta stays at the prior (PHVX-2 off-switch)
+	}
+	if math.IsNaN(y) || math.IsInf(y, 0) {
+		return
+	}
+	for _, value := range f {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return
+		}
 	}
 	// Pf = P f
 	var pf [featureDim]float64
@@ -195,7 +213,7 @@ func satRLS(x float64) float64 {
 	// NaN-SAFE (see sat() in switching.go): NaN compares false against everything, so without
 	// this guard a NaN ReqRate would flow into the feature vector and make C_flow NaN.
 	if math.IsNaN(x) {
-		return 0
+		return 1
 	}
 	if x < 0 {
 		return 0

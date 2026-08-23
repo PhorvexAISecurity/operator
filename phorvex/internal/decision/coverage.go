@@ -7,12 +7,14 @@ package decision
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/ctxprov"
 	"github.com/phorvex/phorvex/internal/killchain"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 )
@@ -211,12 +213,16 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 	}
 
 	tcost := e.costFor(pol.Tenant, pol.Lambda)
-	costCeiling := pol.NormSparsity + pol.FlowDisruption + 0.2 // worst-case single-move budget
+	costCeiling := cost.EffectiveCostCeiling(pol)
 	deps := actionset.Deps{
 		Recon:       e.Recon,
 		FactContext: factCtx,
 		ECost:       tcost.ECost,
 		CHi:         tcost.CHi,
+		Evaluate: func(view *model.WorkloadView, move model.Move, policy model.Policy) (float64, float64, string, string) {
+			eval := tcost.Evaluation(view, move, policy)
+			return eval.Total, eval.CHi, eval.UnactionableCategory, eval.NaNFeature
+		},
 		CostCeiling: costCeiling,
 	}
 	return deps.Generate(views, pol), ctxByKey
@@ -248,6 +254,15 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	if err := set.CollisionError(); err != nil {
 		return nil, err
 	}
+	if persist {
+		for _, ex := range set.Excluded {
+			if ex.Category != cost.UnactionableNaNCategory {
+				continue
+			}
+			namespace, pod, _ := strings.Cut(ex.Key, "/")
+			metrics.RecordCostNaNUnactionable(pol.Tenant, namespace, pod, string(ex.Action), ex.Detail)
+		}
+	}
 
 	candsByAsset := map[string][]int{}
 	for i := range set.Candidates {
@@ -255,7 +270,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	}
 	excludedWhy := map[string]string{}
 	for _, ex := range set.Excluded {
-		if _, ok := excludedWhy[ex.Key]; !ok {
+		if _, ok := excludedWhy[ex.Key]; !ok || ex.Category == cost.UnactionableNaNCategory {
 			excludedWhy[ex.Key] = ex.Reason
 		}
 	}

@@ -332,6 +332,15 @@ spec:
                       Consumption is measured the same way: the summed time readyReplicas was under
                       the floor, whatever caused it.
                     type: string
+                  costCeiling:
+                    default: "1.2"
+                    description: |-
+                      CostCeiling is the independent dimensionless hard ceiling applied to the
+                      conformal switching-cost bound. It is not derived from objective weights.
+                      [ESTIMATE-UNVALIDATED] Empty defaults to "1.2": one logical pod replacement
+                      plus the provisional structural margin from PHVX-9a/9b.
+                    pattern: ^([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$
+                    type: string
                   disruptionBudgetReplicaSeconds:
                     description: |-
                       DisruptionBudgetReplicaSeconds is the total unavailable replica-seconds
@@ -370,16 +379,14 @@ spec:
                     minimum: 0
                     type: integer
                   reserveFraction:
-                    description: |-
-                      ReserveFraction is the share of each TOTAL budget that Phorvex may never
-                      spend, as a decimal string in [0,1). It is withheld from the total before
-                      consumption is subtracted, so the usable remainder is
-
-                       usable = (1 - reserveFraction) * total - consumed
-
-                      A fraction of the TOTAL, not of the remainder: a fraction of the remainder
-                      would shrink as the budget burns and so would never reserve anything.
-                      Empty or unparseable means no reserve.
+                    description: "ReserveFraction is the share of each TOTAL budget
+                      that Phorvex may never\nspend, as a decimal string in [0,1).
+                      It is withheld from the total before\nconsumption is subtracted,
+                      so the usable remainder is\n\n\tusable = (1 - reserveFraction)
+                      * total - consumed\n\nA fraction of the TOTAL, not of the remainder:
+                      a fraction of the remainder\nwould shrink as the budget burns
+                      and so would never reserve anything.\nEmpty or unparseable means
+                      no reserve."
                     type: string
                   window:
                     description: |-

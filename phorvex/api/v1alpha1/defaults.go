@@ -8,6 +8,8 @@ import (
 	"math"
 	"strconv"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 const defaultKillChainShape = 2.0
@@ -67,6 +69,21 @@ func (s *PhorvexPolicySpec) EffectiveNormSparsity() float64 {
 // EffectiveFlowDisruption is the C_flow weight (default 0.6).
 func (s *PhorvexPolicySpec) EffectiveFlowDisruption() float64 {
 	return ParseDecimal(s.Objective.CostWeights.FlowDisruption, defaultFlowDisruption)
+}
+
+// EffectiveCostCeiling resolves the independent per-service hard cost ceiling.
+// A literal NaN/Inf is intentionally preserved so the decision cost gate can
+// classify it as an observable fail-conservative data error instead of silently
+// turning a malformed safety limit into the default.
+func (s *PhorvexPolicySpec) EffectiveCostCeiling() float64 {
+	if s.SLO.CostCeiling == "" {
+		return model.DefaultCostCeiling
+	}
+	v, err := strconv.ParseFloat(s.SLO.CostCeiling, 64)
+	if err != nil || v <= 0 {
+		return model.DefaultCostCeiling
+	}
+	return v
 }
 
 // EffectiveWeightSecrets is the per-mounted-Secret asset weight (default 0.8).
