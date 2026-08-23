@@ -242,17 +242,24 @@ class Cluster:
 
     def controller_pods(self, namespace="phorvex-system"):
         """Health of the operator pods themselves. A crash-looping operator still lets the
-        dashboard look alive, because a second operator keeps writing the audit."""
+        dashboard look alive, because a second operator keeps writing the audit.
+
+        Completed CronJob/Job pods share the operator namespace but are not controllers;
+        counting them makes every E2E run fail between the job completing and its TTL
+        cleanup. Keep failed Jobs out for the same reason: their health belongs to the
+        job-specific check, not the controller liveness invariant.
+        """
         rc, out, _ = self.kubectl(
             f"-n {shlex.quote(namespace)} get pod "
             "-o jsonpath='{range .items[*]}{.metadata.name}|{.status.phase}|"
-            "{.status.containerStatuses[0].restartCount}{\"\\n\"}{end}'")
+            "{.status.containerStatuses[0].restartCount}|"
+            "{.metadata.ownerReferences[0].kind}{\"\\n\"}{end}'")
         pods = {}
         if rc != 0:
             return pods
         for line in out.strip("'").splitlines():
             f = line.strip().split("|")
-            if len(f) >= 3 and f[0]:
+            if len(f) >= 4 and f[0] and f[3] != "Job":
                 pods[f[0]] = {"phase": f[1], "restarts": int(f[2]) if f[2].isdigit() else 0}
         return pods
 
