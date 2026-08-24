@@ -124,9 +124,13 @@ export const api = {
   startRun: (config: string, nativeActuator: boolean, lens: Lens) =>
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
   version: (lens: Lens) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens),
-  vllmAttack: (action: "poison" | "kvcache" | "reset", lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
+  vllmAttack: (action: VllmAttackAction, lens: Lens) => post<{ ok: boolean; action: string; message: string }>("/api/vllm/attack", { action }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens) => get<{ attacks: AttackResult[] }>("/api/attack-results", lens),
+  // Per-app attack compatibility: which attacks THIS app's stack supports, which are armed to
+  // fire now, and — when the harness binary is in the image — the catalogue filtered per app.
+  workloadAttacks: (namespace: string, lens: Lens) =>
+    get<WorkloadAttacks>(`/api/workload/attacks?namespace=${encodeURIComponent(namespace)}`, lens),
   // LIVE-ATTACK MONITORING — availability before/during/after each real attack + downtime $.
   attackMonitoring: (lens: Lens) =>
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),
@@ -203,6 +207,31 @@ export interface ClusterTarget { id: string; context: string; label: string; pro
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
 export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }
 export interface WorkloadNS { namespace: string; system: boolean; podCount: number; workloads: Workload[] }
+
+// The live-attack action set the /api/vllm/attack endpoint accepts (vllm_attack.go). `reset` is
+// the cleanup action, not an attack — it clears the last one.
+export type VllmAttackAction =
+  | "poison" | "kvcache" | "endpoint-rotate" | "guardrail-rotate" | "request-drain"
+  | "kv-migrate-invalidate" | "warm-swap" | "model-shard-replace" | "reset";
+
+// --- per-app attack compatibility (GET /api/workload/attacks) ---
+export interface LiveAttack {
+  id: string; name: string; endpoint: string; mitre: string;
+  expectedActuator: string; stack: string; description: string;
+}
+export interface CompatEntry extends LiveAttack { compatible: boolean; armed: boolean; reason: string }
+export interface AppStack {
+  namespace: string; servedModel: boolean; vllm: boolean; gpu: boolean;
+  stateful: boolean; workload: boolean; armed: boolean;
+}
+export interface CatalogCompat {
+  name: string; product: string; category: string; techniques: string[];
+  expectedActuators: string[]; prereqs: string[]; compatible: boolean; reason: string;
+}
+export interface WorkloadAttacks {
+  namespace: string; stack: AppStack; live: CompatEntry[];
+  catalog: CatalogCompat[]; catalogNote?: string;
+}
 // Attack-timeline SSE event (one per harness stage header / completed trial / run end).
 export interface TimelineEvent {
   type: "meta" | "stage" | "trial" | "end";
