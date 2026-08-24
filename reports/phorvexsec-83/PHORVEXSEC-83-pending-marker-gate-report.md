@@ -13,11 +13,13 @@ The pending-marker discipline is now executable and build-gated.
 - Final production hits: **0**.
 - Orphans: **0** after creating PHORVEXSEC-152 for the previously unowned console authn/RBAC boundary.
 
-`phorvex/PENDING-INVENTORY.md` is generated deterministically with file:line, marker, production classification, exact text, and owner. The committed build fails if:
+`phorvex/PENDING-INVENTORY.md` is generated deterministically with file path, marker, production classification, exact text, and owner. The committed build fails if:
 
 1. a marker appears in a production-tagged Go/config/chart/hack/Grafana path;
 2. any marker lacks a Plane owner; or
 3. the source changes without regenerating the inventory.
+
+**Amendment 2026-08-24 — rows no longer carry line numbers.** As originally shipped each row was keyed on `file:line`, which made rule 3 fire on edits that changed no marker at all. PRs #63 and #64 were each green and merged into a red `main`: #64 removed a line above a marker in `internal/actionset/generator_test.go`, shifting it 121 → 120 and staling the inventory while the marker set was byte-identical. Line numbers were dropped from the rendered rows, so an unrelated edit above a marker is no longer a build failure. `Hit.Line` is unchanged and gate failures still name an exact `file:line`; `TestRenderSurvivesLineDrift` and `TestProductionFailureNamesTheLine` hold both halves of that contract.
 
 ## CI enforcement
 
