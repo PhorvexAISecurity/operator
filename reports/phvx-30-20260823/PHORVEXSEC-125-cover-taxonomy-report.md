@@ -1,11 +1,13 @@
 # PHORVEXSEC-125 (PHVX-30) — P-COVERSETS taxonomy report
 
-Updated: 2026-08-23 · Branch `feat/phorvexsec-125-cover-taxonomy`
+Updated: 2026-08-24 · Branch `feat/phorvexsec-125-cover-taxonomy`
 
 ## Disposition
 
-Implemented as a stacked change on `feat/phorvexsec-91-cost-model` because PHVX-9b's non-zero
-extended-action cost model is a hard prerequisite and PR #64 is not yet merged.
+Implemented originally as a stacked change on `feat/phorvexsec-91-cost-model` because PHVX-9b's
+non-zero extended-action cost model is a hard prerequisite. PR #64 is now merged. Current `main`
+was merged into this branch without conflict on 2026-08-24, so PR #67 can be reviewed and tested
+independently against `main`.
 
 The existing PHVX-9e false-cover withdrawals, PHVX-20 block guards, PHVX-21 fail-loud collision
 handling, PHVX-26a GPU split, dead `nodePlacement` removal, and the corrected
@@ -69,7 +71,7 @@ ran; no skipped result was presented as a ratio.
   shared-key mutation, and greedy/exact tests — pass
 - `git diff --check` — pass
 
-## Merge dependency
+## Final PR gate
 
-The PR must initially target `feat/phorvexsec-91-cost-model`. After PR #64 lands, rebase or retarget
-this branch to `main`, rerun CI, and only then treat PHORVEXSEC-125 as independently mergeable.
+PR #64 has landed and this branch now contains current `main`. Retarget PR #67 to `main`, require
+its independent CI to pass, and only then move PHORVEXSEC-125 to `Test`.
