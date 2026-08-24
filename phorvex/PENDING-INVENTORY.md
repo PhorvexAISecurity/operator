@@ -136,4 +136,4 @@ Total markers: **130**.
 | `P5-FINAL-REPORT.md:145` | false | PHORVEXSEC-87 | `SP-0-PENDING` | \| **All AI/GPU magnitudes** (dwell, GPU cost, the actuator effects) \| **`[SP-0-PENDING-P4]`** \| needs real GPU + DCGM; kind proves structure only \| |
 | `P5-FINAL-REPORT.md:159` | false | PHORVEXSEC-87 | `SP-0-PENDING` | `[SP-0-PENDING-P4]`. |
 | `P5-FINAL-REPORT.md:215` | false | PHORVEXSEC-87 | `SP-0-PENDING` | - **All AI/GPU effectiveness is unproven on hardware.** Every AI magnitude is `[SP-0-PENDING-P4]`. The 9 |
-| `internal/actionset/generator_test.go:121` | false | PHORVEXSEC-87 | `SP-0-PENDING` | // GPU warm-load [SP-0-PENDING] exceeds the ceiling); quarantine remains (safe fallback). |
+| `internal/actionset/generator_test.go:120` | false | PHORVEXSEC-87 | `SP-0-PENDING` | // GPU warm-load [SP-0-PENDING] exceeds the ceiling); quarantine remains (safe fallback). |
