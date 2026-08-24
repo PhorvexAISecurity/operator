@@ -1,6 +1,7 @@
 package pendinggate
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,59 @@ func TestRepositoryInventoryAndProductionGate(t *testing.T) {
 	err := Check(root, filepath.Join(root, "PENDING-INVENTORY.md"))
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The inventory must survive the merge that used to break it: an unrelated edit
+// lands above a marker, every line below shifts, and no regeneration is owed.
+func TestRenderSurvivesLineDrift(t *testing.T) {
+	root := t.TempDir()
+	doc := filepath.Join(root, "P-DASHBOARD-REPORT.md")
+	if err := os.WriteFile(doc, []byte(testMarker()+" endpoint\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := RenderInventory(hits)
+
+	if err := os.WriteFile(doc, []byte("unrelated prose\n"+testMarker()+" endpoint\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shifted, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shifted) != 1 || shifted[0].Line != 2 {
+		t.Fatalf("expected the marker to shift to line 2: %#v", shifted)
+	}
+	if got := RenderInventory(shifted); !bytes.Equal(got, before) {
+		t.Fatalf("line drift restaled the inventory:\nbefore:\n%s\nafter:\n%s", before, got)
+	}
+}
+
+// Line numbers leave the inventory but must stay in the failure messages.
+func TestProductionFailureNamesTheLine(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "internal", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "internal", "x", "x.go"),
+		[]byte("package x\n\n// "+testMarker()+" GPU validation\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv := filepath.Join(root, "PENDING-INVENTORY.md")
+	if err := os.WriteFile(inv, RenderInventory(hits), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err = Check(root, inv)
+	if err == nil || !strings.Contains(err.Error(), "internal/x/x.go:3") {
+		t.Fatalf("expected the failure to name internal/x/x.go:3, got %v", err)
 	}
 }
 
