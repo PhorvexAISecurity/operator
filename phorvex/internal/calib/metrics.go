@@ -289,6 +289,11 @@ func (t *Tracker) ObserveReadyDelay(rep ReadyDelayReport, now time.Time) {
 	readyDelayUnidentifiable.Set(float64(len(rep.Unidentifiable)))
 
 	t.ObserveScaleWithInvalid(rep.Reference, now, rep.Invalid)
+	// Snapshot-derived scales carry their population in Scale.Clip.N. Ready-delay does not:
+	// its population contains observed plus right-censored outcomes and is evaluated by the
+	// Kaplan-Meier estimator, so Clip is intentionally empty. Publish the estimator's eligible
+	// count after the generic scale metrics to avoid reporting zero at the activation gate.
+	scaleObservations.WithLabelValues(rep.Reference.Name).Set(float64(rep.Eligible))
 }
 
 // SaturationStreak reports the current consecutive-over-threshold count, for tests and for the

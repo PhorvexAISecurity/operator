@@ -181,6 +181,32 @@ func TestInvalidCountIsPublishedForSnapshotScales(t *testing.T) {
 	}
 }
 
+// Ready-delay is estimated from observed and right-censored outcomes, not from the snapshot-style
+// Clip distribution. Its Scale therefore legitimately has Clip.N == 0 even when the estimator has
+// enough eligible outcomes. Publishing Clip.N made the live metric report zero at the 100-outcome
+// activation gate while the raw exporter and estimator correctly reported 101.
+func TestReadyDelayPublishesEligibleObservationCount(t *testing.T) {
+	tr := NewTracker(0.10, 3)
+	rep := ReadyDelayReport{
+		Reference: Scale{
+			Name: "t_ready_count", Value: 14.7, Source: SourceMeasured,
+			Percentile: 0.95, ComputedAt: at0(),
+		},
+		Eligible: 101,
+		Observed: 101,
+		Invalid:  2,
+	}
+
+	tr.ObserveReadyDelay(rep, at0())
+
+	if got := gaugeValue(t, scaleObservations, "t_ready_count"); got != 101 {
+		t.Fatalf("ready-delay observations = %v, want eligible count 101", got)
+	}
+	if got := gaugeValue(t, scaleInvalid, "t_ready_count"); got != 2 {
+		t.Fatalf("ready-delay invalid observations = %v, want 2", got)
+	}
+}
+
 // Change ratio is what makes the cost of a short cadence visible.
 func TestChangeRatioReportsRelativeMovement(t *testing.T) {
 	tr := NewTracker(0.10, 3)

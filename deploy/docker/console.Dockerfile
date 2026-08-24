@@ -27,6 +27,8 @@ RUN go mod download
 WORKDIR /workspace
 COPY phorvex/ phorvex/
 WORKDIR /workspace/phorvex
+# PHORVEXSEC-83: the console build shares the marker/ownership gate with the operator.
+RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
 # BuildStamp is what GET /api/version reports as the console's own version, and it is the
 # ONLY way to tell which console build is serving — the operator's version is read from the
 # live Deployment, but the console can only report what was compiled into it. Left unset it

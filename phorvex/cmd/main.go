@@ -414,7 +414,8 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 }
 
 // runScan is the P-PHYSICS proof: scan the live cluster, derive the both-products
-// PhysicsWitness per pod (K8s values live; AI/GPU honestly [SP-0-PENDING] until a DCGM
+// PhysicsWitness per pod (K8s values live; AI/GPU hardware validation is tracked by
+// PHORVEXSEC-87 until a DCGM
 // adapter answers), and run the separately-ablated scarcity A/B. Read-only.
 func runScan(namespace, promURL, kubeContext string) error {
 	// Honor an explicit kubeconfig context (DERIVED by the console from the operator's
@@ -454,7 +455,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 			continue
 		}
 		w := phys[p.Namespace+"/"+p.Name]
-		ai := "AI:[SP-0-PENDING] (no GPU/DCGM scan)"
+		ai := "AI:unmeasured (no GPU/DCGM scan; PHORVEXSEC-87)"
 		if w.GPUPresent {
 			gpuPresent = true
 			ai = fmt.Sprintf("AI: VRAMfrac=%.2f SM=%.2f link=%.2f modelRarity=%.2f SMsource=%s linkSource=%s", w.VRAMFraction, w.SMOccupancy, w.LinkBandwidth, w.ModelRarity, w.SMSource, w.LinkSource)
@@ -463,7 +464,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 			p.Namespace+"/"+p.Name, w.ImageRarity, w.CoResidency, w.SchedulerSlack, w.PDBMinAvailable, w.MIGGeometryValid, w.EPSS, p.Stateful, ai)
 		shown++
 	}
-	gpuNote := "honest [SP-0-PENDING] (no GPU/DCGM feed)"
+	gpuNote := "unmeasured (no GPU/DCGM feed; PHORVEXSEC-87)"
 	if gpuPresent {
 		gpuNote = "live GPU/AI physics from DCGM"
 	}

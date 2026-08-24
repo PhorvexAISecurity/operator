@@ -36,7 +36,8 @@ const (
 	// --- P-ACTUATOR: the full native action vocabulary. Retained extended-Phoenix
 	// primitives the 3-set didn't name + the advanced K8s + AI/GPU moves. Each has a
 	// native handler (the completeness invariant proves it) and a per-action feasibility
-	// law. AI/GPU magnitudes are [SP-0-PENDING] (read the GPUPresent-gated PhysicsWitness).
+	// law. AI/GPU magnitudes remain hardware-validation inputs owned by PHORVEXSEC-87
+	// (read the GPUPresent-gated PhysicsWitness).
 
 	// ActionDebugger injects one ephemeral container (= Phoenix Debugger). Irreversible.
 	// MANUAL-BY-DESIGN: it is a human diagnostic, not a moving-target defence, so it carries NO
@@ -65,18 +66,20 @@ const (
 	// was removed.
 	ActionRouteRotate Action = "route-rotate"
 	// ActionWarmSwap rotates WITHOUT the cold-load: provision a Ready warm replacement
-	// then retire (provision-before-retire). [SP-0-PENDING] magnitude=ColdLoadSec.
+	// then retire (provision-before-retire). ColdLoadSec validation: PHORVEXSEC-87.
 	ActionWarmSwap Action = "warm-swap"
 	// ActionMIGRebind moves to a non-co-resident MIG partition then warm-cutover.
-	// [SP-0-PENDING] (GPU-bound).
+	// GPU-bound hardware validation is tracked by PHORVEXSEC-87.
 	ActionMIGRebind Action = "mig-rebind"
 	// ActionKVReset flushes KV-cache/agent-session in-process WITHOUT killing the pod —
-	// the only move that defeats a wipe-surviving prompt-inject implant. [SP-0-PENDING].
+	// the only move that defeats a wipe-surviving prompt-inject implant. Hardware validation:
+	// PHORVEXSEC-87.
 	ActionKVReset Action = "kv-reset"
-	// ActionEndpointRotate re-keys the served-model route/endpoint. [SP-0-PENDING].
+	// ActionEndpointRotate re-keys the served-model route/endpoint. Hardware validation:
+	// PHORVEXSEC-87.
 	ActionEndpointRotate Action = "endpoint-rotate"
 	// ActionModelShardReplace warm-replaces a model shard on a target id/version.
-	// [SP-0-PENDING] magnitude=ColdLoadSec/ModelRarity.
+	// ColdLoadSec/ModelRarity hardware validation is tracked by PHORVEXSEC-87.
 	ActionModelShardReplace Action = "model-shard-replace"
 	// ActionAdapterRotate unloads + (optionally) reloads a clean LoRA/adapter — the ONLY
 	// move that evicts a poisoned adapter (survives warm-swap/kv-reset/shard-replace).
@@ -221,7 +224,7 @@ type Pod struct {
 	CPURequestMilli  int64   // sum of container CPU requests (millicores) — scheduler-slack input
 	MemRequestBytes  int64   // sum of container memory requests (bytes) — scheduler-slack input
 	GPURequestCount  int64   // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
-	VRAMRequestBytes int64   // per-pod GPU VRAM request bytes (AI; 0 = unmeasured / [SP-0-PENDING])
+	VRAMRequestBytes int64   // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
 	SMFraction       float64 // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
 	ModelID          string  // served model identity/version fingerprint (AI; "" if not a model server)
 	EndpointPath     string  // inference endpoint/API route the attacker can map (AI; "" if none)
@@ -291,8 +294,8 @@ type PhysicsWitness struct {
 	LinkBandwidth float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
 	LinkSource    string  // exact interconnect metric pair used for LinkBandwidth
 	ModelRarity   float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
-	KVRebuildSec  float64 // KV-cache rebuild seconds vs session length (0 = [SP-0-PENDING])
-	ColdLoadSec   float64 // model cold/warm-load seconds (0 = [SP-0-PENDING])
+	KVRebuildSec  float64 // KV-cache rebuild seconds vs session length (0 = unmeasured; PHORVEXSEC-87)
+	ColdLoadSec   float64 // model cold/warm-load seconds (0 = unmeasured; PHORVEXSEC-87)
 }
 
 // NeutralPhysics is the honest-absent witness (all multipliers 1.0, no capacity, no

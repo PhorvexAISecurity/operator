@@ -75,7 +75,8 @@ func (c coreWeave) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness
 	return stampGPU(c.genericK8s, snap)
 }
 
-// Detected: a GPU node carrying a CoreWeave-specific label. [PENDING-P4] — the exact label
+// Detected: a GPU node carrying a CoreWeave-specific label. PHORVEXSEC-87 owns validation
+// of the exact label
 // keys are confirmed on real CoreWeave hardware at P4; false on kind/EKS today.
 func (coreWeave) Detected(s *ingest.Snapshot) bool {
 	return hasGPUNode(s) && nodeLabelKeyPrefix(s, "node.coreweave.cloud/")

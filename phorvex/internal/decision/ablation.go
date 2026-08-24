@@ -18,7 +18,7 @@ import (
 // conditioned weights). Any Ratio delta is therefore attributable to DISCOVERY alone.
 // On a uniform fleet (no dispersion) the two are byte-identical (exact tie at 1.62x);
 // only measured dispersion (rare images/models, co-residency, EPSS) lifts the scarcity
-// ratio — the sound, separately-ablatable beat mechanism (UNRUN on real GPU/SP-0 data).
+// ratio — the sound, separately-ablatable beat mechanism (real-GPU run: PHORVEXSEC-87).
 type ScarcityAblation struct {
 	Baseline     AblationResult `json:"baseline"`     // standard-recon
 	Scarcity     AblationResult `json:"scarcity"`     // ucw-recon (discovered physics)

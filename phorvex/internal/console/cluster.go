@@ -4,7 +4,7 @@
  * The Connect step's targets are DERIVED from the live kubeconfig contexts — never a baked
  * context string (the P4a do-not-hardcode tripwire). When the operator adds their EKS
  * kubeconfig (`aws eks update-kubeconfig …`), that context appears as a runnable, read-only
- * scan target automatically. GPU magnitudes remain [SP-0-PENDING-P4].
+ * scan target automatically. GPU magnitude validation is owned by PHORVEXSEC-87.
  */
 
 package console
@@ -48,11 +48,11 @@ func classifyContext(ctx string) ClusterTarget {
 	case strings.Contains(lc, "eks") || strings.Contains(lc, "arn:aws"):
 		t.Provider = "AWS EKS"
 		t.Label = "AWS EKS · " + shortContext(ctx)
-		t.Note = "DERIVED from your kubeconfig — read-only least-privilege scan; GPU magnitudes [SP-0-PENDING-P4]"
+		t.Note = "DERIVED from your kubeconfig — read-only least-privilege scan; GPU validation tracked by PHORVEXSEC-87"
 	case strings.Contains(lc, "coreweave"):
 		t.Provider = "CoreWeave"
 		t.Label = "CoreWeave · " + shortContext(ctx)
-		t.Note = "DERIVED from your kubeconfig; GPU magnitudes [SP-0-PENDING-P4]"
+		t.Note = "DERIVED from your kubeconfig; GPU validation tracked by PHORVEXSEC-87"
 	default:
 		t.Provider = "Kubernetes"
 		t.Label = ctx

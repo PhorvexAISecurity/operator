@@ -42,7 +42,7 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 	if view.Pod.HasGPU || view.Pod.ModelID != "" {
 		return feasible
 	}
-	return Verdict{Feasible: false, Reason: "ai-context-required: " + string(move.Action) + " needs an inference/accelerated workload (no GPU, no model-id) [SP-0-PENDING]"}
+	return Verdict{Feasible: false, Reason: "ai-context-required: " + string(move.Action) + " needs an inference/accelerated workload (no GPU, no model-id)"}
 }
 
 // migDeviceRequired vetoes a mig-rebind on a pod with no MIG device (there is nothing to
@@ -56,7 +56,7 @@ func (migDeviceRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 		return feasible
 	}
 	if view.Pod.MIGDevice == "" {
-		return Verdict{Feasible: false, Reason: "mig-device-required: pod has no MIG device to rebind [SP-0-PENDING]"}
+		return Verdict{Feasible: false, Reason: "mig-device-required: pod has no MIG device to rebind"}
 	}
 	return feasible
 }

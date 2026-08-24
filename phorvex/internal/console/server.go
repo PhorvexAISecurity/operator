@@ -475,7 +475,7 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		"events": events,
 		"empty":  len(events) == 0,
 		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept},
-		"note":   "kind-scale demo data; live real-cluster streaming is [PENDING-P4a]. Tenant scoping is by request param (demo-trust) until real authn [PENDING-P-VCLUSTER].",
+		"note":   "kind-scale demo data; live real-cluster streaming is tracked by PHORVEXSEC-151. Tenant scoping is by request param (demo-trust) until real authn/RBAC lands under PHORVEXSEC-152.",
 	})
 }
 

@@ -97,7 +97,7 @@ the role has zero verbs outside `{get,list,watch}`, and that it is **disjoint fr
 ## B — LIVE TELEMETRY → PHYSICS (the swappable MetricsSource; the honest weak point)
 
 **The seam exists and is swappable by construction.** `ingest.MetricsSource` (metricssource.go:22) =
-`registry.Named` + `PodMetrics(ctx, ns, pods) → map[pod]model.Telemetry`; default `nilSource` returns empty
+`registry.Named` + `PodMetrics(ctx, ns, pods) → map[pod]model.Telemetry`; default `absentSource` returns empty
 (`Telemetry.Present=false`, **never fabricated**). `PromHTTP` (prometheus.go) is a real instant-PromQL
 provider (per-signal query with a `{namespace}` placeholder, 5s timeout, best-effort per signal). AMP /
 Thanos / managed-Prometheus is a **one-file provider swap**.
@@ -241,7 +241,7 @@ nil → byte-identical regression test gates every wiring delta.
   with a "platform-unverified" flag (never silently mislabel). GPU `Derive()` override stays absent →
   GPUPresent=false → K8s half byte-identical.
 - **M3 — MetricsSource into `runScan` (the B-delta).** Optional `--prometheus-url`; `NewPromHTTP`; thread into
-  CollectSnapshot + ContextScan/AblateScarcity. `nilSource` stays default (no invented URL); retry-with-jitter
+  CollectSnapshot + ContextScan/AblateScarcity. `absentSource` stays default (no invented URL); retry-with-jitter
   + per-signal timeout + a scrape-health record (queried/ok/errored/empty) so honest-absence ≠ breakage.
   Tests: stub MetricsSource at two operating points proving SLOHeadroom/flowCost move by the closed-form Δ;
   nil → byte-identical (gate test).
