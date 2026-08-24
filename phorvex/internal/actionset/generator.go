@@ -32,7 +32,9 @@ type Candidate struct {
 // ActionSet is the generator output: the feasible candidates plus the tick's global
 // recon fact-weight map (cover keys index into it for the coverage objective).
 type ActionSet struct {
-	Candidates  []Candidate
+	Candidates []Candidate
+	// FactWeights contains only keys referenced by at least one action cover. Audit-only facts stay
+	// in recon.AssetFacts but cannot enter marginal gain, normalization, or collision ownership.
 	FactWeights map[string]float64
 	// CrossBlockCollisions records the structural violations that make this entire
 	// tick unsafe to optimize. Rejected is fail-closed: no candidate may be selected.
@@ -149,22 +151,27 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 	for _, v := range views {
 		key := v.Pod.Namespace + "/" + v.Pod.Name
 		af := d.Recon.AssetFacts(v, d.FactContext(v))
-		for _, f := range af.Facts {
-			factKey := f.Key()
-			if !claim(factKey, key) {
-				return out
-			}
-			if w := f.Weight; w > out.FactWeights[factKey] {
-				out.FactWeights[factKey] = w
-			}
-		}
+		coveredKeys := map[string]bool{}
 		// Scan every declared cover, including disabled actions. A topology-conditional
 		// collision is a taxonomy violation independent of this tenant's current policy.
 		for _, coverKeys := range af.CoverByAction {
 			for _, factKey := range coverKeys {
+				coveredKeys[factKey] = true
 				if !claim(factKey, key) {
 					return out
 				}
+			}
+		}
+		// Objective weights are projected strictly through action covers. This is the hard boundary
+		// that keeps shared-scope and CANNOT-HELP facts audit-only: even a large audit weight cannot
+		// influence selection unless a deterministic eraser explicitly names its key.
+		for _, f := range af.Facts {
+			factKey := f.Key()
+			if !coveredKeys[factKey] {
+				continue
+			}
+			if w := f.Weight; w > out.FactWeights[factKey] {
+				out.FactWeights[factKey] = w
 			}
 		}
 		for _, action := range enabledActions(pol) {

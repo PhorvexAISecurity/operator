@@ -8,13 +8,25 @@
 // is the substrate the submodular recon-coverage optimizer maximizes over, and the
 // thing the STEP-3 ablation measures "facts-invalidated-per-dollar" against.
 //
-// A FACT is a (variable, asset) pair the attacker has learned or is about to learn,
+// A FACT is a (scope, variable, asset) tuple the attacker has learned or is about to learn,
 // crisply tied to a measured exposure variable so the per-dollar number is
 // falsifiable (METHOD-DECISION risk #a). Each fact carries a weight =
 // value x P(hold) x stage-urgency (x blast for lateral edges).
 package recon
 
 import "github.com/phorvex/phorvex/internal/model"
+
+// FactScope identifies the physical ownership domain of a fact. Only pod-scoped facts can enter
+// the current pod-partition decision objective. Node/model/service facts are retained as audit
+// evidence until the model has an explicit decision block and deterministic eraser for that scope.
+type FactScope string
+
+const (
+	ScopePod     FactScope = "pod"
+	ScopeNode    FactScope = "node"
+	ScopeModel   FactScope = "model"
+	ScopeService FactScope = "service"
+)
 
 // FactKind enumerates the recon variables, each tied to an exposure-clock variable.
 const (
@@ -49,8 +61,10 @@ const (
 	// FactEndpointPath = inference endpoint / API route the attacker mapped (reset by
 	// endpoint-rotate; route-rotate only writes an unused label and earns no cover).
 	FactEndpointPath = "endpointPath"
-	// FactGPUColocation = shared-GPU/MIG co-residency observability. AUDIT-ONLY: neither
-	// mig-rebind nor warm-swap proves relocation to a different node/device today.
+	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
+	// measurement is node-derived, each pod key represents one victim workload's exposure rather
+	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap
+	// proves relocation to a different node/device.
 	FactGPUColocation = "gpuColocation"
 	// FactGPUContentionChannel = the shared-hardware CONTENTION path through which a co-tenant is
 	// observable: memory bandwidth, cache and SM contention on one physical device.
@@ -79,22 +93,36 @@ const (
 	// safety-guardrail variant. Covered by guardrail-rotate (swap the guardrail variant so the learned
 	// bypass no longer works) — a targeted AI-safety move the engine can pick instead of a blunt rotate.
 	FactGuardrailBypass = "guardrailBypass"
+
+	// Tier 2: shared-scope facts. They are emitted for audit but have no cover grant because the
+	// current action set has no scope-matched deterministic eraser or decision block for them.
+	FactNodeFoothold     = "nodeFoothold"
+	FactModelIdentity    = "modelIdentity"
+	FactGuardrailVariant = "guardrailVariant"
+
+	// Tier 3: persistent facts no current moving-target action can invalidate. These remain
+	// pod-attributed audit evidence and are permanently absent from every action cover set.
+	FactCredential              = "credential"
+	FactRetrievalState          = "retrievalState"
+	FactArtifactProvenance      = "artifactProvenance"
+	FactControlPlanePersistence = "controlPlanePersistence"
 )
 
 // Fact is one weighted recon fact about an asset.
 type Fact struct {
-	Asset  string  // "ns/pod"
+	Scope  FactScope
+	Asset  string  // scope-relative identity: "ns/pod", node, model ID, or "ns/service"
 	Kind   string  // one of the Fact* constants
 	Edge   string  // neighbor "ns/pod" for FactLateralEdge; "" otherwise
 	Weight float64 // value x P(hold) x stage-urgency (x neighbor value for edges)
 }
 
-// Key is the stable identity of a fact (asset|kind|edge).
+// Key is the stable scope-prefixed identity of a fact (scope|asset|kind[|edge]).
 func (f Fact) Key() string {
 	if f.Edge != "" {
-		return f.Asset + "|" + f.Kind + "|" + f.Edge
+		return string(f.Scope) + "|" + f.Asset + "|" + f.Kind + "|" + f.Edge
 	}
-	return f.Asset + "|" + f.Kind
+	return string(f.Scope) + "|" + f.Asset + "|" + f.Kind
 }
 
 // NeighborRef is a reachable neighbor and its asset value (for lateral-edge weights).

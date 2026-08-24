@@ -14,7 +14,8 @@ import (
 
 func aiPod() *model.WorkloadView {
 	return &model.WorkloadView{Pod: model.Pod{
-		Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", Stateful: true,
+		Namespace: "ns", Name: "llm", Node: "node-a", HasGPU: true, ModelID: "m", Stateful: true,
+		RouteService: "infer", GuardrailVariants: 2,
 	}}
 }
 
@@ -61,6 +62,78 @@ func TestKVMigrateInvalidateCoversSessionNotRoute(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("kv-migrate-invalidate should cover %q; got %v", FactSession, got)
+	}
+}
+
+func TestTierTwoAndThreeCarryNoCover(t *testing.T) {
+	af := ucwRecon{}.AssetFacts(aiPod(), FactContext{
+		AssetValue: 10, PHold: 1, StageUrgency: 1, HasGPU: true, Stateful: true,
+	})
+	covered := map[string]bool{}
+	for _, keys := range af.CoverByAction {
+		for _, key := range keys {
+			covered[key] = true
+		}
+	}
+	expected := map[string]FactScope{
+		FactNodeFoothold:            ScopeNode,
+		FactModelIdentity:           ScopeModel,
+		FactGuardrailVariant:        ScopeService,
+		FactCredential:              ScopePod,
+		FactRetrievalState:          ScopePod,
+		FactArtifactProvenance:      ScopePod,
+		FactControlPlanePersistence: ScopePod,
+	}
+	seen := map[string]bool{}
+	for _, fact := range af.Facts {
+		scope, tracked := expected[fact.Kind]
+		if !tracked {
+			continue
+		}
+		seen[fact.Kind] = true
+		if fact.Scope != scope {
+			t.Errorf("%s scope = %q, want %q", fact.Kind, fact.Scope, scope)
+		}
+		if covered[fact.Key()] {
+			t.Errorf("audit-only fact %s leaked into an action cover as %q", fact.Kind, fact.Key())
+		}
+	}
+	for kind := range expected {
+		if !seen[kind] {
+			t.Errorf("audit taxonomy fact %s was not emitted by the rich workload fixture", kind)
+		}
+	}
+}
+
+func TestEveryEmittedFactDeclaresScope(t *testing.T) {
+	for _, profile := range Registry.All() {
+		for _, archetype := range coverArchetypes() {
+			for _, fact := range profile.AssetFacts(archetype.view, archetype.fctx).Facts {
+				if fact.Scope == "" {
+					t.Errorf("%s/%s emitted unscoped fact %s", profile.Name(), archetype.name, fact.Kind)
+				}
+			}
+		}
+	}
+}
+
+func TestNoOrphanedCover(t *testing.T) {
+	for _, profile := range Registry.All() {
+		for _, archetype := range coverArchetypes() {
+			af := profile.AssetFacts(archetype.view, archetype.fctx)
+			facts := map[string]bool{}
+			for _, fact := range af.Facts {
+				facts[fact.Key()] = true
+			}
+			for action, keys := range af.CoverByAction {
+				for _, key := range keys {
+					if !facts[key] {
+						t.Errorf("%s/%s action %s claims orphaned cover key %q",
+							profile.Name(), archetype.name, action, key)
+					}
+				}
+			}
+		}
 	}
 }
 

@@ -22,17 +22,14 @@ import "github.com/phorvex/phorvex/internal/model"
 // dispersion the weights become heavy-tailed, which the submodular greedy provably
 // exploits and the uniform-random arm cannot (the separately-ablatable beat mechanism).
 //
-// It also EMITS the four AI recon facts (model fingerprint / endpoint / GPU co-location
-// / side-channel). These WERE audit-only while their reset actions were Phase-2; they are
-// NOT any more — the grants are made below (model-shard-replace, endpoint-rotate,
-// mig-rebind, warm-swap), so these facts DO enter CoverByAction and DO contribute
-// selectable cover. Corrected under PHVX-76; the previous text described an earlier phase.
+// It also emits the AI recon taxonomy. Pod-scoped facts enter CoverByAction only where a
+// deterministic actuator erases them. Shared node/model/service facts and the permanent
+// cannot-help facts are emitted for audit with zero cover, so they cannot enter marginal gain.
 //
-// SCALING NOTE, since the ordering here is load-bearing: the scarcity scalar `s` is applied
-// to af.Facts BEFORE these AI facts are appended, so the AI facts are NOT scaled by it —
-// they carry their own weights instead. That asymmetry is deliberate at this revision but
-// is what PHVX-70 asks to revisit; do not "fix" it by moving the loop without reading that
-// ticket, or the base/AI weight ratio changes silently.
+// SCALING NOTE, since the ordering here is load-bearing: the scarcity scalar `s` is applied at the
+// END, after pod and audit facts are appended. PHVX-70 moved it there so every fact emitted for the
+// workload receives the same fleet-derived scalar; moving it earlier silently recreates the old
+// base/AI asymmetry.
 //
 // OPTIMALITY BOUND (was asserted falsely here): the selection objective is
 // Σ w(facts covered) − λ·C(S), which is submodular but NOT monotone (the −λ·C term
@@ -71,6 +68,13 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// would scale only the six standardRecon facts, because every AI fact below is appended after
 	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
 
+	asset := view.Pod.Namespace + "/" + view.Pod.Name
+	base := fctx.AssetValue * clamp01(fctx.PHold)
+	if base <= 0 {
+		base = 0.001 * clamp01(fctx.PHold)
+	}
+	urg := 0.5 + 0.5*clamp01(fctx.StageUrgency)
+
 	// AI recon facts — emitted on GPU/served-model assets. Cover is granted per physical mechanism,
 	// not to the group as a whole: model-shard-replace and endpoint-rotate invalidate their matching
 	// facts; mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
@@ -78,21 +82,15 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// kv-migrate-invalidate maps to session state below. This keeps selectable cover narrower than
 	// the emitted audit universe whenever an actuator cannot guarantee the claimed effect.
 	if view.Pod.HasGPU || view.Pod.ModelID != "" {
-		asset := view.Pod.Namespace + "/" + view.Pod.Name
-		base := fctx.AssetValue * clamp01(fctx.PHold)
-		if base <= 0 {
-			base = 0.001 * clamp01(fctx.PHold)
-		}
-		urg := 0.5 + 0.5*clamp01(fctx.StageUrgency)
-		mf := Fact{Asset: asset, Kind: FactModelFingerprint, Weight: base * urg * ph.ModelRarity}
-		ep := Fact{Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
-		gc := Fact{Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency}
-		sc := Fact{Asset: asset, Kind: FactGPUContentionChannel, Weight: base * urg}
+		mf := Fact{Scope: ScopePod, Asset: asset, Kind: FactModelFingerprint, Weight: base * urg * ph.ModelRarity}
+		ep := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
+		gc := Fact{Scope: ScopePod, Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency}
+		sc := Fact{Scope: ScopePod, Asset: asset, Kind: FactGPUContentionChannel, Weight: base * urg}
 		// In-flight-request + guardrail-bypass recon on a serving pod — each invalidated by its own
 		// gentle AI actuator (request-drain / guardrail-rotate) so the engine can pick the surgical
 		// serving move over a blunt rotate. Distinct facts => distinct, meaningful cover per action.
-		rq := Fact{Asset: asset, Kind: FactInflightRequests, Weight: base * urg}
-		gb := Fact{Asset: asset, Kind: FactGuardrailBypass, Weight: base * urg}
+		rq := Fact{Scope: ScopePod, Asset: asset, Kind: FactInflightRequests, Weight: base * urg}
+		gb := Fact{Scope: ScopePod, Asset: asset, Kind: FactGuardrailBypass, Weight: base * urg}
 		af.Facts = append(af.Facts, mf, ep, gc, sc, rq, gb)
 		if af.CoverByAction == nil {
 			af.CoverByAction = map[model.Action][]string{}
@@ -168,11 +166,42 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// one is 3. So a poisoned adapter outranks any other fact on the same asset structurally,
 		// rather than by an additive constant that happens to be large.
 		if view.Pod.SuspectAdapter != "" {
-			ai := Fact{Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
+			ai := Fact{Scope: ScopePod, Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
 			af.Facts = append(af.Facts, ai)
 			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 		}
 	}
+
+	// Tier 2 — shared-scope evidence. The current optimizer has pod decision blocks only, and no
+	// deterministic node/model/service eraser exists for these facts, so none receives cover.
+	// Shared keys are intentional here: they are audit evidence, not selectable objective keys.
+	if view.Pod.Node != "" {
+		af.Facts = append(af.Facts, Fact{
+			Scope: ScopeNode, Asset: view.Pod.Node, Kind: FactNodeFoothold, Weight: base * urg,
+		})
+	}
+	if view.Pod.ModelID != "" {
+		af.Facts = append(af.Facts, Fact{
+			Scope: ScopeModel, Asset: view.Pod.ModelID, Kind: FactModelIdentity, Weight: base * urg,
+		})
+	}
+	if view.Pod.RouteService != "" {
+		af.Facts = append(af.Facts, Fact{
+			Scope: ScopeService, Asset: view.Pod.Namespace + "/" + view.Pod.RouteService,
+			Kind: FactGuardrailVariant, Weight: base * urg,
+		})
+	}
+
+	// Tier 3 — facts no current moving-target actuator can invalidate. They stay attached to the
+	// observed workload for audit and are permanently absent from CoverByAction.
+	for _, kind := range []string{
+		FactCredential, FactRetrievalState, FactArtifactProvenance, FactControlPlanePersistence,
+	} {
+		af.Facts = append(af.Facts, Fact{
+			Scope: ScopePod, Asset: asset, Kind: kind, Weight: base * urg,
+		})
+	}
+
 	// [PHVX-70] Apply the scarcity scalar HERE, not where it is computed.
 	//
 	// It used to be applied immediately after boundMult, which is before every AI fact is appended.

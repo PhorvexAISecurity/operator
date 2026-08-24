@@ -43,12 +43,12 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	cover := map[model.Action][]string{}
 
 	addRotate := func(kind string, w float64) {
-		f := Fact{Asset: asset, Kind: kind, Weight: w}
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: kind, Weight: w}
 		facts = append(facts, f)
 		cover[model.ActionRotate] = append(cover[model.ActionRotate], f.Key())
 	}
 	addQuarantine := func(kind, edge string, w float64) {
-		f := Fact{Asset: asset, Kind: kind, Edge: edge, Weight: w}
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: kind, Edge: edge, Weight: w}
 		facts = append(facts, f)
 		cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], f.Key())
 	}
@@ -58,7 +58,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// WITHOUT killing the pod — a SUBSET of rotate's cover, so the optimizer picks the surgical
 	// identity refresh for an identity-only threat and escalates to a full rotate only when the
 	// in-memory implant / session recon is also at stake.
-	pid := Fact{Asset: asset, Kind: FactPodIdentity, Weight: base * urg}
+	pid := Fact{Scope: ScopePod, Asset: asset, Kind: FactPodIdentity, Weight: base * urg}
 	facts = append(facts, pid)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], pid.Key())
 	// NO COVER for identity-rotate. It writes a `phorvex.ai/identity-epoch` LABEL and nothing else:
@@ -81,7 +81,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// reset actions audit-only "until those actions ship + are validated"; kv-reset is
 	// now validated end-to-end on the real vLLM-shaped control plane, so we let the
 	// engine select the gentler kv-reset over a full rotate on GPU/LLM assets.
-	sessFact := Fact{Asset: asset, Kind: FactSession, Weight: sessionW}
+	sessFact := Fact{Scope: ScopePod, Asset: asset, Kind: FactSession, Weight: sessionW}
 	facts = append(facts, sessFact)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], sessFact.Key())
 	if fctx.HasGPU || fctx.Stateful {
@@ -89,7 +89,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	}
 
 	// Network facts — invalidated by QUARANTINE (deny-all + detach).
-	nid := Fact{Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
+	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
 	// NO COVER for route-rotate — same reason. It writes a `phorvex.ai/route-epoch` label and touches
@@ -98,7 +98,10 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// is not invalidated.
 	latUrg := 0.5 + 0.5*clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	for _, nb := range fctx.Neighbors {
-		// A learned edge to a high-value neighbor is worth cutting (blast containment).
+		// A learned directed edge is owned by its origin pod. Quarantining the target may also cut
+		// the physical edge, but origin-keying deliberately gives no credit for that effect: this is
+		// conservative under-crediting that preserves one owning block in the current pod model.
+		// Canonical cross-endpoint edges belong to the deferred coupled/MILP model.
 		w := nb.Value * clamp01(fctx.PHold) * latUrg
 		addQuarantine(FactLateralEdge, nb.Key, w)
 	}

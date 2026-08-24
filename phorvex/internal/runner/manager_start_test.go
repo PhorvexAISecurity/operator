@@ -16,7 +16,7 @@ type invalidStartupRecon struct{}
 func (invalidStartupRecon) Name() string { return "standard-recon" }
 func (invalidStartupRecon) AssetFacts(_ *model.WorkloadView, _ recon.FactContext) recon.AssetFacts {
 	return recon.AssetFacts{CoverByAction: map[model.Action][]string{
-		model.ActionRotate: {"shared-block|podIdentity"},
+		model.ActionRotate: {"pod|shared-block|podIdentity"},
 	}}
 }
 

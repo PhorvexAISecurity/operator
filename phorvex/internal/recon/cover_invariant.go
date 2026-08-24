@@ -18,7 +18,7 @@ type coverInvariantProbe struct {
 }
 
 // ValidateRegistryCoverKeys checks every registered profile before the tick loop starts.
-// A cover key owned by pod block "ns/pod" must start with "ns/pod|"; this makes it
+// A cover key owned by pod block "ns/pod" must start with "pod|ns/pod|"; this makes it
 // impossible for two pod blocks to share a key regardless of the live fleet topology.
 func ValidateRegistryCoverKeys() error {
 	return validateCoverKeys(Registry.All(), coverInvariantProbes())
@@ -36,7 +36,7 @@ func validateCoverKeys(profiles []ReconProfile, probes []coverInvariantProbe) er
 			sort.Slice(actions, func(i, j int) bool { return actions[i] < actions[j] })
 			for _, action := range actions {
 				for _, key := range af.CoverByAction[action] {
-					if !strings.HasPrefix(key, owner+"|") {
+					if !strings.HasPrefix(key, string(ScopePod)+"|"+owner+"|") {
 						return fmt.Errorf("profile %q view %q action %q emits cover key %q outside owning block %q",
 							profile.Name(), owner, action, key, owner)
 					}
