@@ -40,6 +40,22 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
       -a -o /console cmd/console/main.go
 
+# ---- Stage 2c: the harness binary ----
+# GET /api/catalog enumerates the full scenario catalogue by SHELLING OUT to this binary
+# (evidence.go Catalog() runs `harness -config <cfg> -list`). Without it the handler returns
+# {"items":null} and the per-app attack launcher can only offer the live attacks, never the
+# scenario catalogue. The harness is its OWN Go module (github.com/r6security/phoenix-test-harness)
+# with `replace github.com/r6security/phoenix => ../phoenix-extended`, so both directories must
+# sit side by side for that relative replace to resolve.
+FROM golang:1.26 AS harnessbuild
+WORKDIR /workspace
+COPY build/phoenix-extended/ build/phoenix-extended/
+COPY build/test-harness/ build/test-harness/
+WORKDIR /workspace/build/test-harness
+# CGO-free + static so it runs on the distroless/static final base next to the console binary.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /harness ./cmd/harness
+
 # ---- Stage 2b: kubectl ----
 # internal/console/workload_attack.go fires a real attack by applying a SecurityEvent CR,
 # and it does that by SHELLING OUT to kubectl (the console cannot reach pod IPs directly).
@@ -78,10 +94,16 @@ COPY build/test-harness/ /data/build/test-harness/
 # builds from it) and .dockerignore excludes only phorvex/bin/*.exe, not it. Deleted again
 # on the next line.
 COPY phorvex/go.mod phorvex/bin/console-audit.jsonl* /data/phorvex/bin/
-# Drop anything heavy/irrelevant the .dockerignore didn't catch (keep only out-* + audit).
+# Drop anything heavy/irrelevant the .dockerignore didn't catch, but KEEP three things the
+# catalogue + scenario launcher need: the out-* metrics dirs, the per-target config*.yaml files
+# (StartScenario runs `harness -config <cfg> ...`), and a bin/ dir for the harness binary the
+# final stage drops in. `harness -list` itself short-circuits before it reads any config
+# (cmd/harness/main.go), so enumeration needs only the binary — the configs are for launching.
 RUN rm -f /data/phorvex/bin/go.mod && \
     cd /data/build/test-harness && \
-    find . -maxdepth 1 -mindepth 1 ! -name 'out-*' -exec rm -rf {} + || true
+    find . -maxdepth 1 -mindepth 1 ! -name 'out-*' ! -name 'config*.yaml' ! -name 'bin' \
+        -exec rm -rf {} + || true && \
+    mkdir -p /data/build/test-harness/bin
 
 # ---- Final image ----
 FROM gcr.io/distroless/static:nonroot
@@ -89,6 +111,10 @@ WORKDIR /app
 COPY --from=gobuild /console /app/console
 COPY --from=web /web/out /app/web
 COPY --from=data /data /data
+# The harness binary lands at the exact path DefaultConfig() hardcodes:
+# <root>/build/test-harness/bin/harness.exe. The .exe name is a historical dev artifact and is
+# just a filename on Linux — the console execs it by that path, so it must match.
+COPY --from=harnessbuild /harness /data/build/test-harness/bin/harness.exe
 # Both are static and CGO-free, so distroless/static stays the right base.
 COPY --from=kubectl /kubectl /usr/local/bin/kubectl
 USER 65532:65532

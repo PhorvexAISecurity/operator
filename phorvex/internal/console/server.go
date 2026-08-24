@@ -55,6 +55,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/runs/scenario", s.withCORS(s.scoped("operator", s.startScenario)))
 	mux.HandleFunc("/api/vllm/attack", s.withCORS(s.scoped("operator", s.vllmAttack)))
 	mux.HandleFunc("/api/workload/attack", s.withCORS(s.scoped("operator", s.workloadAttack)))
+	// Per-app attack compatibility: which attacks this app's stack supports and which are armed.
+	mux.HandleFunc("/api/workload/attacks", s.withCORS(s.scoped("operator", s.workloadAttacks)))
 	mux.HandleFunc("/api/attack-results", s.withCORS(s.scoped("operator", s.attackResults)))
 	// LIVE-ATTACK MONITORING — before/during/after availability + real downtime cost per attack.
 	mux.HandleFunc("/api/attack-monitoring", s.withCORS(s.scoped("operator", s.attackMonitoringHandler)))
