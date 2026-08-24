@@ -270,6 +270,32 @@ func greedyPicksOnSet(set actionset.ActionSet, B int, prov func(string) float64,
 	return picks
 }
 
+// selectionEligibleSet applies the same reactive-only eligibility rule as Decide
+// before a benchmark arm sees the candidates. Feasibility alone is not enough in
+// reactive-only mode: an otherwise feasible proactive move is deliberately
+// suppressed unless a direct attack or suspect adapter backs that asset.
+//
+// Without this projection the measured greedy arm contains only attacked assets,
+// while exact and random are allowed to pick calm assets. That is not an
+// optimality comparison over an identical substrate and can report a false gap on
+// a perfectly block-disjoint taxonomy.
+func selectionEligibleSet(set actionset.ActionSet, pol model.Policy) actionset.ActionSet {
+	if !pol.ReactiveOnly {
+		return set
+	}
+	filtered := set
+	filtered.Candidates = make([]actionset.Candidate, 0, len(set.Candidates))
+	for _, candidate := range set.Candidates {
+		if candidate.View == nil {
+			continue // no evidence carrier: fail closed in reactive-only mode
+		}
+		if candidate.View.Pod.SuspectAdapter != "" || hasDirectFoothold(candidate.View.Events) {
+			filtered.Candidates = append(filtered.Candidates, candidate)
+		}
+	}
+	return filtered
+}
+
 // OptimalityOut is the greedy-vs-exact measurement appended to AblationResult.
 type OptimalityOut struct {
 	GreedyObjective float64 `json:"greedyObjective"`

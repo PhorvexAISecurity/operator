@@ -7,6 +7,7 @@
 package decision
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -65,6 +66,32 @@ func TestReactiveOnlyCalmUntilAttacked(t *testing.T) {
 		if last.Action == model.ActionNoop || !last.Selected {
 			t.Fatalf("reactiveOnly reactive: expected rotate/selected UNDER ATTACK, got action=%s selected=%v", last.Action, last.Selected)
 		}
+	}
+}
+
+func TestReactiveOnlyAblationUsesTheSameAttackBackedSubstrate(t *testing.T) {
+	calm := covView("calm", true, 2*time.Hour, false)
+	attacked := covView("attacked", true, 2*time.Hour, false)
+	attacked.Events = []model.SecurityEventInfo{{Type: "Panic", ThreatLevel: "critical", TargetsPod: true}}
+
+	pol := covPolicy(2)
+	pol.ReactiveOnly = true
+
+	res := NewCoverageEngine().Ablate([]*model.WorkloadView{calm, attacked}, pol, []int64{1, 2, 3})
+	if res.Assets != 1 {
+		t.Fatalf("benchmark substrate assets=%d, want only the one directly attacked asset", res.Assets)
+	}
+	if res.ExactSkipped || !res.CoversDisjoint || math.Abs(res.OptimalityRatio-1) > 1e-12 {
+		t.Fatalf("reactive-only exact comparison is not like-for-like: %+v", res.OptimalityOut)
+	}
+	if res.GreedyObjective <= 0 || math.Abs(res.GreedyObjective-res.ExactObjective) > 1e-12 {
+		t.Fatalf("greedy/exact objective mismatch: greedy=%v exact=%v", res.GreedyObjective, res.ExactObjective)
+	}
+
+	calmOnly := NewCoverageEngine().Ablate([]*model.WorkloadView{calm}, pol, []int64{1})
+	if calmOnly.Assets != 0 || calmOnly.Candidates != 0 || calmOnly.GreedyObjective != 0 ||
+		calmOnly.ExactObjective != 0 || calmOnly.OptimalityRatio != 1 {
+		t.Fatalf("calm reactive-only benchmark must compare two empty selections: %+v", calmOnly)
 	}
 }
 
