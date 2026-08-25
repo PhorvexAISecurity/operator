@@ -84,6 +84,7 @@ func (e *CoverageEngine) Ablate(views []*model.WorkloadView, pol model.Policy, s
 
 	// Random arm over the identical substrate.
 	set, ctxByKey := e.AssembleSet(views, pol)
+	set = selectionEligibleSet(set, pol)
 	assets := map[string]bool{}
 	for _, c := range set.Candidates {
 		assets[c.Key] = true
