@@ -4,15 +4,16 @@
 # (only unrendered kubebuilder markers), and the only write-capable binding was a CLUSTER-WIDE
 # ClusterRoleBinding sharing ONE token with the read scanner. This commits a per-managed-
 # namespace Role bound to a DEDICATED actuator ServiceAccount (distinct from the read/scanner
-# SA), with NO cluster-wide write, NO secrets, NO services/endpointslices, NO pods/patch.
+# SA), with NO cluster-wide write, NO secrets/endpointslices and NO pods/patch.
 #
 # Apply ONE copy PER managed namespace (substitute <NS>). Bind Role B (code-exec) ONLY in
 # namespaces explicitly approved for ephemeral-container injection — it is OFF BY DEFAULT.
 #
 # `kubectl auth can-i` (as system:serviceaccount:<NS>:phorvex-actuator) MUST show:
-#   yes: delete/update/get/list pods; create/get/delete networkpolicies; get replicasets  (in <NS>)
+#   yes: delete/update/get/list pods; create/get/delete networkpolicies; get replicasets;
+#        get/update services  (in <NS>)
 #   no : delete pods --all-namespaces; delete pod -n kube-system; get/delete secrets;
-#        update/patch services; update endpointslices; patch pods; delete nodes
+#        patch/create/delete services; update endpointslices; patch pods; delete nodes
 #
 # CODE-EXEC HONESTY (P4c, proven by running): an ephemeral-container injection (kubectl-debug
 # patch path) is FORBIDDEN for the Role-A SA — verified live ("cannot patch pods/
@@ -50,6 +51,11 @@ rules:
   - apiGroups: ["apps"]
     resources: ["replicasets"]
     verbs: ["get"]
+  # route-rotate + endpoint-rotate: read and restitch an explicitly declared Service selector.
+  # Namespaced and deliberately limited: no patch/create/delete; Secrets and EndpointSlices denied.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

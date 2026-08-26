@@ -6,7 +6,8 @@ or what is worth protecting. **Phorvex is the missing brain.** For the MVP it si
 top of **UNMODIFIED extended Phoenix** and decides *which* workload to move, *when*,
 and *which action*, by optimizing security gained against disruption cost — then
 drives Phoenix through Phoenix's own CRDs (**Seam 1**: emit `SecurityEvent` + maintain
-an `AdaptiveMovingTargetDefense` strategy). Phorvex **never writes pods**.
+an `AdaptiveMovingTargetDefense` strategy). The default Phoenix backend does not write
+pods; native/hybrid actuation is opt-in and uses per-tenant namespaced Roles.
 
 > This is a **separate Go module** (`github.com/phorvex/phorvex`). It depends on the
 > Phoenix module ONLY to construct/emit Phoenix's typed CRs, via a consumer-side
@@ -31,8 +32,8 @@ an `AdaptiveMovingTargetDefense` strategy). Phorvex **never writes pods**.
   `ContextProvider`.
 - **Per-variable exposure-clock** scaffold (pod identity + node placement live; image
   / env / GPU / network / session declared).
-- **Actuator interface**: `PhoenixActuator` (Seam 1) + `NativeActuator` stub (Phase 2,
-  not implemented, behind the interface).
+- **Actuator interface**: `PhoenixActuator` (Seam 1) plus native/hybrid handlers behind
+  an explicit backend setting and namespaced write RBAC.
 - **Dry-run decision log** + **Prometheus metrics** + **Grafana risk heatmap**.
 - **Least-privilege RBAC**: writes ONLY its own CRD + SecurityEvent/AMTD; never pods.
 
@@ -91,8 +92,29 @@ go run ./cmd/main.go --integration-emit \
   ConfigMap) suppresses all actuation regardless of mode.
 - **Anti-over-rotation window** is a hard feasibility constraint (evidence-retention
   guard) — Phorvex never rotates the same pod faster than the forensic window.
-- **Least-privilege RBAC** — read-only on the graph inputs; the only writes are its
-  own CRD + Phoenix's SecurityEvent/AMTD. No pod writes.
+- **Least-privilege RBAC** — the default chart remains read-only on workload objects.
+  Native/hybrid writes are granted only in namespaces explicitly listed under
+  `phorvex.actuatorNamespaces`; Secrets and EndpointSlices remain denied.
+
+### `route-rotate` deployment contract
+
+`route-rotate` is emitted only for a pod that names its fronting Service with the
+`phorvex.ai/route-service` annotation. That Service must select the pod through
+`phorvex.ai/route-key`, and at least two matching Ready replicas must exist before a
+restitch. The handler re-keys the target pod and the Service selector together; rollback
+restores both. See `config/samples/route-rotate-contract.yaml` for a complete reference.
+
+For native/hybrid operation, list each protected tenant namespace in Helm values:
+
+```yaml
+phorvex:
+  actuator: hybrid
+  actuatorNamespaces:
+    - default
+```
+
+This renders a Role/RoleBinding per listed namespace. Service permission is exactly
+`get,update`; it grants no Service create/delete/patch and no Secret or EndpointSlice access.
 
 ## Honest scope limits (P0)
 
@@ -103,7 +125,8 @@ go run ./cmd/main.go --integration-emit \
   `ThreatPosture` is a live audit scalar, not an additional targeting multiplier.
 - The **Prometheus** ingest is real but OPTIONAL; with no backend Phorvex runs on
   K8s-only signals and reports telemetry absent — it never fabricates a metric.
-- The **NativeActuator** is a stub that returns `ErrNotImplemented` (Phase 2).
+- Native/hybrid actuation requires explicit per-namespace RBAC opt-in; an unlisted
+  namespace remains read-only and the handler fails closed.
 - Active-mode actuation requires a **matchLabels** selector (the Phoenix AMTD guest
   list is matchLabels-only in P0).
 

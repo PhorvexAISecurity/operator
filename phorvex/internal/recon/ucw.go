@@ -193,7 +193,9 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	}
 
 	// Tier 3 — facts no current moving-target actuator can invalidate. They stay attached to the
-	// observed workload for audit and are permanently absent from CoverByAction.
+	// observed workload for audit and are permanently absent from CoverByAction. In particular,
+	// projected ServiceAccount-token invalidation is CANNOT-HELP for a pod-scoped actuator: only
+	// issuer-side revocation can invalidate a bound token before its TTL.
 	for _, kind := range []string{
 		FactCredential, FactRetrievalState, FactArtifactProvenance, FactControlPlanePersistence,
 	} {

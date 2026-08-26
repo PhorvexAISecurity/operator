@@ -1,0 +1,76 @@
+# Reference deployment contract for route-rotate (PHORVEXSEC-129).
+#
+# The Service selects phorvex.ai/route-key, every managed pod names that Service with
+# phorvex.ai/route-service, and two Ready replicas prevent selector restitch from
+# interrupting the sole backend. The policy stays dryRun until an operator deliberately
+# enables the native/hybrid backend and namespaced actuator RBAC.
+apiVersion: v1
+kind: Service
+metadata:
+  name: route-rotate-demo
+  namespace: default
+spec:
+  selector:
+    app: route-rotate-demo
+    phorvex.ai/route-key: stable
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: route-rotate-demo
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: route-rotate-demo
+  template:
+    metadata:
+      labels:
+        app: route-rotate-demo
+        phorvex.ai/route-key: stable
+      annotations:
+        phorvex.ai/route-service: route-rotate-demo
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+---
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: route-rotate-demo
+  namespace: default
+spec:
+  tenant: default
+  selector:
+    matchLabels:
+      app: route-rotate-demo
+  objective:
+    lambda: "0.6"
+  budget:
+    maxMovesPerTick: 1
+    tickInterval: 20s
+    antiOverRotationWindow: 5m
+    proactiveFloor: 1h
+  slo:
+    minAvailableReplicas: 2
+  assetValue:
+    blastRadiusFromGraph: true
+  triggers:
+    eventDriven: true
+  actions:
+    enabled: ["route-rotate"]
+  mode: dryRun

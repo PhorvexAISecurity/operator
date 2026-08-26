@@ -17,8 +17,10 @@
  * pods/ephemeralcontainers      : debugger / custom-inject / inject-carrier kv-reset (update)
  * networkpolicies               : quarantine deny-all (create/get/delete)
  * replicasets                   : quarantine reads the owning RS selector to detach (get)
- * services / endpointslices     : route-rotate / endpoint-rotate repoint (get/update/patch)
- * serviceaccounts / secrets     : identity-rotate SA-token re-issue, best-effort (get/delete)
+ * services                      : route-rotate / endpoint-rotate selector restitch (get/update)
+ *
+ * Identity-rotate deliberately receives no ServiceAccount/Secret permission: projected tokens
+ * cannot be revoked by a pod-scoped action. EndpointSlices also remain denied.
  */
 
 package actuator
@@ -27,6 +29,4 @@ package actuator
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;delete
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=apps,resources=replicasets,verbs=get
-// +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=services,verbs=get;update;patch
-// +kubebuilder:rbac:namespace=phorvex-tenant,groups=discovery.k8s.io,resources=endpointslices,verbs=get;update;patch
-// +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=serviceaccounts;secrets,verbs=get;delete
+// +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=services,verbs=get;update

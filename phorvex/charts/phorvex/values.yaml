@@ -49,6 +49,12 @@ phorvex:
   # in the audit (A01–A04 assert on what actually touched the cluster), so it must be part
   # of desired state rather than a hand-patched env var.
   actuator: ""
+  # Managed tenant namespaces where the native/hybrid actuator may perform routine
+  # namespaced mutations. Empty by default: the chart adds no workload-write privilege.
+  # Each entry renders a namespaced Role/RoleBinding for pods, NetworkPolicies,
+  # ReplicaSets and Services. Service access is exactly get/update so route-rotate and
+  # endpoint-rotate can restitch selectors; Secrets and EndpointSlices remain denied.
+  actuatorNamespaces: []
   # EPSS exploit-probability cache. The operator reads it from a file so a scored CVE feed
   # can be refreshed without a rebuild; the file arrives as a ConfigMap.
   epss:
