@@ -84,8 +84,20 @@ class Console:
 
     def __init__(self, transport, cfg):
         self.t = transport
-        self.base = cfg["base"].rstrip("/")
+        self.base = cfg.get("base", "").rstrip("/")
         self.lens = cfg.get("lens", "operator")
+        # mode "http": curl the base URL (the ALB host). mode "kubectl-proxy": reach the
+        # in-cluster console Service through the API server, bypassing the ALB entirely. The
+        # latter exists because console.phorvex.ai is now behind Cognito auth — a curl to it
+        # gets a login redirect, so CI reaches the SAME console pod over the API-server proxy
+        # instead. The lens rides as a query param (the console reads ?lens= as well as the
+        # header), which is what makes the header-less kubectl path work.
+        self.mode = cfg.get("mode", "http")
+        svc = cfg.get("service", {})
+        ns = svc.get("namespace", "phorvex-system")
+        name = svc.get("name", "phorvex-console")
+        port = svc.get("port", 80)
+        self.proxy = f"/api/v1/namespaces/{ns}/services/{name}:{port}/proxy"
 
     def _curl(self, args, timeout):
         rc, out, err = self.t.run(args, timeout=timeout)
@@ -93,11 +105,17 @@ class Console:
             raise TransportError(f"console call failed (rc={rc}): {err.strip() or 'no output'}")
         return out
 
+    def _lens_q(self, path):
+        return path + ("&" if "?" in path else "?") + "lens=" + self.lens
+
     def get_json(self, path, timeout=20):
-        cmd = (
-            f"curl -s -m {timeout - 2} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
-            f"{shlex.quote(self.base + path)}"
-        )
+        if self.mode == "kubectl-proxy":
+            cmd = f"kubectl get --raw {shlex.quote(self.proxy + self._lens_q(path))}"
+        else:
+            cmd = (
+                f"curl -s -m {timeout - 2} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
+                f"{shlex.quote(self.base + path)}"
+            )
         out = self._curl(cmd, timeout)
         try:
             return json.loads(out)
@@ -105,12 +123,20 @@ class Console:
             raise TransportError(f"GET {path} did not return JSON: {out[:200]!r}") from e
 
     def post_json(self, path, body, timeout=40):
-        cmd = (
-            f"curl -s -m {timeout - 5} -X POST "
-            f"-H 'Content-Type: application/json' "
-            f"-H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
-            f"-d {shlex.quote(json.dumps(body))} {shlex.quote(self.base + path)}"
-        )
+        if self.mode == "kubectl-proxy":
+            # `kubectl create --raw` issues the POST; the body is piped in on stdin. The
+            # console decodes JSON from the request body regardless of Content-Type.
+            cmd = (
+                f"printf %s {shlex.quote(json.dumps(body))} "
+                f"| kubectl create --raw {shlex.quote(self.proxy + self._lens_q(path))} -f -"
+            )
+        else:
+            cmd = (
+                f"curl -s -m {timeout - 5} -X POST "
+                f"-H 'Content-Type: application/json' "
+                f"-H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
+                f"-d {shlex.quote(json.dumps(body))} {shlex.quote(self.base + path)}"
+            )
         out = self._curl(cmd, timeout)
         try:
             return json.loads(out)
@@ -124,11 +150,18 @@ class Console:
         yields the recent decision history. Bounded on BOTH time and bytes: an operator
         under heavy churn must not be able to hang the pipeline or exhaust memory.
         """
-        cmd = (
-            f"curl -sN -m {seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
-            f"{shlex.quote(self.base + '/api/live?lens=' + self.lens)} | head -c {int(max_bytes)}"
-        )
-        # curl exits non-zero on its own -m timeout, which is the normal path here.
+        if self.mode == "kubectl-proxy":
+            # `timeout` bounds the stream the way curl -m did; head -c caps the bytes.
+            cmd = (
+                f"timeout {seconds} kubectl get --raw "
+                f"{shlex.quote(self.proxy + '/api/live?lens=' + self.lens)} | head -c {int(max_bytes)}"
+            )
+        else:
+            cmd = (
+                f"curl -sN -m {seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
+                f"{shlex.quote(self.base + '/api/live?lens=' + self.lens)} | head -c {int(max_bytes)}"
+            )
+        # curl/timeout exits non-zero on the bounded-window timeout, which is the normal path.
         _, out, _ = self.t.run(cmd, timeout=seconds + 20)
         records, malformed = [], 0
         for line in out.splitlines():
