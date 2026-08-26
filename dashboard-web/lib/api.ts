@@ -131,6 +131,9 @@ export const api = {
   // fire now, and — when the harness binary is in the image — the catalogue filtered per app.
   workloadAttacks: (namespace: string, lens: Lens) =>
     get<WorkloadAttacks>(`/api/workload/attacks?namespace=${encodeURIComponent(namespace)}`, lens),
+  // Fire a catalogue scenario as a REAL SecurityEvent at a live app's pod (not the sandbox).
+  fireScenarioLive: (body: { namespace: string; scenario: string; mitre?: string; expected?: string; action?: "fire" | "clear" }, lens: Lens) =>
+    post<{ ok: boolean; scenario: string; namespace: string; pod?: string; expect?: string; message: string }>("/api/workload/fire-scenario", body, lens),
   // LIVE-ATTACK MONITORING — availability before/during/after each real attack + downtime $.
   attackMonitoring: (lens: Lens) =>
     get<AttackMonitoringResult>("/api/attack-monitoring", lens),

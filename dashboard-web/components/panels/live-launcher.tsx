@@ -116,6 +116,25 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     finally { setFiring(""); }
   };
 
+  // Fire a catalogue scenario as a REAL SecurityEvent at the live app's pod (not the sandbox),
+  // then poll the outcome the same way the live attacks do.
+  const fireScenario = async (c: CatalogCompat) => {
+    if (!app) return;
+    setFiring("scnlive:" + c.name); setMsg(""); setErr("");
+    setVerdicts((v) => { const n = { ...v }; delete n["scn:" + c.name]; return n; });
+    try {
+      const r = await api.fireScenarioLive({
+        namespace: app, scenario: c.name,
+        mitre: (c.techniques || []).join(", "),
+        expected: (c.expectedActuators || [])[0] || "",
+        action: "fire",
+      }, lens);
+      setMsg(r.message || `Fired ${c.name} at ${app}.`);
+      pollVerdict("scn:" + c.name, app);
+    } catch (e: any) { setErr(String(e.message || e)); }
+    finally { setFiring(""); }
+  };
+
   if (err && !compat && !nss) return <div className="text-[12px] text-danger">error: {err}</div>;
   if (!nss) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading your apps…</div>;
   if (nss.length === 0) return <Empty msg="No non-system workloads found on this cluster." />;
@@ -208,7 +227,9 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
           {/* scenario catalogue — launchable, sandboxed, with a run verdict */}
           <Card><CardContent className="p-4">
             <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Scenario catalogue — compatible with this app</div>
-            <div className="mb-3 text-[11px] text-muted-foreground/70">These run the harness against synthetic targets in a disposable sandbox (the backend forbids firing them at your real pods) and report whether the correct actuator fired.</div>
+            <div className="mb-3 text-[11px] text-muted-foreground/70">
+              <b>Fire live</b> sends the scenario as a real SecurityEvent at this app's actual pod — Phorvex reacts for real, the pod rotates/quarantines, the actuator verdict shows below (needs the app armed). <b>Run</b> instead executes the full harness against synthetic sandbox pods (it can't touch your real pods) and scores the correct actuator.
+            </div>
             {compat.catalogNote ? (
               <div className="text-[12px] text-muted-foreground">{compat.catalogNote}</div>
             ) : catCompatible.length === 0 ? (
@@ -217,20 +238,40 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
               <div className="space-y-1.5">
                 {catCompatible.map((c) => {
                   const run = runs[c.name];
+                  const v = verdicts["scn:" + c.name];
+                  const correct = v ? (v.phorvexAction && v.expectedActuator && v.phorvexAction === v.expectedActuator) : null;
                   return (
-                    <div key={c.name} className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 p-2">
-                      <span className="font-mono text-[12px]">{c.name}</span>
-                      {c.expectedActuators?.length > 0 && <span className="text-[10px] text-muted-foreground">→ <span className="font-mono">{c.expectedActuators.join(", ")}</span></span>}
-                      <span className="ml-auto flex items-center gap-2">
-                        {run && (
-                          <span className={cn("text-[11px]", run.state === "done" ? "text-success" : run.state === "error" ? "text-danger" : "text-muted-foreground")}>
-                            {run.state === "running" ? <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> running · {run.trials}/{run.expectedTrials ?? "?"}</span> : run.state}
-                          </span>
-                        )}
-                        <Button size="sm" variant="outline" disabled={!targetId || firing !== "" || run?.state === "running"} onClick={() => runScenario(c)}>
-                          {firing === "scn:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Run</>}
-                        </Button>
-                      </span>
+                    <div key={c.name} className="rounded-md border border-border/60 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[12px]">{c.name}</span>
+                        {c.expectedActuators?.length > 0 && <span className="text-[10px] text-muted-foreground">→ <span className="font-mono">{c.expectedActuators.join(", ")}</span></span>}
+                        <span className="ml-auto flex items-center gap-2">
+                          {run && (
+                            <span className={cn("text-[11px]", run.state === "done" ? "text-success" : run.state === "error" ? "text-danger" : "text-muted-foreground")}>
+                              {run.state === "running" ? <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> running · {run.trials}/{run.expectedTrials ?? "?"}</span> : run.state}
+                            </span>
+                          )}
+                          <Button size="sm" variant={compat.stack.armed ? "primary" : "outline"} disabled={!compat.stack.armed || firing !== ""} onClick={() => fireScenario(c)}>
+                            {firing === "scnlive:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Fire live</>}
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={!targetId || firing !== "" || run?.state === "running"} onClick={() => runScenario(c)}>
+                            {firing === "scn:" + c.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Run</>}
+                          </Button>
+                        </span>
+                      </div>
+                      {(v || firing === "scnlive:" + c.name) && (
+                        v ? (
+                          <div className={cn("mt-2 flex flex-wrap items-center gap-2 rounded-md border p-2 text-[12px]",
+                            correct ? "border-success/30 bg-success/[0.06]" : "border-warning/30 bg-warning/[0.06]")}>
+                            {correct ? <Check className="h-3.5 w-3.5 text-success" /> : <X className="h-3.5 w-3.5 text-warning" />}
+                            <span>{v.outcome || v.status}</span>
+                            <span className="text-muted-foreground">fired <span className="font-mono text-foreground/80">{v.phorvexAction || "—"}</span></span>
+                            <span className={cn("ml-auto font-medium", correct ? "text-success" : "text-warning")}>{correct ? "correct actuator" : v.phorvexAction ? "different actuator" : "no actuation yet"}</span>
+                          </div>
+                        ) : (
+                          <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> firing at the real pod, measuring the outcome…</div>
+                        )
+                      )}
                     </div>
                   );
                 })}

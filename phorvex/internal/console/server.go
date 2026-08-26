@@ -57,9 +57,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/workload/attack", s.withCORS(s.scoped("operator", s.workloadAttack)))
 	// Per-app attack compatibility: which attacks this app's stack supports and which are armed.
 	mux.HandleFunc("/api/workload/attacks", s.withCORS(s.scoped("operator", s.workloadAttacks)))
-	// LIVE cluster control: patch a PhorvexPolicy (mode, dryRun, budget, enabled actuators).
+	// LIVE cluster control: patch a PhorvexPolicy (mode, budget, enabled actuators).
 	// A real cluster write, safe because the ALB enforces Cognito login ahead of it.
 	mux.HandleFunc("/api/policy/edit", s.withCORS(s.scoped("operator", s.policyEdit)))
+	// Fire a catalogue scenario as a REAL SecurityEvent at a live app's pod (not the sandbox).
+	mux.HandleFunc("/api/workload/fire-scenario", s.withCORS(s.scoped("operator", s.fireScenarioLive)))
 	mux.HandleFunc("/api/attack-results", s.withCORS(s.scoped("operator", s.attackResults)))
 	// LIVE-ATTACK MONITORING — before/during/after availability + real downtime cost per attack.
 	mux.HandleFunc("/api/attack-monitoring", s.withCORS(s.scoped("operator", s.attackMonitoringHandler)))
