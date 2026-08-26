@@ -52,8 +52,16 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	ns := strings.TrimSpace(body.Namespace)
-	if !armedWorkloads[ns] {
-		writeJSON(w, 400, map[string]string{"error": "namespace not armed for live attack: " + ns + " (armed: " + armedList() + ")"})
+	// Armed = Phorvex actually governs this namespace (it has a PhorvexPolicy). That is the
+	// honest gate: a foothold at a namespace Phorvex does not watch just lands with no
+	// defense — there is nothing to demonstrate. Any app with a policy is fair game, which
+	// is what makes the launcher's Fire button light up across every governed app rather
+	// than a hardcoded demo pair. The static allowlist stays as a fallback for a namespace
+	// that is armed by intent but has no policy object yet.
+	if !armedWorkloads[ns] && !s.namespaceHasPolicy(ns) {
+		writeJSON(w, 400, map[string]string{"error": "namespace not armed: " + ns +
+			" — it has no PhorvexPolicy, so Phorvex does not govern it and an attack would land " +
+			"with no defense. Add a policy (Protect → Policy control) first."})
 		return
 	}
 	kctl := func(timeout time.Duration, args ...string) (string, error) {

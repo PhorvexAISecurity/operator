@@ -123,16 +123,19 @@ func (s *Server) stackOf(ctx context.Context, ns string, gpu bool) (appStack, er
 			}
 		}
 	}
-	st.Armed = isArmedForLiveAttack(ns)
+	st.Armed = ns == vllmAttackNS || armedWorkloads[ns] || s.namespaceHasPolicy(ns)
 	return st, nil
 }
 
-// isArmedForLiveAttack reports whether a live attack can be fired at this namespace right now. The
-// vLLM fire path is hardcoded to the vllm namespace (vllm_attack.go), and the workload fire path
-// only accepts the armedWorkloads allowlist (workload_attack.go); this mirrors both so the UI's
-// "armed" flag can never drift from what the fire endpoints will actually accept.
-func isArmedForLiveAttack(ns string) bool {
-	return ns == vllmAttackNS || armedWorkloads[ns]
+// namespaceHasPolicy reports whether Phorvex governs this namespace — i.e. it has at least one
+// PhorvexPolicy. This is the arming test the fire endpoints share (workload_attack.go): an
+// attack only demonstrates a defense where a defense exists, so "armed" means "governed".
+func (s *Server) namespaceHasPolicy(ns string) bool {
+	if ns == "" || !nsRe.MatchString(ns) {
+		return false
+	}
+	out, err := s.cfg.execText(6*time.Second, "kubectl", "-n", ns, "get", "phorvexpolicy", "-o", "name")
+	return err == nil && strings.TrimSpace(out) != ""
 }
 
 // compatEntry is one row in the per-app answer: an attack plus whether this app's stack supports
@@ -177,7 +180,7 @@ func compatibleLive(st appStack) []compatEntry {
 			}
 		case "any-workload":
 			e.Compatible = st.Workload
-			e.Armed = armedWorkloads[st.Namespace]
+			e.Armed = st.Armed // governed by a policy (or the static allowlist) => fireable
 			e.Expected = "rotate" // refined below for stateful apps
 			if st.Stateful {
 				e.Expected = "quarantine"
