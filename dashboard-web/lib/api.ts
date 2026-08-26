@@ -240,6 +240,9 @@ export interface CatalogCompat {
 export interface WorkloadAttacks {
   namespace: string; stack: AppStack; live: CompatEntry[];
   catalog: CatalogCompat[]; catalogNote?: string;
+  // the actuators a policy on THIS app may enable — runnable on its stack, so the brain never
+  // gets handed one it will select but cannot actuate.
+  policyActuators?: string[];
 }
 // Attack-timeline SSE event (one per harness stage header / completed trial / run end).
 export interface TimelineEvent {

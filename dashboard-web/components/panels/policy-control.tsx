@@ -14,13 +14,12 @@ import { cn } from "@/lib/utils";
 // console.phorvex.ai, which is what makes a cluster write from a browser safe.
 //
 // Not read-only: what you change here changes what Phorvex is allowed to do to your cluster.
-// The CRD's spec.actions.enabled enum — the ONLY values a policy accepts. Narrower than the
-// attack actuators (guardrail-rotate etc. are not policy-enablable), so the picker offers
-// exactly these and nothing the API server will reject.
-const POLICY_ACTUATORS = [
-  "rotate", "quarantine", "noop", "debugger", "custom-inject", "identity-rotate",
-  "route-rotate", "warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace",
-];
+// Fallback actuator set, used only until the per-app applicable list loads (or if it can't be
+// fetched). The real picker per policy uses the actuators APPLICABLE TO THAT APP'S STACK, fetched
+// from /api/workload/attacks — so a serving-only actuator like route-rotate is never offered on a
+// plain workload, which is what stops the brain from selecting an actuator it can't actuate. The
+// brain still decides WHICH of the enabled actuators to run.
+const GENERIC_ACTUATORS = ["rotate", "quarantine", "noop", "identity-rotate", "debugger", "custom-inject"];
 
 type Draft = { mode: string; maxMovesPerTick: string; enabled: string[] };
 
@@ -38,6 +37,8 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
   const [policies, setPolicies] = React.useState<PolicyView[] | null>(null);
   const [available, setAvailable] = React.useState(true);
   const [drafts, setDrafts] = React.useState<Record<string, Draft>>({});
+  // per-namespace applicable actuators, fetched from the compat endpoint (stack-scoped).
+  const [actuatorsByNs, setActuatorsByNs] = React.useState<Record<string, string[]>>({});
   const [saving, setSaving] = React.useState("");
   const [msg, setMsg] = React.useState("");
   const [err, setErr] = React.useState("");
@@ -50,6 +51,13 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
         setPolicies(ps);
         setAvailable(d.available);
         setDrafts(Object.fromEntries(ps.map((p) => [`${p.namespace}/${p.name}`, readDraft(p)])));
+        // Fetch the stack-applicable actuator set for each governed namespace, so the picker
+        // offers only what the brain can actually run there.
+        Array.from(new Set(ps.map((p) => p.namespace))).forEach((ns) => {
+          api.workloadAttacks(ns, lens)
+            .then((w) => { if (w.policyActuators) setActuatorsByNs((m) => ({ ...m, [ns]: w.policyActuators! })); })
+            .catch(() => {});
+        });
       })
       .catch((e) => setErr(String(e.message || e)));
   }, [lens]);
@@ -124,11 +132,15 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
                   className="w-full rounded-md border border-border bg-elevated/30 px-2 py-1.5 text-[13px]" />
               </label>
             </div>
-            {/* enabled actuators — a picker of the CRD's valid values, so nothing invalid is sent */}
+            {/* enabled actuators — only those RUNNABLE on this app's stack, so the brain is never
+                offered one it would select but couldn't actuate. Brain still picks which one runs. */}
             <div className="mt-3 text-[12px]">
-              <div className="mb-1.5 text-muted-foreground">Enabled actuators</div>
+              <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
+                <span>Allowed actuators</span>
+                <span className="text-[10px] text-muted-foreground/60">— the brain chooses which one to run from this set</span>
+              </div>
               <div className="flex flex-wrap gap-1.5">
-                {POLICY_ACTUATORS.map((a) => {
+                {(actuatorsByNs[p.namespace] || GENERIC_ACTUATORS).map((a) => {
                   const on = d.enabled.includes(a);
                   return (
                     <button key={a} type="button"
@@ -140,6 +152,13 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
                   );
                 })}
               </div>
+              {/* any enabled actuator no longer runnable here (e.g. set before this guard) shown so it can be removed */}
+              {d.enabled.filter((a) => !(actuatorsByNs[p.namespace] || GENERIC_ACTUATORS).includes(a)).map((a) => (
+                <button key={a} type="button" onClick={() => set(k, { enabled: d.enabled.filter((x) => x !== a) })}
+                  className="mt-1.5 mr-1.5 rounded-md border border-warning/40 bg-warning/[0.08] px-2 py-1 font-mono text-[11px] text-warning">
+                  {a} ✕ not runnable here
+                </button>
+              ))}
             </div>
             <div className="mt-3 flex justify-end">
               <Button size="sm" variant="primary" disabled={saving !== ""} onClick={() => save(p)}>
