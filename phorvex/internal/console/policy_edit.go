@@ -3,9 +3,8 @@
  *
  * POST /api/policy/edit is a REAL cluster write: it patches a PhorvexPolicy CR with kubectl
  * (--type merge), exactly as scopeVllmPolicy already does for the attack path. It makes the
- * operator-facing knobs editable from the dashboard — mode (active/observe), dryRun, the
- * per-tick move budget, and the enabled actuator set — instead of an out-of-band kubectl/Helm
- * change.
+ * operator-facing knobs editable from the dashboard — mode (active/observe), the per-tick move
+ * budget, and the enabled actuator set — instead of an out-of-band kubectl/Helm change.
  *
  * This is safe to expose now because the console.phorvex.ai ALB enforces Cognito login before
  * any request reaches the pod (values-eks.yaml auth-* annotations), and the endpoint is scoped
@@ -28,9 +27,20 @@ type policyEditReq struct {
 	Namespace       string   `json:"namespace"`
 	Name            string   `json:"name"`
 	MaxMovesPerTick *int     `json:"maxMovesPerTick,omitempty"`
-	Mode            string   `json:"mode,omitempty"`   // "" leaves it; else "active" | "observe"
-	DryRun          *bool    `json:"dryRun,omitempty"` // nil leaves it
+	Mode            string   `json:"mode,omitempty"` // "" leaves it; else "active" | "observe"
 	EnabledActions  []string `json:"enabledActions,omitempty"`
+}
+
+// policyActuators is the CRD's spec.actions.enabled enum, verified against
+// phorvexpolicies.phorvex.ai (kubectl get crd ... .enum). It is DELIBERATELY narrower than the
+// actuator handler registry: several handlers (guardrail-rotate, adapter-rotate, request-drain,
+// kv-migrate-invalidate) are reachable by the attack path but are NOT policy-enablable, so the
+// CRD rejects them. Validating against the registry — the first version's bug — let a value like
+// "guardrail-rotate" through to a patch the API server then refused as an invalid enum value.
+var policyActuators = map[string]bool{
+	"rotate": true, "quarantine": true, "noop": true, "debugger": true, "custom-inject": true,
+	"identity-rotate": true, "route-rotate": true, "warm-swap": true, "mig-rebind": true,
+	"kv-reset": true, "endpoint-rotate": true, "model-shard-replace": true,
 }
 
 func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
@@ -71,29 +81,34 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		spec["mode"] = req.Mode
 	}
-	if req.DryRun != nil {
-		spec["dryRun"] = *req.DryRun
-	}
+	// dryRun is intentionally NOT patched: the PhorvexPolicy CRD has no spec.dryRun field
+	// (verified against the schema), so sending it produced an "unknown field" warning and
+	// contributed nothing. "Decide but never enact" is expressed by mode=observe instead.
 	if req.EnabledActions != nil {
-		// Validate each against the actuator handler registry so a typo can't disable the
-		// whole policy by naming an action no handler serves. An empty list is legal (it
-		// means "decide but enact nothing"), so only NON-empty entries are checked.
-		known := handlerNameSet()
+		// Validate against the CRD enum (policyActuators), NOT the handler registry — the CRD
+		// is stricter, and a value it rejects makes the whole patch fail. An empty list is
+		// legal (decide, enact nothing), so only non-empty entries are checked.
+		clean := make([]string, 0, len(req.EnabledActions))
 		bad := []string{}
 		for _, a := range req.EnabledActions {
 			a = strings.TrimSpace(a)
 			if a == "" {
 				continue
 			}
-			if !known[a] {
+			if !policyActuators[a] {
 				bad = append(bad, a)
 			}
+			clean = append(clean, a)
 		}
 		if len(bad) > 0 {
-			writeJSON(w, 400, map[string]string{"error": "unknown actuator(s): " + strings.Join(bad, ", ")})
+			writeJSON(w, 400, map[string]string{
+				"error": "not a policy actuator: " + strings.Join(bad, ", ") +
+					" — allowed: rotate, quarantine, noop, debugger, custom-inject, " +
+					"identity-rotate, route-rotate, warm-swap, mig-rebind, kv-reset, " +
+					"endpoint-rotate, model-shard-replace"})
 			return
 		}
-		spec["actions"] = map[string]any{"enabled": req.EnabledActions}
+		spec["actions"] = map[string]any{"enabled": clean}
 	}
 	if len(spec) == 0 {
 		writeJSON(w, 400, map[string]string{"error": "no editable field provided"})
@@ -111,15 +126,4 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 		"ok": true, "namespace": ns, "name": name, "patched": spec,
 		"result": strings.TrimSpace(out),
 	})
-}
-
-// handlerNameSet is the set of actuator names the registry serves — the same list B03 in the
-// End-to-End suite asserts against. Used to reject an enabled-action typo before it reaches
-// the CRD.
-func handlerNameSet() map[string]bool {
-	out := map[string]bool{"noop": true}
-	for _, name := range HandlerRegistryView().Names {
-		out[name] = true
-	}
-	return out
 }
