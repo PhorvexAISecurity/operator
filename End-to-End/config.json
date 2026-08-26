@@ -17,7 +17,16 @@
     "the operator actually writes, so what this tests is what ArgoCD deployed."
   ],
   "console": {
-    "base": "https://console.phorvex.ai",
+    "_mode_comment": [
+      "kubectl-proxy: reach the in-cluster console Service through the API server, NOT the",
+      "console.phorvex.ai ALB. The ALB now enforces Cognito login, so a plain curl to the",
+      "public host gets a login redirect and every check fails. The proxy reaches the SAME",
+      "console pod (it still tests the real deployed image), needs no auth, and needs no",
+      "public exposure — which is why the console Service was moved to ClusterIP.",
+      "Set mode back to 'http' with a base URL to test an unauthenticated host directly."
+    ],
+    "mode": "kubectl-proxy",
+    "service": { "namespace": "phorvex-system", "name": "phorvex-console", "port": 80 },
     "lens": "operator"
   },
   "capture": {

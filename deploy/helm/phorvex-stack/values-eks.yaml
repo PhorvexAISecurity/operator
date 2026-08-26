@@ -190,3 +190,24 @@ dashboard:
       alb.ingress.kubernetes.io/subnets: subnet-0e2c4f3f433045f81,subnet-08bd0af4dcc7672e2
       alb.ingress.kubernetes.io/target-type: ip
       external-dns.alpha.kubernetes.io/hostname: console.phorvex.ai
+      # ── Cognito authentication (P-VCLUSTER auth gate) ──────────────────────
+      # The ALB itself enforces login BEFORE any request reaches the console pod, so this is
+      # the auth boundary that makes it safe to expose live cluster-control (policy edit).
+      # An unauthenticated request is redirected to the Cognito hosted UI; only a logged-in
+      # session reaches the app. No console code change is needed for the gate.
+      #
+      # Resources created out-of-band (aws cognito-idp, admin-create-user-only so there is no
+      # public self-signup): user pool us-east-2_JfwlBPRbB, this app client, hosted domain
+      # phorvex-console-753556437180.
+      #
+      # PREREQUISITE, verify before merge: the aws-load-balancer-controller's IAM role needs
+      #   cognito-idp:DescribeUserPoolClient  (it reads the client secret to drive the flow).
+      # Without it the ALB cannot configure the auth action and the listener update fails.
+      #
+      # SIDE EFFECT: this authenticates the WHOLE host, /api included. The End-to-End pipeline
+      # drives console.phorvex.ai/api/* and will break until it is pointed at the in-cluster
+      # console Service (bypassing the ALB) instead of the public host.
+      alb.ingress.kubernetes.io/auth-type: cognito
+      alb.ingress.kubernetes.io/auth-scope: openid
+      alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
+      alb.ingress.kubernetes.io/auth-idp-cognito: '{"userPoolARN":"arn:aws:cognito-idp:us-east-2:753556437180:userpool/us-east-2_JfwlBPRbB","userPoolClientID":"2ms9uge9hm4uap1h0ida3it9on","userPoolDomain":"phorvex-console-753556437180"}'
