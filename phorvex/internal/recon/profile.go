@@ -53,11 +53,8 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 		cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], f.Key())
 	}
 
-	// In-pod facts — invalidated by ROTATE (full kill+respawn). The gentler IDENTITY-ROTATE
-	// (re-issue the SA token / bump the identity label epoch) invalidates the pod-identity fact
-	// WITHOUT killing the pod — a SUBSET of rotate's cover, so the optimizer picks the surgical
-	// identity refresh for an identity-only threat and escalates to a full rotate only when the
-	// in-memory implant / session recon is also at stake.
+	// In-pod facts — invalidated by ROTATE (full kill+respawn). IDENTITY-ROTATE remains
+	// coverless because its label write changes neither the pod identity nor its credentials.
 	pid := Fact{Scope: ScopePod, Asset: asset, Kind: FactPodIdentity, Weight: base * urg}
 	facts = append(facts, pid)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], pid.Key())
@@ -92,10 +89,11 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * 0.8}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
-	// NO COVER for route-rotate — same reason. It writes a `phorvex.ai/route-epoch` label and touches
-	// no Service selector and no EndpointSlice (contrast endpoint-rotate, handlers_ai.go, which DOES
-	// restitch a declared Service). The learned route is therefore not staled, so networkIdentity
-	// is not invalidated.
+	// route-rotate earns this cover only because its successful path re-keys the pod's route label
+	// and restitches the explicitly declared Service selector, compensating if the second write
+	// fails. Missing deployment
+	// contract returns Emitted=false and receives no actuation credit.
+	cover[model.ActionRouteRotate] = append(cover[model.ActionRouteRotate], nid.Key())
 	latUrg := 0.5 + 0.5*clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
 	for _, nb := range fctx.Neighbors {
 		// A learned directed edge is owned by its origin pod. Quarantining the target may also cut

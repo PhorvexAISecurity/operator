@@ -23,28 +23,31 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	fctx := FactContext{AssetValue: 1, PHold: 1, StageUrgency: 1, LateralUrgency: 1, HasGPU: true,
 		Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}
 
-	// (1) generic pod — rotate and quarantine really do invalidate recon, so they must have cover.
+	// (1) generic pod — rotate, quarantine and a successfully restitched route really do
+	// invalidate recon, so they must have cover.
 	generic := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "web"}}
-	gc := prof.AssetFacts(generic, fctx).CoverByAction
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
+	genericFacts := prof.AssetFacts(generic, fctx)
+	gc := genericFacts.CoverByAction
+	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine, model.ActionRouteRotate} {
 		if len(gc[a]) == 0 {
 			t.Errorf("generic pod: %q has EMPTY cover set — optimizer can never select it", a)
 		}
 	}
+	genericByKey := map[string]string{}
+	for _, fact := range genericFacts.Facts {
+		genericByKey[fact.Key()] = fact.Kind
+	}
+	routeCover := gc[model.ActionRouteRotate]
+	if len(routeCover) != 1 || genericByKey[routeCover[0]] != FactNetworkIdentity {
+		t.Errorf("route-rotate cover = %v, want exactly {%s}", routeCover, FactNetworkIdentity)
+	}
 
-	// (1b) identity-rotate and route-rotate must have NO cover (PHVX-9e). Both write a single
-	// phorvex.ai/*-epoch LABEL and nothing else: identity-rotate's SA-token branch is a no-op on
-	// modern K8s, route-rotate touches no Service selector or EndpointSlice, and nothing in the repo
-	// or on the live cluster selects on either label. So neither invalidates the fact it used to
-	// claim. Granting cover for work an action does not do is worse than granting none: the
-	// optimiser would pick the cheap relabel INSTEAD of the rotate that would really have staled the
-	// attacker's recon. If either action later gains a real mechanism (a Service restitch, a genuine
-	// token rotation), restore its grant IN THE SAME CHANGE.
-	for _, a := range []model.Action{model.ActionIdentityRotate, model.ActionRouteRotate} {
-		if len(gc[a]) != 0 {
-			t.Errorf("%q claims cover %v, but it only writes an epoch label — the optimizer would be "+
-				"credited for recon invalidation that never happens", a, gc[a])
-		}
+	// (1b) identity-rotate remains coverless. It writes an inert identity-epoch label and
+	// changes neither the projected ServiceAccount token nor the pod UID/IP. route-rotate
+	// moved back to the positive assertion above in the same change that implemented its
+	// real Service-selector restitch.
+	if got := gc[model.ActionIdentityRotate]; len(got) != 0 {
+		t.Errorf("identity-rotate claims cover %v, but it changes no identity or credential fact", got)
 	}
 
 	// (2) AI serving pod — the serving actuators become selectable (request-drain / guardrail-rotate /
@@ -110,11 +113,8 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 }
 
 // TestActionDocCommentsDoNotClaimUnearnedEffects binds the model/types.go doc comments to what the
-// handlers actually do (PHVX-9e). The comments there described identity-rotate as rotating the
-// "SA-token/IP" and route-rotate as repointing the "Service selector / EndpointSlice". Neither is
-// true — both write a single label — and it is those false descriptions that justified the recon
-// cover grants this ticket removed. Correcting handlers_k8s.go while leaving model/types.go saying
-// the opposite is how a disproven claim survives a fix.
+// handlers actually do. identity-rotate must never claim token/UID/IP invalidation, while
+// route-rotate may claim a Service-selector restitch only because that mechanism now exists.
 func TestActionDocCommentsDoNotClaimUnearnedEffects(t *testing.T) {
 	src, err := os.ReadFile("../model/types.go")
 	if err != nil {
@@ -123,16 +123,27 @@ func TestActionDocCommentsDoNotClaimUnearnedEffects(t *testing.T) {
 	text := string(src)
 	for _, banned := range []struct{ phrase, why string }{
 		{"SA-token/IP", "identity-rotate does not change the SA token, the UID or the IP"},
-		{"repoints Service selector", "route-rotate writes a label; endpoint-rotate is what re-keys a Service"},
+		{"SA-token re-issue", "identity-rotate does not re-issue a projected ServiceAccount token"},
 	} {
 		if strings.Contains(text, banned.phrase) {
 			t.Errorf("model/types.go still claims %q — %s", banned.phrase, banned.why)
 		}
 	}
 	// And the positive half: the corrected text must actually say what the action does.
-	for _, required := range []string{"identity-epoch", "route-epoch"} {
+	for _, required := range []string{"identity-epoch", "route-key", "route-service"} {
 		if !strings.Contains(text, required) {
-			t.Errorf("model/types.go no longer names the %q label the action really writes", required)
+			t.Errorf("model/types.go no longer names the %q contract the action uses", required)
+		}
+	}
+
+	handlerSrc, err := os.ReadFile("../actuator/handlers_k8s.go")
+	if err != nil {
+		t.Fatalf("read actuator/handlers_k8s.go: %v", err)
+	}
+	handlerText := string(handlerSrc)
+	for _, falseClaim := range []string{"SA-token re-issue best-effort", "label-stale the attacker's identity recon"} {
+		if strings.Contains(handlerText, falseClaim) {
+			t.Errorf("identity-rotate handler still claims %q", falseClaim)
 		}
 	}
 }

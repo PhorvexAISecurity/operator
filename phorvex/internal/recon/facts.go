@@ -59,7 +59,7 @@ const (
 	// (reset by model-shard-replace).
 	FactModelFingerprint = "modelFingerprint"
 	// FactEndpointPath = inference endpoint / API route the attacker mapped (reset by
-	// endpoint-rotate; route-rotate only writes an unused label and earns no cover).
+	// endpoint-rotate; route-rotate resets the generic networkIdentity fact instead).
 	FactEndpointPath = "endpointPath"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
@@ -102,6 +102,9 @@ const (
 
 	// Tier 3: persistent facts no current moving-target action can invalidate. These remain
 	// pod-attributed audit evidence and are permanently absent from every action cover set.
+	// CANNOT-HELP: FactCredential includes projected ServiceAccount-token knowledge. A
+	// pod-scoped action cannot revoke a bound token before its TTL; that requires issuer-side
+	// credential revocation, which is outside this actuator class.
 	FactCredential              = "credential"
 	FactRetrievalState          = "retrievalState"
 	FactArtifactProvenance      = "artifactProvenance"

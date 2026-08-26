@@ -55,15 +55,13 @@ const (
 	ActionDisable Action = "disable"
 	// ActionIdentityRotate writes a fresh `phorvex.ai/identity-epoch` LABEL on the pod
 	// (advanced K8s; native-only). It does NOT change the SA token, the UID or the IP —
-	// the SA-token branch is a deliberate no-op because projected tokens rotate on their
-	// own — so it does not invalidate the podIdentity recon fact. See handlers_k8s.go and
-	// recon/profile.go, where the cover grant was removed for exactly this reason.
+	// projected tokens rotate on their own — so it does not invalidate the podIdentity
+	// recon fact. See handlers_k8s.go and recon/profile.go, where the cover grant was
+	// removed for exactly this reason.
 	ActionIdentityRotate Action = "identity-rotate"
-	// ActionRouteRotate writes a fresh `phorvex.ai/route-epoch` LABEL (advanced K8s;
-	// native-only). It does NOT restitch a Service selector and does NOT touch
-	// EndpointSlices — `endpoint-rotate` is the action that re-keys a declared Service —
-	// so the attacker's learned route is NOT staled and the networkIdentity cover grant
-	// was removed.
+	// ActionRouteRotate re-keys `phorvex.ai/route-key` on the pod and restitches the
+	// selector of its explicitly declared `phorvex.ai/route-service` (advanced K8s;
+	// native-only). It returns Emitted=false when that deployment contract is absent.
 	ActionRouteRotate Action = "route-rotate"
 	// ActionWarmSwap rotates WITHOUT the cold-load: provision a Ready warm replacement
 	// then retire (provision-before-retire). ColdLoadSec validation: PHORVEXSEC-87.
