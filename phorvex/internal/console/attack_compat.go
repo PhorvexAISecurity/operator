@@ -147,6 +147,27 @@ type compatEntry struct {
 	Reason     string `json:"reason"`
 }
 
+// applicablePolicyActuators returns the CRD actuators whose handler is MEANINGFUL for this app's
+// stack — the set a human should be allowed to put in the policy's allowlist, and the set the
+// brain then chooses from. It is deliberately narrower than the full CRD enum: the serving-only
+// actuators (route-rotate, endpoint-rotate, kv-reset, model-shard-replace) and the GPU-only ones
+// (warm-swap, mig-rebind) do nothing on a plain workload, and enabling one there is exactly the
+// bug that made the optimiser SELECT route-rotate on voice and then fail to actuate it (no
+// handler) — a critical A06 failure. The brain still decides WHICH actuator runs; this only keeps
+// it from ever being offered one the app cannot run.
+func applicablePolicyActuators(st appStack) []string {
+	// Generic actuators act on any pod (rotate a stateless pod, quarantine a stateful one, or
+	// the identity/response family), so every governed app gets them.
+	out := []string{"rotate", "quarantine", "noop", "identity-rotate", "debugger", "custom-inject"}
+	if st.ServedModel || st.VLLM {
+		out = append(out, "kv-reset", "endpoint-rotate", "route-rotate", "model-shard-replace")
+	}
+	if st.GPU {
+		out = append(out, "warm-swap", "mig-rebind")
+	}
+	return out
+}
+
 // compatibleLive applies each live attack's stack rule to one app.
 func compatibleLive(st appStack) []compatEntry {
 	out := make([]compatEntry, 0, len(liveAttackCatalogue))
@@ -298,9 +319,10 @@ func (s *Server) workloadAttacks(w http.ResponseWriter, r *http.Request) {
 
 	catalogue, haveCatalogue := s.compatibleCatalogue(st)
 	resp := map[string]any{
-		"namespace": ns,
-		"stack":     st,
-		"live":      live,
+		"namespace":       ns,
+		"stack":           st,
+		"live":            live,
+		"policyActuators": applicablePolicyActuators(st),
 	}
 	if haveCatalogue {
 		resp["catalog"] = catalogue

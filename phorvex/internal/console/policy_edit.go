@@ -15,6 +15,7 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -31,17 +32,11 @@ type policyEditReq struct {
 	EnabledActions  []string `json:"enabledActions,omitempty"`
 }
 
-// policyActuators is the CRD's spec.actions.enabled enum, verified against
-// phorvexpolicies.phorvex.ai (kubectl get crd ... .enum). It is DELIBERATELY narrower than the
-// actuator handler registry: several handlers (guardrail-rotate, adapter-rotate, request-drain,
-// kv-migrate-invalidate) are reachable by the attack path but are NOT policy-enablable, so the
-// CRD rejects them. Validating against the registry — the first version's bug — let a value like
-// "guardrail-rotate" through to a patch the API server then refused as an invalid enum value.
-var policyActuators = map[string]bool{
-	"rotate": true, "quarantine": true, "noop": true, "debugger": true, "custom-inject": true,
-	"identity-rotate": true, "route-rotate": true, "warm-swap": true, "mig-rebind": true,
-	"kv-reset": true, "endpoint-rotate": true, "model-shard-replace": true,
-}
+// The set of actuators a policy may enable is computed per app by applicablePolicyActuators
+// (attack_compat.go): the generic ones on any workload, the serving/GPU ones only where the stack
+// supports them. That subset of the CRD's spec.actions.enabled enum is BOTH schema-valid AND
+// runnable, which is what keeps the brain from being handed an actuator it will select but cannot
+// actuate (the route-rotate-on-voice A06 failure).
 
 func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -85,9 +80,18 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 	// (verified against the schema), so sending it produced an "unknown field" warning and
 	// contributed nothing. "Decide but never enact" is expressed by mode=observe instead.
 	if req.EnabledActions != nil {
-		// Validate against the CRD enum (policyActuators), NOT the handler registry — the CRD
-		// is stricter, and a value it rejects makes the whole patch fail. An empty list is
-		// legal (decide, enact nothing), so only non-empty entries are checked.
+		// Validate against the actuators APPLICABLE to this app's stack, not just the CRD enum.
+		// The CRD accepts route-rotate on any policy, but route-rotate has no handler on a plain
+		// workload — the brain would still SELECT it (higher coverage) and then fail to actuate,
+		// which is the exact A06 critical failure this guards against. The brain keeps deciding;
+		// it just never gets offered an actuator the app cannot run.
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		st, _ := s.stackOf(ctx, ns, s.clusterHasGPU(ctx))
+		allowed := map[string]bool{}
+		for _, a := range applicablePolicyActuators(st) {
+			allowed[a] = true
+		}
 		clean := make([]string, 0, len(req.EnabledActions))
 		bad := []string{}
 		for _, a := range req.EnabledActions {
@@ -95,17 +99,15 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 			if a == "" {
 				continue
 			}
-			if !policyActuators[a] {
+			if !allowed[a] {
 				bad = append(bad, a)
 			}
 			clean = append(clean, a)
 		}
 		if len(bad) > 0 {
 			writeJSON(w, 400, map[string]string{
-				"error": "not a policy actuator: " + strings.Join(bad, ", ") +
-					" — allowed: rotate, quarantine, noop, debugger, custom-inject, " +
-					"identity-rotate, route-rotate, warm-swap, mig-rebind, kv-reset, " +
-					"endpoint-rotate, model-shard-replace"})
+				"error": "actuator(s) not runnable on this app's stack: " + strings.Join(bad, ", ") +
+					" — allowed here: " + strings.Join(applicablePolicyActuators(st), ", ")})
 			return
 		}
 		spec["actions"] = map[string]any{"enabled": clean}
