@@ -61,9 +61,13 @@ func (s *Server) resolveRunningPod(ns string) (string, error) {
 }
 
 // fireSecurityEventAt applies a SecurityEvent CR at ns/pod. It is the namespace-general form of
-// fireVllmEvent: any attack type, any governed namespace. Labeled phorvex.ai/redteam=true so a
-// clear can delete it.
-func (s *Server) fireSecurityEventAt(ns, pod, evName, evType, desc, anomaly string) error {
+// the foothold event, and it uses the SAME recognised rule (type "Panic", source
+// "ExternalDetector") that the shipping foothold attack uses — verified live to raise the pod's
+// threatPosture to ~0.9. An arbitrary rule.type (e.g. the raw scenario name) is NOT a threat the
+// operator scores, so it would leave threatPosture at 0 and Phorvex would never react. The
+// scenario's identity is carried in the description and the event name, not the rule type.
+// Labeled phorvex.ai/redteam=true so a clear can delete it.
+func (s *Server) fireSecurityEventAt(ns, pod, evName, desc string) error {
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
 metadata:
@@ -75,11 +79,10 @@ spec:
   description: %q
   targets: ["%s/%s"]
   rule:
-    type: %q
+    type: "Panic"
     threatLevel: "critical"
-    source: "redteam"
-  anomalyScore: %q
-`, evName, ns, desc, ns, pod, evType, anomaly)
+    source: "ExternalDetector"
+`, evName, ns, desc, ns, pod)
 	f, err := os.CreateTemp("", "phorvex-scn-se-*.yaml")
 	if err != nil {
 		return err
@@ -185,7 +188,7 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 		mitre = "catalogue"
 	}
 	desc := "Red-team catalogue scenario " + scenario + " fired live at " + ns + "/" + pod
-	if err := s.fireSecurityEventAt(ns, pod, evName, eventTypeForScenario(scenario), desc, "0.95"); err != nil {
+	if err := s.fireSecurityEventAt(ns, pod, evName, desc); err != nil {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return
 	}
