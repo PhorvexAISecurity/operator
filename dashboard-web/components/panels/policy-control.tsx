@@ -14,15 +14,23 @@ import { cn } from "@/lib/utils";
 // console.phorvex.ai, which is what makes a cluster write from a browser safe.
 //
 // Not read-only: what you change here changes what Phorvex is allowed to do to your cluster.
-type Draft = { mode: string; dryRun: boolean; maxMovesPerTick: string; enabled: string };
+// The CRD's spec.actions.enabled enum — the ONLY values a policy accepts. Narrower than the
+// attack actuators (guardrail-rotate etc. are not policy-enablable), so the picker offers
+// exactly these and nothing the API server will reject.
+const POLICY_ACTUATORS = [
+  "rotate", "quarantine", "noop", "debugger", "custom-inject", "identity-rotate",
+  "route-rotate", "warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace",
+];
+
+type Draft = { mode: string; maxMovesPerTick: string; enabled: string[] };
 
 function readDraft(p: PolicyView): Draft {
   const spec = p.spec || {};
   return {
+    // "observe" is the decide-but-never-enact mode; the CRD has no separate dryRun field.
     mode: spec.mode || p.mode || "active",
-    dryRun: !!spec.dryRun,
     maxMovesPerTick: String(spec.budget?.maxMovesPerTick ?? ""),
-    enabled: (spec.actions?.enabled || []).join(", "),
+    enabled: spec.actions?.enabled || [],
   };
 }
 
@@ -57,13 +65,11 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
     setSaving(k); setMsg(""); setErr("");
     const body: PolicyEdit = { namespace: p.namespace, name: p.name };
     if (d.mode) body.mode = d.mode as "active" | "observe";
-    body.dryRun = d.dryRun;
     if (d.maxMovesPerTick.trim() !== "") {
       const n = parseInt(d.maxMovesPerTick, 10);
       if (!Number.isNaN(n)) body.maxMovesPerTick = n;
     }
-    const acts = d.enabled.split(",").map((s) => s.trim()).filter(Boolean);
-    body.enabledActions = acts;
+    body.enabledActions = d.enabled;
     try {
       const r = await api.policyEdit(body, lens);
       setMsg(`Patched ${r.namespace}/${r.name} — live now.`);
@@ -99,7 +105,6 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="font-medium text-[13px]">{p.namespace}/{p.name}</span>
               <Badge variant={d.mode === "active" ? "real" : "neutral"}>{d.mode}</Badge>
-              {d.dryRun && <Badge variant="pending">dry-run</Badge>}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {/* mode */}
@@ -108,13 +113,8 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
                 <select value={d.mode} onChange={(e) => set(k, { mode: e.target.value })}
                   className="w-full rounded-md border border-border bg-elevated/30 px-2 py-1.5 text-[13px]">
                   <option value="active">active — decides and actuates</option>
-                  <option value="observe">observe — decides only</option>
+                  <option value="observe">observe — decides only (no enact)</option>
                 </select>
-              </label>
-              {/* dryRun */}
-              <label className="flex cursor-pointer items-center gap-2 text-[12px] sm:mt-6">
-                <input type="checkbox" checked={d.dryRun} onChange={(e) => set(k, { dryRun: e.target.checked })} />
-                <span className="text-muted-foreground">dry-run (never enact, even in active mode)</span>
               </label>
               {/* budget */}
               <label className="text-[12px]">
@@ -123,13 +123,23 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
                   onChange={(e) => set(k, { maxMovesPerTick: e.target.value })}
                   className="w-full rounded-md border border-border bg-elevated/30 px-2 py-1.5 text-[13px]" />
               </label>
-              {/* enabled actuators */}
-              <label className="text-[12px]">
-                <div className="mb-1 text-muted-foreground">Enabled actuators (comma-separated)</div>
-                <input type="text" value={d.enabled} placeholder="rotate, quarantine, kv-reset"
-                  onChange={(e) => set(k, { enabled: e.target.value })}
-                  className="w-full rounded-md border border-border bg-elevated/30 px-2 py-1.5 font-mono text-[12px]" />
-              </label>
+            </div>
+            {/* enabled actuators — a picker of the CRD's valid values, so nothing invalid is sent */}
+            <div className="mt-3 text-[12px]">
+              <div className="mb-1.5 text-muted-foreground">Enabled actuators</div>
+              <div className="flex flex-wrap gap-1.5">
+                {POLICY_ACTUATORS.map((a) => {
+                  const on = d.enabled.includes(a);
+                  return (
+                    <button key={a} type="button"
+                      onClick={() => set(k, { enabled: on ? d.enabled.filter((x) => x !== a) : [...d.enabled, a] })}
+                      className={cn("rounded-md border px-2 py-1 font-mono text-[11px] transition-colors",
+                        on ? "border-primary bg-primary/10 text-foreground" : "border-border bg-elevated/30 text-muted-foreground hover:bg-elevated/60")}>
+                      {a}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="mt-3 flex justify-end">
               <Button size="sm" variant="primary" disabled={saving !== ""} onClick={() => save(p)}>
