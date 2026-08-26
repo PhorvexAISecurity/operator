@@ -52,8 +52,16 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	ns := strings.TrimSpace(body.Namespace)
-	if !armedWorkloads[ns] {
-		writeJSON(w, 400, map[string]string{"error": "namespace not armed for live attack: " + ns + " (armed: " + armedList() + ")"})
+	// Armed = Phorvex actually governs this namespace (it has a PhorvexPolicy). That is the
+	// honest gate: a foothold at a namespace Phorvex does not watch just lands with no
+	// defense — there is nothing to demonstrate. Any app with a policy is fair game, which
+	// is what makes the launcher's Fire button light up across every governed app rather
+	// than a hardcoded demo pair. The static allowlist stays as a fallback for a namespace
+	// that is armed by intent but has no policy object yet.
+	if !armedWorkloads[ns] && !s.namespaceHasPolicy(ns) {
+		writeJSON(w, 400, map[string]string{"error": "namespace not armed: " + ns +
+			" — it has no PhorvexPolicy, so Phorvex does not govern it and an attack would land " +
+			"with no defense. Add a policy (Protect → Policy control) first."})
 		return
 	}
 	kctl := func(timeout time.Duration, args ...string) (string, error) {
@@ -79,26 +87,43 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	// an earlier demo (quarantine is sticky — one per reset): the pod is network-isolated and out
 	// of the serving set, so there is nothing left to defend and the attack correctly does
 	// NOTHING — which reads exactly like a broken actuator.
-	list, err := kctl(8*time.Second, "get", "pod", "-l", "r6th.io/rotation-target=true",
-		"-o", `jsonpath={range .items[*]}{.metadata.name}|{.metadata.ownerReferences[0].kind}|{.status.phase}{"\n"}{end}`)
-	pod, skippedQuarantined := "", 0
-	for _, ln := range strings.Split(strings.TrimSpace(list), "\n") {
-		f := strings.Split(strings.TrimSpace(ln), "|")
-		if len(f) < 3 || f[0] == "" {
-			continue
+	// pickPod finds a Running, not-already-quarantined pod to attack. It returns the pod name
+	// and a count of pods skipped because a previous run already quarantined them.
+	pickPod := func(labelSel string) (string, int) {
+		args := []string{"get", "pod"}
+		if labelSel != "" {
+			args = append(args, "-l", labelSel)
 		}
-		if strings.EqualFold(strings.TrimSpace(f[1]), "AdaptiveMovingTargetDefense") {
-			skippedQuarantined++ // already quarantined by a previous run
-			continue
+		args = append(args, "-o",
+			`jsonpath={range .items[*]}{.metadata.name}|{.metadata.ownerReferences[0].kind}|{.status.phase}{"\n"}{end}`)
+		list, _ := kctl(8*time.Second, args...)
+		skipped := 0
+		for _, ln := range strings.Split(strings.TrimSpace(list), "\n") {
+			f := strings.Split(strings.TrimSpace(ln), "|")
+			if len(f) < 3 || f[0] == "" {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(f[1]), "AdaptiveMovingTargetDefense") {
+				skipped++ // already quarantined by a previous run
+				continue
+			}
+			if !strings.EqualFold(strings.TrimSpace(f[2]), "Running") {
+				continue
+			}
+			return strings.TrimSpace(f[0]), skipped
 		}
-		if !strings.EqualFold(strings.TrimSpace(f[2]), "Running") {
-			continue
-		}
-		pod = strings.TrimSpace(f[0])
-		break
+		return "", skipped
 	}
-	if err != nil || pod == "" {
-		msg := "no attackable rotation-target pod in " + ns
+	// Prefer an explicit rotation-target pod (the original demo apps carry that label), but fall
+	// back to ANY Running pod in the namespace. Every namespace that reaches here is armed —
+	// i.e. governed by a PhorvexPolicy whose selector picks this app's own pods — so a foothold
+	// at any Running pod lands on something Phorvex actually watches and will defend.
+	pod, skippedQuarantined := pickPod("r6th.io/rotation-target=true")
+	if pod == "" {
+		pod, _ = pickPod("")
+	}
+	if pod == "" {
+		msg := "no attackable pod in " + ns
 		if skippedQuarantined > 0 {
 			msg += fmt.Sprintf(" — %d pod(s) are ALREADY quarantined from an earlier run; quarantine is sticky (one per reset), so reset the workload before firing again", skippedQuarantined)
 		}
