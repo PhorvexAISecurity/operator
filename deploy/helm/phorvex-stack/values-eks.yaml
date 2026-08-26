@@ -164,10 +164,18 @@ dashboard:
   replicas: 1
   port: 8090
   service:
-    # LoadBalancer, matching the live Service. The public hostname console.phorvex.ai is
-    # served by a separately-applied ALB Ingress that this chart does not own — which is
-    # also why the phorvex-stack Application runs with prune: false.
-    type: LoadBalancer
+    # ClusterIP, NOT LoadBalancer. A LoadBalancer here provisions a SECOND internet-facing ELB
+    # (acea4b96…elb.amazonaws.com) that reaches the console with NO authentication — an open
+    # back door straight past the Cognito gate on the console.phorvex.ai ALB ingress. With that
+    # ELB in place the auth is theatre: anyone who resolves the service hostname bypasses login.
+    # (Verified live: the Cognito redirect only fires on the ALB host; the ELB serves the console
+    # unauthenticated.)
+    #
+    # ClusterIP closes it. The ALB ingress is unaffected — it uses target-type=ip (confirmed in
+    # the annotations below), so the controller registers pod IPs from this service's
+    # EndpointSlices, which a ClusterIP service provides exactly as a LoadBalancer one did.
+    # console.phorvex.ai keeps working; only the unauthenticated ELB path is removed.
+    type: ClusterIP
     port: 80
   ingress:
     # console.phorvex.ai was a hand-applied Ingress owned by nobody: not in this chart, not
