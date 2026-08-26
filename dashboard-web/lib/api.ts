@@ -173,6 +173,10 @@ export const api = {
   },
   ablation: (ns: string, lens: Lens) => get<AblationResult>(`/api/ablation${ns ? `?ns=${encodeURIComponent(ns)}` : ""}`, lens),
   cluster: (lens: Lens) => get<{ policies: PolicyView[]; available: boolean; note: string }>("/api/cluster", lens),
+  // LIVE cluster control: patch a PhorvexPolicy. Only the fields present are changed. A real
+  // cluster write, gated to the operator lens behind the console's Cognito auth.
+  policyEdit: (body: PolicyEdit, lens: Lens) =>
+    post<{ ok: boolean; namespace: string; name: string; patched: Record<string, unknown>; result: string }>("/api/policy/edit", body, lens),
   handlers: (lens: Lens) => get<RegistryView>("/api/handlers", lens),
   matrix: (lens: Lens) => get<MatrixResult>("/api/matrix", lens),
   aiSurface: (lens: Lens) => get<AISurface>("/api/ai-surface", lens),
@@ -203,6 +207,8 @@ export interface GraphNode { key: string; blast: number; ai: boolean }
 export interface GraphEdge { src: string; dst: string }
 export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
+// A partial live edit to one PhorvexPolicy — only the present fields are patched.
+export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "observe"; dryRun?: boolean; enabledActions?: string[] }
 export interface ClusterTarget { id: string; context: string; label: string; provider: string; runnable: boolean; note: string }
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
 export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }

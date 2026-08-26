@@ -271,7 +271,11 @@ func (rm *RunManager) ClusterTargets() []ClusterTarget {
 			out = append(out, ClusterTarget{
 				ID: "in-cluster", Context: "in-cluster", Runnable: true,
 				Label: "This cluster (in-cluster)",
-				Note:  "DERIVED from the pod ServiceAccount — read-only live view",
+				// The label used to say "read-only live view", which understated it: behind the
+				// Cognito auth gate the console fires real attacks AND edits PhorvexPolicy live
+				// (mode, budget, actuators) via the operator ServiceAccount. It is a control
+				// plane for an authenticated operator, not a read-only viewer.
+				Note: "DERIVED from the pod ServiceAccount — live control (authenticated operator)",
 			})
 		}
 	}
