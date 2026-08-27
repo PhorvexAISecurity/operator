@@ -87,6 +87,10 @@ func main() {
 	// show the real actuator impact on uptime. Read-only; no-ops if no cluster is reachable.
 	srv.StartUptimeSampler(context.Background())
 	log.Printf("  uptime    : %s/api/uptime (measured availability vs actuation markers)", url)
+	// Reap fired red-team SecurityEvents after a TTL so an un-cleared attack cannot pin an app
+	// to "under attack" forever (the state the dashboard was stuck in after heavy Fire-live use).
+	srv.StartRedTeamSweeper(context.Background())
+	log.Printf("  redteam   : auto-expiring fired attack events after %s", "5m")
 	if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
 		log.Fatal(err)
 	}
