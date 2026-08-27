@@ -40,6 +40,15 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
       -a -o /console cmd/console/main.go
 
+# The console's live-scan/ablation subsystems SHELL OUT to the phorvex operator binary at
+# <root>/phorvex/bin/phorvex.exe (subsystems.go: c.PhorvexBin runs `phorvex --scan`). That
+# binary was never built into this image, so GET /api/scan execed a missing file and the
+# dashboard's Scan step reported 0 nodes / 0 pods on a full cluster (platform then falls back
+# to generic-k8s). Build it from the SAME phorvex module — in-cluster it scans via the pod
+# ServiceAccount, exactly like the running operator.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -a -o /phorvex ./cmd
+
 # ---- Stage 2c: the harness binary ----
 # GET /api/catalog enumerates the full scenario catalogue by SHELLING OUT to this binary
 # (evidence.go Catalog() runs `harness -config <cfg> -list`). Without it the handler returns
@@ -115,6 +124,10 @@ COPY --from=data /data /data
 # <root>/build/test-harness/bin/harness.exe. The .exe name is a historical dev artifact and is
 # just a filename on Linux — the console execs it by that path, so it must match.
 COPY --from=harnessbuild /harness /data/build/test-harness/bin/harness.exe
+# The phorvex operator binary lands at the exact path DefaultConfig() hardcodes for the
+# console's live-scan subsystem: <root>/phorvex/bin/phorvex.exe. Without it the Scan step
+# reports 0 nodes / 0 pods on a live cluster (missing-binary exec => empty result).
+COPY --from=gobuild /phorvex /data/phorvex/bin/phorvex.exe
 # Both are static and CGO-free, so distroless/static stays the right base.
 COPY --from=kubectl /kubectl /usr/local/bin/kubectl
 USER 65532:65532
