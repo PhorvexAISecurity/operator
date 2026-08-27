@@ -192,7 +192,12 @@ export function CostPanel({ lens }: { lens: Lens }) {
 }
 
 /* ---------- ACTUATOR (live registry from /api/handlers) ---------- */
-const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace", "kv-migrate-invalidate"]);
+// The AI / served-model actuators (GPU control-plane moves; [PENDING-GPU-VALIDATION]/PHORVEXSEC-87),
+// mirroring model.MutatingActions from ActionWarmSwap onward. Everything NOT here is a K8s-native
+// move (rotate, quarantine, debugger, custom-inject, identity-rotate, route-rotate). guardrail-rotate,
+// adapter-rotate and request-drain are part of the AI P4 set — they were missing here and mis-rendered
+// as "K8s live".
+const AI_HANDLERS = new Set(["warm-swap", "mig-rebind", "kv-reset", "endpoint-rotate", "model-shard-replace", "adapter-rotate", "request-drain", "guardrail-rotate", "kv-migrate-invalidate"]);
 export function ActuatorPanel({ lens }: { lens: Lens }) {
   const recs = useAudit(lens);
   const [reg, setReg] = React.useState<RegistryView | null>(null);
