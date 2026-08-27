@@ -3,7 +3,7 @@
  *
  * POST /api/policy/edit is a REAL cluster write: it patches a PhorvexPolicy CR with kubectl
  * (--type merge), exactly as scopeVllmPolicy already does for the attack path. It makes the
- * operator-facing knobs editable from the dashboard — mode (active/observe), the per-tick move
+ * operator-facing knobs editable from the dashboard — mode (active/dryRun), the per-tick move
  * budget, and the enabled actuator set — instead of an out-of-band kubectl/Helm change.
  *
  * This is safe to expose now because the console.phorvex.ai ALB enforces Cognito login before
@@ -28,7 +28,7 @@ type policyEditReq struct {
 	Namespace       string   `json:"namespace"`
 	Name            string   `json:"name"`
 	MaxMovesPerTick *int     `json:"maxMovesPerTick,omitempty"`
-	Mode            string   `json:"mode,omitempty"` // "" leaves it; else "active" | "observe"
+	Mode            string   `json:"mode,omitempty"` // "" leaves it; else "active" | "dryRun"
 	EnabledActions  []string `json:"enabledActions,omitempty"`
 }
 
@@ -70,15 +70,15 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 		spec["budget"] = map[string]any{"maxMovesPerTick": *req.MaxMovesPerTick}
 	}
 	if req.Mode != "" {
-		if req.Mode != "active" && req.Mode != "observe" {
-			writeJSON(w, 400, map[string]string{"error": "mode must be \"active\" or \"observe\""})
+		if req.Mode != "active" && req.Mode != "dryRun" {
+			writeJSON(w, 400, map[string]string{"error": "mode must be \"active\" or \"dryRun\""})
 			return
 		}
 		spec["mode"] = req.Mode
 	}
 	// dryRun is intentionally NOT patched: the PhorvexPolicy CRD has no spec.dryRun field
 	// (verified against the schema), so sending it produced an "unknown field" warning and
-	// contributed nothing. "Decide but never enact" is expressed by mode=observe instead.
+	// contributed nothing. "Decide but never enact" is expressed by mode=dryRun instead.
 	if req.EnabledActions != nil {
 		// Validate against the actuators APPLICABLE to this app's stack, not just the CRD enum.
 		// The CRD accepts route-rotate on any policy, but route-rotate has no handler on a plain

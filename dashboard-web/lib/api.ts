@@ -211,7 +211,7 @@ export interface GraphEdge { src: string; dst: string }
 export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 // A partial live edit to one PhorvexPolicy — only the present fields are patched.
-export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "observe"; enabledActions?: string[] }
+export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "dryRun"; enabledActions?: string[] }
 export interface ClusterTarget { id: string; context: string; label: string; provider: string; runnable: boolean; note: string }
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
 export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }
