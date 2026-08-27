@@ -91,7 +91,7 @@ phorvex:
       enabled: true
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.60"          # ci:console-tag
+        tag: "0.4.61"          # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
     epss:
