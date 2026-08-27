@@ -1,13 +1,24 @@
 /*
- * Phorvex Console — red-team SecurityEvent TTL sweeper.
+ * Phorvex Console — SecurityEvent TTL sweeper.
  *
- * Every attack the console fires (foothold, vLLM attacks, catalogue Fire-live) applies a
- * SecurityEvent labeled phorvex.ai/redteam=true. Nothing deleted them automatically, so a fired
- * attack that was never explicitly cleared pinned its app to "under attack" indefinitely —
- * dozens of them accumulated over hours and left the dashboard showing permanent, un-actuated
- * threat. This sweeper reaps any red-team event older than redTeamEventTTL: long enough for the
- * operator to react and the End-to-End suite to read the outcome, short enough that a leaked
- * event clears on its own instead of piling up.
+ * Two classes of SecurityEvent accumulate on the cluster and, un-expired, pin an app to a
+ * stale state on the dashboard forever:
+ *
+ *  1. RED-TEAM inputs (phorvex.ai/redteam=true) — every attack the console fires (foothold,
+ *     vLLM attacks, catalogue Fire-live). An un-cleared one leaves the app showing "under
+ *     attack" indefinitely.
+ *
+ *  2. The operator's OWN action records (app.kubernetes.io/managed-by=phorvex, with a
+ *     phorvex.ai/action label and source=PhorvexController) — one is emitted per rotate /
+ *     quarantine / … the brain enacts. These are audit records, NOT threat inputs (nothing
+ *     re-ingests them), but the dashboard reads them to show "actuator fired / app quarantined",
+ *     so an old quarantine record pins voice/litellm to "quarantined" long after the pod is
+ *     healthy again. They carry NO redteam label, so the pass for (1) never touched them — 130+
+ *     accumulated over days.
+ *
+ * The sweeper reaps BOTH by creation-timestamp: red-team inputs after redTeamEventTTL (short —
+ * long enough for the operator to react and the E2E suite to read the outcome), operator action
+ * records after phorvexActionEventTTL (a bit longer so recent decisions still render).
  *
  * Best-effort and non-blocking, in the same shape as StartUptimeSampler. A restart just re-arms
  * it, and because the cut is by creation-timestamp it also cleans up whatever leaked while the
@@ -23,8 +34,9 @@ import (
 )
 
 const (
-	redTeamEventTTL      = 5 * time.Minute
-	redTeamSweepInterval = 60 * time.Second
+	redTeamEventTTL       = 5 * time.Minute
+	phorvexActionEventTTL = 15 * time.Minute
+	redTeamSweepInterval  = 60 * time.Second
 )
 
 // StartRedTeamSweeper launches the background reaper. Safe to call once at startup.
@@ -46,16 +58,23 @@ func (s *Server) StartRedTeamSweeper(ctx context.Context) {
 	}()
 }
 
-// sweepRedTeamEvents deletes every phorvex.ai/redteam=true SecurityEvent older than the TTL.
-// SecurityEvents are cluster-scoped, so this is a single unnamespaced list + per-item delete.
+// sweepRedTeamEvents reaps both event classes by their own TTL. SecurityEvents are
+// cluster-scoped, so each pass is a single unnamespaced list + per-item delete.
 func (s *Server) sweepRedTeamEvents() {
+	s.sweepEventsBySelector("phorvex.ai/redteam=true", redTeamEventTTL)
+	s.sweepEventsBySelector("app.kubernetes.io/managed-by=phorvex", phorvexActionEventTTL)
+}
+
+// sweepEventsBySelector deletes every SecurityEvent matching the label selector whose
+// creationTimestamp is older than ttl. Best-effort: a transient API error skips the pass.
+func (s *Server) sweepEventsBySelector(selector string, ttl time.Duration) {
 	out, err := s.cfg.execText(10*time.Second, "kubectl", "get", "securityevent",
-		"-l", "phorvex.ai/redteam=true",
+		"-l", selector,
 		"-o", `jsonpath={range .items[*]}{.metadata.name}|{.metadata.creationTimestamp}{"\n"}{end}`)
 	if err != nil {
-		return // best-effort: a transient API error just skips this pass
+		return
 	}
-	cutoff := time.Now().Add(-redTeamEventTTL)
+	cutoff := time.Now().Add(-ttl)
 	for _, ln := range strings.Split(strings.TrimSpace(out), "\n") {
 		f := strings.SplitN(strings.TrimSpace(ln), "|", 2)
 		if len(f) < 2 || f[0] == "" {
