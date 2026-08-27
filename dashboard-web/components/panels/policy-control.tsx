@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 // PolicyControlPanel — LIVE editing of the PhorvexPolicy that governs each app.
 //
-// This is the console's write control plane: change the operator mode (active/observe), the
+// This is the console's write control plane: change the operator mode (active/dry-run), the
 // dry-run flag, the per-tick move budget, and the enabled actuator set, and it patches the real
 // PhorvexPolicy CR in the cluster. It is gated to the operator lens behind the Cognito auth on
 // console.phorvex.ai, which is what makes a cluster write from a browser safe.
@@ -26,7 +26,7 @@ type Draft = { mode: string; maxMovesPerTick: string; enabled: string[] };
 function readDraft(p: PolicyView): Draft {
   const spec = p.spec || {};
   return {
-    // "observe" is the decide-but-never-enact mode; the CRD has no separate dryRun field.
+    // "dryRun" is the decide-but-never-enact mode (the CRD enum is active | dryRun).
     mode: spec.mode || p.mode || "active",
     maxMovesPerTick: String(spec.budget?.maxMovesPerTick ?? ""),
     enabled: spec.actions?.enabled || [],
@@ -72,7 +72,7 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
     const d = drafts[k];
     setSaving(k); setMsg(""); setErr("");
     const body: PolicyEdit = { namespace: p.namespace, name: p.name };
-    if (d.mode) body.mode = d.mode as "active" | "observe";
+    if (d.mode) body.mode = d.mode as "active" | "dryRun";
     if (d.maxMovesPerTick.trim() !== "") {
       const n = parseInt(d.maxMovesPerTick, 10);
       if (!Number.isNaN(n)) body.maxMovesPerTick = n;
@@ -121,7 +121,7 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
                 <select value={d.mode} onChange={(e) => set(k, { mode: e.target.value })}
                   className="w-full rounded-md border border-border bg-elevated/30 px-2 py-1.5 text-[13px]">
                   <option value="active">active — decides and actuates</option>
-                  <option value="observe">observe — decides only (no enact)</option>
+                  <option value="dryRun">dry-run — decides only (no enact)</option>
                 </select>
               </label>
               {/* budget */}
