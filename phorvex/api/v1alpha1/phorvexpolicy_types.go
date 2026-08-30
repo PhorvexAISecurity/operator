@@ -356,7 +356,7 @@ type ActionsSpec struct {
 // vocabulary; rotate/quarantine also map to Phoenix Delete/Quarantine via the optional
 // adapter. The advanced/AI moves are native-only and opt-in (a nil/empty Enabled set
 // defaults to rotate+quarantine — the historical behaviour).
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;disable
 type ActionType string
 
 const (
@@ -368,15 +368,20 @@ const (
 	ActionNoop ActionType = "noop"
 
 	// --- P-ACTUATOR native vocabulary (advanced K8s + AI/GPU; native-only, opt-in) ---
-	ActionDebugger          ActionType = "debugger"
-	ActionCustomInject      ActionType = "custom-inject"
-	ActionIdentityRotate    ActionType = "identity-rotate"
-	ActionRouteRotate       ActionType = "route-rotate"
-	ActionWarmSwap          ActionType = "warm-swap"
-	ActionMIGRebind         ActionType = "mig-rebind"
-	ActionKVReset           ActionType = "kv-reset"
-	ActionEndpointRotate    ActionType = "endpoint-rotate"
-	ActionModelShardReplace ActionType = "model-shard-replace"
+	ActionDebugger            ActionType = "debugger"
+	ActionCustomInject        ActionType = "custom-inject"
+	ActionIdentityRotate      ActionType = "identity-rotate"
+	ActionRouteRotate         ActionType = "route-rotate"
+	ActionWarmSwap            ActionType = "warm-swap"
+	ActionMIGRebind           ActionType = "mig-rebind"
+	ActionKVReset             ActionType = "kv-reset"
+	ActionEndpointRotate      ActionType = "endpoint-rotate"
+	ActionModelShardReplace   ActionType = "model-shard-replace"
+	ActionAdapterRotate       ActionType = "adapter-rotate"
+	ActionRequestDrain        ActionType = "request-drain"
+	ActionGuardrailRotate     ActionType = "guardrail-rotate"
+	ActionKVMigrateInvalidate ActionType = "kv-migrate-invalidate"
+	ActionDisable             ActionType = "disable"
 )
 
 // ModeDryRun decides + logs + emits metrics but never actuates (the P0 default).
