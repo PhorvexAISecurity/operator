@@ -141,6 +141,10 @@ func (p *PromHTTP) PodMetrics(ctx context.Context, namespace string, _ []string)
 }
 
 func assignSignal(t *model.Telemetry, sig string, v float64) {
+	if t.PresentSignals == nil {
+		t.PresentSignals = map[string]bool{}
+	}
+	t.PresentSignals[sig] = true
 	switch sig {
 	case SigReqRate:
 		t.ReqRate = v
@@ -363,7 +367,10 @@ func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) err
 	wit := make(map[string]model.PhysicsWitness, len(keys))
 	for k := range keys {
 		w := model.PhysicsWitness{GPUPresent: true, ModelRarity: 1}
-		if u, f := used[k], free[k]; u+f > 0 {
+		u, usedOK := used[k]
+		f, freeOK := free[k]
+		if usedOK && freeOK && u+f > 0 {
+			w.VRAMPresent = true
 			w.VRAMFraction = clampUnit(u / (u + f))
 		}
 		if v, ok := smActive[k]; ok {

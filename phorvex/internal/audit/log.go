@@ -83,6 +83,10 @@ type Record struct {
 	PreemptMargin         float64 `json:"preemptMargin,omitempty"`
 	ProjectedNextStageSec float64 `json:"projectedNextStageSec,omitempty"`
 	AIClassified          bool    `json:"aiClassified,omitempty"`
+
+	// DecisionTrace is the complete, versioned decision-reconstruction payload.
+	// It is nested to preserve the existing phorvex.audit.v2 top-level contract.
+	DecisionTrace *model.DecisionTraceV2 `json:"decisionTrace,omitempty"`
 }
 
 // MarshalJSON is the only write direction: canonical v2. Legacy compatibility is intentionally
@@ -233,6 +237,7 @@ func ToRecord(d model.Decision) Record {
 		PreemptMargin:         round4(d.PreemptMargin),
 		ProjectedNextStageSec: round4(d.ProjectedNextStageSec),
 		AIClassified:          d.AIClassified,
+		DecisionTrace:         d.Trace,
 	}
 }
 

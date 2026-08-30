@@ -5,6 +5,7 @@
 package decision
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strings"
@@ -334,6 +335,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	selectedAsset := map[string]bool{}
 	selectedAction := map[string]model.Action{}
 	selectedMarginal := map[string]float64{}
+	selectedRound := map[string]int{}
 	B := pol.MaxMovesPerTick
 	for round := 0; round < B; round++ {
 		bestIdx := -1
@@ -367,6 +369,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		selectedAsset[c.Key] = true
 		selectedAction[c.Key] = c.Action
 		selectedMarginal[c.Key] = bestMarginal
+		selectedRound[c.Key] = round + 1
 		for _, k := range c.CoverKeys {
 			covered[k] = true
 		}
@@ -471,7 +474,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		selected := selectedAsset[key]
 		net := cov - lambda*ecost
 
-		decisions = append(decisions, model.Decision{
+		decision := model.Decision{
 			Tenant:                pol.Tenant,
 			Namespace:             v.Pod.Namespace,
 			Pod:                   v.Pod.Name,
@@ -509,7 +512,13 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			PreemptMargin:         ac.assess.PreemptMargin,
 			ProjectedNextStageSec: ac.assess.ProjectedNextStageSec,
 			AIClassified:          ac.assess.AIClassified,
-		})
+		}
+		if pol.TraceEnabled {
+			decision.Trace = e.buildDecisionTrace(v, pol, now, set, ac, lambda, demand,
+				len(selectedAsset), selectedAsset[key], selectedAction[key], selectedRound[key],
+				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov)
+		}
+		decisions = append(decisions, decision)
 	}
 
 	if persist {
@@ -528,6 +537,227 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	}
 
 	return decisions, nil
+}
+
+func traceOptional(present bool, value float64) model.OptionalFloat {
+	return model.OptionalFloat{Present: present, Value: value}
+}
+
+func traceStringOrUnavailable(value string) string {
+	if value == "" {
+		return model.TraceNotAvailable
+	}
+	return value
+}
+
+func decisionTraceID(parts ...string) string {
+	h := sha256.New()
+	for _, part := range parts {
+		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)[:16])
+}
+
+func traceCandidateKey(asset string, action model.Action) string {
+	return asset + "|" + string(action)
+}
+
+// buildDecisionTrace runs only after the current optimizer has completed its
+// selection. It reads the already-generated ActionSet and cannot affect scoring,
+// eligibility, feasibility, learning or tie-breaking.
+func (e *CoverageEngine) buildDecisionTrace(
+	v *model.WorkloadView,
+	pol model.Policy,
+	now time.Time,
+	set actionset.ActionSet,
+	ac assetCtx,
+	lambda float64,
+	demand int,
+	movesSpent int,
+	selected bool,
+	selectedAction model.Action,
+	selectionRound int,
+	attackBacked bool,
+	infeasibleWhy string,
+	primed bool,
+	prov func(string) float64,
+) *model.DecisionTraceV2 {
+	assetKey := v.Pod.Namespace + "/" + v.Pod.Name
+	tickID := pol.TickID
+	if tickID == "" {
+		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
+	}
+	trace := &model.DecisionTraceV2{
+		SchemaVersion:        model.DecisionTraceSchemaV2,
+		DecisionID:           decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
+		TickID:               tickID,
+		Timestamp:            now.UTC().Format(time.RFC3339Nano),
+		BrainImage:           traceStringOrUnavailable(pol.BrainImage),
+		GitSHA:               traceStringOrUnavailable(pol.GitSHA),
+		DecisionEngine:       e.Name(),
+		PolicyNamespace:      pol.Namespace,
+		PolicyName:           traceStringOrUnavailable(pol.PolicyName),
+		PolicyUID:            traceStringOrUnavailable(pol.PolicyUID),
+		TenantName:           pol.Tenant,
+		AssetNamespace:       v.Pod.Namespace,
+		AssetName:            v.Pod.Name,
+		AssetUID:             traceStringOrUnavailable(v.Pod.UID),
+		Budget:               pol.MaxMovesPerTick,
+		CandidateDemand:      demand,
+		MovesSpent:           movesSpent,
+		DryRun:               pol.DryRun,
+		LambdaConfiguredSeed: pol.Lambda,
+		LambdaRuntime:        lambda,
+		SelectedAction:       string(model.ActionNoop),
+		TieBreakReason:       "notApplicable",
+	}
+
+	telemetryPresent := func(signal string) bool {
+		return v.Telemetry.PresentSignals != nil && v.Telemetry.PresentSignals[signal]
+	}
+	exposure, exposurePresent := v.ExposureByVariable[model.VarPodIdentity]
+	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
+	trace.Inputs = model.DecisionModelInputsV2{
+		Phase:             string(v.Phase),
+		RequestRate:       traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
+		ConnectionCount:   traceOptional(telemetryPresent("connCount"), v.Telemetry.ConnCount),
+		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
+		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
+		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
+		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
+		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
+		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSS),
+		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
+		PhysicsScanned:    v.Physics.Scanned,
+		DispersionMult:    traceOptional(dispersionPresent, recon.DispersionMultiplier(v)),
+		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
+		Primed:            primed,
+		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
+		PHold:             traceOptional(true, ac.assess.PHold),
+		Stage:             ac.assess.StageName,
+		StageHazard:       traceOptional(true, ac.assess.Hazard),
+		StageUrgency:      traceOptional(true, ac.assess.StageUrgency),
+		ThreatPosture:     traceOptional(true, ac.sig.ThreatPosture),
+		ExposureVariable:  model.VarPodIdentity,
+		ExposureSeconds:   traceOptional(exposurePresent, exposure.Seconds()),
+		ProactiveFloorSec: pol.ProactiveFloor.Seconds(),
+		AntiOverRotateSec: pol.AntiOverRotationWindow.Seconds(),
+	}
+
+	source := model.TraceNotAvailable
+	if e.Recon != nil {
+		source = e.Recon.Name()
+	}
+	for _, fact := range set.FactsByAsset[assetKey] {
+		weight, presented := set.FactWeights[fact.Key()]
+		if !presented {
+			continue
+		}
+		trace.Facts = append(trace.Facts, model.DecisionFactV2{
+			FactKey:               fact.Key(),
+			FactType:              fact.Kind,
+			FinalWeight:           weight,
+			CoveredBeforeDecision: false,
+			SourceComponent:       source,
+			AssetValue:            traceOptional(true, ac.sig.AssetValue),
+			// The current recon API exposes only the final weight and its
+			// conditioning inputs, not a stable per-fact term decomposition.
+			PHoldContribution:      model.OptionalFloat{Present: false},
+			UrgencyContribution:    model.OptionalFloat{Present: false},
+			DispersionContribution: model.OptionalFloat{Present: false},
+			RelativeWeight:         model.OptionalFloat{Present: false},
+		})
+	}
+
+	selectedCandidateKey := ""
+	tieBreakRank := 0
+	for _, candidate := range set.Candidates {
+		if candidate.Key != assetKey {
+			continue
+		}
+		marginal := 0.0
+		for _, factKey := range candidate.CoverKeys {
+			marginal += set.FactWeights[factKey]
+		}
+		provenance := prov(assetKey)
+		lambdaContribution := lambda * candidate.ECost
+		netGain := marginal*provenance - lambdaContribution
+		candidateSelected := selected && candidate.Action == selectedAction
+		key := traceCandidateKey(assetKey, candidate.Action)
+		if candidateSelected {
+			selectedCandidateKey = key
+		}
+		trace.Candidates = append(trace.Candidates, model.DecisionCandidateV2{
+			Action:                      string(candidate.Action),
+			CandidateKey:                key,
+			CoverKeys:                   append([]string(nil), candidate.CoverKeys...),
+			TieBreakRank:                tieBreakRank,
+			MarginalCoverage:            traceOptional(true, marginal),
+			Provenance:                  traceOptional(true, provenance),
+			ExpectedCost:                traceOptional(true, candidate.ECost),
+			CostHigh:                    traceOptional(true, candidate.CHi),
+			LambdaContribution:          traceOptional(true, lambdaContribution),
+			NetGain:                     traceOptional(true, netGain),
+			Feasible:                    model.OptionalBool{Present: true, Value: true},
+			Selected:                    candidateSelected,
+			NotClassifiedByCurrentModel: true,
+		})
+		tieBreakRank++
+	}
+	for _, exclusion := range set.Excluded {
+		if exclusion.Key != assetKey {
+			continue
+		}
+		candidate := model.DecisionCandidateV2{
+			Action:                      string(exclusion.Action),
+			CandidateKey:                traceCandidateKey(assetKey, exclusion.Action),
+			CoverKeys:                   append([]string(nil), exclusion.CoverKeys...),
+			TieBreakRank:                -1,
+			Feasible:                    model.OptionalBool{Present: exclusion.FeasibilityEvaluated, Value: exclusion.Feasible},
+			ExistingExclusionReason:     exclusion.Reason,
+			NotClassifiedByCurrentModel: true,
+		}
+		if exclusion.CostEvaluated {
+			candidate.ExpectedCost = traceOptional(true, exclusion.ECost)
+			candidate.CostHigh = traceOptional(true, exclusion.CHi)
+			candidate.LambdaContribution = traceOptional(true, lambda*exclusion.ECost)
+		}
+		trace.Candidates = append(trace.Candidates, candidate)
+	}
+
+	if selected {
+		trace.SelectedAction = string(selectedAction)
+		trace.SelectedCandidateKey = selectedCandidateKey
+		trace.SelectionRound = model.OptionalInt{Present: true, Value: selectionRound}
+		trace.TieBreakReason = "strict-greater gain; lower recorded tieBreakRank wins an equal gain"
+	} else {
+		switch {
+		case !attackBacked:
+			trace.NoopReason = "reactive-only: no direct foothold"
+		case len(trace.Candidates) == 0:
+			trace.NoopReason = "no candidate generated"
+		case infeasibleWhy != "":
+			trace.NoopReason = infeasibleWhy
+		default:
+			positive := false
+			for _, candidate := range trace.Candidates {
+				if candidate.NetGain.Present && candidate.NetGain.Value > 0 {
+					positive = true
+					break
+				}
+			}
+			if !positive {
+				trace.NoopReason = "priced-out: no net-positive feasible move"
+			} else if pol.MaxMovesPerTick <= 0 || movesSpent >= pol.MaxMovesPerTick {
+				trace.NoopReason = "budget-exhausted"
+			} else {
+				trace.NoopReason = "not selected by current greedy round"
+			}
+		}
+	}
+	return trace
 }
 
 // attributionOf decomposes a move's value into SHAP-style terms: per recon-fact-kind

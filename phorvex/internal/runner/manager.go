@@ -12,6 +12,7 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
@@ -44,6 +46,7 @@ import (
 
 type policyEntry struct {
 	key       types.NamespacedName
+	uid       string
 	tenant    string
 	namespace string
 	spec      v1alpha1.PhorvexPolicySpec
@@ -101,6 +104,12 @@ type Manager struct {
 	// censored rotation disruption. Nil disables recording; it observes and never gates.
 	Disruption *slo.Ledger
 
+	// Decision trace is observational. Build identity is resolved once at
+	// startup; disabling the trace is used only for non-interference tests.
+	DecisionTraceEnabled bool
+	BrainImage           string
+	GitSHA               string
+
 	mu       sync.RWMutex
 	policies map[string]*policyEntry
 	// Accessed only by the single tick loop. The RLS outcome is capped after its
@@ -115,6 +124,7 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 	// P-PHYSICS (UCW): make the discovered-physics recon-EMR profile the engine default
 	// (byte-identical to standard-recon at nil-data; lifts only under measured dispersion).
 	recon.Registry.SetDefault("ucw-recon")
+	identity := buildinfo.Current()
 	return &Manager{
 		Client:        c,
 		Clock:         exposure.NewClock(),
@@ -129,8 +139,11 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		// Retains a month, the longest SLO window anyone has proposed, so an entry
 		// can never be evicted while a ratio could still be computed from it. The
 		// ledger observes only: nothing reads it to gate a move yet.
-		Disruption: slo.NewLedger(30 * 24 * time.Hour),
-		policies:   map[string]*policyEntry{},
+		Disruption:           slo.NewLedger(30 * 24 * time.Hour),
+		DecisionTraceEnabled: true,
+		BrainImage:           identity.BrainImage,
+		GitSHA:               identity.GitSHA,
+		policies:             map[string]*policyEntry{},
 
 		ActionsSupportedDebounce: DefaultActionsSupportedDebounceTicks,
 	}
@@ -176,6 +189,7 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	}
 	m.policies[key.String()] = &policyEntry{
 		key:       key,
+		uid:       string(p.UID),
 		tenant:    p.EffectiveTenant(),
 		namespace: p.Namespace,
 		spec:      *p.Spec.DeepCopy(),
@@ -747,6 +761,10 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool, physicsByKey map[string]model.PhysicsWitness) {
 	start := time.Now()
 	pol := buildPolicy(e)
+	pol.TraceEnabled = m.DecisionTraceEnabled
+	pol.BrainImage = m.BrainImage
+	pol.GitSHA = m.GitSHA
+	pol.TickID = deterministicTraceID("tick", snap.Now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 
 	// P-PHYSICS (UCW): the caller derives one discovered witness map for the shared snapshot.
 	// Honest-absent (NeutralPhysics) when no scan answers.
@@ -881,6 +899,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	if effectiveDryRun {
 		for i := range decisions {
 			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
+			if decisions[i].Trace != nil {
+				decisions[i].Trace.DryRun = true
+			}
 		}
 	}
 	if killEngaged {
@@ -890,6 +911,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			// run with --global-kill-switch to feed a dashboard) distinguishable from an
 			// operator whose actuator is failing. Both otherwise emit the identical record.
 			decisions[i].KillSwitch = true
+			if decisions[i].Trace != nil {
+				decisions[i].Trace.KillSwitchEngaged = true
+			}
 		}
 	}
 
@@ -1115,6 +1139,8 @@ func buildPolicy(e *policyEntry) model.Policy {
 	return model.Policy{
 		Tenant:                       e.tenant,
 		Namespace:                    e.namespace,
+		PolicyName:                   e.key.Name,
+		PolicyUID:                    e.uid,
 		Mode:                         s.EffectiveMode(),
 		DryRun:                       s.IsDryRun(),
 		Lambda:                       s.EffectiveLambda(),
@@ -1137,6 +1163,15 @@ func buildPolicy(e *policyEntry) model.Policy {
 		EnabledActions:               enabled,
 		AssetWeightFromLabels:        s.AssetWeightFromLabels,
 	}
+}
+
+func deterministicTraceID(parts ...string) string {
+	h := sha256.New()
+	for _, part := range parts {
+		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)[:16])
 }
 
 // metav1LabelSelector compiles the policy's selector.
