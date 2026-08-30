@@ -109,6 +109,11 @@ spec:
                       - kv-reset
                       - endpoint-rotate
                       - model-shard-replace
+                      - adapter-rotate
+                      - request-drain
+                      - guardrail-rotate
+                      - kv-migrate-invalidate
+                      - disable
                       type: string
                     minItems: 1
                     type: array
