@@ -147,6 +147,20 @@ spec:
         # back to newestAudit() and serving the snapshot baked into its own image.
         - -audit-json={{ .Values.phorvex.audit.path }}
         {{- end }}
+        {{- if .Values.phorvex.prometheusUrl }}
+        # Let `phorvex --scan` (the console's Scan / Physics tab) reach the live DCGM/GPU feed.
+        # The scan's SSRF guard only fetches a Prometheus whose host is allow-listed here, so
+        # without this the URL is dropped and the GPU half of physics stays "unmeasured (no
+        # GPU/DCGM scan)" even though dcgm-exporter is scraping. host[:port], scheme stripped.
+        - -metrics-allow={{ .Values.phorvex.prometheusUrl | trimPrefix "https://" | trimPrefix "http://" }}
+        {{- end }}
+        {{- if .Values.phorvex.prometheusUrl }}
+        env:
+        # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
+        # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
+        - name: PHORVEX_PROM_URL
+          value: {{ .Values.phorvex.prometheusUrl | quote }}
+        {{- end }}
         ports:
         - name: http
           containerPort: {{ .Values.phorvex.console.port }}
