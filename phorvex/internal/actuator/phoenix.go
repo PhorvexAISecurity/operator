@@ -50,9 +50,18 @@ func (p *PhoenixActuator) timestamp() metav1.Time {
 	return metav1.Now()
 }
 
-// amtdName is the deterministic per-tenant AMTD name Phorvex owns.
-func amtdName(tenant string) string {
-	return "phorvex-" + sanitize(tenant)
+// amtdName is the deterministic AMTD name Phorvex owns for a tenant. It is qualified by
+// namespace because the Phoenix/r6security controller treats the AMTD NAME as a
+// CLUSTER-GLOBAL RuleID: two AMTDs that share a name — even in different namespaces —
+// collide ("AMTD RuleIDs collision") and the AMTD controller stops reconciling ALL of them,
+// which silently kills every decision/actuation. That is exactly what a set of policies
+// cloned with the same spec.tenant produced (five `phorvex-voice` AMTDs across namespaces).
+// Prefixing the namespace makes the name globally unique regardless of the tenant value, so a
+// duplicate tenant can never jam the operator again. (Within ONE namespace two policies must
+// still use distinct tenants — that is a local, obvious misconfiguration, not a silent
+// cross-namespace trap.)
+func amtdName(namespace, tenant string) string {
+	return "phorvex-" + sanitize(namespace) + "-" + sanitize(tenant)
 }
 
 // EnsurePolicy idempotently maintains the tenant's AMTD strategy. Implements Actuator.
@@ -60,7 +69,7 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 	if len(target.MatchLabels) == 0 {
 		return fmt.Errorf("phoenix actuator: tenant %q has no matchLabels selector; P0 active-mode requires a matchLabels-expressible selector for the AMTD guest list", target.Tenant)
 	}
-	name := amtdName(target.Tenant)
+	name := amtdName(target.Namespace, target.Tenant)
 	desired := buildStrategies(target.EnabledActions)
 
 	var amtd amtdv1beta1.AdaptiveMovingTargetDefense
@@ -133,7 +142,7 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 	}
 	return Result{
 		Actuator:        p.Name(),
-		AMTDName:        amtdName(req.Tenant),
+		AMTDName:        amtdName(req.Namespace, req.Tenant),
 		EventName:       se.Name,
 		RuleType:        ruleType,
 		RuleThreatLevel: RuleThreatLevel,
