@@ -59,11 +59,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// CROSS-asset ordering the greedy exploits. With UNIFORM scarcity across the fleet
 	// the ratio is unchanged (scaling all weights by a constant is invariant) => exact
 	// tie / never worse; only DIFFERENTIAL (heavy-tailed) dispersion lifts it.
-	s := ph.ImageRarity * ph.EPSS * ph.CoResidency
-	if view.Pod.ModelID != "" || view.Pod.HasGPU {
-		s *= ph.ModelRarity
-	}
-	s = boundMultAt(s, ph.DispersionCap)
+	s := DispersionMultiplier(view)
 	// NOTE: s is APPLIED AT THE END of this function, after the AI facts exist. Applying it here
 	// would scale only the six standardRecon facts, because every AI fact below is appended after
 	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
@@ -227,6 +223,21 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 
 func boundMult(m float64) float64 {
 	return boundMultAt(m, 0)
+}
+
+// DispersionMultiplier returns the exact scalar the current UCW profile applies
+// to every fact for this asset. The decision trace calls the same function rather
+// than reimplementing the physics equation.
+func DispersionMultiplier(view *model.WorkloadView) float64 {
+	if view == nil {
+		return 1
+	}
+	ph := view.Physics
+	s := ph.ImageRarity * ph.EPSS * ph.CoResidency
+	if view.Pod.ModelID != "" || view.Pod.HasGPU {
+		s *= ph.ModelRarity
+	}
+	return boundMultAt(s, ph.DispersionCap)
 }
 
 // boundMultAt keeps the production default when cap is zero. A positive alternate

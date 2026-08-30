@@ -117,14 +117,21 @@ func EPSSLoaded() int {
 // epssMultiplier returns 1 + (0.5*EPSS + 0.5*CVSS/10) in [1,2] for a known-exploitable
 // image digest, or 1.0 (honest-absent) when the cache has no entry.
 func epssMultiplier(imageID string) float64 {
+	multiplier, _, _, _ := epssInputs(imageID)
+	return multiplier
+}
+
+// epssInputs exposes the exact source values alongside the multiplier so the
+// decision trace can distinguish the honest-neutral default from measured zero.
+func epssInputs(imageID string) (multiplier, epss, cvss float64, present bool) {
 	if imageID == "" {
-		return 1.0
+		return 1.0, 0, 0, false
 	}
 	epssMu.RLock()
 	e, ok := epssCache[imageID]
 	epssMu.RUnlock()
 	if !ok {
-		return 1.0
+		return 1.0, 0, 0, false
 	}
-	return 1 + clamp01(0.5*e.EPSS+0.5*e.CVSS/10.0)
+	return 1 + clamp01(0.5*e.EPSS+0.5*e.CVSS/10.0), e.EPSS, e.CVSS, true
 }

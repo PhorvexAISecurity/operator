@@ -3,7 +3,14 @@
 # dashboard-web/ + the build/test-harness/out-* report snapshots). Keep the context
 # lean by dropping everything that no image build reads.
 
-.git
+# Keep only the revision pointer needed to link an exact Git SHA into the
+# operator decision trace. The object database and all other Git metadata stay
+# excluded from the Docker context.
+.git/*
+!.git/HEAD
+!.git/refs/
+!.git/refs/heads/
+!.git/refs/heads/**
 .gitignore
 **/node_modules
 **/.next

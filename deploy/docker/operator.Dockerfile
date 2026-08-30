@@ -14,6 +14,11 @@ ARG TARGETARCH
 
 WORKDIR /workspace
 
+# Preserve only the revision pointer (the object database is excluded by
+# .dockerignore) so the stripped binary still carries its exact source Git SHA.
+COPY .git/HEAD /tmp/phorvex-git/HEAD
+COPY .git/refs/heads/ /tmp/phorvex-git/refs/heads/
+
 # The replace target must exist before `go mod download` so the local module resolves.
 # Copy it first (and whole, since the operator imports its api/v1beta1 types).
 COPY build/phoenix-extended/ build/phoenix-extended/
@@ -35,8 +40,13 @@ RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
 
 # Static, stripped manager binary. GOARCH left to BuildKit so the binary matches the
 # image platform (amd64 on x86 EKS nodes, arm64 on Graviton).
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /manager ./cmd
+RUN HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
+    if case "$HEAD_VALUE" in "ref: "*) true;; *) false;; esac; then \
+      REF_PATH="${HEAD_VALUE#ref: }"; \
+      if [ -f "/tmp/phorvex-git/${REF_PATH}" ]; then GIT_SHA="$(cat "/tmp/phorvex-git/${REF_PATH}")"; else GIT_SHA="notAvailable"; fi; \
+    else GIT_SHA="$HEAD_VALUE"; fi && \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /manager ./cmd
 
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot

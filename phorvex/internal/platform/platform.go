@@ -146,9 +146,10 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		// image-rarity (heavy-tailed surprisal), K8s measurable now
 		if p.ImageID != "" && withImage > 0 {
 			w.ImageRarity = rarity(imgFreq[p.ImageID], withImage)
+			w.ImageRarityPresent = true
 		}
 		// CVE/EPSS exploitability prior (offline cache; honest-absent = 1.0)
-		w.EPSS = epssMultiplier(p.ImageID)
+		w.EPSS, _, w.CVSS, w.EPSSPresent = epssInputs(p.ImageID)
 		// model-rarity (AI fact dispersion). rarity() is population-relative, so ModelRarity is 1.0 in
 		// TWO cases, not one: when the fleet has no model servers at all, and — the more common one —
 		// when every model-serving pod runs the SAME model, because that model then occupies 100% of
@@ -161,10 +162,12 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 				tot += c
 			}
 			w.ModelRarity = rarity(modelFreq[p.ModelID], tot)
+			w.ModelRarityPresent = true
 		}
 		// co-residency (distinct tenants sharing the node)
 		if t := nodeTenants[p.Node]; t != nil {
 			w.CoResidency = 1 + clamp01(float64(len(t)-1)/CoResidencyCap)
+			w.CoResidencyPresent = true
 		}
 		// scheduler slack of the pod's node
 		if s, ok := nodeSlack[p.Node]; ok {

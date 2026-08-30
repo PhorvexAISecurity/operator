@@ -176,17 +176,21 @@ var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding, VarNet
 // false when no metrics backend answered (Phorvex then degrades to K8s-only signals
 // — NFR3 restart-safe / honest-absent, never fabricated numbers).
 type Telemetry struct {
-	Present      bool
-	ReqRate      float64
-	LatencyMs    float64
-	P99Ms        float64
-	QueueDepth   float64
-	ConnCount    float64
-	BytesIn      float64
-	BytesOut     float64
-	GPUUtil      float64 // 0..1
-	SyscallRate  float64
-	TokensPerSec float64
+	Present bool
+	// PresentSignals is populated by sources that can distinguish a measured zero
+	// from a query that returned no series. A nil map preserves legacy source
+	// compatibility while the decision trace reports those per-signal values absent.
+	PresentSignals map[string]bool
+	ReqRate        float64
+	LatencyMs      float64
+	P99Ms          float64
+	QueueDepth     float64
+	ConnCount      float64
+	BytesIn        float64
+	BytesOut       float64
+	GPUUtil        float64 // 0..1
+	SyscallRate    float64
+	TokensPerSec   float64
 }
 
 // Pod is the K8s-observed state of one protected pod.
@@ -272,9 +276,13 @@ type PhysicsWitness struct {
 	Scanned bool // a platform adapter produced this witness (else all-neutral)
 
 	// --- K8s, measurable now (recon-EMR dispersion multipliers, >=1.0; 1.0 = neutral) ---
-	ImageRarity float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
-	CoResidency float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
-	EPSS        float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
+	ImageRarity        float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
+	ImageRarityPresent bool    // an image identity participated in the current fleet population
+	CoResidency        float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
+	CoResidencyPresent bool    // this pod had a node represented in the current fleet scan
+	EPSS               float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
+	EPSSPresent        bool    // an image-digest cache entry supplied the EPSS/CVSS multiplier
+	CVSS               float64 // raw cache CVSS [0,10]; meaningful only when EPSSPresent
 	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
 	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
 	// learned cap accidentally.
@@ -285,15 +293,17 @@ type PhysicsWitness struct {
 	MIGGeometryValid      bool    // the pod's MIG partition is a legal device-plugin geometry
 
 	// --- AI / inference, DCGM-live when GPUPresent=true ---
-	GPUPresent    bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
-	VRAMFraction  float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
-	SMOccupancy   float64 // pod SM compute share [0,1]; 0 with SMSource="" when unmeasured
-	SMSource      string  // exact occupancy metric used; GPU duty-cycle is never substituted
-	LinkBandwidth float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
-	LinkSource    string  // exact interconnect metric pair used for LinkBandwidth
-	ModelRarity   float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
-	KVRebuildSec  float64 // KV-cache rebuild seconds vs session length (0 = unmeasured; PHORVEXSEC-87)
-	ColdLoadSec   float64 // model cold/warm-load seconds (0 = unmeasured; PHORVEXSEC-87)
+	GPUPresent         bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
+	VRAMPresent        bool    // both used/free VRAM series answered with a usable denominator
+	VRAMFraction       float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
+	SMOccupancy        float64 // pod SM compute share [0,1]; 0 with SMSource="" when unmeasured
+	SMSource           string  // exact occupancy metric used; GPU duty-cycle is never substituted
+	LinkBandwidth      float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
+	LinkSource         string  // exact interconnect metric pair used for LinkBandwidth
+	ModelRarity        float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
+	ModelRarityPresent bool    // a ModelID participated in the current model population
+	KVRebuildSec       float64 // KV-cache rebuild seconds vs session length (0 = unmeasured; PHORVEXSEC-87)
+	ColdLoadSec        float64 // model cold/warm-load seconds (0 = unmeasured; PHORVEXSEC-87)
 }
 
 // NeutralPhysics is the honest-absent witness (all multipliers 1.0, no capacity, no
@@ -362,6 +372,15 @@ type Policy struct {
 	KillChainShape               float64
 	EnabledActions               map[Action]bool
 	AssetWeightFromLabels        func(labels map[string]string) float64
+
+	// Decision-trace-only identity. The optimizer never reads these fields while
+	// scoring; they let the post-selection trace name the exact policy/build/tick.
+	PolicyName   string
+	PolicyUID    string
+	TickID       string
+	BrainImage   string
+	GitSHA       string
+	TraceEnabled bool
 }
 
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
@@ -430,6 +449,10 @@ type Decision struct {
 	ObjectsTouched []string // cluster objects created/mutated/deleted
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
+
+	// Trace is populated only after selection. It is observational and never fed
+	// back into candidate generation, scoring, feasibility or actuation.
+	Trace *DecisionTraceV2
 }
 
 // DecisionValue returns the engine's primary security-value field without merging their
