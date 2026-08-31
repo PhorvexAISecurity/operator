@@ -208,7 +208,8 @@ export interface PhysWitness { pod: string; imageRarity: number; coResidency: nu
 export interface KillchainRow { pod: string; stage: string; ai: boolean; pHold: number; preemptMargin: number; projNextStageSec: number; infectionFrontier: number }
 export interface GraphNode { key: string; blast: number; ai: boolean }
 export interface GraphEdge { src: string; dst: string }
-export interface ScanResult { platform: string; nodes: number; pods: number; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
+export interface NodeInfo { name: string; allocCPUm: number; allocMemMi: number; allocGPU: number; migKinds: number }
+export interface ScanResult { platform: string; nodes: number; pods: number; nodeList: NodeInfo[]; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 // A partial live edit to one PhorvexPolicy — only the present fields are patched.
 export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "dryRun"; enabledActions?: string[] }

@@ -60,6 +60,7 @@ type ScanResult struct {
 	Platform  string         `json:"platform"`
 	Nodes     int            `json:"nodes"`
 	Pods      int            `json:"pods"`
+	NodeList  []NodeInfo     `json:"nodeList"` // per-node capacity from the scan (surfaces GPU nodes)
 	Witness   []PhysWitness  `json:"witness"`
 	Killchain []KillchainRow `json:"killchain"`
 	// GraphNodes + GraphEdges are the live reachability graph (P-GRAPH) the Discovered
@@ -73,6 +74,16 @@ type ScanResult struct {
 		Note     string  `json:"note"`
 	} `json:"emr"`
 	Raw string `json:"raw"`
+}
+
+// NodeInfo is one cluster node's allocatable capacity as the scan reported it. AllocGPU > 0
+// marks a GPU node — the reason the platform adapter resolves to eks-gpu rather than generic-k8s.
+type NodeInfo struct {
+	Name       string `json:"name"`
+	AllocCPUm  int    `json:"allocCPUm"` // millicores
+	AllocMemMi int    `json:"allocMemMi"`
+	AllocGPU   int    `json:"allocGPU"`
+	MIGKinds   int    `json:"migKinds"`
 }
 
 // GraphNode is one workload in the reachability graph (key = "ns/pod").
@@ -96,6 +107,7 @@ var (
 	reAI        = regexp.MustCompile(`AI:\s*VRAMfrac=([\d.]+)\s+SM=([\d.]+)\s+link=([\d.]+)\s+modelRarity=([\d.]+)`)
 	rePlatform  = regexp.MustCompile(`platform-adapter:\s*(\S+)`)
 	reNodesPods = regexp.MustCompile(`nodes:\s*(\d+)\s+pods:\s*(\d+)`)
+	reK8sNode   = regexp.MustCompile(`^\s*node\s+(\S+)\s+allocCPU=(\d+)m\s+allocMem=(\d+)Mi\s+allocGPU=(\d+)\s+migKinds=(\d+)`)
 	reEMRline   = regexp.MustCompile(`(baseline|scarcity).*ratio\s*=\s*([\d.]+)`)
 	reEMRlift   = regexp.MustCompile(`lift\s*=\s*([\d.]+)x\s*(?:\(([^)]*)\))?`)
 )
@@ -150,6 +162,12 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 		} else if m := reNodesPods.FindStringSubmatch(ln); m != nil {
 			res.Nodes = int(atof(m[1]))
 			res.Pods = int(atof(m[2]))
+		} else if m := reK8sNode.FindStringSubmatch(ln); m != nil {
+			res.NodeList = append(res.NodeList, NodeInfo{
+				Name:      m[1],
+				AllocCPUm: int(atof(m[2])), AllocMemMi: int(atof(m[3])),
+				AllocGPU: int(atof(m[4])), MIGKinds: int(atof(m[5])),
+			})
 		} else if m := reEMRline.FindStringSubmatch(ln); m != nil {
 			if m[1] == "baseline" {
 				res.EMR.Baseline = atof(m[2])
@@ -174,6 +192,9 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	}
 	if res.GraphEdges == nil {
 		res.GraphEdges = []GraphEdge{}
+	}
+	if res.NodeList == nil {
+		res.NodeList = []NodeInfo{}
 	}
 	return res
 }

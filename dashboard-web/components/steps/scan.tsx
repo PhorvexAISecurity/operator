@@ -83,8 +83,28 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
                 <Badge variant="real"><Check className="h-2.5 w-2.5" /> live exec</Badge>
                 <Badge variant="accent">{scan?.platform || "generic-k8s"}</Badge>
                 <span>{scan?.nodes ?? 0} node · <span className="tabular text-foreground">{scan?.pods ?? witness.length}</span> pods · {witness.length} physics rows</span>
+                {(scan?.nodeList ?? []).some((n) => n.allocGPU > 0) && (
+                  <Badge variant="accent">{(scan?.nodeList ?? []).filter((n) => n.allocGPU > 0).reduce((s, n) => s + n.allocGPU, 0)}× GPU on {(scan?.nodeList ?? []).filter((n) => n.allocGPU > 0).length} node</Badge>
+                )}
                 <span className="text-muted-foreground/60">scanned {at}</span>
               </div>
+              {(scan?.nodeList?.length ?? 0) > 0 && (
+                <Card><CardContent className="p-0">
+                  <div className="max-h-40 overflow-y-auto">
+                    <table className="w-full text-[12px]">
+                      <thead className="sticky top-0 bg-panel"><tr className="text-left text-[10px] uppercase text-muted-foreground"><th className="px-3 py-1.5">Node</th><th className="px-3 py-1.5">CPU</th><th className="px-3 py-1.5">Mem</th><th className="px-3 py-1.5">GPU</th></tr></thead>
+                      <tbody>{scan!.nodeList.map((n) => (
+                        <tr key={n.name} className={"border-t border-border/40 " + (n.allocGPU > 0 ? "bg-accent/[0.06]" : "")}>
+                          <td className="px-3 py-1.5 font-mono">{n.name.split(".")[0]}</td>
+                          <td className="px-3 py-1.5 tabular">{(n.allocCPUm / 1000).toFixed(1)}</td>
+                          <td className="px-3 py-1.5 tabular">{(n.allocMemMi / 1024).toFixed(1)}Gi</td>
+                          <td className="px-3 py-1.5">{n.allocGPU > 0 ? <Badge variant="accent">{n.allocGPU}× GPU{n.migKinds > 0 ? ` · ${n.migKinds} MIG` : ""}</Badge> : <span className="text-muted-foreground/40">—</span>}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </CardContent></Card>
+              )}
               {witness.length === 0 ? (
                 <div className="rounded-md border border-warning/30 bg-warning/[0.05] px-3 py-2 text-center text-[12px] text-muted-foreground">
                   The scan ran but found no pods on <span className="font-mono">{ctxLabel}</span>. Check the cluster context / that workloads exist.
