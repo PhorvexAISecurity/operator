@@ -23,6 +23,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // resolveRunningPod picks a Running, not-already-quarantined pod in ns to attack. It prefers an
@@ -61,13 +63,17 @@ func (s *Server) resolveRunningPod(ns string) (string, error) {
 }
 
 // fireSecurityEventAt applies a SecurityEvent CR at ns/pod. It is the namespace-general form of
-// the foothold event, and it uses the SAME recognised rule (type "Panic", source
-// "ExternalDetector") that the shipping foothold attack uses — verified live to raise the pod's
-// threatPosture to ~0.9. An arbitrary rule.type (e.g. the raw scenario name) is NOT a threat the
-// operator scores, so it would leave threatPosture at 0 and Phorvex would never react. The
-// scenario's identity is carried in the description and the event name, not the rule type.
-// Labeled phorvex.ai/redteam=true so a clear can delete it.
-func (s *Server) fireSecurityEventAt(ns, pod, evName, desc string) error {
+// the foothold event, and source "ExternalDetector". The rule TYPE must be one the operator
+// SCORES as a threat: "Panic" (the shipping foothold rule, verified to raise threatPosture ~0.9)
+// or one of the model.AttackVector* types, which killchain.stageFromEvent now recognises as a
+// persist-stage threat AND recon (ucw) uses to steer the surgical actuator. An arbitrary type
+// (e.g. the raw scenario name) is NOT scored and would leave threatPosture at 0 — so ruleType is
+// constrained to that set; "" falls back to "Panic". The scenario's identity is carried in the
+// description and the event name. Labeled phorvex.ai/redteam=true so a clear can delete it.
+func (s *Server) fireSecurityEventAt(ns, pod, evName, desc, ruleType string) error {
+	if ruleType == "" {
+		ruleType = "Panic"
+	}
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
 metadata:
@@ -79,10 +85,10 @@ spec:
   description: %q
   targets: ["%s/%s"]
   rule:
-    type: "Panic"
+    type: %q
     threatLevel: "critical"
     source: "ExternalDetector"
-`, evName, ns, desc, ns, pod)
+`, evName, ns, desc, ns, pod, ruleType)
 	f, err := os.CreateTemp("", "phorvex-scn-se-*.yaml")
 	if err != nil {
 		return err
@@ -188,7 +194,11 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 		mitre = "catalogue"
 	}
 	desc := "Red-team catalogue scenario " + scenario + " fired live at " + ns + "/" + pod
-	if err := s.fireSecurityEventAt(ns, pod, evName, desc); err != nil {
+	// Carry the attack's VECTOR when the expected actuator is a surgical serving move, so the brain
+	// is steered to it (kv-reset/guardrail-rotate/request-drain/adapter-rotate) instead of the
+	// cheapest generic cover; "" (e.g. rotate/quarantine) keeps the recognised "Panic" default.
+	vector := model.AttackVectorForActuator(expected)
+	if err := s.fireSecurityEventAt(ns, pod, evName, desc, vector); err != nil {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return
 	}

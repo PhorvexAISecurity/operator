@@ -194,6 +194,11 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 	switch e.Type {
 	case v1beta1.TypePanic: // container escape / breakout
 		return StagePersist
+	case model.AttackVectorKV, model.AttackVectorGuardrail, model.AttackVectorInflight, model.AttackVectorAdapter:
+		// A named attack vector is an established, actionable foothold — same persist-stage weight
+		// as Panic. The vector ALSO steers the surgical actuator over in recon (ucw); here it only
+		// needs to count as a real threat so the engine engages at all.
+		return StagePersist
 	case v1beta1.TypeDrift: // image/baseline drift => implant established
 		return StagePersist
 	case v1beta1.TypePolicyViolation:

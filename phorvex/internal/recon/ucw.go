@@ -166,6 +166,22 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			af.Facts = append(af.Facts, ai)
 			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 		}
+
+		// A NAMED attack vector targeting this pod makes the matching serving fact DOMINATE — the
+		// same ×3 structural dominance as adapter-integrity — so the engine picks the SURGICAL
+		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
+		// jailbreak, request-drain for a request hijack) over the cheaper generic endpoint-rotate.
+		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
+		// only the weight is lifted. Self-limiting: the boost is gone once the event ages out.
+		if hasVectorEvent(view.Events, model.AttackVectorKV) && sessKey != "" {
+			boostFactWeight(af.Facts, FactSession, vectorDominance) // -> kv-reset
+		}
+		if hasVectorEvent(view.Events, model.AttackVectorGuardrail) {
+			boostFactWeight(af.Facts, FactGuardrailBypass, vectorDominance) // -> guardrail-rotate
+		}
+		if hasVectorEvent(view.Events, model.AttackVectorInflight) {
+			boostFactWeight(af.Facts, FactInflightRequests, vectorDominance) // -> request-drain
+		}
 	}
 
 	// Tier 2 — shared-scope evidence. The current optimizer has pod decision blocks only, and no
@@ -253,6 +269,32 @@ func boundMultAt(m, cap float64) float64 {
 		return cap
 	}
 	return m
+}
+
+// vectorDominance is the multiplier a named attack vector applies to its matching fact — the same
+// structural ×3 dominance adapter-integrity uses, so the surgical actuator outranks the cheap cover.
+const vectorDominance = 3.0
+
+// hasVectorEvent reports whether a pod-targeting SecurityEvent of the given attack-vector rule type
+// is active on this workload (the signal a red-team fire raises to name its attack).
+func hasVectorEvent(events []model.SecurityEventInfo, vectorType string) bool {
+	for i := range events {
+		if events[i].TargetsPod && events[i].Type == vectorType {
+			return true
+		}
+	}
+	return false
+}
+
+// boostFactWeight multiplies the weight of the first fact of the given kind in place. No-op if the
+// fact is absent (e.g. a serving pod that never emitted it), so it can never invent cover.
+func boostFactWeight(facts []Fact, kind string, mult float64) {
+	for i := range facts {
+		if facts[i].Kind == kind {
+			facts[i].Weight *= mult
+			return
+		}
+	}
 }
 
 // ucwRecon is registered but NOT made default here — the runner calls
