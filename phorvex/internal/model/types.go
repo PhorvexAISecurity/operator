@@ -242,6 +242,36 @@ type Pod struct {
 	MIGTargetProfile     string // phorvex.ai/mig-target-profile annotation used by mig-rebind
 }
 
+// Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
+// steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
+// guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
+// poisoned LoRA — instead of the cheapest generic cover (endpoint-rotate). Recognised as a
+// persist-stage threat in killchain.stageFromEvent and consumed in recon (ucw) to make the
+// matching fact dominate. Self-limiting: the steer is gone once the event ages out.
+const (
+	AttackVectorKV        = "phorvex.attack.kv"
+	AttackVectorGuardrail = "phorvex.attack.guardrail"
+	AttackVectorInflight  = "phorvex.attack.inflight"
+	AttackVectorAdapter   = "phorvex.attack.adapter"
+)
+
+// AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
+// should carry, so the brain is steered to exactly that surgical move. "" => no dedicated vector
+// (fall back to the generic recognised threat), leaving the optimiser's default cover in charge.
+func AttackVectorForActuator(actuator string) string {
+	switch actuator {
+	case "kv-reset", "kv-migrate-invalidate":
+		return AttackVectorKV
+	case "guardrail-rotate":
+		return AttackVectorGuardrail
+	case "request-drain":
+		return AttackVectorInflight
+	case "adapter-rotate":
+		return AttackVectorAdapter
+	}
+	return ""
+}
+
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 type SecurityEventInfo struct {
