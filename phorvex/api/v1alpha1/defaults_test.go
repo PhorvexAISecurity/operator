@@ -5,6 +5,7 @@
 package v1alpha1
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -52,6 +53,14 @@ func TestEffectiveDefaults(t *testing.T) {
 	for stage, want := range wantSojourn {
 		if got := s.EffectiveSojournScaleSeconds()[stage]; got != want {
 			t.Errorf("%s sojourn default = %v, want %v", stage, got, want)
+		}
+	}
+}
+
+func TestObjectiveDecimalsRejectNonFiniteAPIValues(t *testing.T) {
+	for _, input := range []string{"NaN", "+Inf", "-Inf"} {
+		if got := ParseDecimal(input, 0.6); got != 0.6 || math.IsNaN(got) || math.IsInf(got, 0) {
+			t.Fatalf("ParseDecimal(%q) = %v, want finite default", input, got)
 		}
 	}
 }

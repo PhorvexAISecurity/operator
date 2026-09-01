@@ -45,17 +45,17 @@ var (
 
 	podPerDollar = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_per_dollar",
-		Help: "Per-pod recon-facts-invalidated-per-dollar of the best move (P1 coverage engine).",
+		Help: "Legacy per-pod full-value/ECost reporting ratio; ECost is dimensionless, not dollars.",
 	}, []string{"tenant", "namespace", "pod"})
 
 	podProactiveRate = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_proactive_rate",
-		Help: "Per-pod emergent proactive firing rate (perDollar - lambda); >0 means due to fire now.",
+		Help: "Legacy reporting value perDollar-lambda; it is not the P1 action selector.",
 	}, []string{"tenant", "namespace", "pod"})
 
 	tenantLambda = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_tenant_lambda",
-		Help: "Solved dual-descent budget shadow-price lambda per tenant.",
+		Help: "Legacy mixed runtime lambda per tenant; move-pressure-updated ECost coefficient, not a certified exact dual.",
 	}, []string{"tenant"})
 
 	selectedPods = prometheus.NewGaugeVec(prometheus.GaugeOpts{

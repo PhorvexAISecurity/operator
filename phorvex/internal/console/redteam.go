@@ -253,10 +253,10 @@ func (s *Server) redteamFindings(w http.ResponseWriter, r *http.Request) {
 	s2, n2 := stat(d2)
 	findings := []finding{
 		{
-			ID: "lambda-pump", Title: "λ-pump (budget shadow-price starvation)", Product: "k8s", Category: "price/economics", Source: "RL (QD novelty)",
-			Reasoning: "The RL learned to spawn many cheap decoys to inflate budget demand, pumping the dual shadow-price λ until the real foothold is no longer 'due' (perDollar>λ fails) — starving its rotation with zero detector signal.",
+			ID: "lambda-pump", Title: "λ-pump (legacy runtime-lambda starvation)", Product: "k8s", Category: "price/economics", Source: "RL (QD novelty)",
+			Reasoning: "The RL learned to spawn many cheap decoys to inflate budget demand, pumping legacy runtime lambda until the real foothold's strict marginal*provenance-lambda*ECost gain becomes non-positive.",
 			Cycle:     "found (POC λ-pump) → PRICE FIX (bounded subgradient, gated) → re-ran the adversary → NEUTRALIZED",
-			Fix:       "Bounded, binding-gated dual subgradient: cap the manufacturable λ rise to one step/tick and only raise when the budget is actually fully consumed.",
+			Fix:       "Bounded, binding-gated legacy update: cap the manufacturable λ rise to one step/tick and only raise when the move budget is fully consumed.",
 			FixFile:   "phorvex/internal/cost/dual.go", Neutralized: neutralized["lambda-pump"], ReviewStatus: s1, ReviewNote: n1,
 			ApplyNote: "Already applied in code (gated brain change, gates byte-identical). Re-applying from the UI is [PENDING-P-VCLUSTER write-path].",
 		},

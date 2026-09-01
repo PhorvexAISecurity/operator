@@ -134,7 +134,7 @@ func classify(desc []float64) string {
 	case steer >= 0.5 && count < 0.35:
 		return "DISPERSION-STEER (few high-perDollar decoys out-net the foothold)"
 	case steer < 0.5 && count >= 0.4:
-		return "LAMBDA-PUMP (decoy flood pumps the shadow-price)"
+		return "LAMBDA-PUMP (decoy flood pumps legacy runtime lambda)"
 	default:
 		return "hybrid pump+steer"
 	}

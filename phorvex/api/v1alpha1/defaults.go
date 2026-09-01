@@ -41,7 +41,7 @@ func ParseDecimal(s string, def float64) float64 {
 		return def
 	}
 	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
 		return def
 	}
 	return v
@@ -56,7 +56,8 @@ func (p *PhorvexPolicy) EffectiveTenant() string {
 	return p.Namespace
 }
 
-// EffectiveLambda is the objective cost weight (default 0.6).
+// EffectiveLambda is the configured initial seed for P1's per-tenant legacy
+// runtime lambda controller (default 0.6).
 func (s *PhorvexPolicySpec) EffectiveLambda() float64 {
 	return ParseDecimal(s.Objective.Lambda, defaultLambda)
 }
@@ -226,8 +227,8 @@ func (s *PhorvexPolicySpec) SourceAllowed(source string) bool {
 }
 
 // ── SLO error budgets (PHVX-60a) ───────────────────────────────────────────────
-// Deliberately NO code defaults here. Lambda or the cost weights have a documented
-// baseline that reproduces the PRD example, so falling back to it is harmless. A
+// Deliberately NO code defaults here. The lambda seed and cost weights have a
+// documented baseline that reproduces the PRD example, so falling back is harmless. A
 // budget has no such baseline: inventing one would put a denominator under the SLO
 // cost model that nobody measured, and every ratio computed from it would look
 // authoritative while meaning nothing. Unset therefore means unset.

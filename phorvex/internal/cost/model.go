@@ -3,9 +3,9 @@
  */
 
 // Package cost is the swappable COST surface (PRD §5.1B: the switching-cost matrix
-// K(i->j) that R6 lacks entirely). A CostModel returns the disruption cost of
-// mutating a pod NOW — restart seconds + dropped connections for general K8s; KV-
-// cache rebuild + model warm-load dominate for GPU/LLM. This is the term that lets
+// K(i->j) that R6 lacks entirely). A CostModel returns a bounded, dimensionless
+// disruption-loss score for mutating a pod now. Restart/recovery, connection,
+// serving-state and GPU/LLM signals are normalized before entering this score. It lets
 // Phorvex rotate the right pod at the right MOMENT (high risk AND low cost) instead
 // of blindly.
 //

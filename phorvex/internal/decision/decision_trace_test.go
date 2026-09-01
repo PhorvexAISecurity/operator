@@ -2,6 +2,7 @@ package decision
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -220,5 +221,89 @@ func TestDecisionTraceFactsCandidatesAndCoverKeysSerializeInStableOrder(t *testi
 				t.Fatalf("candidate gain does not reconstruct: %+v", candidate)
 			}
 		}
+	}
+}
+
+func TestDecisionTraceSeparatesLambdaRolesAndReconstructsCost(t *testing.T) {
+	engine := fixedTraceEngine()
+	view := covView("economics", true, 2*time.Hour, false)
+	policy := decisionTracePolicy(1, true)
+	policy.Lambda = 0.2
+
+	first, err := engine.DecideShadowChecked([]*model.WorkloadView{view}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace := first[0].Trace
+	if trace == nil || trace.LambdaConfiguredPolicy != 0.2 || trace.LambdaRuntimeLegacy != 0.2 ||
+		trace.LambdaConfiguredSeed != trace.LambdaConfiguredPolicy || trace.LambdaRuntime != trace.LambdaRuntimeLegacy {
+		t.Fatalf("initial lambda roles are conflated: %+v", trace)
+	}
+	if trace.SelectorComparator != model.SelectorStrictPositiveGain ||
+		trace.CFlowUnitStatus != model.CFlowUnitDimensionlessDisruptionLoss ||
+		trace.CostRepresentationVersion != model.CostRepresentationWeightedDimensionlessV1 {
+		t.Fatalf("semantic identifiers missing: %+v", trace)
+	}
+	if trace.DualUpdate.Applied {
+		t.Fatalf("shadow update reported production mutation: %+v", trace.DualUpdate)
+	}
+	if trace.CandidateDemand != 1 {
+		t.Fatalf("two actions on one asset produced demand=%d, want one asset slot", trace.CandidateDemand)
+	}
+	for _, candidate := range trace.Candidates {
+		if !candidate.ExpectedCost.Present {
+			continue
+		}
+		if candidate.CNorm.Present && candidate.CFlow.Present {
+			want := policy.NormSparsity*candidate.CNorm.Value + policy.FlowDisruption*candidate.CFlow.Value
+			if math.Abs(want-candidate.ExpectedCost.Value) > 1e-12 {
+				t.Fatalf("candidate cost does not reconstruct: %+v", candidate)
+			}
+		}
+		if candidate.Selected && (candidate.SelectionReason != "selected_strict_positive_gain" ||
+			!candidate.GrossFullValue.Present || !candidate.MarginalCoverage.Present) {
+			t.Fatalf("selected candidate lacks exact selector evidence: %+v", candidate)
+		}
+	}
+
+	policy.Lambda = 0.9
+	second, err := engine.DecideShadowChecked([]*model.WorkloadView{view}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondTrace := second[0].Trace
+	if secondTrace.LambdaConfiguredPolicy != 0.9 || secondTrace.LambdaRuntimeLegacy != 0.2 {
+		t.Fatalf("policy reconciliation reset/conflated runtime state: %+v", secondTrace)
+	}
+	if first[0].Action != second[0].Action || first[0].Selected != second[0].Selected {
+		t.Fatalf("configured policy field, rather than frozen runtime state, changed selection: first=%+v second=%+v", first[0], second[0])
+	}
+}
+
+func TestDecisionTraceProductionDualUpdateMatchesPersistedState(t *testing.T) {
+	engine := fixedTraceEngine()
+	policy := decisionTracePolicy(1, true)
+	policy.Lambda = 0
+	views := []*model.WorkloadView{
+		covView("binding-a", true, 2*time.Hour, false),
+		covView("binding-b", true, 2*time.Hour, false),
+	}
+	decisions := engine.Decide(views, policy)
+	if len(decisions) != 2 || decisions[0].Trace == nil {
+		t.Fatalf("missing production traces: %+v", decisions)
+	}
+	update := decisions[0].Trace.DualUpdate
+	if !update.Applied || update.Budget != 1 || update.Demand != 2 || update.Spent != 1 ||
+		update.RawExcess != 1 || update.EffectiveExcess != 1 || update.LambdaBefore != 0 ||
+		update.LambdaAfter != 0.05 || update.UpdateReason != "binding_positive_update" {
+		t.Fatalf("binding recovery trace = %+v", update)
+	}
+	for _, decision := range decisions[1:] {
+		if decision.Trace == nil || decision.Trace.DualUpdate != update {
+			t.Fatalf("per-asset trace disagrees on tick update: %+v", decision.Trace)
+		}
+	}
+	if got := engine.costFor(policy.Tenant).Dual.Lambda(); got != update.LambdaAfter {
+		t.Fatalf("audit/runtime transition drift: runtime=%g update=%+v", got, update)
 	}
 }

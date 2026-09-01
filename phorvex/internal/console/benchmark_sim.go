@@ -183,11 +183,11 @@ func (s *Server) benchmarkSim(w http.ResponseWriter, r *http.Request) {
 		R6BlindMovesPerHour: float64(len(views)) * (3600.0 / 15.0), // blind 15s timer rotates every pod
 		Note: "Every number is the real p1-coverage engine's output, run in-process on a fixed scenario (no live attack). " +
 			"maxMovesPerTick, cost weights, proactiveFloor, reactiveOnly, weightSecrets, minAvailableReplicas and the action set " +
-			"shape the decision directly. λ is a solved online dual shadow-price on p1 (seeded 0.6) — the static λ knob drives the " +
+			"shape the decision directly. P1 lambda is a seeded legacy runtime ECost coefficient updated from move pressure; it is not a certified exact dual. The static λ knob drives the " +
 			"p0-greedy engine, so sweeping it here does not change a single p1 decision. tickInterval and antiOverRotationWindow are " +
 			"cadence controls (they bound how OFTEN a move can fire, not WHAT is decided) — their effect appears in the TEMPORAL " +
 			"series, where the engine is stepped once per tick over the horizon (the anti-over-rotation feasibility law and the " +
-			"online dual-λ both engage, and the exposure clock resets on an identity rotation). Baselines: attack-landed = full asset " +
+			"online runtime-lambda controller both engage, and the exposure clock resets on an identity rotation). Baselines: attack-landed = full asset " +
 			"value left exposed; R6 blind-timer = cost of rotating every pod on a fixed schedule (which DELETES stateful state each cycle).",
 	}
 

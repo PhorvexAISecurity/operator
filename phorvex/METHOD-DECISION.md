@@ -38,15 +38,15 @@ scores.
 
 | Axis | **Winner** | One-line why |
 |---|---|---|
-| **Decision** | **Cost-weighted Submodular Recon-Coverage maximization** over a *dynamically-generated* feasible action set, with a **Lagrangian budget-dual (λ)** that makes per-asset rotation **rate** an emergent decision variable | Criterion (4) *is its literal objective* — facts-invalidated-per-dollar — with deterministic online greedy (no MINLP), hard-constraints-by-construction, and exactness proved only for the shipped asset-keyed profiles. |
+| **Decision** | **Cost-weighted Submodular Recon-Coverage maximization** over a *dynamically-generated* feasible action set, with a legacy runtime λ multiplying dimensionless `ECost` | The exact selector is strict `marginal*provenance − lambdaRuntimeLegacy*ECost > 0`, with deterministic online greedy (no MINLP), hard constraints by construction, and exactness proved only for the shipped asset-keyed profiles. |
 | **Context** | **Semi-Markov kill-chain belief with explicit sojourn-time hazard** (= the predictive belief horizon) + **Beta-Bernoulli P(hold)** + **per-tenant conjugate memory**, over the **P0 reachability graph** | The stage-exit hazard `h_s(t)` *is* the forward projection (fires before the next stage), is detector-independent, deterministic, and explainable. |
-| **Cost** | **RLS self-calibrating** `C = λ₁·C_norm + λ₂·C_flow` with a **dual-descent budget shadow-price** (λ *solved*, not hand-set), hardened by **conformal robust upper-bounds** for the `[SP-0-PENDING]` GPU/KV-cache terms | Learns cost from telemetry online; λ is the timing knob; the unmeasured GPU term enters as a *provable* robust envelope (never fabricated), keeping SLO feasibility provable. |
+| **Cost** | **RLS self-calibrating** dimensionless `C = w₁·C_norm + w₂·C_flow`, hardened by **conformal robust upper-bounds** for the `[SP-0-PENDING]` GPU/KV-cache terms | Learns normalized disruption from telemetry online; current λ is a legacy move-pressure controller/ECost coefficient, not a certified exact dual. The unmeasured GPU term enters as a robust envelope rather than a fabricated measurement. |
 
-These three **unify** into a single Lagrangian: the cost model supplies `C(m)` and the
-dual price `λ`; the context model supplies the fact-weights `w = value × blast × P(hold)
-× stage-hazard`; the decision engine greedily maximizes `Σ w(facts covered) − λ·C` over
-the live feasible set. The **same dual λ** is the budget price, the timing rate (the
-Whittle-index view), and the cost weight — one knob, three jobs.
+The cost model supplies dimensionless `C(m)`; the context model supplies fact weights
+`w = value × blast × P(hold) × stage-hazard`; and the decision engine greedily scores
+`marginal*provenance − lambdaRuntimeLegacy*C` over the live feasible set. The runtime
+lambda update observes unit move-count pressure while its score role multiplies `C`, so
+the current controller must not be called one exact Lagrange dual.
 
 ---
 
@@ -61,7 +61,7 @@ Whittle-index view), and the cost weight — one knob, three jobs.
 | Markov-**Stackelberg** game (PRD default, hardened) | 5 | 3 | 3 | 4 | 4 | 4 | ✅ |
 | Receding-Horizon **MPC** over the belief horizon | 4 | 3 | 4 | 4 | **5** | 5 | ✅ |
 
-### Winner: **Submodular Recon-Coverage maximization + Lagrangian timing dual**
+### Winner: **Submodular Recon-Coverage maximization with a legacy runtime cost coefficient**
 
 **Mechanism.** Define a per-tenant **fact-universe** `F`: each *recon fact* is a
 `(variable, asset)` the attacker has learned or is *about to* learn — pod IP/identity,
@@ -78,11 +78,10 @@ their covers are block-owned, making the objective modular and the deterministic
 Any future overlapping profile requires a new proof; no generic approximation constant is claimed.
 
 **Why it wins (the six criteria + the P1 hard requirements):**
-- **(4) per-dollar recon — its literal objective.** "facts-invalidated-per-dollar" is a
-  number you *log and compare* against random (which covers a uniformly-random fact
+- **(4) value relative to disruption.** The legacy full-value/ECost ratio is a
+  reporting number compared against random (which covers a uniformly-random fact
   subset → strictly dominated in expectation). This makes the **STEP-3 ablation provable
-  and falsifiable**, not rhetorical — the single biggest reason it beats the Stackelberg
-  default.
+  and falsifiable**. Production selection itself uses strict positive gain, not the ratio.
 - **(ii) Dynamic action-set generator — structural, not bolted-on.** The feasible action
   set *is* the candidate cover set: an infeasible move contributes no coverage, so
   feasibility generation and optimization are **one pass**. New primitives (future
@@ -92,22 +91,21 @@ Any future overlapping profile requires a new proof; no generic approximation co
   optimization, so an SLO-violating move is **literally not selectable** — inviolability
   is a structural property, not a penalty term. (Provable: the selected set ⊆ the feasible
   set by construction.)
-- **(iv) Timing as a decision variable.** The Lagrangian dual of the budget constraint
-  yields a shadow price `λ`; the exposure clock continuously inflates the weight of facts
-  the attacker has had time to re-learn; an asset fires exactly when its
-  marginal-coverage-per-dollar crosses `λ` — **proactive, detector-free**, a rate not a
-  cron. (This dual *is* the Whittle index restricted to the coverage reward — see graft.)
+- **(iv) Timing as a decision variable.** The exposure clock continuously inflates the
+  weight of facts the attacker has had time to re-learn. An asset is selected when its
+  strict marginal-value-minus-cost gain wins a greedy round and remains positive —
+  **proactive and detector-free**, but not a `perDollar > lambda` production gate.
 - **(vi) Solver shape.** Discrete = which `(asset,action)` selected; continuous = per-asset
   rate `r_i` + fact-weights. Nonlinear cost is fine because the objective is the
-  per-**dollar** ratio (cost enters as knapsack weight / dual price, the greedy is agnostic
-  to cost nonlinearity). **Offline precompute:** dual prices, fact→cover incidence,
+  weighted disruption score (the greedy consumes the already-evaluated cost surface).
+  **Offline precompute:** fact→cover incidence,
   lazy-greedy priority. **Online:** lazy-greedy `O(B·|F|·log)` — well under 1 s, **no
   online MINLP**.
 - **Explainable.** The marginal-gain decomposition per selected move **is** the SHAP-style
   attribution (which facts, what weight, what cost) — explainability falls out for free.
 
 **(5) zero-day, stated honestly (HONESTY GUARD):** the proactive floor is the
-`λ`-crossing driven by exposure-accrual + stage-hazard — it fires **with no detector**, so
+strict positive gain driven by exposure-accrual + stage-hazard — it fires **with no detector**, so
 on a held-out-CVE / detector-evading attack Phorvex still shrinks dwell by invalidating
 the recon the attacker relies on. The claim is **"detector-independent, cost-optimal,
 consequence-targeted dwell reduction" — NOT "uniquely stops zero-days"** (R6's blind
@@ -183,21 +181,20 @@ dwell — else criterion (5) collapses to "smarter reactive"; we test for exactl
 
 | Candidate | seam | kind | IP | perDollar | 0day | SLO |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|
-| **RC-DD** (RLS cost + dual-descent shadow-price) | 5 | **5** | 4 | **5** | 4 | 5 |
+| **RC-DD** (RLS cost + legacy runtime lambda controller) | 5 | **5** | 4 | **5** | 4 | 5 |
 | **CDR-Cost** (conformal distributionally-robust) | 5 | 4 | **5** | 4 | 4 | 5 |
 | KCF-KKT (Kalman cost filter + KKT dual) | 4 | 4 | 4 | 4 | 4 | 5 |
 | EWMA-HP (pragmatic baseline) | 5 | 5 | 2 | 3 | 3 | 4 |
 
-### Winner: **RC-DD (RLS + dual-descent λ) hardened with CDR-Cost conformal bounds**
+### Winner: **RLS cost + legacy runtime lambda controller, hardened with CDR-Cost conformal bounds**
 
 **Core = RC-DD.** `C = λ₁·C_norm + λ₂·C_flow`. `C_flow` is nonlinear in the raw pod state
 but **linear in engineered features** (phase one-hot, saturated gpu/load), so **recursive
 least squares** gives a closed-form *online* fit of a nonlinear cost surface, calibrated
-from observed rotations — **self-calibrating from telemetry** as required. **λ is solved,
-not hand-set:** projected-subgradient **dual descent** on the budget/SLO constraint yields
-λ as the **budget shadow-price**. λ **is the timing knob** — rotate when accrued exposure
-risk crosses `λ·marginal-cost` — the *same* λ the decision engine uses (one knob, three
-jobs). RLS update + dual step run on the telemetry-ingest cadence **offline**; online is
+from observed rotations — **self-calibrating from telemetry** as required. Runtime λ is
+seeded from policy, updated from move-count pressure, and used as an ECost coefficient.
+Because those resources are not formally matched, it is not an exact budget dual.
+RLS and runtime-lambda updates run on the telemetry-ingest cadence **offline**; online is
 just `Ĉ_flow = φᵀθ` + top-B → `O(N log N)`, ≪1 s, **no MINLP**.
 
 **Graft = CDR-Cost conformal robust bound (highest IP=5).** The `[SP-0-PENDING]` GPU/
@@ -224,10 +221,10 @@ exposure clock ─┐                          ┌─ FeasibilityConstraint regi
  ContextProvider/BeliefEstimator ──► fact-weights w = value×blast×P(hold)×stageHazard(t)
                 │ (semi-Markov hazard = predictive horizon; conjugate per-tenant memory)
                 ▼
- CostModel (Layer B, SOFT): C(m) via RLS  +  λ via dual-descent  +  C_hi conformal (GPU [SP-0-PENDING])
+ CostModel (Layer B, SOFT): dimensionless C(m) via RLS + legacy runtime λ + C_hi conformal (GPU [SP-0-PENDING])
                 │
                 ▼
- DECISION: submodular greedy  max Σ w(facts covered by S) − λ·C(S)   over the generated set, until budget B / λ-crossing
+ DECISION: submodular greedy with strict marginal*provenance−λ*C > 0, capped by unit move budget B
                 │  (marginal-gain log = SHAP-style attribution; no generic ratio claimed; no MINLP)
                 ▼
         Seam 1: emit SecurityEvent + maintain AMTD  →  Phoenix runs delete | quarantine
@@ -249,10 +246,10 @@ optimizer, **zero change to the P0 skeleton, the Phoenix seam, or extended Phoen
 ### Solver-shape compliance (the hard requirement), in one place
 - **Mixed discrete + continuous:** discrete = selected `(asset,action)`; continuous =
   `λ`, RLS `θ`, per-asset rate `r_i`, fact-weights.
-- **Nonlinear cost:** absorbed via per-dollar ratio + RLS-on-engineered-features + conformal
+- **Nonlinear cost:** evaluated via RLS-on-engineered-features + conformal
   endpoint (all closed-form; no global nonlinear solve).
-- **Offline precompute → fast online:** offline = dual prices/Whittle table, fact→cover
-  incidence, RLS/dual updates, HSMM kernels, conformal quantiles. Online = lazy-greedy +
+- **Offline precompute → fast online:** offline = fact→cover incidence,
+  RLS/runtime-lambda updates, HSMM kernels, conformal quantiles. Online = lazy-greedy +
   table lookups, `O(B·|F|·log)` / `O(N log N)`, **< 1 s for ≤1000 assets, NO online MINLP.**
 - **Inviolable hard constraints:** feasibility+SLO prune the candidate set *before*
   selection (and CDR's `C_hi` certifies the SLO prune) → a violating move is unselectable
@@ -268,12 +265,12 @@ Per your spec, as **modular swappable interfaces** (each = one file, zero core c
 2. **FeasibilityConstraint registry (Layer A)** — PDB, resource conservation, affinity/
    taints, stateful-warm-first — **doubling as the DYNAMIC ACTION-SET GENERATOR** (core IP,
    explicit + tested: the set provably changes with state).
-3. **CostModel (Layer B)** — RLS self-calibration + dual-descent λ + conformal `C_hi`;
+3. **CostModel (Layer B)** — RLS self-calibration + legacy runtime λ controller + conformal `C_hi`;
    GPU/KV terms `[SP-0-PENDING]`.
 4. **BeliefEstimator + ReconInvalidation** — semi-Markov hazard with the **predictive belief
    horizon** + per-tenant conjugate **context-memory**.
-5. **per-variable exposure clock → proactive engine** — rotation rate as a *solved* decision
-   variable (λ-crossing), event-risk raises it, never detector-gated.
+5. **per-variable exposure clock → proactive engine** — exposure raises fact value;
+   strict positive gain, not a ratio crossing, determines selection and is never detector-gated.
 6. **Decision engine** — submodular recon-coverage greedy over the generated set; SHAP-style
    marginal-gain attribution; **provable hard-constraint inviolability** (a test that asserts
    no SLO-violating move can ever be returned).
@@ -293,8 +290,9 @@ at small N, not over-claimed; (e) the held-out-CVE benchmark must show the **haz
 
 ## Decision requested
 
-**Approve** this stack (Submodular Recon-Coverage + Lagrangian/Whittle timing · Semi-Markov
-hazard + conjugate memory · RLS+dual-descent+conformal cost), or tell me which axis to
+**Historical proposal:** this stack became Submodular Recon-Coverage + Semi-Markov
+hazard + conjugate memory + RLS/conformal cost. T0-B later classified runtime lambda as
+a legacy mixed controller rather than an exact Lagrangian/Whittle dual. Alternatives were:
 swap to its runner-up:
 - Decision → Markov-Stackelberg game (PRD default) or Whittle-index-first timing.
 - Context → BAG junction-tree-first, or the simpler BetaHold-only.

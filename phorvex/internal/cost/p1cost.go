@@ -40,10 +40,11 @@ func EffectiveCostCeiling(pol model.Policy) float64 {
 // P1Cost is the assembled P1 cost model: C = normSparsity*C_norm + flowDisruption*
 // C_flow. Respawn C_flow is calibrated from completed live rotations; cutover,
 // serving-state, quarantine and lightweight mutations have separate action-specific
-// shapes so rotation latency is never applied across incompatible units. Lambda is
-// the dual-descent shadow-price, and CHi is the
-// conformal robust upper bound used by the HARD SLO gate. It is a
-// stateful object (the RLS, conformal window and dual persist across ticks) owned by
+// shapes so rotation latency is never applied across incompatible units. Both
+// components and their weights are dimensionless; ECost is not dollars. The legacy
+// lambda controller multiplies ECost but is not certified as an exact move-budget
+// dual. CHi is the conformal robust upper bound used by the HARD SLO gate. It is a
+// stateful object (the RLS, conformal window and lambda state persist across ticks) owned by
 // the decision engine.
 type P1Cost struct {
 	RLS       *RLS
@@ -78,8 +79,8 @@ func NewP1Cost() *P1Cost {
 	return NewP1CostWithLambda(DefaultLambdaSeed)
 }
 
-// NewP1CostWithLambda constructs an isolated tenant cost bucket whose adaptive
-// dual price starts from the tenant policy's lambda value.
+// NewP1CostWithLambda constructs an isolated tenant cost bucket whose legacy
+// runtime lambda starts from the tenant policy's configured seed.
 func NewP1CostWithLambda(lambdaSeed float64) *P1Cost {
 	return &P1Cost{RLS: NewRLS(), Conformal: NewConformalBound(), Dual: NewDualSolverWithSeed(lambdaSeed)}
 }

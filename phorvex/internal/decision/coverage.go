@@ -20,12 +20,13 @@ import (
 	"github.com/phorvex/phorvex/internal/recon"
 )
 
-// CoverageEngine is the P1 brain: it maximizes consequence-weighted recon-facts-
-// invalidated-per-dollar — Σ w(facts covered by S) − λ·C(S) — by a submodular greedy
+// CoverageEngine is the P1 brain: it maximizes consequence-weighted recon-fact
+// invalidation — marginal*provenance − lambdaRuntimeLegacy*ECost — by a submodular greedy
 // over the DYNAMICALLY GENERATED feasible action set, under a per-asset (one move)
-// partition constraint and the move budget B. λ is the dual-descent budget shadow-
-// price (also the proactive-timing knob). It is STATEFUL across ticks (RLS cost, dual
-// λ, conjugate memory persist).
+// partition constraint and the unit-count move budget B. The legacy lambda update
+// observes move-count pressure but multiplies a weighted disruption score, so it is
+// not certified as an exact dual. It is STATEFUL across ticks (RLS cost, runtime
+// lambda controller, and conjugate memory persist).
 type CoverageEngine struct {
 	Recon     recon.ReconProfile
 	Context   ctxprov.ContextProvider
@@ -85,7 +86,7 @@ func (e *CoverageEngine) SetCostCalibrationFrozen(frozen bool) {
 func (e *CoverageEngine) CostCalibrationFrozen() bool { return e.calibrationFrozen }
 
 // costFor resolves the per-tenant cost bucket. An optional lambda seed is consumed only
-// when the bucket is first created; later calls preserve the adaptive dual state.
+// when the bucket is first created; later calls preserve the legacy runtime state.
 func (e *CoverageEngine) costFor(tenant string, lambdaSeed ...float64) *cost.P1Cost {
 	if e.costByTenant == nil {
 		e.costByTenant = map[string]*cost.P1Cost{}
@@ -166,6 +167,14 @@ func (e *CoverageEngine) now() time.Time {
 // Defined ONCE here and used by provFn in optimality.go too — the two used to be separate local
 // consts under a "KEEP IN SYNC" comment, which is how they drifted into agreeing on a broken gate.
 const provFloor = 0.34
+
+// strictPositiveGain is the exact production act/skip boundary. There is no
+// epsilon and equality does not pass.
+func strictPositiveGain(gain float64) bool { return gain > 0 }
+
+func legacyMixedGain(marginal, provenance, lambdaRuntimeLegacy, expectedCost float64) float64 {
+	return marginal*provenance - lambdaRuntimeLegacy*expectedCost
+}
 
 type assetCtx struct {
 	sig      model.ContextSignals
@@ -336,6 +345,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	selectedAction := map[string]model.Action{}
 	selectedMarginal := map[string]float64{}
 	selectedRound := map[string]int{}
+	evaluatedMarginal := map[string]float64{}
 	B := pol.MaxMovesPerTick
 	for round := 0; round < B; round++ {
 		bestIdx := -1
@@ -355,14 +365,16 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 					marginal += set.FactWeights[k]
 				}
 			}
-			gain := marginal*prov(c.Key) - lambda*c.ECost
+			candidateKey := traceCandidateKey(c.Key, c.Action)
+			evaluatedMarginal[candidateKey] = marginal
+			gain := legacyMixedGain(marginal, prov(c.Key), lambda, c.ECost)
 			if gain > bestGain {
 				bestGain = gain
 				bestIdx = i
 				bestMarginal = marginal
 			}
 		}
-		if bestIdx < 0 || bestGain <= 0 {
+		if bestIdx < 0 || !strictPositiveGain(bestGain) {
 			break
 		}
 		c := set.Candidates[bestIdx]
@@ -392,6 +404,8 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			demand++
 		}
 	}
+	dualUpdate := tcost.Dual.PreviewStep(demand, len(selectedAsset), B)
+	dualUpdate.Applied = persist
 
 	// --- emit one Decision per view ---
 	decisions := make([]model.Decision, 0, len(views))
@@ -464,8 +478,8 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			attribution = attributionOf(*chosen, set.FactWeights, lambda)
 		}
 
-		// Proactive rate: per-dollar coverage above the shadow-price λ => "due now"; the
-		// rate scales with how far it exceeds λ (the optimized-timing decision variable).
+		// Legacy reporting-only ratio. This does not select actions; production selection
+		// uses the strict positive-gain comparator recorded in DecisionTraceV2.
 		rate := 0.0
 		if perDollar > lambda {
 			rate = perDollar - lambda
@@ -473,6 +487,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 
 		selected := selectedAsset[key]
 		net := cov - lambda*ecost
+		selectionGain := legacyMixedGain(marginal, prov(key), lambda, ecost)
 
 		decision := model.Decision{
 			Tenant:                pol.Tenant,
@@ -492,9 +507,9 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Selected:              selected,
 			Feasible:              feasible,
 			InfeasibleWhy:         infeasibleWhy,
-			Reason:                coverageReason(action, ac.assess, cov, ecost, perDollar, lambda),
+			Reason:                coverageReason(action, ac.assess, cov, ecost, selectionGain, lambda),
 			R6Counterfactual:      model.ActionRotate,
-			CounterfactualNote:    counterfactualNote(action, v, perDollar, lambda),
+			CounterfactualNote:    counterfactualNote(action, v),
 			BlindCost:             blindCost,
 			DryRun:                pol.DryRun,
 			DecidedAt:             now,
@@ -516,14 +531,20 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		if pol.TraceEnabled {
 			decision.Trace = e.buildDecisionTrace(v, pol, now, set, ac, lambda, demand,
 				len(selectedAsset), selectedAsset[key], selectedAction[key], selectedRound[key],
-				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov)
+				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov,
+				tcost, evaluatedMarginal, dualUpdate)
 		}
 		decisions = append(decisions, decision)
 	}
 
 	if persist {
-		// --- persist stateful learning (dual price + conjugate memory) ---
-		tcost.Dual.Step(demand, len(selectedAsset), B)
+		// --- persist stateful learning (legacy lambda controller + conjugate memory) ---
+		actualUpdate := tcost.Dual.StepDetailed(demand, len(selectedAsset), B)
+		for i := range decisions {
+			if decisions[i].Trace != nil {
+				decisions[i].Trace.DualUpdate = traceDualUpdate(actualUpdate)
+			}
+		}
 		for key := range selectedAsset {
 			if ac, ok := ctxByKey[key]; ok {
 				// SYMMETRIC memory feedback (P-CONTEXT): acting on a HIGH-P(hold) asset is
@@ -563,6 +584,20 @@ func traceCandidateKey(asset string, action model.Action) string {
 	return asset + "|" + string(action)
 }
 
+func traceDualUpdate(update cost.DualUpdate) model.DecisionDualUpdateV2 {
+	return model.DecisionDualUpdateV2{
+		Applied:         update.Applied,
+		Demand:          update.Demand,
+		Spent:           update.Spent,
+		Budget:          update.Budget,
+		RawExcess:       update.RawExcess,
+		EffectiveExcess: update.EffectiveExcess,
+		LambdaBefore:    update.LambdaBefore,
+		LambdaAfter:     update.LambdaAfter,
+		UpdateReason:    update.UpdateReason,
+	}
+}
+
 // buildDecisionTrace runs only after the current optimizer has completed its
 // selection. It reads the already-generated ActionSet and cannot affect scoring,
 // eligibility, feasibility, learning or tie-breaking.
@@ -582,6 +617,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 	infeasibleWhy string,
 	primed bool,
 	prov func(string) float64,
+	tcost *cost.P1Cost,
+	evaluatedMarginal map[string]float64,
+	dualUpdate cost.DualUpdate,
 ) *model.DecisionTraceV2 {
 	assetKey := v.Pod.Namespace + "/" + v.Pod.Name
 	tickID := pol.TickID
@@ -589,28 +627,36 @@ func (e *CoverageEngine) buildDecisionTrace(
 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 	}
 	trace := &model.DecisionTraceV2{
-		SchemaVersion:        model.DecisionTraceSchemaV2,
-		DecisionID:           decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
-		TickID:               tickID,
-		Timestamp:            now.UTC().Format(time.RFC3339Nano),
-		BrainImage:           traceStringOrUnavailable(pol.BrainImage),
-		GitSHA:               traceStringOrUnavailable(pol.GitSHA),
-		DecisionEngine:       e.Name(),
-		PolicyNamespace:      pol.Namespace,
-		PolicyName:           traceStringOrUnavailable(pol.PolicyName),
-		PolicyUID:            traceStringOrUnavailable(pol.PolicyUID),
-		TenantName:           pol.Tenant,
-		AssetNamespace:       v.Pod.Namespace,
-		AssetName:            v.Pod.Name,
-		AssetUID:             traceStringOrUnavailable(v.Pod.UID),
-		Budget:               pol.MaxMovesPerTick,
-		CandidateDemand:      demand,
-		MovesSpent:           movesSpent,
-		DryRun:               pol.DryRun,
-		LambdaConfiguredSeed: pol.Lambda,
-		LambdaRuntime:        lambda,
-		SelectedAction:       string(model.ActionNoop),
-		TieBreakReason:       "notApplicable",
+		SchemaVersion:             model.DecisionTraceSchemaV2,
+		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
+		TickID:                    tickID,
+		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
+		BrainImage:                traceStringOrUnavailable(pol.BrainImage),
+		GitSHA:                    traceStringOrUnavailable(pol.GitSHA),
+		DecisionEngine:            e.Name(),
+		PolicyNamespace:           pol.Namespace,
+		PolicyName:                traceStringOrUnavailable(pol.PolicyName),
+		PolicyUID:                 traceStringOrUnavailable(pol.PolicyUID),
+		TenantName:                pol.Tenant,
+		AssetNamespace:            v.Pod.Namespace,
+		AssetName:                 v.Pod.Name,
+		AssetUID:                  traceStringOrUnavailable(v.Pod.UID),
+		Budget:                    pol.MaxMovesPerTick,
+		CandidateDemand:           demand,
+		MovesSpent:                movesSpent,
+		DryRun:                    pol.DryRun,
+		LambdaConfiguredSeed:      pol.Lambda,
+		LambdaRuntime:             lambda,
+		LambdaConfiguredPolicy:    pol.Lambda,
+		LambdaRuntimeLegacy:       lambda,
+		SelectorComparator:        model.SelectorStrictPositiveGain,
+		NormWeight:                pol.NormSparsity,
+		FlowWeight:                pol.FlowDisruption,
+		CFlowUnitStatus:           model.CFlowUnitDimensionlessDisruptionLoss,
+		CostRepresentationVersion: model.CostRepresentationWeightedDimensionlessV1,
+		DualUpdate:                traceDualUpdate(dualUpdate),
+		SelectedAction:            string(model.ActionNoop),
+		TieBreakReason:            "notApplicable",
 	}
 
 	telemetryPresent := func(signal string) bool {
@@ -677,31 +723,54 @@ func (e *CoverageEngine) buildDecisionTrace(
 		if candidate.Key != assetKey {
 			continue
 		}
-		marginal := 0.0
+		grossFull := 0.0
 		for _, factKey := range candidate.CoverKeys {
-			marginal += set.FactWeights[factKey]
+			grossFull += set.FactWeights[factKey]
 		}
-		provenance := prov(assetKey)
-		lambdaContribution := lambda * candidate.ECost
-		netGain := marginal*provenance - lambdaContribution
-		candidateSelected := selected && candidate.Action == selectedAction
 		key := traceCandidateKey(assetKey, candidate.Action)
+		marginal, wasEvaluated := evaluatedMarginal[key]
+		provenance := prov(assetKey)
+		components := tcost.Components(v, model.Move{Action: candidate.Action}, pol)
+		lambdaContribution := lambda * candidate.ECost
+		netGain := legacyMixedGain(marginal, provenance, lambda, candidate.ECost)
+		candidateSelected := selected && candidate.Action == selectedAction
 		if candidateSelected {
 			selectedCandidateKey = key
+		}
+		selectionReason := "not_selected_by_current_greedy_ranking"
+		switch {
+		case candidateSelected:
+			selectionReason = "selected_strict_positive_gain"
+		case !attackBacked:
+			selectionReason = "reactive_only_no_direct_foothold"
+		case selected:
+			selectionReason = "partition_other_action_selected"
+		case !wasEvaluated && pol.MaxMovesPerTick <= 0:
+			selectionReason = "move_budget_exhausted"
+		case !wasEvaluated:
+			selectionReason = "not_evaluated_by_current_greedy"
+		case !strictPositiveGain(netGain):
+			selectionReason = "strict_gain_not_positive"
+		case movesSpent >= pol.MaxMovesPerTick:
+			selectionReason = "move_budget_exhausted"
 		}
 		trace.Candidates = append(trace.Candidates, model.DecisionCandidateV2{
 			Action:                      string(candidate.Action),
 			CandidateKey:                key,
 			CoverKeys:                   append([]string(nil), candidate.CoverKeys...),
 			TieBreakRank:                tieBreakRank,
-			MarginalCoverage:            traceOptional(true, marginal),
+			GrossFullValue:              traceOptional(true, grossFull),
+			MarginalCoverage:            traceOptional(wasEvaluated, marginal),
 			Provenance:                  traceOptional(true, provenance),
+			CNorm:                       traceOptional(true, components.Norm),
+			CFlow:                       traceOptional(true, components.Flow),
 			ExpectedCost:                traceOptional(true, candidate.ECost),
 			CostHigh:                    traceOptional(true, candidate.CHi),
 			LambdaContribution:          traceOptional(true, lambdaContribution),
-			NetGain:                     traceOptional(true, netGain),
+			NetGain:                     traceOptional(wasEvaluated, netGain),
 			Feasible:                    model.OptionalBool{Present: true, Value: true},
 			Selected:                    candidateSelected,
+			SelectionReason:             selectionReason,
 			NotClassifiedByCurrentModel: true,
 		})
 		tieBreakRank++
@@ -710,19 +779,31 @@ func (e *CoverageEngine) buildDecisionTrace(
 		if exclusion.Key != assetKey {
 			continue
 		}
+		grossFull := 0.0
+		for _, factKey := range exclusion.CoverKeys {
+			grossFull += set.FactWeights[factKey]
+		}
 		candidate := model.DecisionCandidateV2{
 			Action:                      string(exclusion.Action),
 			CandidateKey:                traceCandidateKey(assetKey, exclusion.Action),
 			CoverKeys:                   append([]string(nil), exclusion.CoverKeys...),
 			TieBreakRank:                -1,
+			GrossFullValue:              traceOptional(true, grossFull),
+			Provenance:                  traceOptional(true, prov(assetKey)),
 			Feasible:                    model.OptionalBool{Present: exclusion.FeasibilityEvaluated, Value: exclusion.Feasible},
 			ExistingExclusionReason:     exclusion.Reason,
+			SelectionReason:             "existing_generator_exclusion",
 			NotClassifiedByCurrentModel: true,
 		}
 		if exclusion.CostEvaluated {
 			candidate.ExpectedCost = traceOptional(true, exclusion.ECost)
 			candidate.CostHigh = traceOptional(true, exclusion.CHi)
 			candidate.LambdaContribution = traceOptional(true, lambda*exclusion.ECost)
+			evaluation := tcost.Evaluation(v, model.Move{Action: exclusion.Action}, pol)
+			if evaluation.UnactionableCategory == "" {
+				candidate.CNorm = traceOptional(true, evaluation.Norm)
+				candidate.CFlow = traceOptional(true, evaluation.Flow)
+			}
 		}
 		trace.Candidates = append(trace.Candidates, candidate)
 	}
@@ -816,7 +897,7 @@ func factKind(key string) string {
 // counterfactualNote explains, per decision, how Phorvex's choice diverges from R6's
 // blind machinery (whose time-based-trigger would Delete every covered pod on schedule
 // with no cost/value/stateful awareness).
-func counterfactualNote(a model.Action, v *model.WorkloadView, perDollar, lambda float64) string {
+func counterfactualNote(a model.Action, v *model.WorkloadView) string {
 	if v.Pod.Stateful {
 		switch a {
 		case model.ActionQuarantine:
@@ -827,11 +908,11 @@ func counterfactualNote(a model.Action, v *model.WorkloadView, perDollar, lambda
 	}
 	switch a {
 	case model.ActionRotate:
-		return fmt.Sprintf("R6 would rotate too, but on a blind fixed timer (no cost/value targeting); Phorvex rotates now because per-$ %.2f > λ %.2f.", perDollar, lambda)
+		return "R6 would rotate too, but on a blind fixed timer; Phorvex selected rotate with a strict positive marginal-value-minus-cost score."
 	case model.ActionQuarantine:
 		return "R6 has no path to quarantine here without a hand-written exact-match rule; Phorvex chose quarantine to cut lateral recon."
 	case model.ActionNoop:
-		return fmt.Sprintf("R6's blind timer would DELETE this pod on schedule regardless; Phorvex skipped (best per-$ <= λ %.2f — not worth the disruption now).", lambda)
+		return "R6's blind timer would DELETE this pod on schedule regardless; Phorvex skipped because no feasible candidate won the strict positive-gain selector."
 	default:
 		// [HONEST-LABEL FIX] An AI-native move was previously narrated as "Phorvex skipped" — the
 		// exact opposite of what happened. R6 has no non-destructive equivalent at all.
@@ -839,22 +920,22 @@ func counterfactualNote(a model.Action, v *model.WorkloadView, perDollar, lambda
 	}
 }
 
-func coverageReason(a model.Action, as killchain.Assessment, cov, ecost, perDollar, lambda float64) string {
+func coverageReason(a model.Action, as killchain.Assessment, cov, ecost, gain, lambda float64) string {
 	switch a {
 	case model.ActionRotate:
-		return fmt.Sprintf("rotate: invalidates in-pod recon (cov=%.2f/$%.2f=%.2f per-$ > λ=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
-			cov, ecost, perDollar, lambda, as.StageName, as.NextStageName, as.Hazard, as.PHold)
+		return fmt.Sprintf("rotate: strict gain %.2f > 0 (fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
+			gain, cov, ecost, lambda, as.StageName, as.NextStageName, as.Hazard, as.PHold)
 	case model.ActionQuarantine:
-		return fmt.Sprintf("quarantine: cuts lateral recon (cov=%.2f/$%.2f=%.2f per-$); stage=%s→%s lateralUrg=%.2f pHold=%.2f",
-			cov, ecost, perDollar, as.StageName, as.NextStageName, as.LateralUrgency, as.PHold)
+		return fmt.Sprintf("quarantine: strict gain %.2f > 0 (fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s→%s lateralUrg=%.2f pHold=%.2f",
+			gain, cov, ecost, lambda, as.StageName, as.NextStageName, as.LateralUrgency, as.PHold)
 	case model.ActionNoop:
-		return fmt.Sprintf("noop: no net-positive feasible move (best per-$ <= λ=%.2f) stage=%s pHold=%.2f", lambda, as.StageName, as.PHold)
+		return fmt.Sprintf("noop: no candidate won strict gain > 0 (reported gain=%.2f lambdaRuntimeLegacy=%.2f) stage=%s pHold=%.2f", gain, lambda, as.StageName, as.PHold)
 	default:
 		// [HONEST-LABEL FIX] Every AI-native move (kv-reset, adapter-rotate, warm-swap, …) used to
 		// fall through to the noop text above, so a GENUINELY SELECTED move was audited as
 		// "noop: no net-positive feasible move" — the decision was real, the label was a lie, and it
 		// made the operator/dashboard read a live defence as an inaction.
-		return fmt.Sprintf("%s: selected (cov=%.2f/$%.2f=%.2f per-$ > λ=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
-			a, cov, ecost, perDollar, lambda, as.StageName, as.NextStageName, as.Hazard, as.PHold)
+		return fmt.Sprintf("%s: strict gain %.2f > 0 (fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
+			a, gain, cov, ecost, lambda, as.StageName, as.NextStageName, as.Hazard, as.PHold)
 	}
 }

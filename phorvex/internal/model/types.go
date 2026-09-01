@@ -459,12 +459,12 @@ type Decision struct {
 	Engine        string            // "p0-greedy" | "p1-coverage"
 	CoveredWeight float64           // recon-fact weight invalidated by the chosen move
 	CoveredFacts  int               // count of distinct recon facts invalidated
-	PerDollar     float64           // CoveredWeight / cost (the criterion-4 ratio, logged)
+	PerDollar     float64           // legacy full-value / ECost reporting ratio; not the selector
 	Stage         string            // most-likely kill-chain stage (semi-Markov)
 	StageHazard   float64           // stage-exit hazard h_s(t) (predictive horizon signal)
 	NextStage     string            // forward-projected next stage
-	Lambda        float64           // solved budget shadow-price at decision time
-	ProactiveRate float64           // emergent per-asset rotation rate (1/sec); 0 if not due
+	Lambda        float64           // legacy mixed runtime lambda frozen for this decision
+	ProactiveRate float64           // legacy reporting score derived from PerDollar; not the selector
 	Attribution   []AttributionTerm // SHAP-style decomposition of the move's value
 
 	// --- P-CONTEXT predictive horizon (additive, audit-visible). ---
