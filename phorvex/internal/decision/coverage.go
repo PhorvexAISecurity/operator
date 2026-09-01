@@ -507,7 +507,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Selected:              selected,
 			Feasible:              feasible,
 			InfeasibleWhy:         infeasibleWhy,
-			Reason:                coverageReason(action, ac.assess, cov, ecost, selectionGain, lambda),
+			Reason:                coverageReason(action, selected, ac.assess, cov, ecost, selectionGain, lambda),
 			R6Counterfactual:      model.ActionRotate,
 			CounterfactualNote:    counterfactualNote(action, v),
 			BlindCost:             blindCost,
@@ -920,7 +920,11 @@ func counterfactualNote(a model.Action, v *model.WorkloadView) string {
 	}
 }
 
-func coverageReason(a model.Action, as killchain.Assessment, cov, ecost, gain, lambda float64) string {
+func coverageReason(a model.Action, selected bool, as killchain.Assessment, cov, ecost, gain, lambda float64) string {
+	if !selected && a != model.ActionNoop {
+		return fmt.Sprintf("%s not selected by the current greedy/budget result (reported gain=%.2f fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s pHold=%.2f",
+			a, gain, cov, ecost, lambda, as.StageName, as.PHold)
+	}
 	switch a {
 	case model.ActionRotate:
 		return fmt.Sprintf("rotate: strict gain %.2f > 0 (fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
