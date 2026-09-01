@@ -1038,7 +1038,7 @@ func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadV
 	return availability, slo
 }
 
-func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, viewByKey map[string]*model.WorkloadView) int {
+func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) int {
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
@@ -1062,23 +1062,24 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			continue
 		}
-		// P-ACTUATOR emit-boundary feasibility RE-GATE: re-run the SAME move-keyed gate the
-		// generator used, on live view state, immediately before enacting — never trust ONLY
-		// the cached Feasible bool. Action-agnostic (keys on Move{Action}), so it covers all
-		// native action types uniformly. A veto refuses the emit and shouts.
+		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
+		// that fed the generator. This catches an internal decision/view mismatch and is uniform
+		// across native actions, but it does not refresh Kubernetes state or claim to close the
+		// snapshot-to-actuation race. Live mutation safety belongs to the actuator's fresh Get,
+		// resourceVersion and UID preconditions.
 		//
-		// [P4c D3/F5 FAIL-CLOSED FIX] A MISSING live view for the target is UNCERTAINTY, not a
-		// pass: previously the re-gate ran only inside `; ok {`, so a map-miss SKIPPED the gate
+		// [P4c D3/F5 FAIL-CLOSED FIX] A MISSING tick view for the target is UNCERTAINTY, not a
+		// pass: previously the check ran only inside `; ok {`, so a map-miss SKIPPED the gate
 		// (fail-OPEN) and actuated on the stale cached bool. Now a map-miss VETOES (fail-CLOSED):
-		// we never actuate a move whose target we cannot re-verify against live state.
-		v, ok := viewByKey[decisions[i].Namespace+"/"+decisions[i].Pod]
+		// we never actuate a move whose target is absent from the tick snapshot.
+		v, ok := tickViewByKey[decisions[i].Namespace+"/"+decisions[i].Pod]
 		if !ok {
-			m.Log.Error(nil, "EMIT-BOUNDARY VETO (fail-closed): no live view for the target; refusing to actuate",
+			m.Log.Error(nil, "EMIT-BOUNDARY VETO (fail-closed): no tick view for the target; refusing to actuate",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			continue
 		}
 		if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verdict.Feasible {
-			m.Log.Error(nil, "EMIT-BOUNDARY VETO: refusing infeasible move at actuate boundary",
+			m.Log.Error(nil, "EMIT-BOUNDARY INVARIANT VETO: refusing infeasible move at actuate boundary",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
 			continue
 		}
@@ -1114,7 +1115,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
-				if !m.trackRotationWithFloor(pol.Tenant, v, viewByKey, pol.MinAvailableReplicas, actuationStarted) {
+				if !m.trackRotationWithFloor(pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted) {
 					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted)
 				}
 			} else {
