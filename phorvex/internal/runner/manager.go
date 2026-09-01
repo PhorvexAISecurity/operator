@@ -215,6 +215,11 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	}
 }
 
+// NeedLeaderElection keeps the mutating tick loop in controller-runtime's
+// leader-elected runnable group. Without this method every replica starts the
+// loop even when the manager itself has leader election enabled.
+func (*Manager) NeedLeaderElection() bool { return true }
+
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
 func (m *Manager) Start(ctx context.Context) error {
 	// The exact-optimality claim depends on block-disjoint cover keys. Validate every

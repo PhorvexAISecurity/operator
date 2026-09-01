@@ -38,7 +38,7 @@ phorvex:
   costNaNAlert:
     enabled: false
   # Leader election for HA (single active controller).
-  leaderElect: false
+  leaderElect: true
   metricsBindAddress: ":8080"
   healthProbeBindAddress: ":8081"
   # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
