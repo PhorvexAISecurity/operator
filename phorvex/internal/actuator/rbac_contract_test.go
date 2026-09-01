@@ -2,9 +2,48 @@ package actuator
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
+
+// TestNativeRBACMarkersAreLeastPrivilege keeps controller-gen's input aligned
+// with the verbs the native handlers actually call. A stale marker is security
+// relevant even when the separately committed runtime Role remains narrower.
+func TestNativeRBACMarkersAreLeastPrivilege(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate test source")
+	}
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "rbac.go"))
+	if err != nil {
+		t.Fatalf("read rbac.go: %v", err)
+	}
+
+	const prefix = "// +kubebuilder:rbac:"
+	var got []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			got = append(got, strings.TrimPrefix(line, prefix))
+		}
+	}
+	sort.Strings(got)
+	want := []string{
+		`namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update`,
+		`namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update`,
+		`namespace=phorvex-tenant,groups="",resources=services,verbs=get;update`,
+		`namespace=phorvex-tenant,groups=apps,resources=replicasets,verbs=get`,
+		`namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;delete`,
+	}
+	sort.Strings(want)
+
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("native RBAC marker contract drifted\n got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
 
 func TestServiceRestitchRBACIsNamespacedAndExact(t *testing.T) {
 	paths := []string{
