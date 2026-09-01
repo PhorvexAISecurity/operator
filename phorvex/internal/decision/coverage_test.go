@@ -97,12 +97,12 @@ func TestCoverageUsesPolicyLambdaAsPerTenantDualSeed(t *testing.T) {
 		t.Fatalf("tenant B first decision did not use policy lambda: %+v", decisions)
 	}
 
-	// Lambda is an initial condition for the adaptive dual, not a reset switch. A
+	// Lambda is an initial condition for the legacy runtime controller, not a reset switch. A
 	// reconcile with a different value must not erase already-learned tenant state.
 	polA.Lambda = 1.7
 	e.AssembleSet([]*model.WorkloadView{view}, polA)
 	if got := e.costFor(polA.Tenant).Dual.Lambda(); got != 0.2 {
-		t.Fatalf("existing tenant dual was reset by policy reconcile: got %v, want 0.2", got)
+		t.Fatalf("existing tenant runtime lambda was reset by policy reconcile: got %v, want 0.2", got)
 	}
 }
 
@@ -128,6 +128,50 @@ func TestCoverageBudgetAndPartition(t *testing.T) {
 	for k, n := range seen {
 		if n != 1 {
 			t.Errorf("asset %s selected %d times (must be 1: one move per asset)", k, n)
+		}
+	}
+}
+
+func TestStrictPositiveGainRulingBoundary(t *testing.T) {
+	if strictPositiveGain(0) {
+		t.Fatal("TV1 gain == 0 passed the strict production comparator")
+	}
+	if !strictPositiveGain(1e-12) {
+		t.Fatal("TV2 positive gain did not pass")
+	}
+	if strictPositiveGain(-1e-12) {
+		t.Fatal("TV3 negative gain passed")
+	}
+}
+
+func TestLegacyMixedGainMonotonicityProperties(t *testing.T) {
+	values := []float64{0, 0.1, 0.5, 1, 2}
+	for _, marginal := range values {
+		for _, provenance := range []float64{0.34, 0.7, 1} {
+			for _, lambda := range values {
+				previous := legacyMixedGain(marginal, provenance, lambda, values[0])
+				for _, expectedCost := range values[1:] {
+					got := legacyMixedGain(marginal, provenance, lambda, expectedCost)
+					if got > previous {
+						t.Fatalf("larger cost improved gain: marginal=%g provenance=%g lambda=%g previous=%g got=%g",
+							marginal, provenance, lambda, previous, got)
+					}
+					if math.IsNaN(got) || math.IsInf(got, 0) {
+						t.Fatalf("finite inputs produced %g", got)
+					}
+					previous = got
+				}
+			}
+		}
+	}
+	for _, expectedCost := range values {
+		previous := legacyMixedGain(values[0], 0.7, 0.6, expectedCost)
+		for _, marginal := range values[1:] {
+			got := legacyMixedGain(marginal, 0.7, 0.6, expectedCost)
+			if got < previous {
+				t.Fatalf("larger marginal value reduced gain: cost=%g previous=%g got=%g", expectedCost, previous, got)
+			}
+			previous = got
 		}
 	}
 }

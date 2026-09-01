@@ -156,9 +156,11 @@ type SojournScaleSpec struct {
 
 // ObjectiveSpec is the cost-weighted objective (PRD objective{lambda,costWeights}).
 type ObjectiveSpec struct {
-	// Lambda is the cost weight in the objective E[security] - lambda*E[cost], as a
-	// decimal string in [0,inf) (PRD example "0.6"). Larger lambda = more
-	// cost-averse (rotate less). Empty defaults to "0.6" in code.
+	// Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,
+	// which multiplies the dimensionless ECost score. Runtime state then adapts from
+	// move-count pressure and is audited separately from this policy value. It is not
+	// certified as an exact move-budget dual. Decimal string in [0,inf); empty
+	// defaults to "0.6" in code.
 	// +kubebuilder:validation:Optional
 	Lambda string `json:"lambda,omitempty"`
 
@@ -176,9 +178,9 @@ type CostWeights struct {
 	// +kubebuilder:validation:Optional
 	NormSparsity string `json:"normSparsity,omitempty"`
 
-	// FlowDisruption weights C_flow = restart seconds / dropped connections /
-	// (for GPU/LLM) KV-cache rebuild + warm-load. Decimal string; empty defaults
-	// to "0.6".
+	// FlowDisruption weights the bounded dimensionless C_flow disruption-loss score.
+	// Recovery, connection and GPU/LLM signals are normalized before aggregation.
+	// Decimal string; empty defaults to "0.6".
 	// +kubebuilder:validation:Optional
 	FlowDisruption string `json:"flowDisruption,omitempty"`
 }

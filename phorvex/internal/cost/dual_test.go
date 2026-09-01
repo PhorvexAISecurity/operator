@@ -66,3 +66,78 @@ func TestDualLegitimateRationingUnchanged(t *testing.T) {
 		}
 	}
 }
+
+func TestDualRulingVectorsAndReasons(t *testing.T) {
+	tests := []struct {
+		name          string
+		seed          float64
+		demand, spent int
+		budget        int
+		wantRaw       int
+		wantEffective int
+		wantAfter     float64
+		wantReason    string
+	}{
+		{name: "TV4 binding recovery", seed: 0, demand: 2, spent: 1, budget: 1,
+			wantRaw: 1, wantEffective: 1, wantAfter: 0.05, wantReason: DualReasonBindingPositive},
+		{name: "TV5 suppressed pressure", seed: 0, demand: 3, spent: 1, budget: 2,
+			wantRaw: 1, wantEffective: 0, wantAfter: 0, wantReason: DualReasonPressureSuppressed},
+		{name: "TV6 nonbinding decay", seed: 0.6, demand: 0, spent: 0, budget: 1,
+			wantRaw: -1, wantEffective: -1, wantAfter: 0.55, wantReason: DualReasonNonbindingDecay},
+		{name: "TV7 exact binding", seed: 0.6, demand: 1, spent: 1, budget: 1,
+			wantRaw: 0, wantEffective: 0, wantAfter: 0.6, wantReason: DualReasonExactBinding},
+		{name: "positive pressure capped", seed: 0.6, demand: 20, spent: 1, budget: 1,
+			wantRaw: 19, wantEffective: 1, wantAfter: 0.65, wantReason: DualReasonPositiveCapped},
+		{name: "negative pressure capped", seed: 0.6, demand: 0, spent: 0, budget: 3,
+			wantRaw: -3, wantEffective: -1, wantAfter: 0.6 - 0.05/3, wantReason: DualReasonNegativeCapped},
+		{name: "TV8 maximum clamp", seed: 9.99, demand: 2, spent: 1, budget: 1,
+			wantRaw: 1, wantEffective: 1, wantAfter: 10, wantReason: DualReasonMaxClamp},
+		{name: "budget nonpositive", seed: 0.6, demand: 2, spent: 0, budget: 0,
+			wantRaw: 2, wantEffective: 0, wantAfter: 0.6, wantReason: DualReasonBudgetNonpositive},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := NewDualSolverWithSeed(tc.seed)
+			got := d.StepDetailed(tc.demand, tc.spent, tc.budget)
+			if !got.Applied || got.RawExcess != tc.wantRaw || got.EffectiveExcess != tc.wantEffective ||
+				got.UpdateReason != tc.wantReason || math.Abs(got.LambdaAfter-tc.wantAfter) > 1e-12 {
+				t.Fatalf("update = %+v, want raw=%d effective=%d after=%g reason=%s",
+					got, tc.wantRaw, tc.wantEffective, tc.wantAfter, tc.wantReason)
+			}
+			if got.LambdaBefore != tc.seed || math.Abs(d.Lambda()-tc.wantAfter) > 1e-12 {
+				t.Fatalf("transition/runtime mismatch: update=%+v runtime=%g", got, d.Lambda())
+			}
+		})
+	}
+}
+
+func TestDualPreviewIsDeterministicAndDoesNotMutate(t *testing.T) {
+	d := NewDualSolverWithSeed(0)
+	first := d.PreviewStep(2, 1, 1)
+	second := d.PreviewStep(2, 1, 1)
+	if first != second || first.Applied {
+		t.Fatalf("preview is not deterministic/non-mutating: first=%+v second=%+v", first, second)
+	}
+	if d.Lambda() != 0 {
+		t.Fatalf("preview mutated runtime lambda to %g", d.Lambda())
+	}
+	actual := d.StepDetailed(2, 1, 1)
+	first.Applied = true
+	if actual != first {
+		t.Fatalf("preview/actual drift: preview=%+v actual=%+v", first, actual)
+	}
+}
+
+func TestDualZeroFloorIsValid(t *testing.T) {
+	d := NewDualSolver()
+	for i := 0; i < 20; i++ {
+		d.Step(0, 0, 1)
+	}
+	if got := d.Lambda(); got != 0 {
+		t.Fatalf("TV9 runtime lambda = %g, want valid zero floor", got)
+	}
+	update := d.StepDetailed(0, 0, 1)
+	if update.LambdaAfter != 0 || update.UpdateReason != DualReasonMinClamp {
+		t.Fatalf("zero floor transition = %+v", update)
+	}
+}

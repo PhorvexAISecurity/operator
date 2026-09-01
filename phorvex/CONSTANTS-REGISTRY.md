@@ -58,13 +58,13 @@ validated; priors, blend weights, and hazard shapes can still be fleet-dependent
 
 | Dial | Default | Default/consumer | Policy field | Status |
 |---|---:|---|---|---|
-| λ initial dual price | `0.6` | `internal/cost/dual.go:26,37`; `internal/decision/coverage.go:86-103` | `spec.objective.lambda` | **Wired in PR #57.** Previously the field reached `model.Policy` but P1 ignored it. It now seeds each tenant's adaptive dual once; subsequent reconciles do not erase learned state. |
+| λ configured runtime seed | `0.6` | `internal/cost/dual.go`; `internal/decision/coverage.go` | `spec.objective.lambda` | **Wired in PR #57.** It seeds each tenant's legacy runtime controller once; subsequent reconciles do not erase learned state. The controller is not certified as an exact move-budget dual. |
 | `MaxMovesPerTick` (B) | `3` | `api/v1alpha1/defaults.go:28,77-87` | `spec.budget.maxMovesPerTick` | Externalized and consumed. |
 | Tick interval (Δ) | `20s` | `api/v1alpha1/defaults.go:30,97-103` | `spec.budget.tickInterval` | Externalized and consumed. |
 | `ProactiveFloor` | `1h` | `api/v1alpha1/defaults.go:32,113-119` | `spec.budget.proactiveFloor` | Externalized and consumed. |
 | Flow-disruption weight | `0.6` | `api/v1alpha1/defaults.go:26,67-70` | `spec.objective.costWeights.flowDisruption` | Externalized and consumed. |
 
-λ is an **initial condition**, not a fixed production price. The dual solver adapts it to realized
+λ is an **initial condition**, not a fixed production price. The legacy controller adapts it to realized
 budget pressure. The policy value is consumed only when a tenant bucket is first created so a
 routine policy reconcile cannot wipe learned state.
 

@@ -36,18 +36,62 @@ only when both used/free series supplied a usable denominator.
 ## Reconstruction
 
 Facts are ordered by `factKey`; candidates use canonical action order; cover
-keys are lexical. For every feasible candidate with recorded terms:
+keys are lexical. The current selector is exactly:
 
 ```text
-lambdaContribution = lambdaRuntime * expectedCost
+lambdaContribution = lambdaRuntimeLegacy * expectedCost
 netGain = marginalCoverage * provenance - lambdaContribution
+selected only when netGain > 0
 ```
+
+The comparator is strict: equality does not pass. `perDollar` and
+`proactiveRate` are legacy reporting fields and do not select an action.
+
+`grossFullValue` is the full sum of a candidate's fact weights.
+`marginalCoverage` is the value observed when that candidate was last evaluated
+by the greedy selector; it is explicitly absent if the current gates never
+reached scoring. `selectionReason` records selection, partition loss, strict
+non-positive gain, budget exhaustion, reactive-only suppression, or an existing
+generator exclusion.
 
 `tieBreakRank` records the current within-asset strict-`>` candidate order.
 A selected outcome references exactly one candidate and records its 1-based
 selection round. A noop references none and carries the current reason, such as
 an existing feasibility exclusion, `priced-out`, `budget-exhausted`, or the
 reactive-only gate.
+
+## Lambda roles and update
+
+`lambdaConfiguredPolicy` is the configured seed. `lambdaRuntimeLegacy` is the
+per-tenant state frozen at the start of the tick. Compatibility aliases
+`lambdaConfiguredSeed` and `lambdaRuntime` carry the same respective values for
+existing readers. The runtime value is called legacy/mixed because its update
+signal is move-count pressure while it multiplies a weighted disruption score;
+it is not certified as an exact move-budget dual.
+
+The trace records `demand`, `spent`, `budget`, `rawExcess`, `effectiveExcess`,
+lambda before/after, whether the transition was applied, and a stable reason
+code. The move budget consumes one slot per selected asset/action; demand counts
+assets, not actions or disruption cost. A shadow decision records the same
+deterministic preview with `applied: false`.
+
+## Cost representation
+
+The current representation is `weighted_dimensionless_v1`:
+
+```text
+expectedCost = normWeight * cNorm + flowWeight * cFlow
+```
+
+`cNorm`, `cFlow`, their weights, and `expectedCost` are dimensionless.
+`cFlowUnitStatus` is `confirmed_dimensionless_disruption_loss`; none of these
+fields is a dollar value. Rotation's learned CFlow target is replacement Ready
+delay divided by 400 seconds and clamped to `[0,2]`; other action families use
+their declared bounded dimensionless disruption terms.
+
+Pre-T0-B V2 records do not contain the new representation/update fields. They
+remain readable for deterministic rollback; new records are identifiable by the
+non-empty `costRepresentationVersion`.
 
 ## Redaction
 
