@@ -2,14 +2,40 @@ package runner
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
+	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 )
+
+func TestManagerTickLoopRequiresLeaderElection(t *testing.T) {
+	var runnable ctrlmanager.LeaderElectionRunnable = &Manager{}
+	if !runnable.NeedLeaderElection() {
+		t.Fatal("mutating tick loop must run only in the leader-elected runnable group")
+	}
+}
+
+func TestHelmChartEnablesLeaderElectionByDefault(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate test source")
+	}
+	valuesPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "charts", "phorvex", "values.yaml")
+	raw, err := os.ReadFile(valuesPath)
+	if err != nil {
+		t.Fatalf("read chart values: %v", err)
+	}
+	if !strings.Contains(string(raw), "  leaderElect: true\n") {
+		t.Fatal("phorvex chart must enable leader election by default")
+	}
+}
 
 type invalidStartupRecon struct{}
 
