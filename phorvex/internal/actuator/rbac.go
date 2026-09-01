@@ -15,7 +15,7 @@
  *
  * pods                          : rotate (get/delete), quarantine/identity/route/kv/endpoint (get/update), warm-swap (list/update/delete)
  * pods/ephemeralcontainers      : debugger / custom-inject / inject-carrier kv-reset (update)
- * networkpolicies               : quarantine deny-all (create/get/delete)
+ * networkpolicies               : quarantine deny-all + orphan GC (create/get/list/delete)
  * replicasets                   : quarantine reads the owning RS selector to detach (get)
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update)
  *
@@ -25,8 +25,8 @@
 
 package actuator
 
-// +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update;patch
+// +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update
-// +kubebuilder:rbac:namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;delete
+// +kubebuilder:rbac:namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;delete
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=apps,resources=replicasets,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=services,verbs=get;update
