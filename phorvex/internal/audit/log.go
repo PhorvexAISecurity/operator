@@ -52,15 +52,20 @@ type Record struct {
 	PHold         float64 `json:"pHold"`
 	// PHoldInputs (M-143): the capped noisy-OR terms behind pHold. Emitted so a reader can see
 	// that the posterior (betaMean) still moves pHold at every exposure age.
-	PHoldInputs        *PHoldInputsRecord `json:"pHoldInputs,omitempty"`
-	AssetValue         float64            `json:"assetValue"`
-	BlastRadius        float64            `json:"blastRadius"`
-	SLOHeadroom        float64            `json:"sloHeadroom"`
-	Phase              string             `json:"phase"`
-	Reason             string             `json:"reason"`
-	R6Counterfactual   string             `json:"r6Counterfactual"`
-	CounterfactualNote string             `json:"counterfactualNote,omitempty"`
-	BlindCost          float64            `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
+	PHoldInputs *PHoldInputsRecord `json:"pHoldInputs,omitempty"`
+	// M-27 per-asset event evidence: which events were seen, how old, what weight they
+	// carried, the weighted evidence sum and the evidence-following event stage.
+	StageEvent         string                `json:"stageEvent,omitempty"`
+	EventEvidence      float64               `json:"eventEvidence,omitempty"`
+	Events             []model.EventEvidence `json:"events,omitempty"`
+	AssetValue         float64               `json:"assetValue"`
+	BlastRadius        float64               `json:"blastRadius"`
+	SLOHeadroom        float64               `json:"sloHeadroom"`
+	Phase              string                `json:"phase"`
+	Reason             string                `json:"reason"`
+	R6Counterfactual   string                `json:"r6Counterfactual"`
+	CounterfactualNote string                `json:"counterfactualNote,omitempty"`
+	BlindCost          float64               `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
 
 	// P1 (coverage engine) fields — present only under the p1-coverage brain.
 	Engine        string                  `json:"engine,omitempty"`
@@ -231,6 +236,9 @@ func ToRecord(d model.Decision) Record {
 		StageHazard:           round4(d.StageHazard),
 		PHold:                 round4(d.PHold),
 		PHoldInputs:           pHoldInputsRecord(d.PHoldInputs),
+		StageEvent:            d.StageEvent,
+		EventEvidence:         round4(d.EventEvidence),
+		Events:                roundEvents(d.Events),
 		Lambda:                round4(d.Lambda),
 		ProactiveRate:         round4(d.ProactiveRate),
 		Attribution:           canonicalizeAttribution(d.Attribution),
@@ -312,4 +320,17 @@ func pHoldInputsRecord(in model.PHoldInputs) *PHoldInputsRecord {
 		BetaMean: round4(in.BetaMean), Pressure: round4(in.Pressure), Cap: round4(in.Cap),
 		ScaleSec: round4(in.ScaleSec), Raw: round4(in.Raw), Final: round4(in.Final),
 	}
+}
+
+func roundEvents(in []model.EventEvidence) []model.EventEvidence {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]model.EventEvidence, len(in))
+	for i, e := range in {
+		e.AgeSec = round4(e.AgeSec)
+		e.Weight = round4(e.Weight)
+		out[i] = e
+	}
+	return out
 }
