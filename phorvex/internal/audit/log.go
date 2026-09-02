@@ -23,41 +23,44 @@ import (
 
 // Record is the serialized form of one decision (stable JSON for the audit trail).
 type Record struct {
-	SchemaVersion    string    `json:"schemaVersion"`
+	SchemaVersion string `json:"schemaVersion"`
 	// SourceSchemaVersion records the input contract used by the old-to-new read shim.
 	// It is process metadata, not part of the v2 wire representation.
 	SourceSchemaVersion string    `json:"-"`
-	Kind             string    `json:"kind"`
-	Time             time.Time `json:"time"`
-	Tenant           string    `json:"tenant"`
-	Namespace        string    `json:"namespace"`
-	Pod              string    `json:"pod"`
-	Node             string    `json:"node,omitempty"`
-	Action           string    `json:"action"`
-	Selected         bool      `json:"selected"`
-	Feasible         bool      `json:"feasible"`
-	InfeasibleWhy    string    `json:"infeasibleWhy,omitempty"`
-	DryRun           bool      `json:"dryRun"`
+	Kind                string    `json:"kind"`
+	Time                time.Time `json:"time"`
+	Tenant              string    `json:"tenant"`
+	Namespace           string    `json:"namespace"`
+	Pod                 string    `json:"pod"`
+	Node                string    `json:"node,omitempty"`
+	Action              string    `json:"action"`
+	Selected            bool      `json:"selected"`
+	Feasible            bool      `json:"feasible"`
+	InfeasibleWhy       string    `json:"infeasibleWhy,omitempty"`
+	DryRun              bool      `json:"dryRun"`
 	// KillSwitch is emitted only when engaged, so an existing consumer sees no change on a
 	// normal tick, and a suppressed decision is no longer indistinguishable from a failed one.
-	KillSwitch       bool      `json:"killSwitch,omitempty"`
-	Actuated         bool      `json:"actuated"`
-	CoverageValue    float64   `json:"coverageValue"`
-	ThreatRisk       float64   `json:"threatRisk,omitempty"`
-	Cost             float64   `json:"cost"`
-	Net              float64   `json:"net"`
-	Residual         float64   `json:"residual"`      // observational under P1
-	ThreatPosture    float64   `json:"threatPosture"` // observational under P1
-	Exposure         float64   `json:"exposure"`
-	PHold            float64   `json:"pHold"`
-	AssetValue       float64   `json:"assetValue"`
-	BlastRadius      float64   `json:"blastRadius"`
-	SLOHeadroom      float64   `json:"sloHeadroom"`
-	Phase            string    `json:"phase"`
-	Reason             string `json:"reason"`
-	R6Counterfactual   string `json:"r6Counterfactual"`
-	CounterfactualNote string `json:"counterfactualNote,omitempty"`
-	BlindCost          float64 `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
+	KillSwitch    bool    `json:"killSwitch,omitempty"`
+	Actuated      bool    `json:"actuated"`
+	CoverageValue float64 `json:"coverageValue"`
+	ThreatRisk    float64 `json:"threatRisk,omitempty"`
+	Cost          float64 `json:"cost"`
+	Net           float64 `json:"net"`
+	Residual      float64 `json:"residual"`      // observational under P1
+	ThreatPosture float64 `json:"threatPosture"` // observational under P1
+	Exposure      float64 `json:"exposure"`
+	PHold         float64 `json:"pHold"`
+	// PHoldInputs (M-143): the capped noisy-OR terms behind pHold. Emitted so a reader can see
+	// that the posterior (betaMean) still moves pHold at every exposure age.
+	PHoldInputs        *PHoldInputsRecord `json:"pHoldInputs,omitempty"`
+	AssetValue         float64            `json:"assetValue"`
+	BlastRadius        float64            `json:"blastRadius"`
+	SLOHeadroom        float64            `json:"sloHeadroom"`
+	Phase              string             `json:"phase"`
+	Reason             string             `json:"reason"`
+	R6Counterfactual   string             `json:"r6Counterfactual"`
+	CounterfactualNote string             `json:"counterfactualNote,omitempty"`
+	BlindCost          float64            `json:"blindCost"` // cost R6's blind timer incurs this cycle (always rotates) — for the cost comparison
 
 	// P1 (coverage engine) fields — present only under the p1-coverage brain.
 	Engine        string                  `json:"engine,omitempty"`
@@ -189,51 +192,52 @@ func New(log logr.Logger, jsonOut io.Writer) *Logger {
 // ToRecord converts a Decision to a Record.
 func ToRecord(d model.Decision) Record {
 	return Record{
-		SchemaVersion:       SchemaVersionCurrent,
-		SourceSchemaVersion: SchemaVersionCurrent,
-		Kind:                "phorvex.decision",
-		Time:                d.DecidedAt,
-		Tenant:              d.Tenant,
-		Namespace:           d.Namespace,
-		Pod:                 d.Pod,
-		Node:                d.Node,
-		Action:              string(d.Action),
-		Selected:            d.Selected,
-		Feasible:            d.Feasible,
-		InfeasibleWhy:       d.InfeasibleWhy,
-		DryRun:              d.DryRun,
-		KillSwitch:          d.KillSwitch,
-		Actuated:            d.Actuated,
-		CoverageValue:       round4(d.CoverageValue),
-		ThreatRisk:          round4(d.ThreatRisk),
-		Cost:                round4(d.Cost),
-		Net:                 round4(d.Net),
-		Residual:            round4(d.Residual),
-		ThreatPosture:       round4(d.ThreatPosture),
-		Exposure:            round4(d.Exposure),
-		AssetValue:          round4(d.AssetValue),
-		BlastRadius:         round4(d.BlastRadius),
-		SLOHeadroom:         round4(d.SLOHeadroom),
-		Phase:               string(d.Phase),
-		Reason:             d.Reason,
-		R6Counterfactual:   string(d.R6Counterfactual),
-		CounterfactualNote: d.CounterfactualNote,
-		BlindCost:          round4(d.BlindCost),
-		Engine:             d.Engine,
-		PerDollar:        round4(d.PerDollar),
-		CoveredWeight:    round4(d.CoveredWeight),
-		CoveredFacts:     d.CoveredFacts,
-		Stage:            d.Stage,
-		NextStage:        d.NextStage,
-		StageHazard:      round4(d.StageHazard),
-		PHold:            round4(d.PHold),
-		Lambda:           round4(d.Lambda),
-		ProactiveRate:    round4(d.ProactiveRate),
-		Attribution:      canonicalizeAttribution(d.Attribution),
-		Handler:          d.Handler,
-		ObjectsTouched:   d.ObjectsTouched,
-		RollbackRef:      d.RollbackRef,
-		MutationKind:     d.MutationKind,
+		SchemaVersion:         SchemaVersionCurrent,
+		SourceSchemaVersion:   SchemaVersionCurrent,
+		Kind:                  "phorvex.decision",
+		Time:                  d.DecidedAt,
+		Tenant:                d.Tenant,
+		Namespace:             d.Namespace,
+		Pod:                   d.Pod,
+		Node:                  d.Node,
+		Action:                string(d.Action),
+		Selected:              d.Selected,
+		Feasible:              d.Feasible,
+		InfeasibleWhy:         d.InfeasibleWhy,
+		DryRun:                d.DryRun,
+		KillSwitch:            d.KillSwitch,
+		Actuated:              d.Actuated,
+		CoverageValue:         round4(d.CoverageValue),
+		ThreatRisk:            round4(d.ThreatRisk),
+		Cost:                  round4(d.Cost),
+		Net:                   round4(d.Net),
+		Residual:              round4(d.Residual),
+		ThreatPosture:         round4(d.ThreatPosture),
+		Exposure:              round4(d.Exposure),
+		AssetValue:            round4(d.AssetValue),
+		BlastRadius:           round4(d.BlastRadius),
+		SLOHeadroom:           round4(d.SLOHeadroom),
+		Phase:                 string(d.Phase),
+		Reason:                d.Reason,
+		R6Counterfactual:      string(d.R6Counterfactual),
+		CounterfactualNote:    d.CounterfactualNote,
+		BlindCost:             round4(d.BlindCost),
+		Engine:                d.Engine,
+		PerDollar:             round4(d.PerDollar),
+		CoveredWeight:         round4(d.CoveredWeight),
+		CoveredFacts:          d.CoveredFacts,
+		Stage:                 d.Stage,
+		NextStage:             d.NextStage,
+		StageHazard:           round4(d.StageHazard),
+		PHold:                 round4(d.PHold),
+		PHoldInputs:           pHoldInputsRecord(d.PHoldInputs),
+		Lambda:                round4(d.Lambda),
+		ProactiveRate:         round4(d.ProactiveRate),
+		Attribution:           canonicalizeAttribution(d.Attribution),
+		Handler:               d.Handler,
+		ObjectsTouched:        d.ObjectsTouched,
+		RollbackRef:           d.RollbackRef,
+		MutationKind:          d.MutationKind,
 		PreemptMargin:         round4(d.PreemptMargin),
 		ProjectedNextStageSec: round4(d.ProjectedNextStageSec),
 		AIClassified:          d.AIClassified,
@@ -288,4 +292,24 @@ func sign(x float64) float64 {
 		return -1
 	}
 	return 1
+}
+
+// PHoldInputsRecord is the audited form of model.PHoldInputs (M-143).
+type PHoldInputsRecord struct {
+	BetaMean float64 `json:"betaMean"`
+	Pressure float64 `json:"p"`
+	Cap      float64 `json:"cap"` // INSUFFICIENT EVIDENCE — provisional, fit in T3-D
+	ScaleSec float64 `json:"scaleSec"`
+	Raw      float64 `json:"raw"`
+	Final    float64 `json:"final"`
+}
+
+func pHoldInputsRecord(in model.PHoldInputs) *PHoldInputsRecord {
+	if in.Cap == 0 && in.ScaleSec == 0 && in.Raw == 0 && in.Final == 0 {
+		return nil // engine that does not compute pHold inputs (p0-greedy)
+	}
+	return &PHoldInputsRecord{
+		BetaMean: round4(in.BetaMean), Pressure: round4(in.Pressure), Cap: round4(in.Cap),
+		ScaleSec: round4(in.ScaleSec), Raw: round4(in.Raw), Final: round4(in.Final),
+	}
 }

@@ -521,6 +521,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			StageHazard:           ac.assess.Hazard,
 			NextStage:             ac.assess.NextStageName,
 			PHold:                 ac.assess.PHold,
+			PHoldInputs:           ac.assess.PHoldInputs,
 			Lambda:                lambda,
 			ProactiveRate:         rate,
 			Attribution:           attribution,

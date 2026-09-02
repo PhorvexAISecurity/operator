@@ -98,3 +98,30 @@ func TestPhorvexPolicyWebhookDeleteDoesNotBlockCleanup(t *testing.T) {
 		t.Fatalf("delete rejected: %v", err)
 	}
 }
+
+// PHORVEXSEC-189 / M-143 test (f): the exposure-pressure cap must stay strictly inside
+// (0,1) — 1 would restore the annihilating form, 0 would erase the prior floor.
+func TestValidatePhorvexPolicyAcceptsExposurePressureCapInsideUnitInterval(t *testing.T) {
+	for _, cap := range []string{"", "0.5", "0.01", "0.999", "0.25"} {
+		p := validAdmissionPolicy()
+		p.Spec.Belief.ExposurePressureCap = cap
+		if errs := ValidatePhorvexPolicy(p); len(errs) != 0 {
+			t.Errorf("exposurePressureCap %q rejected: %v", cap, errs)
+		}
+	}
+}
+
+func TestValidatePhorvexPolicyRejectsExposurePressureCapOutsideUnitInterval(t *testing.T) {
+	for _, cap := range []string{"0", "0.0", "1", "1.0", "1.5", "-0.5", "banana", "NaN", "+0.5", ".5", "5e-1"} {
+		p := validAdmissionPolicy()
+		p.Spec.Belief.ExposurePressureCap = cap
+		errs := ValidatePhorvexPolicy(p)
+		if len(errs) == 0 {
+			t.Errorf("exposurePressureCap %q accepted; want rejection", cap)
+			continue
+		}
+		if errs[0].Field != "spec.belief.exposurePressureCap" {
+			t.Errorf("exposurePressureCap %q: error field = %q", cap, errs[0].Field)
+		}
+	}
+}

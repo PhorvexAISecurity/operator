@@ -123,7 +123,10 @@ type Assessment struct {
 	NextStageName string
 	Hazard        float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
 	PHold         float64 // P(attacker still holds the foothold) in [0,1]
-	StageUrgency  float64 // [0,1] current-consequence blended with predictive (hazard*next)
+	// PHoldInputs are the audited terms behind PHold (M-143): betaMean, capped pressure,
+	// cap, scale, raw and final. Lets a reader verify the posterior survived the clock.
+	PHoldInputs  model.PHoldInputs
+	StageUrgency float64 // [0,1] current-consequence blended with predictive (hazard*next)
 	// HasEvidence is TRUE when this assessment rests on a REAL observation rather than on the
 	// passage of time: a SecurityEvent on this pod, a compromised graph neighbour, an AI kill-chain
 	// signature, or a poisoned adapter. It is the anti-decoy discriminator (PHVX-72): StageUrgency
@@ -183,6 +186,10 @@ func NewModel() *Model {
 		Memory:       NewConjugateMemory(),
 	}
 }
+
+// DefaultExposurePressureCap is the runtime backstop for an unset/invalid policy cap
+// (M-143 form A). INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D.
+const DefaultExposurePressureCap = 0.5
 
 // weibullCDF = 1 - exp(-(t/scale)^k): the prob the stage has transitioned by dwell t.
 func weibullCDF(t, scale, k float64) float64 {
@@ -343,13 +350,27 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	latUrg := clamp01(math.Max(lateralPressure, hazard*boolf(next == StageLateral)))
 
 	// --- P(hold): Beta posterior (tenant prior + per-asset event evidence), with an
-	// exposure-pressure floor and a just-moved damping. ---
+	// exposure-pressure PRIOR FLOOR (not an annihilator) and a just-moved damping. ---
+	//
+	// PHORVEXSEC-189 / M-143 (form A, capped noisy-OR). The old term
+	// clamp01(exposure/floor) reached 1 for every pod older than the floor, and then
+	// pHoldRaw = betaMean + 1*(1-betaMean) = 1 for EVERY betaMean: the posterior, the tenant
+	// prior and the feedback had zero effect (84.6% of live records pinned >= 0.999).
+	// Now p(t) = cap*min(1, t/T_exp) with 0 < cap < 1, so d pHold/d betaMean = 1-p >= 1-cap > 0
+	// at every age, pHold(t=0) = betaMean exactly as before, and pHold reaches 1 only when
+	// betaMean does. cap is INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. T_exp is the
+	// policy proactive floor today; T1-B substitutes its dedicated constant without changing
+	// this formula.
 	betaMean := m.Memory.PHoldUCBWithEvidence(pol.Tenant, eventAlpha, m.ConfidenceK)
+	cap := pol.ExposurePressureCap
+	if cap <= 0 || cap >= 1 {
+		cap = DefaultExposurePressureCap
+	}
 	exposurePressure := 0.0
 	if proactiveFloorSec > 0 {
-		exposurePressure = clamp01(exposureSec / proactiveFloorSec)
+		exposurePressure = cap * math.Min(1, math.Max(0, exposureSec)/proactiveFloorSec)
 	}
-	pHoldRaw := betaMean + exposurePressure*(1-betaMean) // noisy-OR
+	pHoldRaw := betaMean + exposurePressure*(1-betaMean) // capped noisy-OR: range [betaMean, betaMean+cap*(1-betaMean)]
 
 	// AI-GATED damping. The generic K8s path stays BYTE-IDENTICAL to the P1 baseline
 	// (shape=1 exponential just-moved damping); AI workloads use the survival form
@@ -373,12 +394,16 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	projNext := projectedNextStageSec(scale, shape, exposureSec)
 
 	return Assessment{
-		Stage:                 stage,
-		StageName:             stage.String(),
-		NextStage:             next,
-		NextStageName:         next.String(),
-		Hazard:                hazard,
-		PHold:                 pHold,
+		Stage:         stage,
+		StageName:     stage.String(),
+		NextStage:     next,
+		NextStageName: next.String(),
+		Hazard:        hazard,
+		PHold:         pHold,
+		PHoldInputs: model.PHoldInputs{
+			BetaMean: betaMean, Pressure: exposurePressure, Cap: cap, ScaleSec: proactiveFloorSec,
+			Raw: pHoldRaw, Final: pHold,
+		},
 		StageUrgency:          stageUrg,
 		HasEvidence:           hasEvidence,
 		Leakage:               leakageOf(view.Physics),
