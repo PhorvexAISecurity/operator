@@ -7,6 +7,7 @@ package killchain
 import (
 	"math"
 
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
 )
@@ -125,7 +126,15 @@ type Assessment struct {
 	PHold         float64 // P(attacker still holds the foothold) in [0,1]
 	// PHoldInputs are the audited terms behind PHold (M-143): betaMean, capped pressure,
 	// cap, scale, raw and final. Lets a reader verify the posterior survived the clock.
-	PHoldInputs  model.PHoldInputs
+	PHoldInputs model.PHoldInputs
+	// EventStageName is the evidence-following event-derived stage (M-27 ruling Q2); ""
+	// when no event with a positive aging weight targets this pod. The final Stage is this
+	// merged with the AI classifier (the T1-M025 merge point).
+	EventStageName string
+	// EventEvidence is Σ_e w(age_e)·severity_e over targeting events (M-27 ruling Q1).
+	EventEvidence float64
+	// Events lists every event the assessment saw with its age and aging weight.
+	Events       []model.EventEvidence
 	StageUrgency float64 // [0,1] current-consequence blended with predictive (hazard*next)
 	// HasEvidence is TRUE when this assessment rests on a REAL observation rather than on the
 	// passage of time: a SecurityEvent on this pod, a compromised graph neighbour, an AI kill-chain
@@ -293,20 +302,50 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 // pod-identity exposure clock; proactiveFloorSec is the policy's proactive floor.
 func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, proactiveFloorSec float64) Assessment {
 	// --- stage belief from events (this pod) + neighbor pressure ---
+	//
+	// PHORVEXSEC-186 / M-27: every event is weighted by its age, w = 1 − clamp01(age/τ_ev)
+	// (ruling Q1, the same function ctxprov uses), and the event-derived stage follows the
+	// evidence (ruling Q2): only events with w > 0 can set it, so a stale alert cannot hold
+	// a stage. τ_ev is the policy proactive floor — T1-B's initialization; its value is
+	// INSUFFICIENT EVIDENCE (M-29). Aging applies to every ingested event (T1-M094 is not
+	// merged). A CR without a timestamp is present=false and weighs 0.
 	stage := StageRecon
+	eventStage := Stage(0)
+	eventStageSet := false
 	eventAlpha := 0.0 // held-evidence pseudo-counts for the Beta posterior
+	evidence := 0.0   // Σ_e w(age_e)·severity_e over events targeting this pod
 	lateralPressure := 0.0
+	var eventRecords []model.EventEvidence
+	if len(view.Events) > 0 {
+		eventRecords = make([]model.EventEvidence, 0, len(view.Events))
+	}
 	for _, e := range view.Events {
 		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / 4.0
+		w := 0.0
+		if !e.TimestampMissing {
+			w = model.EventAgeWeight(e.Age, pol.ProactiveFloor)
+		}
+		eventRecords = append(eventRecords, model.EventEvidence{
+			Name: e.Name, Source: e.Source, Type: e.Type, ThreatLevel: e.ThreatLevel,
+			TargetsPod: e.TargetsPod, AgeSec: e.Age.Seconds(), Weight: w, TimestampPresent: !e.TimestampMissing,
+		})
+		if w <= 0 {
+			metrics.RecordEventAgedOut(pol.Tenant)
+			continue
+		}
 		if e.TargetsPod {
-			if s := stageFromEvent(e); s > stage {
-				stage = s
+			if s := stageFromEvent(e); !eventStageSet || s > eventStage {
+				eventStage, eventStageSet = s, true
 			}
-			eventAlpha += 1.0 + 2.0*sev // stronger events => stronger held-evidence
+			eventAlpha += w * (1.0 + 2.0*sev) // stronger AND fresher events => stronger held-evidence
+			evidence += w * sev
 		} else {
 			// A compromised NEIGHBOR means the attacker is about to pivot HERE.
-			lateralPressure = math.Max(lateralPressure, 0.5+0.5*sev)
+			lateralPressure = math.Max(lateralPressure, w*(0.5+0.5*sev))
 		}
+	}
+	if eventStageSet && eventStage > stage {
+		stage = eventStage
 	}
 
 	// --- AI/inference stage classification (P-CONTEXT). Takes precedence over the
@@ -393,13 +432,20 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	preempt := 1 - weibullCDF(exposureSec, scale, shape) // survival; moveLatency=0 (flagged)
 	projNext := projectedNextStageSec(scale, shape, exposureSec)
 
+	eventStageName := ""
+	if eventStageSet {
+		eventStageName = eventStage.String()
+	}
 	return Assessment{
-		Stage:         stage,
-		StageName:     stage.String(),
-		NextStage:     next,
-		NextStageName: next.String(),
-		Hazard:        hazard,
-		PHold:         pHold,
+		Stage:          stage,
+		StageName:      stage.String(),
+		EventStageName: eventStageName,
+		EventEvidence:  evidence,
+		Events:         eventRecords,
+		NextStage:      next,
+		NextStageName:  next.String(),
+		Hazard:         hazard,
+		PHold:          pHold,
 		PHoldInputs: model.PHoldInputs{
 			BetaMean: betaMean, Pressure: exposurePressure, Cap: cap, ScaleSec: proactiveFloorSec,
 			Raw: pHoldRaw, Final: pHold,

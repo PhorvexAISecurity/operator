@@ -286,13 +286,18 @@ func AttackVectorForActuator(actuator string) string {
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 type SecurityEventInfo struct {
+	Name         string // SecurityEvent CR name (audit: which event carried the evidence)
 	Type         string
 	ThreatLevel  string
 	Source       string
 	Description  string
 	AnomalyScore float64 // -1 when unscored
 	Age          time.Duration
-	TargetsPod   bool // true when this event targets THIS pod (vs a graph neighbor)
+	// TimestampMissing is true when the CR carried no usable CreationTimestamp, so Age is
+	// not trusted: the event's aging weight is 0 and the record says present=false
+	// (M-27). Zero value = present, so every existing literal stays a fresh event.
+	TimestampMissing bool
+	TargetsPod       bool // true when this event targets THIS pod (vs a graph neighbor)
 }
 
 // NeighborRef is a graph-reachable neighbor and its (generic) asset value — used by
@@ -449,7 +454,14 @@ type Decision struct {
 	PHold         float64 // authoritative P(attacker still holds the foothold) [0,1]
 	// PHoldInputs records every term of the capped noisy-OR that produced PHold
 	// (PHORVEXSEC-189 / M-143) so a reader can see the posterior was not annihilated.
-	PHoldInputs        PHoldInputs
+	PHoldInputs PHoldInputs
+	// StageEvent is the evidence-following event-derived stage (M-27): the max-rank stage
+	// among events whose aging weight is > 0; "" when no live event sets a stage.
+	StageEvent string
+	// EventEvidence is Σ_e w(age_e)·severity_e over events targeting this pod (M-27).
+	EventEvidence float64
+	// Events lists every ingested event this assessment saw with its age and weight.
+	Events             []EventEvidence
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase
