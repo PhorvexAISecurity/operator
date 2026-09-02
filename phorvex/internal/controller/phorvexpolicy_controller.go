@@ -11,7 +11,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -45,7 +44,7 @@ func (r *PhorvexPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	if err := validate(&p); err != nil {
+	if err := ValidatePhorvexPolicy(&p).ToAggregate(); err != nil {
 		// Do not register an invalid policy; surface the error and stop.
 		return ctrl.Result{}, r.setCondition(ctx, &p, "ValidationError", metav1.ConditionTrue, "Invalid", err.Error())
 	}
@@ -95,17 +94,6 @@ func (r *PhorvexPolicyReconciler) setCondition(ctx context.Context, p *v1alpha1.
 		}
 		return r.Status().Update(ctx, &fresh)
 	})
-}
-
-// validate checks the spec beyond CRD-level validation.
-func validate(p *v1alpha1.PhorvexPolicy) error {
-	if _, err := metav1.LabelSelectorAsSelector(&p.Spec.Selector); err != nil {
-		return fmt.Errorf("invalid selector: %w", err)
-	}
-	if p.Spec.EffectiveMode() == v1alpha1.ModeActive && len(p.Spec.Selector.MatchLabels) == 0 {
-		return fmt.Errorf("active mode requires a matchLabels selector (the Phoenix AMTD guest list is matchLabels-only in P0)")
-	}
-	return nil
 }
 
 // SetupWithManager wires the reconciler.
