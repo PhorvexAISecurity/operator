@@ -145,6 +145,17 @@ const (
 	PhaseUnknown WorkloadPhase = "Unknown"
 )
 
+// PHoldInputs are the audited terms of pHold = betaMean + p*(1-betaMean), p = cap*min(1, t/scale),
+// then multiplied by the just-moved damping (M-143 form A).
+type PHoldInputs struct {
+	BetaMean float64 // Beta posterior mean (tenant prior + per-asset event evidence)
+	Pressure float64 // p(t_exp) = cap*min(1, t_exp/scaleSec) in [0,cap]
+	Cap      float64 // p_max — INSUFFICIENT EVIDENCE, provisional 0.5 (T3-D)
+	ScaleSec float64 // T_exp in seconds (today the policy proactive floor; T1-B substitutes the dedicated constant)
+	Raw      float64 // betaMean + pressure*(1-betaMean), before damping
+	Final    float64 // clamp01(raw * damping) = PHold
+}
+
 // Exposure-clock variable dimensions (the per-VARIABLE exposure scaffold). P0 wires
 // the K8s-observable dimensions (PodIdentity, NodePlacement) live and DECLARES the
 // rest so a later phase fills them without a schema change.
@@ -400,8 +411,11 @@ type Policy struct {
 	ReactiveOnly                 bool
 	KillChainSojournScaleSeconds map[string]float64
 	KillChainShape               float64
-	EnabledActions               map[Action]bool
-	AssetWeightFromLabels        func(labels map[string]string) float64
+	// ExposurePressureCap is p_max of the capped noisy-OR P(hold) (M-143). 0 means unset:
+	// killchain substitutes the provisional default. INSUFFICIENT EVIDENCE — fit in T3-D.
+	ExposurePressureCap   float64
+	EnabledActions        map[Action]bool
+	AssetWeightFromLabels func(labels map[string]string) float64
 
 	// Decision-trace-only identity. The optimizer never reads these fields while
 	// scoring; they let the post-selection trace name the exact policy/build/tick.
@@ -425,14 +439,17 @@ type Decision struct {
 	CoverageValue float64
 	// ThreatRisk preserves the deprecated P0 engine's distinct threat-weighted value.
 	// It is zero under P1 and is serialized separately so one field never has two meanings.
-	ThreatRisk         float64
-	Cost               float64
-	Net                float64 // engine-specific value - Lambda*Cost
-	AssetValue         float64
-	Residual           float64 // observational under the default P1 coverage engine
-	ThreatPosture      float64 // observational under the default P1 coverage engine
-	Exposure           float64
-	PHold              float64 // authoritative P(attacker still holds the foothold) [0,1]
+	ThreatRisk    float64
+	Cost          float64
+	Net           float64 // engine-specific value - Lambda*Cost
+	AssetValue    float64
+	Residual      float64 // observational under the default P1 coverage engine
+	ThreatPosture float64 // observational under the default P1 coverage engine
+	Exposure      float64
+	PHold         float64 // authoritative P(attacker still holds the foothold) [0,1]
+	// PHoldInputs records every term of the capped noisy-OR that produced PHold
+	// (PHORVEXSEC-189 / M-143) so a reader can see the posterior was not annihilated.
+	PHoldInputs        PHoldInputs
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase
