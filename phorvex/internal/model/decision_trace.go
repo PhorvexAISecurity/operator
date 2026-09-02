@@ -52,11 +52,15 @@ type OptionalBool struct {
 type DecisionModelInputsV2 struct {
 	Phase string `json:"phase"`
 
-	RequestRate       OptionalFloat `json:"requestRate"`
-	ConnectionCount   OptionalFloat `json:"connectionCount"`
-	GPUUtilization    OptionalFloat `json:"gpuUtilization"`
-	SMOccupancy       OptionalFloat `json:"smOccupancy"`
-	VRAMFraction      OptionalFloat `json:"vramFraction"`
+	RequestRate     OptionalFloat `json:"requestRate"`
+	ConnectionCount OptionalFloat `json:"connectionCount"`
+	GPUUtilization  OptionalFloat `json:"gpuUtilization"`
+	SMOccupancy     OptionalFloat `json:"smOccupancy"`
+	VRAMFraction    OptionalFloat `json:"vramFraction"`
+	// Leakage is the model-theft gate's ACTIVITY input as actually tested (T1-A): SMOccupancy
+	// only, never allocation. Present iff SMOccupancy was measured (SMSource != ""), so an
+	// honest-absent scrape is recorded as absent rather than as an idle GPU.
+	Leakage           OptionalFloat `json:"leakage"`
 	ImageRarity       OptionalFloat `json:"imageRarity"`
 	ModelRarity       OptionalFloat `json:"modelRarity"`
 	CoResidency       OptionalFloat `json:"coResidency"`
@@ -242,6 +246,7 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out.Inputs.GPUUtilization = cleanOptional(out.Inputs.GPUUtilization)
 	out.Inputs.SMOccupancy = cleanOptional(out.Inputs.SMOccupancy)
 	out.Inputs.VRAMFraction = cleanOptional(out.Inputs.VRAMFraction)
+	out.Inputs.Leakage = cleanOptional(out.Inputs.Leakage)
 	out.Inputs.ImageRarity = cleanOptional(out.Inputs.ImageRarity)
 	out.Inputs.ModelRarity = cleanOptional(out.Inputs.ModelRarity)
 	out.Inputs.CoResidency = cleanOptional(out.Inputs.CoResidency)

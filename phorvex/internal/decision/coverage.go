@@ -671,6 +671,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
 		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
 		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
+		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
 		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
 		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
 		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
