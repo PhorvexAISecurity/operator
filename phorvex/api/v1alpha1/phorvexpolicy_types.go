@@ -159,9 +159,11 @@ type ObjectiveSpec struct {
 	// Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,
 	// which multiplies the dimensionless ECost score. Runtime state then adapts from
 	// move-count pressure and is audited separately from this policy value. It is not
-	// certified as an exact move-budget dual. Decimal string in [0,inf); empty
-	// defaults to "0.6" in code.
+	// certified as an exact move-budget dual. Decimal string in [0,10], matching
+	// the runtime controller's existing clamp; empty defaults to "0.6" in code.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^$|^(0|[1-9][0-9]*)(\.[0-9]+)?$`
+	// +kubebuilder:validation:XValidation:rule="self == '' || double(self) <= 10.0",message="lambda must be between 0 and 10"
 	Lambda string `json:"lambda,omitempty"`
 
 	// CostWeights splits the switching cost K = normSparsity*C_norm +
@@ -195,12 +197,14 @@ type BudgetSpec struct {
 
 	// TickInterval is the decision cadence. Empty defaults to 20s in code.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="tickInterval must be a positive duration"
 	TickInterval metav1.Duration `json:"tickInterval,omitempty"`
 
 	// AntiOverRotationWindow is the minimum gap before the SAME pod may be mutated
 	// again — the forensic/evidence-retention guard (never wipe attack evidence
 	// faster than this window). Empty defaults to 5m in code.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="antiOverRotationWindow must be a positive duration"
 	AntiOverRotationWindow metav1.Duration `json:"antiOverRotationWindow,omitempty"`
 
 	// ProactiveFloor (a.k.a. the hygiene floor) is the detection-independent
@@ -208,6 +212,7 @@ type BudgetSpec struct {
 	// for a proactive rotation regardless of any detector. This is the thesis signal
 	// (FR5). Empty defaults to 1h in code.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="proactiveFloor must be a positive duration"
 	ProactiveFloor metav1.Duration `json:"proactiveFloor,omitempty"`
 }
 

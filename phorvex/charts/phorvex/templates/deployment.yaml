@@ -26,10 +26,9 @@ spec:
       serviceAccountName: {{ include "phorvex.serviceAccountName" . }}
       securityContext:
         runAsNonRoot: true
-        {{- if .Values.phorvex.audit.enabled }}
+        {{- if or .Values.phorvex.audit.enabled .Values.phorvex.admissionWebhook.enabled }}
         # Both containers run as non-root with different images; fsGroup makes the mounted
-        # audit volume group-writable so the operator can create the file and the console
-        # can read it.
+        # audit volume group-writable and lets the manager read its 0440 webhook key.
         fsGroup: 65532
         {{- end }}
       containers:
@@ -49,6 +48,11 @@ spec:
         - --metrics-bind-address={{ .Values.phorvex.metricsBindAddress }}
         - --health-probe-bind-address={{ .Values.phorvex.healthProbeBindAddress }}
         - --leader-elect={{ .Values.phorvex.leaderElect }}
+        {{- if .Values.phorvex.admissionWebhook.enabled }}
+        - --admission-webhook=true
+        - --webhook-port={{ .Values.phorvex.admissionWebhook.port }}
+        - --webhook-cert-dir={{ .Values.phorvex.admissionWebhook.certDir }}
+        {{- end }}
         {{- if .Values.phorvex.prometheusUrl }}
         - --prometheus-url={{ .Values.phorvex.prometheusUrl }}
         {{- end }}
@@ -92,6 +96,11 @@ spec:
           containerPort: 8080
         - name: health
           containerPort: 8081
+        {{- if .Values.phorvex.admissionWebhook.enabled }}
+        - name: webhook-server
+          containerPort: {{ .Values.phorvex.admissionWebhook.port }}
+          protocol: TCP
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -111,7 +120,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -125,6 +134,11 @@ spec:
         {{- if .Values.phorvex.calibration.enabled }}
         - name: calibration-evidence
           mountPath: {{ .Values.phorvex.calibration.exportDir }}
+        {{- end }}
+        {{- if .Values.phorvex.admissionWebhook.enabled }}
+        - name: webhook-cert
+          mountPath: {{ .Values.phorvex.admissionWebhook.certDir }}
+          readOnly: true
         {{- end }}
         {{- end }}
 {{- if .Values.phorvex.console.enabled }}
@@ -191,7 +205,7 @@ spec:
         - name: console-tmp
           mountPath: /tmp
 {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled .Values.phorvex.calibration.enabled }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -214,6 +228,12 @@ spec:
       {{- if .Values.phorvex.calibration.enabled }}
       - name: calibration-evidence
         emptyDir: {}
+      {{- end }}
+      {{- if .Values.phorvex.admissionWebhook.enabled }}
+      - name: webhook-cert
+        secret:
+          secretName: {{ include "phorvex.fullname" . }}-webhook-cert
+          defaultMode: 0440
       {{- end }}
       {{- end }}
       {{- with .Values.phorvex.nodeSelector }}

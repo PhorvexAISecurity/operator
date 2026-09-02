@@ -1,0 +1,77 @@
+{{- if .Values.phorvex.admissionWebhook.enabled }}
+{{- $fullname := include "phorvex.fullname" . -}}
+{{- $serviceName := printf "%s-webhook" $fullname -}}
+{{- $secretName := printf "%s-webhook-cert" $fullname -}}
+{{- $caCert := "" -}}
+{{- $tlsCert := "" -}}
+{{- $tlsKey := "" -}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $secretName -}}
+{{- if and $existing (hasKey $existing.data "ca.crt") (hasKey $existing.data "tls.crt") (hasKey $existing.data "tls.key") -}}
+{{- $caCert = (index $existing.data "ca.crt" | b64dec) -}}
+{{- $tlsCert = (index $existing.data "tls.crt" | b64dec) -}}
+{{- $tlsKey = (index $existing.data "tls.key" | b64dec) -}}
+{{- else -}}
+{{- $ca := genCA (printf "%s-ca" $fullname) 3650 -}}
+{{- $dnsNames := list $serviceName (printf "%s.%s" $serviceName .Release.Namespace) (printf "%s.%s.svc" $serviceName .Release.Namespace) (printf "%s.%s.svc.cluster.local" $serviceName .Release.Namespace) -}}
+{{- $cert := genSignedCert $serviceName nil $dnsNames 3650 $ca -}}
+{{- $caCert = $ca.Cert -}}
+{{- $tlsCert = $cert.Cert -}}
+{{- $tlsKey = $cert.Key -}}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  ca.crt: {{ $caCert | b64enc | quote }}
+  tls.crt: {{ $tlsCert | b64enc | quote }}
+  tls.key: {{ $tlsKey | b64enc | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "phorvex.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+  - name: https-webhook
+    port: 443
+    protocol: TCP
+    targetPort: webhook-server
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ printf "%s-policy-validator" $fullname | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+webhooks:
+- name: vphorvexpolicy.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  timeoutSeconds: 5
+  clientConfig:
+    caBundle: {{ $caCert | b64enc | quote }}
+    service:
+      name: {{ $serviceName }}
+      namespace: {{ .Release.Namespace }}
+      port: 443
+      path: /validate-phorvex-ai-v1alpha1-phorvexpolicy
+  rules:
+  - apiGroups: ["phorvex.ai"]
+    apiVersions: ["v1alpha1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["phorvexpolicies"]
+    scope: Namespaced
+{{- end }}
