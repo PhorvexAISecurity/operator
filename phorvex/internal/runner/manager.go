@@ -110,7 +110,13 @@ type Manager struct {
 	BrainImage           string
 	GitSHA               string
 
-	mu       sync.RWMutex
+	mu sync.RWMutex
+	// emits is the per-policy ledger of ENACTED-move timestamps that feeds the rolling
+	// Status.Actuated / Status.MovesThisWindow (PHORVEXSEC-176). It lives on the Manager,
+	// not the policyEntry, so a spec edit (Upsert) does not forget real actuations. It is
+	// in-memory only: a restart or leadership change can only UNDER-report until the next
+	// emit — never claim an actuation the running brain did not perform.
+	emits    map[string][]time.Time
 	policies map[string]*policyEntry
 	// Accessed only by the single tick loop. The RLS outcome is capped after its
 	// [0,2] observation window, but ledger-enabled censored entries remain here so
@@ -208,11 +214,42 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	m.mu.Lock()
 	e := m.policies[key.String()]
 	delete(m.policies, key.String())
+	delete(m.emits, key.String())
 	m.mu.Unlock()
 	if e != nil {
 		metrics.ResetTenant(e.tenant)
 		metrics.ResetKillSwitchStatus(e.key.Namespace, e.key.Name)
 	}
+}
+
+// recordEmits appends n enacted moves at now to the policy's ledger, drops entries older
+// than the trailing window and returns how many enacted moves remain inside it. Called
+// exactly once per tick, OUTSIDE the status conflict-retry loop, so a retried write never
+// double-counts. Selected-but-not-emitted decisions (dry-run, kill-switch, actuator
+// failure) are never recorded.
+func (m *Manager) recordEmits(key string, n int, now time.Time, window time.Duration) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.emits == nil {
+		m.emits = map[string][]time.Time{}
+	}
+	ledger := m.emits[key]
+	for i := 0; i < n; i++ {
+		ledger = append(ledger, now)
+	}
+	cutoff := now.Add(-window)
+	kept := ledger[:0]
+	for _, ts := range ledger {
+		if ts.After(cutoff) {
+			kept = append(kept, ts)
+		}
+	}
+	if len(kept) == 0 {
+		delete(m.emits, key)
+		return 0
+	}
+	m.emits[key] = kept
+	return len(kept)
 }
 
 // NeedLeaderElection keeps the mutating tick loop in controller-runtime's
