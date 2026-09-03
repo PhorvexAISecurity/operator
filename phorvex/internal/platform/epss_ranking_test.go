@@ -51,7 +51,7 @@ func TestSeededEPSSReachesPhysicsWitness(t *testing.T) {
 	defer SeedEPSS(nil)
 
 	w := witnessByPod(t, twoPodSnapshot())
-	got, absent := w["ns/exploitable"].EPSS, w["ns/benign"].EPSS
+	got, absent := w["ns/exploitable"].EPSSMultiplier, w["ns/benign"].EPSSMultiplier
 
 	// M-104 form: 1 + 0.97*(9.8/10) = 1.9506
 	if math.Abs(got-1.9506) > 1e-9 {
@@ -72,9 +72,9 @@ func TestNonNeutralEPSSChangesRanking(t *testing.T) {
 	// Baseline: nothing seeded. Both pods are honest-absent, so the two are indistinguishable.
 	SeedEPSS(nil)
 	flat := witnessByPod(t, snap)
-	if flat["ns/exploitable"].EPSS != flat["ns/benign"].EPSS {
+	if flat["ns/exploitable"].EPSSMultiplier != flat["ns/benign"].EPSSMultiplier {
 		t.Fatalf("with an empty cache both pods must tie; got %v vs %v",
-			flat["ns/exploitable"].EPSS, flat["ns/benign"].EPSS)
+			flat["ns/exploitable"].EPSSMultiplier, flat["ns/benign"].EPSSMultiplier)
 	}
 	baseRatio := scarcity(flat["ns/exploitable"]) / scarcity(flat["ns/benign"])
 	if math.Abs(baseRatio-1.0) > 1e-9 {
@@ -113,5 +113,5 @@ func TestNonNeutralEPSSChangesRanking(t *testing.T) {
 // scarcity is the product ucw.go forms before boundMult: ImageRarity * EPSS * CoResidency.
 // ModelRarity is excluded — these fixtures are not model-serving pods.
 func scarcity(w model.PhysicsWitness) float64 {
-	return w.ImageRarity * w.EPSS * w.CoResidency
+	return w.ImageRarity * w.EPSSMultiplier * w.CoResidency
 }

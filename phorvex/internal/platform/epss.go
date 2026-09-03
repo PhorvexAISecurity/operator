@@ -22,7 +22,7 @@ import (
 // this file only looks the pair up. Rather than
 // wrapping the default ctxprov 'sensed-context' provider (which computes AssetValue
 // itself — the non-additivity the decision flagged), the exploitability prior enters the
-// SAME Layer-C EMR weight via Physics.EPSS, multiplying the recon-fact base alongside
+// SAME Layer-C EMR weight via Physics.EPSSMultiplier, multiplying the recon-fact base alongside
 // image-rarity. A known-exploitable image makes its recon facts worth more to invalidate.
 //
 // SOURCE: an image-digest -> {EPSS in [0,1], CVSS in [0,10]} cache, populated point-in-

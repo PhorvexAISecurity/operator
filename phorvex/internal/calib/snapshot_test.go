@@ -106,7 +106,7 @@ func TestTerminalPodsAreExcludedFromCalibrationProjection(t *testing.T) {
 	witness := map[string]model.PhysicsWitness{}
 	for _, p := range snap.Pods {
 		witness[p.Namespace+"/"+p.Name] = model.PhysicsWitness{
-			Scanned: true, ImageRarity: 1.5, EPSS: 1.2, ModelRarity: 1,
+			Scanned: true, ImageRarity: 1.5, EPSSMultiplier: 1.2, ModelRarity: 1,
 		}
 	}
 

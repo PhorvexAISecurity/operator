@@ -676,7 +676,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
 		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSScore),
 		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
-		EPSSMultiplier:    traceOptional(v.Physics.EPSSPresent, v.Physics.EPSS),
+		EPSSMultiplier:    traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSMultiplier),
 		EPSSReason:        v.Physics.EPSSReason,
 		EPSSBasis:         v.Physics.EPSSBasis,
 		EPSSCachedDigest:  v.Physics.EPSSCachedDigest,

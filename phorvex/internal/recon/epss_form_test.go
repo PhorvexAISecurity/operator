@@ -112,10 +112,10 @@ func TestEPSSEntersExactlyOneLayer(t *testing.T) {
 				if i := strings.Index(code, "//"); i >= 0 {
 					code = code[:i]
 				}
-				if pkg == "decision" && (strings.Contains(code, "EPSSScore") || strings.Contains(code, "EPSSReason") || strings.Contains(code, "EPSSPresent") || strings.Contains(code, "Physics.EPSS")) {
+				if pkg == "decision" && (strings.Contains(code, "EPSSScore") || strings.Contains(code, "EPSSReason") || strings.Contains(code, "EPSSPresent") || strings.Contains(code, "Physics.EPSSMultiplier")) {
 					continue // the trace RECORDS the pair; it does not consume it
 				}
-				if strings.Contains(code, "EPSSMultiplier(") || strings.Contains(code, "Physics.EPSS") || strings.Contains(code, ".CVSS") {
+				if strings.Contains(code, "EPSSMultiplier(") || strings.Contains(code, "Physics.EPSSMultiplier") || strings.Contains(code, ".CVSS") {
 					t.Fatalf("%s/%s consumes EPSS/CVSS: %q — EPSS enters exactly one layer (recon value axis)", pkg, ent.Name(), strings.TrimSpace(line))
 				}
 			}

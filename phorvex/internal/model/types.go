@@ -310,7 +310,7 @@ type PhysicsWitness struct {
 	ImageRarityPresent bool    // an image identity participated in the current fleet population
 	CoResidency        float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
 	CoResidencyPresent bool    // this pod had a node represented in the current fleet scan
-	EPSS               float64 // the M-104 value multiplier 1 + EPSSScore·(CVSS/10) ∈ [1,2]; exactly 1 when !EPSSPresent
+	EPSSMultiplier     float64 // the M-104 value multiplier 1 + EPSSScore·(CVSS/10) ∈ [1,2]; exactly 1 when !EPSSPresent (was EPSS)
 	EPSSPresent        bool    // a usable (present, finite, in-domain) EPSS/CVSS pair produced the multiplier
 	EPSSScore          float64 // raw cache EPSS [0,1]; meaningful only when EPSSPresent
 	CVSS               float64 // raw cache CVSS [0,10]; meaningful only when EPSSPresent
@@ -348,7 +348,7 @@ type PhysicsWitness struct {
 // PDB) — what every consumer sees before a scan, guaranteeing baseline reproduction.
 func NeutralPhysics() PhysicsWitness {
 	return PhysicsWitness{
-		ImageRarity: 1, CoResidency: 1, EPSS: 1, ModelRarity: 1,
+		ImageRarity: 1, CoResidency: 1, EPSSMultiplier: 1, ModelRarity: 1,
 		PDBMinAvailable: -1, PDBDisruptionsAllowed: -1,
 	}
 }

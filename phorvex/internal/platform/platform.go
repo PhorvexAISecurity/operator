@@ -153,7 +153,7 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		lk := lookupEPSS(p.ImageID)
 		// The multiplier is recon's (M-104, one layer); the witness carries it for the
 		// calibration snapshot and the scan report, plus the raw pair and the reason.
-		w.EPSS, w.EPSSPresent, w.EPSSReason = recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+		w.EPSSMultiplier, w.EPSSPresent, w.EPSSReason = recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
 		w.EPSSScore, w.CVSS = lk.EPSS, lk.CVSS
 		w.EPSSBasis, w.EPSSCachedDigest, w.EPSSScanTS = lk.Basis, lk.CachedDigest, lk.ScanTS
 		// model-rarity (AI fact dispersion). rarity() is population-relative, so ModelRarity is 1.0 in

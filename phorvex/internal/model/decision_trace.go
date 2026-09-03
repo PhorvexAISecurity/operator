@@ -67,7 +67,7 @@ type DecisionModelInputsV2 struct {
 	EPSSBasis         string        `json:"epssBasis,omitempty"`         // exact | repo-fallback | miss (M-141)
 	EPSSCachedDigest  string        `json:"epssCachedDigest,omitempty"`  // cache key that supplied the value
 	EPSSRunningDigest string        `json:"epssRunningDigest,omitempty"` // the pod's running ImageID
-	EPSSScanTS        string        `json:"epssScanTS,omitempty"`        // audit only
+	EPSSScanTS        string        `json:"epssScanTS,omitempty"`        // feed-run time the pair (CVE scan + EPSS score) was produced = EPSS as-of; a matched digest with an old scanTS is a stale pair
 	PhysicsScanned    bool          `json:"physicsScanned"`
 	DispersionMult    OptionalFloat `json:"dispersionMult"`
 	DispersionCap     OptionalFloat `json:"dispersionCap"`

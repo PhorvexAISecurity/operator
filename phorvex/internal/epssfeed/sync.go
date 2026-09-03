@@ -176,7 +176,12 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			continue
 		}
 		if score, ok := bestImageScore(vulns, epssScores); ok {
-			score.ScanTS = now.Format(time.RFC3339) // M-141: the lookup's repo-latest ordering key
+			// M-141 / M-104: the feed-run time at which THIS digest's CVE scan and its FIRST EPSS
+			// scores were produced together — i.e. the "EPSS as-of" time of the entry. A digest can
+			// match and still be old: that shows as an old scanTS in the record (no freshness
+			// window is applied; freshness is the feed job's cadence). A retained last-known-good
+			// score keeps its own, older scanTS.
+			score.ScanTS = now.Format(time.RFC3339)
 			after[target.key] = score
 		}
 	}
