@@ -120,6 +120,21 @@ func (s *PhorvexPolicySpec) EffectiveTickInterval() time.Duration {
 	return s.Budget.TickInterval.Duration
 }
 
+// DefaultExposurePressureCap is p_max for the capped noisy-OR P(hold) (M-143 form A).
+// INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. Not a validated value.
+const DefaultExposurePressureCap = 0.5
+
+// EffectiveExposurePressureCap returns spec.belief.exposurePressureCap strictly inside
+// (0,1), or the provisional default when unset/unparseable (admission rejects the
+// unparseable case; this is the rolling-upgrade backstop).
+func (s *PhorvexPolicySpec) EffectiveExposurePressureCap() float64 {
+	v := ParseDecimal(s.Belief.ExposurePressureCap, DefaultExposurePressureCap)
+	if v <= 0 || v >= 1 {
+		return DefaultExposurePressureCap
+	}
+	return v
+}
+
 // EffectiveAntiOverRotationWindow is the per-pod re-move floor (default 5m).
 func (s *PhorvexPolicySpec) EffectiveAntiOverRotationWindow() time.Duration {
 	if s.Budget.AntiOverRotationWindow.Duration <= 0 {

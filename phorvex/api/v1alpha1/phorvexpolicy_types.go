@@ -95,6 +95,10 @@ type PhorvexPolicySpec struct {
 	// +kubebuilder:validation:Optional
 	Brain BrainSpec `json:"brain,omitempty"`
 
+	// Belief configures the P(hold) belief layer (PHORVEXSEC-189 / M-143).
+	// +kubebuilder:validation:Optional
+	Belief BeliefSpec `json:"belief,omitempty"`
+
 	// Mode is the safety gate. "dryRun" (the default) decides + logs + emits metrics
 	// but NEVER actuates; "active" additionally drives Phoenix. P0 ships and runs in
 	// dryRun. (PRD: mode: dryRun.)
@@ -109,6 +113,21 @@ type BrainSpec struct {
 	// KillChain configures the semi-Markov stage hazard model.
 	// +kubebuilder:validation:Optional
 	KillChain KillChainSpec `json:"killChain,omitempty"`
+}
+
+// BeliefSpec configures the P(hold) belief layer.
+type BeliefSpec struct {
+	// ExposurePressureCap is p_max, the ceiling of the exposure-pressure term in the
+	// capped noisy-OR pHold = betaMean + p(t)*(1-betaMean) with
+	// p(t) = p_max*min(1, t_exp/T_exp) (M-143 ruling, form A). It keeps the Beta
+	// posterior informative at every exposure age: d pHold / d betaMean = 1-p(t) >= 1-p_max > 0,
+	// so pHold reaches 1 only when betaMean does. Decimal string strictly inside (0,1);
+	// empty defaults to "0.5" in code.
+	// INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D against confirmed attacker-hold outcomes.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^$|^0\.[0-9]+$`
+	// +kubebuilder:validation:XValidation:rule="self == '' || (double(self) > 0.0 && double(self) < 1.0)",message="exposurePressureCap must be strictly between 0 and 1"
+	ExposurePressureCap string `json:"exposurePressureCap,omitempty"`
 }
 
 // KillChainSpec configures Weibull stage-transition hazards. Sojourn values are seconds;

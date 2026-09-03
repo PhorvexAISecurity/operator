@@ -143,8 +143,13 @@ func TestSweepTableSection6(t *testing.T) {
 	if firstPositive != antiOver {
 		t.Errorf("first positive coverage = %v, want anti-over-rotation boundary %v", firstPositive, antiOver)
 	}
-	if firstCompetitive != 5*time.Minute {
-		t.Errorf("first budget-competitive exposure = %v, report records 5m", firstCompetitive)
+	// The provfloor report recorded 5m while pHold was pinned at 1.00 for every pod past the
+	// proactive floor (M-143). With the capped noisy-OR (PHORVEXSEC-189, p_max 0.5 provisional)
+	// the "due" fleet reads pHold 0.75, its cover weights fall by the same factor, and the
+	// evidence-less decoy becomes budget-competitive one sample earlier, at 4m. The
+	// anti-over-rotation boundary (first POSITIVE coverage) is unchanged.
+	if firstCompetitive != 4*time.Minute {
+		t.Errorf("first budget-competitive exposure = %v, want 4m (was 5m before M-143)", firstCompetitive)
 	}
 }
 
