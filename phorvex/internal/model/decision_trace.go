@@ -60,12 +60,14 @@ type DecisionModelInputsV2 struct {
 	ImageRarity       OptionalFloat `json:"imageRarity"`
 	ModelRarity       OptionalFloat `json:"modelRarity"`
 	CoResidency       OptionalFloat `json:"coResidency"`
-	EPSS              OptionalFloat `json:"epss"`
-	CVSS              OptionalFloat `json:"cvss"`
+	EPSS              OptionalFloat `json:"epss"`                        // RAW exploit probability [0,1] (M-104; was the multiplier before)
+	CVSS              OptionalFloat `json:"cvss"`                        // raw base severity [0,10]
+	EPSSMultiplier    OptionalFloat `json:"epssMultiplier"`              // 1 + epss·(cvss/10) ∈ [1,2]; present only for a usable pair
+	EPSSReason        string        `json:"epssReason,omitempty"`        // absent | non-finite | invalid-domain
 	EPSSBasis         string        `json:"epssBasis,omitempty"`         // exact | repo-fallback | miss (M-141)
 	EPSSCachedDigest  string        `json:"epssCachedDigest,omitempty"`  // cache key that supplied the value
 	EPSSRunningDigest string        `json:"epssRunningDigest,omitempty"` // the pod's running ImageID
-	EPSSScanTS        string        `json:"epssScanTS,omitempty"`        // audit only
+	EPSSScanTS        string        `json:"epssScanTS,omitempty"`        // feed-run time the pair (CVE scan + EPSS score) was produced = EPSS as-of; a matched digest with an old scanTS is a stale pair
 	PhysicsScanned    bool          `json:"physicsScanned"`
 	DispersionMult    OptionalFloat `json:"dispersionMult"`
 	DispersionCap     OptionalFloat `json:"dispersionCap"`
@@ -251,6 +253,7 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out.Inputs.CoResidency = cleanOptional(out.Inputs.CoResidency)
 	out.Inputs.EPSS = cleanOptional(out.Inputs.EPSS)
 	out.Inputs.CVSS = cleanOptional(out.Inputs.CVSS)
+	out.Inputs.EPSSMultiplier = cleanOptional(out.Inputs.EPSSMultiplier)
 	out.Inputs.DispersionMult = cleanOptional(out.Inputs.DispersionMult)
 	out.Inputs.DispersionCap = cleanOptional(out.Inputs.DispersionCap)
 	out.Inputs.BetaMean = cleanOptional(out.Inputs.BetaMean)

@@ -249,7 +249,7 @@ func DispersionMultiplier(view *model.WorkloadView) float64 {
 		return 1
 	}
 	ph := view.Physics
-	s := ph.ImageRarity * ph.EPSS * ph.CoResidency
+	s := ph.ImageRarity * ph.EPSSMultiplier * ph.CoResidency
 	if view.Pod.ModelID != "" || view.Pod.HasGPU {
 		s *= ph.ModelRarity
 	}

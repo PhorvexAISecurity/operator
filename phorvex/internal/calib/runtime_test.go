@@ -25,9 +25,9 @@ func runtimeSnapshot(at time.Time) (*ingest.Snapshot, map[string]model.PhysicsWi
 		},
 	}
 	witness := map[string]model.PhysicsWitness{
-		"a/p1": {Scanned: true, ImageRarity: 1.2, EPSS: 1.1, ModelRarity: 1},
-		"b/p2": {Scanned: true, ImageRarity: 1.8, EPSS: 1.3, ModelRarity: 1.5},
-		"c/p3": {Scanned: true, ImageRarity: 1.4, EPSS: 1, ModelRarity: 1},
+		"a/p1": {Scanned: true, ImageRarity: 1.2, EPSSMultiplier: 1.1, ModelRarity: 1},
+		"b/p2": {Scanned: true, ImageRarity: 1.8, EPSSMultiplier: 1.3, ModelRarity: 1.5},
+		"c/p3": {Scanned: true, ImageRarity: 1.4, EPSSMultiplier: 1, ModelRarity: 1},
 	}
 	return snap, witness
 }

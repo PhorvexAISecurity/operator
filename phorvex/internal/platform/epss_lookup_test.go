@@ -10,6 +10,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 
 	"github.com/phorvex/phorvex/internal/metrics"
+	"github.com/phorvex/phorvex/internal/recon"
 )
 
 // epss_lookup_test.go — PHORVEXSEC-203 / M-141: exact digest -> latest scan of the same
@@ -47,8 +48,8 @@ func TestEPSSLookupExactHit(t *testing.T) {
 	if lk.Basis != EPSSBasisExact || !lk.Present || lk.CachedDigest != digestRun || lk.RunningDigest != digestRun || lk.ScanTS != "2026-09-01T03:17:00Z" {
 		t.Fatalf("exact lookup = %+v", lk)
 	}
-	if lk.Multiplier != 1+0.5*0.5+0.5*0.5 {
-		t.Fatalf("multiplier = %v", lk.Multiplier)
+	if m, ok, _ := recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present); !ok || m != 1+0.5*(5.0/10) {
+		t.Fatalf("multiplier = %v ok=%v, want the M-104 form 1 + e·c/10 = 1.25", m, ok)
 	}
 	if lookupCount(t, "hit") != before+1 {
 		t.Fatal("hit was not counted")
@@ -93,13 +94,16 @@ func TestEPSSLookupMissIsNeutralAndCounted(t *testing.T) {
 	defer SeedEPSS(nil)
 	before := lookupCount(t, "miss")
 	lk := lookupEPSS(otherRepoRun)
-	if lk.Basis != EPSSBasisMiss || lk.Present || lk.Multiplier != 1.0 || lk.EPSS != 0 || lk.CachedDigest != "" || lk.RunningDigest != otherRepoRun {
+	if lk.Basis != EPSSBasisMiss || lk.Present || lk.EPSS != 0 || lk.CachedDigest != "" || lk.RunningDigest != otherRepoRun {
 		t.Fatalf("miss = %+v (a miss must never carry a stale cached value)", lk)
 	}
 	if lookupCount(t, "miss") != before+1 {
 		t.Fatal("miss was not counted")
 	}
-	if lk := lookupEPSS(""); lk.Basis != "" || lk.Multiplier != 1.0 || lk.Present {
+	if m := epssMultiplier(otherRepoRun); m != 1.0 {
+		t.Fatalf("a miss must be neutral: multiplier %v", m)
+	}
+	if lk := lookupEPSS(""); lk.Basis != "" || lk.Present {
 		t.Fatalf("no image identity must be neutral and unbased: %+v", lk)
 	}
 }
