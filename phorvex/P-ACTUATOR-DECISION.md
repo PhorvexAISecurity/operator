@@ -36,7 +36,7 @@ build/CI-enforced completeness theorem**, and is the candidate that does not ove
 | # | Action | Product | Native enactment | Rollback | SP-0 |
 |---|---|---|---|---|---|
 | 1 | `rotate` (=Phoenix Delete) | K8s | `Pods().Delete` w/ UID precondition; owner respawns clean | none (respawn IS recovery) | no |
-| 2 | `quarantine` (=Phoenix Quarantine, **lead demo**) | K8s | deny-all NetworkPolicy + relabel-out-of-RS-selector + **ownerRef re-parent** (both, or the RS re-adopts) | reversible (snapshot labels/ownerRefs) | no |
+| 2 | `quarantine` (=Phoenix Quarantine, **lead demo**) | K8s | deny-all NetworkPolicy + relabel-out-of-owner-selector (ReplicaSet/StatefulSet/DaemonSet/Job; matching Services when no owner selector is readable) + **ownerRef re-parent** (both, or the owner re-adopts) | reversible (snapshot labels/ownerRefs) | no |
 | 3 | `debugger` (=Phoenix Debugger, NEW const) | K8s | `pods/ephemeralcontainers` Update | **irreversible** (K8s can't remove an ephemeral container) | no |
 | 4 | `custom-inject` (=Phoenix CustomAction, NEW) | K8s | parameterized ephemeral-container Update; **doubles as the KV-reset carrier** | irreversible | no |
 | 5 | `disable` (=Phoenix declaration, NEW) | K8s | declared-not-implemented (matches Phoenix's posture); EXCLUDED from emittable set, but the handler exists so completeness stays green | n/a | no |
