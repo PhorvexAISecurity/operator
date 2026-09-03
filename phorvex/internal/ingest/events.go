@@ -5,8 +5,8 @@
 package ingest
 
 import (
-	"math"
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -44,17 +44,25 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 				score = f
 			}
 		}
-		age := now.Sub(se.CreationTimestamp.Time)
-		if age < 0 {
-			age = 0
+		// M-27: age per event. A CR with no usable CreationTimestamp is NOT a fresh event —
+		// its age is untrusted, so it is recorded present=false and carries weight 0.
+		missing := se.CreationTimestamp.IsZero()
+		age := time.Duration(0)
+		if !missing {
+			age = now.Sub(se.CreationTimestamp.Time)
+			if age < 0 {
+				age = 0
+			}
 		}
 		base := model.SecurityEventInfo{
-			Type:         se.Spec.Rule.Type,
-			ThreatLevel:  se.Spec.Rule.ThreatLevel,
-			Source:       se.Spec.Rule.Source,
-			Description:  se.Spec.Description,
-			AnomalyScore: score,
-			Age:          age,
+			Name:             se.Name,
+			TimestampMissing: missing,
+			Type:             se.Spec.Rule.Type,
+			ThreatLevel:      se.Spec.Rule.ThreatLevel,
+			Source:           se.Spec.Rule.Source,
+			Description:      se.Spec.Description,
+			AnomalyScore:     score,
+			Age:              age,
 		}
 		all = append(all, base)
 		for _, target := range se.Spec.Targets {

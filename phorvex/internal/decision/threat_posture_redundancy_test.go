@@ -1,6 +1,7 @@
 package decision
 
 import (
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -50,33 +51,48 @@ func directAlert(level string, age time.Duration) model.SecurityEventInfo {
 	}
 }
 
-// TestThreatPostureIsNotInformationallyRedundantWithP1 constructs the requested
-// counterexample. Killchain.Assess and every downstream P1 fact/provenance value
-// are identical because that path does not consume SecurityEventInfo.Age, while
-// ThreatPosture age-decays the same event over ProactiveFloor.
+// TestThreatPostureIsNotInformationallyRedundantWithP1 — INVERTED by PHORVEXSEC-186 (M-27).
+// Until M-27 this test asserted that Killchain.Assess, the P1 fact weights and the provenance
+// were byte-identical for a 0 s and a 30 min event ("that path does not consume
+// SecurityEventInfo.Age"), i.e. it pinned the defect: an alert from last week set today's
+// stage. Now BOTH halves of belief age the same event over the same τ_ev (= proactiveFloor):
+// the 30 min event weighs 0, carries no evidence and sets no event stage, so the assessment
+// and the fact weights must differ, while ThreatPosture keeps its own decay as before.
 func TestThreatPostureIsNotInformationallyRedundantWithP1(t *testing.T) {
 	fresh := snapshotThreatMapping(t, []model.SecurityEventInfo{directAlert("medium", 0)})
 	aged := snapshotThreatMapping(t, []model.SecurityEventInfo{directAlert("medium", 30*time.Minute)})
 
-	if !reflect.DeepEqual(fresh.assessment, aged.assessment) {
-		t.Fatalf("precondition failed: recency changed Killchain.Assess:\n fresh=%+v\n aged=%+v",
-			fresh.assessment, aged.assessment)
+	if reflect.DeepEqual(fresh.assessment, aged.assessment) {
+		t.Fatalf("M-27 regression: recency no longer changes Killchain.Assess (a 30 min event still "+
+			"weighs like a fresh one):\n fresh=%+v\n aged=%+v", fresh.assessment, aged.assessment)
 	}
-	if !reflect.DeepEqual(fresh.factWeights, aged.factWeights) {
-		t.Fatalf("precondition failed: recency changed P1 fact weights:\n fresh=%v\n aged=%v",
+	// The fixture floor is 1h, so the 30 min event still weighs w = 1 − 30/60 = 0.5: half the
+	// evidence of the fresh one, same (recon) event stage. Past τ_ev it must vanish entirely.
+	if fresh.assessment.EventEvidence <= 0 || fresh.assessment.EventStageName == "" || !fresh.assessment.HasEvidence {
+		t.Fatalf("fresh event must carry evidence and an event stage: %+v", fresh.assessment)
+	}
+	if want := 0.5 * fresh.assessment.EventEvidence; math.Abs(aged.assessment.EventEvidence-want) > 1e-9 {
+		t.Fatalf("30 min event under tau_ev=1h must weigh 0.5: evidence=%.4f want %.4f", aged.assessment.EventEvidence, want)
+	}
+	if len(aged.assessment.Events) != 1 || math.Abs(aged.assessment.Events[0].Weight-0.5) > 1e-9 {
+		t.Fatalf("aged event record = %+v, want weight 0.5", aged.assessment.Events)
+	}
+	expired := snapshotThreatMapping(t, []model.SecurityEventInfo{directAlert("medium", 2*time.Hour)})
+	if expired.assessment.EventEvidence != 0 || expired.assessment.EventStageName != "" || expired.assessment.HasEvidence {
+		t.Fatalf("a 2h event past tau_ev=1h must carry no evidence, no event stage and no HasEvidence: %+v", expired.assessment)
+	}
+	if reflect.DeepEqual(fresh.factWeights, aged.factWeights) {
+		t.Fatalf("P1 fact weights must follow the aged evidence through P(hold): fresh=%v aged=%v",
 			fresh.factWeights, aged.factWeights)
 	}
-	if fresh.provenance != aged.provenance {
-		t.Fatalf("precondition failed: recency changed provenance: fresh=%v aged=%v",
-			fresh.provenance, aged.provenance)
-	}
 	if fresh.posture == aged.posture {
-		t.Fatalf("counterexample disappeared: ThreatPosture fresh=%v aged=%v", fresh.posture, aged.posture)
+		t.Fatalf("ThreatPosture must still decay: fresh=%v aged=%v", fresh.posture, aged.posture)
 	}
 
-	t.Logf("counterexample: K is identical (P(hold)=%.6f, stageUrgency=%.6f, facts=%d, prov=%.3f), "+
-		"but ThreatPosture fresh=%.3f and aged=%.3f",
-		fresh.assessment.PHold, fresh.assessment.StageUrgency, len(fresh.factWeights), fresh.provenance,
+	t.Logf("M-27: fresh K (P(hold)=%.6f, evidence=%.4f, stageEvent=%q) vs aged K (P(hold)=%.6f, evidence=%.4f, stageEvent=%q); "+
+		"ThreatPosture fresh=%.3f aged=%.3f",
+		fresh.assessment.PHold, fresh.assessment.EventEvidence, fresh.assessment.EventStageName,
+		aged.assessment.PHold, aged.assessment.EventEvidence, aged.assessment.EventStageName,
 		fresh.posture, aged.posture)
 }
 

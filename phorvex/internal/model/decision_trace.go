@@ -114,14 +114,17 @@ type DecisionModelInputsV2 struct {
 	// Leakage is the model-theft gate's ACTIVITY input as actually tested (T1-A): SMOccupancy
 	// only, never allocation. Present iff SMOccupancy was measured (SMSource != ""), so an
 	// honest-absent scrape is recorded as absent rather than as an idle GPU.
-	Leakage           OptionalFloat `json:"leakage"`
-	ImageRarity       OptionalFloat `json:"imageRarity"`
-	ModelRarity       OptionalFloat `json:"modelRarity"`
-	CoResidency       OptionalFloat `json:"coResidency"`
-	EPSS              OptionalFloat `json:"epss"`
-	CVSS              OptionalFloat `json:"cvss"`
-	PhysicsScanned    bool          `json:"physicsScanned"`
-	DispersionMult    OptionalFloat `json:"dispersionMult"`
+	Leakage        OptionalFloat `json:"leakage"`
+	ImageRarity    OptionalFloat `json:"imageRarity"`
+	ModelRarity    OptionalFloat `json:"modelRarity"`
+	CoResidency    OptionalFloat `json:"coResidency"`
+	EPSS           OptionalFloat `json:"epss"`
+	CVSS           OptionalFloat `json:"cvss"`
+	PhysicsScanned bool          `json:"physicsScanned"`
+	DispersionMult OptionalFloat `json:"dispersionMult"`
+	// FactsAbsentReason is set when a non-finite belief/physics input meant no fact was
+	// minted for this asset (M-111): the weights are absent, not zero and not NaN.
+	FactsAbsentReason string        `json:"factsAbsentReason,omitempty"`
 	DispersionCap     OptionalFloat `json:"dispersionCap"`
 	Primed            bool          `json:"primed"`
 	BetaMean          OptionalFloat `json:"betaMean"`

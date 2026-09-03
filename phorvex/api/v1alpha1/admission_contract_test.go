@@ -31,6 +31,14 @@ func TestPolicyCRDAdmissionBounds(t *testing.T) {
 	}
 	assertValidationRule(t, lambda, `self == '' || double(self) <= 10.0`, "lambda must be between 0 and 10")
 
+	// PHORVEXSEC-189 / M-143 test (f): the exposure-pressure cap is a decimal strictly inside (0,1).
+	belief := property(t, spec, "belief")
+	capField := property(t, belief, "exposurePressureCap")
+	if capField.Type != "string" || capField.Pattern != `^$|^0\.[0-9]+$` {
+		t.Fatalf("exposurePressureCap type/pattern = %q/%q", capField.Type, capField.Pattern)
+	}
+	assertValidationRule(t, capField, `self == '' || (double(self) > 0.0 && double(self) < 1.0)`, "exposurePressureCap must be strictly between 0 and 1")
+
 	budget := property(t, spec, "budget")
 	for fieldName, message := range map[string]string{
 		"tickInterval":           "tickInterval must be a positive duration",

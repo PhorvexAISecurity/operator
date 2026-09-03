@@ -145,6 +145,17 @@ const (
 	PhaseUnknown WorkloadPhase = "Unknown"
 )
 
+// PHoldInputs are the audited terms of pHold = betaMean + p*(1-betaMean), p = cap*min(1, t/scale),
+// then multiplied by the just-moved damping (M-143 form A).
+type PHoldInputs struct {
+	BetaMean float64 // Beta posterior mean (tenant prior + per-asset event evidence)
+	Pressure float64 // p(t_exp) = cap*min(1, t_exp/scaleSec) in [0,cap]
+	Cap      float64 // p_max — INSUFFICIENT EVIDENCE, provisional 0.5 (T3-D)
+	ScaleSec float64 // T_exp in seconds (today the policy proactive floor; T1-B substitutes the dedicated constant)
+	Raw      float64 // betaMean + pressure*(1-betaMean), before damping
+	Final    float64 // clamp01(raw * damping) = PHold
+}
+
 // Exposure-clock variable dimensions (the per-VARIABLE exposure scaffold). P0 wires
 // the K8s-observable dimensions (PodIdentity, NodePlacement) live and DECLARES the
 // rest so a later phase fills them without a schema change.
@@ -275,13 +286,18 @@ func AttackVectorForActuator(actuator string) string {
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 type SecurityEventInfo struct {
+	Name         string // SecurityEvent CR name (audit: which event carried the evidence)
 	Type         string
 	ThreatLevel  string
 	Source       string
 	Description  string
 	AnomalyScore float64 // -1 when unscored
 	Age          time.Duration
-	TargetsPod   bool // true when this event targets THIS pod (vs a graph neighbor)
+	// TimestampMissing is true when the CR carried no usable CreationTimestamp, so Age is
+	// not trusted: the event's aging weight is 0 and the record says present=false
+	// (M-27). Zero value = present, so every existing literal stays a fresh event.
+	TimestampMissing bool
+	TargetsPod       bool // true when this event targets THIS pod (vs a graph neighbor)
 }
 
 // NeighborRef is a graph-reachable neighbor and its (generic) asset value — used by
@@ -400,8 +416,11 @@ type Policy struct {
 	ReactiveOnly                 bool
 	KillChainSojournScaleSeconds map[string]float64
 	KillChainShape               float64
-	EnabledActions               map[Action]bool
-	AssetWeightFromLabels        func(labels map[string]string) float64
+	// ExposurePressureCap is p_max of the capped noisy-OR P(hold) (M-143). 0 means unset:
+	// killchain substitutes the provisional default. INSUFFICIENT EVIDENCE — fit in T3-D.
+	ExposurePressureCap   float64
+	EnabledActions        map[Action]bool
+	AssetWeightFromLabels func(labels map[string]string) float64
 
 	// Decision-trace-only identity. The optimizer never reads these fields while
 	// scoring; they let the post-selection trace name the exact policy/build/tick.
@@ -425,14 +444,24 @@ type Decision struct {
 	CoverageValue float64
 	// ThreatRisk preserves the deprecated P0 engine's distinct threat-weighted value.
 	// It is zero under P1 and is serialized separately so one field never has two meanings.
-	ThreatRisk         float64
-	Cost               float64
-	Net                float64 // engine-specific value - Lambda*Cost
-	AssetValue         float64
-	Residual           float64 // observational under the default P1 coverage engine
-	ThreatPosture      float64 // observational under the default P1 coverage engine
-	Exposure           float64
-	PHold              float64 // authoritative P(attacker still holds the foothold) [0,1]
+	ThreatRisk    float64
+	Cost          float64
+	Net           float64 // engine-specific value - Lambda*Cost
+	AssetValue    float64
+	Residual      float64 // observational under the default P1 coverage engine
+	ThreatPosture float64 // observational under the default P1 coverage engine
+	Exposure      float64
+	PHold         float64 // authoritative P(attacker still holds the foothold) [0,1]
+	// PHoldInputs records every term of the capped noisy-OR that produced PHold
+	// (PHORVEXSEC-189 / M-143) so a reader can see the posterior was not annihilated.
+	PHoldInputs PHoldInputs
+	// StageEvent is the evidence-following event-derived stage (M-27): the max-rank stage
+	// among events whose aging weight is > 0; "" when no live event sets a stage.
+	StageEvent string
+	// EventEvidence is Σ_e w(age_e)·severity_e over events targeting this pod (M-27).
+	EventEvidence float64
+	// Events lists every ingested event this assessment saw with its age and weight.
+	Events             []EventEvidence
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase

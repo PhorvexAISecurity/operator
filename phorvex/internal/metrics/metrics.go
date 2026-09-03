@@ -83,6 +83,11 @@ var (
 		Help: "Decisions emitted, by tenant/action/mode/selected.",
 	}, []string{"tenant", "action", "mode", "selected"})
 
+	eventsAgedOut = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_events_aged_out_total",
+		Help: "Kill-chain evidence observations whose SecurityEvent aging weight reached 0 (age >= tau_ev or no timestamp), by tenant (M-27).",
+	}, []string{"tenant"})
+
 	actuationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_actuations_total",
 		Help: "SecurityEvents actually emitted to Phoenix (active mode only).",
@@ -154,7 +159,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
@@ -231,6 +236,12 @@ func PublishTick(tenant string, decisions []model.Decision, exposures map[string
 }
 
 // RecordActuation counts a real emit to Phoenix (active mode).
+// RecordEventAgedOut counts one assessment in which an ingested SecurityEvent carried
+// weight 0 — it aged past tau_ev or had no timestamp (M-27).
+func RecordEventAgedOut(tenant string) {
+	eventsAgedOut.WithLabelValues(tenant).Inc()
+}
+
 func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
 }
