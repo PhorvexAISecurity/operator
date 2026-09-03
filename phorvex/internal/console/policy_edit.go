@@ -17,6 +17,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -43,13 +44,37 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
 		return
 	}
-	var req policyEditReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad JSON: " + err.Error()})
+		return
+	}
+	var req policyEditReq
+	if b, _ := json.Marshal(raw); json.Unmarshal(b, &req) != nil {
+		writeJSON(w, 400, map[string]string{"error": "bad JSON: field types"})
 		return
 	}
 	ns := strings.TrimSpace(req.Namespace)
 	name := strings.TrimSpace(req.Name)
+
+	// PHORVEXSEC-205 / M-145 — the tenant KEY is not editable from the console. spec.tenant is
+	// the name every learned store (cost dual, kill-chain memory, exposure clock, metrics) is
+	// keyed by; rewriting it onto an in-use name silently merges two workloads' economics and
+	// even a rename to a fresh name is a state reset, not a migration (M-140). The console never
+	// offered this field; it now REFUSES it explicitly instead of silently dropping it, and the
+	// refusal is audited. Merging duals is a product + Math decision, filed, not built. This
+	// console check is UX and honesty only — kubectl bypasses it; the authoritative guard is
+	// M-140's key decision / the admission webhook (PX-P-003).
+	if key, present := tenantWriteAttempt(raw); present {
+		msg := fmt.Sprintf("%s is not editable from the console: spec.tenant keys the tenant's learned state; "+
+			"merging duals is not supported and a rename is a state reset (M-140) — change it deliberately with kubectl", key)
+		s.auditConsoleMutation(consoleMutation{
+			Actor: lensOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+			Field: "spec.tenant", Verdict: "rejected-tenant-key-write", Message: msg,
+		})
+		writeJSON(w, 409, map[string]string{"error": msg, "verdict": "rejected-tenant-key-write"})
+		return
+	}
 	if ns == "" || name == "" {
 		writeJSON(w, 400, map[string]string{"error": "namespace and name are required"})
 		return
@@ -120,12 +145,57 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 	patch, _ := json.Marshal(map[string]any{"spec": spec})
 	out, err := s.cfg.execText(10*time.Second, "kubectl", "-n", ns, "patch", "phorvexpolicy", name,
 		"--type", "merge", "-p", string(patch))
+	verdict := strings.TrimSpace(out)
 	if err != nil {
-		writeJSON(w, 502, map[string]string{"error": "patch failed: " + strings.TrimSpace(out)})
+		// HONEST SURFACE (M-145): a write the API server (CRD validation, admission webhook,
+		// RBAC) rejected is reported as rejected, with the rejecting layer's message verbatim —
+		// never {"ok": true}. 422 when the server said so, 502 for transport/exec failure.
+		status := 502
+		if apiServerRejected(verdict) {
+			status = 422
+		}
+		s.auditConsoleMutation(consoleMutation{
+			Actor: lensOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+			Field: "spec", Patch: string(patch), Verdict: "rejected-by-apiserver", Message: verdict,
+		})
+		writeJSON(w, status, map[string]any{"ok": false, "error": "patch rejected: " + verdict, "verdict": "rejected-by-apiserver"})
 		return
 	}
+	s.auditConsoleMutation(consoleMutation{
+		Actor: lensOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+		Field: "spec", Patch: string(patch), Verdict: "applied", Message: verdict,
+	})
 	writeJSON(w, 200, map[string]any{
 		"ok": true, "namespace": ns, "name": name, "patched": spec,
-		"result": strings.TrimSpace(out),
+		"result": verdict,
 	})
+}
+
+// tenantWriteAttempt reports whether the request body tries to write the tenant key, at the
+// top level ("tenant") or nested ("spec": {"tenant": ...}). Returns the path it found.
+func tenantWriteAttempt(raw map[string]json.RawMessage) (string, bool) {
+	if _, ok := raw["tenant"]; ok {
+		return "tenant", true
+	}
+	if specRaw, ok := raw["spec"]; ok {
+		var spec map[string]json.RawMessage
+		if json.Unmarshal(specRaw, &spec) == nil {
+			if _, ok := spec["tenant"]; ok {
+				return "spec.tenant", true
+			}
+		}
+	}
+	return "", false
+}
+
+// apiServerRejected recognises kubectl's transcription of a server-side rejection (validation,
+// admission webhook, forbidden) as opposed to a transport or exec failure.
+func apiServerRejected(out string) bool {
+	l := strings.ToLower(out)
+	for _, marker := range []string{"invalid", "admission webhook", "denied the request", "forbidden", "validation", "unknown field"} {
+		if strings.Contains(l, marker) {
+			return true
+		}
+	}
+	return false
 }

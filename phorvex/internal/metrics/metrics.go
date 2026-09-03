@@ -90,8 +90,8 @@ var (
 
 	ticksTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_ticks_total",
-		Help: "Decision ticks executed, by tenant.",
-	}, []string{"tenant"})
+		Help: "Decision ticks executed, by tenant and policy. The policy label keeps two policies that share one tenant name from collapsing into a single series (M-145).",
+	}, []string{"tenant", "policy"})
 
 	actionSetRejections = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_action_set_rejections_total",
@@ -200,9 +200,9 @@ func ResetTenant(tenant string) {
 
 // PublishTick records one tenant's tick: re-publishes per-pod gauges, the rollups,
 // and the counters.
-func PublishTick(tenant string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string) {
+func PublishTick(tenant, policy string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string) {
 	ResetTenant(tenant)
-	ticksTotal.WithLabelValues(tenant).Inc()
+	ticksTotal.WithLabelValues(tenant, policy).Inc()
 	tickDuration.WithLabelValues(tenant).Observe(durSeconds)
 	protectedPods.WithLabelValues(tenant).Set(float64(len(decisions)))
 	selectedPods.WithLabelValues(tenant).Set(float64(selected))
