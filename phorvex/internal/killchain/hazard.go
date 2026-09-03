@@ -114,7 +114,11 @@ func consequence(s Stage) float64 {
 
 // Assessment is the per-asset kill-chain belief output.
 type Assessment struct {
-	Stage         Stage
+	Stage Stage
+	// Leakage is the ACTIVITY signal the model-theft gate actually tested (T1-A): SMOccupancy
+	// only. Recorded so the decision trace can show the gate input beside its raw sources;
+	// 0 with Physics.SMSource=="" means unmeasured, not idle.
+	Leakage       float64
 	StageName     string
 	NextStage     Stage
 	NextStageName string
@@ -237,6 +241,13 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 // GPU-leakage stages need HasGPU (so they stay absent on a CPU-only cluster);
 // PHORVEXSEC-115 owns their magnitude calibration.
 // ModelID/EndpointPath stages fire on a model-annotated pod + the event stream (live).
+// leakageOf is the model-theft gate's activity term (T1-A). Allocation (VRAMFraction) is
+// deliberately NOT a summand: residency is eligibility/context, never activity. Weights on
+// LinkBandwidth/PCIe are 0 — INSUFFICIENT EVIDENCE to set them (Tier 3). Range [0,1].
+func leakageOf(ph model.PhysicsWitness) float64 {
+	return ph.SMOccupancy
+}
+
 func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 	p := view.Pod
 	ph := view.Physics
@@ -259,7 +270,13 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 			exploitEvent = true
 		}
 	}
-	leakage := ph.SMOccupancy + ph.VRAMFraction // [0,2]; 0 on kind; PHORVEXSEC-115
+	// T1-A: leakage is ACTIVITY only. VRAMFraction is allocation (model residency) and carries
+	// no weight here at any value — a loaded, idle model server must not read as extraction
+	// (bus 084: VRAM=0.9931, SM=0 satisfied the old sum permanently). Threshold 0.8 and the
+	// zero weights on LinkBandwidth/PCIe are untouched: INSUFFICIENT EVIDENCE (Tier 3).
+	// SMOccupancy is honest-absent (0 with SMSource=="") on stacks without DCP profiling; the
+	// decision trace records SMSource so absent is distinguishable from measured zero.
+	leakage := leakageOf(ph) // [0,1]; 0 on kind; PHORVEXSEC-115
 
 	// (1) model theft in progress: co-resident GPU reconstructing a rare model.
 	if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1.3 && leakage > 0.8 {
@@ -435,6 +452,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		},
 		StageUrgency:          stageUrg,
 		HasEvidence:           hasEvidence,
+		Leakage:               leakageOf(view.Physics),
 		LateralUrgency:        latUrg,
 		PreemptMargin:         preempt,
 		ProjectedNextStageSec: projNext,

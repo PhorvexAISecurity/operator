@@ -152,4 +152,9 @@ type FactContext struct {
 type AssetFacts struct {
 	Facts         []Fact
 	CoverByAction map[model.Action][]string
+	// AbsentReason is non-empty when a non-finite input (NaN/±Inf in belief, asset value,
+	// neighbour value or physics dispersion) meant NO fact could honestly be minted for the
+	// asset (PHORVEXSEC-199 / M-111). Facts and CoverByAction are then empty; the action set
+	// records every enabled action as excluded in the NaN category with this reason.
+	AbsentReason string
 }
