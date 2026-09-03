@@ -15,10 +15,14 @@ import (
 // the SOURCE. This drives the real path end to end: SeedEPSS -> epssMultiplier -> PhysicsWitness,
 // keyed on a real image digest, and then compares the resulting order.
 
+// The two images live in DIFFERENT repositories. Since M-141 (PHORVEXSEC-203) a digest with no
+// cache entry falls back to the latest scan of its own repository, so two digests of one repo
+// are no longer "exploitable" and "benign" — they are the same software at two builds. The
+// honest-absent pod of this test is therefore an image whose repository was never scanned.
 const (
 	exploitableImg = "registry.example/app@sha256:" +
 		"1111111111111111111111111111111111111111111111111111111111111111"
-	benignImg = "registry.example/app@sha256:" +
+	benignImg = "registry.example/other@sha256:" +
 		"2222222222222222222222222222222222222222222222222222222222222222"
 )
 

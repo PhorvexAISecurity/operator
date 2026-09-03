@@ -83,6 +83,11 @@ var (
 		Help: "Decisions emitted, by tenant/action/mode/selected.",
 	}, []string{"tenant", "action", "mode", "selected"})
 
+	epssLookupTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_epss_lookup_total",
+		Help: "EPSS cache lookups by outcome: hit (exact digest), repo-fallback (latest scan of the same repository), miss (M-141). A stale cache is a metric, not a surprise.",
+	}, []string{"result"})
+
 	actuationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_actuations_total",
 		Help: "SecurityEvents actually emitted to Phoenix (active mode only).",
@@ -154,7 +159,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
@@ -231,6 +236,16 @@ func PublishTick(tenant string, decisions []model.Decision, exposures map[string
 }
 
 // RecordActuation counts a real emit to Phoenix (active mode).
+// RecordEPSSLookup counts one exploitability-cache lookup by outcome (M-141).
+func RecordEPSSLookup(result string) {
+	epssLookupTotal.WithLabelValues(result).Inc()
+}
+
+// EPSSLookupCounter exposes one outcome's counter (tests and the scan report).
+func EPSSLookupCounter(result string) prometheus.Counter {
+	return epssLookupTotal.WithLabelValues(result)
+}
+
 func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
 }

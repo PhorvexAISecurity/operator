@@ -149,7 +149,9 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 			w.ImageRarityPresent = true
 		}
 		// CVE/EPSS exploitability prior (offline cache; honest-absent = 1.0)
-		w.EPSS, _, w.CVSS, w.EPSSPresent = epssInputs(p.ImageID)
+		lk := lookupEPSS(p.ImageID)
+		w.EPSS, w.CVSS, w.EPSSPresent = lk.Multiplier, lk.CVSS, lk.Present
+		w.EPSSBasis, w.EPSSCachedDigest, w.EPSSScanTS = lk.Basis, lk.CachedDigest, lk.ScanTS
 		// model-rarity (AI fact dispersion). rarity() is population-relative, so ModelRarity is 1.0 in
 		// TWO cases, not one: when the fleet has no model servers at all, and — the more common one —
 		// when every model-serving pod runs the SAME model, because that model then occupies 100% of

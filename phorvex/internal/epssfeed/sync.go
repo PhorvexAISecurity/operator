@@ -165,21 +165,22 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	// Build only from the current inventory, pruning digest churn. For a scan that failed,
 	// retain that current image's old score; a transient registry outage must not turn a
 	// known signal back into honest-absent.
+	now := opts.Now().UTC()
 	after := make(map[string]Score, len(inv.targets))
 	for _, target := range inv.targets {
 		vulns, scanned := vulnsByImage[target.key]
 		if !scanned {
 			if old, ok := before[target.key]; ok {
-				after[target.key] = old
+				after[target.key] = old // keeps its own scanTS: the retained score is as old as its scan
 			}
 			continue
 		}
 		if score, ok := bestImageScore(vulns, epssScores); ok {
+			score.ScanTS = now.Format(time.RFC3339) // M-141: the lookup's repo-latest ordering key
 			after[target.key] = score
 		}
 	}
 
-	now := opts.Now().UTC()
 	result := Result{
 		Mode:                    "dry-run",
 		ObservedPods:            inv.observedPods,

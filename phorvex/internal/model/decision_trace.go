@@ -62,6 +62,10 @@ type DecisionModelInputsV2 struct {
 	CoResidency       OptionalFloat `json:"coResidency"`
 	EPSS              OptionalFloat `json:"epss"`
 	CVSS              OptionalFloat `json:"cvss"`
+	EPSSBasis         string        `json:"epssBasis,omitempty"`         // exact | repo-fallback | miss (M-141)
+	EPSSCachedDigest  string        `json:"epssCachedDigest,omitempty"`  // cache key that supplied the value
+	EPSSRunningDigest string        `json:"epssRunningDigest,omitempty"` // the pod's running ImageID
+	EPSSScanTS        string        `json:"epssScanTS,omitempty"`        // audit only
 	PhysicsScanned    bool          `json:"physicsScanned"`
 	DispersionMult    OptionalFloat `json:"dispersionMult"`
 	DispersionCap     OptionalFloat `json:"dispersionCap"`
