@@ -88,6 +88,11 @@ var (
 		Help: "EPSS cache lookups by outcome: hit (exact digest), repo-fallback (latest scan of the same repository), miss (M-141). A stale cache is a metric, not a surprise.",
 	}, []string{"result"})
 
+	eventsAgedOut = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_events_aged_out_total",
+		Help: "Kill-chain evidence observations whose SecurityEvent aging weight reached 0 (age >= tau_ev or no timestamp), by tenant (M-27).",
+	}, []string{"tenant"})
+
 	actuationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_actuations_total",
 		Help: "SecurityEvents actually emitted to Phoenix (active mode only).",
@@ -159,7 +164,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
@@ -244,6 +249,12 @@ func RecordEPSSLookup(result string) {
 // EPSSLookupCounter exposes one outcome's counter (tests and the scan report).
 func EPSSLookupCounter(result string) prometheus.Counter {
 	return epssLookupTotal.WithLabelValues(result)
+}
+
+// RecordEventAgedOut counts one assessment in which an ingested SecurityEvent carried
+// weight 0 — it aged past tau_ev or had no timestamp (M-27).
+func RecordEventAgedOut(tenant string) {
+	eventsAgedOut.WithLabelValues(tenant).Inc()
 }
 
 func RecordActuation(tenant, action string) {

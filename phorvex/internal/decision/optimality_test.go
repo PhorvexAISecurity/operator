@@ -50,8 +50,12 @@ func TestGreedyIsExactOnShippedFleets(t *testing.T) {
 
 	// CROSS-CHECK: the Step-2 re-implemented greedy (greedyPicksOnSet) must reproduce the REAL greedy's
 	// objective on the real substrate — pins the re-impl to Decide so the sweep is faithful.
-	set, ctx := e.AssembleSet(views, pol)
-	decs := e.Decide(views, pol)
+	// A FRESH engine: Ablate's Decide already fed the selected assets' pHold back into the
+	// killchain memory, and since M-143 (PHORVEXSEC-189) that feedback moves betaMean and the
+	// fact weights, so the substrate `e` would assemble now is not the one Ablate measured.
+	fresh := NewCoverageEngine()
+	set, ctx := fresh.AssembleSet(views, pol)
+	decs := fresh.Decide(views, pol)
 	lam := decs[0].Lambda
 	prov := provFn(ctx, pol.ProactiveFloor.Seconds())
 	reObj := setObjective(greedyPicksOnSet(set, pol.MaxMovesPerTick, prov, lam), set.FactWeights, prov, lam)

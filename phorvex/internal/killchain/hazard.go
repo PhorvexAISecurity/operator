@@ -7,6 +7,7 @@ package killchain
 import (
 	"math"
 
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
 )
@@ -113,13 +114,28 @@ func consequence(s Stage) float64 {
 
 // Assessment is the per-asset kill-chain belief output.
 type Assessment struct {
-	Stage         Stage
+	Stage Stage
+	// Leakage is the ACTIVITY signal the model-theft gate actually tested (T1-A): SMOccupancy
+	// only. Recorded so the decision trace can show the gate input beside its raw sources;
+	// 0 with Physics.SMSource=="" means unmeasured, not idle.
+	Leakage       float64
 	StageName     string
 	NextStage     Stage
 	NextStageName string
 	Hazard        float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
 	PHold         float64 // P(attacker still holds the foothold) in [0,1]
-	StageUrgency  float64 // [0,1] current-consequence blended with predictive (hazard*next)
+	// PHoldInputs are the audited terms behind PHold (M-143): betaMean, capped pressure,
+	// cap, scale, raw and final. Lets a reader verify the posterior survived the clock.
+	PHoldInputs model.PHoldInputs
+	// EventStageName is the evidence-following event-derived stage (M-27 ruling Q2); ""
+	// when no event with a positive aging weight targets this pod. The final Stage is this
+	// merged with the AI classifier (the T1-M025 merge point).
+	EventStageName string
+	// EventEvidence is Σ_e w(age_e)·severity_e over targeting events (M-27 ruling Q1).
+	EventEvidence float64
+	// Events lists every event the assessment saw with its age and aging weight.
+	Events       []model.EventEvidence
+	StageUrgency float64 // [0,1] current-consequence blended with predictive (hazard*next)
 	// HasEvidence is TRUE when this assessment rests on a REAL observation rather than on the
 	// passage of time: a SecurityEvent on this pod, a compromised graph neighbour, an AI kill-chain
 	// signature, or a poisoned adapter. It is the anti-decoy discriminator (PHVX-72): StageUrgency
@@ -180,6 +196,10 @@ func NewModel() *Model {
 	}
 }
 
+// DefaultExposurePressureCap is the runtime backstop for an unset/invalid policy cap
+// (M-143 form A). INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D.
+const DefaultExposurePressureCap = 0.5
+
 // weibullCDF = 1 - exp(-(t/scale)^k): the prob the stage has transitioned by dwell t.
 func weibullCDF(t, scale, k float64) float64 {
 	if t <= 0 || scale <= 0 {
@@ -221,6 +241,13 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 // GPU-leakage stages need HasGPU (so they stay absent on a CPU-only cluster);
 // PHORVEXSEC-115 owns their magnitude calibration.
 // ModelID/EndpointPath stages fire on a model-annotated pod + the event stream (live).
+// leakageOf is the model-theft gate's activity term (T1-A). Allocation (VRAMFraction) is
+// deliberately NOT a summand: residency is eligibility/context, never activity. Weights on
+// LinkBandwidth/PCIe are 0 — INSUFFICIENT EVIDENCE to set them (Tier 3). Range [0,1].
+func leakageOf(ph model.PhysicsWitness) float64 {
+	return ph.SMOccupancy
+}
+
 func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 	p := view.Pod
 	ph := view.Physics
@@ -243,7 +270,13 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 			exploitEvent = true
 		}
 	}
-	leakage := ph.SMOccupancy + ph.VRAMFraction // [0,2]; 0 on kind; PHORVEXSEC-115
+	// T1-A: leakage is ACTIVITY only. VRAMFraction is allocation (model residency) and carries
+	// no weight here at any value — a loaded, idle model server must not read as extraction
+	// (bus 084: VRAM=0.9931, SM=0 satisfied the old sum permanently). Threshold 0.8 and the
+	// zero weights on LinkBandwidth/PCIe are untouched: INSUFFICIENT EVIDENCE (Tier 3).
+	// SMOccupancy is honest-absent (0 with SMSource=="") on stacks without DCP profiling; the
+	// decision trace records SMSource so absent is distinguishable from measured zero.
+	leakage := leakageOf(ph) // [0,1]; 0 on kind; PHORVEXSEC-115
 
 	// (1) model theft in progress: co-resident GPU reconstructing a rare model.
 	if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1.3 && leakage > 0.8 {
@@ -269,20 +302,50 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 // pod-identity exposure clock; proactiveFloorSec is the policy's proactive floor.
 func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, proactiveFloorSec float64) Assessment {
 	// --- stage belief from events (this pod) + neighbor pressure ---
+	//
+	// PHORVEXSEC-186 / M-27: every event is weighted by its age, w = 1 − clamp01(age/τ_ev)
+	// (ruling Q1, the same function ctxprov uses), and the event-derived stage follows the
+	// evidence (ruling Q2): only events with w > 0 can set it, so a stale alert cannot hold
+	// a stage. τ_ev is the policy proactive floor — T1-B's initialization; its value is
+	// INSUFFICIENT EVIDENCE (M-29). Aging applies to every ingested event (T1-M094 is not
+	// merged). A CR without a timestamp is present=false and weighs 0.
 	stage := StageRecon
+	eventStage := Stage(0)
+	eventStageSet := false
 	eventAlpha := 0.0 // held-evidence pseudo-counts for the Beta posterior
+	evidence := 0.0   // Σ_e w(age_e)·severity_e over events targeting this pod
 	lateralPressure := 0.0
+	var eventRecords []model.EventEvidence
+	if len(view.Events) > 0 {
+		eventRecords = make([]model.EventEvidence, 0, len(view.Events))
+	}
 	for _, e := range view.Events {
 		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / 4.0
+		w := 0.0
+		if !e.TimestampMissing {
+			w = model.EventAgeWeight(e.Age, pol.ProactiveFloor)
+		}
+		eventRecords = append(eventRecords, model.EventEvidence{
+			Name: e.Name, Source: e.Source, Type: e.Type, ThreatLevel: e.ThreatLevel,
+			TargetsPod: e.TargetsPod, AgeSec: e.Age.Seconds(), Weight: w, TimestampPresent: !e.TimestampMissing,
+		})
+		if w <= 0 {
+			metrics.RecordEventAgedOut(pol.Tenant)
+			continue
+		}
 		if e.TargetsPod {
-			if s := stageFromEvent(e); s > stage {
-				stage = s
+			if s := stageFromEvent(e); !eventStageSet || s > eventStage {
+				eventStage, eventStageSet = s, true
 			}
-			eventAlpha += 1.0 + 2.0*sev // stronger events => stronger held-evidence
+			eventAlpha += w * (1.0 + 2.0*sev) // stronger AND fresher events => stronger held-evidence
+			evidence += w * sev
 		} else {
 			// A compromised NEIGHBOR means the attacker is about to pivot HERE.
-			lateralPressure = math.Max(lateralPressure, 0.5+0.5*sev)
+			lateralPressure = math.Max(lateralPressure, w*(0.5+0.5*sev))
 		}
+	}
+	if eventStageSet && eventStage > stage {
+		stage = eventStage
 	}
 
 	// --- AI/inference stage classification (P-CONTEXT). Takes precedence over the
@@ -326,13 +389,27 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	latUrg := clamp01(math.Max(lateralPressure, hazard*boolf(next == StageLateral)))
 
 	// --- P(hold): Beta posterior (tenant prior + per-asset event evidence), with an
-	// exposure-pressure floor and a just-moved damping. ---
+	// exposure-pressure PRIOR FLOOR (not an annihilator) and a just-moved damping. ---
+	//
+	// PHORVEXSEC-189 / M-143 (form A, capped noisy-OR). The old term
+	// clamp01(exposure/floor) reached 1 for every pod older than the floor, and then
+	// pHoldRaw = betaMean + 1*(1-betaMean) = 1 for EVERY betaMean: the posterior, the tenant
+	// prior and the feedback had zero effect (84.6% of live records pinned >= 0.999).
+	// Now p(t) = cap*min(1, t/T_exp) with 0 < cap < 1, so d pHold/d betaMean = 1-p >= 1-cap > 0
+	// at every age, pHold(t=0) = betaMean exactly as before, and pHold reaches 1 only when
+	// betaMean does. cap is INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. T_exp is the
+	// policy proactive floor today; T1-B substitutes its dedicated constant without changing
+	// this formula.
 	betaMean := m.Memory.PHoldUCBWithEvidence(pol.Tenant, eventAlpha, m.ConfidenceK)
+	cap := pol.ExposurePressureCap
+	if cap <= 0 || cap >= 1 {
+		cap = DefaultExposurePressureCap
+	}
 	exposurePressure := 0.0
 	if proactiveFloorSec > 0 {
-		exposurePressure = clamp01(exposureSec / proactiveFloorSec)
+		exposurePressure = cap * math.Min(1, math.Max(0, exposureSec)/proactiveFloorSec)
 	}
-	pHoldRaw := betaMean + exposurePressure*(1-betaMean) // noisy-OR
+	pHoldRaw := betaMean + exposurePressure*(1-betaMean) // capped noisy-OR: range [betaMean, betaMean+cap*(1-betaMean)]
 
 	// AI-GATED damping. The generic K8s path stays BYTE-IDENTICAL to the P1 baseline
 	// (shape=1 exponential just-moved damping); AI workloads use the survival form
@@ -355,15 +432,27 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	preempt := 1 - weibullCDF(exposureSec, scale, shape) // survival; moveLatency=0 (flagged)
 	projNext := projectedNextStageSec(scale, shape, exposureSec)
 
+	eventStageName := ""
+	if eventStageSet {
+		eventStageName = eventStage.String()
+	}
 	return Assessment{
-		Stage:                 stage,
-		StageName:             stage.String(),
-		NextStage:             next,
-		NextStageName:         next.String(),
-		Hazard:                hazard,
-		PHold:                 pHold,
+		Stage:          stage,
+		StageName:      stage.String(),
+		EventStageName: eventStageName,
+		EventEvidence:  evidence,
+		Events:         eventRecords,
+		NextStage:      next,
+		NextStageName:  next.String(),
+		Hazard:         hazard,
+		PHold:          pHold,
+		PHoldInputs: model.PHoldInputs{
+			BetaMean: betaMean, Pressure: exposurePressure, Cap: cap, ScaleSec: proactiveFloorSec,
+			Raw: pHoldRaw, Final: pHold,
+		},
 		StageUrgency:          stageUrg,
 		HasEvidence:           hasEvidence,
+		Leakage:               leakageOf(view.Physics),
 		LateralUrgency:        latUrg,
 		PreemptMargin:         preempt,
 		ProjectedNextStageSec: projNext,

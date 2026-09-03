@@ -12,12 +12,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -70,8 +74,10 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 // --- 2. quarantine (= Phoenix Quarantine: deny-all NP + detach) — THE LEAD DEMO ----------
 //
 // Isolation-before-detach, fidelity-critical: BOTH the deny-all NetworkPolicy AND the
-// detach (relabel out of the owning ReplicaSet's selector + strip controller ownerRef) —
-// or the RS re-adopts the frozen pod and the stateful job is destroyed. The pod is NOT
+// detach (relabel out of the owning controller's selector — ReplicaSet, StatefulSet,
+// DaemonSet, Job, or the matching Services when no owner selector is readable — + strip
+// the controller ownerRef) — or the owner re-adopts the frozen pod and the stateful job
+// is destroyed. The pod is NOT
 // killed, so its state survives. Reversible: a snapshot of prior labels+ownerRefs is
 // stored on the pod (restart-safe rollback).
 
@@ -123,25 +129,35 @@ func (h quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 		return HandlerResult{}, fmt.Errorf("quarantine NP %s: %w", npName, err)
 	}
 
-	// (b) DETACH: break the owning RS's selector match + strip the controller ownerRef, so
-	// the RS spawns a replacement and CANNOT re-adopt this frozen pod.
+	// (b) DETACH: break the selector match of WHATEVER controller owns the pod (ReplicaSet,
+	// StatefulSet, DaemonSet, Job, ...) + strip the controller ownerRef, so the owner spawns a
+	// replacement and CANNOT re-adopt this frozen pod. When no owner selector can be
+	// resolved (bare pod, or an owner kind the actuator cannot read), fall back to breaking
+	// the keys every matching Service selects on, so the frozen pod at least leaves the
+	// Service endpoints (PHORVEXSEC-169 / M-38). The Note reports exactly which path ran.
 	if pod.Labels == nil {
 		pod.Labels = map[string]string{}
 	}
 	pod.Annotations = ensureMap(pod.Annotations)
 	pod.Annotations[quarantineSnapAnno] = string(snapJSON)
-	for k := range rsSelectorKeys(ctx, ec.Client, pod) {
-		pod.Labels[k] = pod.Labels[k] + "-quarantined" // break the RS matchLabels subset
+	brk := ownerSelectorBreak(ctx, ec.Client, pod)
+	if brk.empty() {
+		brk = serviceSelectorBreak(ctx, ec.Client, pod)
 	}
+	brk.apply(pod.Labels)
 	pod.Labels[quarantineLabel] = qid
-	pod.OwnerReferences = nil // detach from the ReplicaSet
+	pod.OwnerReferences = nil // detach from the controller owner
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		return HandlerResult{}, fmt.Errorf("quarantine detach %s/%s: %w", req.Namespace, req.Pod, err)
+	}
+	detachNote := "no owner or Service selector to break"
+	if !brk.empty() {
+		detachNote = "relabel-out-of-" + strings.Join(brk.Via, ",")
 	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
 		ObjectsTouched: []string{objRef("NetworkPolicy", req.Namespace, npName), objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "deny-all NP + relabel-out-of-RS + ownerRef-detach; pod ALIVE (state preserved)",
+		Note:           "deny-all NP + " + detachNote + " + ownerRef-detach; pod ALIVE (state preserved)",
 	}, nil
 }
 
@@ -172,25 +188,112 @@ func (h quarantineHandler) Rollback(ctx context.Context, ec EnactCtx, req Reques
 	return nil
 }
 
-// rsSelectorKeys returns the label keys the owning ReplicaSet selects on (so quarantine
-// can break the match). Empty if the pod has no RS owner or the RS can't be read.
-func rsSelectorKeys(ctx context.Context, c client.Client, pod *corev1.Pod) map[string]bool {
-	keys := map[string]bool{}
-	for _, o := range pod.OwnerReferences {
-		if o.Kind != "ReplicaSet" {
-			continue
-		}
-		var rs appsv1.ReplicaSet
-		if err := c.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: o.Name}, &rs); err != nil {
-			continue
-		}
-		if rs.Spec.Selector != nil {
-			for k := range rs.Spec.Selector.MatchLabels {
-				keys[k] = true
-			}
+// selectorBreak is the set of pod label keys quarantine mutates so that a selector stops
+// matching the pod. Suffix keys get "-quarantined" appended to their value (breaks
+// matchLabels and In expressions); Drop keys are removed (breaks Exists expressions).
+// Via records, sorted, which owner/Service each key was taken from, for the Note.
+type selectorBreak struct {
+	Suffix map[string]bool
+	Drop   map[string]bool
+	Via    []string
+}
+
+func newSelectorBreak() selectorBreak {
+	return selectorBreak{Suffix: map[string]bool{}, Drop: map[string]bool{}}
+}
+
+func (b selectorBreak) empty() bool { return len(b.Suffix) == 0 && len(b.Drop) == 0 }
+
+func (b *selectorBreak) addSelector(sel *metav1.LabelSelector, via string) {
+	if sel == nil {
+		return
+	}
+	before := len(b.Suffix) + len(b.Drop)
+	for k := range sel.MatchLabels {
+		b.Suffix[k] = true
+	}
+	for _, expr := range sel.MatchExpressions {
+		switch expr.Operator {
+		case metav1.LabelSelectorOpIn:
+			b.Suffix[expr.Key] = true
+		case metav1.LabelSelectorOpExists:
+			b.Drop[expr.Key] = true
 		}
 	}
-	return keys
+	if len(b.Suffix)+len(b.Drop) > before {
+		b.Via = append(b.Via, via)
+		sort.Strings(b.Via)
+	}
+}
+
+// apply mutates the pod labels so every recorded selector stops matching. Deterministic:
+// keys are visited in sorted order.
+func (b selectorBreak) apply(labels map[string]string) {
+	keys := make([]string, 0, len(b.Suffix))
+	for k := range b.Suffix {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if b.Drop[k] {
+			continue
+		}
+		labels[k] = labels[k] + "-quarantined"
+	}
+	for k := range b.Drop {
+		delete(labels, k)
+	}
+}
+
+// ownerSelectorBreak resolves the selector of EVERY owner referenced by the pod through an
+// unstructured Get (ReplicaSet, StatefulSet, DaemonSet, Job — any kind that carries
+// spec.selector) and returns the keys quarantine must break. An owner that cannot be
+// read (unknown kind, no RBAC, gone) contributes nothing; the caller falls back to the
+// Service selectors in that case.
+func ownerSelectorBreak(ctx context.Context, c client.Client, pod *corev1.Pod) selectorBreak {
+	brk := newSelectorBreak()
+	for _, o := range pod.OwnerReferences {
+		owner := &unstructured.Unstructured{}
+		owner.SetAPIVersion(o.APIVersion)
+		owner.SetKind(o.Kind)
+		if err := c.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: o.Name}, owner); err != nil {
+			continue
+		}
+		raw, found, err := unstructured.NestedMap(owner.Object, "spec", "selector")
+		if err != nil || !found {
+			continue
+		}
+		var sel metav1.LabelSelector
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &sel); err != nil {
+			continue
+		}
+		brk.addSelector(&sel, o.Kind+"/"+o.Name)
+	}
+	return brk
+}
+
+// serviceSelectorBreak returns the keys every Service in the pod's namespace whose
+// selector currently matches the pod selects on. Services are visited in name order so
+// the resulting Note is deterministic. The Services themselves are never mutated.
+func serviceSelectorBreak(ctx context.Context, c client.Client, pod *corev1.Pod) selectorBreak {
+	brk := newSelectorBreak()
+	var svcs corev1.ServiceList
+	if err := c.List(ctx, &svcs, client.InNamespace(pod.Namespace)); err != nil {
+		return brk
+	}
+	sort.Slice(svcs.Items, func(i, j int) bool { return svcs.Items[i].Name < svcs.Items[j].Name })
+	podLabels := labels.Set(pod.Labels)
+	for i := range svcs.Items {
+		svc := &svcs.Items[i]
+		if len(svc.Spec.Selector) == 0 {
+			continue
+		}
+		if !labels.SelectorFromSet(svc.Spec.Selector).Matches(podLabels) {
+			continue
+		}
+		brk.addSelector(&metav1.LabelSelector{MatchLabels: svc.Spec.Selector}, "Service/"+svc.Name)
+	}
+	return brk
 }
 
 // --- 3. debugger (= Phoenix Debugger: inject one ephemeral container) — IRREVERSIBLE -----

@@ -32,12 +32,17 @@ type standardRecon struct{}
 func (standardRecon) Name() string { return "standard-recon" }
 
 func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFacts {
-	asset := view.Pod.Namespace + "/" + view.Pod.Name
-	base := fctx.AssetValue * clamp01(fctx.PHold)
-	if base <= 0 {
-		base = 0.001 * clamp01(fctx.PHold) // a still-held asset always has minimal recon value
+	if reason := factInputs(fctx); reason != "" {
+		return AssetFacts{AbsentReason: reason} // no fact is minted from a non-number (M-111)
 	}
-	urg := 0.5 + 0.5*clamp01(fctx.StageUrgency) // [0.5,1] — never zero out a held foothold
+	asset := view.Pod.Namespace + "/" + view.Pod.Name
+	pHold, _ := clamp01(fctx.PHold) // finite: checked above
+	base := fctx.AssetValue * pHold
+	if base <= 0 {
+		base = 0.001 * pHold // a still-held asset always has minimal recon value
+	}
+	stageUrg, _ := clamp01(fctx.StageUrgency)
+	urg := 0.5 + 0.5*stageUrg // [0.5,1] — never zero out a held foothold
 
 	var facts []Fact
 	cover := map[model.Action][]string{}
@@ -94,27 +99,58 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// fails. Missing deployment
 	// contract returns Emitted=false and receives no actuation credit.
 	cover[model.ActionRouteRotate] = append(cover[model.ActionRouteRotate], nid.Key())
-	latUrg := 0.5 + 0.5*clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
+	maxUrg, _ := clamp01(maxf(fctx.StageUrgency, fctx.LateralUrgency))
+	latUrg := 0.5 + 0.5*maxUrg
 	for _, nb := range fctx.Neighbors {
 		// A learned directed edge is owned by its origin pod. Quarantining the target may also cut
 		// the physical edge, but origin-keying deliberately gives no credit for that effect: this is
 		// conservative under-crediting that preserves one owning block in the current pod model.
 		// Canonical cross-endpoint edges belong to the deferred coupled/MILP model.
-		w := nb.Value * clamp01(fctx.PHold) * latUrg
+		w := nb.Value * pHold * latUrg
 		addQuarantine(FactLateralEdge, nb.Key, w)
 	}
 
 	return AssetFacts{Facts: facts, CoverByAction: cover}
 }
 
-func clamp01(x float64) float64 {
+// clamp01 clamps a FINITE x into [0,1]. A non-finite x (NaN/±Inf) is not a value: ok=false
+// and the caller records the asset's facts as absent instead of minting a weight from it
+// (PHORVEXSEC-199 / M-111). Note for the reviewer: the ticket's "physics twin"
+// (platform.clamp01) has NO non-finite guard at this SHA or at aedd218 — its inputs are
+// guarded at ingest — so there was no twin behaviour to mirror; this returns a presence
+// state, never a chosen replacement value. The finite branch is byte-identical to before.
+func clamp01(x float64) (float64, bool) {
+	if !finite(x) {
+		return 0, false
+	}
 	if x < 0 {
-		return 0
+		return 0, true
 	}
 	if x > 1 {
-		return 1
+		return 1, true
 	}
-	return x
+	return x, true
+}
+
+// factInputs validates every scalar that enters a fact weight through the FactContext.
+// Returns the absent reason for the first non-finite input ("" when all are finite).
+func factInputs(fctx FactContext) string {
+	switch {
+	case !finite(fctx.AssetValue):
+		return absentReason("assetValue")
+	case !finite(fctx.PHold):
+		return absentReason("pHold")
+	case !finite(fctx.StageUrgency):
+		return absentReason("stageUrgency")
+	case !finite(fctx.LateralUrgency):
+		return absentReason("lateralUrgency")
+	}
+	for _, nb := range fctx.Neighbors {
+		if !finite(nb.Value) {
+			return absentReason("neighbor:" + nb.Key)
+		}
+	}
+	return ""
 }
 
 func maxf(a, b float64) float64 {
