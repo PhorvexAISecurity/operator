@@ -51,6 +51,9 @@ const MaxDispersionMult = 4.0
 
 func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFacts {
 	af := standardRecon{}.AssetFacts(view, fctx)
+	if af.AbsentReason != "" {
+		return af
+	}
 	ph := view.Physics
 
 	// ONE per-asset scarcity scalar applied UNIFORMLY to every fact of the asset. This
@@ -59,17 +62,23 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// CROSS-asset ordering the greedy exploits. With UNIFORM scarcity across the fleet
 	// the ratio is unchanged (scaling all weights by a constant is invariant) => exact
 	// tie / never worse; only DIFFERENTIAL (heavy-tailed) dispersion lifts it.
-	s := DispersionMultiplier(view)
+	s, sOK := DispersionMultiplier(view)
+	if !sOK {
+		// A non-finite physics multiplier is not a scarcity value; no fact is minted (M-111).
+		return AssetFacts{AbsentReason: absentReason("dispersion")}
+	}
 	// NOTE: s is APPLIED AT THE END of this function, after the AI facts exist. Applying it here
 	// would scale only the six standardRecon facts, because every AI fact below is appended after
 	// this point — see the comment above the application site (PHVX-70 / PHORVEXSEC-126).
 
 	asset := view.Pod.Namespace + "/" + view.Pod.Name
-	base := fctx.AssetValue * clamp01(fctx.PHold)
+	pHold, _ := clamp01(fctx.PHold) // finite: standardRecon validated the inputs above
+	base := fctx.AssetValue * pHold
 	if base <= 0 {
-		base = 0.001 * clamp01(fctx.PHold)
+		base = 0.001 * pHold
 	}
-	urg := 0.5 + 0.5*clamp01(fctx.StageUrgency)
+	stageUrg, _ := clamp01(fctx.StageUrgency)
+	urg := 0.5 + 0.5*stageUrg
 
 	// AI recon facts — emitted on GPU/served-model assets. Cover is granted per physical mechanism,
 	// not to the group as a whole: model-shard-replace and endpoint-rotate invalidate their matching
@@ -237,16 +246,17 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	return af
 }
 
-func boundMult(m float64) float64 {
+func boundMult(m float64) (float64, bool) {
 	return boundMultAt(m, 0)
 }
 
 // DispersionMultiplier returns the exact scalar the current UCW profile applies
-// to every fact for this asset. The decision trace calls the same function rather
-// than reimplementing the physics equation.
-func DispersionMultiplier(view *model.WorkloadView) float64 {
+// to every fact for this asset, and whether it is a number at all. The decision trace
+// calls the same function rather than reimplementing the physics equation; ok=false
+// means the physics inputs were non-finite and the asset's facts are absent (M-111).
+func DispersionMultiplier(view *model.WorkloadView) (float64, bool) {
 	if view == nil {
-		return 1
+		return 1, true
 	}
 	ph := view.Physics
 	s := ph.ImageRarity * ph.EPSS * ph.CoResidency
@@ -258,17 +268,25 @@ func DispersionMultiplier(view *model.WorkloadView) float64 {
 
 // boundMultAt keeps the production default when cap is zero. A positive alternate
 // cap is carried only by cloned shadow witnesses used for PHVX-74 counterfactuals.
-func boundMultAt(m, cap float64) float64 {
+//
+// PHORVEXSEC-199 / M-111: a non-finite m (or cap) is not clamped into a weight — NaN passed
+// straight through both comparisons before — it is reported as ok=false and the caller
+// records the asset's facts as absent. lo/hi are unchanged (M-108 owns the cap value); the
+// finite branch is byte-identical to before.
+func boundMultAt(m, cap float64) (float64, bool) {
+	if !finite(m) || !finite(cap) {
+		return 0, false
+	}
 	if cap <= 0 {
 		cap = MaxDispersionMult
 	}
 	if m < 1 {
-		return 1
+		return 1, true
 	}
 	if m > cap {
-		return cap
+		return cap, true
 	}
-	return m
+	return m, true
 }
 
 // vectorDominance is the multiplier a named attack vector applies to its matching fact — the same
