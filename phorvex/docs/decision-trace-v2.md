@@ -1,9 +1,27 @@
-# Decision Trace V2
+# Decision Trace V2 / V3
 
-`phorvex.decision-trace.v2` is nested under `decisionTrace` in each
-`phorvex.audit.v2` per-asset decision record. It records the current P1 decision
-path; it does not change candidate generation, feasibility, cost, λ, scoring,
-selection, learning, or actuation.
+`phorvex.decision-trace.v3` (T0-C; supersedes `v2`, which remains readable) is
+nested under `decisionTrace` in each `phorvex.audit.v2` per-asset decision record.
+It records the current P1 decision path; it does not change candidate generation,
+feasibility, cost, λ, scoring, selection, learning, or actuation.
+
+**V3 additions (the complete decision path):** `actionStatus` — exactly one row per
+canonical mutating action (`not-enabled` / `no-cover` / `infeasible` /
+`conformal-slo` / `priced-out` / `budget-exhausted` / `candidate` / `selected` /
+`not-evaluated-by-current-model` / `not-installable`), each with a closed
+`exclusionKind` (`none` / `not-enabled` / `recon-cover` / `feasibility` /
+`cost-nan` / `slo-gate` / `reactive-only` / `selection`) and a `scored` flag; the
+CHi reconstruction terms per costed candidate (`conformalQuantile`,
+`conformalCalibrated`, `gpuEnvelopeApplied`, `gpuEnvelopeSlack`) with the pinned law
+`costHigh = expectedCost + (rotate ? max(quantile, envelopeSlack if applied) : 0)`;
+`sloGateResult`; round semantics (`evaluationRound` per record, `coveredRound` per
+fact, with `coveredBeforeDecision` derived as `coveredRound < evaluationRound`);
+per-fact `coveringActions` and `decompositionAvailable`; the effective `costCeiling`
+and `costModelVersion`; `sloHeadroom` / `nextStage` / `projectedNextStageSec` in the
+inputs; and the runner-stamped `dispatchOutcome` (`not-attempted` / `emitted` /
+`emitted-false` / `dispatch-error`) with `dispatchReason` covering every
+pre-dispatch guard (`dry-run`, `kill-switch`, `ensure-policy-failed`,
+`inviolability-guard`, `no-tick-view`, `emit-boundary-infeasible`, `unselected`).
 
 ## Identity and scope
 
