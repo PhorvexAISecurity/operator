@@ -380,3 +380,37 @@ func decisionsEqualSelection(a, b []model.Decision) bool {
 	}
 	return true
 }
+
+// TestDecisionTraceV3ValidateRejectsMalformed pins the negative half of the v3 contract:
+// a v3 record missing a field the reconstruction laws depend on, or naming a selected
+// action outside the canonical vocabulary, is rejected with an error — never accepted,
+// never a panic.
+func TestDecisionTraceV3ValidateRejectsMalformed(t *testing.T) {
+	base := fixedTraceEngine().Decide([]*model.WorkloadView{covView("v3-neg", true, 2*time.Hour, false)}, decisionTracePolicy(1, true))[0].Trace
+	if base == nil {
+		t.Fatal("trace missing")
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("well-formed v3 trace must validate: %v", err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(tr *model.DecisionTraceV2)
+	}{
+		{"unknown selected action", func(tr *model.DecisionTraceV2) { tr.SelectedAction = "not-a-move" }},
+		{"empty costModelVersion", func(tr *model.DecisionTraceV2) { tr.CostModelVersion = "" }},
+		{"zero costCeiling", func(tr *model.DecisionTraceV2) { tr.CostCeiling = 0 }},
+		{"truncated actionStatus", func(tr *model.DecisionTraceV2) { tr.ActionStatus = tr.ActionStatus[:len(tr.ActionStatus)-1] }},
+		{"missing dispatchOutcome", func(tr *model.DecisionTraceV2) { tr.DispatchOutcome = "" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := *base
+			tr.ActionStatus = append([]model.DecisionActionStatusV3(nil), base.ActionStatus...)
+			tc.mutate(&tr)
+			if err := tr.Validate(); err == nil {
+				t.Fatalf("malformed v3 trace (%s) validated", tc.name)
+			}
+		})
+	}
+}

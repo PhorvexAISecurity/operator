@@ -36,16 +36,16 @@ const (
 // T0-C: the closed per-action status vocabulary (the ticket's ten values). Exactly one
 // row per model.MutatingActions member is recorded, in canonical order.
 const (
-	ActionStatusNotEnabled       = "not-enabled"
-	ActionStatusNoCover          = "no-cover"
-	ActionStatusInfeasible       = "infeasible"
-	ActionStatusConformalSLO     = "conformal-slo"
-	ActionStatusPricedOut        = "priced-out"
-	ActionStatusBudgetExhausted  = "budget-exhausted"
-	ActionStatusCandidate        = "candidate"
-	ActionStatusSelected         = "selected"
-	ActionStatusNotEvaluated     = "not-evaluated-by-current-model"
-	ActionStatusNotInstallable   = "not-installable" // emitted by no v3 mapping: capability is never evaluated per-asset
+	ActionStatusNotEnabled      = "not-enabled"
+	ActionStatusNoCover         = "no-cover"
+	ActionStatusInfeasible      = "infeasible"
+	ActionStatusConformalSLO    = "conformal-slo"
+	ActionStatusPricedOut       = "priced-out"
+	ActionStatusBudgetExhausted = "budget-exhausted"
+	ActionStatusCandidate       = "candidate"
+	ActionStatusSelected        = "selected"
+	ActionStatusNotEvaluated    = "not-evaluated-by-current-model"
+	ActionStatusNotInstallable  = "not-installable" // emitted by no v3 mapping: capability is never evaluated per-asset
 )
 
 // T0-C: the closed exclusion-kind vocabulary (B.3) — the structural cause, kept
@@ -580,6 +580,13 @@ func (t DecisionTraceV2) Validate() error {
 // validateV3 enforces the T0-C reconstructability invariants. It runs on the
 // canonical copy from Validate, after the version-agnostic checks.
 func (t DecisionTraceV2) validateV3() error {
+	// (0) Trace-level v3 fields the reconstruction laws depend on are mandatory.
+	if t.CostModelVersion == "" {
+		return errors.New("v3 trace has no costModelVersion")
+	}
+	if math.IsNaN(t.CostCeiling) || math.IsInf(t.CostCeiling, 0) || t.CostCeiling <= 0 {
+		return fmt.Errorf("v3 trace costCeiling %g is not a positive finite ceiling", t.CostCeiling)
+	}
 	// (1) The action accounting is complete: exactly one row per canonical
 	// mutating action, in canonical order, from the closed vocabularies.
 	if len(t.ActionStatus) != len(MutatingActions) {
@@ -630,7 +637,11 @@ func (t DecisionTraceV2) validateV3() error {
 		if selectedRows != 1 {
 			return fmt.Errorf("selected trace has %d selected actionStatus rows, want 1", selectedRows)
 		}
-		if t.ActionStatus[canonicalActionRank(t.SelectedAction)].Status != ActionStatusSelected {
+		rank := canonicalActionRank(t.SelectedAction)
+		if rank >= len(t.ActionStatus) {
+			return fmt.Errorf("selected action %q is not a canonical mutating action", t.SelectedAction)
+		}
+		if t.ActionStatus[rank].Status != ActionStatusSelected {
 			return fmt.Errorf("selected action %q is not the selected actionStatus row", t.SelectedAction)
 		}
 	}

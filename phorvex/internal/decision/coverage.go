@@ -716,7 +716,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 		ProactiveFloorSec: pol.ProactiveFloor.Seconds(),
 		AntiOverRotateSec: pol.AntiOverRotationWindow.Seconds(),
 		// T0-C: lifted from the envelope into the trace with presence.
-		SLOHeadroom:           traceOptional(true, ac.sig.SLOHeadroom),
+		// Present only when headroom was MEASURED: sensed.Context (ctxprov/sensed.go) derives it
+		// from P99 under exactly this predicate and otherwise defaults to 1.0 (full headroom).
+		SLOHeadroom:           traceOptional(pol.P99Ms > 0 && v.Telemetry.Present && v.Telemetry.P99Ms > 0, ac.sig.SLOHeadroom),
 		NextStage:             ac.assess.NextStageName,
 		ProjectedNextStageSec: traceOptional(ac.assess.NextStageName != "", ac.assess.ProjectedNextStageSec),
 	}
