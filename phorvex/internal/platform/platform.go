@@ -26,6 +26,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/recon"
 	"github.com/phorvex/phorvex/internal/registry"
 )
 
@@ -150,7 +151,10 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		}
 		// CVE/EPSS exploitability prior (offline cache; honest-absent = 1.0)
 		lk := lookupEPSS(p.ImageID)
-		w.EPSS, w.CVSS, w.EPSSPresent = lk.Multiplier, lk.CVSS, lk.Present
+		// The multiplier is recon's (M-104, one layer); the witness carries it for the
+		// calibration snapshot and the scan report, plus the raw pair and the reason.
+		w.EPSS, w.EPSSPresent, w.EPSSReason = recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+		w.EPSSScore, w.CVSS = lk.EPSS, lk.CVSS
 		w.EPSSBasis, w.EPSSCachedDigest, w.EPSSScanTS = lk.Basis, lk.CachedDigest, lk.ScanTS
 		// model-rarity (AI fact dispersion). rarity() is population-relative, so ModelRarity is 1.0 in
 		// TWO cases, not one: when the fleet has no model servers at all, and — the more common one —

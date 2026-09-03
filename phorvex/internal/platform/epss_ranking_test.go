@@ -53,8 +53,8 @@ func TestSeededEPSSReachesPhysicsWitness(t *testing.T) {
 	w := witnessByPod(t, twoPodSnapshot())
 	got, absent := w["ns/exploitable"].EPSS, w["ns/benign"].EPSS
 
-	// 1 + clamp01(0.5*0.97 + 0.5*0.98) = 1.975
-	if math.Abs(got-1.975) > 1e-9 {
+	// M-104 form: 1 + 0.97*(9.8/10) = 1.9506
+	if math.Abs(got-1.9506) > 1e-9 {
 		t.Fatalf("seeded EPSS did not reach PhysicsWitness: got %v, want 1.975 — the cache is not "+
 			"feeding epssMultiplier, which is exactly what this ticket alleges", got)
 	}

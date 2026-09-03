@@ -310,9 +310,11 @@ type PhysicsWitness struct {
 	ImageRarityPresent bool    // an image identity participated in the current fleet population
 	CoResidency        float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
 	CoResidencyPresent bool    // this pod had a node represented in the current fleet scan
-	EPSS               float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
-	EPSSPresent        bool    // an image-digest cache entry supplied the EPSS/CVSS multiplier
+	EPSS               float64 // the M-104 value multiplier 1 + EPSSScore·(CVSS/10) ∈ [1,2]; exactly 1 when !EPSSPresent
+	EPSSPresent        bool    // a usable (present, finite, in-domain) EPSS/CVSS pair produced the multiplier
+	EPSSScore          float64 // raw cache EPSS [0,1]; meaningful only when EPSSPresent
 	CVSS               float64 // raw cache CVSS [0,10]; meaningful only when EPSSPresent
+	EPSSReason         string  // why the pair was unusable: absent | non-finite | invalid-domain ("" when present)
 	// EPSSBasis says HOW the cache answered (M-141): "exact" (running digest scored),
 	// "repo-fallback" (latest scan of the same repository, flagged), "miss" (nothing —
 	// multiplier neutral, EPSSPresent=false), "" when the pod has no image identity.

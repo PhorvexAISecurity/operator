@@ -13,10 +13,13 @@ import (
 	"sync"
 
 	"github.com/phorvex/phorvex/internal/metrics"
+	"github.com/phorvex/phorvex/internal/recon"
 )
 
 // epss.go realizes the PRD context signal #1 (CVE/CVSS posture from image-scan + NVD)
-// as a DETERMINISTIC, OFFLINE, honest-absent EMR exploitability multiplier. Rather than
+// as a DETERMINISTIC, OFFLINE, honest-absent cache of RAW (epss, cvss) pairs. Since M-104
+// the value multiplier itself lives in recon.EPSSMultiplier (the one consumption layer);
+// this file only looks the pair up. Rather than
 // wrapping the default ctxprov 'sensed-context' provider (which computes AssetValue
 // itself — the non-additivity the decision flagged), the exploitability prior enters the
 // SAME Layer-C EMR weight via Physics.EPSS, multiplying the recon-fact base alongside
@@ -51,9 +54,10 @@ const (
 	EPSSBasisMiss         = "miss"          // nothing for this digest or repository: neutral, present=false
 )
 
-// EPSSLookup is the typed answer of the exploitability cache for one running image.
+// EPSSLookup is the typed answer of the exploitability cache for one running image. It
+// carries RAW values only: the value multiplier is computed by recon.EPSSMultiplier, the
+// single EPSS consumption layer (M-104).
 type EPSSLookup struct {
-	Multiplier    float64 // 1 + clamp01(0.5*EPSS + 0.5*CVSS/10) in [1,2]; exactly 1 on a miss
 	EPSS, CVSS    float64 // raw cache values; 0 on a miss
 	Present       bool    // a cache entry supplied the value (exact or repo-fallback)
 	Basis         string  // EPSSBasis* ("" when imageID is empty: no identity to look up)
@@ -203,17 +207,20 @@ func EPSSLoaded() int {
 	return len(epssCache)
 }
 
-// epssMultiplier returns 1 + (0.5*EPSS + 0.5*CVSS/10) in [1,2] for a known-exploitable
-// image digest, or 1.0 (honest-absent) when the cache has no entry.
+// epssMultiplier returns the M-104 value multiplier for a running image digest — computed by
+// recon.EPSSMultiplier, the one consumption layer — or exactly 1.0 (honest-absent) on a miss.
 func epssMultiplier(imageID string) float64 {
-	return lookupEPSS(imageID).Multiplier
+	lk := lookupEPSS(imageID)
+	m, _, _ := recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+	return m
 }
 
 // epssInputs exposes the exact source values alongside the multiplier so the
 // decision trace can distinguish the honest-neutral default from measured zero.
 func epssInputs(imageID string) (multiplier, epss, cvss float64, present bool) {
 	lk := lookupEPSS(imageID)
-	return lk.Multiplier, lk.EPSS, lk.CVSS, lk.Present
+	m, ok, _ := recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+	return m, lk.EPSS, lk.CVSS, ok
 }
 
 // lookupEPSS is THE cache lookup (M-141), in this order and no other:
@@ -226,7 +233,7 @@ func epssInputs(imageID string) (multiplier, epss, cvss float64, present bool) {
 // Every outcome is counted in phorvex_epss_lookup_total so a stale cache is a metric.
 func lookupEPSS(imageID string) EPSSLookup {
 	if imageID == "" {
-		return EPSSLookup{Multiplier: 1.0}
+		return EPSSLookup{}
 	}
 	epssMu.RLock()
 	e, ok := epssCache[imageID]
@@ -241,14 +248,14 @@ func lookupEPSS(imageID string) EPSSLookup {
 	switch {
 	case ok && !hasFallback:
 		metrics.RecordEPSSLookup("hit")
-		return EPSSLookup{Multiplier: 1 + clamp01(0.5*e.EPSS+0.5*e.CVSS/10.0), EPSS: e.EPSS, CVSS: e.CVSS,
+		return EPSSLookup{EPSS: e.EPSS, CVSS: e.CVSS,
 			Present: true, Basis: EPSSBasisExact, CachedDigest: imageID, RunningDigest: imageID, ScanTS: e.ScanTS}
 	case ok && hasFallback:
 		metrics.RecordEPSSLookup("repo-fallback")
-		return EPSSLookup{Multiplier: 1 + clamp01(0.5*e.EPSS+0.5*e.CVSS/10.0), EPSS: e.EPSS, CVSS: e.CVSS,
+		return EPSSLookup{EPSS: e.EPSS, CVSS: e.CVSS,
 			Present: true, Basis: EPSSBasisRepoFallback, CachedDigest: fallbackKey, RunningDigest: imageID, ScanTS: e.ScanTS}
 	default:
 		metrics.RecordEPSSLookup("miss")
-		return EPSSLookup{Multiplier: 1.0, Basis: EPSSBasisMiss, RunningDigest: imageID}
+		return EPSSLookup{Basis: EPSSBasisMiss, RunningDigest: imageID}
 	}
 }
