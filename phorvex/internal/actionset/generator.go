@@ -14,6 +14,7 @@ package actionset
 import (
 	"fmt"
 
+	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
@@ -39,6 +40,8 @@ type ActionSet struct {
 	// FactsByAsset retains the already-generated recon output for the decision
 	// trace, including audit-only facts. Selection continues to read FactWeights.
 	FactsByAsset map[string][]recon.Fact
+	// FactsAbsent records, per asset key, why NO fact was minted (non-finite input, M-111).
+	FactsAbsent map[string]string
 	// CrossBlockCollisions records the structural violations that make this entire
 	// tick unsafe to optimize. Rejected is fail-closed: no candidate may be selected.
 	CrossBlockCollisions []CrossBlockCollision
@@ -137,7 +140,7 @@ func GeneratableActions() []model.Action {
 //
 // The set provably changes with state and contains NO hard-constraint-violating move.
 func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
-	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{}}
+	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{}, FactsAbsent: map[string]string{}}
 	keyOwners := map[string]string{}
 	claim := func(factKey, block string) bool {
 		owner, exists := keyOwners[factKey]
@@ -160,6 +163,20 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 	for _, v := range views {
 		key := v.Pod.Namespace + "/" + v.Pod.Name
 		af := d.Recon.AssetFacts(v, d.FactContext(v))
+		if af.AbsentReason != "" {
+			// M-111: a non-finite belief/physics input minted no fact. Fail-conservative in the
+			// SAME observable category as a NaN cost (never folded into ordinary infeasibility):
+			// every enabled action is excluded with the reason, the trace carries it per asset,
+			// and the NaN metric counts it. No weight, marginal or gain ever sees the non-number.
+			out.FactsAbsent[key] = af.AbsentReason
+			for _, action := range enabledActions(pol) {
+				out.Excluded = append(out.Excluded, Exclusion{
+					Key: key, Action: action, Reason: cost.UnactionableNaNCategory + ": recon " + af.AbsentReason,
+					Category: cost.UnactionableNaNCategory, Detail: "recon " + af.AbsentReason,
+				})
+			}
+			continue
+		}
 		out.FactsByAsset[key] = append([]recon.Fact(nil), af.Facts...)
 		coveredKeys := map[string]bool{}
 		// Scan every declared cover, including disabled actions. A topology-conditional

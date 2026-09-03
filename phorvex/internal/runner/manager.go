@@ -1166,6 +1166,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		ReactiveOnly:                 s.Triggers.ReactiveOnly,
 		KillChainSojournScaleSeconds: s.EffectiveSojournScaleSeconds(),
 		KillChainShape:               s.EffectiveKillChainShape(),
+		ExposurePressureCap:          s.EffectiveExposurePressureCap(),
 		EnabledActions:               enabled,
 		AssetWeightFromLabels:        s.AssetWeightFromLabels,
 	}

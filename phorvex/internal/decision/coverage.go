@@ -533,6 +533,10 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			NextStage:             ac.assess.NextStageName,
 			PHold:                 ac.assess.PHold,
 			Provenance:            prov(key),
+			PHoldInputs:           ac.assess.PHoldInputs,
+			StageEvent:            ac.assess.EventStageName,
+			EventEvidence:         ac.assess.EventEvidence,
+			Events:                ac.assess.Events,
 			Lambda:                lambda,
 			ProactiveRate:         rate,
 			Attribution:           attribution,
@@ -676,6 +680,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	}
 	exposure, exposurePresent := v.ExposureByVariable[model.VarPodIdentity]
 	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
+	dispersionMult, dispersionOK := recon.DispersionMultiplier(v)
 	trace.Inputs = model.DecisionModelInputsV2{
 		Phase:                string(v.Phase),
 		RequestRate:          traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
@@ -690,7 +695,8 @@ func (e *CoverageEngine) buildDecisionTrace(
 		EPSS:                 traceOptional(v.Physics.EPSSPresent, v.Physics.EPSS),
 		CVSS:                 traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
 		PhysicsScanned:       v.Physics.Scanned,
-		DispersionMult:       traceOptional(dispersionPresent, recon.DispersionMultiplier(v)),
+		DispersionMult:       traceOptional(dispersionPresent && dispersionOK, dispersionMult),
+		FactsAbsentReason:    set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
 		DispersionCap:        traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:               primed,
 		BetaMean:             traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),

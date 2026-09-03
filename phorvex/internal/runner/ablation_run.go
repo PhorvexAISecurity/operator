@@ -7,6 +7,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -156,6 +157,7 @@ func ablationPolicy(namespace string, budget int) model.Policy {
 		Lambda: 0.6, NormSparsity: 0.4, FlowDisruption: 0.6, WeightSecrets: 0.8, BlastRadiusFromGraph: true,
 		MaxMovesPerTick: budget, TickInterval: 20 * time.Second, AntiOverRotationWindow: 10 * time.Second,
 		ProactiveFloor: 30 * time.Second, MinAvailableReplicas: 1, EventDriven: true,
-		EnabledActions: map[model.Action]bool{model.ActionRotate: true, model.ActionQuarantine: true},
+		ExposurePressureCap: v1alpha1.DefaultExposurePressureCap,
+		EnabledActions:      map[model.Action]bool{model.ActionRotate: true, model.ActionQuarantine: true},
 	}
 }
