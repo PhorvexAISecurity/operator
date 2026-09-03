@@ -39,6 +39,13 @@ phorvex:
     enabled: false
   # Leader election for HA (single active controller).
   leaderElect: true
+  # Fail-closed CREATE/UPDATE admission for cross-field PhorvexPolicy invariants.
+  # The chart generates and retains one self-signed serving certificate per release;
+  # single-field ranges and duration syntax are enforced independently by CRD CEL.
+  admissionWebhook:
+    enabled: true
+    port: 9443
+    certDir: /tmp/k8s-webhook-server/serving-certs
   metricsBindAddress: ":8080"
   healthProbeBindAddress: ":8081"
   # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
