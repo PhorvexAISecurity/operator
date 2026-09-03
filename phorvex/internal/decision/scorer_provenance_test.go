@@ -171,4 +171,53 @@ func TestFallbackActionUsesTheSameProvenancedScore(t *testing.T) {
 	if d.Action != provPick {
 		t.Fatalf("fallback picked %s at λ=%.2f; the main-path score ranks %s first (old raw ranking picked %s)", d.Action, lambda, provPick, rawPick)
 	}
+	// The fallback record carries the provenance it was scored with.
+	if math.Abs(d.Provenance-prov) > 1e-12 {
+		t.Fatalf("fallback record provenance = %v, want prov(key) = %v", d.Provenance, prov)
+	}
+}
+
+// Same function AND same inputs (Math review): with owning-block-disjoint covers no other
+// asset's selection can shrink a candidate's marginal, so the coverage input demand uses
+// (the standalone cover) equals the marginal the main path evaluated, and prov(key), λ and
+// ECost are the same per candidate. Hence candidateDemand must equal the number of assets
+// whose best main-path netGain (recorded per candidate in the trace) is positive.
+func TestDemandIsRebuildableFromMainPathCandidateGains(t *testing.T) {
+	e := NewCoverageEngine()
+	e.Now = func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }
+	pol := covPolicy(1)
+	pol.ProactiveFloor = 15 * time.Minute
+	pol.AntiOverRotationWindow = 90 * time.Second
+	pol.TraceEnabled = true
+	fleet := []*model.WorkloadView{
+		covView("fresh-decoy", true, 90*time.Second, false),
+		covView("mid", true, 7*time.Minute, false),
+		covView("due", true, 2*time.Hour, false),
+	}
+	decs := e.Decide(fleet, pol)
+	rebuilt, demand := 0, -1
+	for _, d := range decs {
+		if d.Trace == nil {
+			t.Fatalf("%s: trace missing", d.Pod)
+		}
+		demand = d.Trace.CandidateDemand
+		best := math.Inf(-1)
+		for _, c := range d.Trace.Candidates {
+			if c.TieBreakRank < 0 || !c.NetGain.Present {
+				continue // exclusions carry no main-path gain
+			}
+			if c.NetGain.Value > best {
+				best = c.NetGain.Value
+			}
+			if !c.Provenance.Present || math.Abs(c.Provenance.Value-d.Provenance) > 1e-12 {
+				t.Fatalf("%s/%s: candidate provenance %v differs from the decision's %v", d.Pod, c.Action, c.Provenance, d.Provenance)
+			}
+		}
+		if best > 0 {
+			rebuilt++
+		}
+	}
+	if demand != rebuilt {
+		t.Fatalf("candidateDemand = %d but %d assets have a positive main-path netGain: demand and selection do not share inputs", demand, rebuilt)
+	}
 }
