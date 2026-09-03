@@ -521,6 +521,10 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			StageHazard:           ac.assess.Hazard,
 			NextStage:             ac.assess.NextStageName,
 			PHold:                 ac.assess.PHold,
+			PHoldInputs:           ac.assess.PHoldInputs,
+			StageEvent:            ac.assess.EventStageName,
+			EventEvidence:         ac.assess.EventEvidence,
+			Events:                ac.assess.Events,
 			Lambda:                lambda,
 			ProactiveRate:         rate,
 			Attribution:           attribution,
@@ -664,6 +668,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	}
 	exposure, exposurePresent := v.ExposureByVariable[model.VarPodIdentity]
 	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
+	dispersionMult, dispersionOK := recon.DispersionMultiplier(v)
 	trace.Inputs = model.DecisionModelInputsV2{
 		Phase:             string(v.Phase),
 		RequestRate:       traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
@@ -671,6 +676,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
 		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
 		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
+		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
 		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
 		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
 		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
@@ -683,7 +689,8 @@ func (e *CoverageEngine) buildDecisionTrace(
 		EPSSRunningDigest: v.Pod.ImageID,
 		EPSSScanTS:        v.Physics.EPSSScanTS,
 		PhysicsScanned:    v.Physics.Scanned,
-		DispersionMult:    traceOptional(dispersionPresent, recon.DispersionMultiplier(v)),
+		DispersionMult:    traceOptional(dispersionPresent && dispersionOK, dispersionMult),
+		FactsAbsentReason: set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
 		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:            primed,
 		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),

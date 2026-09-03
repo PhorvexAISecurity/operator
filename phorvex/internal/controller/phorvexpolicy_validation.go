@@ -17,6 +17,8 @@ import (
 
 const maxPolicyLambda = 10.0
 
+var exposurePressureCapPattern = regexp.MustCompile(`^0\.[0-9]+$`)
+
 var policyLambdaPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 
 // ValidatePhorvexPolicy is the canonical runtime validation shared by admission
@@ -39,6 +41,13 @@ func ValidatePhorvexPolicy(p *v1alpha1.PhorvexPolicy) field.ErrorList {
 		if !policyLambdaPattern.MatchString(raw) || err != nil || math.IsNaN(lambda) || math.IsInf(lambda, 0) || lambda < 0 || lambda > maxPolicyLambda {
 			errs = append(errs, field.Invalid(specPath.Child("objective", "lambda"), raw,
 				"must be a decimal between 0 and 10"))
+		}
+	}
+	if raw := p.Spec.Belief.ExposurePressureCap; raw != "" {
+		cap, err := strconv.ParseFloat(raw, 64)
+		if !exposurePressureCapPattern.MatchString(raw) || err != nil || math.IsNaN(cap) || math.IsInf(cap, 0) || cap <= 0 || cap >= 1 {
+			errs = append(errs, field.Invalid(specPath.Child("belief", "exposurePressureCap"), raw,
+				"exposurePressureCap must be a decimal strictly between 0 and 1 (M-143: the exposure-pressure term must stay a prior floor, never an annihilator)"))
 		}
 	}
 

@@ -130,9 +130,12 @@ func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextS
 			unknownThreatLevel(e.ThreatLevel)
 		}
 		sev := float64(rank) / 4.0
-		decay := 1.0
-		if pol.ProactiveFloor > 0 {
-			decay = 1.0 - clampC(e.Age.Seconds()/pol.ProactiveFloor.Seconds(), 0, 1)
+		// One aging function for both halves of belief (M-27): the same linear
+		// w = 1 − clamp01(age/τ_ev) the kill-chain evidence sum now uses. τ_ev is the
+		// proactive floor (T1-B initialization; value INSUFFICIENT EVIDENCE, M-29).
+		decay := 0.0
+		if !e.TimestampMissing {
+			decay = model.EventAgeWeight(e.Age, pol.ProactiveFloor)
 		}
 		w := sev * decay
 		if !e.TargetsPod {
