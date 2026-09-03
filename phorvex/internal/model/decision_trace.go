@@ -79,7 +79,12 @@ type DecisionModelInputsV2 struct {
 	ExposureVariable  string        `json:"exposureVariable"`
 	ExposureSeconds   OptionalFloat `json:"exposureSeconds"`
 	ProactiveFloorSec float64       `json:"proactiveFloorSeconds"`
-	AntiOverRotateSec float64       `json:"antiOverRotationWindowSeconds"`
+	// CostCalibratorTenant names the tenant whose calibrator bucket priced every cost in this
+	// record, BlindCost included (M-110 site 1); BlindCostSource says whether the blind cost
+	// came from that calibrator ("tenant-calibrator") or the stateful maximum ("stateful-max").
+	CostCalibratorTenant string  `json:"costCalibratorTenant,omitempty"`
+	BlindCostSource      string  `json:"blindCostSource,omitempty"`
+	AntiOverRotateSec    float64 `json:"antiOverRotationWindowSeconds"`
 }
 
 // DecisionFactV2 is one fact presented to the current optimizer. Decomposition

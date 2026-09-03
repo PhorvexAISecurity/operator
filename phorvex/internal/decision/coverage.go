@@ -7,6 +7,7 @@ package decision
 import (
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -387,7 +388,11 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		}
 	}
 
-	// demand = number of assets with a net-positive best move (for the dual subgradient)
+	// demand = number of assets with a net-positive best move (for the dual subgradient).
+	// PHORVEXSEC-196 / M-110 site 2: the SAME provenance discount selection applies
+	// (legacyMixedGain with prov) — a fresh, evidence-less decoy that selection discounts to
+	// provFloor no longer pumps λ's rise pressure at face value. Expect demand, and hence λ,
+	// to be lower on decoy-bearing tenants; that is the point (M-144's decoy channel).
 	demand := 0
 	for key, idxs := range candsByAsset {
 		if !attackBackedKey[key] {
@@ -396,8 +401,8 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		best := 0.0
 		for _, i := range idxs {
 			c := set.Candidates[i]
-			if v := covValue(c) - lambda*c.ECost; v > best {
-				best = v
+			if g := legacyMixedGain(covValue(c), prov(key), lambda, c.ECost); g > best {
+				best = g
 			}
 		}
 		if best > 0 {
@@ -425,11 +430,13 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 				}
 			}
 		} else if len(idxs) > 0 && attackBackedKey[key] {
-			// best standalone candidate (highest coverage − λ·cost)
-			bestNet := -1.0
+			// best standalone candidate, scored EXACTLY as the main path scores it
+			// (PHORVEXSEC-196 / M-110 site 3): coverage·prov − λ·cost through legacyMixedGain.
+			// The un-discounted form ranked a "considered" entry higher than selection ever would.
+			bestNet := math.Inf(-1)
 			for _, i := range idxs {
 				c := set.Candidates[i]
-				if net := covValue(c) - lambda*c.ECost; net > bestNet {
+				if net := legacyMixedGain(covValue(c), prov(key), lambda, c.ECost); net > bestNet {
 					bestNet = net
 					action = c.Action
 					chosen = &set.Candidates[i]
@@ -452,7 +459,11 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		// rotate from the candidate set, yet the blind timer rotates anyway. Reading the candidate
 		// set there yielded 0 (no rotate candidate => "blind costs nothing"), which is exactly
 		// backwards: the blind rotate it CANNOT safely take is the most expensive of all.
-		blindCost := e.Cost.ECost(v, model.Move{Action: model.ActionRotate}, pol)
+		// PHORVEXSEC-196 / M-110 site 1: priced by the TARGET tenant's calibrator bucket
+		// (tcost = costFor(pol.Tenant)). e.Cost is the legacy scalar that costFor hands to the
+		// FIRST tenant registered, so every later tenant's blind cost was priced by that first
+		// tenant's learned RLS/Conformal state.
+		blindCost := tcost.ECost(v, model.Move{Action: model.ActionRotate}, pol)
 		if v.Pod.Stateful {
 			// A blind rotate DELETES this stateful pod and its persistent state — a total,
 			// irrecoverable loss: maximum disruption (1.0 on the normalized cost scale). This is
@@ -665,32 +676,34 @@ func (e *CoverageEngine) buildDecisionTrace(
 	exposure, exposurePresent := v.ExposureByVariable[model.VarPodIdentity]
 	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
 	trace.Inputs = model.DecisionModelInputsV2{
-		Phase:             string(v.Phase),
-		RequestRate:       traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
-		ConnectionCount:   traceOptional(telemetryPresent("connCount"), v.Telemetry.ConnCount),
-		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
-		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
-		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
-		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
-		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
-		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
-		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
-		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSS),
-		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
-		PhysicsScanned:    v.Physics.Scanned,
-		DispersionMult:    traceOptional(dispersionPresent, recon.DispersionMultiplier(v)),
-		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
-		Primed:            primed,
-		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
-		PHold:             traceOptional(true, ac.assess.PHold),
-		Stage:             ac.assess.StageName,
-		StageHazard:       traceOptional(true, ac.assess.Hazard),
-		StageUrgency:      traceOptional(true, ac.assess.StageUrgency),
-		ThreatPosture:     traceOptional(true, ac.sig.ThreatPosture),
-		ExposureVariable:  model.VarPodIdentity,
-		ExposureSeconds:   traceOptional(exposurePresent, exposure.Seconds()),
-		ProactiveFloorSec: pol.ProactiveFloor.Seconds(),
-		AntiOverRotateSec: pol.AntiOverRotationWindow.Seconds(),
+		Phase:                string(v.Phase),
+		RequestRate:          traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
+		ConnectionCount:      traceOptional(telemetryPresent("connCount"), v.Telemetry.ConnCount),
+		GPUUtilization:       traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
+		SMOccupancy:          traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
+		VRAMFraction:         traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
+		Leakage:              traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
+		ImageRarity:          traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
+		ModelRarity:          traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
+		CoResidency:          traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+		EPSS:                 traceOptional(v.Physics.EPSSPresent, v.Physics.EPSS),
+		CVSS:                 traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
+		PhysicsScanned:       v.Physics.Scanned,
+		DispersionMult:       traceOptional(dispersionPresent, recon.DispersionMultiplier(v)),
+		DispersionCap:        traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
+		Primed:               primed,
+		BetaMean:             traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
+		PHold:                traceOptional(true, ac.assess.PHold),
+		Stage:                ac.assess.StageName,
+		StageHazard:          traceOptional(true, ac.assess.Hazard),
+		StageUrgency:         traceOptional(true, ac.assess.StageUrgency),
+		ThreatPosture:        traceOptional(true, ac.sig.ThreatPosture),
+		ExposureVariable:     model.VarPodIdentity,
+		ExposureSeconds:      traceOptional(exposurePresent, exposure.Seconds()),
+		ProactiveFloorSec:    pol.ProactiveFloor.Seconds(),
+		CostCalibratorTenant: pol.Tenant,
+		BlindCostSource:      blindCostSource(v),
+		AntiOverRotateSec:    pol.AntiOverRotationWindow.Seconds(),
 	}
 
 	source := model.TraceNotAvailable
@@ -943,4 +956,12 @@ func coverageReason(a model.Action, selected bool, as killchain.Assessment, cov,
 		return fmt.Sprintf("%s: strict gain %.2f > 0 (fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s→%s hazard=%.2f pHold=%.2f",
 			a, gain, cov, ecost, lambda, as.StageName, as.NextStageName, as.Hazard, as.PHold)
 	}
+}
+
+// blindCostSource records where a decision's BlindCost came from (M-110 site 1).
+func blindCostSource(v *model.WorkloadView) string {
+	if v.Pod.Stateful {
+		return "stateful-max"
+	}
+	return "tenant-calibrator"
 }
