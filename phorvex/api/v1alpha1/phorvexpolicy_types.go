@@ -443,13 +443,17 @@ type PhorvexPolicyStatus struct {
 	// +kubebuilder:validation:Optional
 	DecisionsTotal int64 `json:"decisionsTotal,omitempty"`
 
-	// MovesThisWindow is the moves decided in the current AntiOverRotationWindow
-	// (budget accounting).
+	// MovesThisWindow is the number of moves ENACTED (really emitted to the actuator)
+	// inside the trailing AntiOverRotationWindow (budget accounting). Selected-but-not-
+	// emitted decisions (dry-run, kill-switch, actuator failure) do not count. The ledger
+	// is in-memory: after a restart it rebuilds from the next emit.
 	// +kubebuilder:validation:Optional
 	MovesThisWindow int `json:"movesThisWindow,omitempty"`
 
-	// Actuated is true once at least one move was really emitted to Phoenix (only
-	// possible in active mode). Stays false for the whole P0 dry-run lifetime.
+	// Actuated is true while at least one move was really enacted inside the trailing
+	// AntiOverRotationWindow — a rolling condition, not a latch. It returns to false once
+	// the window passes without an emit, stays false for the whole dry-run lifetime, and
+	// after a restart until the next emit.
 	// +kubebuilder:validation:Optional
 	Actuated bool `json:"actuated,omitempty"`
 
