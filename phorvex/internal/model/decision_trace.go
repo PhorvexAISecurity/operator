@@ -105,6 +105,9 @@ type OptionalBool struct {
 // the decision path. Every potentially absent measurement carries presence.
 type DecisionModelInputsV2 struct {
 	Phase string `json:"phase"`
+	// PhaseReason (T1-C) distinguishes idle-measured|warm-no-app-signal|busy-measured|coldstart|
+	// draining|unknown, so a Warm-by-absence pod is auditable as such rather than as measured serving.
+	PhaseReason string `json:"phaseReason,omitempty"`
 
 	RequestRate     OptionalFloat `json:"requestRate"`
 	ConnectionCount OptionalFloat `json:"connectionCount"`
@@ -130,7 +133,7 @@ type DecisionModelInputsV2 struct {
 	DispersionMult    OptionalFloat `json:"dispersionMult"`
 	// FactsAbsentReason is set when a non-finite belief/physics input meant no fact was
 	// minted for this asset (M-111): the weights are absent, not zero and not NaN.
-	FactsAbsentReason string `json:"factsAbsentReason,omitempty"`
+	FactsAbsentReason string        `json:"factsAbsentReason,omitempty"`
 	DispersionCap     OptionalFloat `json:"dispersionCap"`
 	Primed            bool          `json:"primed"`
 	BetaMean          OptionalFloat `json:"betaMean"`
@@ -145,9 +148,9 @@ type DecisionModelInputsV2 struct {
 	// CostCalibratorTenant names the tenant whose calibrator bucket priced every cost in this
 	// record, BlindCost included (M-110 site 1); BlindCostSource says whether the blind cost
 	// came from that calibrator ("tenant-calibrator") or the stateful maximum ("stateful-max").
-	CostCalibratorTenant string        `json:"costCalibratorTenant,omitempty"`
-	BlindCostSource      string        `json:"blindCostSource,omitempty"`
-	AntiOverRotateSec    float64       `json:"antiOverRotationWindowSeconds"`
+	CostCalibratorTenant string  `json:"costCalibratorTenant,omitempty"`
+	BlindCostSource      string  `json:"blindCostSource,omitempty"`
+	AntiOverRotateSec    float64 `json:"antiOverRotationWindowSeconds"`
 	// T0-C: the three horizon/headroom inputs the envelope already carried (log.go)
 	// lifted into the trace with presence. ProjectedNextStageSec is present iff a
 	// next stage was projected (NextStage != "").

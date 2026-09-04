@@ -30,40 +30,37 @@ func (littlesLaw) Name() string { return "littles-law" }
 
 func (littlesLaw) Residual(view *model.WorkloadView, _ model.Policy) float64 {
 	t := view.Telemetry
-	if !t.Present {
-		return 0
-	}
 
-	// (1) Flow-conservation residual: requests in should produce bytes out. If a pod
-	// takes traffic in (reqRate>0 or bytesIn>0) but almost nothing leaves, OR data
-	// leaves with no matching requests (exfil pattern), that is a flow inconsistency.
+	// (1) Flow-conservation residual: bytes in vs bytes out (cAdvisor, infra-universal).
+	// Gate on each byte signal's usability and require some byte flow (old >0 semantics).
 	flow := 0.0
-	if t.BytesIn > 0 || t.BytesOut > 0 {
-		ratio := t.BytesOut / (t.BytesIn + 1.0) // +1 avoids div-by-zero, mild low-volume damping
+	if (t.BytesIn.Usable() && t.BytesIn.Value > 0) || (t.BytesOut.Usable() && t.BytesOut.Value > 0) {
+		ratio := t.BytesOut.Value / (t.BytesIn.Value + 1.0) // +1 avoids div-by-zero, mild low-volume damping
 		// Healthy band is roughly [0.1, 10]; deviation grows as we leave it (log scale).
 		dev := math.Abs(math.Log10(clampPos(ratio, 1e-3)))
 		flow = clamp01((dev - 1.0) / 3.0) // 0 inside the decade band, ->1 by ~4 decades off
 	}
 
-	// (2) Queue/backlog residual: queue depth large relative to arrival rate means
-	// items pile up (L >> λ·W stable point).
+	// (2) Queue/backlog residual: needs BOTH queue depth AND arrival rate. An absent
+	// ReqRate is unknown arrival, not zero arrival, so the term is skipped (not fabricated).
 	queue := 0.0
-	if t.QueueDepth > 0 {
-		queue = clamp01((t.QueueDepth - t.ReqRate) / (t.ReqRate + 8.0))
+	if t.QueueDepth.Usable() && t.ReqRate.Usable() && t.QueueDepth.Value > 0 {
+		queue = clamp01((t.QueueDepth.Value - t.ReqRate.Value) / (t.ReqRate.Value + 8.0))
 	}
 
-	// (3) Connection fan-out residual: connections far exceeding request rate suggests
-	// abnormal fan-out (lateral probing / C2 multiplexing).
+	// (3) Connection fan-out residual. T1-C PHANTOM FIX: ConnCount is real cAdvisor but
+	// ReqRate is app-level; with ReqRate absent-as-zero the old code fabricated a "lateral
+	// probing / C2" residual on every uninstrumented pod and fed it to LIVE selection.
+	// Require ReqRate usable so absence never invents fan-out (no math/band change).
 	fanout := 0.0
-	if t.ConnCount > 0 {
-		fanout = clamp01((t.ConnCount - t.ReqRate) / (t.ReqRate + 20.0))
+	if t.ConnCount.Usable() && t.ReqRate.Usable() && t.ConnCount.Value > 0 {
+		fanout = clamp01((t.ConnCount.Value - t.ReqRate.Value) / (t.ReqRate.Value + 20.0))
 	}
 
-	// (4) Throughput collapse under load (GPU/LLM): serving load present but tokens/sec
-	// floored.
+	// (4) Throughput collapse under load (GPU/LLM): needs both GPUUtil and TokensPerSec.
 	collapse := 0.0
-	if t.GPUUtil > 0.5 && t.TokensPerSec >= 0 && t.TokensPerSec < pol_floor {
-		collapse = clamp01((pol_floor - t.TokensPerSec) / pol_floor)
+	if t.GPUUtil.Usable() && t.TokensPerSec.Usable() && t.GPUUtil.Value > 0.5 && t.TokensPerSec.Value >= 0 && t.TokensPerSec.Value < pol_floor {
+		collapse = clamp01((pol_floor - t.TokensPerSec.Value) / pol_floor)
 	}
 
 	// Blend: max emphasizes the single strongest inconsistency (any one law breaking

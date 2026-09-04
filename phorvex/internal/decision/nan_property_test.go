@@ -39,7 +39,7 @@ func poisonedView(ns, name string, v float64, gpu bool, phase model.WorkloadPhas
 		},
 		Phase: phase,
 		Telemetry: model.Telemetry{
-			Present: true, ReqRate: v, ConnCount: v,
+			ReqRate: telSigNP(v), ConnCount: telSigNP(v),
 		},
 		BlastRadius:        0.5,
 		ExposureByVariable: map[string]time.Duration{"podIdentity": 20 * time.Minute, "nodePlacement": 20 * time.Minute},
@@ -127,4 +127,12 @@ func TestDecideStaysSelectableUnderPoisonedTelemetry(t *testing.T) {
 				v, gotSelected, wantSelected)
 		}
 	}
+}
+
+// telSigNP mirrors ingest typing for the poison fuzz: non-finite => State=Error, else Present.
+func telSigNP(v float64) model.Signal {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return model.Signal{Value: v, State: model.Error}
+	}
+	return model.PresentSignal(v, "test")
 }

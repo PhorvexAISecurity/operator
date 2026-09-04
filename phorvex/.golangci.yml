@@ -1,0 +1,16 @@
+# T1-C (A-10): exhaustiveness over model.WorkloadPhase. The SENSING->ECONOMICS phase switches
+# (internal/cost/switching.go, internal/cost/rls.go) list every phase arm with no masking default,
+# so removing an arm fails CI (ticket test (g)). Wiring `golangci-lint run` into the CI workflow is
+# the CI owner's step (same as the T0-C E2E stage); the config lands here with the code.
+run:
+  timeout: 5m
+linters:
+  enable:
+    - exhaustive
+linters-settings:
+  exhaustive:
+    # default-signifies-exhaustive stays false: a switch WITHOUT a default must list every enum arm,
+    # which is exactly the arm-removal guard test (g) requires over model.WorkloadPhase.
+    default-signifies-exhaustive: false
+    check:
+      - switch

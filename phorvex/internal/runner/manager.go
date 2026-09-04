@@ -831,8 +831,17 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	}
 	tele := map[string]model.Telemetry{}
 	if m.MetricsSource != nil {
-		if t, err := m.MetricsSource.PodMetrics(ctx, e.namespace, names); err == nil {
+		// M-130/M-113: use the BEST-EFFORT map even on a partial scrape failure (dropping the
+		// whole tick's telemetry was the silent-outage bug). A source failure is surfaced as a
+		// metric + an error log, and per-signal State=Error keeps absence distinguishable.
+		t, err := m.MetricsSource.PodMetrics(ctx, e.namespace, names)
+		if t != nil {
 			tele = t
+		}
+		if err != nil {
+			metrics.RecordScrapeFailure(m.MetricsSource.Name())
+			m.Log.Error(err, "telemetry scrape degraded (best-effort telemetry used; per-signal State=Error)",
+				"namespace", e.namespace, "source", m.MetricsSource.Name())
 		}
 	}
 
@@ -879,10 +888,16 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		}
 		viewPod := *p
 		viewPod.RouteServiceReady = declaredRouteServiceExists(p, snap.Services)
+		if pol.P99Ms > 0 && !t.P99Ms.Usable() {
+			// SLO latency headroom unmeasurable: the gate is skipped (never blocks, P-NO-FREEZE)
+			// and counted, instead of passing as a silent full-headroom 1.0 (B-3).
+			metrics.RecordSLOGateSkipped(pol.Tenant, t.P99Ms.State.String())
+		}
 		views = append(views, &model.WorkloadView{
 			Pod:                viewPod,
 			Telemetry:          t,
 			Phase:              ingest.PhaseOf(*p, t),
+			PhaseReason:        ingest.PhaseReasonOf(*p, t),
 			BlastRadius:        snap.Graph.BlastRadius(p.Namespace, p.Name),
 			NeighborCount:      snap.Graph.NeighborCount(p.Namespace, p.Name),
 			Neighbors:          neighbors,

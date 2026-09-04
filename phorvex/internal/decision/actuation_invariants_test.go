@@ -26,7 +26,7 @@ func sloPolicy(b int) model.Policy {
 func mixedFleet() []*model.WorkloadView {
 	fresh := covView("fresh", true, 20*time.Second, false) // < anti-over-rotation window
 	hot := covView("hot", true, 2*time.Hour, false)
-	hot.Telemetry = model.Telemetry{Present: true, P99Ms: 250} // over the 200ms ceiling
+	hot.Telemetry = model.Telemetry{P99Ms: model.PresentSignal(250, "test")} // over the 200ms ceiling
 	solo := covView("solo", true, 2*time.Hour, false)
 	solo.Pod.DesiredReplicas = 1
 	solo.Pod.ReadyReplicas = 1 // ready-1 < minAvailable => availability veto

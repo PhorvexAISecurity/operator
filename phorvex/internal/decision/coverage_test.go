@@ -16,7 +16,7 @@ import (
 func TestNaNCostReportsDistinctUnactionableCategory(t *testing.T) {
 	e := NewCoverageEngine()
 	view := covView("nan-cost", true, 2*time.Hour, false)
-	view.Telemetry = model.Telemetry{Present: true, ReqRate: math.NaN()}
+	view.Telemetry = model.Telemetry{ReqRate: model.Signal{Value: math.NaN(), State: model.Error}}
 	pol := covPolicy(1)
 	pol.EnabledActions = map[model.Action]bool{model.ActionRotate: true}
 

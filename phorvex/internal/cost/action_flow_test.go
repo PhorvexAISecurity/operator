@@ -82,7 +82,7 @@ func TestCutoverAndUnmeasuredServingStateEstimatesRespondOnlyToBoundedServingLoa
 	view := bareView()
 	view.Phase = model.PhaseColdStarting // must not leak the respawn phase prior
 	view.Pod.HasGPU = true               // must not leak the respawn GPU prior
-	view.Telemetry = model.Telemetry{Present: true, ReqRate: 1e9, ConnCount: 1e9}
+	view.Telemetry = model.Telemetry{ReqRate: model.PresentSignal(1e9, "test"), ConnCount: model.PresentSignal(1e9, "test")}
 	pol := model.Policy{FlowDisruption: 1}
 
 	if got, want := c.ECost(view, model.Move{Action: model.ActionWarmSwap}, pol),
@@ -103,7 +103,7 @@ func TestKVResetUsesMeasuredTTFTPenaltyNotServingLoadEstimate(t *testing.T) {
 	pol := model.Policy{FlowDisruption: 1}
 	idle := bareView()
 	loaded := bareView()
-	loaded.Telemetry = model.Telemetry{Present: true, ReqRate: 1e9, ConnCount: 1e9}
+	loaded.Telemetry = model.Telemetry{ReqRate: model.PresentSignal(1e9, "test"), ConnCount: model.PresentSignal(1e9, "test")}
 	move := model.Move{Action: model.ActionKVReset}
 
 	want := (measuredKVResetPostResetTTFTMilliseconds - measuredKVResetCachedTTFTMilliseconds) /

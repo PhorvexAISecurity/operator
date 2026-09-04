@@ -53,7 +53,7 @@ func TestPart1_CNorm(t *testing.T) {
 func TestPart1_CNormIsPurelyStructural(t *testing.T) {
 	bare := bareView()
 	rich := bareView()
-	rich.Telemetry = model.Telemetry{Present: true, ConnCount: 88, ReqRate: 144}
+	rich.Telemetry = model.Telemetry{ConnCount: model.PresentSignal(88, "test"), ReqRate: model.PresentSignal(144, "test")}
 	for _, a := range append([]model.Action{model.ActionNoop}, model.MutatingActions...) {
 		got := normCostP1(bare, model.Move{Action: a})
 		if got < 0 || math.IsNaN(got) || math.IsInf(got, 0) {
@@ -151,7 +151,7 @@ func TestPart2_CFlowQuarantineLoadTermBounded(t *testing.T) {
 	pol := defaultPolicy()
 	for _, conn := range []float64{0, 1, 50, 100, 1000, 1e9} {
 		v := bareView()
-		v.Telemetry = model.Telemetry{Present: true, ConnCount: conn}
+		v.Telemetry = model.Telemetry{ConnCount: model.PresentSignal(conn, "test")}
 		e := c.ECost(v, model.Move{Action: model.ActionQuarantine}, pol)
 		cFlow := (e - pol.NormSparsity*(1.0/3.0)) / pol.FlowDisruption
 		if cFlow < 0.25-1e-9 || cFlow > 0.40+1e-9 {
@@ -162,7 +162,7 @@ func TestPart2_CFlowQuarantineLoadTermBounded(t *testing.T) {
 	prev := -1.0
 	for _, conn := range []float64{0, 10, 25, 50, 75, 100, 200} {
 		v := bareView()
-		v.Telemetry = model.Telemetry{Present: true, ConnCount: conn}
+		v.Telemetry = model.Telemetry{ConnCount: model.PresentSignal(conn, "test")}
 		e := c.ECost(v, model.Move{Action: model.ActionQuarantine}, pol)
 		cFlow := (e - pol.NormSparsity*(1.0/3.0)) / pol.FlowDisruption
 		if cFlow < prev-1e-12 {
@@ -330,7 +330,7 @@ func TestInvariants_NonNegativeFiniteDeterministic(t *testing.T) {
 				v.Pod.HasGPU = gpu
 				v.Phase = ph
 				if tel {
-					v.Telemetry = model.Telemetry{Present: true, ConnCount: 137, ReqRate: 321}
+					v.Telemetry = model.Telemetry{ConnCount: model.PresentSignal(137, "test"), ReqRate: model.PresentSignal(321, "test")}
 				}
 				views = append(views, v)
 			}
@@ -363,7 +363,7 @@ func TestInvariants_GarbageTelemetryDoesNotPoisonCost(t *testing.T) {
 	pol := defaultPolicy()
 	for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), -1} {
 		v := bareView()
-		v.Telemetry = model.Telemetry{Present: true, ConnCount: bad, ReqRate: bad}
+		v.Telemetry = model.Telemetry{ConnCount: telSig(bad), ReqRate: telSig(bad)}
 		for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
 			got := c.ECost(v, model.Move{Action: a}, pol)
 			if math.IsNaN(got) || math.IsInf(got, 0) || got < 0 {
@@ -377,7 +377,7 @@ func TestNaNFeatureFailsConservativeWithDistinctCategory(t *testing.T) {
 	c := NewP1Cost()
 	pol := defaultPolicy()
 	view := bareView()
-	view.Telemetry = model.Telemetry{Present: true, ReqRate: math.NaN()}
+	view.Telemetry = model.Telemetry{ReqRate: model.Signal{Value: math.NaN(), State: model.Error}}
 	eval := c.Evaluation(view, model.Move{Action: model.ActionRotate}, pol)
 	if eval.Total != NaNFailConservativeCost || eval.CHi != NaNFailConservativeCost {
 		t.Fatalf("NaN evaluation did not use max cost: %+v", eval)
@@ -406,4 +406,12 @@ func TestPart3_ConformalSlackIsNeverNegative(t *testing.T) {
 	if e, hi := c.ECost(v, m, pol), c.CHi(v, m, pol); hi < e-eps {
 		t.Errorf("CHi (%v) below ECost (%v)", hi, e)
 	}
+}
+
+// telSig mirrors ingest typing for tests: non-finite => State=Error, finite => Present. (T1-C)
+func telSig(v float64) model.Signal {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return model.Signal{Value: v, State: model.Error}
+	}
+	return model.PresentSignal(v, "test")
 }

@@ -292,7 +292,7 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 		return StagePromptInjectPersist, true
 	}
 	// (4) LLM-jacking: an exposed endpoint + a compute-abuse / exploit signal.
-	if p.EndpointPath != "" && (exploitEvent || (view.Telemetry.Present && view.Telemetry.GPUUtil > 0.8)) {
+	if p.EndpointPath != "" && (exploitEvent || (view.Telemetry.GPUUtil.Usable() && view.Telemetry.GPUUtil.Value > 0.8)) {
 		return StageLLMJacking, true
 	}
 	return 0, false

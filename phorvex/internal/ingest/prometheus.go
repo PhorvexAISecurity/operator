@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -28,6 +29,34 @@ type PromHTTP struct {
 	BaseURL string
 	Client  *http.Client
 	Queries map[string]string // signal -> PromQL with a {namespace} placeholder
+	// ScrapeInterval sizes the staleness bound maxAge = 3x interval (0 => 30s default).
+	ScrapeInterval time.Duration
+
+	mu       sync.Mutex
+	lastGood map[string]map[string]lastSample // "ns\x00pod" -> signal -> last usable sample
+	lastAgg  map[string]aggSample             // "ns\x00pod" -> last cAdvisor aggregate (for deltas)
+}
+
+// lastSample is a per-signal last-good reading, reused as Stale within maxAge.
+type lastSample struct {
+	value float64
+	at    time.Time
+}
+
+// aggSample is the previous cAdvisor aggregate, used to derive the raw rate deltas
+// (T1-M142 input; logged into the record only, no consumer reads them in T1-C).
+type aggSample struct {
+	conn  float64
+	bytes float64
+	at    time.Time
+}
+
+func (p *PromHTTP) maxAge() time.Duration {
+	iv := p.ScrapeInterval
+	if iv <= 0 {
+		iv = 30 * time.Second
+	}
+	return 3 * iv
 }
 
 // Signal keys for the query map.
@@ -120,51 +149,181 @@ func NewPromHTTP(baseURL string, queries map[string]string) *PromHTTP {
 // Name implements MetricsSource.
 func (*PromHTTP) Name() string { return "prometheus-http" }
 
-// PodMetrics implements MetricsSource.
+// PodMetrics implements MetricsSource. Each signal query yields a typed Signal per pod:
+// a fresh finite reading is Present; a non-finite sample is Error; a signal whose whole
+// query failed reuses its last-good within maxAge as Stale (else Absent). Absence is never
+// a measured zero (P-SENSING). It returns best-effort telemetry AND a joined error naming
+// every failed signal query, so the caller can raise TelemetryDegraded (M-113/M-130) rather
+// than dropping the tick.
 func (p *PromHTTP) PodMetrics(ctx context.Context, namespace string, _ []string) (map[string]model.Telemetry, error) {
-	out := map[string]model.Telemetry{}
+	now := time.Now()
+	finite := map[string]map[string]float64{}     // signal -> pod -> value
+	nonfinite := map[string]map[string]struct{}{} // signal -> pod set (saw pod, bad value)
+	failed := map[string]bool{}                   // signal -> query errored
+	var queryErrs []error
 	for sig, tmpl := range p.Queries {
 		q := strings.ReplaceAll(tmpl, "{namespace}", namespace)
-		vec, err := p.instantQuery(ctx, q)
+		vec, bad, err := p.instantQuery(ctx, q)
 		if err != nil {
-			// Best-effort: skip this signal, keep going (do not fail the whole tick).
+			failed[sig] = true
+			queryErrs = append(queryErrs, fmt.Errorf("%s: %w", sig, err))
 			continue
 		}
-		for pod, val := range vec {
-			t := out[pod]
-			t.Present = true
-			assignSignal(&t, sig, val)
-			out[pod] = t
+		finite[sig] = vec
+		nonfinite[sig] = bad
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.lastGood == nil {
+		p.lastGood = map[string]map[string]lastSample{}
+	}
+	maxAge := p.maxAge()
+
+	// Pod universe = every pod any successful query returned (finite or non-finite) PLUS every
+	// pod we still hold recent last-good for in this namespace. The last set matters when a
+	// pod's only signal query FAILED this tick: it must still appear with State=Error, not
+	// vanish (M-113: Error is distinguishable from scraped-empty). B.4.
+	prefix := namespace + "\x00"
+	pods := map[string]struct{}{}
+	for _, vec := range finite {
+		for pod := range vec {
+			pods[pod] = struct{}{}
 		}
 	}
-	return out, nil
+	for _, bad := range nonfinite {
+		for pod := range bad {
+			pods[pod] = struct{}{}
+		}
+	}
+	for key := range p.lastGood {
+		if strings.HasPrefix(key, prefix) {
+			pods[strings.TrimPrefix(key, prefix)] = struct{}{}
+		}
+	}
+
+	out := make(map[string]model.Telemetry, len(pods))
+	for pod := range pods {
+		key := namespace + "\x00" + pod
+		var t model.Telemetry
+		for sig := range p.Queries {
+			var s model.Signal
+			switch {
+			case hasVal(finite[sig], pod):
+				v := finite[sig][pod]
+				s = model.Signal{Value: v, State: model.Present, Src: p.Name()}
+				if p.lastGood[key] == nil {
+					p.lastGood[key] = map[string]lastSample{}
+				}
+				p.lastGood[key][sig] = lastSample{value: v, at: now}
+			case hasKey(nonfinite[sig], pod):
+				s = model.Signal{State: model.Error, Src: p.Name()} // saw the pod, non-finite value
+			case failed[sig]:
+				// The job for this signal errored: State=Error (source is broken, M-113/M-130),
+				// distinguishable from a scraped-empty absent. Not Stale — Stale is for a healthy
+				// source whose series merely flickered (below).
+				s = model.Signal{State: model.Error, Src: p.Name()}
+			default:
+				// Query succeeded but this pod had no series this tick. Reuse a fresh-enough
+				// last-good as Stale (value retained for the record, not usable); else Absent.
+				if lg, ok := p.lastGood[key][sig]; ok && now.Sub(lg.at) <= maxAge {
+					s = model.Signal{Value: lg.value, State: model.Stale, Age: now.Sub(lg.at), Src: p.Name()}
+				}
+			}
+			assignSignal(&t, sig, s)
+		}
+		p.computeDeltas(&t, key, now)
+		out[pod] = t
+	}
+	p.pruneCache(now, maxAge)
+	return out, errors.Join(queryErrs...)
 }
 
-func assignSignal(t *model.Telemetry, sig string, v float64) {
-	if t.PresentSignals == nil {
-		t.PresentSignals = map[string]bool{}
+// pruneCache evicts last-good/aggregate entries older than maxAge across all namespaces, so a
+// pod that churns out stops consuming memory once its history ages past the staleness bound.
+func (p *PromHTTP) pruneCache(now time.Time, maxAge time.Duration) {
+	for key, sigs := range p.lastGood {
+		newest := time.Time{}
+		for sig, lg := range sigs {
+			if now.Sub(lg.at) > maxAge {
+				delete(sigs, sig)
+				continue
+			}
+			if lg.at.After(newest) {
+				newest = lg.at
+			}
+		}
+		if len(sigs) == 0 {
+			delete(p.lastGood, key)
+		}
 	}
-	t.PresentSignals[sig] = true
+	for key, agg := range p.lastAgg {
+		if now.Sub(agg.at) > maxAge {
+			delete(p.lastAgg, key)
+		}
+	}
+}
+
+func hasVal(m map[string]float64, pod string) bool  { _, ok := m[pod]; return ok }
+func hasKey(m map[string]struct{}, pod string) bool { _, ok := m[pod]; return ok }
+
+// computeDeltas derives the raw cAdvisor rate deltas from the previous tick's aggregate.
+// Logged into the record only (T1-M142 owns whether/how they enter the phase boundary).
+// CAVEAT for T1-M142 (K3 P3 F2): when a signal is unusable this tick its aggregate contributes
+// 0, so the first delta after a gap can read inflated. T1-M142 must gate on signal usability
+// (or skip deltas across a non-Present span) before trusting them as a load estimate.
+func (p *PromHTTP) computeDeltas(t *model.Telemetry, key string, now time.Time) {
+	conn, connOK := 0.0, t.ConnCount.Usable()
+	if connOK {
+		conn = t.ConnCount.Value
+	}
+	bytes, bytesOK := 0.0, false
+	if t.BytesIn.Usable() {
+		bytes += t.BytesIn.Value
+		bytesOK = true
+	}
+	if t.BytesOut.Usable() {
+		bytes += t.BytesOut.Value
+		bytesOK = true
+	}
+	if p.lastAgg == nil {
+		p.lastAgg = map[string]aggSample{}
+	}
+	if prev, ok := p.lastAgg[key]; ok {
+		if dt := now.Sub(prev.at).Seconds(); dt > 0 {
+			if connOK {
+				t.ConnDeltaPerSec = (conn - prev.conn) / dt
+			}
+			if bytesOK {
+				t.BytesDeltaPerSec = (bytes - prev.bytes) / dt
+			}
+		}
+	}
+	p.lastAgg[key] = aggSample{conn: conn, bytes: bytes, at: now}
+}
+
+// assignSignal stores a typed Signal onto the matching Telemetry field.
+func assignSignal(t *model.Telemetry, sig string, s model.Signal) {
 	switch sig {
 	case SigReqRate:
-		t.ReqRate = v
+		t.ReqRate = s
 	case SigP99Ms:
-		t.P99Ms = v
-		t.LatencyMs = v
+		t.P99Ms = s
+		t.LatencyMs = s
 	case SigQueueDepth:
-		t.QueueDepth = v
+		t.QueueDepth = s
 	case SigConnCount:
-		t.ConnCount = v
+		t.ConnCount = s
 	case SigBytesIn:
-		t.BytesIn = v
+		t.BytesIn = s
 	case SigBytesOut:
-		t.BytesOut = v
+		t.BytesOut = s
 	case SigGPUUtil:
-		t.GPUUtil = v
+		t.GPUUtil = s
 	case SigSyscallRate:
-		t.SyscallRate = v
+		t.SyscallRate = s
 	case SigTokensPerSec:
-		t.TokensPerSec = v
+		t.TokensPerSec = s
 	}
 }
 
@@ -180,47 +339,48 @@ type promResponse struct {
 	} `json:"data"`
 }
 
-func (p *PromHTTP) instantQuery(ctx context.Context, query string) (map[string]float64, error) {
+func (p *PromHTTP) instantQuery(ctx context.Context, query string) (map[string]float64, map[string]struct{}, error) {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		out, err := p.instantQueryOnce(ctx, query)
+		out, bad, err := p.instantQueryOnce(ctx, query)
 		if err == nil {
-			return out, nil
+			return out, bad, nil
 		}
 		lastErr = err
 		if attempt < 2 {
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, nil, ctx.Err()
 			case <-time.After(100 * time.Millisecond):
 			}
 		}
 	}
-	return nil, lastErr
+	return nil, nil, lastErr
 }
 
-func (p *PromHTTP) instantQueryOnce(ctx context.Context, query string) (map[string]float64, error) {
+func (p *PromHTTP) instantQueryOnce(ctx context.Context, query string) (map[string]float64, map[string]struct{}, error) {
 	u := fmt.Sprintf("%s/api/v1/query?query=%s", p.BaseURL, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resp, err := p.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("prometheus query status %d", resp.StatusCode)
+		return nil, nil, fmt.Errorf("prometheus query status %d", resp.StatusCode)
 	}
 	var pr promResponse
 	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if pr.Status != "success" {
-		return nil, fmt.Errorf("prometheus query status %q", pr.Status)
+		return nil, nil, fmt.Errorf("prometheus query status %q", pr.Status)
 	}
 	out := map[string]float64{}
+	bad := map[string]struct{}{}
 	for _, r := range pr.Data.Result {
 		pod := r.Metric["pod"]
 		if pod == "" {
@@ -231,15 +391,16 @@ func (p *PromHTTP) instantQueryOnce(ctx context.Context, query string) (map[stri
 			continue
 		}
 		f, err := strconv.ParseFloat(s, 64)
-		// Prometheus legitimately serves "NaN" (e.g. 0/0, a stale/absent series) and Go's
-		// ParseFloat accepts it WITHOUT error. Admitting it would make every downstream cost NaN,
-		// so an unusable sample is DROPPED (honest-absent) rather than ingested.
+		// Prometheus legitimately serves "NaN" (0/0, a stale/absent series); Go parses it
+		// without error. A non-finite sample is now typed State==Error (the pod is recorded
+		// as seen-with-bad-value) instead of silently dropped — never a measured zero (M-111).
 		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			bad[pod] = struct{}{}
 			continue
 		}
 		out[pod] = f
 	}
-	return out, nil
+	return out, bad, nil
 }
 
 // instantQueryNsPod runs query and keys results by "namespace/pod" (DCGM series carry both
