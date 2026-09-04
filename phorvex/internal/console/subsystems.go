@@ -22,6 +22,9 @@ import (
 )
 
 func (c *Config) execText(timeout time.Duration, bin string, args ...string) (string, error) {
+	if c.Exec != nil {
+		return c.Exec(timeout, bin, args...)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
@@ -48,13 +51,13 @@ type PhysWitness struct {
 	LinkBW       float64 `json:"linkBandwidth"`
 }
 type KillchainRow struct {
-	Pod          string  `json:"pod"`
-	Stage        string  `json:"stage"`
-	AI           bool    `json:"ai"`
-	PHold        float64 `json:"pHold"`
+	Pod           string  `json:"pod"`
+	Stage         string  `json:"stage"`
+	AI            bool    `json:"ai"`
+	PHold         float64 `json:"pHold"`
 	PreemptMargin float64 `json:"preemptMargin"`
-	ProjNextSec  float64 `json:"projNextStageSec"`
-	Frontier     float64 `json:"infectionFrontier"`
+	ProjNextSec   float64 `json:"projNextStageSec"`
+	Frontier      float64 `json:"infectionFrontier"`
 }
 type ScanResult struct {
 	Platform  string         `json:"platform"`
@@ -202,12 +205,12 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 // --- Live ablation (GET /api/ablation?ns=) ----------------------------------------------
 
 type AblationResult struct {
-	Ratio          float64 `json:"ratio"`
+	Ratio           float64 `json:"ratio"`
 	P1PerDollar     float64 `json:"p1PerDollar"`
 	RandomPerDollar float64 `json:"randomPerDollar"`
-	Ran            bool    `json:"ran"`
-	Note           string  `json:"note"`
-	Raw            string  `json:"raw"`
+	Ran             bool    `json:"ran"`
+	Note            string  `json:"note"`
+	Raw             string  `json:"raw"`
 }
 
 // the --ablation entrypoint prints a JSON object with ratio/p1PerDollar/randomPerDollar.

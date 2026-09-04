@@ -4,7 +4,10 @@
 
 package console
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"time"
+)
 
 // Config locates the Phorvex tree the console reads (read-only) and triggers.
 type Config struct {
@@ -18,6 +21,11 @@ type Config struct {
 	// MetricsAllow is the SSRF allowlist for /api/metrics?url= (host or host:port). Loopback
 	// is always allowed; metadata/link-local is always blocked; any other host must be listed.
 	MetricsAllow []string
+	// Exec, when set, replaces the kubectl/harness process launcher (test seam; nil = real exec).
+	Exec func(timeout time.Duration, bin string, args ...string) (string, error)
+	// MutationAuditPath is the append-only JSONL trail of console cluster writes (accepted and
+	// rejected). Empty derives console-mutations.jsonl beside AuditPath, else under HarnessDir.
+	MutationAuditPath string
 }
 
 // DefaultConfig derives the standard in-repo layout from a root.
