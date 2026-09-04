@@ -426,7 +426,13 @@ type Policy struct {
 	KillChainShape               float64
 	// ExposurePressureCap is p_max of the capped noisy-OR P(hold) (M-143). 0 means unset:
 	// killchain substitutes the provisional default. INSUFFICIENT EVIDENCE — fit in T3-D.
-	ExposurePressureCap   float64
+	ExposurePressureCap float64
+	// EventAgeHorizon (τ_ev) and ExposurePressureScale (T_exp) are T1-B's dedicated CLOCK->BELIEF
+	// horizons, split out of the triple-loaded ProactiveFloor. buildPolicy initialises BOTH equal
+	// to EffectiveProactiveFloor() (inherited, not chosen — the numeric value stays Tier 3). 0 =>
+	// killchain falls back to ProactiveFloor, so a policy built without them is byte-identical.
+	EventAgeHorizon       time.Duration
+	ExposurePressureScale time.Duration
 	EnabledActions        map[Action]bool
 	AssetWeightFromLabels func(labels map[string]string) float64
 
@@ -473,7 +479,7 @@ type Decision struct {
 	// EventEvidence is Σ_e w(age_e)·severity_e over events targeting this pod (M-27).
 	EventEvidence float64
 	// Events lists every ingested event this assessment saw with its age and weight.
-	Events []EventEvidence
+	Events             []EventEvidence
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase

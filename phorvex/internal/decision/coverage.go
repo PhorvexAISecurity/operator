@@ -135,6 +135,14 @@ func NewCoverageEngine() *CoverageEngine {
 // Name implements Optimizer.
 func (e *CoverageEngine) Name() string { return "p1-coverage" }
 
+// RetainStageClock forwards the runner's per-tick GC to the kill-chain stage-dwell tracker
+// (T1-B), using the same keep set that prunes the exposure clock.
+func (e *CoverageEngine) RetainStageClock(tenant string, keep map[string]struct{}) {
+	if e.Killchain != nil {
+		e.Killchain.StageClock.RetainTenant(tenant, keep)
+	}
+}
+
 // hasDirectFoothold reports whether an event places the attacker ON this pod (TargetsPod=true), as
 // opposed to a neighbor-propagated event (TargetsPod=false). Under reactiveOnly this is what makes a
 // pod actionable — so containment isolates the COMPROMISED node, not a clean neighbor of it.
@@ -742,6 +750,14 @@ func (e *CoverageEngine) buildDecisionTrace(
 		CostCalibratorTenant: pol.Tenant,
 		BlindCostSource:      blindCostSource(v),
 		AntiOverRotateSec:    pol.AntiOverRotationWindow.Seconds(),
+		Clocks: model.DecisionClocksV3{
+			PodAgeSec:                v.Pod.Age.Seconds(),
+			SinceIdentityChangeSec:   ac.exposure,
+			InStageSec:               ac.assess.InStageSec,
+			SinceEvidence:            sinceEvidenceOf(ac.assess),
+			EventAgeHorizonSec:       eventAgeHorizonSeconds(pol),
+			ExposurePressureScaleSec: exposurePressureScaleSeconds(pol),
+		},
 		// T0-C: lifted from the envelope into the trace with presence.
 		// Present only when headroom was MEASURED: sensed.Context (ctxprov/sensed.go) derives it
 		// from P99 under exactly this predicate and otherwise defaults to 1.0 (full headroom).
@@ -1162,4 +1178,35 @@ func blindCostSource(v *model.WorkloadView) string {
 		return "stateful-max"
 	}
 	return "tenant-calibrator"
+}
+
+// sinceEvidenceOf reports seconds since the newest timestamped event targeting the pod (T1-B).
+// Absent when no such event exists — distinct from zero (a fresh event).
+func sinceEvidenceOf(a killchain.Assessment) model.OptionalFloat {
+	best := math.Inf(1)
+	for _, e := range a.Events {
+		if e.TargetsPod && e.TimestampPresent && e.AgeSec < best {
+			best = e.AgeSec
+		}
+	}
+	if math.IsInf(best, 1) {
+		return model.OptionalFloat{Present: false}
+	}
+	return model.OptionalFloat{Present: true, Value: best}
+}
+
+// eventAgeHorizonSeconds / exposurePressureScaleSeconds mirror the killchain fallbacks so the
+// trace records the horizon the model actually used (dedicated field, else the floor).
+func eventAgeHorizonSeconds(pol model.Policy) float64 {
+	if pol.EventAgeHorizon > 0 {
+		return pol.EventAgeHorizon.Seconds()
+	}
+	return pol.ProactiveFloor.Seconds()
+}
+
+func exposurePressureScaleSeconds(pol model.Policy) float64 {
+	if pol.ExposurePressureScale > 0 {
+		return pol.ExposurePressureScale.Seconds()
+	}
+	return pol.ProactiveFloor.Seconds()
 }

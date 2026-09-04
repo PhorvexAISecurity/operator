@@ -212,7 +212,7 @@ func TestGateComparisonAgainstBaseline(t *testing.T) {
 	}
 	fmt.Println()
 	for _, sh := range shapes(floor) {
-		v := covView("x", true, sh.exposure, false)
+		v := covView("x-"+sh.name, true, sh.exposure, false)
 		v.Events = sh.events
 		a := m.Assess(v, pol, sh.exposure.Seconds(), floor.Seconds())
 		tag := sh.name
@@ -238,7 +238,7 @@ func TestGateComparisonAgainstBaseline(t *testing.T) {
 	for _, g := range gates {
 		sup, fa, decoys, genuines := 0, 0, 0, 0
 		for _, sh := range shapes(floor) {
-			v := covView("x", true, sh.exposure, false)
+			v := covView("x-"+sh.name, true, sh.exposure, false)
 			v.Events = sh.events
 			a := m.Assess(v, pol, sh.exposure.Seconds(), floor.Seconds())
 			p := g.fn(a, sh.exposure.Seconds(), floor.Seconds())

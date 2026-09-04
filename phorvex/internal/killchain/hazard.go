@@ -6,6 +6,7 @@ package killchain
 
 import (
 	"math"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
@@ -123,7 +124,10 @@ type Assessment struct {
 	NextStage     Stage
 	NextStageName string
 	Hazard        float64 // h_s(age) in [0,1]: prob of imminent transition to NextStage
-	PHold         float64 // P(attacker still holds the foothold) in [0,1]
+	// InStageSec is time-in-current-stage (T1-B): the dwell the Weibull hazard/preempt/projNext
+	// read, distinct from the pod identity clock. Recorded so the trace can show which clock fed them.
+	InStageSec float64
+	PHold      float64 // P(attacker still holds the foothold) in [0,1]
 	// PHoldInputs are the audited terms behind PHold (M-143): betaMean, capped pressure,
 	// cap, scale, raw and final. Lets a reader verify the posterior survived the clock.
 	PHoldInputs model.PHoldInputs
@@ -173,6 +177,9 @@ type Model struct {
 	ConfidenceK float64
 	// Memory is the per-tenant conjugate prior (context-memory layer).
 	Memory *ConjugateMemory
+	// StageClock tracks time-in-current-stage per pod (T1-B): the Weibull dwell reads it,
+	// not the pod identity/lifecycle clock. nil => dwell falls back to the identity clock.
+	StageClock *StageClock
 }
 
 // NewModel returns a Model with default sojourn scales (seconds) and shape.
@@ -193,6 +200,7 @@ func NewModel() *Model {
 		Shape:        2.0, // Weibull k=2 => linearly-increasing hazard rate
 		RecoverScale: 30,  // P(hold) recovers ~30s after a wipe (generic)
 		Memory:       NewConjugateMemory(),
+		StageClock:   NewStageClock(),
 	}
 }
 
@@ -323,7 +331,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		sev := float64(maxInt(v1beta1.ThreatLevelRank(e.ThreatLevel), 0)) / 4.0
 		w := 0.0
 		if !e.TimestampMissing {
-			w = model.EventAgeWeight(e.Age, pol.ProactiveFloor)
+			w = model.EventAgeWeight(e.Age, eventAgeHorizon(pol))
 		}
 		eventRecords = append(eventRecords, model.EventEvidence{
 			Name: e.Name, Source: e.Source, Type: e.Type, ThreatLevel: e.ThreatLevel,
@@ -356,6 +364,10 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		aiClassified = true
 	}
 
+	// T1-B: the Weibull dwell family reads time-IN-STAGE, not the pod identity clock. On a
+	// non-transitioning pod dwellSec == exposureSec (byte-identical); it restarts on a stage change.
+	dwellSec := m.StageClock.Observe(pol.Tenant, view.Pod.Namespace, view.Pod.Name, view.Pod.UID, stage, exposureSec)
+
 	// --- predictive belief horizon: hazard of imminent next-stage transition ---
 	scale := m.SojournScale[stage]
 	if configured := pol.KillChainSojournScaleSeconds[stage.String()]; configured > 0 {
@@ -368,7 +380,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	if shape <= 0 || math.IsNaN(shape) || math.IsInf(shape, 0) {
 		shape = m.Shape
 	}
-	hazard := weibullCDF(exposureSec, scale, shape)
+	hazard := weibullCDF(dwellSec, scale, shape) // T1-B: dwell = time in stage
 
 	next := successorOf(stage)
 	// Neighbor pressure forward-projects a LATERAL transition (generic chain only; the
@@ -405,9 +417,15 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	if cap <= 0 || cap >= 1 {
 		cap = DefaultExposurePressureCap
 	}
+	// T1-B: T_exp is its own horizon (initialised = ProactiveFloor). exposureSec here is the
+	// move clock (SinceIdentityChangeSec) — unchanged. Only the SCALE gets its dedicated field.
+	tExpSec := proactiveFloorSec
+	if s := pol.ExposurePressureScale.Seconds(); s > 0 {
+		tExpSec = s
+	}
 	exposurePressure := 0.0
-	if proactiveFloorSec > 0 {
-		exposurePressure = cap * math.Min(1, math.Max(0, exposureSec)/proactiveFloorSec)
+	if tExpSec > 0 {
+		exposurePressure = cap * math.Min(1, math.Max(0, exposureSec)/tExpSec)
 	}
 	pHoldRaw := betaMean + exposurePressure*(1-betaMean) // capped noisy-OR: range [betaMean, betaMean+cap*(1-betaMean)]
 
@@ -429,8 +447,8 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	pHold := clamp01(pHoldRaw * damping)
 
 	// --- predictive horizon: the MOVED-BEFORE-NEXT-STAGE measurable (closed-form) ---
-	preempt := 1 - weibullCDF(exposureSec, scale, shape) // survival; moveLatency=0 (flagged)
-	projNext := projectedNextStageSec(scale, shape, exposureSec)
+	preempt := 1 - weibullCDF(dwellSec, scale, shape) // T1-B: same dwell clock as hazard
+	projNext := projectedNextStageSec(scale, shape, dwellSec)
 
 	eventStageName := ""
 	if eventStageSet {
@@ -445,9 +463,10 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		NextStage:      next,
 		NextStageName:  next.String(),
 		Hazard:         hazard,
+		InStageSec:     dwellSec,
 		PHold:          pHold,
 		PHoldInputs: model.PHoldInputs{
-			BetaMean: betaMean, Pressure: exposurePressure, Cap: cap, ScaleSec: proactiveFloorSec,
+			BetaMean: betaMean, Pressure: exposurePressure, Cap: cap, ScaleSec: tExpSec, // T1-B: the scale actually consumed (T_exp), not the cadence floor
 			Raw: pHoldRaw, Final: pHold,
 		},
 		StageUrgency:          stageUrg,
@@ -493,4 +512,14 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// eventAgeHorizon is the T1-B event-decay horizon (τ_ev): its dedicated policy field,
+// initialised equal to ProactiveFloor. Falls back to ProactiveFloor when unset so a policy
+// built without the field (older tests) is byte-identical.
+func eventAgeHorizon(pol model.Policy) time.Duration {
+	if pol.EventAgeHorizon > 0 {
+		return pol.EventAgeHorizon
+	}
+	return pol.ProactiveFloor
 }
