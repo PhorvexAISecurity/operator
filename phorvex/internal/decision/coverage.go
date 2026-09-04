@@ -342,6 +342,12 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 
 	// --- submodular greedy under partition (one move/asset) + budget B ---
 	covered := map[string]bool{}
+	// T0-C: coveredRound records WHEN a fact key was first covered (1-based round),
+	// written beside covered[k] and never read by the loop — zero selection effect.
+	// lastRound is the last round whose evaluation pass ran (rounds evaluate, then
+	// break), so a recorded marginal's round semantics are reconstructable.
+	coveredRound := map[string]int{}
+	lastRound := 0
 	selectedAsset := map[string]bool{}
 	selectedAction := map[string]model.Action{}
 	selectedMarginal := map[string]float64{}
@@ -349,6 +355,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	evaluatedMarginal := map[string]float64{}
 	B := pol.MaxMovesPerTick
 	for round := 0; round < B; round++ {
+		lastRound = round + 1
 		bestIdx := -1
 		bestGain := 0.0
 		bestMarginal := 0.0
@@ -385,6 +392,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		selectedRound[c.Key] = round + 1
 		for _, k := range c.CoverKeys {
 			covered[k] = true
+			coveredRound[k] = round + 1
 		}
 	}
 
@@ -545,10 +553,17 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			AIClassified:          ac.assess.AIClassified,
 		}
 		if pol.TraceEnabled {
+			// T0-C: the round whose marginal this asset's record carries — the
+			// selection round for the winner (its whole asset is skipped
+			// afterwards), the last executed round for every other asset.
+			evaluationRound := lastRound
+			if selectedAsset[key] {
+				evaluationRound = selectedRound[key]
+			}
 			decision.Trace = e.buildDecisionTrace(v, pol, now, set, ac, lambda, demand,
 				len(selectedAsset), selectedAsset[key], selectedAction[key], selectedRound[key],
 				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov,
-				tcost, evaluatedMarginal, dualUpdate)
+				tcost, evaluatedMarginal, dualUpdate, coveredRound, evaluationRound)
 		}
 		decisions = append(decisions, decision)
 	}
@@ -578,6 +593,10 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 
 func traceOptional(present bool, value float64) model.OptionalFloat {
 	return model.OptionalFloat{Present: present, Value: value}
+}
+
+func traceOptionalInt(present bool, value int) model.OptionalInt {
+	return model.OptionalInt{Present: present, Value: value}
 }
 
 func traceStringOrUnavailable(value string) string {
@@ -636,6 +655,8 @@ func (e *CoverageEngine) buildDecisionTrace(
 	tcost *cost.P1Cost,
 	evaluatedMarginal map[string]float64,
 	dualUpdate cost.DualUpdate,
+	coveredRound map[string]int,
+	evaluationRound int,
 ) *model.DecisionTraceV2 {
 	assetKey := v.Pod.Namespace + "/" + v.Pod.Name
 	tickID := pol.TickID
@@ -643,7 +664,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 	}
 	trace := &model.DecisionTraceV2{
-		SchemaVersion:             model.DecisionTraceSchemaV2,
+		SchemaVersion:             model.DecisionTraceSchemaV3,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
@@ -659,7 +680,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		AssetUID:                  traceStringOrUnavailable(v.Pod.UID),
 		Budget:                    pol.MaxMovesPerTick,
 		CandidateDemand:           demand,
-		MovesSpent:                movesSpent,
+		MovesSpent:                movesSpent, // ≡ the ticket's movesSelected: per-tick selected count (B.6.1)
 		DryRun:                    pol.DryRun,
 		LambdaConfiguredSeed:      pol.Lambda,
 		LambdaRuntime:             lambda,
@@ -671,6 +692,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 		CFlowUnitStatus:           model.CFlowUnitDimensionlessDisruptionLoss,
 		CostRepresentationVersion: model.CostRepresentationWeightedDimensionlessV1,
 		DualUpdate:                traceDualUpdate(dualUpdate),
+		CostCeiling:               set.CostCeiling,
+		CostModelVersion:          tcost.Name(),
+		EvaluationRound:           evaluationRound,
 		SelectedAction:            string(model.ActionNoop),
 		TieBreakReason:            "notApplicable",
 	}
@@ -682,51 +706,82 @@ func (e *CoverageEngine) buildDecisionTrace(
 	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
 	dispersionMult, dispersionOK := recon.DispersionMultiplier(v)
 	trace.Inputs = model.DecisionModelInputsV2{
-		Phase:                string(v.Phase),
-		RequestRate:          traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
-		ConnectionCount:      traceOptional(telemetryPresent("connCount"), v.Telemetry.ConnCount),
-		GPUUtilization:       traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
-		SMOccupancy:          traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
-		VRAMFraction:         traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
-		Leakage:              traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
-		ImageRarity:          traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
-		ModelRarity:          traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
-		CoResidency:          traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
-		EPSS:                 traceOptional(v.Physics.EPSSPresent, v.Physics.EPSS),
-		CVSS:                 traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
-		PhysicsScanned:       v.Physics.Scanned,
-		DispersionMult:       traceOptional(dispersionPresent && dispersionOK, dispersionMult),
-		FactsAbsentReason:    set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
-		DispersionCap:        traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
-		Primed:               primed,
-		BetaMean:             traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
-		PHold:                traceOptional(true, ac.assess.PHold),
-		Stage:                ac.assess.StageName,
-		StageHazard:          traceOptional(true, ac.assess.Hazard),
-		StageUrgency:         traceOptional(true, ac.assess.StageUrgency),
-		ThreatPosture:        traceOptional(true, ac.sig.ThreatPosture),
-		ExposureVariable:     model.VarPodIdentity,
-		ExposureSeconds:      traceOptional(exposurePresent, exposure.Seconds()),
-		ProactiveFloorSec:    pol.ProactiveFloor.Seconds(),
+		Phase:             string(v.Phase),
+		RequestRate:       traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
+		ConnectionCount:   traceOptional(telemetryPresent("connCount"), v.Telemetry.ConnCount),
+		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
+		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
+		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
+		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
+		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
+		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
+		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSScore),
+		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
+		EPSSMultiplier:    traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSMultiplier),
+		EPSSReason:        v.Physics.EPSSReason,
+		EPSSBasis:         v.Physics.EPSSBasis,
+		EPSSCachedDigest:  v.Physics.EPSSCachedDigest,
+		EPSSRunningDigest: v.Pod.ImageID,
+		EPSSScanTS:        v.Physics.EPSSScanTS,
+		PhysicsScanned:    v.Physics.Scanned,
+		DispersionMult:    traceOptional(dispersionPresent && dispersionOK, dispersionMult),
+		FactsAbsentReason: set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
+		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
+		Primed:            primed,
+		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
+		PHold:             traceOptional(true, ac.assess.PHold),
+		Stage:             ac.assess.StageName,
+		StageHazard:       traceOptional(true, ac.assess.Hazard),
+		StageUrgency:      traceOptional(true, ac.assess.StageUrgency),
+		ThreatPosture:     traceOptional(true, ac.sig.ThreatPosture),
+		ExposureVariable:  model.VarPodIdentity,
+		ExposureSeconds:   traceOptional(exposurePresent, exposure.Seconds()),
+		ProactiveFloorSec: pol.ProactiveFloor.Seconds(),
+		// M-110 site 1: which calibrator bucket priced the costs, and where BlindCost came from.
 		CostCalibratorTenant: pol.Tenant,
 		BlindCostSource:      blindCostSource(v),
 		AntiOverRotateSec:    pol.AntiOverRotationWindow.Seconds(),
+		// T0-C: lifted from the envelope into the trace with presence.
+		// Present only when headroom was MEASURED: sensed.Context (ctxprov/sensed.go) derives it
+		// from P99 under exactly this predicate and otherwise defaults to 1.0 (full headroom).
+		SLOHeadroom:           traceOptional(pol.P99Ms > 0 && v.Telemetry.Present && v.Telemetry.P99Ms > 0, ac.sig.SLOHeadroom),
+		NextStage:             ac.assess.NextStageName,
+		ProjectedNextStageSec: traceOptional(ac.assess.NextStageName != "", ac.assess.ProjectedNextStageSec),
 	}
 
 	source := model.TraceNotAvailable
 	if e.Recon != nil {
 		source = e.Recon.Name()
 	}
+	// T0-C: invert the declared cover map (ALL actions, not only enabled ones)
+	// into per-fact covering actions, in canonical order.
+	coveringActions := func(factKey string) []string {
+		var out []string
+		for _, a := range model.MutatingActions {
+			for _, k := range set.CoverByAsset[assetKey][a] {
+				if k == factKey {
+					out = append(out, string(a))
+					break
+				}
+			}
+		}
+		return out
+	}
 	for _, fact := range set.FactsByAsset[assetKey] {
 		weight, presented := set.FactWeights[fact.Key()]
 		if !presented {
 			continue
 		}
+		// T0-C: coveredBeforeDecision is DERIVED from the round map (covered in an
+		// earlier round than the one whose marginal this record carries), not
+		// asserted — the hard-coded false it replaces was a fabricated value.
+		factCoveredRound, factCovered := coveredRound[fact.Key()]
 		trace.Facts = append(trace.Facts, model.DecisionFactV2{
 			FactKey:               fact.Key(),
 			FactType:              fact.Kind,
 			FinalWeight:           weight,
-			CoveredBeforeDecision: false,
+			CoveredBeforeDecision: factCovered && factCoveredRound < evaluationRound,
 			SourceComponent:       source,
 			AssetValue:            traceOptional(true, ac.sig.AssetValue),
 			// The current recon API exposes only the final weight and its
@@ -735,6 +790,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 			UrgencyContribution:    model.OptionalFloat{Present: false},
 			DispersionContribution: model.OptionalFloat{Present: false},
 			RelativeWeight:         model.OptionalFloat{Present: false},
+			CoveringActions:        coveringActions(fact.Key()),
+			DecompositionAvailable: false,
+			CoveredRound:           traceOptionalInt(factCovered, factCoveredRound),
 		})
 	}
 
@@ -758,6 +816,12 @@ func (e *CoverageEngine) buildDecisionTrace(
 		if candidateSelected {
 			selectedCandidateKey = key
 		}
+		// T0-C (B.1): the CHi reconstruction terms, recorded exactly where the
+		// cost path computed them. The envelope branch is the majority GPU case
+		// live; without these four fields CHi is unreconstructable there.
+		conformalQuantile, quantileOK := tcost.ConformalQuantile()
+		conformalCalibrated, calibratedOK := tcost.ConformalCalibrated()
+		envelopeApplied := candidate.Action == model.ActionRotate && v.Pod.HasGPU && !primed
 		selectionReason := "not_selected_by_current_greedy_ranking"
 		switch {
 		case candidateSelected:
@@ -775,7 +839,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		case movesSpent >= pol.MaxMovesPerTick:
 			selectionReason = "move_budget_exhausted"
 		}
-		trace.Candidates = append(trace.Candidates, model.DecisionCandidateV2{
+		row := model.DecisionCandidateV2{
 			Action:                      string(candidate.Action),
 			CandidateKey:                key,
 			CoverKeys:                   append([]string(nil), candidate.CoverKeys...),
@@ -793,7 +857,19 @@ func (e *CoverageEngine) buildDecisionTrace(
 			Selected:                    candidateSelected,
 			SelectionReason:             selectionReason,
 			NotClassifiedByCurrentModel: true,
-		})
+			// Generated ⇒ passed the conformal SLO gate (generator step 4).
+			SLOGateResult:      model.OptionalBool{Present: true, Value: true},
+			GPUEnvelopeApplied: model.OptionalBool{Present: true, Value: envelopeApplied},
+		}
+		if candidate.Action == model.ActionRotate {
+			row.ConformalQuantile = traceOptional(quantileOK, conformalQuantile)
+			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated}
+			row.GPUEnvelopeSlack = traceOptional(envelopeApplied, pol.FlowDisruption*cost.GPUEnvelopeMax())
+		}
+		if candidateSelected {
+			row.SelectionRound = model.OptionalInt{Present: true, Value: selectionRound}
+		}
+		trace.Candidates = append(trace.Candidates, row)
 		tieBreakRank++
 	}
 	for _, exclusion := range set.Excluded {
@@ -824,6 +900,19 @@ func (e *CoverageEngine) buildDecisionTrace(
 			if evaluation.UnactionableCategory == "" {
 				candidate.CNorm = traceOptional(true, evaluation.Norm)
 				candidate.CFlow = traceOptional(true, evaluation.Flow)
+			}
+			// T0-C: cost-evaluated exclusions are conformal-slo gate rejects
+			// (the only costed exclusion path) — the gate result is false, and
+			// rotate rows carry the same CHi reconstruction terms as candidates.
+			candidate.SLOGateResult = model.OptionalBool{Present: true, Value: false}
+			exclEnvelopeApplied := exclusion.Action == model.ActionRotate && v.Pod.HasGPU && !primed
+			candidate.GPUEnvelopeApplied = model.OptionalBool{Present: true, Value: exclEnvelopeApplied}
+			if exclusion.Action == model.ActionRotate {
+				q, qOK := tcost.ConformalQuantile()
+				cal, calOK := tcost.ConformalCalibrated()
+				candidate.ConformalQuantile = traceOptional(qOK, q)
+				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal}
+				candidate.GPUEnvelopeSlack = traceOptional(exclEnvelopeApplied, pol.FlowDisruption*cost.GPUEnvelopeMax())
 			}
 		}
 		trace.Candidates = append(trace.Candidates, candidate)
@@ -859,7 +948,109 @@ func (e *CoverageEngine) buildDecisionTrace(
 			}
 		}
 	}
+
+	// T0-C (R-2): the complete action accounting — exactly one row per canonical
+	// mutating action, including actions the current model never considered.
+	// Statuses map from existing pipeline facts only; nothing is invented.
+	// Capability/installability is never evaluated per-asset in the decision path,
+	// so not-installable is emitted by no mapping (trap 3).
+	trace.ActionStatus = buildActionStatus(pol, assetKey, attackBacked, trace.Candidates, set.Excluded, evaluatedMarginal)
+
+	// T0-C (B.5): the dispatch outcome is known only after the actuation attempt;
+	// the runner stamps the real value before the audit write. These defaults make
+	// an unselected record honest at decision time and a selected record that
+	// somehow reached the write unstamped VISIBLE (pending-dispatch is a stamp bug,
+	// not a decision state).
+	if selected {
+		trace.DispatchOutcome = model.DispatchNotAttempted
+		trace.DispatchReason = "pending-dispatch"
+	} else {
+		trace.DispatchOutcome = model.DispatchNotAttempted
+		trace.DispatchReason = "unselected"
+	}
 	return trace
+}
+
+// buildActionStatus maps the generator/selection facts of one asset's tick onto the
+// ticket's closed per-action vocabulary (T0-C). Pure recording: it reads the trace's
+// own candidate rows and the generator's exclusions; it cannot affect selection.
+func buildActionStatus(pol model.Policy, assetKey string, attackBacked bool,
+	candidates []model.DecisionCandidateV2, excluded []actionset.Exclusion,
+	evaluatedMarginal map[string]float64) []model.DecisionActionStatusV3 {
+
+	generated := map[string]model.DecisionCandidateV2{}
+	for _, c := range candidates {
+		if c.ExistingExclusionReason == "" {
+			generated[c.Action] = c
+		}
+	}
+	excludedByAction := map[string]actionset.Exclusion{}
+	for _, ex := range excluded {
+		if ex.Key == assetKey {
+			excludedByAction[string(ex.Action)] = ex
+		}
+	}
+
+	rows := make([]model.DecisionActionStatusV3, 0, len(model.MutatingActions))
+	for _, action := range model.MutatingActions {
+		name := string(action)
+		row := model.DecisionActionStatusV3{Action: name}
+		ex, wasExcluded := excludedByAction[name]
+		c, wasGenerated := generated[name]
+		switch {
+		case !model.ActionEnabled(pol, action):
+			row.Status = model.ActionStatusNotEnabled
+			row.ExclusionKind = model.ExclusionNotEnabled
+		case wasExcluded:
+			// Structural mapping from the exclusion's own fields — no string sniffing:
+			// Category set ⇒ data-quality fail-close; feasibility never evaluated ⇒
+			// recon-cover; infeasible ⇒ Layer-A; costed+feasible ⇒ the SLO gate.
+			row.Reason = ex.Reason
+			switch {
+			case ex.Category != "":
+				row.Status = model.ActionStatusInfeasible
+				row.ExclusionKind = model.ExclusionCostNaN
+			case !ex.FeasibilityEvaluated:
+				row.Status = model.ActionStatusNoCover
+				row.ExclusionKind = model.ExclusionReconCover
+			case !ex.Feasible:
+				row.Status = model.ActionStatusInfeasible
+				row.ExclusionKind = model.ExclusionFeasibility
+			default:
+				row.Status = model.ActionStatusConformalSLO
+				row.ExclusionKind = model.ExclusionSLOGate
+			}
+		case wasGenerated:
+			_, row.Scored = evaluatedMarginal[traceCandidateKey(assetKey, action)]
+			row.Reason = c.SelectionReason
+			switch {
+			case c.Selected:
+				row.Status = model.ActionStatusSelected
+				row.ExclusionKind = model.ExclusionNone
+			case !attackBacked:
+				// Reactive-only suppression: never scored, never in the running —
+				// recorded as such, not as a bare candidate (B.4).
+				row.Status = model.ActionStatusCandidate
+				row.ExclusionKind = model.ExclusionReactiveOnly
+			case c.SelectionReason == "strict_gain_not_positive":
+				row.Status = model.ActionStatusPricedOut
+				row.ExclusionKind = model.ExclusionSelection
+			case c.SelectionReason == "move_budget_exhausted":
+				row.Status = model.ActionStatusBudgetExhausted
+				row.ExclusionKind = model.ExclusionSelection
+			default:
+				row.Status = model.ActionStatusCandidate
+				row.ExclusionKind = model.ExclusionSelection
+			}
+		default:
+			// Unreachable by construction (Generate writes every enabled action to
+			// Candidates or Excluded); recorded defensively, never fabricated.
+			row.Status = model.ActionStatusNotEvaluated
+			row.ExclusionKind = model.ExclusionNone
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 // attributionOf decomposes a move's value into SHAP-style terms: per recon-fact-kind

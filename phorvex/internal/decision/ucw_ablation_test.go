@@ -31,7 +31,7 @@ func ucwViews(n, rareIdx int, withGPU bool) []*model.WorkloadView {
 		ph := model.NeutralPhysics()
 		if i == rareIdx {
 			ph.ImageRarity = 2.0 // a singleton image (max surprisal)
-			ph.EPSS = 2.0        // known-exploitable
+			ph.EPSSMultiplier = 2.0        // known-exploitable
 			ph.CoResidency = 2.0
 		}
 		name := "p" + itoa(i)

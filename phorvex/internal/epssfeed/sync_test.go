@@ -78,7 +78,9 @@ func TestRunAppliesRefreshRetainsFailedImageAndPrunesDigestChurn(t *testing.T) {
 	if result.CoveredPodsBefore != 1 || result.CoveredPodsAfter != 2 {
 		t.Fatalf("coverage before/after = %d/%d, want 1/2", result.CoveredPodsBefore, result.CoveredPodsAfter)
 	}
-	if got := result.Cache[imgA]; got != (Score{EPSS: 0.97, CVSS: 9.8, CVE: "CVE-2026-0001", Considered: 1}) {
+	// M-141: a freshly scanned digest is stamped with the run time (the lookup's repo-latest
+	// ordering key); a retained last-known-good score keeps whatever scanTS it had.
+	if got := result.Cache[imgA]; got != (Score{EPSS: 0.97, CVSS: 9.8, CVE: "CVE-2026-0001", Considered: 1, ScanTS: "2026-08-17T12:00:00Z"}) {
 		t.Fatalf("new image score = %+v", got)
 	}
 	if got := result.Cache[imgB]; got != before[imgB] {

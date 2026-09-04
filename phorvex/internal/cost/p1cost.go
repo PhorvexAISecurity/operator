@@ -205,6 +205,36 @@ func (c *P1Cost) ECost(view *model.WorkloadView, move model.Move, pol model.Poli
 	return c.Evaluation(view, move, pol).Total
 }
 
+// T0-C read-only accessors for the decision trace. None of them mutates model
+// state (Quantile sorts a copy); Observe is never reachable through them.
+
+// Name returns the cost-model identity constant — the same value the registry
+// stub reports — so the trace records the model, not a hard-coded string.
+func (c *P1Cost) Name() string { return P1CostModelName }
+
+// ConformalQuantile returns the post-clamp slack the CHi path applies for a
+// rotate (Quantile() clamped at 0, exactly as Evaluation uses it). ok is false
+// when no conformal bound exists.
+func (c *P1Cost) ConformalQuantile() (q float64, ok bool) {
+	if c == nil || c.Conformal == nil {
+		return 0, false
+	}
+	q = c.Conformal.Quantile()
+	if q < 0 {
+		q = 0
+	}
+	return q, true
+}
+
+// ConformalCalibrated reports whether the bound holds enough residuals for a
+// measured (non-cold-start) quantile. ok is false when no bound exists.
+func (c *P1Cost) ConformalCalibrated() (calibrated, ok bool) {
+	if c == nil || c.Conformal == nil {
+		return false, false
+	}
+	return c.Conformal.Calibrated(), true
+}
+
 // CHi is the conformal robust UPPER bound used by the hard SLO/feasibility gate. For a
 // rotate it adds the conformal slack on top of E[C]; for an unprimed GPU pod the
 // configured hardware-measured reload/warm-up envelope dominates. Deployments without
@@ -294,9 +324,13 @@ func maxf(a, b float64) float64 {
 // The wrapper is stateless (a fresh P1Cost per call returns the PRIOR estimate); the
 // stateful calibrating instance is owned by the engine. This entry just proves the P1
 // cost is a registered, swappable CostModel.
+// P1CostModelName is the single source of the cost-model identity string,
+// reported by both the registry stub and the decision trace.
+const P1CostModelName = "rls-dual-conformal"
+
 type p1CostModel struct{}
 
-func (p1CostModel) Name() string { return "rls-dual-conformal" }
+func (p1CostModel) Name() string { return P1CostModelName }
 func (p1CostModel) Switching(view *model.WorkloadView, move model.Move, pol model.Policy) float64 {
 	return NewP1Cost().ECost(view, move, pol)
 }

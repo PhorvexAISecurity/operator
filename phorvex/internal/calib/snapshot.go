@@ -101,7 +101,7 @@ func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsW
 		out = append(out, AssetObservation{
 			Key:         key,
 			ImageRarity: w.ImageRarity,
-			EPSS:        w.EPSS,
+			EPSS:        w.EPSSMultiplier,
 			ModelRarity: w.ModelRarity,
 			Namespaces:  len(tenants[p.Node]),
 			// Mirrors the production gate in recon: a GPU pod takes the ModelRarity term even

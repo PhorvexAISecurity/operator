@@ -485,7 +485,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 			ai = fmt.Sprintf("AI: VRAMfrac=%.2f SM=%.2f link=%.2f modelRarity=%.2f SMsource=%s linkSource=%s", w.VRAMFraction, w.SMOccupancy, w.LinkBandwidth, w.ModelRarity, w.SMSource, w.LinkSource)
 		}
 		fmt.Printf("  %-34s K8s: imgRarity=%.2f coRes=%.2f slack=%.2f pdbMinAvail=%d migValid=%v epss=%.2f stateful=%v | %s\n",
-			p.Namespace+"/"+p.Name, w.ImageRarity, w.CoResidency, w.SchedulerSlack, w.PDBMinAvailable, w.MIGGeometryValid, w.EPSS, p.Stateful, ai)
+			p.Namespace+"/"+p.Name, w.ImageRarity, w.CoResidency, w.SchedulerSlack, w.PDBMinAvailable, w.MIGGeometryValid, w.EPSSMultiplier, p.Stateful, ai)
 		shown++
 	}
 	gpuNote := "unmeasured (no GPU/DCGM feed; PHORVEXSEC-87)"
