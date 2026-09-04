@@ -21,7 +21,7 @@ func gpuView() *model.WorkloadView {
 			MountedSecrets: []string{"creds"},
 		},
 		Physics: model.PhysicsWitness{
-			ImageRarity: 2.0, EPSS: 1.0, CoResidency: 2.0, ModelRarity: 1.0, // product 4.0
+			ImageRarity: 2.0, EPSSMultiplier: 1.0, CoResidency: 2.0, ModelRarity: 1.0, // product 4.0
 		},
 	}
 }
@@ -67,7 +67,7 @@ func TestScarcityScalesEveryFactUniformly(t *testing.T) {
 func TestShadowDispersionCapDoesNotChangeShippedDefault(t *testing.T) {
 	fctx := FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, HasGPU: true}
 	view := gpuView()
-	view.Physics.EPSS = 2 // raw product = 8
+	view.Physics.EPSSMultiplier = 2 // raw product = 8
 
 	shipped := factsByKind(ucwRecon{}.AssetFacts(view, fctx).Facts)
 	view.Physics.DispersionCap = 6

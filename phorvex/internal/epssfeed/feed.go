@@ -46,6 +46,10 @@ type Entry struct {
 	// Considered is how many scored CVEs the selection was made from, so a score derived from
 	// three CVEs is not mistaken for one derived from three hundred.
 	Considered int `json:"considered,omitempty"`
+	// ScanTS is when the feed scanned this digest (RFC3339 UTC). The operator records it per
+	// asset and uses it to pick a repository's LATEST scan for the M-141 repo-level fallback;
+	// it is never an age window. Absent on caches written before M-141.
+	ScanTS string `json:"scanTS,omitempty"`
 }
 
 // trivyReport is the subset of Trivy's JSON output this needs. Declared narrowly on purpose: a

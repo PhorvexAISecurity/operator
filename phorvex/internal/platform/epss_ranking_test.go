@@ -15,10 +15,14 @@ import (
 // the SOURCE. This drives the real path end to end: SeedEPSS -> epssMultiplier -> PhysicsWitness,
 // keyed on a real image digest, and then compares the resulting order.
 
+// The two images live in DIFFERENT repositories. Since M-141 (PHORVEXSEC-203) a digest with no
+// cache entry falls back to the latest scan of its own repository, so two digests of one repo
+// are no longer "exploitable" and "benign" — they are the same software at two builds. The
+// honest-absent pod of this test is therefore an image whose repository was never scanned.
 const (
 	exploitableImg = "registry.example/app@sha256:" +
 		"1111111111111111111111111111111111111111111111111111111111111111"
-	benignImg = "registry.example/app@sha256:" +
+	benignImg = "registry.example/other@sha256:" +
 		"2222222222222222222222222222222222222222222222222222222222222222"
 )
 
@@ -47,10 +51,10 @@ func TestSeededEPSSReachesPhysicsWitness(t *testing.T) {
 	defer SeedEPSS(nil)
 
 	w := witnessByPod(t, twoPodSnapshot())
-	got, absent := w["ns/exploitable"].EPSS, w["ns/benign"].EPSS
+	got, absent := w["ns/exploitable"].EPSSMultiplier, w["ns/benign"].EPSSMultiplier
 
-	// 1 + clamp01(0.5*0.97 + 0.5*0.98) = 1.975
-	if math.Abs(got-1.975) > 1e-9 {
+	// M-104 form: 1 + 0.97*(9.8/10) = 1.9506
+	if math.Abs(got-1.9506) > 1e-9 {
 		t.Fatalf("seeded EPSS did not reach PhysicsWitness: got %v, want 1.975 — the cache is not "+
 			"feeding epssMultiplier, which is exactly what this ticket alleges", got)
 	}
@@ -68,9 +72,9 @@ func TestNonNeutralEPSSChangesRanking(t *testing.T) {
 	// Baseline: nothing seeded. Both pods are honest-absent, so the two are indistinguishable.
 	SeedEPSS(nil)
 	flat := witnessByPod(t, snap)
-	if flat["ns/exploitable"].EPSS != flat["ns/benign"].EPSS {
+	if flat["ns/exploitable"].EPSSMultiplier != flat["ns/benign"].EPSSMultiplier {
 		t.Fatalf("with an empty cache both pods must tie; got %v vs %v",
-			flat["ns/exploitable"].EPSS, flat["ns/benign"].EPSS)
+			flat["ns/exploitable"].EPSSMultiplier, flat["ns/benign"].EPSSMultiplier)
 	}
 	baseRatio := scarcity(flat["ns/exploitable"]) / scarcity(flat["ns/benign"])
 	if math.Abs(baseRatio-1.0) > 1e-9 {
@@ -109,5 +113,5 @@ func TestNonNeutralEPSSChangesRanking(t *testing.T) {
 // scarcity is the product ucw.go forms before boundMult: ImageRarity * EPSS * CoResidency.
 // ModelRarity is excluded — these fixtures are not model-serving pods.
 func scarcity(w model.PhysicsWitness) float64 {
-	return w.ImageRarity * w.EPSS * w.CoResidency
+	return w.ImageRarity * w.EPSSMultiplier * w.CoResidency
 }
