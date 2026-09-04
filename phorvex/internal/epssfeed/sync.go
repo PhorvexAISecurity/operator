@@ -165,21 +165,27 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	// Build only from the current inventory, pruning digest churn. For a scan that failed,
 	// retain that current image's old score; a transient registry outage must not turn a
 	// known signal back into honest-absent.
+	now := opts.Now().UTC()
 	after := make(map[string]Score, len(inv.targets))
 	for _, target := range inv.targets {
 		vulns, scanned := vulnsByImage[target.key]
 		if !scanned {
 			if old, ok := before[target.key]; ok {
-				after[target.key] = old
+				after[target.key] = old // keeps its own scanTS: the retained score is as old as its scan
 			}
 			continue
 		}
 		if score, ok := bestImageScore(vulns, epssScores); ok {
+			// M-141 / M-104: the feed-run time at which THIS digest's CVE scan and its FIRST EPSS
+			// scores were produced together — i.e. the "EPSS as-of" time of the entry. A digest can
+			// match and still be old: that shows as an old scanTS in the record (no freshness
+			// window is applied; freshness is the feed job's cadence). A retained last-known-good
+			// score keeps its own, older scanTS.
+			score.ScanTS = now.Format(time.RFC3339)
 			after[target.key] = score
 		}
 	}
 
-	now := opts.Now().UTC()
 	result := Result{
 		Mode:                    "dry-run",
 		ObservedPods:            inv.observedPods,

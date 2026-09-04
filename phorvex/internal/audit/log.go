@@ -50,6 +50,7 @@ type Record struct {
 	ThreatPosture float64 `json:"threatPosture"` // observational under P1
 	Exposure      float64 `json:"exposure"`
 	PHold         float64 `json:"pHold"`
+	Provenance    float64 `json:"provenance,omitempty"` // prov(key) applied to coverage in selection/demand/fallback (M-110)
 	// PHoldInputs (M-143): the capped noisy-OR terms behind pHold. Emitted so a reader can see
 	// that the posterior (betaMean) still moves pHold at every exposure age.
 	PHoldInputs *PHoldInputsRecord `json:"pHoldInputs,omitempty"`
@@ -235,6 +236,7 @@ func ToRecord(d model.Decision) Record {
 		NextStage:             d.NextStage,
 		StageHazard:           round4(d.StageHazard),
 		PHold:                 round4(d.PHold),
+		Provenance:            round4(d.Provenance),
 		PHoldInputs:           pHoldInputsRecord(d.PHoldInputs),
 		StageEvent:            d.StageEvent,
 		EventEvidence:         round4(d.EventEvidence),

@@ -83,6 +83,11 @@ var (
 		Help: "Decisions emitted, by tenant/action/mode/selected.",
 	}, []string{"tenant", "action", "mode", "selected"})
 
+	epssLookupTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_epss_lookup_total",
+		Help: "EPSS cache lookups by outcome: hit (exact digest), repo-fallback (latest scan of the same repository), miss (M-141). A stale cache is a metric, not a surprise.",
+	}, []string{"result"})
+
 	eventsAgedOut = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_events_aged_out_total",
 		Help: "Kill-chain evidence observations whose SecurityEvent aging weight reached 0 (age >= tau_ev or no timestamp), by tenant (M-27).",
@@ -95,8 +100,8 @@ var (
 
 	ticksTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_ticks_total",
-		Help: "Decision ticks executed, by tenant.",
-	}, []string{"tenant"})
+		Help: "Decision ticks executed, by tenant and policy. The policy label keeps two policies that share one tenant name from collapsing into a single series (M-145).",
+	}, []string{"tenant", "policy"})
 
 	actionSetRejections = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_action_set_rejections_total",
@@ -159,7 +164,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, eventsAgedOut,
+		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 	)
@@ -205,9 +210,9 @@ func ResetTenant(tenant string) {
 
 // PublishTick records one tenant's tick: re-publishes per-pod gauges, the rollups,
 // and the counters.
-func PublishTick(tenant string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string) {
+func PublishTick(tenant, policy string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string) {
 	ResetTenant(tenant)
-	ticksTotal.WithLabelValues(tenant).Inc()
+	ticksTotal.WithLabelValues(tenant, policy).Inc()
 	tickDuration.WithLabelValues(tenant).Observe(durSeconds)
 	protectedPods.WithLabelValues(tenant).Set(float64(len(decisions)))
 	selectedPods.WithLabelValues(tenant).Set(float64(selected))
@@ -236,6 +241,16 @@ func PublishTick(tenant string, decisions []model.Decision, exposures map[string
 }
 
 // RecordActuation counts a real emit to Phoenix (active mode).
+// RecordEPSSLookup counts one exploitability-cache lookup by outcome (M-141).
+func RecordEPSSLookup(result string) {
+	epssLookupTotal.WithLabelValues(result).Inc()
+}
+
+// EPSSLookupCounter exposes one outcome's counter (tests and the scan report).
+func EPSSLookupCounter(result string) prometheus.Counter {
+	return epssLookupTotal.WithLabelValues(result)
+}
+
 // RecordEventAgedOut counts one assessment in which an ingested SecurityEvent carried
 // weight 0 — it aged past tau_ev or had no timestamp (M-27).
 func RecordEventAgedOut(tenant string) {

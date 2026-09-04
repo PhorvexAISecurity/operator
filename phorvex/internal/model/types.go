@@ -326,9 +326,17 @@ type PhysicsWitness struct {
 	ImageRarityPresent bool    // an image identity participated in the current fleet population
 	CoResidency        float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
 	CoResidencyPresent bool    // this pod had a node represented in the current fleet scan
-	EPSS               float64 // 1 + (0.5*EPSS + 0.5*CVSS/10): CVE/EPSS attacker-utility [1,2]
-	EPSSPresent        bool    // an image-digest cache entry supplied the EPSS/CVSS multiplier
+	EPSSMultiplier     float64 // the M-104 value multiplier 1 + EPSSScore·(CVSS/10) ∈ [1,2]; exactly 1 when !EPSSPresent (was EPSS)
+	EPSSPresent        bool    // a usable (present, finite, in-domain) EPSS/CVSS pair produced the multiplier
+	EPSSScore          float64 // raw cache EPSS [0,1]; meaningful only when EPSSPresent
 	CVSS               float64 // raw cache CVSS [0,10]; meaningful only when EPSSPresent
+	EPSSReason         string  // why the pair was unusable: absent | non-finite | invalid-domain ("" when present)
+	// EPSSBasis says HOW the cache answered (M-141): "exact" (running digest scored),
+	// "repo-fallback" (latest scan of the same repository, flagged), "miss" (nothing —
+	// multiplier neutral, EPSSPresent=false), "" when the pod has no image identity.
+	EPSSBasis        string
+	EPSSCachedDigest string // the cache key that supplied the value (differs from ImageID on repo-fallback)
+	EPSSScanTS       string // when that entry was scanned (RFC3339; "" for caches written before M-141) — audit only, never a branch
 	// DispersionCap is used only by an explicitly constructed shadow witness. Zero keeps
 	// the shipped MaxDispersionMult, so ordinary production snapshots cannot activate a
 	// learned cap accidentally.
@@ -356,7 +364,7 @@ type PhysicsWitness struct {
 // PDB) — what every consumer sees before a scan, guaranteeing baseline reproduction.
 func NeutralPhysics() PhysicsWitness {
 	return PhysicsWitness{
-		ImageRarity: 1, CoResidency: 1, EPSS: 1, ModelRarity: 1,
+		ImageRarity: 1, CoResidency: 1, EPSSMultiplier: 1, ModelRarity: 1,
 		PDBMinAvailable: -1, PDBDisruptionsAllowed: -1,
 	}
 }
@@ -452,6 +460,10 @@ type Decision struct {
 	ThreatPosture float64 // observational under the default P1 coverage engine
 	Exposure      float64
 	PHold         float64 // authoritative P(attacker still holds the foothold) [0,1]
+	// Provenance is prov(key) — the evidence/exposure discount applied to this asset's coverage
+	// in selection, demand and the standalone fallback alike (M-110). 1 = fully evidenced or
+	// past the proactive floor; provFloor..1 = fresh and evidence-less.
+	Provenance float64
 	// PHoldInputs records every term of the capped noisy-OR that produced PHold
 	// (PHORVEXSEC-189 / M-143) so a reader can see the posterior was not annihilated.
 	PHoldInputs PHoldInputs
@@ -461,7 +473,7 @@ type Decision struct {
 	// EventEvidence is Σ_e w(age_e)·severity_e over events targeting this pod (M-27).
 	EventEvidence float64
 	// Events lists every ingested event this assessment saw with its age and weight.
-	Events             []EventEvidence
+	Events []EventEvidence
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase

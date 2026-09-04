@@ -110,7 +110,13 @@ type Manager struct {
 	BrainImage           string
 	GitSHA               string
 
-	mu       sync.RWMutex
+	mu sync.RWMutex
+	// emits is the per-policy ledger of ENACTED-move timestamps that feeds the rolling
+	// Status.Actuated / Status.MovesThisWindow (PHORVEXSEC-176). It lives on the Manager,
+	// not the policyEntry, so a spec edit (Upsert) does not forget real actuations. It is
+	// in-memory only: a restart or leadership change can only UNDER-report until the next
+	// emit — never claim an actuation the running brain did not perform.
+	emits    map[string][]time.Time
 	policies map[string]*policyEntry
 	// Accessed only by the single tick loop. The RLS outcome is capped after its
 	// [0,2] observation window, but ledger-enabled censored entries remain here so
@@ -208,11 +214,42 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	m.mu.Lock()
 	e := m.policies[key.String()]
 	delete(m.policies, key.String())
+	delete(m.emits, key.String())
 	m.mu.Unlock()
 	if e != nil {
 		metrics.ResetTenant(e.tenant)
 		metrics.ResetKillSwitchStatus(e.key.Namespace, e.key.Name)
 	}
+}
+
+// recordEmits appends n enacted moves at now to the policy's ledger, drops entries older
+// than the trailing window and returns how many enacted moves remain inside it. Called
+// exactly once per tick, OUTSIDE the status conflict-retry loop, so a retried write never
+// double-counts. Selected-but-not-emitted decisions (dry-run, kill-switch, actuator
+// failure) are never recorded.
+func (m *Manager) recordEmits(key string, n int, now time.Time, window time.Duration) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.emits == nil {
+		m.emits = map[string][]time.Time{}
+	}
+	ledger := m.emits[key]
+	for i := 0; i < n; i++ {
+		ledger = append(ledger, now)
+	}
+	cutoff := now.Add(-window)
+	kept := ledger[:0]
+	for _, ts := range ledger {
+		if ts.After(cutoff) {
+			kept = append(kept, ts)
+		}
+	}
+	if len(kept) == 0 {
+		delete(m.emits, key)
+		return 0
+	}
+	m.emits[key] = kept
+	return len(kept)
 }
 
 // NeedLeaderElection keeps the mutating tick loop in controller-runtime's
@@ -906,6 +943,12 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
 			if decisions[i].Trace != nil {
 				decisions[i].Trace.DryRun = true
+				// T0-C: actuate() never runs under dry-run — a selected move is
+				// not-attempted for that reason, not silently un-dispatched.
+				if decisions[i].Selected {
+					decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
+					decisions[i].Trace.DispatchReason = "dry-run"
+				}
 			}
 		}
 	}
@@ -918,6 +961,10 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			decisions[i].KillSwitch = true
 			if decisions[i].Trace != nil {
 				decisions[i].Trace.KillSwitchEngaged = true
+				if decisions[i].Selected {
+					decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
+					decisions[i].Trace.DispatchReason = "kill-switch"
+				}
 			}
 		}
 	}
@@ -954,7 +1001,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	}
 
 	dur := time.Since(start)
-	metrics.PublishTick(pol.Tenant, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
+	metrics.PublishTick(pol.Tenant, pol.PolicyName, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
 	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode, killEngaged)
 	m.Clock.RetainTenant(pol.Tenant, keep)
 	m.updateStatus(ctx, e, len(views), selected, actuated, killEngaged, snap.Now, actionsSupport)
@@ -1047,6 +1094,13 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 	}
 	if err := m.Actuator.EnsurePolicy(ctx, target); err != nil {
 		m.Log.Error(err, "actuator EnsurePolicy failed; suppressing actuation this tick", "tenant", pol.Tenant)
+		// T0-C: a tick-level pre-dispatch guard — every selected move is refused here.
+		for i := range decisions {
+			if decisions[i].Selected && decisions[i].Trace != nil {
+				decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
+				decisions[i].Trace.DispatchReason = "ensure-policy-failed"
+			}
+		}
 		return 0
 	}
 	actuated := 0
@@ -1054,12 +1108,21 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if !decisions[i].Selected {
 			continue
 		}
+		// T0-C: every guard below stamps the dispatch outcome on the trace before
+		// the audit write, so a selected-but-refused move never reads as unselected.
+		stampDispatch := func(outcome, reason string) {
+			if decisions[i].Trace != nil {
+				decisions[i].Trace.DispatchOutcome = outcome
+				decisions[i].Trace.DispatchReason = reason
+			}
+		}
 		// Inviolability guard at the emit boundary (defense in depth): a selected move is
 		// ALWAYS feasible (the action-set generator excluded infeasible moves before
 		// selection), but never emit one that is not — and shout if the invariant breaks.
 		if !decisions[i].Feasible || decisions[i].Action == model.ActionNoop {
 			m.Log.Error(nil, "INVARIANT VIOLATION: a selected move was infeasible/noop; refusing to emit",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
+			stampDispatch(model.DispatchNotAttempted, "inviolability-guard")
 			continue
 		}
 		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
@@ -1076,11 +1139,13 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if !ok {
 			m.Log.Error(nil, "EMIT-BOUNDARY VETO (fail-closed): no tick view for the target; refusing to actuate",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
+			stampDispatch(model.DispatchNotAttempted, "no-tick-view")
 			continue
 		}
 		if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verdict.Feasible {
 			m.Log.Error(nil, "EMIT-BOUNDARY INVARIANT VETO: refusing infeasible move at actuate boundary",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
+			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible: "+verdict.Reason)
 			continue
 		}
 		score := decisions[i].DecisionValue()
@@ -1098,14 +1163,18 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		})
 		if err != nil {
 			outcome := slo.OutcomeFailed
+			dispatchReason := "failed"
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				outcome = slo.OutcomeDeadlineExpired
+				dispatchReason = "deadline-expired"
 			}
+			stampDispatch(model.DispatchError, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
 			continue
 		}
 		if res.Emitted {
+			stampDispatch(model.DispatchEmitted, "")
 			decisions[i].Actuated = true
 			// Carry the native actuator's forensic fields into the audit (empty for Phoenix).
 			decisions[i].Handler = res.Handler
@@ -1126,6 +1195,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			}
 		} else {
+			stampDispatch(model.DispatchEmittedFalse, "")
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}

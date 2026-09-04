@@ -30,7 +30,10 @@ func metav1SelAsSel(sel *metav1.LabelSelector) (labels.Selector, error) {
 // updateStatus writes the operational tick result back onto the PhorvexPolicy status
 // subresource. The controller also owns one status condition, so conflicts are retried from a
 // fresh object instead of dropping this tick or overwriting the controller's condition.
-// protected = pods covered; moves = decisions selected this tick.
+// protected = pods covered; moves = decisions selected this tick; actuated = moves really
+// emitted this tick. MovesThisWindow and Actuated are ROLLING (PHORVEXSEC-176): they describe
+// the enacted moves inside the trailing AntiOverRotationWindow, never selections, and return
+// to 0/false once the window passes without an emit.
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, moves, actuated int, killEngaged bool, now time.Time, actionStatuses ...actionsSupportStatus) {
@@ -42,6 +45,7 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 	if len(actionStatuses) > 0 {
 		actions = actionStatuses[0]
 	}
+	enactedInWindow := m.recordEmits(e.key.String(), actuated, now, e.spec.EffectiveAntiOverRotationWindow())
 	var updated v1alpha1.PhorvexPolicy
 	emitUnsupportedEvent := false
 	lastOperation := "read"
@@ -60,14 +64,12 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		p.Status.Tenant = e.tenant
 		p.Status.ObservedGeneration = p.Generation
 		p.Status.SelectedPods = protected
-		p.Status.MovesThisWindow = moves
+		p.Status.MovesThisWindow = enactedInWindow
+		p.Status.Actuated = enactedInWindow > 0
 		p.Status.DecisionsTotal += int64(moves)
 		p.Status.LastTickTime = metav1.Time{Time: now}
 		if moves > 0 {
 			p.Status.LastDecisionTime = metav1.Time{Time: now}
-		}
-		if actuated > 0 {
-			p.Status.Actuated = true
 		}
 		p.Status.KillSwitchEngaged = killEngaged
 		previous := meta.FindStatusCondition(p.Status.Conditions, ConditionActionsSupported)
