@@ -17,6 +17,10 @@ import (
 const (
 	// DecisionTraceSchemaV2 is independent of the enclosing audit-record version.
 	DecisionTraceSchemaV2 = "phorvex.decision-trace.v2"
+	// DecisionTraceSchemaV3 adds the complete decision path (T0-C): the per-action
+	// status array, CHi reconstruction terms, round semantics, and the dispatch
+	// outcome. V2 records remain readable: Validate branches on the version.
+	DecisionTraceSchemaV3 = "phorvex.decision-trace.v3"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -28,6 +32,56 @@ const (
 	// SelectorStrictPositiveGain is the exact P1 production comparator.
 	SelectorStrictPositiveGain = "strict_gain_positive"
 )
+
+// T0-C: the closed per-action status vocabulary (the ticket's ten values). Exactly one
+// row per model.MutatingActions member is recorded, in canonical order.
+const (
+	ActionStatusNotEnabled      = "not-enabled"
+	ActionStatusNoCover         = "no-cover"
+	ActionStatusInfeasible      = "infeasible"
+	ActionStatusConformalSLO    = "conformal-slo"
+	ActionStatusPricedOut       = "priced-out"
+	ActionStatusBudgetExhausted = "budget-exhausted"
+	ActionStatusCandidate       = "candidate"
+	ActionStatusSelected        = "selected"
+	ActionStatusNotEvaluated    = "not-evaluated-by-current-model"
+	ActionStatusNotInstallable  = "not-installable" // emitted by no v3 mapping: capability is never evaluated per-asset
+)
+
+// T0-C: the closed exclusion-kind vocabulary (B.3) — the structural cause, kept
+// distinct from the ticket's status so a data-quality failure never reads as
+// ordinary infeasibility (p1cost.go's deliberate distinction).
+const (
+	ExclusionNone         = "none"
+	ExclusionNotEnabled   = "not-enabled"
+	ExclusionReconCover   = "recon-cover"
+	ExclusionFeasibility  = "feasibility"
+	ExclusionCostNaN      = "cost-nan"
+	ExclusionSLOGate      = "slo-gate"
+	ExclusionReactiveOnly = "reactive-only"
+	ExclusionSelection    = "selection"
+)
+
+// T0-C: the closed dispatch-outcome vocabulary. The runner stamps it after the
+// actuation attempt, before the audit record is written.
+const (
+	DispatchNotAttempted = "not-attempted"
+	DispatchEmitted      = "emitted"
+	DispatchEmittedFalse = "emitted-false"
+	DispatchError        = "dispatch-error"
+)
+
+// DecisionActionStatusV3 is one canonical action's outcome for this asset (T0-C R-2):
+// every MutatingActions member gets exactly one row, so "the action was never
+// considered" is recorded, not absent. Reason carries the existing pipeline string
+// verbatim (redacted); Scored reports whether the greedy loop evaluated a marginal.
+type DecisionActionStatusV3 struct {
+	Action        string `json:"action"`
+	Status        string `json:"status"`
+	ExclusionKind string `json:"exclusionKind"`
+	Reason        string `json:"reason,omitempty"`
+	Scored        bool   `json:"scored"`
+}
 
 // OptionalFloat distinguishes an observed zero from an unavailable measurement.
 type OptionalFloat struct {
@@ -83,6 +137,12 @@ type DecisionModelInputsV2 struct {
 	ExposureSeconds   OptionalFloat `json:"exposureSeconds"`
 	ProactiveFloorSec float64       `json:"proactiveFloorSeconds"`
 	AntiOverRotateSec float64       `json:"antiOverRotationWindowSeconds"`
+	// T0-C: the three horizon/headroom inputs the envelope already carried (log.go)
+	// lifted into the trace with presence. ProjectedNextStageSec is present iff a
+	// next stage was projected (NextStage != "").
+	SLOHeadroom           OptionalFloat `json:"sloHeadroom"`
+	NextStage             string        `json:"nextStage"`
+	ProjectedNextStageSec OptionalFloat `json:"projectedNextStageSec"`
 }
 
 // DecisionFactV2 is one fact presented to the current optimizer. Decomposition
@@ -99,6 +159,17 @@ type DecisionFactV2 struct {
 	UrgencyContribution    OptionalFloat `json:"urgencyContribution"`
 	DispersionContribution OptionalFloat `json:"dispersionContribution"`
 	RelativeWeight         OptionalFloat `json:"relativeWeight"`
+	// T0-C: CoveringActions lists every canonical action whose declared cover
+	// includes this fact (all actions, not only policy-enabled ones — a fact's
+	// cover set is a property of the fact). CoveredRound is the 1-based greedy
+	// round in which a selected move first covered this fact (absent = never
+	// covered this tick); CoveredBeforeDecision is DERIVED from it
+	// (coveredRound < evaluationRound), recorded computed, not asserted.
+	// DecompositionAvailable names the honest absence of the four decomposition
+	// terms above instead of leaving their absence unexplained.
+	CoveringActions        []string    `json:"coveringActions"`
+	DecompositionAvailable bool        `json:"decompositionAvailable"`
+	CoveredRound           OptionalInt `json:"coveredRound"`
 }
 
 // DecisionCandidateV2 records either a generated feasible candidate or an
@@ -121,6 +192,24 @@ type DecisionCandidateV2 struct {
 	NetGain            OptionalFloat `json:"netGain"`
 	Feasible           OptionalBool  `json:"feasible"`
 	Selected           bool          `json:"selected"`
+
+	// T0-C CHi reconstruction terms (B.1). Present exactly where the cost path
+	// computed them: rotate rows carry ConformalQuantile (the post-clamp slack
+	// used in the max) and ConformalCalibrated (measured vs cold-start);
+	// GPUEnvelopeApplied is present wherever cost ran (false for non-rotate);
+	// GPUEnvelopeSlack is present iff the envelope branch fired. NaN-category
+	// rows carry none of the four (the fail-closed return never computes slack).
+	// Law: CostHigh = ExpectedCost + (action==rotate ? max(quantile, applied?slack:0) : 0).
+	ConformalQuantile   OptionalFloat `json:"conformalQuantile"`
+	ConformalCalibrated OptionalBool  `json:"conformalCalibrated"`
+	GPUEnvelopeApplied  OptionalBool  `json:"gpuEnvelopeApplied"`
+	GPUEnvelopeSlack    OptionalFloat `json:"gpuEnvelopeSlack"`
+	// SLOGateResult is present/true for generated candidates (they passed the
+	// conformal SLO gate), present/false for conformal-slo exclusions, absent
+	// for rows excluded upstream of the gate. SelectionRound is per-candidate,
+	// present iff this candidate was selected.
+	SLOGateResult  OptionalBool `json:"sloGateResult"`
+	SelectionRound OptionalInt  `json:"selectionRound"`
 
 	ExistingExclusionReason     string `json:"existingExclusionReason,omitempty"`
 	SelectionReason             string `json:"selectionReason"`
@@ -176,10 +265,26 @@ type DecisionTraceV2 struct {
 	CFlowUnitStatus           string               `json:"cFlowUnitStatus"`
 	CostRepresentationVersion string               `json:"costRepresentationVersion"`
 	DualUpdate                DecisionDualUpdateV2 `json:"dualUpdate"`
+	// T0-C: CostCeiling is the EFFECTIVE conformal SLO ceiling the generator
+	// enforced (post-defaulting, not the raw policy field); CostModelVersion is
+	// the cost model's own Name(); EvaluationRound is the 1-based greedy round
+	// whose marginal this record carries (the selection round for the selected
+	// asset, the last executed round otherwise).
+	CostCeiling      float64 `json:"costCeiling"`
+	CostModelVersion string  `json:"costModelVersion"`
+	EvaluationRound  int     `json:"evaluationRound"`
 
 	Inputs     DecisionModelInputsV2 `json:"inputs"`
 	Facts      []DecisionFactV2      `json:"facts"`
 	Candidates []DecisionCandidateV2 `json:"candidates"`
+
+	// T0-C: ActionStatus carries exactly one row per model.MutatingActions member
+	// in canonical order (R-2: the complete action accounting, including actions
+	// the current model never considered). DispatchOutcome/DispatchReason are
+	// stamped by the runner after the actuation attempt, before the audit write.
+	ActionStatus    []DecisionActionStatusV3 `json:"actionStatus"`
+	DispatchOutcome string                   `json:"dispatchOutcome"`
+	DispatchReason  string                   `json:"dispatchReason,omitempty"`
 
 	SelectedAction       string      `json:"selectedAction"`
 	SelectedCandidateKey string      `json:"selectedCandidateKey,omitempty"`
@@ -216,9 +321,12 @@ func cleanOptional(v OptionalFloat) OptionalFloat {
 
 // Canonical returns a redacted, deterministically ordered deep copy. It never
 // mutates the trace attached to the decision or any optimizer input.
+// The schema version is set at construction and is NOT rewritten here: a legacy
+// v2 record read from disk re-marshals as v2 (rollback-honest), and a v3 record
+// stays v3. (Pre-T0-C this line forced V2; forcing V3 would mislabel legacy
+// records that lack the v3 arrays.)
 func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out := t
-	out.SchemaVersion = DecisionTraceSchemaV2
 	out.DecisionID = redactTraceString(out.DecisionID)
 	out.TickID = redactTraceString(out.TickID)
 	out.Timestamp = redactTraceString(out.Timestamp)
@@ -240,6 +348,9 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out.CFlowUnitStatus = redactTraceString(out.CFlowUnitStatus)
 	out.CostRepresentationVersion = redactTraceString(out.CostRepresentationVersion)
 	out.DualUpdate.UpdateReason = redactTraceString(out.DualUpdate.UpdateReason)
+	out.CostModelVersion = redactTraceString(out.CostModelVersion)
+	out.DispatchOutcome = redactTraceString(out.DispatchOutcome)
+	out.DispatchReason = redactTraceString(out.DispatchReason)
 
 	out.Inputs.Phase = redactTraceString(out.Inputs.Phase)
 	out.Inputs.Stage = redactTraceString(out.Inputs.Stage)
@@ -263,6 +374,9 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out.Inputs.StageUrgency = cleanOptional(out.Inputs.StageUrgency)
 	out.Inputs.ThreatPosture = cleanOptional(out.Inputs.ThreatPosture)
 	out.Inputs.ExposureSeconds = cleanOptional(out.Inputs.ExposureSeconds)
+	out.Inputs.NextStage = redactTraceString(out.Inputs.NextStage)
+	out.Inputs.SLOHeadroom = cleanOptional(out.Inputs.SLOHeadroom)
+	out.Inputs.ProjectedNextStageSec = cleanOptional(out.Inputs.ProjectedNextStageSec)
 
 	out.Facts = append([]DecisionFactV2(nil), t.Facts...)
 	for i := range out.Facts {
@@ -275,6 +389,13 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		f.UrgencyContribution = cleanOptional(f.UrgencyContribution)
 		f.DispersionContribution = cleanOptional(f.DispersionContribution)
 		f.RelativeWeight = cleanOptional(f.RelativeWeight)
+		f.CoveringActions = append([]string(nil), f.CoveringActions...)
+		for j := range f.CoveringActions {
+			f.CoveringActions[j] = redactTraceString(f.CoveringActions[j])
+		}
+		sort.SliceStable(f.CoveringActions, func(a, b int) bool {
+			return canonicalActionRank(f.CoveringActions[a]) < canonicalActionRank(f.CoveringActions[b])
+		})
 	}
 	sort.SliceStable(out.Facts, func(i, j int) bool { return out.Facts[i].FactKey < out.Facts[j].FactKey })
 
@@ -299,7 +420,21 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.CostHigh = cleanOptional(c.CostHigh)
 		c.LambdaContribution = cleanOptional(c.LambdaContribution)
 		c.NetGain = cleanOptional(c.NetGain)
+		c.ConformalQuantile = cleanOptional(c.ConformalQuantile)
+		c.GPUEnvelopeSlack = cleanOptional(c.GPUEnvelopeSlack)
 	}
+
+	out.ActionStatus = append([]DecisionActionStatusV3(nil), t.ActionStatus...)
+	for i := range out.ActionStatus {
+		row := &out.ActionStatus[i]
+		row.Action = redactTraceString(row.Action)
+		row.Status = redactTraceString(row.Status)
+		row.ExclusionKind = redactTraceString(row.ExclusionKind)
+		row.Reason = redactTraceString(row.Reason)
+	}
+	sort.SliceStable(out.ActionStatus, func(i, j int) bool {
+		return canonicalActionRank(out.ActionStatus[i].Action) < canonicalActionRank(out.ActionStatus[j].Action)
+	})
 	sort.SliceStable(out.Candidates, func(i, j int) bool {
 		assetKey := func(candidateKey string) string {
 			if at := strings.LastIndex(candidateKey, "|"); at >= 0 {
@@ -337,10 +472,15 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 }
 
 // Validate checks the version/build identity and selection-reference invariants.
+// It accepts both V2 (legacy/rollback records, pre-T0-C checks only) and V3
+// (full reconstructability invariants). NOTE (T0-C, B.6.7): Validate has no
+// non-test caller — it is a test-time contract, not a runtime guard; the
+// production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
+	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
 	finite := func(values ...float64) bool {
 		for _, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -420,6 +560,13 @@ func (t DecisionTraceV2) Validate() error {
 			t.DualUpdate.LambdaBefore != t.LambdaRuntimeLegacy || t.DualUpdate.UpdateReason == "" {
 			return errors.New("dual update is not reconstructable from trace inputs")
 		}
+	} else if isV3 {
+		return errors.New("v3 trace must carry the cost representation semantics")
+	}
+	if isV3 {
+		if err := t.validateV3(); err != nil {
+			return err
+		}
 	}
 	if t.SelectedAction == string(ActionNoop) {
 		if selected != 0 || t.SelectedCandidateKey != "" || t.NoopReason == "" {
@@ -429,6 +576,166 @@ func (t DecisionTraceV2) Validate() error {
 	}
 	if selected != 1 || t.SelectedCandidateKey == "" || selectedKey != t.SelectedCandidateKey {
 		return errors.New("selected trace must reference exactly one recorded candidate")
+	}
+	return nil
+}
+
+// validateV3 enforces the T0-C reconstructability invariants. It runs on the
+// canonical copy from Validate, after the version-agnostic checks.
+func (t DecisionTraceV2) validateV3() error {
+	// (0) Trace-level v3 fields the reconstruction laws depend on are mandatory.
+	if t.CostModelVersion == "" {
+		return errors.New("v3 trace has no costModelVersion")
+	}
+	if math.IsNaN(t.CostCeiling) || math.IsInf(t.CostCeiling, 0) || t.CostCeiling <= 0 {
+		return fmt.Errorf("v3 trace costCeiling %g is not a positive finite ceiling", t.CostCeiling)
+	}
+	// (1) The action accounting is complete: exactly one row per canonical
+	// mutating action, in canonical order, from the closed vocabularies.
+	if len(t.ActionStatus) != len(MutatingActions) {
+		return fmt.Errorf("actionStatus carries %d rows, want exactly %d (one per MutatingActions member)",
+			len(t.ActionStatus), len(MutatingActions))
+	}
+	statusOK := map[string]bool{
+		ActionStatusNotEnabled: true, ActionStatusNoCover: true, ActionStatusInfeasible: true,
+		ActionStatusConformalSLO: true, ActionStatusPricedOut: true, ActionStatusBudgetExhausted: true,
+		ActionStatusCandidate: true, ActionStatusSelected: true, ActionStatusNotEvaluated: true,
+		ActionStatusNotInstallable: true,
+	}
+	kindOK := map[string]bool{
+		ExclusionNone: true, ExclusionNotEnabled: true, ExclusionReconCover: true,
+		ExclusionFeasibility: true, ExclusionCostNaN: true, ExclusionSLOGate: true,
+		ExclusionReactiveOnly: true, ExclusionSelection: true,
+	}
+	selectedRows := 0
+	for i, row := range t.ActionStatus {
+		if row.Action != string(MutatingActions[i]) {
+			return fmt.Errorf("actionStatus[%d] = %q, canonical order wants %q", i, row.Action, MutatingActions[i])
+		}
+		if !statusOK[row.Status] {
+			return fmt.Errorf("actionStatus[%d] status %q is outside the closed vocabulary", i, row.Status)
+		}
+		if !kindOK[row.ExclusionKind] {
+			return fmt.Errorf("actionStatus[%d] exclusionKind %q is outside the closed vocabulary", i, row.ExclusionKind)
+		}
+		// (2) status/kind consistency: a selected row carries no exclusion; a
+		// data-quality exclusion always reads infeasible (never collapsed).
+		if row.Status == ActionStatusSelected {
+			selectedRows++
+			if row.ExclusionKind != ExclusionNone {
+				return fmt.Errorf("actionStatus[%d] selected but exclusionKind=%q", i, row.ExclusionKind)
+			}
+		}
+		if row.ExclusionKind == ExclusionCostNaN && row.Status != ActionStatusInfeasible {
+			return fmt.Errorf("actionStatus[%d] cost-nan must read status=infeasible, got %q", i, row.Status)
+		}
+		if row.Status == ActionStatusNotInstallable {
+			return fmt.Errorf("actionStatus[%d] not-installable is emitted by no v3 mapping (capability is never evaluated per-asset)", i)
+		}
+	}
+	if t.SelectedAction == string(ActionNoop) && selectedRows != 0 {
+		return errors.New("noop trace has a selected actionStatus row")
+	}
+	if t.SelectedAction != string(ActionNoop) {
+		if selectedRows != 1 {
+			return fmt.Errorf("selected trace has %d selected actionStatus rows, want 1", selectedRows)
+		}
+		rank := canonicalActionRank(t.SelectedAction)
+		if rank >= len(t.ActionStatus) {
+			return fmt.Errorf("selected action %q is not a canonical mutating action", t.SelectedAction)
+		}
+		if t.ActionStatus[rank].Status != ActionStatusSelected {
+			return fmt.Errorf("selected action %q is not the selected actionStatus row", t.SelectedAction)
+		}
+	}
+
+	// (3) One asset per record: every candidate key's asset prefix is this asset.
+	asset := t.AssetNamespace + "/" + t.AssetName
+	for _, c := range t.Candidates {
+		key := c.CandidateKey
+		if at := strings.LastIndex(key, "|"); at >= 0 {
+			key = key[:at]
+		}
+		if key != asset {
+			return fmt.Errorf("candidate %q does not belong to this record's asset %q", c.CandidateKey, asset)
+		}
+	}
+
+	// (4) CHi reconstruction law (B.1): CostHigh = ExpectedCost + slack, where
+	// slack = max(conformalQuantile, gpuEnvelopeSlack if applied) for rotate and
+	// 0 otherwise. Rows without a computed CostHigh (NaN, pre-cost exclusions)
+	// are outside the law — and must carry none of the slack terms.
+	for _, c := range t.Candidates {
+		if !c.CostHigh.Present || !c.ExpectedCost.Present {
+			if c.ConformalQuantile.Present || c.GPUEnvelopeSlack.Present {
+				return fmt.Errorf("candidate %q carries slack terms without a computed cost", c.CandidateKey)
+			}
+			continue
+		}
+		want := c.ExpectedCost.Value
+		if c.Action == string(ActionRotate) {
+			if !c.ConformalQuantile.Present {
+				return fmt.Errorf("candidate %q is a costed rotate without the conformal quantile", c.CandidateKey)
+			}
+			slack := c.ConformalQuantile.Value
+			if c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value {
+				if !c.GPUEnvelopeSlack.Present {
+					return fmt.Errorf("candidate %q applied the GPU envelope without recording its value", c.CandidateKey)
+				}
+				if c.GPUEnvelopeSlack.Value > slack {
+					slack = c.GPUEnvelopeSlack.Value
+				}
+			}
+			want += slack
+		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
+			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
+		}
+		if math.Abs(want-c.CostHigh.Value) > 1e-9 {
+			return fmt.Errorf("candidate %q cost high is not reconstructable (want %g, got %g)",
+				c.CandidateKey, want, c.CostHigh.Value)
+		}
+	}
+
+	// (5) coveredBeforeDecision is derived, not asserted: coveredRound present
+	// and strictly before the record's evaluation round.
+	factByKey := map[string]*DecisionFactV2{}
+	for i := range t.Facts {
+		f := &t.Facts[i]
+		want := f.CoveredRound.Present && f.CoveredRound.Value < t.EvaluationRound
+		if f.CoveredBeforeDecision != want {
+			return fmt.Errorf("fact %q coveredBeforeDecision=%t contradicts coveredRound=%+v at evaluationRound=%d",
+				f.FactKey, f.CoveredBeforeDecision, f.CoveredRound, t.EvaluationRound)
+		}
+		factByKey[f.FactKey] = f
+	}
+
+	// (6) Marginal law: the recorded marginal is the sum of final weights over
+	// cover keys not covered before the evaluation round.
+	for _, c := range t.Candidates {
+		if !c.MarginalCoverage.Present {
+			continue
+		}
+		sum := 0.0
+		for _, k := range c.CoverKeys {
+			f, ok := factByKey[k]
+			if !ok {
+				return fmt.Errorf("candidate %q covers fact %q that has no recorded fact row", c.CandidateKey, k)
+			}
+			if !f.CoveredBeforeDecision {
+				sum += f.FinalWeight
+			}
+		}
+		if math.Abs(sum-c.MarginalCoverage.Value) > 1e-9 {
+			return fmt.Errorf("candidate %q marginal coverage is not reconstructable (want %g, got %g)",
+				c.CandidateKey, sum, c.MarginalCoverage.Value)
+		}
+	}
+
+	// (7) Dispatch outcome from the closed vocabulary, always recorded.
+	switch t.DispatchOutcome {
+	case DispatchNotAttempted, DispatchEmitted, DispatchEmittedFalse, DispatchError:
+	default:
+		return fmt.Errorf("dispatchOutcome %q is outside the closed vocabulary", t.DispatchOutcome)
 	}
 	return nil
 }

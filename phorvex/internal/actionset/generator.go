@@ -49,6 +49,13 @@ type ActionSet struct {
 	// Excluded records (asset,action,reason) pairs pruned by structural relevance or
 	// a hard constraint — surfaced for audit/inviolability, never selectable.
 	Excluded []Exclusion
+	// CostCeiling is the effective conformal SLO ceiling enforced this tick
+	// (T0-C: recorded in the decision trace so the gate is reconstructable).
+	CostCeiling float64
+	// CoverByAsset carries recon's declared cover sets per asset over ALL actions
+	// (enabled or not — a fact's cover set is a property of the fact). Read-only;
+	// the decision trace inverts it into per-fact CoveringActions. (T0-C)
+	CoverByAsset map[string]map[model.Action][]string
 }
 
 // CrossBlockCollision is one recon key claimed by two distinct pod decision blocks.
@@ -140,7 +147,11 @@ func GeneratableActions() []model.Action {
 //
 // The set provably changes with state and contains NO hard-constraint-violating move.
 func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
-	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{}, FactsAbsent: map[string]string{}}
+	// Both sides added fields to this literal: main added FactsAbsent (M-111), this branch added
+	// CostCeiling + CoverByAsset for the decision trace. Keep BOTH — they are independent.
+	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{},
+		FactsAbsent: map[string]string{},
+		CostCeiling: d.CostCeiling, CoverByAsset: map[string]map[model.Action][]string{}}
 	keyOwners := map[string]string{}
 	claim := func(factKey, block string) bool {
 		owner, exists := keyOwners[factKey]
@@ -178,6 +189,9 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			continue
 		}
 		out.FactsByAsset[key] = append([]recon.Fact(nil), af.Facts...)
+		// T0-C: carry the full declared cover map (all actions) for the trace's
+		// per-fact CoveringActions inversion. The slices are shared read-only.
+		out.CoverByAsset[key] = af.CoverByAction
 		coveredKeys := map[string]bool{}
 		// Scan every declared cover, including disabled actions. A topology-conditional
 		// collision is a taxonomy violation independent of this tenant's current policy.
