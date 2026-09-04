@@ -460,6 +460,10 @@ type Decision struct {
 	ThreatPosture float64 // observational under the default P1 coverage engine
 	Exposure      float64
 	PHold         float64 // authoritative P(attacker still holds the foothold) [0,1]
+	// Provenance is prov(key) — the evidence/exposure discount applied to this asset's coverage
+	// in selection, demand and the standalone fallback alike (M-110). 1 = fully evidenced or
+	// past the proactive floor; provFloor..1 = fresh and evidence-less.
+	Provenance float64
 	// PHoldInputs records every term of the capped noisy-OR that produced PHold
 	// (PHORVEXSEC-189 / M-143) so a reader can see the posterior was not annihilated.
 	PHoldInputs PHoldInputs
@@ -469,7 +473,7 @@ type Decision struct {
 	// EventEvidence is Σ_e w(age_e)·severity_e over events targeting this pod (M-27).
 	EventEvidence float64
 	// Events lists every ingested event this assessment saw with its age and weight.
-	Events             []EventEvidence
+	Events []EventEvidence
 	BlastRadius        float64
 	SLOHeadroom        float64
 	Phase              WorkloadPhase
