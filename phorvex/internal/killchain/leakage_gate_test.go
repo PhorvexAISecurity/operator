@@ -97,15 +97,12 @@ func TestLeakageGate_AllocationCarriesNoWeight(t *testing.T) {
 //
 //	PRE-FIX:  arm (1) fires on residency alone → model-theft (0.9). The inflation masked the
 //	          arm ordering entirely.
-//	POST-FIX: arm (1) is dark (SM unmeasured); arm (2) side-channel (0.15) is checked BEFORE
-//	          arm (3) prompt-inject-persist and Assess overwrites the event stage with a bare
-//	          `=` (hazard.go:291-293) → gpu-side-channel, BELOW the event-implied stage.
-//
-// This is M-25's override surface, unchanged in kind, direction now deflation instead of
-// inflation. Declared in 01-proposal §4 / 03-decision; the re-ordering is M-25's fix, not
-// T1-A's (one issue per cycle). This test pins the declared post-fix behavior so that when M-25
-// lands, its diff flips exactly this assertion and nothing else here.
-func TestLeakageGate_LivePersistEventOnTwoModelFleet_DeclaredDowngrade(t *testing.T) {
+//	PRE-M25:  arm (2) side-channel (0.15) is checked before arm (3) and Assess overwrote the event
+//	          stage with a bare `=` → gpu-side-channel, BELOW the event-implied persist stage.
+//	POST-M25: the AI stage is merged by max-consequence, so a live persist event (0.6) is a FLOOR
+//	          the gpu-side-channel topology stage (0.15) cannot lower → persist. (M-25 landed; this
+//	          assertion was authored during T1-A to flip exactly here, and nothing else.)
+func TestLeakageGate_LivePersistEventOnTwoModelFleet_NoDowngrade(t *testing.T) {
 	m := NewModel()
 	v := gpuView(0, 0.9931, "") // bus-084 physics, on a 2-model / 2-namespace topology
 	v.Events = []model.SecurityEventInfo{{Type: v1beta1.TypePanic, ThreatLevel: "high", TargetsPod: true}}
@@ -113,9 +110,9 @@ func TestLeakageGate_LivePersistEventOnTwoModelFleet_DeclaredDowngrade(t *testin
 	if a.Stage == StageModelTheft {
 		t.Fatalf("T1-A regression: residency + a live event still reads model-theft (stage=%s)", a.StageName)
 	}
-	if a.Stage != StageGPUSideChannel {
-		t.Fatalf("declared post-fix stage for GPU pod + live persist event on a 2-model fleet is gpu-side-channel "+
-			"(M-25 override, deflation direction); got %s — if this is persist-class, M-25 has landed and this pin must be retired", a.StageName)
+	if a.Stage != StagePersist {
+		t.Fatalf("M-25: a live persist event must NOT be downgraded by gpu topology; merged stage = %s, want persist "+
+			"(event=%s ai=%s rule=%s)", a.StageName, a.EventStageName, a.AIStageName, a.StageMergeRule)
 	}
 	if !a.HasEvidence {
 		t.Fatalf("a live Panic event must keep HasEvidence true regardless of stage")

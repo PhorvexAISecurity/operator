@@ -131,6 +131,11 @@ type Assessment struct {
 	// when no event with a positive aging weight targets this pod. The final Stage is this
 	// merged with the AI classifier (the T1-M025 merge point).
 	EventStageName string
+	// AIStageName is the AI/inference-derived stage before the merge ("" when the AI arm was
+	// silent); StageMergeRule names how Stage was produced from EventStageName + AIStageName
+	// ("max-consequence"). Both are recorded so a diff can attribute the merged stage (M-25).
+	AIStageName    string
+	StageMergeRule string
 	// EventEvidence is Σ_e w(age_e)·severity_e over targeting events (M-27 ruling Q1).
 	EventEvidence float64
 	// Events lists every event the assessment saw with its age and aging weight.
@@ -231,6 +236,17 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 		return StageExploit
 	}
 	return StageRecon
+}
+
+// maxByConsequence returns the higher-consequence of two stages, ties keeping a (the
+// event-incorporating current stage). Rank is the EXISTING consequence() ordinal — no new table
+// is invented (both the event and AI chains are the same Stage enum). This makes the
+// detector-derived stage a floor physics can raise but never lower (M-25 / P-BELIEF / P-ORDER).
+func maxByConsequence(a, b Stage) Stage {
+	if consequence(b) > consequence(a) {
+		return b
+	}
+	return a
 }
 
 // aiStageFromView classifies the AI/inference kill-chain stage from the pod's AI
@@ -351,9 +367,15 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	// --- AI/inference stage classification (P-CONTEXT). Takes precedence over the
 	// generic stage when an AI signature matches; honest-absent for non-AI workloads. ---
 	aiClassified := false
+	aiStageName := ""
 	if ai, ok := aiStageFromView(view); ok {
-		stage = ai
+		// M-25: the AI/topology chain may RAISE the stage, never lower it. A detector-derived
+		// (event) stage is a floor (P-BELIEF); the merge is max-consequence over the shared Stage
+		// ordinal, symmetric with the eventStage merge just above (:347). This is the merge ONLY —
+		// arm (1) still fires on physics (the M-26 evidence gate is a separate ticket).
+		stage = maxByConsequence(stage, ai)
 		aiClassified = true
+		aiStageName = ai.String()
 	}
 
 	// --- predictive belief horizon: hazard of imminent next-stage transition ---
@@ -440,6 +462,8 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		Stage:          stage,
 		StageName:      stage.String(),
 		EventStageName: eventStageName,
+		AIStageName:    aiStageName,
+		StageMergeRule: "max-consequence",
 		EventEvidence:  evidence,
 		Events:         eventRecords,
 		NextStage:      next,

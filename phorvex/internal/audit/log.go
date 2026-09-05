@@ -57,6 +57,8 @@ type Record struct {
 	// M-27 per-asset event evidence: which events were seen, how old, what weight they
 	// carried, the weighted evidence sum and the evidence-following event stage.
 	StageEvent         string                `json:"stageEvent,omitempty"`
+	StageAI            string                `json:"stageAI,omitempty"`
+	StageMergeRule     string                `json:"stageMergeRule,omitempty"`
 	EventEvidence      float64               `json:"eventEvidence,omitempty"`
 	Events             []model.EventEvidence `json:"events,omitempty"`
 	AssetValue         float64               `json:"assetValue"`
@@ -239,6 +241,8 @@ func ToRecord(d model.Decision) Record {
 		Provenance:            round4(d.Provenance),
 		PHoldInputs:           pHoldInputsRecord(d.PHoldInputs),
 		StageEvent:            d.StageEvent,
+		StageAI:               d.StageAI,
+		StageMergeRule:        d.StageMergeRule,
 		EventEvidence:         round4(d.EventEvidence),
 		Events:                roundEvents(d.Events),
 		Lambda:                round4(d.Lambda),
