@@ -930,6 +930,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name())
 		m.Clock.RetainTenant(pol.Tenant, keep)
+		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+			ce.RetainStageClock(pol.Tenant, keep)
+		}
 		m.mu.Lock()
 		if cur := m.policies[e.key.String()]; cur != nil {
 			cur.lastTick = snap.Now
@@ -1019,6 +1022,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	metrics.PublishTick(pol.Tenant, pol.PolicyName, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
 	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode, killEngaged)
 	m.Clock.RetainTenant(pol.Tenant, keep)
+	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+		ce.RetainStageClock(pol.Tenant, keep)
+	}
 	m.updateStatus(ctx, e, len(views), selected, actuated, killEngaged, snap.Now, actionsSupport)
 
 	m.mu.Lock()
@@ -1244,6 +1250,8 @@ func buildPolicy(e *policyEntry) model.Policy {
 		TickInterval:                 s.EffectiveTickInterval(),
 		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
 		ProactiveFloor:               s.EffectiveProactiveFloor(),
+		EventAgeHorizon:              s.EffectiveProactiveFloor(), // T1-B: τ_ev initialised = floor (inherited)
+		ExposurePressureScale:        s.EffectiveProactiveFloor(), // T1-B: T_exp initialised = floor (inherited)
 		MinAvailableReplicas:         s.EffectiveMinAvailableReplicas(),
 		P99Ms:                        s.SLO.P99Ms,
 		MinTokensPerSec:              s.SLO.MinTokensPerSec,

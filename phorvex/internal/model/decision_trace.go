@@ -83,6 +83,17 @@ type DecisionActionStatusV3 struct {
 	Scored        bool   `json:"scored"`
 }
 
+// DecisionClocksV3 are T1-B's separated belief clocks (all seconds). Equal on a
+// non-transitioning pod with all horizons = ProactiveFloor (byte-identical era).
+type DecisionClocksV3 struct {
+	PodAgeSec                float64       `json:"podAgeSeconds"`
+	SinceIdentityChangeSec   float64       `json:"sinceIdentityChangeSeconds"`
+	InStageSec               float64       `json:"inStageSeconds"`
+	SinceEvidence            OptionalFloat `json:"sinceEvidenceSeconds"`
+	EventAgeHorizonSec       float64       `json:"eventAgeHorizonSeconds"`
+	ExposurePressureScaleSec float64       `json:"exposurePressureScaleSeconds"`
+}
+
 // OptionalFloat distinguishes an observed zero from an unavailable measurement.
 type OptionalFloat struct {
 	Present bool    `json:"present"`
@@ -151,6 +162,9 @@ type DecisionModelInputsV2 struct {
 	CostCalibratorTenant string  `json:"costCalibratorTenant,omitempty"`
 	BlindCostSource      string  `json:"blindCostSource,omitempty"`
 	AntiOverRotateSec    float64 `json:"antiOverRotationWindowSeconds"`
+	// Clocks (T1-B): the separated CLOCK->BELIEF time inputs, so a reader can see which clock
+	// fed the dwell Weibull vs the pHold pressure. Additive under v3; no schema bump.
+	Clocks DecisionClocksV3 `json:"clocks"`
 	// T0-C: the three horizon/headroom inputs the envelope already carried (log.go)
 	// lifted into the trace with presence. ProjectedNextStageSec is present iff a
 	// next stage was projected (NextStage != "").
@@ -389,6 +403,7 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out.Inputs.StageUrgency = cleanOptional(out.Inputs.StageUrgency)
 	out.Inputs.ThreatPosture = cleanOptional(out.Inputs.ThreatPosture)
 	out.Inputs.ExposureSeconds = cleanOptional(out.Inputs.ExposureSeconds)
+	out.Inputs.Clocks.SinceEvidence = cleanOptional(out.Inputs.Clocks.SinceEvidence)
 	out.Inputs.NextStage = redactTraceString(out.Inputs.NextStage)
 	out.Inputs.SLOHeadroom = cleanOptional(out.Inputs.SLOHeadroom)
 	out.Inputs.ProjectedNextStageSec = cleanOptional(out.Inputs.ProjectedNextStageSec)

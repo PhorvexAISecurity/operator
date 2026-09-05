@@ -7,6 +7,7 @@ package ctxprov
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
@@ -135,7 +136,7 @@ func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextS
 		// proactive floor (T1-B initialization; value INSUFFICIENT EVIDENCE, M-29).
 		decay := 0.0
 		if !e.TimestampMissing {
-			decay = model.EventAgeWeight(e.Age, pol.ProactiveFloor)
+			decay = model.EventAgeWeight(e.Age, eventAgeHorizonCtx(pol)) // T1-B: dedicated τ_ev (init = floor)
 		}
 		w := sev * decay
 		if !e.TargetsPod {
@@ -184,3 +185,12 @@ func clampC(x, lo, hi float64) float64 {
 }
 
 func init() { Registry.Register(sensed{}) }
+
+// eventAgeHorizonCtx mirrors killchain.eventAgeHorizon: τ_ev is its own T1-B field, initialised
+// equal to ProactiveFloor; fall back to the floor when unset so an unbuilt policy is identical.
+func eventAgeHorizonCtx(pol model.Policy) time.Duration {
+	if pol.EventAgeHorizon > 0 {
+		return pol.EventAgeHorizon
+	}
+	return pol.ProactiveFloor
+}
