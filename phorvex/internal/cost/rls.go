@@ -27,15 +27,11 @@ const featureDim = 6
 func Features(view *model.WorkloadView) [featureDim]float64 {
 	var f [featureDim]float64
 	f[0] = 1 // bias
-	switch view.Phase {
-	case model.PhaseColdStarting:
-		f[1] = 1
-	case model.PhaseWarm:
-		f[2] = 1
-	case model.PhaseIdle:
-		f[3] = 1
-	case model.PhaseDraining, model.PhaseUnknown:
-		// no phase feature: draining/unknown carry no learned-load prior (unchanged; A-10 exhaustiveness)
+	// One lookup into the single spec (phaseFlowEncoding, T1-D). featureBit -1 means the
+	// phase carries no learned-load prior (bias-only) — draining/unknown, and any
+	// out-of-vocabulary phase via the explicit Unknown fallback.
+	if bit := phaseEncoding(view.Phase).featureBit; bit >= 0 {
+		f[bit] = 1
 	}
 	if view.Pod.HasGPU {
 		f[4] = 1
@@ -48,8 +44,24 @@ func Features(view *model.WorkloadView) [featureDim]float64 {
 
 // priorTheta reproduces the P0 phase-based flow prior so nil-data == today's behavior:
 // bias 0.15 (idle floor), +cold 0.85, +warm 0.55, idle 0, +gpu 0.45, +load 0.20.
+//
+// Assembled from phaseFlowEncoding (the single spec, T1-D) so the phase weights cannot
+// drift from Features' bit assignment; the three non-phase weights stay named constants.
+// Result is byte-identical to the former literal {0.15, 0.85, 0.55, 0.0, 0.45, 0.20}.
 func priorTheta() [featureDim]float64 {
-	return [featureDim]float64{0.15, 0.85, 0.55, 0.0, 0.45, 0.20}
+	var theta [featureDim]float64
+	theta[0] = biasPrior
+	for _, p := range model.AllWorkloadPhases {
+		// Fail-closed: an absent row must not zero-clobber theta[0] via a zero-value
+		// featureBit 0. The completeness test (b) makes an absent row a build failure,
+		// so `ok` is defence in depth, not a reachable path.
+		if enc, ok := phaseFlowEncoding[p]; ok && enc.featureBit >= 0 {
+			theta[enc.featureBit] = enc.priorWeight
+		}
+	}
+	theta[4] = gpuPrior
+	theta[5] = loadPrior
+	return theta
 }
 
 // maxThetaStep bounds how far a SINGLE observation may move any one weight of theta.
