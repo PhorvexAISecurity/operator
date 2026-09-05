@@ -496,6 +496,10 @@ type Decision struct {
 	// StageEvent is the evidence-following event-derived stage (M-27): the max-rank stage
 	// among events whose aging weight is > 0; "" when no live event sets a stage.
 	StageEvent string
+	// StageAI is the AI/inference-derived stage before the merge ("" when silent); StageMergeRule
+	// names the merge ("max-consequence") so the final Stage is attributable to event+ai (M-25).
+	StageAI        string
+	StageMergeRule string
 	// EventEvidence is Σ_e w(age_e)·severity_e over events targeting this pod (M-27).
 	EventEvidence float64
 	// Events lists every ingested event this assessment saw with its age and weight.

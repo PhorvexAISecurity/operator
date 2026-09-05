@@ -551,6 +551,8 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			Provenance:            prov(key),
 			PHoldInputs:           ac.assess.PHoldInputs,
 			StageEvent:            ac.assess.EventStageName,
+			StageAI:               ac.assess.AIStageName,
+			StageMergeRule:        ac.assess.StageMergeRule,
 			EventEvidence:         ac.assess.EventEvidence,
 			Events:                ac.assess.Events,
 			Lambda:                lambda,
