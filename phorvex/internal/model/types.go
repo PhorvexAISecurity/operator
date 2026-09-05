@@ -186,22 +186,37 @@ var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding, VarNet
 // Telemetry is the per-pod live signal vector ingested from Prometheus. Present is
 // false when no metrics backend answered (Phorvex then degrades to K8s-only signals
 // — NFR3 restart-safe / honest-absent, never fabricated numbers).
+// Telemetry is the per-pod observed telemetry (T1-C, SENSING->ECONOMICS). Every signal
+// carries its own observation State (Absent|Present|Stale|Error) so no consumer can read
+// an absent app-level signal as a measured zero (property P-SENSING; fixes M-142/M-113/M-130).
+// The old flat float64 fields + `Present bool` + `PresentSignals map[string]bool` are gone:
+// the per-Signal State subsumes both bools.
 type Telemetry struct {
-	Present bool
-	// PresentSignals is populated by sources that can distinguish a measured zero
-	// from a query that returned no series. A nil map preserves legacy source
-	// compatibility while the decision trace reports those per-signal values absent.
-	PresentSignals map[string]bool
-	ReqRate        float64
-	LatencyMs      float64
-	P99Ms          float64
-	QueueDepth     float64
-	ConnCount      float64
-	BytesIn        float64
-	BytesOut       float64
-	GPUUtil        float64 // 0..1
-	SyscallRate    float64
-	TokensPerSec   float64
+	// App-level signals — presence of ANY decides Idle-vs-Warm (see AppLevelPresent).
+	// Their absence must NEVER route a pod to Idle (M-142).
+	ReqRate      Signal
+	P99Ms        Signal
+	LatencyMs    Signal // legacy mirror of P99Ms (same source)
+	QueueDepth   Signal
+	GPUUtil      Signal // 0..1
+	TokensPerSec Signal
+	// cAdvisor / infra signals — universal (every pod has them); their presence NEVER
+	// makes a pod Idle. Reading one is fine; letting one imply app activity is the M-142 bug.
+	ConnCount   Signal
+	BytesIn     Signal
+	BytesOut    Signal
+	SyscallRate Signal
+	// Raw cAdvisor deltas for T1-M142's phase boundary — logged into the record ONLY.
+	// NO consumer reads them in T1-C; the delta thresholds are deliberately unchosen here.
+	ConnDeltaPerSec  float64
+	BytesDeltaPerSec float64
+}
+
+// AppLevelPresent reports whether any application-level signal is a usable measurement.
+// PhaseOf keys on this (not any-signal presence) so a pod exporting only universal cAdvisor
+// metrics is Warm-by-absence, never Idle-by-absence — the M-142 crux fix.
+func (t Telemetry) AppLevelPresent() bool {
+	return t.ReqRate.Usable() || t.GPUUtil.Usable() || t.QueueDepth.Usable() || t.TokensPerSec.Usable()
 }
 
 // Pod is the K8s-observed state of one protected pod.
@@ -375,6 +390,7 @@ type WorkloadView struct {
 	Pod                Pod
 	Telemetry          Telemetry
 	Phase              WorkloadPhase
+	PhaseReason        string  // T1-C: idle-measured|warm-no-app-signal|busy-measured|coldstart|draining|unknown
 	BlastRadius        float64 // graph score (reach into high-value neighbors), normalized [0,1]
 	NeighborCount      int
 	Neighbors          []NeighborRef // reachable neighbors with their values (P1 lateral facts)
@@ -397,6 +413,10 @@ type ContextSignals struct {
 	ThreatPosture float64 // [0,1], recent event severity for this pod + neighbors
 	Exposure      float64 // [0,1], normalized time-since-last-move pressure
 	SLOHeadroom   float64 // [0,1], 1 = full latency/availability headroom
+	// SLOHeadroomKnown is false when the latency signal was absent/stale/errored: SLOHeadroom
+	// then stays fully permissive (never blocks a move, P-NO-FREEZE) but the gate is recorded
+	// as skipped and counted rather than passing as a silent full-headroom 1.0 (B-3 fix).
+	SLOHeadroomKnown bool
 }
 
 // Policy is the RESOLVED (effective) per-tenant configuration snapshot the

@@ -56,7 +56,7 @@ func TestComponentsExactlyRecomposeECost(t *testing.T) {
 	view := &model.WorkloadView{
 		Pod:       model.Pod{HasGPU: true},
 		Phase:     model.PhaseWarm,
-		Telemetry: model.Telemetry{Present: true, ReqRate: 100, ConnCount: 40},
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(100, "test"), ConnCount: model.PresentSignal(40, "test")},
 	}
 	actions := append([]model.Action{model.ActionNoop}, model.MutatingActions...)
 	for _, action := range actions {

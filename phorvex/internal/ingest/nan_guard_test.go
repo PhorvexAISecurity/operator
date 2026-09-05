@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // nan_guard_test.go — the INGEST half of the NaN-poisoning defence (PHORVEXSEC-46).
@@ -47,13 +49,15 @@ func TestInstantQueryDropsNonFiniteSamples(t *testing.T) {
 			defer srv.Close()
 
 			p := NewPromHTTP(srv.URL, DefaultPromQueries())
-			got, err := p.instantQuery(context.Background(), "whatever")
+			got, bad, err := p.instantQuery(context.Background(), "whatever")
 			if err != nil {
 				t.Fatalf("query: %v", err)
 			}
 			if v, ok := got["api-0"]; ok {
-				t.Fatalf("a %q sample must be DROPPED, not ingested (got %v — it would poison "+
-					"C_flow/ECost and make the optimizer stop selecting)", raw, v)
+				t.Fatalf("a %q sample must NOT be usable (got %v)", raw, v)
+			}
+			if _, ok := bad["api-0"]; !ok {
+				t.Fatalf("a %q sample must be tracked non-finite (State=Error), not silently gone", raw)
 			}
 		})
 	}
@@ -65,7 +69,7 @@ func TestInstantQueryKeepsFiniteSamples(t *testing.T) {
 	defer srv.Close()
 
 	p := NewPromHTTP(srv.URL, DefaultPromQueries())
-	got, err := p.instantQuery(context.Background(), "whatever")
+	got, _, err := p.instantQuery(context.Background(), "whatever")
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
@@ -86,9 +90,11 @@ func TestInstantQueryKeepsFiniteSamples(t *testing.T) {
 // range body never ran — the test passed without asserting anything, which is precisely the failure
 // mode this file was written to catch. It now asserts BOTH halves explicitly.
 func TestPodMetricsNeverYieldsNonFiniteTelemetry(t *testing.T) {
-	// (a) Fully stale exporter: every series NaN. The honest outcome is that the pod is ABSENT,
-	//     not present-with-zeroes — an absent metric is recoverable, a zeroed one is a lie.
-	t.Run("all NaN => the pod is dropped entirely", func(t *testing.T) {
+	// (a) Fully stale exporter: every series NaN. Under T1-C typing the pod is PRESENT with every
+	//     signal State=Error — deliberately distinguishable from Absent (P-SENSING/M-113) and never
+	//     a usable measured value. (Pre-T1-C this dropped the pod; the typed model keeps it
+	//     visible-but-unusable so downstream can tell a bad source from no series at all.)
+	t.Run("all NaN => pod present, every signal Error and unusable", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, vectorBody("api-0", "NaN"))
@@ -99,8 +105,17 @@ func TestPodMetricsNeverYieldsNonFiniteTelemetry(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PodMetrics: %v", err)
 		}
-		if len(tele) != 0 {
-			t.Fatalf("every series was NaN, so nothing should have been ingested; got %d pods: %v", len(tele), tele)
+		tl, ok := tele["api-0"]
+		if !ok {
+			t.Fatal("all-NaN pod must be PRESENT with Error signals, not dropped (M-113: Error != absent)")
+		}
+		if tl.AppLevelPresent() {
+			t.Error("no app-level signal may be usable when every series is NaN")
+		}
+		for name, sig := range allSignals(tl) {
+			if sig.Usable() {
+				t.Errorf("signal %s: a NaN sample must be State=Error/unusable, got usable %v", name, sig.Value)
+			}
 		}
 	})
 
@@ -129,19 +144,18 @@ func TestPodMetricsNeverYieldsNonFiniteTelemetry(t *testing.T) {
 				"check below never runs and this test asserts nothing")
 		}
 		for pod, tl := range tele {
-			if !tl.Present {
-				t.Errorf("pod %s: ingested but Present=false", pod)
-			}
-			for name, v := range map[string]float64{
-				"ReqRate": tl.ReqRate, "LatencyMs": tl.LatencyMs, "P99Ms": tl.P99Ms,
-				"QueueDepth": tl.QueueDepth, "ConnCount": tl.ConnCount, "BytesIn": tl.BytesIn,
-				"BytesOut": tl.BytesOut, "GPUUtil": tl.GPUUtil, "SyscallRate": tl.SyscallRate,
-				"TokensPerSec": tl.TokensPerSec,
-			} {
-				if math.IsNaN(v) || math.IsInf(v, 0) {
-					t.Errorf("pod %s: Telemetry.%s is non-finite (%v) — it would poison ECost and "+
-						"silently stop the optimizer selecting", pod, name, v)
+			usable := false
+			for name, sig := range allSignals(tl) {
+				if sig.Usable() {
+					usable = true
+					if math.IsNaN(sig.Value) || math.IsInf(sig.Value, 0) {
+						t.Errorf("pod %s: Telemetry.%s is Usable but non-finite (%v) — it would poison "+
+							"ECost and silently stop the optimizer selecting", pod, name, sig.Value)
+					}
 				}
+			}
+			if !usable {
+				t.Errorf("pod %s: ingested but no signal usable", pod)
 			}
 		}
 	})
@@ -159,5 +173,15 @@ func TestParseFloatAcceptsNaN(t *testing.T) {
 			t.Fatalf("%q parsed to a finite %v — unexpected", raw, f)
 		}
 		t.Logf("ParseFloat(%q) = %v with err == nil — this is why the ingest guard exists", raw, f)
+	}
+}
+
+// allSignals lists every typed Telemetry signal by name for the finite-ness property checks.
+func allSignals(tl model.Telemetry) map[string]model.Signal {
+	return map[string]model.Signal{
+		"ReqRate": tl.ReqRate, "LatencyMs": tl.LatencyMs, "P99Ms": tl.P99Ms,
+		"QueueDepth": tl.QueueDepth, "ConnCount": tl.ConnCount, "BytesIn": tl.BytesIn,
+		"BytesOut": tl.BytesOut, "GPUUtil": tl.GPUUtil, "SyscallRate": tl.SyscallRate,
+		"TokensPerSec": tl.TokensPerSec,
 	}
 }

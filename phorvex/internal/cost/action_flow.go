@@ -82,8 +82,9 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 		return c.RLS.Predict(Features(view))
 	case flowQuarantine:
 		flow := 0.25
-		if view.Telemetry.Present {
-			flow += 0.15 * sat(view.Telemetry.ConnCount/100.0)
+		// cAdvisor ConnCount is infra-universal; gate on its own usability, not any-signal.
+		if view.Telemetry.ConnCount.Usable() {
+			flow += 0.15 * sat(view.Telemetry.ConnCount.Value/100.0)
 		}
 		return flow
 	case flowCutover:
@@ -104,10 +105,16 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 // connection counts are normalized within their own model family and only shape
 // the unvalidated disruption-loss prior.
 func servingLoadPressure(view *model.WorkloadView) float64 {
-	if view == nil || !view.Telemetry.Present {
+	if view == nil {
 		return 0
 	}
-	req := sat(view.Telemetry.ReqRate / 200.0)
-	conn := sat(view.Telemetry.ConnCount / 100.0)
+	// Per-signal gates: an absent app signal contributes 0 pressure, never a measured zero.
+	req, conn := 0.0, 0.0
+	if view.Telemetry.ReqRate.Usable() {
+		req = sat(view.Telemetry.ReqRate.Value / 200.0)
+	}
+	if view.Telemetry.ConnCount.Usable() {
+		conn = sat(view.Telemetry.ConnCount.Value / 100.0)
+	}
 	return maxf(req, conn)
 }

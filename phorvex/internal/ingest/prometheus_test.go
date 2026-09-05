@@ -108,7 +108,7 @@ func TestPodMetricsParsesDCGMGPUUtilIntoTelemetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	tel := got["gpu-pod"]
-	if !tel.Present || math.Abs(tel.GPUUtil-0.42) > 1e-12 {
+	if !tel.GPUUtil.Usable() || math.Abs(tel.GPUUtil.Value-0.42) > 1e-12 {
 		t.Fatalf("real DCGM GPU utilization was not parsed into Telemetry: %+v", tel)
 	}
 }

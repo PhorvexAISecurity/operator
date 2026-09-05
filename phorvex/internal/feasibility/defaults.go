@@ -66,14 +66,14 @@ type sloHeadroom struct{}
 func (sloHeadroom) Name() string { return "slo-headroom" }
 
 func (sloHeadroom) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
-	if pol.P99Ms <= 0 || !view.Telemetry.Present || view.Telemetry.P99Ms <= 0 {
+	if pol.P99Ms <= 0 || !view.Telemetry.P99Ms.Usable() || view.Telemetry.P99Ms.Value <= 0 {
 		return feasible
 	}
 	// A quarantine FREEZES one pod (cuts capacity) just like a rotate; both stress
 	// the remaining replicas, so both honor the SLO ceiling.
-	if view.Telemetry.P99Ms >= float64(pol.P99Ms) {
+	if view.Telemetry.P99Ms.Value >= float64(pol.P99Ms) {
 		return Verdict{Feasible: false, Reason: fmt.Sprintf(
-			"slo: p99=%.0fms >= ceiling=%dms (no headroom to absorb the move)", view.Telemetry.P99Ms, pol.P99Ms)}
+			"slo: p99=%.0fms >= ceiling=%dms (no headroom to absorb the move)", view.Telemetry.P99Ms.Value, pol.P99Ms)}
 	}
 	return feasible
 }

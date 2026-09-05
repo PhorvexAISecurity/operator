@@ -707,17 +707,15 @@ func (e *CoverageEngine) buildDecisionTrace(
 		TieBreakReason:            "notApplicable",
 	}
 
-	telemetryPresent := func(signal string) bool {
-		return v.Telemetry.PresentSignals != nil && v.Telemetry.PresentSignals[signal]
-	}
 	exposure, exposurePresent := v.ExposureByVariable[model.VarPodIdentity]
 	dispersionPresent := e.Recon != nil && e.Recon.Name() == "ucw-recon"
 	dispersionMult, dispersionOK := recon.DispersionMultiplier(v)
 	trace.Inputs = model.DecisionModelInputsV2{
 		Phase:             string(v.Phase),
-		RequestRate:       traceOptional(telemetryPresent("reqRate"), v.Telemetry.ReqRate),
-		ConnectionCount:   traceOptional(telemetryPresent("connCount"), v.Telemetry.ConnCount),
-		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
+		PhaseReason:       v.PhaseReason,
+		RequestRate:       traceOptional(v.Telemetry.ReqRate.Usable(), v.Telemetry.ReqRate.Value),
+		ConnectionCount:   traceOptional(v.Telemetry.ConnCount.Usable(), v.Telemetry.ConnCount.Value),
+		GPUUtilization:    traceOptional(v.Telemetry.GPUUtil.Usable(), v.Telemetry.GPUUtil.Value),
 		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
 		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
 		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
@@ -761,7 +759,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		// T0-C: lifted from the envelope into the trace with presence.
 		// Present only when headroom was MEASURED: sensed.Context (ctxprov/sensed.go) derives it
 		// from P99 under exactly this predicate and otherwise defaults to 1.0 (full headroom).
-		SLOHeadroom:           traceOptional(pol.P99Ms > 0 && v.Telemetry.Present && v.Telemetry.P99Ms > 0, ac.sig.SLOHeadroom),
+		SLOHeadroom:           traceOptional(pol.P99Ms > 0 && v.Telemetry.P99Ms.Usable() && v.Telemetry.P99Ms.Value > 0, ac.sig.SLOHeadroom),
 		NextStage:             ac.assess.NextStageName,
 		ProjectedNextStageSec: traceOptional(ac.assess.NextStageName != "", ac.assess.ProjectedNextStageSec),
 	}

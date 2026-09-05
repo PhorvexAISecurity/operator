@@ -41,7 +41,7 @@ func highExposureIdlePod(name string, blast float64, stateful bool) *model.Workl
 			MountedSecrets: []string{"creds"}, DesiredReplicas: 3, ReadyReplicas: 3,
 			Ready: true, Stateful: stateful,
 		},
-		Telemetry:   model.Telemetry{Present: true, ReqRate: 0, GPUUtil: 0, P99Ms: 0},
+		Telemetry:   model.Telemetry{ReqRate: model.PresentSignal(0, "test"), GPUUtil: model.PresentSignal(0, "test"), P99Ms: model.PresentSignal(0, "test")},
 		Phase:       model.PhaseIdle,
 		BlastRadius: blast,
 		ExposureByVariable: map[string]time.Duration{

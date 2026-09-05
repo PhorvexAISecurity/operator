@@ -113,6 +113,7 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 		views = append(views, &model.WorkloadView{
 			Pod:                *p,
 			Phase:              ingest.PhaseOf(*p, model.Telemetry{}),
+			PhaseReason:        ingest.PhaseReasonOf(*p, model.Telemetry{}),
 			BlastRadius:        snap.Graph.BlastRadius(p.Namespace, p.Name),
 			NeighborCount:      snap.Graph.NeighborCount(p.Namespace, p.Name),
 			Neighbors:          neighbors,

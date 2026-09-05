@@ -34,12 +34,14 @@ func Features(view *model.WorkloadView) [featureDim]float64 {
 		f[2] = 1
 	case model.PhaseIdle:
 		f[3] = 1
+	case model.PhaseDraining, model.PhaseUnknown:
+		// no phase feature: draining/unknown carry no learned-load prior (unchanged; A-10 exhaustiveness)
 	}
 	if view.Pod.HasGPU {
 		f[4] = 1
 	}
-	if view.Telemetry.Present {
-		f[5] = satRLS(view.Telemetry.ReqRate / 200.0)
+	if view.Telemetry.ReqRate.Usable() {
+		f[5] = satRLS(view.Telemetry.ReqRate.Value / 200.0)
 	}
 	return f
 }

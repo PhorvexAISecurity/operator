@@ -110,7 +110,7 @@ func TestDynamicActionSetChangesWithState(t *testing.T) {
 
 	// 4. SLO-hot pod (p99 at ceiling) => BOTH removed (SLO hard gate).
 	hot := baseView("hot")
-	hot.Telemetry = model.Telemetry{Present: true, P99Ms: 250}
+	hot.Telemetry = model.Telemetry{P99Ms: model.PresentSignal(250, "test")}
 	hotSet := actionsFor(d.Generate([]*model.WorkloadView{hot}, pol), "ns/hot")
 	if len(hotSet) != 0 {
 		t.Errorf("SLO-hot pod must have an EMPTY action set, got %v", hotSet)

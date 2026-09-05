@@ -153,18 +153,24 @@ func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextS
 		exposure = clampC(since.Seconds()/pol.ProactiveFloor.Seconds(), 0, 1)
 	}
 
-	// (5) SLO headroom (1 = full headroom). Derived from p99 vs ceiling when known.
+	// (5) SLO headroom (1 = full headroom), derived from p99 vs ceiling ONLY when the
+	// latency signal is a usable measurement. Absent/stale/errored ⇒ gate SKIPPED: headroom
+	// stays fully permissive (never blocks a move, P-NO-FREEZE) and headroomKnown=false so the
+	// record reports sloGate=skipped and the metric counts it — no silent full-headroom 1.0 (B-3).
 	headroom := 1.0
-	if pol.P99Ms > 0 && view.Telemetry.Present && view.Telemetry.P99Ms > 0 {
-		headroom = clampC(1.0-view.Telemetry.P99Ms/float64(pol.P99Ms), 0, 1)
+	headroomKnown := false
+	if pol.P99Ms > 0 && view.Telemetry.P99Ms.Usable() && view.Telemetry.P99Ms.Value > 0 {
+		headroom = clampC(1.0-view.Telemetry.P99Ms.Value/float64(pol.P99Ms), 0, 1)
+		headroomKnown = true
 	}
 
 	return model.ContextSignals{
-		AssetValue:    asset,
-		Phase:         view.Phase,
-		ThreatPosture: posture,
-		Exposure:      exposure,
-		SLOHeadroom:   headroom,
+		AssetValue:       asset,
+		Phase:            view.Phase,
+		ThreatPosture:    posture,
+		Exposure:         exposure,
+		SLOHeadroom:      headroom,
+		SLOHeadroomKnown: headroomKnown,
 	}
 }
 

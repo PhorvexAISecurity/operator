@@ -451,13 +451,21 @@ func workloadView(pod corev1.Pod, o options, metrics metricSnapshot, ready, desi
 		phase = model.PhaseUnknown
 	}
 	t := model.Telemetry{}
-	if metrics.P99MS.Valid || metrics.TokensPerSecond.Valid || metrics.RequestRate.Valid || metrics.ActiveConnections.Valid || metrics.GPUUtil.Valid {
-		t.Present = true
-		t.P99Ms = metrics.P99MS.Value
-		t.TokensPerSec = metrics.TokensPerSecond.Value
-		t.ReqRate = metrics.RequestRate.Value
-		t.ConnCount = metrics.ActiveConnections.Value
-		t.GPUUtil = metrics.GPUUtil.Value
+	if metrics.P99MS.Valid {
+		t.P99Ms = model.PresentSignal(metrics.P99MS.Value, "benchmark")
+		t.LatencyMs = t.P99Ms
+	}
+	if metrics.TokensPerSecond.Valid {
+		t.TokensPerSec = model.PresentSignal(metrics.TokensPerSecond.Value, "benchmark")
+	}
+	if metrics.RequestRate.Valid {
+		t.ReqRate = model.PresentSignal(metrics.RequestRate.Value, "benchmark")
+	}
+	if metrics.ActiveConnections.Valid {
+		t.ConnCount = model.PresentSignal(metrics.ActiveConnections.Value, "benchmark")
+	}
+	if metrics.GPUUtil.Valid {
+		t.GPUUtil = model.PresentSignal(metrics.GPUUtil.Value, "benchmark")
 	}
 	return &model.WorkloadView{
 		Pod: model.Pod{

@@ -108,6 +108,14 @@ var (
 		Help: "Decision ticks rejected before optimization because the generated action set violated a structural invariant.",
 	}, []string{"tenant", "reason"})
 
+	scrapeFailuresTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_scrape_failures_total",
+		Help: "Telemetry scrape failures by source (a failed scrape is degradation, not a measured zero).",
+	}, []string{"source"})
+	sloGateSkippedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_slo_gate_skipped_total",
+		Help: "SLO gate skipped because latency headroom was not a usable measurement (skip+count, never block).",
+	}, []string{"tenant", "reason"})
 	costNaNUnactionable = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_cost_nan_unactionable_total",
 		Help: "Actions excluded fail-conservative because an action-relevant cost feature was NaN.",
@@ -167,7 +175,20 @@ func init() {
 		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
+		scrapeFailuresTotal, sloGateSkippedTotal,
 	)
+}
+
+// RecordScrapeFailure counts a telemetry-source scrape failure by source (M-113/M-130): a failed
+// scrape is a measured degradation, not a silent measured zero.
+func RecordScrapeFailure(source string) {
+	scrapeFailuresTotal.WithLabelValues(source).Inc()
+}
+
+// RecordSLOGateSkipped counts an SLO gate skipped because latency headroom was not a usable
+// measurement (T1-C P-NO-FREEZE): absence skips-and-counts, never blocks. reason = absent|stale|error.
+func RecordSLOGateSkipped(tenant, reason string) {
+	sloGateSkippedTotal.WithLabelValues(tenant, reason).Inc()
 }
 
 // SetKillSwitch reflects the global kill-switch state.

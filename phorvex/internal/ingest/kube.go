@@ -608,22 +608,50 @@ func projectNetRule(peers []networkingv1.NetworkPolicyPeer, allowAll bool) graph
 
 // PhaseOf derives the cost-relevant workload phase from pod status + telemetry.
 func PhaseOf(p model.Pod, t model.Telemetry) model.WorkloadPhase {
+	ph, _ := classifyPhase(p, t)
+	return ph
+}
+
+// Phase reason strings recorded alongside the phase (T1-C: phaseReason). The Warm enum
+// value covers both busy-measured and warm-no-app-signal; the reason disambiguates them.
+const (
+	PhaseReasonColdStart    = "coldstart"
+	PhaseReasonUnknown      = "unknown"
+	PhaseReasonDraining     = "draining"
+	PhaseReasonIdleMeasured = "idle-measured"
+	PhaseReasonWarmNoApp    = "warm-no-app-signal"
+	PhaseReasonBusyMeasured = "busy-measured"
+)
+
+// PhaseReasonOf returns the auditable reason for PhaseOf's verdict on the same inputs, so
+// the record distinguishes idle-measured from warm-no-app-signal from busy-measured (A-10).
+func PhaseReasonOf(p model.Pod, t model.Telemetry) string {
+	_, reason := classifyPhase(p, t)
+	return reason
+}
+
+// classifyPhase is the SINGLE decision tree behind PhaseOf and PhaseReasonOf, so the phase and
+// its recorded reason can never drift (K3 P3 F3). The Warm enum value covers both busy-measured
+// and warm-no-app-signal; the reason disambiguates them.
+func classifyPhase(p model.Pod, t model.Telemetry) (model.WorkloadPhase, string) {
 	if p.Phase == string(corev1.PodSucceeded) || p.Phase == string(corev1.PodFailed) {
-		return model.PhaseDraining
+		return model.PhaseDraining, PhaseReasonDraining
 	}
 	if !p.Ready {
 		// Young + not ready => still warming; older + not ready => unknown/unhealthy.
 		if p.Age < 2*time.Minute {
-			return model.PhaseColdStarting
+			return model.PhaseColdStarting, PhaseReasonColdStart
 		}
-		return model.PhaseUnknown
+		return model.PhaseUnknown, PhaseReasonUnknown
 	}
-	if t.Present {
-		if t.ReqRate <= 0.001 && t.GPUUtil <= 0.01 {
-			return model.PhaseIdle
-		}
-		return model.PhaseWarm
+	if !t.AppLevelPresent() {
+		// Ready, no APP-LEVEL signal: assume warm (rotating costs the warm-load). Keyed on
+		// AppLevelPresent (not any-signal), so a pod exporting only universal cAdvisor metrics
+		// stays Warm for its whole life instead of collapsing to Idle — the M-142 fix.
+		return model.PhaseWarm, PhaseReasonWarmNoApp
 	}
-	// Ready, no telemetry: assume warm (conservative — rotating costs the warm-load).
-	return model.PhaseWarm
+	if t.ReqRate.Usable() && t.ReqRate.Value <= 0.001 && (!t.GPUUtil.Usable() || t.GPUUtil.Value <= 0.01) {
+		return model.PhaseIdle, PhaseReasonIdleMeasured
+	}
+	return model.PhaseWarm, PhaseReasonBusyMeasured
 }

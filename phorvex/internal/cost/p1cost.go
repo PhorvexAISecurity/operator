@@ -258,23 +258,25 @@ func (c *P1Cost) nanFeature(view *model.WorkloadView, move model.Move, pol model
 	if c.RLS != nil && c.RLS.hasNaNParameter() && flowFamilyForAction(move.Action) == flowRespawn {
 		return "rls.parameter"
 	}
-	if view == nil || !view.Telemetry.Present {
+	if view == nil {
 		return ""
 	}
+	// A non-finite telemetry sample is typed State==Error at ingest (M-111 ingest-side);
+	// an absent signal is not unactionable, it just takes its fallback.
 	switch flowFamilyForAction(move.Action) {
 	case flowRespawn:
-		if math.IsNaN(view.Telemetry.ReqRate) {
+		if view.Telemetry.ReqRate.State == model.Error {
 			return "telemetry.reqRate"
 		}
 	case flowQuarantine:
-		if math.IsNaN(view.Telemetry.ConnCount) {
+		if view.Telemetry.ConnCount.State == model.Error {
 			return "telemetry.connCount"
 		}
 	case flowCutover, flowServingState:
-		if math.IsNaN(view.Telemetry.ReqRate) {
+		if view.Telemetry.ReqRate.State == model.Error {
 			return "telemetry.reqRate"
 		}
-		if math.IsNaN(view.Telemetry.ConnCount) {
+		if view.Telemetry.ConnCount.State == model.Error {
 			return "telemetry.connCount"
 		}
 	}

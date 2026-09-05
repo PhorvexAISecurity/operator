@@ -18,7 +18,7 @@ type tokensFloor struct{}
 func (tokensFloor) Name() string { return "tokens-floor" }
 
 func (tokensFloor) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
-	if pol.MinTokensPerSec <= 0 || !view.Telemetry.Present {
+	if pol.MinTokensPerSec <= 0 || !view.Telemetry.TokensPerSec.Usable() {
 		return feasible // unconstrained / honest-absent
 	}
 	if move.Action != model.ActionRotate {
@@ -27,7 +27,7 @@ func (tokensFloor) Check(view *model.WorkloadView, move model.Move, pol model.Po
 	// Only the SOLE server lacks headroom to absorb a warm-load excursion; with >1
 	// ready replica the availability floor governs instead.
 	soleServer := view.Pod.DesiredReplicas <= 1 && view.Pod.ReadyReplicas <= 1
-	if soleServer && view.Telemetry.TokensPerSec > 0 && view.Telemetry.TokensPerSec < float64(pol.MinTokensPerSec) {
+	if soleServer && view.Telemetry.TokensPerSec.Value > 0 && view.Telemetry.TokensPerSec.Value < float64(pol.MinTokensPerSec) {
 		return Verdict{Feasible: false, Reason: "tokens/sec below floor on the sole server: rotate would breach the inference SLO"}
 	}
 	return feasible

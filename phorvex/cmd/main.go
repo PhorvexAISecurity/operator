@@ -540,15 +540,15 @@ func runScan(namespace, promURL, kubeContext string) error {
 				any := false
 				for _, n := range names {
 					t, ok := tel[n]
-					if !ok || !t.Present {
+					if !ok {
 						continue
 					}
 					any = true
 					fmt.Printf("  %-34s reqRate=%.2f p99Ms=%.1f gpuUtil=%.2f tokensPerSec=%.1f connCount=%.0f\n",
-						namespace+"/"+n, t.ReqRate, t.P99Ms, t.GPUUtil, t.TokensPerSec, t.ConnCount)
+						namespace+"/"+n, t.ReqRate.Value, t.P99Ms.Value, t.GPUUtil.Value, t.TokensPerSec.Value, t.ConnCount.Value)
 				}
 				if !any {
-					fmt.Printf("  (no pod reported telemetry — honest-absent; Present=false, never fabricated)\n")
+					fmt.Printf("  (no pod reported telemetry — honest-absent; per-signal State=Absent, never fabricated)\n")
 				}
 			}
 		}

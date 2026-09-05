@@ -52,8 +52,8 @@ func flowCost(view *model.WorkloadView, move model.Move) float64 {
 	// the pod's live connections — a modest, phase-independent flow hit.
 	if move.Action == model.ActionQuarantine {
 		base := 0.25
-		if view.Telemetry.Present && view.Telemetry.ConnCount > 0 {
-			base += 0.15 * sat(view.Telemetry.ConnCount/100.0)
+		if view.Telemetry.ConnCount.Usable() && view.Telemetry.ConnCount.Value > 0 {
+			base += 0.15 * sat(view.Telemetry.ConnCount.Value/100.0)
 		}
 		return clamp01c(base)
 	}
@@ -69,6 +69,8 @@ func flowCost(view *model.WorkloadView, move model.Move) float64 {
 		phase = 0.15 // idle: cheap to rotate (the moment to strike)
 	case model.PhaseDraining:
 		phase = 0.2
+	case model.PhaseUnknown:
+		phase = 0.5 // explicit = the initialized neutral prior (no value change; A-10 exhaustiveness)
 	}
 
 	// GPU/LLM pods carry a large warm-load tax on rotate (60–400s reload, KV-cache
@@ -76,15 +78,15 @@ func flowCost(view *model.WorkloadView, move model.Move) float64 {
 	gpu := 0.0
 	if view.Pod.HasGPU {
 		gpu = 0.6
-		if view.Telemetry.Present && view.Telemetry.GPUUtil > 0 {
-			gpu = 0.4 + 0.5*sat(view.Telemetry.GPUUtil) // busier GPU => costlier to drop
+		if view.Telemetry.GPUUtil.Usable() && view.Telemetry.GPUUtil.Value > 0 {
+			gpu = 0.4 + 0.5*sat(view.Telemetry.GPUUtil.Value) // busier GPU => costlier to drop
 		}
 	}
 
 	// Live request load adds dropped-connection cost.
 	loadHit := 0.0
-	if view.Telemetry.Present {
-		loadHit = 0.2 * sat(view.Telemetry.ReqRate/200.0)
+	if view.Telemetry.ReqRate.Usable() {
+		loadHit = 0.2 * sat(view.Telemetry.ReqRate.Value/200.0)
 	}
 
 	return clamp01c(0.55*phase + 0.35*gpu + loadHit)

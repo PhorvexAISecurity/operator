@@ -57,9 +57,9 @@ func traceByAsset(t *testing.T, decisions []model.Decision) map[string]string {
 
 func TestDecisionTraceCandidateCompletenessSelectionAndMissingTelemetry(t *testing.T) {
 	view := covView("trace", true, 2*time.Hour, false)
-	// A bundle-level answer without per-query provenance must not turn an
-	// unobserved request rate into a measured zero in the trace.
-	view.Telemetry = model.Telemetry{Present: true, ReqRate: 0}
+	// An unobserved request rate must not become a measured zero in the trace: with the
+	// signal Absent (no State==Present), the trace reports it absent, not a measured 0.
+	view.Telemetry = model.Telemetry{}
 	decisions := fixedTraceEngine().Decide([]*model.WorkloadView{view}, decisionTracePolicy(1, true))
 	if len(decisions) != 1 || decisions[0].Trace == nil {
 		t.Fatalf("trace missing: %+v", decisions)
@@ -90,7 +90,7 @@ func TestDecisionTraceCandidateCompletenessSelectionAndMissingTelemetry(t *testi
 		t.Fatalf("selected candidate count = %d", selected)
 	}
 
-	view.Telemetry.PresentSignals = map[string]bool{"reqRate": true}
+	view.Telemetry.ReqRate = model.PresentSignal(0, "test")
 	view.Physics.ImageRarity, view.Physics.ImageRarityPresent = 1, true
 	measured := fixedTraceEngine().Decide([]*model.WorkloadView{view}, decisionTracePolicy(1, true))[0].Trace
 	if !measured.Inputs.RequestRate.Present || measured.Inputs.RequestRate.Value != 0 {

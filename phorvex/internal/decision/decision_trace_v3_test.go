@@ -206,7 +206,7 @@ func TestDecisionTraceV3GPUUnprimedRotateCarriesEnvelopeTerms(t *testing.T) {
 // (View-side NaN: rotate reads reqRate, quarantine reads connCount — p1cost.go:265-279.)
 func TestDecisionTraceV3NaNExclusionKeepsDataQualityDistinct(t *testing.T) {
 	view := covView("v3-nan", true, 2*time.Hour, false)
-	view.Telemetry = model.Telemetry{Present: true, ReqRate: math.NaN(), ConnCount: math.NaN()}
+	view.Telemetry = model.Telemetry{ReqRate: model.Signal{Value: math.NaN(), State: model.Error}, ConnCount: model.Signal{Value: math.NaN(), State: model.Error}}
 	pol := decisionTracePolicy(1, true)
 	trace := fixedTraceEngine().Decide([]*model.WorkloadView{view}, pol)[0].Trace
 	if trace == nil {
