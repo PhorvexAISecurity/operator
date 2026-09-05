@@ -9,6 +9,8 @@ import (
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // NativeActuator is Phorvex's OWN hands (NFR5: "standalone actuation behind an
@@ -39,6 +41,19 @@ type NativeActuator struct {
 
 // NewNativeActuator constructs the native actuator over a controller-runtime client.
 func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator{Client: c} }
+
+// SupportsAction answers only the fixtures the ACTUATOR PACKAGE itself knows — the
+// per-target CONFIG predicates (MIG tuple, guardrail variants, serving endpoint, route
+// Service, warm-shadow pool) are computed by the capability layer from the model's typed
+// witnesses, so they are not re-derived here. The one thing only this package knows is
+// whether the node-exec TRANSPORT is wired: mig-rebind fail-closes without it, yet the
+// old status reported it supported (M-79). This makes that absence visible before scoring.
+func (n *NativeActuator) SupportsAction(_ context.Context, a model.Action, _ Target) (bool, string) {
+	if a == model.ActionMIGRebind && !NodeExecWired() {
+		return false, "transport-unwired"
+	}
+	return true, ""
+}
 
 // Name implements Actuator.
 func (*NativeActuator) Name() string { return "native" }

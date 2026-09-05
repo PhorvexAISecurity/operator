@@ -45,7 +45,8 @@ const (
 	ActionStatusCandidate       = "candidate"
 	ActionStatusSelected        = "selected"
 	ActionStatusNotEvaluated    = "not-evaluated-by-current-model"
-	ActionStatusNotInstallable  = "not-installable" // emitted by no v3 mapping: capability is never evaluated per-asset
+	ActionStatusNotInstallable  = "not-installable" // T1-E: the action is absent from the installed CRD action enum
+	ActionStatusIneligible      = "ineligible"      // T1-E: excluded by the capability gate (no-rbac / capability-unsupported)
 )
 
 // T0-C: the closed exclusion-kind vocabulary (B.3) — the structural cause, kept
@@ -60,6 +61,11 @@ const (
 	ExclusionSLOGate      = "slo-gate"
 	ExclusionReactiveOnly = "reactive-only"
 	ExclusionSelection    = "selection"
+	// T1-E capability-gate kinds (evaluated before scoring). no-cover reuses
+	// ExclusionReconCover; these three are the genuinely new causes.
+	ExclusionNotInstallable = "not-installable"
+	ExclusionNoRBAC         = "no-rbac"
+	ExclusionCapability     = "capability-unsupported"
 )
 
 // T0-C: the closed dispatch-outcome vocabulary. The runner stamps it after the
@@ -81,6 +87,11 @@ type DecisionActionStatusV3 struct {
 	ExclusionKind string `json:"exclusionKind"`
 	Reason        string `json:"reason,omitempty"`
 	Scored        bool   `json:"scored"`
+	// RBACUnknown (T1-E): the capability gate's SSAR errored for this candidate, so its
+	// RBAC could not be confirmed this tick. The action is NOT excluded (fail-open,
+	// P-NO-FREEZE) — this flags that the eligibility is provisional. Never set on an
+	// excluded row.
+	RBACUnknown bool `json:"rbacUnknown,omitempty"`
 }
 
 // DecisionClocksV3 are T1-B's separated belief clocks (all seconds). Equal on a
@@ -242,6 +253,10 @@ type DecisionCandidateV2 struct {
 	ExistingExclusionReason     string `json:"existingExclusionReason,omitempty"`
 	SelectionReason             string `json:"selectionReason"`
 	NotClassifiedByCurrentModel bool   `json:"notClassifiedByCurrentModel"`
+	// RBACUnknown (T1-E): the capability gate's SSAR errored for this candidate, so its
+	// RBAC could not be confirmed this tick; it was NOT excluded (fail-open). Carried
+	// through to the per-action status row.
+	RBACUnknown bool `json:"rbacUnknown,omitempty"`
 }
 
 // DecisionDualUpdateV2 records one legacy runtime-controller transition.
@@ -630,12 +645,13 @@ func (t DecisionTraceV2) validateV3() error {
 		ActionStatusNotEnabled: true, ActionStatusNoCover: true, ActionStatusInfeasible: true,
 		ActionStatusConformalSLO: true, ActionStatusPricedOut: true, ActionStatusBudgetExhausted: true,
 		ActionStatusCandidate: true, ActionStatusSelected: true, ActionStatusNotEvaluated: true,
-		ActionStatusNotInstallable: true,
+		ActionStatusNotInstallable: true, ActionStatusIneligible: true,
 	}
 	kindOK := map[string]bool{
 		ExclusionNone: true, ExclusionNotEnabled: true, ExclusionReconCover: true,
 		ExclusionFeasibility: true, ExclusionCostNaN: true, ExclusionSLOGate: true,
 		ExclusionReactiveOnly: true, ExclusionSelection: true,
+		ExclusionNotInstallable: true, ExclusionNoRBAC: true, ExclusionCapability: true,
 	}
 	selectedRows := 0
 	for i, row := range t.ActionStatus {
@@ -659,8 +675,14 @@ func (t DecisionTraceV2) validateV3() error {
 		if row.ExclusionKind == ExclusionCostNaN && row.Status != ActionStatusInfeasible {
 			return fmt.Errorf("actionStatus[%d] cost-nan must read status=infeasible, got %q", i, row.Status)
 		}
-		if row.Status == ActionStatusNotInstallable {
-			return fmt.Errorf("actionStatus[%d] not-installable is emitted by no v3 mapping (capability is never evaluated per-asset)", i)
+		// T1-E: not-installable / ineligible are now emitted by the capability gate;
+		// enforce status↔kind consistency instead of rejecting them outright.
+		if row.Status == ActionStatusNotInstallable && row.ExclusionKind != ExclusionNotInstallable {
+			return fmt.Errorf("actionStatus[%d] not-installable must read exclusionKind=not-installable, got %q", i, row.ExclusionKind)
+		}
+		if row.Status == ActionStatusIneligible &&
+			row.ExclusionKind != ExclusionNoRBAC && row.ExclusionKind != ExclusionCapability {
+			return fmt.Errorf("actionStatus[%d] ineligible must read exclusionKind=no-rbac|capability-unsupported, got %q", i, row.ExclusionKind)
 		}
 	}
 	if t.SelectedAction == string(ActionNoop) && selectedRows != 0 {

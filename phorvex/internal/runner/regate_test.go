@@ -22,6 +22,9 @@ func (f *fakeActuator) Actuate(context.Context, actuator.Request) (actuator.Resu
 	f.calls++
 	return actuator.Result{Emitted: true}, nil
 }
+func (f *fakeActuator) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
 
 // TestEmitBoundaryFailsClosedOnMapMiss — P4c D3/F5: a selected+feasible move whose target pod is
 // ABSENT from the tick view (map-miss) must be VETOED at the emit boundary (fail-CLOSED,

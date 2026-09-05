@@ -1,0 +1,321 @@
+/*
+ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (P1)
+ */
+
+// Package capability is the T1-E capability gate: the ONE home for "may this action be
+// offered for THIS pod, right now?", evaluated BEFORE scoring. It is imported by BOTH the
+// candidate generator (per-candidate eligibility) and the runner's ActionsSupported
+// status (per-pod capability), so the two can never drift into the M-20 mirror.
+//
+// The per-pod predicate is EXTRACTED from the pre-T1-E runner code (it read the model's
+// typed capability witnesses); this package de-smears it (per-pod conjunction, not a
+// fleet-wide OR of independent ∃'s — the M-20 lie) and precomputes the fleet/pool indices
+// ONCE per tick (Index) so a per-candidate lookup is O(1), never an O(fleet) rescan (R1).
+//
+// Cheapest-first, first-failure-wins, exactly one reason per excluded action:
+//
+//	1 not-installable  (cluster set)        2 no-cover  (per-asset recon)
+//	3 capability-unsupported (model witness + pool index + actuator transport)
+//	4 no-rbac          (cached SSAR — LAST; the only network call)
+package capability
+
+import (
+	"context"
+
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/model"
+)
+
+// The exclusion classes (closed set; mirrored in the decision trace's ExclusionKind).
+const (
+	ReasonNotInstallable = "not-installable"
+	ReasonNoCover        = "no-cover"
+	ReasonCapability     = "capability-unsupported"
+	ReasonNoRBAC         = "no-rbac"
+)
+
+// Pod capability-witness label/role keys (extracted from the pre-T1-E runner).
+const (
+	labelSwapGroup     = "phorvex.ai/swap-group"
+	labelModelShard    = "phorvex.ai/model-shard"
+	labelParallelGroup = "phorvex.ai/parallel-group"
+	labelRank          = "phorvex.ai/rank"
+	labelWarmRole      = "phorvex.ai/role"
+	labelModelLoaded   = "phorvex.ai/model-loaded"
+	labelLoRAEnabled   = "phorvex.ai/lora-enabled"
+	labelGuardrailTier = "phorvex.ai/guardrail-tier"
+	labelServing       = "phorvex.ai/serving"
+	warmShadowRole     = "warm-shadow"
+)
+
+// AICapabilityActions are the actions whose eligibility depends on AI runtime fixtures.
+var AICapabilityActions = map[model.Action]bool{
+	model.ActionWarmSwap: true, model.ActionMIGRebind: true,
+	model.ActionKVReset: true, model.ActionEndpointRotate: true,
+	model.ActionModelShardReplace: true, model.ActionAdapterRotate: true,
+	model.ActionRequestDrain: true, model.ActionGuardrailRotate: true,
+	model.ActionKVMigrateInvalidate: true,
+}
+
+// Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
+type Reason struct {
+	Excluded    bool   // true = drop from ranking with Kind/Detail
+	Kind        string // Reason* class (only when Excluded)
+	Detail      string // free-text why (exclusion detail, or the rbac-unknown note)
+	RBACUnknown bool   // SSAR errored — NOT excluded, flagged + counted (fail-open, P-NO-FREEZE)
+}
+
+// Index is the per-tick precompute: fleet/pool facts bucketed once so per-candidate
+// capability is O(1). Built by BuildIndex from the tick snapshot.
+type Index struct {
+	warmShadowGroups map[string]bool // "ns\x00swapGroup" -> a ready promotable warm shadow exists
+	shardShadow      map[string]bool // "ns\x00shard" -> a ready promotable shadow exists (independent shard)
+	parallelRanks    map[string]int  // "ns\x00shard\x00parallel" -> distinct ready shadow ranks
+	servingByNS      map[string][]ingest.ServiceInfo
+	schedulableGPU   int
+}
+
+func poolKey(parts ...string) string {
+	k := ""
+	for i, p := range parts {
+		if i > 0 {
+			k += "\x00"
+		}
+		k += p
+	}
+	return k
+}
+
+// BuildIndex precomputes the fleet/pool indices from the tick snapshot ONCE (R1).
+func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.ServiceInfo) Index {
+	idx := Index{
+		warmShadowGroups: map[string]bool{},
+		shardShadow:      map[string]bool{},
+		parallelRanks:    map[string]int{},
+		servingByNS:      map[string][]ingest.ServiceInfo{},
+	}
+	// Bucket ready promotable shadows once.
+	seenRank := map[string]map[string]bool{} // parallelKey -> set of ranks
+	for i := range fleet {
+		s := &fleet[i]
+		if !s.Ready || s.Labels[labelWarmRole] != warmShadowRole || s.Labels[labelModelLoaded] != "true" {
+			continue
+		}
+		if g := s.Labels[labelSwapGroup]; g != "" {
+			idx.warmShadowGroups[poolKey(s.Namespace, g)] = true
+		}
+		if sh := s.Labels[labelModelShard]; sh != "" {
+			if p := s.Labels[labelParallelGroup]; p != "" {
+				if r := s.Labels[labelRank]; r != "" {
+					pk := poolKey(s.Namespace, sh, p)
+					if seenRank[pk] == nil {
+						seenRank[pk] = map[string]bool{}
+					}
+					if !seenRank[pk][r] {
+						seenRank[pk][r] = true
+						idx.parallelRanks[pk]++
+					}
+				}
+			} else {
+				idx.shardShadow[poolKey(s.Namespace, sh)] = true
+			}
+		}
+	}
+	for _, n := range nodes {
+		if n.Schedulable && hasAllocatableGPU(n) {
+			idx.schedulableGPU++
+		}
+	}
+	for _, svc := range services {
+		idx.servingByNS[svc.Namespace] = append(idx.servingByNS[svc.Namespace], svc)
+	}
+	return idx
+}
+
+// Witness is built ONCE per tick: the precomputed index + the installability set + the
+// SSAR checker + the actuator (for the wiring-only SupportsAction leg). Eligible/Capable
+// are then O(1) per candidate apart from the cached SSAR.
+type Witness struct {
+	ctx        context.Context
+	idx        Index
+	notInstall model.InstallSet
+	az         *authz.Checker
+	act        actuator.Actuator
+}
+
+// BuildWitness assembles the per-tick witness.
+func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az *authz.Checker, act actuator.Actuator) Witness {
+	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act}
+}
+
+// Eligible runs the full cheapest-first gate for one (asset, action). nil = eligible.
+func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys []string) *Reason {
+	if w.notInstall.Has(action) {
+		return &Reason{Excluded: true, Kind: ReasonNotInstallable, Detail: "action not in installed CRD action enum"}
+	}
+	if len(coverKeys) == 0 {
+		return &Reason{Excluded: true, Kind: ReasonNoCover, Detail: "recon-cover: action invalidates no facts for this asset"}
+	}
+	if ok, why := w.Capable(v, action); !ok {
+		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
+	}
+	// RBAC is LAST: only a candidate that passed the free local checks reaches an SSAR.
+	if w.az != nil {
+		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
+			allowed, unknown, why := w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
+			if unknown {
+				return &Reason{RBACUnknown: true, Detail: why} // fail-open: NOT excluded, flagged
+			}
+			if !allowed {
+				return &Reason{Excluded: true, Kind: ReasonNoRBAC, Detail: why}
+			}
+		}
+	}
+	return nil
+}
+
+// Capable is the CAPABILITY leg alone (runtime fixtures), per (pod, action). Used by the
+// gate (step 3) and by the runner's ActionsSupported status (∃-aggregation). ok=true for
+// any non-AI-capability action. why is the specific missing-fixture reason.
+func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, string) {
+	if !AICapabilityActions[action] {
+		return true, ""
+	}
+	pod := &v.Pod
+	if !(pod.HasGPU || pod.ModelID != "") {
+		return false, "pod advertises no GPU or model identity"
+	}
+	if why := w.configWhy(pod, action); why != "" {
+		return false, why
+	}
+	// The one fixture only the actuator PACKAGE knows: node-exec transport wired (M-79).
+	if w.act != nil {
+		if ok, why := w.act.SupportsAction(w.ctx, action, targetFrom(v)); !ok {
+			return false, why
+		}
+	}
+	return true, ""
+}
+
+// configWhy returns the missing per-target CONFIG fixture for an AI action, from the
+// model's typed witnesses + the pool index; "" means the config fixtures are present.
+func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
+	switch action {
+	case model.ActionMIGRebind:
+		if !(pod.MIGDevice != "" && pod.Node != "" && pod.MIGGPUID != "" && pod.MIGTargetProfile != "") {
+			return "pod has no MIG device, scheduled node, GPU id, and target profile"
+		}
+	case model.ActionWarmSwap:
+		return w.warmPoolWhy(pod, pod.Labels[labelSwapGroup], w.idx.warmShadowGroups, "matching swap-group")
+	case model.ActionModelShardReplace:
+		return w.shardPoolWhy(pod)
+	case model.ActionKVReset, model.ActionKVMigrateInvalidate:
+		if !pod.ServingEndpointReady {
+			return "pod has no Ready serving endpoint"
+		}
+	case model.ActionAdapterRotate:
+		if !(pod.Labels[labelLoRAEnabled] == "true" && pod.SuspectAdapter != "") {
+			return "pod is not LoRA-enabled or names no adapter to rotate"
+		}
+	case model.ActionGuardrailRotate:
+		if !(pod.Labels[labelGuardrailTier] == "true" && pod.GuardrailVariants >= 2) {
+			return "pod is not a guardrail tier declaring at least 2 distinct variants"
+		}
+	case model.ActionEndpointRotate:
+		if pod.RouteService == "" {
+			return "pod declares no phorvex.ai/route-service"
+		}
+	case model.ActionRequestDrain:
+		if !w.servingServiceSelects(pod) {
+			return "no target Service selects on phorvex.ai/serving for this pod"
+		}
+	}
+	return ""
+}
+
+func (w Witness) warmPoolWhy(pod *model.Pod, group string, shadows map[string]bool, label string) string {
+	if !capabilityTarget(pod) {
+		return "pod is a warm shadow or advertises no GPU/model identity"
+	}
+	if group == "" {
+		return "pod declares no " + label
+	}
+	if !shadows[poolKey(pod.Namespace, group)] {
+		return "no Ready warm shadow exists for a " + label + " pool"
+	}
+	if w.idx.schedulableGPU < 2 {
+		return "fewer than 2 schedulable GPU nodes"
+	}
+	return ""
+}
+
+func (w Witness) shardPoolWhy(pod *model.Pod) string {
+	if !capabilityTarget(pod) {
+		return "pod is a warm shadow or advertises no GPU/model identity"
+	}
+	shard := pod.Labels[labelModelShard]
+	if shard == "" {
+		return "pod declares no model-shard"
+	}
+	if parallel := pod.Labels[labelParallelGroup]; parallel != "" {
+		if pod.ParallelSize <= 0 || w.idx.parallelRanks[poolKey(pod.Namespace, shard, parallel)] < pod.ParallelSize {
+			return "no complete parallel shadow group (one Ready rank per member)"
+		}
+	} else if !w.idx.shardShadow[poolKey(pod.Namespace, shard)] {
+		return "no Ready warm shadow exists for a matching model-shard pool"
+	}
+	if w.idx.schedulableGPU < 2 {
+		return "fewer than 2 schedulable GPU nodes"
+	}
+	return ""
+}
+
+func (w Witness) servingServiceSelects(pod *model.Pod) bool {
+	for _, svc := range w.idx.servingByNS[pod.Namespace] {
+		if pod.RouteService != "" && svc.Name != pod.RouteService {
+			continue
+		}
+		if _, ok := svc.Selector[labelServing]; !ok || !selectorMatches(svc.Selector, pod.Labels) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func capabilityTarget(pod *model.Pod) bool {
+	return pod != nil && pod.Labels[labelWarmRole] != warmShadowRole && (pod.HasGPU || pod.ModelID != "")
+}
+
+func hasAllocatableGPU(node ingest.NodeInfo) bool {
+	if node.AllocatableGPU > 0 {
+		return true
+	}
+	for _, count := range node.MIGResources {
+		if count > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func selectorMatches(selector, podLabels map[string]string) bool {
+	if len(selector) == 0 {
+		return false
+	}
+	for key, value := range selector {
+		if podLabels[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func targetFrom(v *model.WorkloadView) actuator.Target {
+	return actuator.Target{
+		Namespace: v.Pod.Namespace, Pod: v.Pod.Name,
+		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU,
+	}
+}

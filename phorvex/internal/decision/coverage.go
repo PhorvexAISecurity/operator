@@ -43,6 +43,11 @@ type CoverageEngine struct {
 	// calibrationFrozen is the PHVX-2 off-switch, remembered so lazily-created tenant buckets
 	// inherit it rather than starting to learn behind the operator's back.
 	calibrationFrozen bool
+
+	// Capability is the T1-E capability gate, set per tick by the runner (which holds the
+	// snapshot + actuator + SSAR checker to build the witness). nil = gate off (legacy /
+	// tests): the generator then falls back to the pre-T1-E empty-cover check only.
+	Capability func(*model.WorkloadView, model.Action, []string) *actionset.Eligibility
 }
 
 // CalibrationState reports, per tenant, whether the RLS has left the shipped prior and how many
@@ -243,8 +248,22 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 			return eval.Total, eval.CHi, eval.UnactionableCategory, eval.NaNFeature
 		},
 		CostCeiling: costCeiling,
+		Eligible:    e.Capability, // T1-E gate (nil when the runner has not wired it)
 	}
-	return deps.Generate(views, pol), ctxByKey
+	as := deps.Generate(views, pol)
+	// T1-E metrics: one per capability-gate exclusion (by reason), and the fail-open
+	// rbac-unknown flag on candidates that proceeded despite an SSAR error.
+	for _, ex := range as.Excluded {
+		if ex.EligibilityKind != "" {
+			metrics.RecordCandidateExcluded(pol.Tenant, string(ex.Action), ex.EligibilityKind)
+		}
+	}
+	for _, cand := range as.Candidates {
+		if cand.RBACUnknown {
+			metrics.RecordCandidateRBACUnknown(pol.Tenant, string(cand.Action))
+		}
+	}
+	return as, ctxByKey
 }
 
 // Decide runs the per-tick coverage optimization and returns one Decision per pod.
@@ -856,10 +875,12 @@ func (e *CoverageEngine) buildDecisionTrace(
 			selectionReason = "move_budget_exhausted"
 		}
 		row := model.DecisionCandidateV2{
-			Action:                      string(candidate.Action),
-			CandidateKey:                key,
-			CoverKeys:                   append([]string(nil), candidate.CoverKeys...),
-			TieBreakRank:                tieBreakRank,
+			Action:       string(candidate.Action),
+			CandidateKey: key,
+			CoverKeys:    append([]string(nil), candidate.CoverKeys...),
+			TieBreakRank: tieBreakRank,
+			RBACUnknown:  candidate.RBACUnknown, // T1-E fail-open flag → trace
+
 			GrossFullValue:              traceOptional(true, grossFull),
 			MarginalCoverage:            traceOptional(wasEvaluated, marginal),
 			Provenance:                  traceOptional(true, provenance),
@@ -987,6 +1008,26 @@ func (e *CoverageEngine) buildDecisionTrace(
 	return trace
 }
 
+// eligibilityTrace maps a T1-E capability-gate EligibilityKind (the closed set the
+// generator stamps, == capability.Reason* == the model.Exclusion* strings) onto the
+// trace's (status, exclusionKind). Pure closed-set map — the structural counterpart to
+// the "no string sniffing" rule. no-cover reuses recon-cover so it stays byte-identical
+// to the pre-T1-E no-cover record; the two new causes take the shared "ineligible" status.
+func eligibilityTrace(kind string) (status, exclusionKind string) {
+	switch kind {
+	case model.ExclusionNotInstallable: // "not-installable"
+		return model.ActionStatusNotInstallable, model.ExclusionNotInstallable
+	case "no-cover": // capability.ReasonNoCover — no dedicated kind; reuses recon-cover
+		return model.ActionStatusNoCover, model.ExclusionReconCover
+	case model.ExclusionCapability: // "capability-unsupported"
+		return model.ActionStatusIneligible, model.ExclusionCapability
+	case model.ExclusionNoRBAC: // "no-rbac"
+		return model.ActionStatusIneligible, model.ExclusionNoRBAC
+	default:
+		return model.ActionStatusNotEvaluated, model.ExclusionNone // defensive; never reached
+	}
+}
+
 // buildActionStatus maps the generator/selection facts of one asset's tick onto the
 // ticket's closed per-action vocabulary (T0-C). Pure recording: it reads the trace's
 // own candidate rows and the generator's exclusions; it cannot affect selection.
@@ -1023,6 +1064,10 @@ func buildActionStatus(pol model.Policy, assetKey string, attackBacked bool,
 			// recon-cover; infeasible ⇒ Layer-A; costed+feasible ⇒ the SLO gate.
 			row.Reason = ex.Reason
 			switch {
+			case ex.EligibilityKind != "":
+				// T1-E capability gate (runs before scoring). Structural: map the
+				// gate's own closed EligibilityKind, never the reason string.
+				row.Status, row.ExclusionKind = eligibilityTrace(ex.EligibilityKind)
 			case ex.Category != "":
 				row.Status = model.ActionStatusInfeasible
 				row.ExclusionKind = model.ExclusionCostNaN
@@ -1038,6 +1083,7 @@ func buildActionStatus(pol model.Policy, assetKey string, attackBacked bool,
 			}
 		case wasGenerated:
 			_, row.Scored = evaluatedMarginal[traceCandidateKey(assetKey, action)]
+			row.RBACUnknown = c.RBACUnknown // T1-E: fail-open flag on a proceeding candidate
 			row.Reason = c.SelectionReason
 			switch {
 			case c.Selected:

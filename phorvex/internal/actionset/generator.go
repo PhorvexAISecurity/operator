@@ -28,6 +28,10 @@ type Candidate struct {
 	CoverKeys []string // recon fact keys this move invalidates
 	ECost     float64  // expected (objective) cost
 	CHi       float64  // conformal worst-case cost (used by the hard SLO gate)
+	// RBACUnknown is set when the capability gate's SSAR errored (T1-E fail-open): the
+	// candidate is NOT excluded, but the record flags that its RBAC could not be
+	// confirmed this tick (P-NO-FREEZE) — surfaced in the trace + a metric.
+	RBACUnknown bool
 }
 
 // ActionSet is the generator output: the feasible candidates plus the tick's global
@@ -93,6 +97,21 @@ type Exclusion struct {
 	CostEvaluated        bool
 	ECost                float64
 	CHi                  float64
+	// EligibilityKind is set by the T1-E capability gate (before scoring). It is the
+	// STRUCTURAL key the decision trace maps on — never the Reason string. "" for a
+	// non-gate exclusion (feasibility/cost/slo). One of the capability Reason* classes:
+	// not-installable | no-cover | capability-unsupported | no-rbac.
+	EligibilityKind string
+}
+
+// Eligibility is the capability gate's verdict for one (asset, action), wired into Deps
+// by the engine (which adapts capability.Reason to this, so actionset need not import
+// capability — actuator already imports actionset). nil = eligible-and-clean.
+type Eligibility struct {
+	Excluded    bool   // true = drop from ranking with Kind/Detail
+	Kind        string // capability Reason* class (only when Excluded)
+	Detail      string // exclusion detail, or the rbac-unknown note
+	RBACUnknown bool   // SSAR errored — NOT excluded, flagged (fail-open, P-NO-FREEZE)
 }
 
 const emptyReconCoverReason = "recon-cover: action invalidates no facts for this asset"
@@ -111,6 +130,11 @@ type Deps struct {
 	// CostCeiling is the worst-case (CHi) cost above which a move is deemed SLO-unsafe
 	// and pruned (the conformal SLO gate). The engine derives it from the policy.
 	CostCeiling float64
+	// Eligible is the T1-E capability gate, evaluated BEFORE scoring: it returns the
+	// single cheapest-first exclusion reason (or an eligible-but-rbac-unknown flag) for
+	// one (asset, action). When nil (legacy/tests), the generator falls back to the
+	// pre-T1-E empty-cover check only. The engine wires capability.Witness.Eligible here.
+	Eligible func(v *model.WorkloadView, action model.Action, coverKeys []string) *Eligibility
 }
 
 func enabledActions(pol model.Policy) []model.Action {
@@ -217,10 +241,23 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 		}
 		for _, action := range enabledActions(pol) {
 			coverKeys := af.CoverByAction[action]
-			// A move with no cover has zero marginal security gain by construction. Letting
-			// it through cannot improve the objective, but does inflate candidate/demand and
-			// audit counts (adapter-rotate on an unflagged pod was the live example).
-			if len(coverKeys) == 0 {
+			// (1) T1-E capability gate — cheapest-first, before any scoring. Exactly one
+			// reason per excluded action; an SSAR error flags-but-does-not-exclude. When
+			// the gate is not wired (legacy/tests), fall back to the pre-T1-E empty-cover
+			// check only (a move with no cover has zero marginal security gain).
+			rbacUnknown := false
+			if d.Eligible != nil {
+				if e := d.Eligible(v, action, coverKeys); e != nil {
+					if e.Excluded {
+						out.Excluded = append(out.Excluded, Exclusion{
+							Key: key, Action: action, Reason: e.Detail, EligibilityKind: e.Kind,
+							CoverKeys: append([]string(nil), coverKeys...),
+						})
+						continue
+					}
+					rbacUnknown = e.RBACUnknown
+				}
+			} else if len(coverKeys) == 0 {
 				out.Excluded = append(out.Excluded, Exclusion{
 					Key: key, Action: action, Reason: emptyReconCoverReason,
 				})
@@ -264,12 +301,13 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				continue
 			}
 			out.Candidates = append(out.Candidates, Candidate{
-				Key:       key,
-				View:      v,
-				Action:    action,
-				CoverKeys: coverKeys,
-				ECost:     ecost,
-				CHi:       chi,
+				Key:         key,
+				View:        v,
+				Action:      action,
+				CoverKeys:   coverKeys,
+				ECost:       ecost,
+				CHi:         chi,
+				RBACUnknown: rbacUnknown,
 			})
 		}
 	}

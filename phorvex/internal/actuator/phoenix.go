@@ -43,6 +43,14 @@ func NewPhoenixActuator(c client.Client) *PhoenixActuator {
 // Name implements Actuator.
 func (*PhoenixActuator) Name() string { return "phoenix" }
 
+// SupportsAction is a stub for the Phoenix path (T1-E): Phoenix maps rotate/quarantine to
+// AMTD rules, whose per-target repertoire is not verified as a runtime fixture at this
+// layer yet. Per the ticket, stubs return capable-but-UNVERIFIED (never a silent false),
+// so an unverified capability can never masquerade as a checked one. P-08 fills this in.
+func (*PhoenixActuator) SupportsAction(_ context.Context, _ model.Action, _ Target) (bool, string) {
+	return true, "unverified: phoenix-amtd-repertoire — P-08"
+}
+
 func (p *PhoenixActuator) timestamp() metav1.Time {
 	if p.now != nil {
 		return p.now()
