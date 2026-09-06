@@ -94,6 +94,35 @@ type DecisionClocksV3 struct {
 	ExposurePressureScaleSec float64       `json:"exposurePressureScaleSeconds"`
 }
 
+// DecisionFlowV3 records the M-115 Little's-law residual and its basis, plus every physics
+// residual component's presence, so a flow-derived anomaly traces to its inputs.
+type DecisionFlowV3 struct {
+	Present    bool          `json:"present"`
+	Basis      string        `json:"basis"`            // littles-law | absent
+	Reason     string        `json:"reason,omitempty"` // absence/invalid reason
+	InFlight   OptionalFloat `json:"inFlight"`         // L, requests (time-average)
+	ReqRate    OptionalFloat `json:"reqRate"`          // lambda, requests/second (completion rate)
+	W          OptionalFloat `json:"w"`                // mean sojourn, seconds
+	WStatistic string        `json:"wStatistic"`       // mean-sojourn
+	Units      string        `json:"units"`
+	Window     string        `json:"window"`
+	Expected   OptionalFloat `json:"expected"`  // lambda*W
+	Residual   OptionalFloat `json:"residual"`  // signed, [-1,1]
+	Magnitude  OptionalFloat `json:"magnitude"` // |residual|, [0,1]
+	AgeSec     float64       `json:"ageSeconds"`
+	// Components lists every physics residual component with presence and magnitude; the
+	// aggregate is the mean magnitude over the present ones (absent ones are excluded).
+	Components []DecisionFlowComponentV3 `json:"components"`
+	Aggregate  OptionalFloat             `json:"aggregate"`
+}
+
+type DecisionFlowComponentV3 struct {
+	Name      string        `json:"name"`
+	Present   bool          `json:"present"`
+	Magnitude OptionalFloat `json:"magnitude"`
+	Reason    string        `json:"reason,omitempty"`
+}
+
 // OptionalFloat distinguishes an observed zero from an unavailable measurement.
 type OptionalFloat struct {
 	Present bool    `json:"present"`
@@ -144,18 +173,20 @@ type DecisionModelInputsV2 struct {
 	DispersionMult    OptionalFloat `json:"dispersionMult"`
 	// FactsAbsentReason is set when a non-finite belief/physics input meant no fact was
 	// minted for this asset (M-111): the weights are absent, not zero and not NaN.
-	FactsAbsentReason string        `json:"factsAbsentReason,omitempty"`
-	DispersionCap     OptionalFloat `json:"dispersionCap"`
-	Primed            bool          `json:"primed"`
-	BetaMean          OptionalFloat `json:"betaMean"`
-	PHold             OptionalFloat `json:"pHold"`
-	Stage             string        `json:"stage"`
-	StageHazard       OptionalFloat `json:"stageHazard"`
-	StageUrgency      OptionalFloat `json:"stageUrgency"`
-	ThreatPosture     OptionalFloat `json:"threatPosture"`
-	ExposureVariable  string        `json:"exposureVariable"`
-	ExposureSeconds   OptionalFloat `json:"exposureSeconds"`
-	ProactiveFloorSec float64       `json:"proactiveFloorSeconds"`
+	FactsAbsentReason string `json:"factsAbsentReason,omitempty"`
+	// Flow is the M-115 Little's-law residual basis record.
+	Flow              DecisionFlowV3 `json:"flow"`
+	DispersionCap     OptionalFloat  `json:"dispersionCap"`
+	Primed            bool           `json:"primed"`
+	BetaMean          OptionalFloat  `json:"betaMean"`
+	PHold             OptionalFloat  `json:"pHold"`
+	Stage             string         `json:"stage"`
+	StageHazard       OptionalFloat  `json:"stageHazard"`
+	StageUrgency      OptionalFloat  `json:"stageUrgency"`
+	ThreatPosture     OptionalFloat  `json:"threatPosture"`
+	ExposureVariable  string         `json:"exposureVariable"`
+	ExposureSeconds   OptionalFloat  `json:"exposureSeconds"`
+	ProactiveFloorSec float64        `json:"proactiveFloorSeconds"`
 	// CostCalibratorTenant names the tenant whose calibrator bucket priced every cost in this
 	// record, BlindCost included (M-110 site 1); BlindCostSource says whether the blind cost
 	// came from that calibrator ("tenant-calibrator") or the stateful maximum ("stateful-max").

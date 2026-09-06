@@ -206,6 +206,15 @@ type Telemetry struct {
 	BytesIn     Signal
 	BytesOut    Signal
 	SyscallRate Signal
+	// Little's-law flow inputs (PHORVEXSEC-198 / M-115), each over ONE shared observation
+	// window and ONE system boundary (the serving engine): InFlightMean is the time-average
+	// number in system (avg_over_time of the running-requests gauge), CompletionRate the mean
+	// completion rate of the same population (req/s), MeanSojournSec the arithmetic mean
+	// time-in-system of that population (histogram sum/count, seconds). Deliberately NOT
+	// app-level for PhaseOf. Absent on every class without a mean-sojourn exporter.
+	InFlightMean   Signal
+	CompletionRate Signal
+	MeanSojournSec Signal
 	// Raw cAdvisor deltas for T1-M142's phase boundary — logged into the record ONLY.
 	// NO consumer reads them in T1-C; the delta thresholds are deliberately unchosen here.
 	ConnDeltaPerSec  float64

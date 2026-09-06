@@ -70,6 +70,12 @@ const (
 	SigGPUUtil      = "gpuUtil"
 	SigSyscallRate  = "syscallRate"
 	SigTokensPerSec = "tokensPerSec"
+	// M-115 flow inputs — one 5m window, one boundary (the vLLM engine), one population
+	// (completed requests). Only the vLLM exporter publishes all three today; every other
+	// class reads Absent, which the flow residual reports as mean-sojourn-unavailable.
+	SigInFlightMean   = "inFlightMean"
+	SigCompletionRate = "completionRate"
+	SigMeanSojournSec = "meanSojournSec"
 )
 
 // DefaultPromQueries are conventional PromQL templates. They are intentionally
@@ -84,6 +90,13 @@ func DefaultPromQueries() map[string]string {
 		SigBytesOut:     `sum by (pod) (rate(container_network_transmit_bytes_total{namespace="{namespace}"}[1m]))`,
 		SigGPUUtil:      `avg by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace="{namespace}"}) / 100`,
 		SigTokensPerSec: `sum by (pod) (rate(nim_tokens_total{namespace="{namespace}"}[1m]))`,
+		// M-115: time-average number in system, completion rate and mean sojourn over the SAME
+		// 5m window and boundary. L is avg_over_time of an instantaneous gauge (a time mean,
+		// sampled at the scrape interval); λ is the completion rate of the population whose
+		// mean latency W is; W = Σ latency / count of completed requests (arithmetic mean, s).
+		SigInFlightMean:   `avg by (pod) (avg_over_time(vllm:num_requests_running{namespace="{namespace}"}[5m]))`,
+		SigCompletionRate: `sum by (pod) (rate(vllm:e2e_request_latency_seconds_count{namespace="{namespace}"}[5m]))`,
+		SigMeanSojournSec: `sum by (pod) (increase(vllm:e2e_request_latency_seconds_sum{namespace="{namespace}"}[5m])) / sum by (pod) (increase(vllm:e2e_request_latency_seconds_count{namespace="{namespace}"}[5m]))`,
 
 		// QueueDepth feeds the queue term of the physics residual (littleslaw.go:51 —
 		// "queue depth large relative to arrival rate means items pile up"). It had NO
@@ -324,6 +337,12 @@ func assignSignal(t *model.Telemetry, sig string, s model.Signal) {
 		t.SyscallRate = s
 	case SigTokensPerSec:
 		t.TokensPerSec = s
+	case SigInFlightMean:
+		t.InFlightMean = s
+	case SigCompletionRate:
+		t.CompletionRate = s
+	case SigMeanSojournSec:
+		t.MeanSojournSec = s
 	}
 }
 
