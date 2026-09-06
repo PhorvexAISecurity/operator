@@ -121,6 +121,15 @@ var (
 		Help: "Actions excluded fail-conservative because an action-relevant cost feature was NaN.",
 	}, []string{"tenant", "namespace", "pod", "action", "feature"})
 
+	candidatesExcludedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_candidates_excluded_total",
+		Help: "Candidate (asset,action) pairs excluded by the T1-E capability gate BEFORE scoring, by reason (not-installable|no-cover|capability-unsupported|no-rbac).",
+	}, []string{"tenant", "action", "reason"})
+	candidatesRBACUnknownTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_candidates_rbac_unknown_total",
+		Help: "Candidates whose SSAR errored so RBAC could not be confirmed — NOT excluded (fail-open, P-NO-FREEZE); flags a degraded apiserver, not a policy problem.",
+	}, []string{"tenant", "action"})
+
 	requestDrainAborted = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "phorvex_request_drain_aborted_requests",
 		Help:    "In-flight requests aborted by each successful request-drain actuation.",
@@ -176,7 +185,18 @@ func init() {
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal,
+		candidatesExcludedTotal, candidatesRBACUnknownTotal,
 	)
+}
+
+// RecordCandidateExcluded counts a candidate excluded by the T1-E capability gate.
+func RecordCandidateExcluded(tenant, action, reason string) {
+	candidatesExcludedTotal.WithLabelValues(tenant, action, reason).Inc()
+}
+
+// RecordCandidateRBACUnknown counts a candidate whose SSAR errored (fail-open, not excluded).
+func RecordCandidateRBACUnknown(tenant, action string) {
+	candidatesRBACUnknownTotal.WithLabelValues(tenant, action).Inc()
 }
 
 // RecordScrapeFailure counts a telemetry-source scrape failure by source (M-113/M-130): a failed

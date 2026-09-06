@@ -27,6 +27,13 @@ rules:
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["authorization.k8s.io"]
+  # T1-E capability gate: the operator reviews its OWN permissions (SelfSubjectAccessReview,
+  # "can I?") before offering an action, so an unpermitted move is excluded pre-scoring
+  # (no-rbac) instead of ranked and failing at actuation. Creating a SelfSubjectAccessReview
+  # grants no cluster power — it only asks the apiserver what this ServiceAccount may already do.
+  resources: ["selfsubjectaccessreviews"]
+  verbs: ["create"]
 - apiGroups: ["amtd.r6security.com"]
   resources: ["securityevents"]
   {{- if .Values.phorvex.console.enabled }}

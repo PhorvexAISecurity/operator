@@ -76,6 +76,18 @@ type Result struct {
 	MutationKind string
 }
 
+// Target is the per-asset context the capability gate (T1-E) passes to SupportsAction.
+// It carries exactly the TARGET-LOCAL facts an actuator needs to answer "can I run this
+// action on THIS pod?" (labels, annotations, node, GPU) — no fleet/pool state, which the
+// capability layer precomputes once per tick and checks itself (R1).
+type Target struct {
+	Namespace string
+	Pod       string
+	Labels    map[string]string
+	NodeName  string
+	HasGPU    bool
+}
+
 // Actuator is the swappable hands behind the brain.
 type Actuator interface {
 	Name() string
@@ -86,6 +98,14 @@ type Actuator interface {
 	// Actuate performs the requested move. Implementations MUST be safe to call only
 	// in active mode; the decision engine never calls Actuate in dryRun.
 	Actuate(ctx context.Context, req Request) (Result, error)
+	// SupportsAction reports whether the runtime fixtures for action a are present on
+	// target t (T1-E capability gate, evaluated BEFORE scoring). ok=false excludes the
+	// action with why as the record detail (e.g. "no-guardrail-labels",
+	// "transport-unwired"). It answers TARGET-LOCAL predicates only; pool/namespace
+	// predicates are the capability layer's job. A stub that cannot yet verify a
+	// fixture MUST return ok=true with why prefixed "unverified: " (never a silent
+	// false), so an unverified capability can never masquerade as a checked one (P-08).
+	SupportsAction(ctx context.Context, a model.Action, t Target) (ok bool, why string)
 }
 
 // RuleTypeFor maps a Phorvex action to its controlled SecurityEvent rule type.

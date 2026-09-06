@@ -33,6 +33,9 @@ func (f *dispatchFakeActuator) Actuate(context.Context, actuator.Request) (actua
 	f.calls++
 	return actuator.Result{Emitted: f.emit}, f.actErr
 }
+func (f *dispatchFakeActuator) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
 
 func tracedSelectedDecision() []model.Decision {
 	return []model.Decision{{

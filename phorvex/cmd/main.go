@@ -35,6 +35,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
@@ -247,6 +248,15 @@ func main() {
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
+	// T1-E: wire the SSAR capability checker so the gate's no-rbac leg is live. A
+	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
+	// cover and runtime capability, just not RBAC (never a silent actuation of an
+	// unpermitted action: the actuation itself still fails closed on real RBAC).
+	if cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie()); csErr == nil {
+		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
+	} else {
+		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
+	}
 	if calibrationShadow {
 		rmgr.Calibration = calib.NewRuntime(calib.RuntimeConfig{
 			RefreshInterval: calibrationRefresh, SampleInterval: calibrationSample,

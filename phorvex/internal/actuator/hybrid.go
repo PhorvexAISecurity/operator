@@ -24,6 +24,8 @@ import (
 	"context"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // HybridActuator dispatches Phoenix-supported actions (rotate/quarantine) to the Phoenix
@@ -42,6 +44,17 @@ func NewHybridActuator(c client.Client) *HybridActuator {
 }
 
 func (h *HybridActuator) Name() string { return "hybrid" }
+
+// SupportsAction delegates exactly as Actuate does: Phoenix-mapped actions (rotate,
+// quarantine) to the Phoenix stub; every native action (incl. guardrail-rotate and
+// mig-rebind) to the native actuator's real target-local checks — so M-19 and M-79 are
+// caught on the production hybrid path, not only on a native-only deployment.
+func (h *HybridActuator) SupportsAction(ctx context.Context, a model.Action, t Target) (bool, string) {
+	if RuleTypeFor(a) != "" {
+		return h.phoenix.SupportsAction(ctx, a, t)
+	}
+	return h.native.SupportsAction(ctx, a, t)
+}
 
 // EnsurePolicy maintains BOTH sides: Phoenix's AMTD CR (so nats/rotate/quarantine keep the
 // exact CR-driven mechanism) and the native actuator's in-memory tenant binding (which its

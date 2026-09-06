@@ -28,10 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
+	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
@@ -82,8 +85,12 @@ type Manager struct {
 	MetricsSource ingest.MetricsSource
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
-	PromURL      string
-	Actuator     actuator.Actuator
+	PromURL  string
+	Actuator actuator.Actuator
+	// Authz is the T1-E SSAR capability checker (cached). nil disables the RBAC leg of the
+	// gate (installability + cover + runtime-capability still apply); the boot layer wires
+	// it from the cluster clientset so no-rbac exclusions become live.
+	Authz        *authz.Checker
 	KillSwitch   *KillSwitch
 	BaseInterval time.Duration
 	// PerTickTimeout bounds one tick so a slow/hung API server cannot wedge the loop
@@ -907,7 +914,23 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			InfectionFrontier:  infectionFrontier(nbKeys, infected),
 		})
 	}
-	actionsSupport := m.debounceActionsSupported(e, unsupportedEnabledActions(pol, views, snap))
+	// T1-E: build ONE per-tick capability witness (the single predicate home) and use it
+	// for BOTH the ActionsSupported status (capability leg only, via Capable) AND the
+	// generator's pre-scoring gate (full Eligible incl. installability + RBAC) — so the
+	// two can never drift into the M-20 mirror. m.Authz is nil until the boot layer wires
+	// the SSAR checker (then no-rbac becomes live); NotInstallable is empty on a current
+	// CRD (17/17).
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator)
+	actionsSupport := m.debounceActionsSupported(e, unsupportedEnabledActions(pol, views, capWit))
+	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+		ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
+			r := capWit.Eligible(v, a, coverKeys)
+			if r == nil {
+				return nil
+			}
+			return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+		}
+	}
 
 	var shadowDecisions []model.Decision
 	shadowAvailable := false
