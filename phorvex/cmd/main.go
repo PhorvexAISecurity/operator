@@ -115,6 +115,7 @@ func main() {
 		webhookPort          int
 		webhookCertDir       string
 		pcieClassTableRaw    string
+		trustedDetectors     string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -134,6 +135,7 @@ func main() {
 	flag.BoolVar(&admissionWebhook, "admission-webhook", false, "Serve the PhorvexPolicy validating admission webhook.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "TLS port for the validating admission webhook.")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
+	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
@@ -176,7 +178,14 @@ func main() {
 	} else {
 		pcieClasses = parsed
 	}
+	detectors := ingest.NewTrustedDetectors(strings.Split(trustedDetectors, ","))
+	ingest.ConfigureEventTrust(detectors)
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if detectors.Empty() {
+		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")
+	} else {
+		setupLog.Info("SecurityEvent trust boundary active (M-94)", "trustedDetectors", detectors.List())
+	}
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
 		os.Exit(2)
@@ -320,7 +329,12 @@ func main() {
 			setupLog.Error(err, "unable to create validating webhook", "webhook", "PhorvexPolicy")
 			os.Exit(1)
 		}
+		if err = controller.SetupSecurityEventWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create mutating webhook", "webhook", "SecurityEvent")
+			os.Exit(1)
+		}
 		setupLog.Info("PhorvexPolicy validating admission webhook enabled", "port", webhookPort, "certDir", webhookCertDir)
+		setupLog.Info("SecurityEvent creator-identity stamp enabled (M-94 trust boundary)", "path", "/stamp-amtd-r6security-com-v1beta1-securityevent")
 	}
 	if err = mgr.Add(rmgr); err != nil {
 		setupLog.Error(err, "unable to add the phorvex tick loop")

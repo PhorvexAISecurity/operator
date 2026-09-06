@@ -332,6 +332,18 @@ type SecurityEventInfo struct {
 	// (M-27). Zero value = present, so every existing literal stays a fresh event.
 	TimestampMissing bool
 	TargetsPod       bool // true when this event targets THIS pod (vs a graph neighbor)
+	// Trust is the ingest verdict on the event's AUTHENTICATED creator (M-94): trusted |
+	// self | unstamped | untrusted-identity | no-allowlist. Only a trusted event becomes
+	// belief evidence; the rest are still recorded so an injection attempt is visible.
+	// Zero value "" = a directly constructed event (tests, simulations), never ingested.
+	Trust string
+	// CreatorIdentity is the authenticated identity the admission stamp recorded, e.g.
+	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
+	CreatorIdentity string
+	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
+	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
+	// silently dropped (M-94, second half).
+	UnresolvedTargets []string
 }
 
 // NeighborRef is a graph-reachable neighbor and its (generic) asset value — used by

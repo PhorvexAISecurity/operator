@@ -112,6 +112,10 @@ var (
 		Name: "phorvex_scrape_failures_total",
 		Help: "Telemetry scrape failures by source, signal and reason (query-failed | source-unreachable); a failed scrape is degradation, not a measured zero (M-113/M-130).",
 	}, []string{"source", "signal", "reason"})
+	securityEventsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_security_events_total",
+		Help: "Ingested SecurityEvents by trust verdict on the admission-stamped creator identity (M-94): trusted | self | unstamped | untrusted-identity | no-allowlist | target-unresolved.",
+	}, []string{"trust"})
 	sloGateSkippedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_slo_gate_skipped_total",
 		Help: "SLO gate skipped because latency headroom was not a usable measurement (skip+count, never block).",
@@ -184,7 +188,7 @@ func init() {
 		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
-		scrapeFailuresTotal, sloGateSkippedTotal,
+		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
 		candidatesExcludedTotal, candidatesRBACUnknownTotal,
 	)
 }
@@ -203,6 +207,12 @@ func RecordCandidateRBACUnknown(tenant, action string) {
 // scrape is a measured degradation, not a silent measured zero.
 func RecordScrapeFailure(source, signal, reason string) {
 	scrapeFailuresTotal.WithLabelValues(source, signal, reason).Inc()
+}
+
+// RecordSecurityEvent counts one ingested SecurityEvent by its trust verdict (M-94), so a
+// forged or unstamped detector stream is visible as a metric instead of silently steering belief.
+func RecordSecurityEvent(trust string) {
+	securityEventsTotal.WithLabelValues(trust).Inc()
 }
 
 // RecordSLOGateSkipped counts an SLO gate skipped because latency headroom was not a usable

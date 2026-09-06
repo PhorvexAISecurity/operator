@@ -131,6 +131,10 @@ type Manager struct {
 	// counted — never one ERROR line per tick (PHORVEXSEC-200 / M-113, P-LOUD-OUTAGE).
 	degraded map[string]*sourceOutage
 	policies map[string]*policyEntry
+	// untrustedEvents is the last tick's count of SecurityEvents that supplied no belief
+	// evidence because their creator was not an allowlisted detector (M-94). It exists so the
+	// stream is reported ONCE per transition instead of every tick.
+	untrustedEvents int
 	// Accessed only by the single tick loop. The RLS outcome is capped after its
 	// [0,2] observation window, but ledger-enabled censored entries remain here so
 	// their disruption floor keeps increasing until recovery is actually observed.
@@ -375,6 +379,8 @@ func (m *Manager) tick(ctx context.Context) {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		return
 	}
+
+	m.observeEventTrust(snap.Events)
 
 	// GPU-half physics on the LIVE tick (not just --scan): fill the DCGM-via-Prometheus witness so
 	// VRAMFraction/SMOccupancy/LinkBandwidth/GPUPresent feed the live decision engine when a Prometheus
@@ -1392,4 +1398,40 @@ func (m *Manager) sourceOutageState() (string, sourceOutage) {
 		return m.MetricsSource.Name(), *st
 	}
 	return m.MetricsSource.Name(), sourceOutage{}
+}
+
+// observeEventTrust reports the SecurityEvent stream's trust verdicts (PHORVEXSEC-193 / M-94).
+// Untrusted events are already excluded from belief at ingest and counted in
+// phorvex_security_events_total; this makes the stream legible to an operator without one log
+// line per tick: ERROR once when untrusted events appear, one Info line when they clear.
+func (m *Manager) observeEventTrust(events []model.SecurityEventInfo) {
+	untrusted := 0
+	samples := make([]string, 0, 3)
+	unresolved := 0
+	for _, e := range events {
+		unresolved += len(e.UnresolvedTargets)
+		if e.Trust == ingest.TrustTrusted {
+			continue
+		}
+		untrusted++
+		if len(samples) < 3 {
+			identity := e.CreatorIdentity
+			if identity == "" {
+				identity = "<unstamped>"
+			}
+			samples = append(samples, e.Name+" source="+e.Source+" creator="+identity+" verdict="+e.Trust)
+		}
+	}
+	m.mu.Lock()
+	was := m.untrustedEvents
+	m.untrustedEvents = untrusted
+	m.mu.Unlock()
+
+	switch {
+	case untrusted > 0 && was == 0:
+		m.Log.Error(nil, "SecurityEvents from unallowlisted or unstamped creators are present; they carry NO belief evidence (M-94)",
+			"untrusted", untrusted, "trustedDetectors", ingest.EventTrust().List(), "samples", samples, "unresolvedTargets", unresolved)
+	case untrusted == 0 && was > 0:
+		m.Log.Info("SecurityEvent stream is fully attributed again: every event carries an allowlisted creator", "previouslyUntrusted", was)
+	}
 }
