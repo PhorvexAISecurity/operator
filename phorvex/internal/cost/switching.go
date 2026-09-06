@@ -58,20 +58,10 @@ func flowCost(view *model.WorkloadView, move model.Move) float64 {
 		return clamp01c(base)
 	}
 
-	// Rotate (Delete): pay the warm-up back. Phase prior dominates.
-	phase := 0.5
-	switch view.Phase {
-	case model.PhaseColdStarting:
-		phase = 1.0 // rotating a still-warming pod is the worst case
-	case model.PhaseWarm:
-		phase = 0.7
-	case model.PhaseIdle:
-		phase = 0.15 // idle: cheap to rotate (the moment to strike)
-	case model.PhaseDraining:
-		phase = 0.2
-	case model.PhaseUnknown:
-		phase = 0.5 // explicit = the initialized neutral prior (no value change; A-10 exhaustiveness)
-	}
+	// Rotate (Delete): pay the warm-up back. Phase prior dominates. The prior is one
+	// lookup into phaseFlowEncoding (the single spec, T1-D); an out-of-vocabulary phase
+	// falls back to the Unknown row (0.5) explicitly, preserving the old fall-through.
+	phase := phaseEncoding(view.Phase).switchPrior
 
 	// GPU/LLM pods carry a large warm-load tax on rotate (60–400s reload, KV-cache
 	// rebuild). This is the "R6 can't rotate AI safely" cost made explicit.

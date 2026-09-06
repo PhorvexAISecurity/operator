@@ -145,6 +145,16 @@ const (
 	PhaseUnknown WorkloadPhase = "Unknown"
 )
 
+// AllWorkloadPhases is the SINGLE SOURCE OF TRUTH for the phase vocabulary — the
+// MutatingActions analog. Every cost encoding (the heuristic flow prior and the RLS
+// feature/prior layout) is derived from, or tested against, this list; the
+// phase-vocabulary completeness test fails the build if a WorkloadPhase constant is
+// added without a corresponding cost-encoding row. Order is declaration order and is
+// NOT currently load-bearing — do not add an order-dependent consumer without a test.
+var AllWorkloadPhases = []WorkloadPhase{
+	PhaseColdStarting, PhaseWarm, PhaseIdle, PhaseDraining, PhaseUnknown,
+}
+
 // PHoldInputs are the audited terms of pHold = betaMean + p*(1-betaMean), p = cap*min(1, t/scale),
 // then multiplied by the just-moved damping (M-143 form A).
 type PHoldInputs struct {
