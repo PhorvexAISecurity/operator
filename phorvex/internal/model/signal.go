@@ -56,7 +56,21 @@ type Signal struct {
 	State State         // Absent | Present | Stale | Error
 	Age   time.Duration // since the last successful sample; 0 when Present
 	Src   string        // exporter/job name, for the record
+	// Reason says WHY a signal is not a fresh measurement (PHORVEXSEC-200 / M-113). Two
+	// non-measurements are different facts: the query FAILED (transport/HTTP/timeout —
+	// "query-failed") versus the query SUCCEEDED and no series exists for this pod
+	// ("no-series"). "" when Present.
+	Reason string
 }
+
+// Signal reasons (M-113). A measured 0 is none of these.
+const (
+	ReasonQueryFailed       = "query-failed"       // transport / HTTP / timeout on the signal's query
+	ReasonNoSeries          = "no-series"          // query succeeded; this pod has no series
+	ReasonNonFinite         = "non-finite"         // saw the pod, NaN/Inf sample
+	ReasonStale             = "stale"              // last-good reused within maxAge (State=Stale)
+	ReasonSourceUnreachable = "source-unreachable" // every query of the source failed this tick
+)
 
 // Usable reports whether a consumer may read Value as a measured quantity. Stale, Error,
 // and Absent are all "unknown" to consumers.

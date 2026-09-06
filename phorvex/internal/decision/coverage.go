@@ -756,6 +756,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		DispersionMult:    traceOptional(dispersionPresent && dispersionOK, dispersionMult),
 		FactsAbsentReason: set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
 		Flow:              flowRecord(v),
+		TelemetryStates:   telemetryStates(v.Telemetry),
 		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:            primed,
 		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
@@ -1276,4 +1277,16 @@ func flowRecord(v *model.WorkloadView) model.DecisionFlowV3 {
 		out.Components = append(out.Components, model.DecisionFlowComponentV3{Name: c.Name, Present: c.Present, Magnitude: traceOptional(c.Present, c.Magnitude), Reason: c.Reason})
 	}
 	return out
+}
+
+// telemetryStates records every signal's presence for the M-113 record fields.
+func telemetryStates(t model.Telemetry) []model.DecisionSignalStateV3 {
+	sig := func(name string, s model.Signal) model.DecisionSignalStateV3 {
+		return model.DecisionSignalStateV3{Signal: name, State: s.State.String(), Reason: s.Reason, Src: s.Src}
+	}
+	return []model.DecisionSignalStateV3{
+		sig("reqRate", t.ReqRate), sig("p99Ms", t.P99Ms), sig("queueDepth", t.QueueDepth), sig("gpuUtil", t.GPUUtil),
+		sig("tokensPerSec", t.TokensPerSec), sig("connCount", t.ConnCount), sig("bytesIn", t.BytesIn), sig("bytesOut", t.BytesOut),
+		sig("syscallRate", t.SyscallRate),
+	}
 }

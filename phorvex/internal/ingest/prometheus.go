@@ -35,6 +35,9 @@ type PromHTTP struct {
 	mu       sync.Mutex
 	lastGood map[string]map[string]lastSample // "ns\x00pod" -> signal -> last usable sample
 	lastAgg  map[string]aggSample             // "ns\x00pod" -> last cAdvisor aggregate (for deltas)
+	// lastHealth is the per-tick source verdict (M-113) the runner turns into a condition,
+	// a transition log and a counter.
+	lastHealth SourceHealth
 }
 
 // lastSample is a per-signal last-good reading, reused as Stale within maxAge.
@@ -230,17 +233,21 @@ func (p *PromHTTP) PodMetrics(ctx context.Context, namespace string, _ []string)
 				}
 				p.lastGood[key][sig] = lastSample{value: v, at: now}
 			case hasKey(nonfinite[sig], pod):
-				s = model.Signal{State: model.Error, Src: p.Name()} // saw the pod, non-finite value
+				s = model.Signal{State: model.Error, Src: p.Name(), Reason: model.ReasonNonFinite} // saw the pod, non-finite value
 			case failed[sig]:
 				// The job for this signal errored: State=Error (source is broken, M-113/M-130),
 				// distinguishable from a scraped-empty absent. Not Stale — Stale is for a healthy
-				// source whose series merely flickered (below).
-				s = model.Signal{State: model.Error, Src: p.Name()}
+				// source whose series merely flickered (below). Reason names the fact (M-113).
+				s = model.Signal{State: model.Error, Src: p.Name(), Reason: model.ReasonQueryFailed}
 			default:
 				// Query succeeded but this pod had no series this tick. Reuse a fresh-enough
-				// last-good as Stale (value retained for the record, not usable); else Absent.
+				// last-good as Stale (value retained for the record, not usable); else Absent
+				// with reason no-series — a different fact from a failed query (T1-M142 treats
+				// them differently), and never a measured 0.
 				if lg, ok := p.lastGood[key][sig]; ok && now.Sub(lg.at) <= maxAge {
-					s = model.Signal{Value: lg.value, State: model.Stale, Age: now.Sub(lg.at), Src: p.Name()}
+					s = model.Signal{Value: lg.value, State: model.Stale, Age: now.Sub(lg.at), Src: p.Name(), Reason: model.ReasonStale}
+				} else {
+					s = model.Signal{State: model.Absent, Src: p.Name(), Reason: model.ReasonNoSeries}
 				}
 			}
 			assignSignal(&t, sig, s)
@@ -249,7 +256,21 @@ func (p *PromHTTP) PodMetrics(ctx context.Context, namespace string, _ []string)
 		out[pod] = t
 	}
 	p.pruneCache(now, maxAge)
+	// M-113: the source-level verdict is a separate check from per-signal errors — every
+	// query failing is an unreachable source even if partial last-good data was served.
+	health := SourceHealth{Source: p.Name(), Total: len(p.Queries), Failed: len(failed)}
+	if health.Unreachable() {
+		health.Reason = model.ReasonSourceUnreachable
+	}
+	p.lastHealth = health
 	return out, errors.Join(queryErrs...)
+}
+
+// LastHealth implements HealthReporter: the verdict of the most recent PodMetrics call.
+func (p *PromHTTP) LastHealth() SourceHealth {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.lastHealth
 }
 
 // pruneCache evicts last-good/aggregate entries older than maxAge across all namespaces, so a

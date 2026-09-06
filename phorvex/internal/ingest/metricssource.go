@@ -26,6 +26,26 @@ type MetricsSource interface {
 	PodMetrics(ctx context.Context, namespace string, podNames []string) (map[string]model.Telemetry, error)
 }
 
+// SourceHealth is the per-tick verdict on a telemetry SOURCE (M-113/M-130): how many signal
+// queries ran, how many failed, and the reason when the source as a whole is down. A source
+// with every query failed is unreachable even if partial last-good data exists.
+type SourceHealth struct {
+	Source string
+	Total  int
+	Failed int
+	// Reason is model.ReasonSourceUnreachable when Failed == Total > 0; "" when healthy or
+	// only partially failed.
+	Reason string
+}
+
+// Unreachable reports a whole-source failure this tick.
+func (h SourceHealth) Unreachable() bool { return h.Total > 0 && h.Failed == h.Total }
+
+// HealthReporter is implemented by sources that can report their last tick's health.
+type HealthReporter interface {
+	LastHealth() SourceHealth
+}
+
 // SourceRegistry holds the registered metrics sources.
 var SourceRegistry = registry.New[MetricsSource]()
 

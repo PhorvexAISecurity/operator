@@ -110,8 +110,8 @@ var (
 
 	scrapeFailuresTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_scrape_failures_total",
-		Help: "Telemetry scrape failures by source (a failed scrape is degradation, not a measured zero).",
-	}, []string{"source"})
+		Help: "Telemetry scrape failures by source, signal and reason (query-failed | source-unreachable); a failed scrape is degradation, not a measured zero (M-113/M-130).",
+	}, []string{"source", "signal", "reason"})
 	sloGateSkippedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_slo_gate_skipped_total",
 		Help: "SLO gate skipped because latency headroom was not a usable measurement (skip+count, never block).",
@@ -201,8 +201,8 @@ func RecordCandidateRBACUnknown(tenant, action string) {
 
 // RecordScrapeFailure counts a telemetry-source scrape failure by source (M-113/M-130): a failed
 // scrape is a measured degradation, not a silent measured zero.
-func RecordScrapeFailure(source string) {
-	scrapeFailuresTotal.WithLabelValues(source).Inc()
+func RecordScrapeFailure(source, signal, reason string) {
+	scrapeFailuresTotal.WithLabelValues(source, signal, reason).Inc()
 }
 
 // RecordSLOGateSkipped counts an SLO gate skipped because latency headroom was not a usable

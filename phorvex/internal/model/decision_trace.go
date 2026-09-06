@@ -134,6 +134,16 @@ type DecisionFlowComponentV3 struct {
 	Reason    string        `json:"reason,omitempty"`
 }
 
+// DecisionSignalStateV3 is one telemetry signal's presence as the record sees it (M-113):
+// state, the reason it is not a fresh measurement, and the source. A measured 0 is
+// present with no reason; query-failed and no-series are two different absences.
+type DecisionSignalStateV3 struct {
+	Signal string `json:"signal"`
+	State  string `json:"state"` // present | stale | error | absent
+	Reason string `json:"reason,omitempty"`
+	Src    string `json:"src,omitempty"`
+}
+
 // OptionalFloat distinguishes an observed zero from an unavailable measurement.
 type OptionalFloat struct {
 	Present bool    `json:"present"`
@@ -186,18 +196,20 @@ type DecisionModelInputsV2 struct {
 	// minted for this asset (M-111): the weights are absent, not zero and not NaN.
 	FactsAbsentReason string `json:"factsAbsentReason,omitempty"`
 	// Flow is the M-115 Little's-law residual basis record.
-	Flow              DecisionFlowV3 `json:"flow"`
-	DispersionCap     OptionalFloat  `json:"dispersionCap"`
-	Primed            bool           `json:"primed"`
-	BetaMean          OptionalFloat  `json:"betaMean"`
-	PHold             OptionalFloat  `json:"pHold"`
-	Stage             string         `json:"stage"`
-	StageHazard       OptionalFloat  `json:"stageHazard"`
-	StageUrgency      OptionalFloat  `json:"stageUrgency"`
-	ThreatPosture     OptionalFloat  `json:"threatPosture"`
-	ExposureVariable  string         `json:"exposureVariable"`
-	ExposureSeconds   OptionalFloat  `json:"exposureSeconds"`
-	ProactiveFloorSec float64        `json:"proactiveFloorSeconds"`
+	Flow DecisionFlowV3 `json:"flow"`
+	// TelemetryStates lists every telemetry signal's state/reason/src (M-113 record fields).
+	TelemetryStates   []DecisionSignalStateV3 `json:"telemetryStates,omitempty"`
+	DispersionCap     OptionalFloat           `json:"dispersionCap"`
+	Primed            bool                    `json:"primed"`
+	BetaMean          OptionalFloat           `json:"betaMean"`
+	PHold             OptionalFloat           `json:"pHold"`
+	Stage             string                  `json:"stage"`
+	StageHazard       OptionalFloat           `json:"stageHazard"`
+	StageUrgency      OptionalFloat           `json:"stageUrgency"`
+	ThreatPosture     OptionalFloat           `json:"threatPosture"`
+	ExposureVariable  string                  `json:"exposureVariable"`
+	ExposureSeconds   OptionalFloat           `json:"exposureSeconds"`
+	ProactiveFloorSec float64                 `json:"proactiveFloorSeconds"`
 	// CostCalibratorTenant names the tenant whose calibrator bucket priced every cost in this
 	// record, BlindCost included (M-110 site 1); BlindCostSource says whether the blind cost
 	// came from that calibrator ("tenant-calibrator") or the stateful maximum ("stateful-max").
