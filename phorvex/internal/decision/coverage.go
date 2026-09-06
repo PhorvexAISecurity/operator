@@ -18,6 +18,7 @@ import (
 	"github.com/phorvex/phorvex/internal/killchain"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/physics"
 	"github.com/phorvex/phorvex/internal/recon"
 )
 
@@ -754,6 +755,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		PhysicsScanned:    v.Physics.Scanned,
 		DispersionMult:    traceOptional(dispersionPresent && dispersionOK, dispersionMult),
 		FactsAbsentReason: set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
+		Flow:              flowRecord(v),
 		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:            primed,
 		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
@@ -1255,4 +1257,23 @@ func exposurePressureScaleSeconds(pol model.Policy) float64 {
 		return pol.ExposurePressureScale.Seconds()
 	}
 	return pol.ProactiveFloor.Seconds()
+}
+
+// flowRecord builds the M-115 flow basis record from the same physics functions the
+// residual uses, so the record and the number cannot drift apart.
+func flowRecord(v *model.WorkloadView) model.DecisionFlowV3 {
+	fr := physics.FlowResidual(v.Telemetry)
+	cs := physics.Components(v)
+	agg, aggPresent := physics.Aggregate(cs)
+	out := model.DecisionFlowV3{
+		Present: fr.Present, Basis: fr.Basis, Reason: fr.Reason,
+		InFlight: traceOptional(fr.Present, fr.L), ReqRate: traceOptional(fr.Present, fr.Lambda), W: traceOptional(fr.Present, fr.W),
+		WStatistic: physics.FlowWStatistic, Units: physics.FlowUnits, Window: physics.FlowWindow,
+		Expected: traceOptional(fr.Present, fr.Expected), Residual: traceOptional(fr.Present, fr.Residual), Magnitude: traceOptional(fr.Present, fr.Magnitude),
+		AgeSec: fr.Age.Seconds(), Aggregate: traceOptional(aggPresent, agg),
+	}
+	for _, c := range cs {
+		out.Components = append(out.Components, model.DecisionFlowComponentV3{Name: c.Name, Present: c.Present, Magnitude: traceOptional(c.Present, c.Magnitude), Reason: c.Reason})
+	}
+	return out
 }
