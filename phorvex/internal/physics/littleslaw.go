@@ -6,6 +6,9 @@ package physics
 
 import (
 	"math"
+	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -40,7 +43,63 @@ const (
 	FlowWStatistic  = "mean-sojourn"
 	FlowBasisLittle = "littles-law"
 	FlowBasisAbsent = "absent"
+	// FlowReasonNotActivated is the absence reason for a workload class MATH has not
+	// activated. Availability of the three inputs is NOT activation (M-115 conformance,
+	// 2026-09-06): the per-class verdict is the ruling's, and until a class is ruled
+	// admissible the component is absent and enters neither the aggregate nor any fact.
+	FlowReasonNotActivated = "class-not-activated"
 )
+
+var (
+	flowMu      sync.RWMutex
+	flowClasses = map[string]struct{}{}
+)
+
+// ConfigureFlowActivation installs the set of workload classes (namespaces) whose
+// Little's-law residual MATH has activated. Empty (the default) means no class is active.
+func ConfigureFlowActivation(classes []string) {
+	next := map[string]struct{}{}
+	for _, raw := range classes {
+		for _, part := range strings.Split(raw, ",") {
+			if c := strings.TrimSpace(part); c != "" {
+				next[c] = struct{}{}
+			}
+		}
+	}
+	flowMu.Lock()
+	defer flowMu.Unlock()
+	flowClasses = next
+}
+
+// FlowActivated reports whether a workload class has been activated by the ruling.
+func FlowActivated(class string) bool {
+	flowMu.RLock()
+	defer flowMu.RUnlock()
+	_, ok := flowClasses[class]
+	return ok
+}
+
+// ActivatedFlowClasses lists the activated classes (for the startup log and the record).
+func ActivatedFlowClasses() []string {
+	flowMu.RLock()
+	defer flowMu.RUnlock()
+	out := make([]string, 0, len(flowClasses))
+	for c := range flowClasses {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// FlowResidualFor is the residual as the RECORD and the aggregate see it: the ruled
+// computation for an activated class, honest absence for every other class. FlowResidual
+// itself stays the pure ruled mathematics (the conformance vector runs against it).
+func FlowResidualFor(class string, t model.Telemetry) FlowResult {
+	if !FlowActivated(class) {
+		return FlowResult{Basis: FlowBasisAbsent, Reason: FlowReasonNotActivated}
+	}
+	return FlowResidual(t)
+}
 
 // FlowResult is the M-115 Little's-law flow residual with its full basis, for the record.
 type FlowResult struct {
@@ -128,8 +187,8 @@ func Components(view *model.WorkloadView) []Component {
 	t := view.Telemetry
 	var out []Component
 
-	// (0) Little's-law flow residual (M-115).
-	fr := FlowResidual(t)
+	// (0) Little's-law flow residual (M-115), gated on the ruling's per-class activation.
+	fr := FlowResidualFor(view.Pod.Namespace, t)
 	out = append(out, Component{Name: "flow-littles-law", Present: fr.Present, Magnitude: fr.Magnitude, Reason: fr.Reason})
 
 	// (1) Byte flow-conservation: bytes in vs bytes out (cAdvisor). Needs some byte flow.

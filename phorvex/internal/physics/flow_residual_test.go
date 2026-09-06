@@ -141,8 +141,17 @@ func TestResidualNoDilutionByAbsentComponents(t *testing.T) {
 // Unit dependence (old-fails): the same physical situation in different units gives the same
 // aggregate; the old queue term flipped from 0.298 to 0 when the rate was expressed per minute.
 func TestResidualFlowTermIsUnitInvariantEndToEnd(t *testing.T) {
-	a := (littlesLaw{}).Residual(&model.WorkloadView{Telemetry: flowTel(15, 5, 1)}, model.Policy{})
-	b := (littlesLaw{}).Residual(&model.WorkloadView{Telemetry: flowTel(15, 300, 1.0/60)}, model.Policy{}) // per minute
+	// The flow term is per-class gated since the M-115 conformance round, so the fixture
+	// activates its own class; unit invariance is a property of the ruled mathematics, not of
+	// the gate.
+	prev := ActivatedFlowClasses()
+	t.Cleanup(func() { ConfigureFlowActivation(prev) })
+	ConfigureFlowActivation([]string{"ns"})
+	view := func(t model.Telemetry) *model.WorkloadView {
+		return &model.WorkloadView{Pod: model.Pod{Namespace: "ns"}, Telemetry: t}
+	}
+	a := (littlesLaw{}).Residual(view(flowTel(15, 5, 1)), model.Policy{})
+	b := (littlesLaw{}).Residual(view(flowTel(15, 300, 1.0/60)), model.Policy{}) // per minute
 	if math.Abs(a-b) > 1e-9 || math.Abs(a-0.5) > 1e-9 {
 		t.Fatalf("aggregate differs across units: %v vs %v (want 0.5 both)", a, b)
 	}

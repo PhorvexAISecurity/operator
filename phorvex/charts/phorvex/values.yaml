@@ -31,6 +31,12 @@ phorvex:
   # NVIDIA T4 datasheet); add classes for other devices, e.g. "NVIDIA A100-SXM4-40GB": {gen: 4, width: 16}.
   pcieClassCapacity:
     "Tesla T4": {gen: 3, width: 16}
+  # Workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115).
+  # The per-class verdict belongs to the math ruling, not to telemetry availability: as of
+  # 2026-09-06 MATH ruled every class ABSENT (vllm included) until the in-system count is
+  # validated at low load, so this list is empty and the component is recorded absent with
+  # reason class-not-activated, entering no aggregate and no fact.
+  flowResidualClasses: []
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false

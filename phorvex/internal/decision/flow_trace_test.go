@@ -6,11 +6,17 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/physics"
 )
 
 // PHORVEXSEC-198 / M-115: the decision trace carries the flow basis record — inputs, window,
 // units, expected, signed residual, magnitude, presence, reason and every component.
 func TestTraceRecordsFlowBasis(t *testing.T) {
+	// M-115 conformance round: the flow residual is now per-class activated, so this fixture
+	// activates its own namespace; every other class records absent/class-not-activated.
+	prevClasses := physics.ActivatedFlowClasses()
+	t.Cleanup(func() { physics.ConfigureFlowActivation(prevClasses) })
+	physics.ConfigureFlowActivation([]string{"ns"})
 	pol := covPolicy(2)
 	pol.TraceEnabled = true
 	e := NewCoverageEngine()

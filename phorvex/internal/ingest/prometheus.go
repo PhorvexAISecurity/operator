@@ -97,7 +97,11 @@ func DefaultPromQueries() map[string]string {
 		// 5m window and boundary. L is avg_over_time of an instantaneous gauge (a time mean,
 		// sampled at the scrape interval); λ is the completion rate of the population whose
 		// mean latency W is; W = Σ latency / count of completed requests (arithmetic mean, s).
-		SigInFlightMean:   `avg by (pod) (avg_over_time(vllm:num_requests_running{namespace="{namespace}"}[5m]))`,
+		// M-115 conformance (2026-09-06): W is the END-TO-END mean sojourn, which includes queue
+		// wait, so L must count every request inside the same boundary — running AND waiting.
+		// `num_requests_running` alone counts only what is on the GPU, so it under-reads L for
+		// exactly the population W measures. The two series are summed before the time average.
+		SigInFlightMean:   `avg_over_time((sum by (pod) (vllm:num_requests_running{namespace="{namespace}"}) + sum by (pod) (vllm:num_requests_waiting{namespace="{namespace}"}))[5m:])`,
 		SigCompletionRate: `sum by (pod) (rate(vllm:e2e_request_latency_seconds_count{namespace="{namespace}"}[5m]))`,
 		SigMeanSojournSec: `sum by (pod) (increase(vllm:e2e_request_latency_seconds_sum{namespace="{namespace}"}[5m])) / sum by (pod) (increase(vllm:e2e_request_latency_seconds_count{namespace="{namespace}"}[5m]))`,
 
