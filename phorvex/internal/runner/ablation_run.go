@@ -70,7 +70,7 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 	// the configured live DCGM feed before platform.Derive. Otherwise --scan can print a
 	// real GPU witness while its subsequent scarcity A/B silently runs GPU-neutral.
 	if m.PromURL != "" {
-		if err := ingest.PopulateGPUWitness(ctx, snap, m.PromURL); err != nil {
+		if err := ingest.PopulateGPUWitness(ctx, snap, m.PromURL, m.PCIeClasses); err != nil {
 			return nil, "", fmt.Errorf("GPU/DCGM witness ingest: %w", err)
 		}
 	}

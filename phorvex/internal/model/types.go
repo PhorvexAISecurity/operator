@@ -381,17 +381,25 @@ type PhysicsWitness struct {
 	MIGGeometryValid      bool    // the pod's MIG partition is a legal device-plugin geometry
 
 	// --- AI / inference, DCGM-live when GPUPresent=true ---
-	GPUPresent         bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
-	VRAMPresent        bool    // both used/free VRAM series answered with a usable denominator
-	VRAMFraction       float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
-	SMOccupancy        float64 // pod SM compute share [0,1]; 0 with SMSource="" when unmeasured
-	SMSource           string  // exact occupancy metric used; GPU duty-cycle is never substituted
-	LinkBandwidth      float64 // NVLink/PCIe/NIC demand / ceiling [0,1] (0 if !GPUPresent)
-	LinkSource         string  // exact interconnect metric pair used for LinkBandwidth
-	ModelRarity        float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
-	ModelRarityPresent bool    // a ModelID participated in the current model population
-	KVRebuildSec       float64 // KV-cache rebuild seconds vs session length (0 = unmeasured; PHORVEXSEC-87)
-	ColdLoadSec        float64 // model cold/warm-load seconds (0 = unmeasured; PHORVEXSEC-87)
+	GPUPresent    bool    // a GPU/DCGM scan answered for this pod's node (false on kind)
+	VRAMPresent   bool    // both used/free VRAM series answered with a usable denominator
+	VRAMFraction  float64 // pod VRAM demand / device VRAM allocatable [0,1] (0 if !GPUPresent)
+	SMOccupancy   float64 // pod SM compute share [0,1]; 0 with SMSource="" when unmeasured
+	SMSource      string  // exact occupancy metric used; GPU duty-cycle is never substituted
+	LinkBandwidth float64 // PCIe RX+TX demand / DISCOVERED capacity [0,1]; 0 when !LinkPresent
+	LinkSource    string  // exact interconnect metric pair used for LinkBandwidth
+	// M-114: where the denominator came from. LinkPresent=false means the capacity was
+	// undiscoverable (no link telemetry, no class entry) — the ratio is absent, never a
+	// borrowed T4 number. On MIG devices the capacity is the physical device's (shared link).
+	LinkPresent             bool
+	LinkCapacityBytesPerSec float64 // RX+TX aggregate capacity used as the denominator
+	LinkCapacitySource      string  // dcgm-link | class-config | absent
+	LinkGen, LinkWidth      int     // the link the capacity was derived from
+	LinkReason              string  // why absent ("" when present)
+	ModelRarity             float64 // 1 + (-log2 freq) over served ModelID across the fleet [1,2]; 1.0 if none
+	ModelRarityPresent      bool    // a ModelID participated in the current model population
+	KVRebuildSec            float64 // KV-cache rebuild seconds vs session length (0 = unmeasured; PHORVEXSEC-87)
+	ColdLoadSec             float64 // model cold/warm-load seconds (0 = unmeasured; PHORVEXSEC-87)
 }
 
 // NeutralPhysics is the honest-absent witness (all multipliers 1.0, no capacity, no

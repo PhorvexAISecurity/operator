@@ -25,6 +25,8 @@ func stampGPU(base genericK8s, snap *ingest.Snapshot) map[string]model.PhysicsWi
 		w.SMSource = gw.SMSource
 		w.LinkBandwidth = gw.LinkBandwidth
 		w.LinkSource = gw.LinkSource
+		w.LinkPresent, w.LinkCapacityBytesPerSec, w.LinkCapacitySource = gw.LinkPresent, gw.LinkCapacityBytesPerSec, gw.LinkCapacitySource
+		w.LinkGen, w.LinkWidth, w.LinkReason = gw.LinkGen, gw.LinkWidth, gw.LinkReason
 		out[key] = w
 	}
 	return out

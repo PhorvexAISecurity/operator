@@ -512,9 +512,22 @@ func clusterWide(q string) string {
 	return q
 }
 
-// A Tesla T4 is PCIe Gen3 x16: 15.754 GB/s per direction. The query sums RX and TX,
-// hence the 31.508 GB/s aggregate ceiling used to normalize the measured byte-rate.
-const pcieT4AggregateCeilingBytesPerSec = 2 * 15.754e9
+// Link discovery queries (M-114): the negotiated PCIe generation and width, when the exporter
+// publishes them, and the exporter's device model label carried on the byte-rate series.
+const (
+	SigPCIeLinkGen   = "pcieLinkGen"
+	SigPCIeLinkWidth = "pcieLinkWidth"
+)
+
+func pcieLinkQueries() map[string]string {
+	return map[string]string{
+		SigPCIeLinkGen:   `max by (pod) (DCGM_FI_DEV_PCIE_LINK_GEN{namespace="{namespace}"})`,
+		SigPCIeLinkWidth: `max by (pod) (DCGM_FI_DEV_PCIE_LINK_WIDTH{namespace="{namespace}"})`,
+	}
+}
+
+// pcieModelQuery yields one series per pod carrying the exporter's modelName label.
+const pcieModelQuery = `max by (namespace, pod, modelName) (DCGM_FI_PROF_PCIE_RX_BYTES)`
 
 func clampUnit(x float64) float64 {
 	if x < 0 {
@@ -533,12 +546,19 @@ func clampUnit(x float64) float64 {
 // exporters without PROF_SM_ACTIVE, SM occupancy stays honest-absent rather than borrowing
 // GPU_UTIL duty-cycle. An empty promURL or no DCGM data leaves GPUWitness empty; no GPU float
 // is ever fabricated.
-func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) error {
+func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string, classes PCIeClassTable) error {
 	if snap == nil || promURL == "" {
 		return nil
 	}
+	if classes == nil {
+		classes = DefaultPCIeClassTable()
+	}
 	p := NewPromHTTP(promURL, nil)
 	q := DCGMWitnessQueries()
+	lq := pcieLinkQueries()
+	linkGen, _ := p.instantQueryNsPod(ctx, clusterWide(lq[SigPCIeLinkGen]))     // absent on exporters without the field
+	linkWidth, _ := p.instantQueryNsPod(ctx, clusterWide(lq[SigPCIeLinkWidth])) // (not an error: discovery step 1 unavailable)
+	modelByKey, _ := p.instantQueryNsPodLabel(ctx, pcieModelQuery, "modelName")
 	used, usedErr := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMUsedMiB]))
 	free, freeErr := p.instantQueryNsPod(ctx, clusterWide(q[SigVRAMFreeMiB]))
 	smActive, smActiveErr := p.instantQueryNsPod(ctx, clusterWide(q[SigSMActive]))
@@ -579,11 +599,54 @@ func PopulateGPUWitness(ctx context.Context, snap *Snapshot, promURL string) err
 			w.SMSource = "DCGM_FI_PROF_SM_ACTIVE"
 		}
 		if b, ok := pcie[k]; ok {
-			w.LinkBandwidth = clampUnit(b / pcieT4AggregateCeilingBytesPerSec)
+			// M-114: the denominator is discovered — negotiated link, else the chart's class
+			// table keyed by the exporter's modelName, else absent. Never the T4 constant.
+			negotiated := PCIeLink{Gen: int(linkGen[k] + 0.5), Width: int(linkWidth[k] + 0.5)}
+			capacity, link, source, reason := PCIeCapacity(negotiated, modelByKey[k], classes)
 			w.LinkSource = "DCGM_FI_PROF_PCIE_RX_BYTES+DCGM_FI_PROF_PCIE_TX_BYTES"
+			w.LinkCapacitySource, w.LinkGen, w.LinkWidth, w.LinkReason = source, link.Gen, link.Width, reason
+			if capacity > 0 {
+				w.LinkPresent = true
+				w.LinkCapacityBytesPerSec = capacity
+				w.LinkBandwidth = clampUnit(b / capacity)
+			}
 		}
 		wit[k] = w
 	}
 	snap.GPUWitness = wit
 	return errors.Join(queryErrs...)
+}
+
+// instantQueryNsPodLabel runs a query and returns, per "ns/pod" key, the value of one label of
+// the returned series (M-114: the exporter's device modelName). Missing label => no entry.
+func (p *PromHTTP) instantQueryNsPodLabel(ctx context.Context, query, label string) (map[string]string, error) {
+	u := fmt.Sprintf("%s/api/v1/query?query=%s", p.BaseURL, url.QueryEscape(query))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("prometheus query status %d", resp.StatusCode)
+	}
+	var pr promResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
+		return nil, err
+	}
+	if pr.Status != "success" {
+		return nil, fmt.Errorf("prometheus query status %q", pr.Status)
+	}
+	out := map[string]string{}
+	for _, r := range pr.Data.Result {
+		ns, pod, v := r.Metric["namespace"], r.Metric["pod"], r.Metric[label]
+		if ns == "" || pod == "" || v == "" {
+			continue
+		}
+		out[ns+"/"+pod] = v
+	}
+	return out, nil
 }

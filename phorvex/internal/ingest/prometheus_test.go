@@ -33,8 +33,15 @@ func TestPopulateGPUWitnessParsesLiveT4DCGMShape(t *testing.T) {
 			value = 5098
 		case strings.Contains(q, "DCGM_FI_PROF_SM_ACTIVE"):
 			present = false // not exported by the live T4 stack
+		case strings.Contains(q, "PCIE_LINK_GEN") || strings.Contains(q, "PCIE_LINK_WIDTH"):
+			present = false // M-114 discovery step 1: the live T4 exporter publishes no link fields
+		case strings.Contains(q, "modelName"):
+			// M-114 discovery step 2: the byte series carry the exporter's device model label.
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"namespace":"vllm","pod":"vllm-584bdd646f-t54kd","modelName":"Tesla T4"},"value":[0,"1"]}]}}`)
+			return
 		case strings.Contains(q, "DCGM_FI_PROF_PCIE_RX_BYTES"):
-			value = pcieT4AggregateCeilingBytesPerSec / 10
+			value = mustCap(PCIeLink{Gen: 3, Width: 16}) /* M-114: T4 class capacity, discovered */ / 10
 		default:
 			t.Fatalf("unexpected PromQL: %s", q)
 		}
@@ -49,7 +56,7 @@ func TestPopulateGPUWitnessParsesLiveT4DCGMShape(t *testing.T) {
 	defer server.Close()
 
 	snap := &Snapshot{}
-	PopulateGPUWitness(context.Background(), snap, server.URL)
+	PopulateGPUWitness(context.Background(), snap, server.URL, nil)
 	w, ok := snap.GPUWitness[key]
 	if !ok || !w.GPUPresent {
 		t.Fatalf("live DCGM pod missing from PhysicsWitness: %+v", snap.GPUWitness)
@@ -86,7 +93,7 @@ func TestPopulateGPUWitnessUsesProfiledSMActive(t *testing.T) {
 	defer server.Close()
 
 	snap := &Snapshot{}
-	if err := PopulateGPUWitness(context.Background(), snap, server.URL); err != nil {
+	if err := PopulateGPUWitness(context.Background(), snap, server.URL, nil); err != nil {
 		t.Fatal(err)
 	}
 	w := snap.GPUWitness["vllm/gpu-pod"]

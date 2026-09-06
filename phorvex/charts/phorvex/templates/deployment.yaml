@@ -64,6 +64,9 @@ spec:
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
         {{- end }}
         - --gpu-envelope-max={{ .Values.phorvex.gpuEnvelopeMax }}
+        {{- with .Values.phorvex.pcieClassCapacity }}
+        - --pcie-class-table={{ toJson . }}
+        {{- end }}
         {{- if .Values.phorvex.audit.enabled }}
         - --audit-json={{ .Values.phorvex.audit.path }}
         # int64, because YAML parses 268435456 as a float and Helm would otherwise render
