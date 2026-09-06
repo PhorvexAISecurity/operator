@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	authzv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -265,4 +267,27 @@ func TestUnsupportedConditionEmitsOnePolicyEvent(t *testing.T) {
 
 func clientKey(object client.Object) types.NamespacedName {
 	return types.NamespacedName{Namespace: object.GetNamespace(), Name: object.GetName()}
+}
+
+// --- M-160: the ActionsSupported condition now reflects no-rbac gaps ---
+
+type runnerDenySSAR struct{ deny bool }
+
+func (d runnerDenySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authzv1.SelfSubjectAccessReview, error) {
+	sar.Status.Allowed = !d.deny
+	return sar, nil
+}
+
+// TestConditionSurfacesNoRBAC: a pod capable of kv-reset but RBAC-denied must appear as a gap in
+// the condition (M-160 part B) — before, the condition read capability only and stayed silent.
+func TestConditionSurfacesNoRBAC(t *testing.T) {
+	pod := model.Pod{Namespace: "denied", Name: "p", HasGPU: true, ServingEndpointReady: true}
+	az := authz.NewCheckerWithClient(runnerDenySSAR{deny: true}, authz.DefaultTTL)
+	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, nil)
+	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
+
+	gaps := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}}, wit)
+	if len(gaps) != 1 || gaps[0].action != model.ActionKVReset || !strings.HasPrefix(gaps[0].why, "no-rbac:") {
+		t.Fatalf("condition must surface the kv-reset no-rbac gap, got %+v", gaps)
+	}
 }

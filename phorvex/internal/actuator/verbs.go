@@ -41,9 +41,26 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionKVMigrateInvalidate: {{Resource: "pods", Verb: "update"}},
 }
 
-// RequiredVerbs returns the RBAC verbs the capability gate must confirm before action a
-// is offered. A non-generatable action (e.g. noop) or an unmapped one returns nil (no
-// RBAC gate); the completeness test guarantees every generatable action is mapped.
+// phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the
+// operator does NOT mutate pods — it CREATES a controlled SecurityEvent (RuleTypeFor) that
+// Phoenix (R6) enacts. The operator holds this grant CLUSTER-WIDE (rbac.yaml base rule
+// amtd.r6security.com/securityevents:[get,list,watch,create]), whereas the native pod
+// verbs are bound only per phorvex.actuatorNamespaces. (M-160.)
+var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "create"}}
+
+// RequiredVerbs returns the RBAC verbs the capability gate must confirm before action a is
+// offered — ROUTING-AWARE (M-160). A Phoenix-routed action (RuleTypeFor != "") is gated on
+// the SecurityEvent-create verb the operator actually uses, NOT the native handler's pod
+// verbs it never touches on that path — the fix for the no-rbac false-exclusion of
+// rotate/quarantine outside the native-bound namespaces. Native-routed actions keep their
+// own verbs. A non-generatable/unmapped action returns nil (no RBAC gate).
+//
+// This tracks the HYBRID actuator's routing (the production default; hybrid.go delegates by
+// exactly this RuleTypeFor). A pure-native actuator would take the native path for
+// rotate/quarantine; making that precise is the Actuator-interface method (deferred).
 func RequiredVerbs(a model.Action) []authz.Verb {
+	if RuleTypeFor(a) != "" {
+		return phoenixRuleVerbs
+	}
 	return actionVerbs[a]
 }
