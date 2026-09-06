@@ -1,0 +1,155 @@
+schema_version: 1
+fixes:
+  T1-A:
+    directory: fixes/T1-A
+    aliases:
+    - R-8
+    issues: []
+    related_issues:
+    - M-149
+    - M-150
+    - M-151
+    - M-152
+    state: CLOSED
+    dependencies: []
+    stacked_on: []
+    branch: t1/sensing-separate-residency-activity
+    head_sha: d66f67d
+  T0-C:
+    directory: fixes/T0-C
+    aliases:
+    - B-5
+    - R-2
+    - R-9
+    issues: []
+    related_issues:
+    - M-154
+    - M-159
+    state: CLOSED
+    dependencies: []
+    stacked_on: []
+    branch: t0/record-complete-decision-path
+    head_sha: 01a343e
+  T1-B:
+    directory: fixes/T1-B
+    aliases:
+    - A-9
+    - B-2
+    issues: []
+    related_issues:
+    - M-23
+    state: CLOSED
+    dependencies: []
+    stacked_on: []
+    branch: t1/clock-separate-belief-and-decay
+    head_sha: 78fba3e
+  T1-C:
+    directory: fixes/T1-C
+    aliases:
+    - A-3
+    - B-3
+    - A-10
+    issues:
+    - M-111
+    - M-113
+    - M-130
+    related_issues: []
+    state: CLOSED
+    dependencies: []
+    stacked_on: []
+    branch: t1/sensing-honest-absent
+    head_sha: 06f2554
+  M-25:
+    directory: fixes/M-25
+    aliases:
+    - T1-M025
+    issues:
+    - M-25
+    related_issues: []
+    state: CLOSED
+    dependencies: []
+    stacked_on: []
+    branch: t1/belief-m025-max-consequence-stage-merge
+    head_sha: ddea288
+  T1-D:
+    directory: fixes/T1-D
+    aliases: []
+    issues: []
+    related_issues:
+    - M-156
+    - M-157
+    - M-159
+    state: CLOSED
+    dependencies: []
+    stacked_on: []
+    branch: t1/economics-exhaustive-phase-vocabulary
+    head_sha: 21bffe9
+  T1-E:
+    directory: fixes/T1-E
+    aliases:
+    - R-5
+    issues:
+    - M-20
+    - M-79
+    related_issues:
+    - M-158
+    - M-160
+    state: REOPENED
+    dependencies: []
+    stacked_on: []
+    branch: t1/choice-capability-gate
+    head_sha: 3b9bf5a
+  T1-M020:
+    directory: fixes/T1-M020
+    aliases:
+    - M-20-followup
+    issues:
+    - M-20
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: t1/contract-choice-m020-witness-gates-selection
+    head_sha: ce9d2b5
+  T1-M023:
+    directory: fixes/T1-M023
+    aliases:
+    - M-23
+    issues:
+    - M-23
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: t1/clock-choice-m023-per-action-exposure-clocks
+    head_sha: 13258e3
+  T1-M160:
+    directory: fixes/T1-M160
+    aliases:
+    - M-160
+    issues:
+    - M-160
+    related_issues:
+    - T1-E
+    state: PR_READY
+    dependencies: []
+    stacked_on:
+    - T1-M020
+    branch: t1/contract-choice-m160-routing-aware-rbac
+    head_sha: 3f0903f
+  T1-M028:
+    directory: fixes/T1-M028
+    aliases:
+    - M-28
+    issues:
+    - M-28
+    related_issues:
+    - M-23
+    - M-25
+    - M-26
+    state: HELD
+    dependencies:
+    - T1-M023
+    stacked_on: []
+    branch: null
+    head_sha: null

@@ -1,0 +1,8 @@
+ok  	github.com/phorvex/phorvex/internal/killchain	0.007s
+ok  	github.com/phorvex/phorvex/internal/decision	(cached)
+ok  	github.com/phorvex/phorvex/internal/actionset	(cached)
+ok  	github.com/phorvex/phorvex/internal/feasibility	(cached)
+ok  	github.com/phorvex/phorvex/internal/platform	(cached)
+ok  	github.com/phorvex/phorvex/internal/audit	(cached)
+ok  	github.com/phorvex/phorvex/internal/model	(cached)
+L1 exit 0

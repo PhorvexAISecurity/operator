@@ -1,0 +1,13 @@
+# Large/raw evidence is retained outside normal Git history and indexed by
+# artifacts/*-manifest.yaml.
+artifacts/raw/
+campaigns/**/raw-corpus/
+anatomy/generated/*.pdf
+anatomy/generated/*.png
+anatomy/generated/*.html
+issues/MASTER_ISSUES.legacy-projector.md
+
+# Generated local caches.
+**/__pycache__/
+*.py[cod]
+.workflow.lock

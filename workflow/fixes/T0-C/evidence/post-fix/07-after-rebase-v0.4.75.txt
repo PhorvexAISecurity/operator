@@ -1,0 +1,10 @@
+# after rebase onto 67acdc3 release: v0.4.75 [skip ci] → HEAD b7235da (2026-09-03T18:22:23Z)
+BUILD-OK
+ok  	github.com/phorvex/phorvex/internal/decision	(cached)
+ok  	github.com/phorvex/phorvex/internal/model	(cached)
+ok  	github.com/phorvex/phorvex/internal/audit	(cached)
+ok  	github.com/phorvex/phorvex/internal/actionset	(cached)
+ok  	github.com/phorvex/phorvex/internal/cost	(cached)
+ok  	github.com/phorvex/phorvex/internal/runner	0.056s
+ok  	github.com/phorvex/phorvex/internal/actuator	0.042s
+test-exit=0

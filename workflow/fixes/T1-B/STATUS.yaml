@@ -1,0 +1,71 @@
+schema_version: 1
+fix_id: T1-B
+issues: []
+related_issues:
+- M-23
+title: Separate exposure clock from belief and decay
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/clock-separate-belief-and-decay
+  base_sha: b418692
+  head_sha: 78fba3e
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/111
+  reviewed_head: 78fba3e
+  merge_sha: 8b542be
+  checks: legacy-see-evidence
+  patch_equivalence: PASS
+deployment:
+  image: phorvex:0.4.84
+  digest: null
+  git_sha: '4522076'
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: No action; M-23 remains a separate cycle.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-B
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: true
+  legacy_blind_deriver: null
+updated_at: '2026-09-06T22:26:59+00:00'

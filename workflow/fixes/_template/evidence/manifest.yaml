@@ -1,0 +1,19 @@
+schema_version: 1
+fix_id: REPLACE_ME
+artifacts: []
+
+# Artifact fields:
+# - id
+# - path or uri
+# - bytes
+# - sha256
+# - producer
+# - created_at
+# - source/base/head/deployed pins
+# - command
+# - evidence_class
+# - expected
+# - actual
+# - positive_control_for
+# - retention
+# - sensitivity

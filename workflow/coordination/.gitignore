@@ -1,0 +1,6 @@
+.bus.lock
+sequence.txt
+inbox/*
+!inbox/.gitkeep
+archive/*
+!archive/.gitkeep

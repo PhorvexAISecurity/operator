@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "issue-entry.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "id", "title", "register_label", "workflow_state",
+    "anatomy_tag", "source_body_sha256", "migration_body_sha256", "fixes",
+    "dependencies", "verdicts"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^M-[0-9]+$"},
+    "title": {"type": "string", "minLength": 1},
+    "severity": {"type": ["string", "null"]},
+    "register_label": {"type": ["string", "null"]},
+    "workflow_state": {
+      "enum": [
+        "OPEN", "IN_PROGRESS", "MAIN_PENDING_DEPLOY",
+        "DEPLOYED_PENDING_L3", "CLOSED", "REOPENED", "DEFERRED",
+        "ACCEPTED_RISK", "SUPERSEDED"
+      ]
+    },
+    "anatomy_tag": {"type": "string", "minLength": 1},
+    "source_body_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "migration_body_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "migration_review": {"enum": ["required", "complete"]},
+    "fixes": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "dependencies": {"type": "array", "items": {"type": "string"}},
+    "verdicts": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

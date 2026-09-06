@@ -1,0 +1,379 @@
+{
+ "rotate": {
+  "handler": "rotateHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Delete@handlers_k8s.go:57",
+   "Get@handlers_k8s.go:30"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "forward-only@handlers_k8s.go:53",
+   "forward-only@handlers_k8s.go:59",
+   "forward-only@handlers_k8s.go:64"
+  ],
+  "emitted_literals": [
+   "true@handlers_k8s.go:53",
+   "true@handlers_k8s.go:59",
+   "true@handlers_k8s.go:64"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "quarantine": {
+  "handler": "quarantineHandler",
+  "functions_visited": [
+   "getPod",
+   "rsSelectorKeys"
+  ],
+  "k8s_call_sites": [
+   "Create@handlers_k8s.go:122",
+   "Get@handlers_k8s.go:184",
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_k8s.go:138"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "reversible@handlers_k8s.go:102",
+   "reversible@handlers_k8s.go:142"
+  ],
+  "emitted_literals": [
+   "true@handlers_k8s.go:102",
+   "true@handlers_k8s.go:142"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "debugger": {
+  "handler": "debuggerHandler",
+  "functions_visited": [
+   "getPod",
+   "injectEphemeral"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update(ephemeralcontainers)@handlers_k8s.go:235"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "irreversible@handlers_k8s.go:229",
+   "irreversible@handlers_k8s.go:239"
+  ],
+  "emitted_literals": [
+   "true@handlers_k8s.go:229",
+   "true@handlers_k8s.go:239"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "custom-inject": {
+  "handler": "customInjectHandler",
+  "functions_visited": [
+   "getPod",
+   "injectEphemeral"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update(ephemeralcontainers)@handlers_k8s.go:235"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "irreversible@handlers_k8s.go:229",
+   "irreversible@handlers_k8s.go:239"
+  ],
+  "emitted_literals": [
+   "true@handlers_k8s.go:229",
+   "true@handlers_k8s.go:239"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "identity-rotate": {
+  "handler": "identityRotateHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_k8s.go:286"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "reversible@handlers_k8s.go:290"
+  ],
+  "emitted_literals": [
+   "true@handlers_k8s.go:290"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "route-rotate": {
+  "handler": "routeRotateHandler",
+  "functions_visited": [
+   "getPod",
+   "readyPodsMatchingService",
+   "restoreRoutePodLabels"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Get@handlers_k8s.go:333",
+   "Get@handlers_k8s.go:443",
+   "Update@handlers_k8s.go:359",
+   "Update@handlers_k8s.go:365",
+   "Update@handlers_k8s.go:448"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "none@handlers_k8s.go:327",
+   "reversible@handlers_k8s.go:376"
+  ],
+  "emitted_literals": [
+   "false@handlers_k8s.go:327",
+   "true@handlers_k8s.go:376"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "warm-swap": {
+  "handler": "warmSwapHandler",
+  "functions_visited": [
+   "drainInflight",
+   "getPod",
+   "pickReadyShadow",
+   "relabelRole",
+   "rewarmShadow",
+   "shadowModelReady",
+   "warmCutover"
+  ],
+  "k8s_call_sites": [
+   "Create@handlers_ai.go:100",
+   "Delete@handlers_ai.go:150",
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai.go:128",
+   "Update@handlers_ai.go:132",
+   "Update@handlers_ai.go:138",
+   "Update@handlers_ai.go:191"
+  ],
+  "control_plane_call_sites": [
+   "DrainRequests@handlers_ai_p4set.go:142",
+   "ModelReady@handlers_ai.go:57"
+  ],
+  "mutation_kind_literals": [
+   "swap@handlers_ai.go:172"
+  ],
+  "emitted_literals": [
+   "true@handlers_ai.go:172"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "mig-rebind": {
+  "handler": "migRebindHandler",
+  "functions_visited": [
+   "drainInflight",
+   "getPod",
+   "relabelRole"
+  ],
+  "k8s_call_sites": [
+   "Delete@handlers_ai.go:241",
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai.go:191"
+  ],
+  "control_plane_call_sites": [
+   "Available@handlers_ai.go:232",
+   "DrainRequests@handlers_ai_p4set.go:142",
+   "Repartition@handlers_ai.go:247"
+  ],
+  "mutation_kind_literals": [
+   "swap@handlers_ai.go:255"
+  ],
+  "emitted_literals": [
+   "true@handlers_ai.go:255"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "kv-reset": {
+  "handler": "kvResetHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai.go:306"
+  ],
+  "control_plane_call_sites": [
+   "ResetPrefixCache@handlers_ai.go:283"
+  ],
+  "mutation_kind_literals": [
+   "forward-only@handlers_ai.go:310",
+   "none@handlers_ai.go:295"
+  ],
+  "emitted_literals": [
+   "false@handlers_ai.go:295",
+   "true@handlers_ai.go:289",
+   "true@handlers_ai.go:310"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "endpoint-rotate": {
+  "handler": "endpointRotateHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_ai.go:342",
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai.go:334",
+   "Update@handlers_ai.go:347"
+  ],
+  "control_plane_call_sites": [],
+  "mutation_kind_literals": [
+   "reversible@handlers_ai.go:355"
+  ],
+  "emitted_literals": [
+   "true@handlers_ai.go:355"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "model-shard-replace": {
+  "handler": "modelShardReplaceHandler",
+  "functions_visited": [
+   "drainInflight",
+   "getPod",
+   "groupCoherentCutover",
+   "pickReadyShadow",
+   "relabelRole",
+   "rewarmShadow",
+   "shadowModelReady",
+   "warmCutover"
+  ],
+  "k8s_call_sites": [
+   "Create@handlers_ai.go:100",
+   "Delete@handlers_ai.go:150",
+   "Delete@handlers_ai_p4set.go:112",
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai.go:128",
+   "Update@handlers_ai.go:132",
+   "Update@handlers_ai.go:138",
+   "Update@handlers_ai.go:191",
+   "Update@handlers_ai_p4set.go:94",
+   "Update@handlers_ai_p4set.go:97"
+  ],
+  "control_plane_call_sites": [
+   "DrainRequests@handlers_ai_p4set.go:142",
+   "ModelReady@handlers_ai.go:57"
+  ],
+  "mutation_kind_literals": [
+   "swap@handlers_ai.go:172",
+   "swap@handlers_ai_p4set.go:125"
+  ],
+  "emitted_literals": [
+   "true@handlers_ai.go:172",
+   "true@handlers_ai_p4set.go:125"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "adapter-rotate": {
+  "handler": "adapterRotateHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai_p4set.go:229"
+  ],
+  "control_plane_call_sites": [
+   "LoadAdapter@handlers_ai_p4set.go:204",
+   "UnloadAdapter@handlers_ai_p4set.go:169"
+  ],
+  "mutation_kind_literals": [
+   "none@handlers_ai_p4set.go:193",
+   "reversible@handlers_ai_p4set.go:233"
+  ],
+  "emitted_literals": [
+   "false@handlers_ai_p4set.go:193",
+   "true@handlers_ai_p4set.go:185",
+   "true@handlers_ai_p4set.go:233"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "request-drain": {
+  "handler": "requestDrainHandler",
+  "functions_visited": [
+   "drainInflight",
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai_p4set.go:268",
+   "Update@handlers_ai_p4set.go:276"
+  ],
+  "control_plane_call_sites": [
+   "DrainRequests@handlers_ai_p4set.go:142"
+  ],
+  "mutation_kind_literals": [
+   "reversible@handlers_ai_p4set.go:286"
+  ],
+  "emitted_literals": [
+   "true@handlers_ai_p4set.go:286"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "guardrail-rotate": {
+  "handler": "guardrailRotateHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai_p4set.go:351"
+  ],
+  "control_plane_call_sites": [
+   "ApplyVariant@handlers_ai_p4set.go:330",
+   "ApplyVariant@handlers_ai_p4set.go:353"
+  ],
+  "mutation_kind_literals": [
+   "none@handlers_ai_p4set.go:335",
+   "reversible@handlers_ai_p4set.go:359"
+  ],
+  "emitted_literals": [
+   "false@handlers_ai_p4set.go:335",
+   "true@handlers_ai_p4set.go:359"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ },
+ "kv-migrate-invalidate": {
+  "handler": "kvMigrateInvalidateHandler",
+  "functions_visited": [
+   "getPod"
+  ],
+  "k8s_call_sites": [
+   "Get@handlers_k8s.go:30",
+   "Update@handlers_ai_p4set.go:431"
+  ],
+  "control_plane_call_sites": [
+   "InvalidateLocal@handlers_ai_p4set.go:399",
+   "MigrateRemote@handlers_ai_p4set.go:424"
+  ],
+  "mutation_kind_literals": [
+   "forward-only@handlers_ai_p4set.go:435",
+   "none@handlers_ai_p4set.go:412"
+  ],
+  "emitted_literals": [
+   "false@handlers_ai_p4set.go:412",
+   "true@handlers_ai_p4set.go:407",
+   "true@handlers_ai_p4set.go:435"
+  ],
+  "unresolved_calls": [],
+  "status": "NO_UNRESOLVED_REGEX_CALLS"
+ }
+}

@@ -1,0 +1,227 @@
+file	line	fingerprint
+.github/workflows/ci.yml	245	file: deploy/docker/console.Dockerfile
+api/v1alpha1/phorvexpolicy_types.go	359	// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rot
+build/phoenix-extended/go.mod	1	module github.com/r6security/phoenix
+build/phoenix-extended/internal/controller/adaptivemovingtargetdefense_controller.go	231	For(&amtdv1beta1.AdaptiveMovingTargetDefense{}).
+build/phoenix-extended/internal/controller/securityevent_controller.go	77	func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
+build/phoenix-extended/internal/controller/securityevent_controller.go	259	podErr := r.Client.Delete(ctx, pod)
+build/phoenix-extended/internal/controller/securityevent_controller.go	346	} else if action.Quarantine != nil {
+build/phoenix-extended/internal/controller/securityevent_controller.go	513	For(&amtdv1beta1.SecurityEvent{}).
+charts/phorvex/templates/epss-feed.yaml	121	"args: [""cp /usr/local/bin/trivy /tools/trivy""]"
+charts/phorvex/templates/epss-feed.yaml	163	mountPath: /tools
+charts/phorvex/templates/epss-feed.yaml	169	emptyDir: {}
+charts/phorvex/values.yaml	88	repository: aquasec/trivy
+cmd/calib-soak/main.go	41	func (*denyWritesClient) Create(context.Context, client.Object, ...client.CreateOption) er
+cmd/calib-soak/main.go	127	if err := platform.LoadEPSSFromFile(epssCache); err != nil {
+cmd/calib-soak/main.go	144	runtimeShadow := calib.NewRuntime(calib.RuntimeConfig{
+cmd/calib-soak/main.go	150	manager := runner.NewManager(readOnlyClient, log)
+cmd/console/main.go	23	func main() {
+cmd/console/main.go	43	cfg := console.DefaultConfig(root)
+cmd/console/main.go	66	// for local click-through). The applier is nil => record-only until a deployment injects 
+cmd/console/main.go	84	srv.EnableVCluster(oidc, console.NewTenantQuota(console.DefaultQuota()), console.NewApplyF
+cmd/main.go	54	func init() {
+cmd/main.go	161	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
+cmd/main.go	185	if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
+cmd/main.go	235	rmgr := runner.NewManager(mgr.GetClient(), ctrl.Log)
+cmd/main.go	240	rmgr.Calibration = calib.NewRuntime(calib.RuntimeConfig{
+cmd/main.go	251	"setupLog.Info(""the p0 greedy baseline is deprecated and will be removed in the next releas"
+cmd/main.go	254	rmgr.Optimizer = decision.NewCoverageEngine()
+cmd/main.go	262	rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)
+cmd/main.go	272	f, ferr := audit.NewRotatingWriter(auditJSON, auditMaxBytes, auditMaxBackups)
+cmd/main.go	281	if err = (&controller.PhorvexPolicyReconciler{Client: mgr.GetClient(), Manager: rmgr}).Set
+cmd/main.go	337	result, err := epssfeed.Run(ctrl.SetupSignalHandler(), epssfeed.Options{
+cmd/main.go	384	ph := actuator.NewPhoenixActuator(c)
+cmd/nativedemo.go	38	na := actuator.NewNativeActuator(c)
+cmd/p3deep/main.go	41	func markers(s string) map[string]string {
+cmd/p3report/main.go	101	func parseMarkers(s string) map[string]string {
+cmd/p4b-soak/main.go	28	func scrape(url string) (map[string]float64, error) {
+cmd/p4b-soak/main.go	152	heap := soak.FitOLS(xs, col(func(s sample) float64 { return s.heap }))
+cmd/pendingcheck/main.go	13	func main() {
+cmd/pendingcheck/main.go	24	hits, err := pendinggate.Scan(*root)
+cmd/redteam-rl/main.go	53	func evalAgent(a *redteam.Agent, env *redteam.Env, n int) float64 {
+cmd/redteam-rl/main.go	66	env := redteam.NewEnv(kind, rng)
+config/crd/kustomization.yaml	4	resources:
+config/rbac/role.yaml	13	"- apiGroups: [""""]"
+dashboard-web/lib/api.ts	30	"export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || """";"
+dashboard-web/lib/api.ts	35	"r = await fetch(API_BASE + path, { headers: { ""X-Phorvex-Lens"": lens }, cache: ""no-store"" "
+dashboard-web/lib/api.ts	341	const es = new EventSource(`${API_BASE}/api/live?lens=${lens}&tail=${tail}${tenant ? `&ten
+deploy/docker/console.Dockerfile	113	find . -maxdepth 1 -mindepth 1 ! -name 'out-*' ! -name 'config*.yaml' ! -name 'bin' \
+deploy/docker/console.Dockerfile	118	FROM gcr.io/distroless/static:nonroot
+deploy/docker/console.Dockerfile	120	COPY --from=gobuild /console /app/console
+deploy/docker/console.Dockerfile	121	COPY --from=web /web/out /app/web
+deploy/docker/console.Dockerfile	126	COPY --from=harnessbuild /harness /data/build/test-harness/bin/harness.exe
+deploy/docker/console.Dockerfile	130	COPY --from=gobuild /phorvex /data/phorvex/bin/phorvex.exe
+deploy/docker/console.Dockerfile	132	COPY --from=kubectl /kubectl /usr/local/bin/kubectl
+deploy/docker/operator.Dockerfile	42	FROM gcr.io/distroless/static:nonroot
+deploy/docker/operator.Dockerfile	44	COPY --from=builder /manager .
+go.mod	79	replace github.com/r6security/phoenix => ../build/phoenix-extended
+internal/actionset/generator.go	57	func (c CrossBlockCollision) Error() string {
+internal/actionset/generator.go	190	if verdict := feasibility.Evaluate(v, move, pol); !verdict.Feasible {
+internal/actionset/generator.go	199	ecost, chi, category, detail = d.Evaluate(v, move, pol)
+internal/actionset/generator.go	201	ecost, chi = d.ECost(v, move, pol), d.CHi(v, move, pol)
+internal/actuator/gpu_stack.go	133	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+internal/actuator/gpu_stack_p4set.go	157	"code, body, err := g.v.postJSON(ctx, ep.base()+ep.guardPath, ep.token, map[string]string{"""
+internal/actuator/gpu_stack_p4set.go	183	"code, body, err := k.v.postJSON(ctx, ep.base()+ep.kvInvPath, ep.token, map[string]bool{""lo"
+internal/actuator/gpu_stack_p4set.go	196	"return fmt.Errorf(""kv MigrateRemote not built [PENDING-GPU-VALIDATION]: needs a disaggrega"
+internal/actuator/gpu_stack_p4set.go	241	return r.exec(ctx, ns, pod, migAgentContaine, argv)
+internal/actuator/gpu_stack_p4set.go	247	"if err := r.c.List(ctx, &pods, client.MatchingLabels{r.label: ""true""}); err != nil {"
+internal/actuator/handler.go	53	type HandlerResult struct {
+internal/actuator/handler.go	103	for _, a := range actionset.GeneratableActions() {
+internal/actuator/handler.go	115	for _, a := range actionset.GeneratableActions() {
+internal/actuator/handlers_ai.go	204	func (warmSwapHandler) Name() string { return string(model.ActionWarmSwap) }
+internal/actuator/handlers_ai.go	212	func (migRebindHandler) Name() string { return string(model.ActionMIGRebind) }
+internal/actuator/handlers_ai.go	275	func (kvResetHandler) Name() string { return string(model.ActionKVReset) }
+internal/actuator/handlers_ai.go	288	// [FAIL-CLOSED FIX] No serving stack reachable (pod Pending / no IP / no vLLM). This bran
+internal/actuator/handlers_ai.go	319	func (endpointRotateHandler) Name() string { return string(model.ActionEndpointRotate) }
+internal/actuator/handlers_ai.go	368	func (modelShardReplaceHandler) Name() string { return string(model.ActionModelShardReplac
+internal/actuator/handlers_ai_p4set.go	156	func (adapterRotateHandler) Name() string { return string(model.ActionAdapterRotate) }
+internal/actuator/handlers_ai_p4set.go	257	func (requestDrainHandler) Name() string { return string(model.ActionRequestDrain) }
+internal/actuator/handlers_ai_p4set.go	279	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, aborted)
+internal/actuator/handlers_ai_p4set.go	306	func (guardrailRotateHandler) Name() string { return string(model.ActionGuardrailRotate) }
+internal/actuator/handlers_ai_p4set.go	333	case errors.Is(aerr, errStackUnreachable):
+internal/actuator/handlers_ai_p4set.go	385	func (kvMigrateInvalidateHandler) Name() string { return string(model.ActionKVMigrateInval
+internal/actuator/handlers_k8s.go	45	func (rotateHandler) Name() string { return string(model.ActionRotate) }
+internal/actuator/handlers_k8s.go	80	func (quarantineHandler) Name() string { return string(model.ActionQuarantine) }
+internal/actuator/handlers_k8s.go	200	func (debuggerHandler) Name() string { return string(model.ActionDebugger) }
+internal/actuator/handlers_k8s.go	210	func (customInjectHandler) Name() string { return string(model.ActionCustomInject) }
+internal/actuator/handlers_k8s.go	253	func (disableHandler) Name() string { return string(model.ActionDisable) }
+internal/actuator/handlers_k8s.go	271	func (identityRotateHandler) Name() string { return string(model.ActionIdentityRotate) }
+internal/actuator/handlers_k8s.go	309	func (routeRotateHandler) Name() string { return string(model.ActionRouteRotate) }
+internal/actuator/hybrid.go	44	"func (h *HybridActuator) Name() string { return ""hybrid"" }"
+internal/actuator/hybrid.go	60	"if RuleTypeFor(req.Action) != """" {"
+internal/actuator/hybrid.go	63	return h.native.Actuate(ctx, req)
+internal/actuator/native.go	41	func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator{Client: c
+internal/actuator/native.go	44	"func (*NativeActuator) Name() string { return ""native"" }"
+internal/actuator/native.go	82	return dispatch(ctx, EnactCtx{Client: n.Client, DryRun: n.DryRun}, req)
+internal/actuator/nodeexec.go	73	func WireRemoteNodeExec(cfg RemoteExecConfig) { pkgNodeExec = newRemoteNodeExec(cfg) }
+internal/actuator/phoenix.go	15	"amtdv1beta1 ""github.com/r6security/phoenix/api/v1beta1"""
+internal/actuator/phoenix.go	44	"func (*PhoenixActuator) Name() string { return ""phoenix"" }"
+internal/actuator/phoenix.go	93	if cerr := p.Client.Create(ctx, &amtd); cerr != nil {
+internal/actuator/phoenix.go	105	if uerr := p.Client.Update(ctx, &amtd); uerr != nil {
+internal/actuator/phoenix.go	140	if err := p.Client.Create(ctx, se); err != nil {
+internal/actuator/phoenix.go	150	Emitted: true,
+internal/applier/crd.go	33	// CRDApplier patches the tenant's PhorvexPolicy via a namespace-scoped client.
+internal/audit/log.go	25	type Record struct {
+internal/belief/reconexposure.go	29	"func (reconExposure) Name() string { return ""recon-exposure"" }"
+internal/calib/runtime.go	34	// RuntimeConfig controls the shadow runner. Learned values never enter production scoring
+internal/calib/runtime.go	48	func (c RuntimeConfig) withDefaults() RuntimeConfig {
+internal/console/applyfix.go	42	func (d ApplyFixDelta) validate() error {
+internal/console/applyfix_gate.go	55	e1 := decision.NewCoverageEngine()
+internal/console/applyfix_gate.go	69	e2 := decision.NewCoverageEngine()
+internal/console/attack_results.go	126	func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
+internal/console/benchmark_sim.go	143	func (s *Server) benchmarkSim(w http.ResponseWriter, r *http.Request) {
+internal/console/benchmark_sim.go	196	for _, d := range decision.NewCoverageEngine().Decide(views, basePol) {
+internal/console/benchmark_sim.go	209	decs := decision.NewCoverageEngine().Decide(views, pol)
+internal/console/benchmark_sim.go	210	abl := decision.NewCoverageEngine().Ablate(views, pol, seeds)
+internal/console/computed.go	54	for _, a := range actionset.GeneratableActions() {
+internal/console/computed.go	58	for _, a := range actuator.MissingHandlers() {
+internal/console/computed.go	61	orphans := actuator.OrphanHandlers()
+internal/console/evidence.go	58	"cmd := exec.CommandContext(ctx, c.HarnessBin, ""-config"", cfg, ""-list"")"
+internal/console/live.go	31	func isVClusterContext(ctxName string) bool {
+internal/console/redteam.go	60	"return filepath.Join(s.cfg.Root, ""phorvex"", ""bin"", name)"
+internal/console/redteam.go	322	"cmd := exec.CommandContext(ctx, ""go"", args...)"
+internal/console/redteam.go	367	"cmd := exec.CommandContext(ctx, bin, ""--iters"", ""24"", ""--batch"", ""8"", ""--generations"", ""12"
+internal/console/runs.go	29	func envBase() []string { return os.Environ() }
+internal/console/runs.go	443	cmd := exec.CommandContext(ctx, rm.cfg.HarnessBin,
+internal/console/server.go	34	applyfix *ApplyFixManager // the safe apply-fix write-path
+internal/console/server.go	37	func NewServer(cfg Config) *Server { return &Server{cfg: cfg, runs: NewRunManager(cfg)} }
+internal/console/subsystems.go	27	cmd := exec.CommandContext(ctx, bin, args...)
+internal/console/uptime.go	53	func uptimePath(cfg Config) string {
+internal/console/workload_attack.go	68	"return s.cfg.execText(timeout, ""kubectl"", append([]string{""-n"", ns}, args...)...)"
+internal/controller/phorvexpolicy_controller.go	38	func (r *PhorvexPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
+internal/controller/phorvexpolicy_controller.go	39	var p v1alpha1.PhorvexPolicy
+internal/controller/phorvexpolicy_controller.go	42	r.Manager.Remove(req.NamespacedName)
+internal/controller/phorvexpolicy_controller.go	53	if err := r.Manager.Upsert(&p); err != nil {
+internal/cost/model.go	21	type CostModel interface {
+internal/cost/p1cost.go	33	func EffectiveCostCeiling(pol model.Policy) float64 {
+internal/cost/p1cost.go	180	if view != nil && view.Pod.HasGPU && !c.RLS.Primed() {
+internal/cost/p1cost.go	260	pred := c.RLS.Predict(f)
+internal/cost/p1cost.go	299	func (p1CostModel) Switching(view *model.WorkloadView, move model.Move, pol model.Policy) 
+internal/cost/rls.go	27	func Features(view *model.WorkloadView) [featureDim]float64 {
+internal/cost/switching.go	27	"func (switching) Name() string { return ""switching-cost"" }"
+internal/ctxprov/sensed.go	45	func unknownThreatLevel(level string) {
+internal/decision/ablation.go	45	if r, ok := recon.Registry.Get(name); ok {
+internal/decision/coverage.go	133	"func (e *CoverageEngine) Name() string { return ""p1-coverage"" }"
+internal/decision/coverage.go	186	sig = e.Context.Context(v, pol)
+internal/decision/coverage.go	192	assess := e.Killchain.Assess(v, pol, exp, floorSec)
+internal/decision/coverage.go	217	deps := actionset.Deps{
+internal/decision/coverage.go	218	Recon: e.Recon,
+internal/decision/coverage.go	223	eval := tcost.Evaluation(view, move, policy)
+internal/decision/coverage.go	228	return deps.Generate(views, pol), ctxByKey
+internal/decision/coverage.go	263	metrics.RecordCostNaNUnactionable(pol.Tenant, namespace, pod, string(ex.Action), ex.Detail
+internal/decision/coverage.go	438	blindCost := e.Cost.ECost(v, model.Move{Action: model.ActionRotate}, pol)
+internal/decision/engine.go	81	if c, ok := cost.Registry.Default(); ok {
+internal/decision/engine.go	87	if cp, ok := ctxprov.Registry.Default(); ok {
+internal/decision/engine.go	124	residual = e.Physics.Residual(v, pol)
+internal/decision/engine.go	128	sig = e.Context.Context(v, pol)
+internal/decision/engine.go	132	bel = e.Belief.Belief(v, pol)
+internal/decision/engine.go	151	c = e.Cost.Switching(v, move, pol)
+internal/decision/engine.go	154	verdict := feasibility.Evaluate(v, move, pol)
+internal/decision/engine.go	197	"Engine: ""p0-greedy"","
+internal/decision/localsearch.go	31	func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, lambda flo
+internal/epssfeed/feed.go	83	func ParseTrivyReports(r io.Reader) ([]ScanResult, error) {
+internal/epssfeed/sync.go	35	"defaultFIRSTURL = ""https://api.first.org/data/v1/epss"""
+internal/epssfeed/sync.go	394	"s.Path = ""/trivy"""
+internal/epssfeed/sync.go	408	cmd := exec.CommandContext(scanCtx, s.Path, args...)
+internal/epssfeed/sync.go	486	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+internal/exposure/clock.go	47	func NewClock() *Clock {
+internal/feasibility/defaults.go	24	func removesReadyReplica(a model.Action) bool { return RemovesReadyReplica(a) }
+internal/graph/reachability.go	33	"func (p PodNode) key() string { return p.Namespace + ""/"" + p.Name }"
+internal/ingest/kube.go	89	func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(
+internal/ingest/kube.go	146	perms := graph.ResolveRBAC(roles, bindings)
+internal/ingest/kube.go	168	g := graph.Build(gin)
+internal/ingest/prometheus.go	204	resp, err := p.Client.Do(req)
+internal/killchain/hazard.go	49	func successorOf(s Stage) Stage {
+internal/metrics/metrics.go	152	func init() {
+internal/model/types.go	120	func ActionEnabled(pol Policy, a Action) bool {
+internal/pendinggate/gate.go	46	func Scan(root string) ([]Hit, error) {
+internal/physics/littleslaw.go	29	"func (littlesLaw) Name() string { return ""littles-law"" }"
+internal/platform/platform.go	50	func Derive(snap *ingest.Snapshot) (string, map[string]model.PhysicsWitness) {
+internal/platform/platform.go	151	w.EPSS = epssMultiplier(p.ImageID)
+internal/recon/ucw.go	46	"func (ucwRecon) Name() string { return ""ucw-recon"" }"
+internal/redteam/autograd.go	21	func newVal(x float64) *Value { return &Value{data: x} }
+internal/redteam/pomdp.go	75	return &Env{kind: kind, rng: rng, dual: cost.NewDualSolver()}
+internal/registry/registry.go	32	func New[T Named]() *Registry[T] {
+internal/runner/ablation_run.go	41	km := killchain.NewModel()
+internal/runner/ablation_run.go	147	return decision.AblateScarcity(views, ablationPolicy(namespace, budget), seeds), platformN
+internal/runner/killswitch.go	30	func (k *KillSwitch) Engaged(ctx context.Context) bool {
+internal/runner/manager.go	105	policies map[string]*policyEntry
+internal/runner/manager.go	113	func NewManager(c client.Client, log logr.Logger) *Manager {
+internal/runner/manager.go	146	return actuator.NewNativeActuator(c)
+internal/runner/manager.go	151	return actuator.NewHybridActuator(c)
+internal/runner/manager.go	153	return actuator.NewPhoenixActuator(c)
+internal/runner/manager.go	208	if err := recon.ValidateRegistryCoverKeys(); err != nil {
+internal/runner/manager.go	255	func (m *Manager) tick(ctx context.Context) {
+internal/runner/manager.go	270	killEngaged := m.KillSwitch.Engaged(ctx)
+internal/runner/manager.go	271	metrics.SetKillSwitch(killEngaged)
+internal/runner/manager.go	304	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue)
+internal/runner/manager.go	320	m.observeReadyRotations(snap)
+internal/runner/manager.go	324	_, physicsByKey := platform.Derive(snap)
+internal/runner/manager.go	326	if _, _, err := m.Calibration.ObserveSnapshot(snap, physicsByKey); err != nil {
+internal/runner/manager.go	332	m.processTenantWithPhysics(ctx, snap, e, killEngaged, physicsByKey)
+internal/runner/manager.go	388	m.Calibration.ObserveRotation(calib.RotationRecord{
+internal/runner/manager.go	453	bound := selectionBound(action)
+internal/runner/manager.go	483	func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
+internal/runner/manager.go	523	metrics.ObserveRotationOutcome(p.tenant, metrics.RLSAbandoned)
+internal/runner/manager.go	599	observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+internal/runner/manager.go	627	metrics.ObserveRotationOutcome(p.tenant, outcome)
+internal/runner/manager.go	747	func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *
+internal/runner/manager.go	783	m.Clock.Observe(exposure.Observation{
+internal/runner/manager.go	799	exp := m.Clock.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
+internal/runner/manager.go	825	Phase: ingest.PhaseOf(*p, t),
+internal/runner/manager.go	852	decisions, err := decideTick(m.Optimizer, views, pol)
+internal/runner/manager.go	854	"metrics.RecordActionSetRejection(pol.Tenant, ""cross-block-collision"")"
+internal/runner/manager.go	866	availabilityViolations, sloViolations := shadowSafetyViolations(shadowDecisions, views, po
+internal/runner/manager.go	909	m.Audit.Record(decisions[i])
+internal/runner/manager.go	928	metrics.PublishTick(pol.Tenant, decisions, exposuresForMetrics, selected, dur.Seconds(), p
+internal/runner/manager.go	982	func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadView, pol m
+internal/runner/manager.go	998	verdict := feasibility.Evaluate(view, model.Move{Action: d.Action}, pol)
+internal/runner/manager.go	1051	if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verd
+internal/runner/manager.go	1061	res, err := m.Actuator.Actuate(ctx, actuator.Request{
+internal/runner/manager.go	1074	m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuat
+internal/runner/manager.go	1089	m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuat
+internal/runner/manager.go	1093	if selectionBound(decisions[i].Action).Status == slo.StatusZero {
+internal/slo/contract.go	72	func evaluatePhase(phase Phase) phaseImpact {
+internal/slo/ledger.go	45	"OutcomeEmitted Outcome = ""emitted_outcome_unobserved"""
+internal/slo/ledger.go	113	func (e Entry) ReplicaSeconds() float64 {
+internal/soak/slope.go	25	func FitOLS(xs, ys []float64) Fit {

@@ -1,0 +1,73 @@
+schema_version: 1
+fix_id: T0-C
+issues: []
+related_issues:
+- M-154
+- M-159
+title: Record the complete decision path
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: k3
+  implementer: k3
+  skeptic: claude
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t0/record-complete-decision-path
+  base_sha: 515c56a
+  head_sha: 01a343e
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/108
+  reviewed_head: 9098dcc
+  merge_sha: 098ab89
+  checks: legacy-see-evidence
+  patch_equivalence: legacy-see-evidence
+deployment:
+  image: phorvex:0.4.80
+  digest: null
+  git_sha: 17082b7
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers: []
+residuals:
+- CI-stage half remains separate
+- M-154 retention
+next_action:
+  owner: coordinator
+  action: No action for the closed code half; residuals remain separate issues.
+migration:
+  source: /home/mehrdad/operator/fixes/T0-C
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: true
+  legacy_blind_deriver: null
+updated_at: '2026-09-06T22:26:59+00:00'

@@ -1,0 +1,40 @@
+schema_version: 1
+
+agents:
+  - id: human-owner
+    kind: human
+    active: true
+    capabilities:
+      scope_authority: true
+      merge_authority: true
+      deployment_authority: true
+      destructive_test_authority: true
+
+  - id: claude
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: true
+      go_toolchain: true
+      github: limited
+      cluster_read: false
+      cluster_write: false
+      deployment_authority: false
+
+  - id: k3
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: true
+      go_toolchain: false
+      github: limited
+      cluster_read: true
+      cluster_write: human_gated
+      deployment_authority: false
+
+notes:
+  - Capabilities are re-verified at intake; this file is not a permanent entitlement.
+  - A replacement agent receives a new ID and explicit capabilities.
+  - Role assignment lives in each fix STATUS.yaml, not here.

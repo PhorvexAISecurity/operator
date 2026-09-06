@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "fix-status.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "fix_id",
+    "issues",
+    "title",
+    "profile",
+    "state",
+    "roles",
+    "implementation",
+    "verification",
+    "synchronization",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "fix_id": {"type": "string", "minLength": 1},
+    "issues": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^M-[0-9]+$"},
+      "uniqueItems": true
+    },
+    "title": {"type": "string", "minLength": 1},
+    "profile": {"type": "string", "minLength": 1},
+    "state": {
+      "enum": [
+        "TRIAGED", "DESIGNING", "CRITIQUED", "AGREED", "IMPLEMENTED",
+        "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED", "PR_READY", "IN_PR",
+        "MERGED", "DEPLOYED", "LIVE_VERIFIED", "SYNCHRONIZED", "CLOSED",
+        "HELD", "BLOCKED", "DEFERRED", "ACCEPTED_RISK", "REOPENED",
+        "INVALIDATED"
+      ]
+    },
+    "roles": {
+      "type": "object",
+      "required": [
+        "human_owner", "proposer", "implementer", "skeptic",
+        "live_verifier", "coordinator"
+      ]
+    },
+    "implementation": {
+      "type": "object",
+      "required": ["branch", "base_sha", "head_sha", "stacked_on"]
+    },
+    "verification": {"type": "object"},
+    "synchronization": {"type": "object"},
+    "next_action": {
+      "type": "object",
+      "required": ["owner", "action"],
+      "properties": {
+        "owner": {"type": "string", "minLength": 1},
+        "action": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "additionalProperties": true
+}

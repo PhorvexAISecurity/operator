@@ -1,0 +1,2351 @@
+[
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:1",
+    "decisionID": "dc9b5f317d5a390b5e41f9447c823776",
+    "tenantPod": "t/v3-status",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "quarantine",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (43 present, 41 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='quarantine', key='ns/v3-status|quarantine'"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "4 identity(ies) reconstruct"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "argmax 'ns/v3-status|quarantine' netGain=3.5784999397374144 (unique); budget=1, movesSpent=1 -> 'quarantine' as recorded"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='exact_binding_no_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "591 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        2,
+        3
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        1,
+        1
+      ],
+      "decisionTrace.selectionRound": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:2",
+    "decisionID": "45fd938b19a7e47aaa7f92549a02699a",
+    "tenantPod": "t/v3-round-a",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "quarantine",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (43 present, 41 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='quarantine', key='ns/v3-round-a|quarantine'"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "4 identity(ies) reconstruct"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "argmax 'ns/v3-round-a|quarantine' netGain=3.5784999397374144 (unique); budget=2, movesSpent=2 -> 'quarantine' as recorded"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='binding_positive_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "591 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        2,
+        3
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        1,
+        1
+      ],
+      "decisionTrace.selectionRound": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:3",
+    "decisionID": "d542d8f93af13efcf2c526b64fbebe6a",
+    "tenantPod": "t/v3-round-b",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "quarantine",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (43 present, 41 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='quarantine', key='ns/v3-round-b|quarantine'"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "4 identity(ies) reconstruct"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "argmax 'ns/v3-round-b|quarantine' netGain=3.5784999397374144 (unique); budget=2, movesSpent=2 -> 'quarantine' as recorded"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='binding_positive_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "591 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        2,
+        3
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        1,
+        1
+      ],
+      "decisionTrace.selectionRound": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:4",
+    "decisionID": "53bcef602a86d6638871d9c23d8b60da",
+    "tenantPod": "t/v3-round-c",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "noop",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (39 present, 45 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='noop', no selected candidate"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "4 identity(ies) reconstruct"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "argmax 'ns/v3-round-c|quarantine' netGain=3.5784999397374144 (unique); budget=2, movesSpent=2 -> 'noop' as recorded"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='binding_positive_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "591 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        0,
+        5
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        0,
+        2
+      ],
+      "decisionTrace.selectionRound": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:5",
+    "decisionID": "30e40bce571cb50e4bf919f9d07dbbc8",
+    "tenantPod": "t/v3-gpu",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "quarantine",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (44 present, 40 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='quarantine', key='ns/v3-gpu|quarantine'"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "4 identity(ies) reconstruct"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "argmax 'ns/v3-gpu|quarantine' netGain=3.571416606404081 (unique); budget=1, movesSpent=1 -> 'quarantine' as recorded"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='exact_binding_no_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "592 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        2,
+        3
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        1,
+        1
+      ],
+      "decisionTrace.selectionRound": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:6",
+    "decisionID": "7ab23562f1e868b14bbf86c1a0c03188",
+    "tenantPod": "t/v3-nan",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "noop",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (19 present, 65 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='noop', no selected candidate"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "SKIPPED",
+        "message": "no candidate has cNorm, cFlow and expectedCost all present: decisionTrace.candidates[0]: absent cNorm, cFlow, expectedCost; decisionTrace.candidates[1]: absent cNorm, cFlow, expectedCost"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "SKIPPED",
+        "message": "no candidate carries the terms: decisionTrace.candidates[0]: absent marginalCoverage, lambdaContribution, netGain; decisionTrace.candidates[1]: absent marginalCoverage, lambdaContribution, netGain"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "no feasible candidate generated (2 generator exclusion(s)) -> noop; noopReason='unactionable due to NaN: telemetry.connCount'"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='nonbinding_decay'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "583 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        0,
+        5
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].netGain": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        0,
+        2
+      ],
+      "decisionTrace.selectionRound": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:7",
+    "decisionID": "91d21621b2121cd36e2b9dd652fee662",
+    "tenantPod": "t/v3-reactive",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "noop",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (35 present, 49 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='noop', no selected candidate"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "2 identity(ies) reconstruct; netGain skipped on 2: decisionTrace.candidates[0]: absent marginalCoverage, netGain; decisionTrace.candidates[1]: absent marginalCoverage, netGain"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "reactive-only gate: 2 generated candidate(s) skipped before scoring -> noop; noopReason consistent"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='nonbinding_decay'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "577 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        0,
+        5
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        0,
+        2
+      ],
+      "decisionTrace.selectionRound": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:8",
+    "decisionID": "6fc605c56e4431abd3f6440c0f147b5f",
+    "tenantPod": "t/v3-slo",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "noop",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (35 present, 49 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='noop', no selected candidate"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "2 identity(ies) reconstruct; netGain skipped on 2: decisionTrace.candidates[0]: absent marginalCoverage, netGain; decisionTrace.candidates[1]: absent marginalCoverage, netGain"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "no feasible candidate generated (2 generator exclusion(s)) -> noop; noopReason='conformal-slo: worst-case cost 0.92 > ceiling 0.00'"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='nonbinding_decay'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "583 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        0,
+        5
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        0,
+        2
+      ],
+      "decisionTrace.selectionRound": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "source": "../evidence/post-fix/02-v3-fixture-records.jsonl:9",
+    "decisionID": "60c0ac9587cea067cc9f7aab23108816",
+    "tenantPod": "t/v3-b0",
+    "traceVersion": "phorvex.decision-trace.v3",
+    "brainImage": "registry/phorvex:sha-test",
+    "selectedAction": "noop",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v3"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "84 optionals well-formed (35 present, 49 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='noop', no selected candidate"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "2 candidate(s) reconstruct"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "2 identity(ies) reconstruct; netGain skipped on 2: decisionTrace.candidates[0]: absent marginalCoverage, netGain; decisionTrace.candidates[1]: absent marginalCoverage, netGain"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "budget=0 <= 0: greedy never ran, noop forced (selectionReasons ['move_budget_exhausted'])"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "5 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "5 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='budget_nonpositive_no_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "591 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "PASS",
+        "message": "actionStatus, costHigh, coveredBeforeDecision, dispatchOutcome laws hold"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.sloHeadroom": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.projectedNextStageSec": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        5,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        5
+      ],
+      "decisionTrace.facts[].coveredRound": [
+        0,
+        5
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].netGain": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].conformalQuantile": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].conformalCalibrated": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeApplied": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].gpuEnvelopeSlack": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].sloGateResult": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].selectionRound": [
+        0,
+        2
+      ],
+      "decisionTrace.selectionRound": [
+        0,
+        1
+      ]
+    }
+  }
+]

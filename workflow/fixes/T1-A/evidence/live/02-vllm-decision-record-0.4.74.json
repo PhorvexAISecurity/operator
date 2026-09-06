@@ -1,0 +1,3570 @@
+{
+  "schemaVersion": "phorvex.audit.v2",
+  "kind": "phorvex.decision",
+  "time": "2026-09-03T15:08:13.155081823Z",
+  "tenant": "vllm",
+  "namespace": "vllm",
+  "pod": "vllm-77997646c9-nhzv4",
+  "node": "ip-172-27-12-137.us-east-2.compute.internal",
+  "action": "noop",
+  "selected": false,
+  "feasible": true,
+  "dryRun": false,
+  "actuated": false,
+  "coverageValue": 0,
+  "cost": 0,
+  "net": 0,
+  "residual": 0,
+  "threatPosture": 0,
+  "exposure": 1,
+  "pHold": 1,
+  "assetValue": 0.98,
+  "blastRadius": 0.98,
+  "sloHeadroom": 1,
+  "phase": "Warm",
+  "reason": "noop: no candidate won strict gain > 0 (reported gain=0.00 lambdaRuntimeLegacy=0.00) stage=recon pHold=1.00",
+  "r6Counterfactual": "rotate",
+  "counterfactualNote": "R6's blind timer would DELETE this pod on schedule regardless; Phorvex skipped because no feasible candidate won the strict positive-gain selector.",
+  "blindCost": 1.09,
+  "engine": "p1-coverage",
+  "stage": "recon",
+  "nextStage": "exploit",
+  "stageHazard": 1,
+  "projectedNextStageSec": -248795.2324,
+  "decisionTrace": {
+    "schemaVersion": "phorvex.decision-trace.v2",
+    "decisionID": "253c43da2dddc93e618eed25fa23878b",
+    "tickID": "33b31b02efa315c7e913f0dec0da857b",
+    "timestamp": "2026-09-03T15:08:13.155081823Z",
+    "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.74",
+    "gitSHA": "35c1206908ef11ffeee4d8414b9fd9feae7741dd",
+    "decisionEngine": "p1-coverage",
+    "policyNamespace": "vllm",
+    "policyName": "vllm-defense",
+    "policyUID": "5cef9d07-12ed-48a2-9f51-f8f45fb2442d",
+    "tenantName": "vllm",
+    "assetNamespace": "vllm",
+    "assetName": "vllm-77997646c9-nhzv4",
+    "assetUID": "128fbec2-5267-42d0-9536-0bf9df66a5ad",
+    "budget": 1,
+    "candidateDemand": 0,
+    "movesSpent": 0,
+    "dryRun": false,
+    "killSwitchEngaged": false,
+    "lambdaConfiguredSeed": 0.5,
+    "lambdaRuntime": 0,
+    "lambdaConfiguredPolicy": 0.5,
+    "lambdaRuntimeLegacy": 0,
+    "selectorComparator": "strict_gain_positive",
+    "normWeight": 0.4,
+    "flowWeight": 0.6,
+    "cFlowUnitStatus": "confirmed_dimensionless_disruption_loss",
+    "costRepresentationVersion": "weighted_dimensionless_v1",
+    "dualUpdate": {
+      "applied": true,
+      "demand": 0,
+      "spent": 0,
+      "budget": 1,
+      "rawExcess": -1,
+      "effectiveExcess": -1,
+      "lambdaBefore": 0,
+      "lambdaAfter": 0,
+      "updateReason": "min_clamp"
+    },
+    "inputs": {
+      "phase": "Warm",
+      "requestRate": {
+        "present": true,
+        "value": 0.03333333333333333
+      },
+      "connectionCount": {
+        "present": true,
+        "value": 42
+      },
+      "gpuUtilization": {
+        "present": true,
+        "value": 0
+      },
+      "smOccupancy": {
+        "present": false,
+        "value": 0
+      },
+      "vramFraction": {
+        "present": false,
+        "value": 0
+      },
+      "leakage": {
+        "present": false,
+        "value": 0
+      },
+      "imageRarity": {
+        "present": true,
+        "value": 1.6620371421812732
+      },
+      "modelRarity": {
+        "present": true,
+        "value": 1
+      },
+      "coResidency": {
+        "present": true,
+        "value": 2
+      },
+      "epss": {
+        "present": false,
+        "value": 0
+      },
+      "cvss": {
+        "present": false,
+        "value": 0
+      },
+      "physicsScanned": true,
+      "dispersionMult": {
+        "present": true,
+        "value": 3.3240742843625464
+      },
+      "dispersionCap": {
+        "present": false,
+        "value": 0
+      },
+      "primed": false,
+      "betaMean": {
+        "present": true,
+        "value": 0.2
+      },
+      "pHold": {
+        "present": true,
+        "value": 1
+      },
+      "stage": "recon",
+      "stageHazard": {
+        "present": true,
+        "value": 1
+      },
+      "stageUrgency": {
+        "present": true,
+        "value": 0.22499999999999998
+      },
+      "threatPosture": {
+        "present": true,
+        "value": 0
+      },
+      "exposureVariable": "podIdentity",
+      "exposureSeconds": {
+        "present": true,
+        "value": 250293.83073509
+      },
+      "proactiveFloorSeconds": 900,
+      "antiOverRotationWindowSeconds": 90
+    },
+    "facts": [
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|endpointPath",
+        "factType": "endpointPath",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|guardrailBypass",
+        "factType": "guardrailBypass",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|inMemory",
+        "factType": "inMemory",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|inflightRequests",
+        "factType": "inflightRequests",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-6cqg9",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-c2xvz",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-gf4kk",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-j64jj",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-jvm66",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-rv46n",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-tqtw4",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-ttwlv",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|amazon-network-flow-monitor/aws-network-flow-monitor-agent-z6wn4",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|argocd/argocd-application-controller-0",
+        "factType": "lateralEdge",
+        "finalWeight": 4.07199099834412,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|argocd/argocd-applicationset-controller-6d576ccc85-pkr2z",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|argocd/argocd-dex-server-bb9b95994-ls2gl",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|argocd/argocd-notifications-controller-6989d4857-chxrx",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|argocd/argocd-repo-server-6967f5b9b8-nxzrb",
+        "factType": "lateralEdge",
+        "finalWeight": 3.461192348592502,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|argocd/argocd-server-5846698997-hlsqc",
+        "factType": "lateralEdge",
+        "finalWeight": 5.089988747930151,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|ci-reports/ci-reports-ffc65b84d-wwbx7",
+        "factType": "lateralEdge",
+        "finalWeight": 0.814398199668824,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|crm/crm-56485cf8cb-spc6b",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|document-store/chroma-69f59c97b5-725gq",
+        "factType": "lateralEdge",
+        "finalWeight": 0.814398199668824,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|document-store/mongo-86c769cc54-nr5v6",
+        "factType": "lateralEdge",
+        "finalWeight": 0.814398199668824,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|external-dns/external-dns-57b55c49b6-9gsj5",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|gpu-telemetry/dcgm-exporter-z978v",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|gpu-telemetry/nv-hostengine-w4gv6",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|gpu-telemetry/prometheus-86f85d87b5-5sjkg",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-load-balancer-controller-59cf9bc5b9-5jqc9",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-5wlk9",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-7p9ph",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-84zns",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-bzf5x",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-dc26q",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-h9fv6",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-ns4jb",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-sx7t6",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/aws-node-x9d2c",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/cluster-autoscaler-79487b65cd-lw5gw",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/coredns-5f8c6645d8-pkttg",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-controller-bd577c557-dvdks",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-controller-bd577c557-n8jtg",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-2zxxc",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-4kncr",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-9p2fb",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-f69ls",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-jwqfc",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-lk6hr",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-m686t",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-r2znr",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/ebs-csi-node-w8jdr",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-468gr",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-6n829",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-fcbm7",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-hnbh4",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-lpvj5",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-sbp62",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-tk5kz",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-xhf22",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-node-monitoring-agent-xqttt",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-2lfpj",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-5kglp",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-6gkvq",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-7mld4",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-8qkd5",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-d6frd",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-fsnr9",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-jh94j",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/eks-pod-identity-agent-w4lqq",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-2zpqf",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-4v2zr",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-6j8t6",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-7sb8l",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-brxs2",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-g92d7",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-l9x2q",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-wh5g2",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/kube-proxy-xtfkt",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/metrics-server-c7f565db5-dt4gg",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/nvidia-device-plugin-daemonset-46rmd",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/nvidia-device-plugin-daemonset-qn2mb",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/nvidia-device-plugin-daemonset-r24r7",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|kube-system/nvidia-device-plugin-daemonset-xhpzz",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|litellm/litellm-54d5f4ccb4-6r9j4",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|litellm/litellm-54d5f4ccb4-7wtqx",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|mcp/mcp-server-6679c8885c-kpkgx",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-2dj4r",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-62cvf",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-g24mx",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-gbc9f",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-hsxtw",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-ks5v8",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-m7gdx",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-smdxg",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/cadvisor-vx7lb",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-grafana-5c99c75775-m2dz9",
+        "factType": "lateralEdge",
+        "finalWeight": 2.4431945990064716,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-kube-prome-operator-645f7dd85c-974ql",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-kube-state-metrics-58b9b5d7f5-ssm7k",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-6h9kg",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-98p8w",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-dp7hx",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-ms9fz",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-msdwj",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-nrdvk",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-pbj5z",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-sc2fl",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/kube-prom-stack-prometheus-node-exporter-smmkm",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|monitoring/prometheus-kube-prom-stack-kube-prome-prometheus-0",
+        "factType": "lateralEdge",
+        "finalWeight": 5.7007873976817685,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|nats/nats-1",
+        "factType": "lateralEdge",
+        "finalWeight": 0.814398199668824,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|nats/nats-2",
+        "factType": "lateralEdge",
+        "finalWeight": 0.814398199668824,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|phorvex-loadgen/loadgen-698d667c5d-h4f8n",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|phorvex-system/audit-scan-k3",
+        "factType": "lateralEdge",
+        "finalWeight": 0.814398199668824,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|phorvex-system/operator-controller-manager-dfb48f6f7-9hvpc",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|phorvex-system/phorvex-phorvex-57d6fbcd78-s22jx",
+        "factType": "lateralEdge",
+        "finalWeight": 2.4431945990064716,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|vllm/detector-adapter-inv-6f8b4cd85f-lhls4",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|vllm/detector-kv-canary-9f98c66b5-9srrg",
+        "factType": "lateralEdge",
+        "finalWeight": 0.203599549917206,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|voice/voice-bot-79d7f9464d-7wfw4",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|voice/voice-bot-79d7f9464d-cmqnk",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|lateralEdge|voice/voice-bot-79d7f9464d-rv2kg",
+        "factType": "lateralEdge",
+        "finalWeight": 1.8323959492548538,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|modelFingerprint",
+        "factType": "modelFingerprint",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|networkIdentity",
+        "factType": "networkIdentity",
+        "finalWeight": 1.596220471350893,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|podIdentity",
+        "factType": "podIdentity",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      },
+      {
+        "factKey": "pod|vllm/vllm-77997646c9-nhzv4|session",
+        "factType": "session",
+        "finalWeight": 1.995275589188616,
+        "coveredBeforeDecision": false,
+        "sourceComponent": "ucw-recon",
+        "assetValue": {
+          "present": true,
+          "value": 0.9799999999999988
+        },
+        "pHoldContribution": {
+          "present": false,
+          "value": 0
+        },
+        "urgencyContribution": {
+          "present": false,
+          "value": 0
+        },
+        "dispersionContribution": {
+          "present": false,
+          "value": 0
+        },
+        "relativeWeight": {
+          "present": false,
+          "value": 0
+        }
+      }
+    ],
+    "candidates": [
+      {
+        "action": "rotate",
+        "candidateKey": "vllm/vllm-77997646c9-nhzv4|rotate",
+        "coverKeys": [
+          "pod|vllm/vllm-77997646c9-nhzv4|inMemory",
+          "pod|vllm/vllm-77997646c9-nhzv4|podIdentity",
+          "pod|vllm/vllm-77997646c9-nhzv4|session"
+        ],
+        "tieBreakRank": -1,
+        "grossFullValue": {
+          "present": true,
+          "value": 5.9858267675658485
+        },
+        "marginalCoverage": {
+          "present": false,
+          "value": 0
+        },
+        "provenance": {
+          "present": true,
+          "value": 1
+        },
+        "cNorm": {
+          "present": false,
+          "value": 0
+        },
+        "cFlow": {
+          "present": false,
+          "value": 0
+        },
+        "expectedCost": {
+          "present": false,
+          "value": 0
+        },
+        "costHigh": {
+          "present": false,
+          "value": 0
+        },
+        "lambdaContribution": {
+          "present": false,
+          "value": 0
+        },
+        "netGain": {
+          "present": false,
+          "value": 0
+        },
+        "feasible": {
+          "present": true,
+          "value": false
+        },
+        "selected": false,
+        "existingExclusionReason": "availability: ready=1-1 < minAvailable=2",
+        "selectionReason": "existing_generator_exclusion",
+        "notClassifiedByCurrentModel": true
+      },
+      {
+        "action": "kv-migrate-invalidate",
+        "candidateKey": "vllm/vllm-77997646c9-nhzv4|kv-migrate-invalidate",
+        "coverKeys": [
+          "pod|vllm/vllm-77997646c9-nhzv4|session"
+        ],
+        "tieBreakRank": 0,
+        "grossFullValue": {
+          "present": true,
+          "value": 1.995275589188616
+        },
+        "marginalCoverage": {
+          "present": false,
+          "value": 0
+        },
+        "provenance": {
+          "present": true,
+          "value": 1
+        },
+        "cNorm": {
+          "present": true,
+          "value": 0.2
+        },
+        "cFlow": {
+          "present": true,
+          "value": 0.092
+        },
+        "expectedCost": {
+          "present": true,
+          "value": 0.13520000000000001
+        },
+        "costHigh": {
+          "present": true,
+          "value": 0.13520000000000001
+        },
+        "lambdaContribution": {
+          "present": true,
+          "value": 0
+        },
+        "netGain": {
+          "present": false,
+          "value": 0
+        },
+        "feasible": {
+          "present": true,
+          "value": true
+        },
+        "selected": false,
+        "selectionReason": "reactive_only_no_direct_foothold",
+        "notClassifiedByCurrentModel": true
+      }
+    ],
+    "selectedAction": "noop",
+    "selectionRound": {
+      "present": false,
+      "value": 0
+    },
+    "tieBreakReason": "notApplicable",
+    "noopReason": "reactive-only: no direct foothold"
+  }
+}

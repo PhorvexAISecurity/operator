@@ -1,0 +1,1636 @@
+schema_version: 1
+anatomy_pin: fb52e6c976df
+source: archive/register-v1/PHORVEX_MASTER_ISSUES_V2.snapshot.md
+joins:
+  M-2:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-144:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > matched on `no anatomy token in the title; header tag `ECONOMICS``
+
+      > `V2` TOUCHES · ext.vllm · controller · runner.policies · cost.rls · actuator.native
+      · slo.ledger (+4 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-23:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · exposure
+
+      > matched on `no anatomy token in the title; header tag `CLOCK->CHOICE``
+
+      > `V2` TOUCHES · ext.vllm · ext.guardrail · ext.phoenix · runner.policies ·
+      runner.feedback · actuator.phoenix (+13 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-79:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.k8s -> ext.mig_agent, crossing_status=declared-unwired
+
+      > WireRemoteNodeExec (internal/actuator/nodeexec.go:73) has zero callers, so
+      the exec at gpu_stack_p4set.go:241 is unreachable and mig-rebind fail-closes
+      at handlers_ai.go:232.
+
+      > `V2` TOUCHES · mig-rebind Delete @ internal/actuator/handlers_ai.go:241 ·
+      ext.mig_agent · actuator.native.mig-rebind · actuator.native · cmd.p3report'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-143:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · belief
+
+      > matched on `belief`
+
+      > `V2` TOUCHES · killchain · runner.policies · runner.feedback'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-25:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · killchain
+
+      > matched on `stage`
+
+      > `V2` TOUCHES · physics · recon · platform · console'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-26:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · belief
+
+      > matched on `no anatomy token in the title; header tag `BELIEF``
+
+      > `V2` TOUCHES · killchain · console.live'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-27:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · belief
+
+      > matched on `belief`
+
+      > `V2` TOUCHES · killchain · ext.k8s · cost.rls'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-28:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
+
+      > matched on `kv-reset`
+
+      > `V2` TOUCHES · actuator.native.kv-reset · ext.vllm · platform · killchain
+      · feasibility · image.console'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-94:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.k8s
+
+      > matched on `securityevent`
+
+      > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
+      · endpoint-rotate Update @ internal/actuator/handlers_ai.go:347 · endpoint-rotate
+      Update @ internal/actuator/handlers_k8s.go:493 · ext.vllm · ext.guardrail ·
+      ext.phoenix (+12 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-142:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `PhaseOf`
+
+      > `V2` TOUCHES · ext.first_epss · model · rotate Delete @ internal/actuator/handlers_k8s.go:57
+      · rotate Create @ internal/actuator/phoenix.go:140 · ext.vllm · ext.prometheus
+      (+9 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-140:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > header tag CONTROL->ECONOMICS; the resurrected state is the tenant lambda
+      the cost stack carries.
+
+      > `V2` TOUCHES · runner.policies · bin.kubectl · killchain · cmd.main · runner.assembly
+      · runner.feedback (+6 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-145:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.vllm
+
+      > matched on `vllm`
+
+      > `V2` TOUCHES · runner.policies · console · bin.kubectl · belief · killchain
+      · cmd.main (+4 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-104:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.first_epss
+
+      > matched on `epss`
+
+      > `V2` TOUCHES · belief · phoenix.module'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-113:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.prometheus
+
+      > matched on `prometheus`
+
+      > `V2` TOUCHES · metrics · console.live · ingest · phoenix.module'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-141:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.first_epss
+
+      > matched on `epss`
+
+      > `V2` TOUCHES · ext.vllm · image.console'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-31:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-107:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · decision.p0
+
+      > matched on `engine`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-20:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner
+
+      > ERRATUM (2026-09-02, T1-A cycle, K3): LOCUS is **runner**, not platform —
+      the witness is computed in `internal/runner/actions_supported.go:55` (`unsupportedEnabledActions`),
+      consumed at `internal/runner/manager.go:858`; CONTROL node in the module graph.
+      The earlier `platform` assignment was a keyword-match artifact (`matched on
+      witness`). Treat keyword-matched LOCUS fields as unverified until checked against
+      the call site.
+
+      > `V2` TOUCHES · feasibility · actuator.router · ext.mig_agent · actionset ·
+      ext.vllm'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-30:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · exposure
+
+      > matched on `no anatomy token in the title; header tag `CLOCK``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-110:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `no anatomy token in the title; header tag `SENSING``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-112:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-29:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · belief
+
+      > matched on `no anatomy token in the title; header tag `CLOCK->BELIEF``
+
+      > `V2` TOUCHES · belief'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-111:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `no anatomy token in the title; header tag `SENSING``
+
+      > `V2` TOUCHES · physics · platform · console'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-114:
+    kind: AFFECTS
+    rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-115:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `no anatomy token in the title; header tag `SENSING``
+
+      > `V2` TOUCHES · phoenix.module'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-130:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `no anatomy token in the title; header tag `SENSING``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-118:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-9:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · phoenix-execution-readback
+
+      > the seam IS this missing contract
+
+      > `V2` TOUCHES · actuator.phoenix · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:351
+      · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:375 · ext.guardrail
+      · api.v1alpha1 · ext.k8s (+16 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-10:
+    kind: ABSENCE
+    rendered: '> `V2` **ABSENCE** — no positive locus: no trace of an honest non-emit:
+      no metric, no Event, no audit line'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-64:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION->EFFECT``
+
+      > `V2` TOUCHES · actuator.native.rotate · actuator.native.kv-reset'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-12:
+    kind: ABSENCE
+    rendered: '> `V2` **ABSENCE** — no positive locus: no actuation-failure metric
+      exists'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-71:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
+
+      > matched on `adapter-rotate`
+
+      > `V2` TOUCHES · actuator.phoenix · actuator.native.adapter-rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-73:
+    kind: AFFECTS
+    rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-15:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · decision.coverage
+
+      > coverage is booked by the CoverageEngine at decide-time; the retraction that
+      never happens would be its own.
+
+      > `V2` TOUCHES · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-109:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.feedback
+
+      > matched on `rotation`
+
+      > `V2` TOUCHES · ext.first_epss · cost.rls'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-98:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > matched on `no anatomy token in the title; header tag `ECONOMICS``
+
+      > `V2` TOUCHES · calib'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-139:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > matched on `no anatomy token in the title; header tag `ECONOMICS``
+
+      > `V2` TOUCHES · request-drain Update @ internal/actuator/handlers_ai_p4set.go:268
+      · request-drain Update @ internal/actuator/handlers_ai_p4set.go:276 · request-drain
+      Update @ internal/actuator/handlers_ai_p4set.go:300 · ext.vllm · registry ·
+      runner.feedback (+6 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-156:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · slo.contract
+
+      > matched on `Unknown`
+
+      > `V2` TOUCHES · runner.feedback · cost.rls · rotate Delete @ internal/actuator/handlers_k8s.go:57
+      · rotate Create @ internal/actuator/phoenix.go:140 · model · cost.p1 (+5 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-101:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > matched on `no anatomy token in the title; header tag `ECONOMICS``
+
+      > `V2` TOUCHES · cost.p1'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-106:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · belief
+
+      > matched on `belief`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-108:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > matched on `no anatomy token in the title; header tag `ECONOMICS``
+
+      > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · belief ·
+      calib · cost.rls · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-38:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine · rotate Delete @ internal/actuator/handlers_k8s.go:57
+      (+4 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-47:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
+
+      > matched on `rotate`
+
+      > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate
+      · bin.kubectl · controller · feasibility · slo.contract'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-48:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-49:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine · actuator.native (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-57:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · debugger Update @ internal/actuator/handlers_k8s.go:235
+
+      > matched on `debugger`
+
+      > `V2` TOUCHES · actuator.native.debugger · console.live · vol.trivy_bin'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-62:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
+
+      > matched on `endpoint-rotate`
+
+      > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_ai.go:347
+      · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493 · actuator.native.endpoint-rotate
+      · ext.vllm · ext.first_epss'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-65:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `rewarmShadow`
+
+      > `V2` TOUCHES · model-shard-replace Create @ internal/actuator/handlers_ai.go:100
+      · warm-swap Create @ internal/actuator/handlers_ai.go:100 · kv-reset Update
+      @ internal/actuator/handlers_ai.go:306 · ext.mig_agent · calib · ext.vllm (+1
+      more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-67:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100
+
+      > matched on `warm-swap`
+
+      > `V2` TOUCHES · warm-swap Update @ internal/actuator/handlers_ai.go:128 · warm-swap
+      Update @ internal/actuator/handlers_ai.go:132 · warm-swap Update @ internal/actuator/handlers_ai.go:138
+      · warm-swap Delete @ internal/actuator/handlers_ai.go:150 · warm-swap Update
+      @ internal/actuator/handlers_ai.go:191 · actuator.native.warm-swap (+2 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-76:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``
+
+      > `V2` TOUCHES · console.server · dashboard.api'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-77:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``
+
+      > `V2` TOUCHES · warm-swap Update @ internal/actuator/handlers_ai.go:128 · warm-swap
+      Update @ internal/actuator/handlers_ai.go:132 · warm-swap Update @ internal/actuator/handlers_ai.go:138
+      · warm-swap Delete @ internal/actuator/handlers_ai.go:150 · warm-swap Update
+      @ internal/actuator/handlers_ai.go:191 · console.live (+3 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-81:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.mig_agent
+
+      > matched on `mig`
+
+      > `V2` TOUCHES · recon'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-92:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.policies
+
+      > matched on `tenant`
+
+      > `V2` TOUCHES · ext.vllm · kv-reset Update @ internal/actuator/handlers_ai.go:306
+      · cmd.main · actuator.phoenix · console.server · ci.release (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-121:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `handlers`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-41:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
+
+      > matched on `kv-reset`
+
+      > `V2` TOUCHES · actuator.native.kv-reset · ext.vllm'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-50:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-51:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine · controller'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-52:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine · cost.rls'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-54:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
+
+      > matched on `rotate`
+
+      > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-58:
+    kind: AFFECTS
+    rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-59:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `restoreLabels`
+
+      > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493
+      · identity-rotate Update @ internal/actuator/handlers_k8s.go:493 · runner.tick
+      · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-63:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
+
+      > matched on `endpoint-rotate`
+
+      > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_ai.go:347
+      · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493 · actuator.native.endpoint-rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-66:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `rewarmShadow`
+
+      > `V2` TOUCHES · model-shard-replace Create @ internal/actuator/handlers_ai.go:100
+      · warm-swap Create @ internal/actuator/handlers_ai.go:100 · deploy · bin.trivy'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-68:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-70:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · mig-rebind Update @ internal/actuator/handlers_ai.go:191
+
+      > matched on `mig-rebind`
+
+      > `V2` TOUCHES · mig-rebind Delete @ internal/actuator/handlers_ai.go:241 ·
+      ext.mig_agent · actuator.native.mig-rebind'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-82:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.mig_agent
+
+      > matched on `mig`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-83:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.mig_agent
+
+      > matched on `mig`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-84:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native
+
+      > matched on `WireRemoteNodeExec`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-85:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cmd.main
+
+      > matched on `operator`
+
+      > `V2` TOUCHES · runner.policies · actuator.native.rotate · feasibility'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-87:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · the 18 native-rollback operation rows, shipped_reachability=tool-only
+
+      > NativeActuator.Rollback (internal/actuator/native.go:88) is the only invoker
+      and its only caller is cmd/nativedemo.go:79, the native-demo one-shot.
+
+      > `V2` TOUCHES · actuator.native.handlers'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-88:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · calib · actuator.native.quarantine'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-93:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.vllm
+
+      > the plaintext control plane is the serving stack Phorvex talks to, not the
+      domain vocabulary that happens to be called `model`.
+
+      > `V2` TOUCHES · dashboard.api'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-134:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.phoenix
+
+      > matched on `phoenix`
+
+      > `V2` TOUCHES · actuator.phoenix · ext.first_epss · actuator.router · ext.k8s
+      · controller'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-138:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · bin.kubectl · runner (+5 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-116:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.guardrail
+
+      > matched on `guardrail`
+
+      > `V2` TOUCHES · calib · ci.release'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-24:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-56:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · actuator.native.quarantine'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-60:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · route-rotate Update @ internal/actuator/handlers_k8s.go:359
+
+      > matched on `route-rotate`
+
+      > `V2` TOUCHES · route-rotate Update @ internal/actuator/handlers_k8s.go:365
+      · route-rotate Update @ internal/actuator/handlers_k8s.go:411 · route-rotate
+      Update @ internal/actuator/handlers_k8s.go:418 · route-rotate Update @ internal/actuator/handlers_k8s.go:448
+      · console.server · actuator.native.route-rotate (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-61:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · custom-inject Update @ internal/actuator/handlers_k8s.go:235
+
+      > matched on `custom-inject`
+
+      > `V2` TOUCHES · actuator.native.custom-inject · actuator.native.kv-reset'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-69:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``
+
+      > `V2` TOUCHES · mig-rebind Delete @ internal/actuator/handlers_ai.go:241 ·
+      ext.mig_agent · actuator.native.rotate · actuator.native.warm-swap · actuator.native.mig-rebind'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-72:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.guardrail
+
+      > matched on `guardrail`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-89:
+    kind: AFFECTS
+    rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-122:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native
+
+      > matched on `actuator`
+
+      > `V2` TOUCHES · kv-reset Update @ internal/actuator/handlers_ai.go:306 · actuator.native.kv-reset'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-55:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
+
+      > matched on `rotate`
+
+      > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-74:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.shadow_validation
+
+      > matched on `validation`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-75:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native.handlers
+
+      > matched on `no anatomy token in the title; header tag `ACTUATION``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-90:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · api.v1alpha1
+
+      > matched on `contract`
+
+      > `V2` TOUCHES · actuator.native.handlers'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-148:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · the 3 compensation rows with error_handling=DISCARDED:
+      handlers_ai.go:138, handlers_ai_p4set.go:97, handlers_ai_p4set.go:276
+
+      > each is `_ = ec.Client.Update(...)` inside an err-branch; the runner records
+      OutcomeFailed (internal/runner/manager.go:1070) for the action and nothing reports
+      the failed undo.
+
+      > `V2` TOUCHES · model-shard-replace Update @ internal/actuator/handlers_ai.go:128
+      · model-shard-replace Update @ internal/actuator/handlers_ai.go:132 · model-shard-replace
+      Update @ internal/actuator/handlers_ai.go:138 · model-shard-replace Delete @
+      internal/actuator/handlers_ai.go:150 · model-shard-replace Update @ internal/actuator/handlers_ai.go:191
+      · model-shard-replace Delete @ internal/actuator/handlers_ai_p4set.go:112 (+17
+      more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-33:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · identity-rotate Update @ internal/actuator/handlers_k8s.go:286
+
+      > matched on `identity-rotate`
+
+      > `V2` TOUCHES · identity-rotate Update @ internal/actuator/handlers_k8s.go:493
+      · console.server · actuator.native.identity-rotate · actuator.native.route-rotate
+      · route-rotate Update @ internal/actuator/handlers_k8s.go:359 · route-rotate
+      Update @ internal/actuator/handlers_k8s.go:365 (+9 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-35:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
+
+      > matched on `endpoint-rotate`
+
+      > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_ai.go:347
+      · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493 · actuator.native.endpoint-rotate
+      · ext.vllm · ext.mig_agent · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-36:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:351
+
+      > matched on `guardrail-rotate`
+
+      > `V2` TOUCHES · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:375
+      · ext.guardrail · actuator.native.guardrail-rotate · runner.feedback · actuator.native.handlers
+      · ext.mig_agent (+2 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-37:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · model-shard-replace Create @ internal/actuator/handlers_ai.go:100
+
+      > matched on `model-shard-replace`
+
+      > `V2` TOUCHES · model-shard-replace Update @ internal/actuator/handlers_ai.go:128
+      · model-shard-replace Update @ internal/actuator/handlers_ai.go:132 · model-shard-replace
+      Update @ internal/actuator/handlers_ai.go:138 · model-shard-replace Delete @
+      internal/actuator/handlers_ai.go:150 · model-shard-replace Update @ internal/actuator/handlers_ai.go:191
+      · model-shard-replace Delete @ internal/actuator/handlers_ai_p4set.go:112 (+5
+      more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-39:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · kv-migrate-invalidate MigrateRemote @ internal/actuator/handlers_ai_p4set.go:424
+
+      > ack = ALWAYS ERRORS; the stub is internal/actuator/gpu_stack_p4set.go:196.
+      The LOCAL invalidate at :399 does cross — only the remote path is absent.
+
+      > `V2` TOUCHES · ext.kv_local · actuator.native.kv-migrate-invalidate · actuator.native
+      · deploy · ext.mig_agent'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-40:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · request-drain Update @ internal/actuator/handlers_ai_p4set.go:268
+
+      > matched on `request-drain`
+
+      > `V2` TOUCHES · request-drain Update @ internal/actuator/handlers_ai_p4set.go:276
+      · request-drain Update @ internal/actuator/handlers_ai_p4set.go:300 · actuator.native.request-drain'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-42:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
+
+      > matched on `kv-reset`
+
+      > `V2` TOUCHES · actuator.native.kv-reset · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-43:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · killchain
+
+      > matched on `no anatomy token in the title; header tag `KNOWLEDGE``
+
+      > `V2` TOUCHES · model-shard-replace Update @ internal/actuator/handlers_ai.go:128
+      · model-shard-replace Update @ internal/actuator/handlers_ai.go:132 · model-shard-replace
+      Update @ internal/actuator/handlers_ai.go:138 · model-shard-replace Delete @
+      internal/actuator/handlers_ai.go:150 · model-shard-replace Update @ internal/actuator/handlers_ai.go:191
+      · model-shard-replace Delete @ internal/actuator/handlers_ai_p4set.go:112 (+8
+      more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-95:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.phoenix
+
+      > matched on `adapter`
+
+      > `V2` TOUCHES · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
+      · recon · phoenix.module · actuator.native.adapter-rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-96:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · killchain
+
+      > matched on `no anatomy token in the title; header tag `KNOWLEDGE``
+
+      > `V2` TOUCHES · actuator.phoenix · actuator.native.adapter-rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-34:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100
+
+      > matched on `warm-swap`
+
+      > `V2` TOUCHES · warm-swap Update @ internal/actuator/handlers_ai.go:128 · warm-swap
+      Update @ internal/actuator/handlers_ai.go:132 · warm-swap Update @ internal/actuator/handlers_ai.go:138
+      · warm-swap Delete @ internal/actuator/handlers_ai.go:150 · warm-swap Update
+      @ internal/actuator/handlers_ai.go:191 · recon (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-105:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · killchain
+
+      > matched on `no anatomy token in the title; header tag `KNOWLEDGE``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-45:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · recon
+
+      > matched on `facts`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-44:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
+
+      > matched on `rotate`
+
+      > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-46:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.mig_agent
+
+      > matched on `mig`
+
+      > `V2` TOUCHES · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-3:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-1:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · deploy
+
+      > matched on `rbac`
+
+      > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
+      · endpoint-rotate Update @ internal/actuator/handlers_ai.go:347 · endpoint-rotate
+      Update @ internal/actuator/handlers_k8s.go:493 · ext.mig_agent · ext.vllm ·
+      ext.phoenix (+10 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-8:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.mig_agent
+
+      > matched on `node-exec`
+
+      > `V2` TOUCHES · deploy'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-21:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · phoenix:actuate SecurityEvent.Create @ internal/actuator/phoenix.go:140
+
+      > RuleTypeFor is non-empty only for rotate/quarantine (internal/actuator/actuator.go:92);
+      phoenix.go:114 errors on the rest. The 17 hybrid route rows show the same split.
+
+      > `V2` TOUCHES · console.analytics · quarantine Create @ internal/actuator/handlers_k8s.go:122
+      · quarantine Update @ internal/actuator/handlers_k8s.go:138 · quarantine Update
+      @ internal/actuator/handlers_k8s.go:165 · quarantine Delete @ internal/actuator/handlers_k8s.go:169
+      · quarantine Create @ internal/actuator/phoenix.go:140 (+9 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-80:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.native
+
+      > matched on `Available`
+
+      > `V2` TOUCHES · ext.mig_agent · actuator.router'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-123:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · api.v1alpha1
+
+      > matched on `no anatomy token in the title; header tag `CONTRACT``
+
+      > `V2` TOUCHES · route-rotate Update @ internal/actuator/handlers_k8s.go:365
+      · route-rotate Update @ internal/actuator/handlers_k8s.go:411 · route-rotate
+      Update @ internal/actuator/handlers_k8s.go:418 · route-rotate Update @ internal/actuator/handlers_k8s.go:448
+      · recon · actuator.native (+5 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-6:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · api.v1alpha1
+
+      > matched on `no anatomy token in the title; header tag `CONTRACT``
+
+      > `V2` TOUCHES · deploy · feasibility · image.console · actuator.native.debugger
+      · actuator.native.custom-inject'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-7:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-120:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · api.v1alpha1
+
+      > matched on `no anatomy token in the title; header tag `CONTRACT``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-126:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.policies
+
+      > matched on `tenant`
+
+      > `V2` TOUCHES · console.server · ext.phoenix · api.v1alpha1 · cost.rls · actuator.native
+      · console (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-132:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.phoenix
+
+      > matched on `amtd`
+
+      > `V2` TOUCHES · runner.policies · actuator.phoenix · actuator.native'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-53:
+    kind: AFFECTS
+    rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-11:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-22:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``
+
+      > `V2` TOUCHES · runner.policies · console.live · ci.release · ext.first_epss'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-86:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``
+
+      > `V2` TOUCHES · warm-swap Create @ internal/actuator/handlers_ai.go:100 · warm-swap
+      Update @ internal/actuator/handlers_ai.go:128 · warm-swap Update @ internal/actuator/handlers_ai.go:132
+      · warm-swap Update @ internal/actuator/handlers_ai.go:138 · warm-swap Delete
+      @ internal/actuator/handlers_ai.go:150 · warm-swap Update @ internal/actuator/handlers_ai.go:191
+      (+5 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-119:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-5:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-124:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``
+
+      > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · ext.phoenix
+      · cmd.main · runner.policies · actuator.phoenix · actuator.native.rotate'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-135:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · actuator.router
+
+      > matched on `EnsurePolicy`
+
+      > `V2` TOUCHES · runner.policies · ext.phoenix · controller · runner.assembly
+      · actuator.phoenix'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-137:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``
+
+      > `V2` TOUCHES · deploy · graph · controller · runner.policies · runner.feedback
+      · console.live'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-103:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-78:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.vllm
+
+      > matched on `serving`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-91:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-127:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-128:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.policies
+
+      > matched on `tenant`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-13:
+    kind: ABSENCE
+    rendered: '> `V2` **ABSENCE** — no positive locus: no Kubernetes Event is emitted
+      on any actuation'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-14:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · audit
+
+      > matched on `no anatomy token in the title; header tag `RECORD``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-125:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cmd.main
+
+      > matched on `operator`
+
+      > `V2` TOUCHES · console'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-146:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · audit
+
+      > matched on `no anatomy token in the title; header tag `RECORD``
+
+      > `V2` TOUCHES · console · console.live'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-32:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · audit
+
+      > matched on `no anatomy token in the title; header tag `RECORD``
+
+      > `V2` TOUCHES · phoenix.module'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-16:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · audit
+
+      > matched on `no anatomy token in the title; header tag `RECORD``
+
+      > `V2` TOUCHES · quarantine Create @ internal/actuator/handlers_k8s.go:122 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:138 · quarantine Update
+      @ internal/actuator/handlers_k8s.go:165 · quarantine Delete @ internal/actuator/handlers_k8s.go:169
+      · quarantine Create @ internal/actuator/phoenix.go:140 · actionset (+7 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-17:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.feedback
+
+      > matched on `rotation`'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-18:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.phoenix
+
+      > matched on `phoenix`
+
+      > `V2` TOUCHES · actuator.phoenix · runner · audit'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-19:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · runner.feedback
+
+      > matched on `feedback`
+
+      > `V2` TOUCHES · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:351
+      · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:375 · ext.guardrail
+      · runner · actionset · audit (+4 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-100:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · decision.coverage
+
+      > matched on `no anatomy token in the title; header tag `CHOICE``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-102:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · decision.coverage
+
+      > matched on `no anatomy token in the title; header tag `CHOICE``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-131:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · decision.coverage
+
+      > matched on `no anatomy token in the title; header tag `CHOICE``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-117:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · console.attack
+
+      > matched on `attack`
+
+      > `V2` TOUCHES · quarantine Create @ internal/actuator/handlers_k8s.go:122 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:138 · quarantine Update
+      @ internal/actuator/handlers_k8s.go:165 · quarantine Delete @ internal/actuator/handlers_k8s.go:169
+      · quarantine Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate
+      (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-136:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · bin.kubectl
+
+      > matched on `kubectl`
+
+      > `V2` TOUCHES · cmd.console · ext.vllm · applier · belief · cmd.main · deploy
+      (+8 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-4:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · console
+
+      > matched on `no anatomy token in the title; header tag `SURFACE``
+
+      > `V2` TOUCHES · actuator.native · console.server'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-147:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · route-rotate Service.Update @ internal/actuator/handlers_k8s.go:365
+
+      > internal/slo/bound.go:95 justifies StatusZero with "does not change Service
+      selectors" while :363-365 sets svc.Spec.Selector; the runner then records OutcomeCompleted
+      (internal/runner/manager.go:1093).
+
+      > `V2` TOUCHES · route-rotate Update @ internal/actuator/handlers_k8s.go:365
+      · route-rotate Update @ internal/actuator/handlers_k8s.go:411 · route-rotate
+      Update @ internal/actuator/handlers_k8s.go:418 · route-rotate Update @ internal/actuator/handlers_k8s.go:448
+      · actuator.native.rotate · actuator.native.route-rotate (+40 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-99:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · cost.p1
+
+      > matched on `no anatomy token in the title; header tag `ECONOMICS``'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-149:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · killchain
+
+      > matched on `stage`
+
+      > `V2` TOUCHES · ext.vllm · ext.prometheus · ingest · cmd.main · feasibility
+      · audit (+5 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-150:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `no anatomy token in the title; header tag `SENSING``
+
+      > `V2` TOUCHES · runner.policies · platform · console.server'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-151:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ingest
+
+      > matched on `no anatomy token in the title; header tag `SENSING``
+
+      > `V2` TOUCHES · cmd.p3report · ext.vllm'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-152:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · audit
+
+      > matched on `decision`
+
+      > `V2` TOUCHES · ingest · ext.vllm · ext.prometheus · platform · actuator.phoenix
+      · metrics (+1 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-153:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · recon
+
+      > boostFactWeight ×3 at internal/recon/ucw.go:176-184 (vectorDominance, :276)
+      keyed on hasVectorEvent (:280-288, event Type string only); the StagePersist
+      promotion at killchain/hazard.go:201-205 is the secondary effect. Post-dates
+      the fb52e6c anatomy: no node or edge describes it.
+
+      > `V2` TOUCHES · console.attack · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:351
+      · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:375 · ext.guardrail
+      · ext.k8s · recon (+11 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-154:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · audit
+
+      > matched on `decision`
+
+      > `V2` TOUCHES · runner.feedback · runner.killswitch'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-155:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.phoenix
+
+      > matched on `phoenix`
+
+      > `V2` TOUCHES · ext.k8s · controller · redteam · actuator.phoenix · audit ·
+      console.attack (+10 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-157:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.first_epss
+
+      > matched on `epss`
+
+      > `V2` TOUCHES · recon · model · slo.contract · console · ci.release · phoenix.module'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-158:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · model
+
+      > matched on `model`
+
+      > `V2` TOUCHES · api.v1alpha1 · controller · console.live · dashboard.api ·
+      ext.first_epss'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-159:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · ext.kv_local
+
+      > matched on `local`
+
+      > `V2` TOUCHES · deploy · recon · cmd.main · killchain · image.console · ci.release'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-160:
+    kind: LOCUS
+    rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
+
+      > matched on `quarantine`
+
+      > `V2` TOUCHES · quarantine Update @ internal/actuator/handlers_k8s.go:138 ·
+      quarantine Update @ internal/actuator/handlers_k8s.go:165 · quarantine Delete
+      @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
+      · ext.vllm · ext.phoenix (+22 more)'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-97:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228
+  M-129:
+    kind: CLOSED
+    rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
+      as open.'
+    migration_source: legacy-v2-projection
+    review: complete
+    accepted_at: legacy Anatomy V2 join review, bus 228

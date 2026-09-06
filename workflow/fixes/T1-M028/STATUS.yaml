@@ -1,0 +1,76 @@
+schema_version: 1
+fix_id: T1-M028
+issues:
+- M-28
+related_issues:
+- M-23
+- M-25
+- M-26
+title: Proactive cadence cap
+profile: legacy-migrated
+state: HELD
+roles:
+  human_owner: mehrdad
+  proposer: unassigned
+  implementer: unassigned
+  skeptic: unassigned
+  live_verifier: unassigned
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: not-started
+  artifact: null
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: null
+  base_sha: null
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: legacy-see-evidence
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: pending
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: pending
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies:
+- T1-M023
+blockers:
+- Resume only after the M-023/M-020/M-160 chain is merged and deployed
+residuals: []
+next_action:
+  owner: human-owner
+  action: Human releases the hold after dependencies are deployed.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-M028
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: false
+  legacy_blind_deriver: null
+updated_at: '2026-09-06T22:26:59+00:00'

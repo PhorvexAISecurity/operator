@@ -1,0 +1,1599 @@
+diff --git a/phorvex/docs/decision-trace-v2.md b/phorvex/docs/decision-trace-v2.md
+index 82da5e3..778f301 100644
+--- a/phorvex/docs/decision-trace-v2.md
++++ b/phorvex/docs/decision-trace-v2.md
+@@ -1,9 +1,27 @@
+-# Decision Trace V2
+-
+-`phorvex.decision-trace.v2` is nested under `decisionTrace` in each
+-`phorvex.audit.v2` per-asset decision record. It records the current P1 decision
+-path; it does not change candidate generation, feasibility, cost, λ, scoring,
+-selection, learning, or actuation.
++# Decision Trace V2 / V3
++
++`phorvex.decision-trace.v3` (T0-C; supersedes `v2`, which remains readable) is
++nested under `decisionTrace` in each `phorvex.audit.v2` per-asset decision record.
++It records the current P1 decision path; it does not change candidate generation,
++feasibility, cost, λ, scoring, selection, learning, or actuation.
++
++**V3 additions (the complete decision path):** `actionStatus` — exactly one row per
++canonical mutating action (`not-enabled` / `no-cover` / `infeasible` /
++`conformal-slo` / `priced-out` / `budget-exhausted` / `candidate` / `selected` /
++`not-evaluated-by-current-model` / `not-installable`), each with a closed
++`exclusionKind` (`none` / `not-enabled` / `recon-cover` / `feasibility` /
++`cost-nan` / `slo-gate` / `reactive-only` / `selection`) and a `scored` flag; the
++CHi reconstruction terms per costed candidate (`conformalQuantile`,
++`conformalCalibrated`, `gpuEnvelopeApplied`, `gpuEnvelopeSlack`) with the pinned law
++`costHigh = expectedCost + (rotate ? max(quantile, envelopeSlack if applied) : 0)`;
++`sloGateResult`; round semantics (`evaluationRound` per record, `coveredRound` per
++fact, with `coveredBeforeDecision` derived as `coveredRound < evaluationRound`);
++per-fact `coveringActions` and `decompositionAvailable`; the effective `costCeiling`
++and `costModelVersion`; `sloHeadroom` / `nextStage` / `projectedNextStageSec` in the
++inputs; and the runner-stamped `dispatchOutcome` (`not-attempted` / `emitted` /
++`emitted-false` / `dispatch-error`) with `dispatchReason` covering every
++pre-dispatch guard (`dry-run`, `kill-switch`, `ensure-policy-failed`,
++`inviolability-guard`, `no-tick-view`, `emit-boundary-infeasible`, `unselected`).
+ 
+ ## Identity and scope
+ 
+diff --git a/phorvex/internal/actionset/generator.go b/phorvex/internal/actionset/generator.go
+index 097bb3c..d555711 100644
+--- a/phorvex/internal/actionset/generator.go
++++ b/phorvex/internal/actionset/generator.go
+@@ -46,6 +46,13 @@ type ActionSet struct {
+ 	// Excluded records (asset,action,reason) pairs pruned by structural relevance or
+ 	// a hard constraint — surfaced for audit/inviolability, never selectable.
+ 	Excluded []Exclusion
++	// CostCeiling is the effective conformal SLO ceiling enforced this tick
++	// (T0-C: recorded in the decision trace so the gate is reconstructable).
++	CostCeiling float64
++	// CoverByAsset carries recon's declared cover sets per asset over ALL actions
++	// (enabled or not — a fact's cover set is a property of the fact). Read-only;
++	// the decision trace inverts it into per-fact CoveringActions. (T0-C)
++	CoverByAsset map[string]map[model.Action][]string
+ }
+ 
+ // CrossBlockCollision is one recon key claimed by two distinct pod decision blocks.
+@@ -137,7 +144,8 @@ func GeneratableActions() []model.Action {
+ //
+ // The set provably changes with state and contains NO hard-constraint-violating move.
+ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
+-	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{}}
++	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{},
++		CostCeiling: d.CostCeiling, CoverByAsset: map[string]map[model.Action][]string{}}
+ 	keyOwners := map[string]string{}
+ 	claim := func(factKey, block string) bool {
+ 		owner, exists := keyOwners[factKey]
+@@ -161,6 +169,9 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet
+ 		key := v.Pod.Namespace + "/" + v.Pod.Name
+ 		af := d.Recon.AssetFacts(v, d.FactContext(v))
+ 		out.FactsByAsset[key] = append([]recon.Fact(nil), af.Facts...)
++		// T0-C: carry the full declared cover map (all actions) for the trace's
++		// per-fact CoveringActions inversion. The slices are shared read-only.
++		out.CoverByAsset[key] = af.CoverByAction
+ 		coveredKeys := map[string]bool{}
+ 		// Scan every declared cover, including disabled actions. A topology-conditional
+ 		// collision is a taxonomy violation independent of this tenant's current policy.
+diff --git a/phorvex/internal/cost/p1cost.go b/phorvex/internal/cost/p1cost.go
+index 07fa9c1..dff8b62 100644
+--- a/phorvex/internal/cost/p1cost.go
++++ b/phorvex/internal/cost/p1cost.go
+@@ -205,6 +205,36 @@ func (c *P1Cost) ECost(view *model.WorkloadView, move model.Move, pol model.Poli
+ 	return c.Evaluation(view, move, pol).Total
+ }
+ 
++// T0-C read-only accessors for the decision trace. None of them mutates model
++// state (Quantile sorts a copy); Observe is never reachable through them.
++
++// Name returns the cost-model identity constant — the same value the registry
++// stub reports — so the trace records the model, not a hard-coded string.
++func (c *P1Cost) Name() string { return P1CostModelName }
++
++// ConformalQuantile returns the post-clamp slack the CHi path applies for a
++// rotate (Quantile() clamped at 0, exactly as Evaluation uses it). ok is false
++// when no conformal bound exists.
++func (c *P1Cost) ConformalQuantile() (q float64, ok bool) {
++	if c == nil || c.Conformal == nil {
++		return 0, false
++	}
++	q = c.Conformal.Quantile()
++	if q < 0 {
++		q = 0
++	}
++	return q, true
++}
++
++// ConformalCalibrated reports whether the bound holds enough residuals for a
++// measured (non-cold-start) quantile. ok is false when no bound exists.
++func (c *P1Cost) ConformalCalibrated() (calibrated, ok bool) {
++	if c == nil || c.Conformal == nil {
++		return false, false
++	}
++	return c.Conformal.Calibrated(), true
++}
++
+ // CHi is the conformal robust UPPER bound used by the hard SLO/feasibility gate. For a
+ // rotate it adds the conformal slack on top of E[C]; for an unprimed GPU pod the
+ // configured hardware-measured reload/warm-up envelope dominates. Deployments without
+@@ -294,9 +324,13 @@ func maxf(a, b float64) float64 {
+ // The wrapper is stateless (a fresh P1Cost per call returns the PRIOR estimate); the
+ // stateful calibrating instance is owned by the engine. This entry just proves the P1
+ // cost is a registered, swappable CostModel.
++// P1CostModelName is the single source of the cost-model identity string,
++// reported by both the registry stub and the decision trace.
++const P1CostModelName = "rls-dual-conformal"
++
+ type p1CostModel struct{}
+ 
+-func (p1CostModel) Name() string { return "rls-dual-conformal" }
++func (p1CostModel) Name() string { return P1CostModelName }
+ func (p1CostModel) Switching(view *model.WorkloadView, move model.Move, pol model.Policy) float64 {
+ 	return NewP1Cost().ECost(view, move, pol)
+ }
+diff --git a/phorvex/internal/decision/coverage.go b/phorvex/internal/decision/coverage.go
+index 5d7fa57..81dac85 100644
+--- a/phorvex/internal/decision/coverage.go
++++ b/phorvex/internal/decision/coverage.go
+@@ -341,6 +341,12 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
+ 
+ 	// --- submodular greedy under partition (one move/asset) + budget B ---
+ 	covered := map[string]bool{}
++	// T0-C: coveredRound records WHEN a fact key was first covered (1-based round),
++	// written beside covered[k] and never read by the loop — zero selection effect.
++	// lastRound is the last round whose evaluation pass ran (rounds evaluate, then
++	// break), so a recorded marginal's round semantics are reconstructable.
++	coveredRound := map[string]int{}
++	lastRound := 0
+ 	selectedAsset := map[string]bool{}
+ 	selectedAction := map[string]model.Action{}
+ 	selectedMarginal := map[string]float64{}
+@@ -348,6 +354,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
+ 	evaluatedMarginal := map[string]float64{}
+ 	B := pol.MaxMovesPerTick
+ 	for round := 0; round < B; round++ {
++		lastRound = round + 1
+ 		bestIdx := -1
+ 		bestGain := 0.0
+ 		bestMarginal := 0.0
+@@ -384,6 +391,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
+ 		selectedRound[c.Key] = round + 1
+ 		for _, k := range c.CoverKeys {
+ 			covered[k] = true
++			coveredRound[k] = round + 1
+ 		}
+ 	}
+ 
+@@ -529,10 +537,17 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
+ 			AIClassified:          ac.assess.AIClassified,
+ 		}
+ 		if pol.TraceEnabled {
++			// T0-C: the round whose marginal this asset's record carries — the
++			// selection round for the winner (its whole asset is skipped
++			// afterwards), the last executed round for every other asset.
++			evaluationRound := lastRound
++			if selectedAsset[key] {
++				evaluationRound = selectedRound[key]
++			}
+ 			decision.Trace = e.buildDecisionTrace(v, pol, now, set, ac, lambda, demand,
+ 				len(selectedAsset), selectedAsset[key], selectedAction[key], selectedRound[key],
+ 				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov,
+-				tcost, evaluatedMarginal, dualUpdate)
++				tcost, evaluatedMarginal, dualUpdate, coveredRound, evaluationRound)
+ 		}
+ 		decisions = append(decisions, decision)
+ 	}
+@@ -564,6 +579,10 @@ func traceOptional(present bool, value float64) model.OptionalFloat {
+ 	return model.OptionalFloat{Present: present, Value: value}
+ }
+ 
++func traceOptionalInt(present bool, value int) model.OptionalInt {
++	return model.OptionalInt{Present: present, Value: value}
++}
++
+ func traceStringOrUnavailable(value string) string {
+ 	if value == "" {
+ 		return model.TraceNotAvailable
+@@ -620,6 +639,8 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 	tcost *cost.P1Cost,
+ 	evaluatedMarginal map[string]float64,
+ 	dualUpdate cost.DualUpdate,
++	coveredRound map[string]int,
++	evaluationRound int,
+ ) *model.DecisionTraceV2 {
+ 	assetKey := v.Pod.Namespace + "/" + v.Pod.Name
+ 	tickID := pol.TickID
+@@ -627,7 +648,7 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
+ 	}
+ 	trace := &model.DecisionTraceV2{
+-		SchemaVersion:             model.DecisionTraceSchemaV2,
++		SchemaVersion:             model.DecisionTraceSchemaV3,
+ 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
+ 		TickID:                    tickID,
+ 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
+@@ -643,7 +664,7 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		AssetUID:                  traceStringOrUnavailable(v.Pod.UID),
+ 		Budget:                    pol.MaxMovesPerTick,
+ 		CandidateDemand:           demand,
+-		MovesSpent:                movesSpent,
++		MovesSpent:                movesSpent, // ≡ the ticket's movesSelected: per-tick selected count (B.6.1)
+ 		DryRun:                    pol.DryRun,
+ 		LambdaConfiguredSeed:      pol.Lambda,
+ 		LambdaRuntime:             lambda,
+@@ -655,6 +676,9 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		CFlowUnitStatus:           model.CFlowUnitDimensionlessDisruptionLoss,
+ 		CostRepresentationVersion: model.CostRepresentationWeightedDimensionlessV1,
+ 		DualUpdate:                traceDualUpdate(dualUpdate),
++		CostCeiling:               set.CostCeiling,
++		CostModelVersion:          tcost.Name(),
++		EvaluationRound:           evaluationRound,
+ 		SelectedAction:            string(model.ActionNoop),
+ 		TieBreakReason:            "notApplicable",
+ 	}
+@@ -691,22 +715,46 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		ExposureSeconds:   traceOptional(exposurePresent, exposure.Seconds()),
+ 		ProactiveFloorSec: pol.ProactiveFloor.Seconds(),
+ 		AntiOverRotateSec: pol.AntiOverRotationWindow.Seconds(),
++		// T0-C: lifted from the envelope into the trace with presence.
++		// Present only when headroom was MEASURED: sensed.Context (ctxprov/sensed.go) derives it
++		// from P99 under exactly this predicate and otherwise defaults to 1.0 (full headroom).
++		SLOHeadroom:           traceOptional(pol.P99Ms > 0 && v.Telemetry.Present && v.Telemetry.P99Ms > 0, ac.sig.SLOHeadroom),
++		NextStage:             ac.assess.NextStageName,
++		ProjectedNextStageSec: traceOptional(ac.assess.NextStageName != "", ac.assess.ProjectedNextStageSec),
+ 	}
+ 
+ 	source := model.TraceNotAvailable
+ 	if e.Recon != nil {
+ 		source = e.Recon.Name()
+ 	}
++	// T0-C: invert the declared cover map (ALL actions, not only enabled ones)
++	// into per-fact covering actions, in canonical order.
++	coveringActions := func(factKey string) []string {
++		var out []string
++		for _, a := range model.MutatingActions {
++			for _, k := range set.CoverByAsset[assetKey][a] {
++				if k == factKey {
++					out = append(out, string(a))
++					break
++				}
++			}
++		}
++		return out
++	}
+ 	for _, fact := range set.FactsByAsset[assetKey] {
+ 		weight, presented := set.FactWeights[fact.Key()]
+ 		if !presented {
+ 			continue
+ 		}
++		// T0-C: coveredBeforeDecision is DERIVED from the round map (covered in an
++		// earlier round than the one whose marginal this record carries), not
++		// asserted — the hard-coded false it replaces was a fabricated value.
++		factCoveredRound, factCovered := coveredRound[fact.Key()]
+ 		trace.Facts = append(trace.Facts, model.DecisionFactV2{
+ 			FactKey:               fact.Key(),
+ 			FactType:              fact.Kind,
+ 			FinalWeight:           weight,
+-			CoveredBeforeDecision: false,
++			CoveredBeforeDecision: factCovered && factCoveredRound < evaluationRound,
+ 			SourceComponent:       source,
+ 			AssetValue:            traceOptional(true, ac.sig.AssetValue),
+ 			// The current recon API exposes only the final weight and its
+@@ -715,6 +763,9 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 			UrgencyContribution:    model.OptionalFloat{Present: false},
+ 			DispersionContribution: model.OptionalFloat{Present: false},
+ 			RelativeWeight:         model.OptionalFloat{Present: false},
++			CoveringActions:        coveringActions(fact.Key()),
++			DecompositionAvailable: false,
++			CoveredRound:           traceOptionalInt(factCovered, factCoveredRound),
+ 		})
+ 	}
+ 
+@@ -738,6 +789,12 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		if candidateSelected {
+ 			selectedCandidateKey = key
+ 		}
++		// T0-C (B.1): the CHi reconstruction terms, recorded exactly where the
++		// cost path computed them. The envelope branch is the majority GPU case
++		// live; without these four fields CHi is unreconstructable there.
++		conformalQuantile, quantileOK := tcost.ConformalQuantile()
++		conformalCalibrated, calibratedOK := tcost.ConformalCalibrated()
++		envelopeApplied := candidate.Action == model.ActionRotate && v.Pod.HasGPU && !primed
+ 		selectionReason := "not_selected_by_current_greedy_ranking"
+ 		switch {
+ 		case candidateSelected:
+@@ -755,7 +812,7 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		case movesSpent >= pol.MaxMovesPerTick:
+ 			selectionReason = "move_budget_exhausted"
+ 		}
+-		trace.Candidates = append(trace.Candidates, model.DecisionCandidateV2{
++		row := model.DecisionCandidateV2{
+ 			Action:                      string(candidate.Action),
+ 			CandidateKey:                key,
+ 			CoverKeys:                   append([]string(nil), candidate.CoverKeys...),
+@@ -773,7 +830,19 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 			Selected:                    candidateSelected,
+ 			SelectionReason:             selectionReason,
+ 			NotClassifiedByCurrentModel: true,
+-		})
++			// Generated ⇒ passed the conformal SLO gate (generator step 4).
++			SLOGateResult:      model.OptionalBool{Present: true, Value: true},
++			GPUEnvelopeApplied: model.OptionalBool{Present: true, Value: envelopeApplied},
++		}
++		if candidate.Action == model.ActionRotate {
++			row.ConformalQuantile = traceOptional(quantileOK, conformalQuantile)
++			row.ConformalCalibrated = model.OptionalBool{Present: calibratedOK, Value: conformalCalibrated}
++			row.GPUEnvelopeSlack = traceOptional(envelopeApplied, pol.FlowDisruption*cost.GPUEnvelopeMax())
++		}
++		if candidateSelected {
++			row.SelectionRound = model.OptionalInt{Present: true, Value: selectionRound}
++		}
++		trace.Candidates = append(trace.Candidates, row)
+ 		tieBreakRank++
+ 	}
+ 	for _, exclusion := range set.Excluded {
+@@ -805,6 +874,19 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 				candidate.CNorm = traceOptional(true, evaluation.Norm)
+ 				candidate.CFlow = traceOptional(true, evaluation.Flow)
+ 			}
++			// T0-C: cost-evaluated exclusions are conformal-slo gate rejects
++			// (the only costed exclusion path) — the gate result is false, and
++			// rotate rows carry the same CHi reconstruction terms as candidates.
++			candidate.SLOGateResult = model.OptionalBool{Present: true, Value: false}
++			exclEnvelopeApplied := exclusion.Action == model.ActionRotate && v.Pod.HasGPU && !primed
++			candidate.GPUEnvelopeApplied = model.OptionalBool{Present: true, Value: exclEnvelopeApplied}
++			if exclusion.Action == model.ActionRotate {
++				q, qOK := tcost.ConformalQuantile()
++				cal, calOK := tcost.ConformalCalibrated()
++				candidate.ConformalQuantile = traceOptional(qOK, q)
++				candidate.ConformalCalibrated = model.OptionalBool{Present: calOK, Value: cal}
++				candidate.GPUEnvelopeSlack = traceOptional(exclEnvelopeApplied, pol.FlowDisruption*cost.GPUEnvelopeMax())
++			}
+ 		}
+ 		trace.Candidates = append(trace.Candidates, candidate)
+ 	}
+@@ -839,9 +921,111 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 			}
+ 		}
+ 	}
++
++	// T0-C (R-2): the complete action accounting — exactly one row per canonical
++	// mutating action, including actions the current model never considered.
++	// Statuses map from existing pipeline facts only; nothing is invented.
++	// Capability/installability is never evaluated per-asset in the decision path,
++	// so not-installable is emitted by no mapping (trap 3).
++	trace.ActionStatus = buildActionStatus(pol, assetKey, attackBacked, trace.Candidates, set.Excluded, evaluatedMarginal)
++
++	// T0-C (B.5): the dispatch outcome is known only after the actuation attempt;
++	// the runner stamps the real value before the audit write. These defaults make
++	// an unselected record honest at decision time and a selected record that
++	// somehow reached the write unstamped VISIBLE (pending-dispatch is a stamp bug,
++	// not a decision state).
++	if selected {
++		trace.DispatchOutcome = model.DispatchNotAttempted
++		trace.DispatchReason = "pending-dispatch"
++	} else {
++		trace.DispatchOutcome = model.DispatchNotAttempted
++		trace.DispatchReason = "unselected"
++	}
+ 	return trace
+ }
+ 
++// buildActionStatus maps the generator/selection facts of one asset's tick onto the
++// ticket's closed per-action vocabulary (T0-C). Pure recording: it reads the trace's
++// own candidate rows and the generator's exclusions; it cannot affect selection.
++func buildActionStatus(pol model.Policy, assetKey string, attackBacked bool,
++	candidates []model.DecisionCandidateV2, excluded []actionset.Exclusion,
++	evaluatedMarginal map[string]float64) []model.DecisionActionStatusV3 {
++
++	generated := map[string]model.DecisionCandidateV2{}
++	for _, c := range candidates {
++		if c.ExistingExclusionReason == "" {
++			generated[c.Action] = c
++		}
++	}
++	excludedByAction := map[string]actionset.Exclusion{}
++	for _, ex := range excluded {
++		if ex.Key == assetKey {
++			excludedByAction[string(ex.Action)] = ex
++		}
++	}
++
++	rows := make([]model.DecisionActionStatusV3, 0, len(model.MutatingActions))
++	for _, action := range model.MutatingActions {
++		name := string(action)
++		row := model.DecisionActionStatusV3{Action: name}
++		ex, wasExcluded := excludedByAction[name]
++		c, wasGenerated := generated[name]
++		switch {
++		case !model.ActionEnabled(pol, action):
++			row.Status = model.ActionStatusNotEnabled
++			row.ExclusionKind = model.ExclusionNotEnabled
++		case wasExcluded:
++			// Structural mapping from the exclusion's own fields — no string sniffing:
++			// Category set ⇒ data-quality fail-close; feasibility never evaluated ⇒
++			// recon-cover; infeasible ⇒ Layer-A; costed+feasible ⇒ the SLO gate.
++			row.Reason = ex.Reason
++			switch {
++			case ex.Category != "":
++				row.Status = model.ActionStatusInfeasible
++				row.ExclusionKind = model.ExclusionCostNaN
++			case !ex.FeasibilityEvaluated:
++				row.Status = model.ActionStatusNoCover
++				row.ExclusionKind = model.ExclusionReconCover
++			case !ex.Feasible:
++				row.Status = model.ActionStatusInfeasible
++				row.ExclusionKind = model.ExclusionFeasibility
++			default:
++				row.Status = model.ActionStatusConformalSLO
++				row.ExclusionKind = model.ExclusionSLOGate
++			}
++		case wasGenerated:
++			_, row.Scored = evaluatedMarginal[traceCandidateKey(assetKey, action)]
++			row.Reason = c.SelectionReason
++			switch {
++			case c.Selected:
++				row.Status = model.ActionStatusSelected
++				row.ExclusionKind = model.ExclusionNone
++			case !attackBacked:
++				// Reactive-only suppression: never scored, never in the running —
++				// recorded as such, not as a bare candidate (B.4).
++				row.Status = model.ActionStatusCandidate
++				row.ExclusionKind = model.ExclusionReactiveOnly
++			case c.SelectionReason == "strict_gain_not_positive":
++				row.Status = model.ActionStatusPricedOut
++				row.ExclusionKind = model.ExclusionSelection
++			case c.SelectionReason == "move_budget_exhausted":
++				row.Status = model.ActionStatusBudgetExhausted
++				row.ExclusionKind = model.ExclusionSelection
++			default:
++				row.Status = model.ActionStatusCandidate
++				row.ExclusionKind = model.ExclusionSelection
++			}
++		default:
++			// Unreachable by construction (Generate writes every enabled action to
++			// Candidates or Excluded); recorded defensively, never fabricated.
++			row.Status = model.ActionStatusNotEvaluated
++			row.ExclusionKind = model.ExclusionNone
++		}
++		rows = append(rows, row)
++	}
++	return rows
++}
++
+ // attributionOf decomposes a move's value into SHAP-style terms: per recon-fact-kind
+ // coverage contribution + the −λ·cost term.
+ func attributionOf(c actionset.Candidate, weights map[string]float64, lambda float64) []model.AttributionTerm {
+diff --git a/phorvex/internal/decision/decision_trace_v3_test.go b/phorvex/internal/decision/decision_trace_v3_test.go
+new file mode 100644
+index 0000000..bf253f9
+--- /dev/null
++++ b/phorvex/internal/decision/decision_trace_v3_test.go
+@@ -0,0 +1,416 @@
++/*
++ * Phorvex — T0-C (B-5/R-2/R-9): the decision trace records the complete decision
++ * path. Fixture battery per fixes/T0-C/03-decision.md B.7: action accounting (R-2),
++ * CHi reconstruction (B.1), round semantics (B.2), NaN distinction (B.3),
++ * reactive-only honesty (B.4), SLO-gate recording, and the completeness property.
++ */
++
++package decision
++
++import (
++	"math"
++	"testing"
++	"time"
++
++	"github.com/phorvex/phorvex/internal/cost"
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++func actionStatusRow(t *testing.T, trace *model.DecisionTraceV2, action model.Action) model.DecisionActionStatusV3 {
++	t.Helper()
++	for _, row := range trace.ActionStatus {
++		if row.Action == string(action) {
++			return row
++		}
++	}
++	t.Fatalf("no actionStatus row for %q", action)
++	return model.DecisionActionStatusV3{}
++}
++
++// B.7.1 + B.7.8: every record carries exactly one row per canonical mutating action,
++// in canonical order, unique — here with a 2-action policy (13 not-enabled rows).
++func TestDecisionTraceV3ActionStatusCompletesCanonicalVocabulary(t *testing.T) {
++	view := covView("v3-status", true, 2*time.Hour, false)
++	trace := fixedTraceEngine().Decide([]*model.WorkloadView{view}, decisionTracePolicy(1, true))[0].Trace
++	if trace == nil {
++		t.Fatal("trace missing")
++	}
++	if err := trace.Validate(); err != nil {
++		t.Fatal(err)
++	}
++	if got, want := len(trace.ActionStatus), len(model.MutatingActions); got != want {
++		t.Fatalf("actionStatus rows = %d, want exactly %d", got, want)
++	}
++	notEnabled := 0
++	for i, row := range trace.ActionStatus {
++		if row.Action != string(model.MutatingActions[i]) {
++			t.Fatalf("row %d = %q, canonical order wants %q", i, row.Action, model.MutatingActions[i])
++		}
++		if row.Status == model.ActionStatusNotEnabled {
++			notEnabled++
++			if row.ExclusionKind != model.ExclusionNotEnabled {
++				t.Fatalf("not-enabled row %q carries exclusionKind %q", row.Action, row.ExclusionKind)
++			}
++			continue
++		}
++		// covPolicy enables rotate+quarantine: those two rows must be accounted.
++		if row.Action != string(model.ActionRotate) && row.Action != string(model.ActionQuarantine) {
++			t.Fatalf("action %q is not policy-enabled but is not recorded not-enabled: %+v", row.Action, row)
++		}
++	}
++	if notEnabled != len(model.MutatingActions)-2 {
++		t.Fatalf("not-enabled rows = %d, want %d", notEnabled, len(model.MutatingActions)-2)
++	}
++	// The selected action's row reads selected/none (B.3 consistency rule).
++	if trace.SelectedAction != string(model.ActionNoop) {
++		row := actionStatusRow(t, trace, model.Action(trace.SelectedAction))
++		if row.Status != model.ActionStatusSelected || row.ExclusionKind != model.ExclusionNone {
++			t.Fatalf("selected action row = %+v", row)
++		}
++	}
++}
++
++// B.7.2: B=2 three-asset tick — coveredRound/evaluationRound semantics and the
++// marginal reconstruction law (B.2). Two assets win (rounds 1 and 2); the third is
++// unselected with evaluationRound = lastRound. Under the cross-block collision
++// regime fact keys are block-owned, so coveredBeforeDecision derives false
++// everywhere — but now it is COMPUTED from the recorded rounds, not asserted.
++func TestDecisionTraceV3CoveredRoundSemantics(t *testing.T) {
++	a := covView("v3-round-a", true, 2*time.Hour, false)
++	b := covView("v3-round-b", true, 2*time.Hour, false)
++	c := covView("v3-round-c", true, 2*time.Hour, false)
++	a.BlastRadius, b.BlastRadius, c.BlastRadius = 0.9, 0.8, 0.1 // deterministic order
++	decisions := fixedTraceEngine().Decide([]*model.WorkloadView{a, b, c}, decisionTracePolicy(2, true))
++	if len(decisions) != 3 {
++		t.Fatalf("decisions = %d", len(decisions))
++	}
++	selectedRounds := 0
++	var other *model.DecisionTraceV2
++	for i := range decisions {
++		tr := decisions[i].Trace
++		if tr == nil {
++			t.Fatal("trace missing")
++		}
++		if err := tr.Validate(); err != nil {
++			t.Fatalf("%s/%s: %v", decisions[i].Namespace, decisions[i].Pod, err)
++		}
++		if decisions[i].Selected {
++			selectedRounds++
++			// A winner's record carries ITS selection round. Facts covered by the
++			// SELECTED action are covered AT that round (coveredRound ==
++			// evaluationRound ⇒ not before); facts outside its cover stay absent.
++			if !tr.SelectionRound.Present || tr.EvaluationRound != tr.SelectionRound.Value {
++				t.Fatalf("winner %s/%s evaluationRound = %d, selectionRound = %+v",
++					decisions[i].Namespace, decisions[i].Pod, tr.EvaluationRound, tr.SelectionRound)
++			}
++			coveredKeys := map[string]bool{}
++			for _, cand := range tr.Candidates {
++				if cand.Selected {
++					for _, k := range cand.CoverKeys {
++						coveredKeys[k] = true
++					}
++				}
++			}
++			if len(coveredKeys) == 0 {
++				t.Fatal("selected candidate covers nothing")
++			}
++			for _, f := range tr.Facts {
++				if coveredKeys[f.FactKey] {
++					if !f.CoveredRound.Present || f.CoveredRound.Value != tr.EvaluationRound {
++						t.Fatalf("winner covered fact %q coveredRound = %+v, want present %d", f.FactKey, f.CoveredRound, tr.EvaluationRound)
++					}
++				} else if f.CoveredRound.Present {
++					t.Fatalf("fact %q outside the selected cover claims a cover round", f.FactKey)
++				}
++				if f.CoveredBeforeDecision {
++					t.Fatalf("winner fact %q coveredBeforeDecision must derive false (covered AT its round)", f.FactKey)
++				}
++			}
++		} else {
++			other = tr
++		}
++	}
++	if selectedRounds != 2 || other == nil {
++		t.Fatalf("selected = %d, want 2 selected + 1 unselected", selectedRounds)
++	}
++	// The unselected asset was evaluated through the last executed round (2).
++	if other.EvaluationRound != 2 {
++		t.Fatalf("unselected asset evaluationRound = %d, want 2 (lastRound)", other.EvaluationRound)
++	}
++	for _, f := range other.Facts {
++		if f.CoveredRound.Present || f.CoveredBeforeDecision {
++			t.Fatalf("unselected asset's fact %q claims coverage under block-owned keys: %+v", f.FactKey, f.CoveredRound)
++		}
++	}
++	// The marginal law is exercised inside Validate (v3): marginal == Σ finalWeight
++	// over not-covered-before keys. Reaching here means it held on all three records.
++}
++
++// B.7.3: GPU-unprimed rotate carries the full CHi reconstruction quad (B.1) and the
++// pinned law reconstructs CostHigh from the recorded terms.
++func TestDecisionTraceV3GPUUnprimedRotateCarriesEnvelopeTerms(t *testing.T) {
++	view := covView("v3-gpu", true, 2*time.Hour, false)
++	view.Pod.HasGPU = true
++	pol := decisionTracePolicy(1, true)
++	pol.CostCeiling = 100 // keep the SLO gate open: this fixture is about the envelope TERMS
++	trace := fixedTraceEngine().Decide([]*model.WorkloadView{view}, pol)[0].Trace
++	if trace == nil {
++		t.Fatal("trace missing")
++	}
++	if err := trace.Validate(); err != nil {
++		t.Fatal(err) // the CHi law invariant runs here
++	}
++	var rotate *model.DecisionCandidateV2
++	for i := range trace.Candidates {
++		if trace.Candidates[i].Action == string(model.ActionRotate) && trace.Candidates[i].ExistingExclusionReason == "" {
++			rotate = &trace.Candidates[i]
++		}
++	}
++	if rotate == nil {
++		t.Fatal("no generated rotate candidate")
++	}
++	if !rotate.ConformalQuantile.Present {
++		t.Fatalf("rotate row lacks the conformal quantile: %+v", rotate)
++	}
++	if !rotate.ConformalCalibrated.Present || rotate.ConformalCalibrated.Value {
++		t.Fatalf("cold-start bound must record calibrated=false: %+v", rotate.ConformalCalibrated)
++	}
++	if !rotate.GPUEnvelopeApplied.Present || !rotate.GPUEnvelopeApplied.Value {
++		t.Fatalf("unprimed GPU rotate must record the envelope branch: %+v", rotate.GPUEnvelopeApplied)
++	}
++	wantSlack := pol.FlowDisruption * cost.GPUEnvelopeMax()
++	if !rotate.GPUEnvelopeSlack.Present || rotate.GPUEnvelopeSlack.Value != wantSlack {
++		t.Fatalf("envelope slack = %+v, want present %g", rotate.GPUEnvelopeSlack, wantSlack)
++	}
++	// The pinned law, independently recomputed here (Validate also checks it):
++	slack := math.Max(rotate.ConformalQuantile.Value, wantSlack)
++	if want := rotate.ExpectedCost.Value + slack; math.Abs(want-rotate.CostHigh.Value) > 1e-9 {
++		t.Fatalf("CHi law: %g + %g != %g", rotate.ExpectedCost.Value, slack, rotate.CostHigh.Value)
++	}
++	// A non-rotate generated row carries no rotate slack terms.
++	for i := range trace.Candidates {
++		c := &trace.Candidates[i]
++		if c.Action != string(model.ActionRotate) && c.ExistingExclusionReason == "" {
++			if c.ConformalQuantile.Present || c.GPUEnvelopeSlack.Present {
++				t.Fatalf("non-rotate row carries rotate slack terms: %+v", c)
++			}
++			if !c.GPUEnvelopeApplied.Present || c.GPUEnvelopeApplied.Value {
++				t.Fatalf("non-rotate row must record envelope-applied=false: %+v", c.GPUEnvelopeApplied)
++			}
++		}
++	}
++}
++
++// B.7.4: a NaN telemetry feature fails closed into status=infeasible +
++// exclusionKind=cost-nan — the distinction p1cost.go:24-26 draws deliberately (B.3).
++// (View-side NaN: rotate reads reqRate, quarantine reads connCount — p1cost.go:265-279.)
++func TestDecisionTraceV3NaNExclusionKeepsDataQualityDistinct(t *testing.T) {
++	view := covView("v3-nan", true, 2*time.Hour, false)
++	view.Telemetry = model.Telemetry{Present: true, ReqRate: math.NaN(), ConnCount: math.NaN()}
++	pol := decisionTracePolicy(1, true)
++	trace := fixedTraceEngine().Decide([]*model.WorkloadView{view}, pol)[0].Trace
++	if trace == nil {
++		t.Fatal("trace missing")
++	}
++	if err := trace.Validate(); err != nil {
++		t.Fatal(err)
++	}
++	nanRows := 0
++	for _, row := range trace.ActionStatus {
++		if row.ExclusionKind == model.ExclusionCostNaN {
++			nanRows++
++			if row.Status != model.ActionStatusInfeasible {
++				t.Fatalf("cost-nan row reads status %q, want infeasible (B.3)", row.Status)
++			}
++			if row.Reason == "" {
++				t.Fatal("cost-nan row lost the category/detail reason")
++			}
++		}
++	}
++	if nanRows != 2 { // covPolicy enables rotate+quarantine; both fail closed
++		t.Fatalf("cost-nan rows = %d, want 2 (both enabled actions)", nanRows)
++	}
++	for _, c := range trace.Candidates {
++		if c.ConformalQuantile.Present || c.GPUEnvelopeSlack.Present || c.SLOGateResult.Present {
++			t.Fatalf("NaN row carries cost-path terms the fail-closed return never computed: %+v", c)
++		}
++	}
++}
++
++// B.7.5: reactive-only suppression records scored=false + exclusionKind=reactive-only,
++// never a bare "candidate" (B.4) — the state 100% of vllm rows are in live.
++func TestDecisionTraceV3ReactiveOnlyRowsAreHonest(t *testing.T) {
++	view := covView("v3-reactive", true, 2*time.Hour, false) // no foothold, no suspect adapter
++	pol := decisionTracePolicy(1, true)
++	pol.ReactiveOnly = true
++	decision := fixedTraceEngine().Decide([]*model.WorkloadView{view}, pol)[0]
++	if decision.Trace == nil {
++		t.Fatal("trace missing")
++	}
++	trace := decision.Trace
++	if err := trace.Validate(); err != nil {
++		t.Fatal(err)
++	}
++	if trace.SelectedAction != string(model.ActionNoop) {
++		t.Fatalf("reactive-only asset with no foothold selected %q", trace.SelectedAction)
++	}
++	for _, action := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
++		row := actionStatusRow(t, trace, action)
++		if row.Status != model.ActionStatusCandidate || row.ExclusionKind != model.ExclusionReactiveOnly || row.Scored {
++			t.Fatalf("reactive-only row for %q = %+v, want candidate/reactive-only/scored=false", action, row)
++		}
++	}
++}
++
++// B.7.7: a conformal-slo gate reject records status=conformal-slo, exclusionKind=
++// slo-gate, sloGateResult=false, and the effective ceiling at trace level.
++func TestDecisionTraceV3ConformalSLOGateReject(t *testing.T) {
++	view := covView("v3-slo", true, 2*time.Hour, false)
++	pol := decisionTracePolicy(1, true)
++	pol.CostCeiling = 1e-9 // below any CHi: every enabled action is gate-rejected
++	trace := fixedTraceEngine().Decide([]*model.WorkloadView{view}, pol)[0].Trace
++	if trace == nil {
++		t.Fatal("trace missing")
++	}
++	if err := trace.Validate(); err != nil {
++		t.Fatal(err)
++	}
++	if trace.CostCeiling != 1e-9 {
++		t.Fatalf("trace costCeiling = %g, want the effective 1e-9", trace.CostCeiling)
++	}
++	for _, action := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
++		row := actionStatusRow(t, trace, action)
++		if row.Status != model.ActionStatusConformalSLO || row.ExclusionKind != model.ExclusionSLOGate {
++			t.Fatalf("gate-rejected row for %q = %+v", action, row)
++		}
++	}
++	gateRows := 0
++	for _, c := range trace.Candidates {
++		if c.ExistingExclusionReason == "" {
++			continue
++		}
++		if !c.SLOGateResult.Present || c.SLOGateResult.Value {
++			t.Fatalf("gate-rejected exclusion lacks sloGateResult=false: %+v", c)
++		}
++		gateRows++
++	}
++	if gateRows != 2 {
++		t.Fatalf("gate-rejected exclusion rows = %d, want 2", gateRows)
++	}
++}
++
++// B.7.8: the completeness property over varied policies — exactly 15 rows, canonical
++// order, unique, valid — including the B=0 edge (no evaluation pass runs).
++func TestDecisionTraceV3ActionStatusPropertyVariedPolicies(t *testing.T) {
++	views := []*model.WorkloadView{covView("v3-prop", true, 2*time.Hour, false)}
++	policies := []model.Policy{
++		decisionTracePolicy(0, true),
++		decisionTracePolicy(1, true),
++		decisionTracePolicy(3, true),
++	}
++	onlyRotate := decisionTracePolicy(1, true)
++	onlyRotate.EnabledActions = map[model.Action]bool{model.ActionRotate: true}
++	policies = append(policies, onlyRotate)
++	none := decisionTracePolicy(1, true)
++	none.EnabledActions = map[model.Action]bool{}
++	policies = append(policies, none)
++
++	for pi, pol := range policies {
++		trace := fixedTraceEngine().Decide(views, pol)[0].Trace
++		if trace == nil {
++			t.Fatalf("policy %d: trace missing", pi)
++		}
++		if err := trace.Validate(); err != nil {
++			t.Fatalf("policy %d: %v", pi, err)
++		}
++		if len(trace.ActionStatus) != len(model.MutatingActions) {
++			t.Fatalf("policy %d: %d rows", pi, len(trace.ActionStatus))
++		}
++		seen := map[string]bool{}
++		for i, row := range trace.ActionStatus {
++			if row.Action != string(model.MutatingActions[i]) || seen[row.Action] {
++				t.Fatalf("policy %d row %d = %q: non-canonical or duplicate", pi, i, row.Action)
++			}
++			seen[row.Action] = true
++			if row.Status == model.ActionStatusNotInstallable {
++				t.Fatalf("policy %d: not-installable emitted — capability is never evaluated per-asset", pi)
++			}
++		}
++		if trace.DispatchOutcome == "" {
++			t.Fatalf("policy %d: dispatch outcome not recorded", pi)
++		}
++	}
++}
++
++// B.7.9: trace-on/off selection equivalence extended to the v3 fixtures (P-C5).
++func TestDecisionTraceV3FixturesAreSelectionEquivalentTraceOnOff(t *testing.T) {
++	gpu := covView("v3-eq-gpu", true, 2*time.Hour, false)
++	gpu.Pod.HasGPU = true
++	corpus := [][]*model.WorkloadView{
++		{gpu},
++		{covView("v3-eq-a", true, 2*time.Hour, false), covView("v3-eq-b", true, 90*time.Minute, false)},
++	}
++	pols := []model.Policy{decisionTracePolicy(1, false), decisionTracePolicy(2, false)}
++	reactivePol := decisionTracePolicy(1, false)
++	reactivePol.ReactiveOnly = true
++	pols = append(pols, reactivePol)
++
++	for i, views := range corpus {
++		for pi, base := range pols {
++			withPol := base
++			withPol.TraceEnabled = true
++			without := fixedTraceEngine().Decide(views, base)
++			with := fixedTraceEngine().Decide(views, withPol)
++			if !decisionsEqualSelection(without, with) {
++				t.Fatalf("corpus %d policy %d: trace changed selection", i, pi)
++			}
++		}
++	}
++}
++
++func decisionsEqualSelection(a, b []model.Decision) bool {
++	if len(a) != len(b) {
++		return false
++	}
++	for i := range a {
++		if a[i].Selected != b[i].Selected || a[i].Action != b[i].Action ||
++			a[i].Namespace != b[i].Namespace || a[i].Pod != b[i].Pod {
++			return false
++		}
++	}
++	return true
++}
++
++// TestDecisionTraceV3ValidateRejectsMalformed pins the negative half of the v3 contract:
++// a v3 record missing a field the reconstruction laws depend on, or naming a selected
++// action outside the canonical vocabulary, is rejected with an error — never accepted,
++// never a panic.
++func TestDecisionTraceV3ValidateRejectsMalformed(t *testing.T) {
++	base := fixedTraceEngine().Decide([]*model.WorkloadView{covView("v3-neg", true, 2*time.Hour, false)}, decisionTracePolicy(1, true))[0].Trace
++	if base == nil {
++		t.Fatal("trace missing")
++	}
++	if err := base.Validate(); err != nil {
++		t.Fatalf("well-formed v3 trace must validate: %v", err)
++	}
++	cases := []struct {
++		name   string
++		mutate func(tr *model.DecisionTraceV2)
++	}{
++		{"unknown selected action", func(tr *model.DecisionTraceV2) { tr.SelectedAction = "not-a-move" }},
++		{"empty costModelVersion", func(tr *model.DecisionTraceV2) { tr.CostModelVersion = "" }},
++		{"zero costCeiling", func(tr *model.DecisionTraceV2) { tr.CostCeiling = 0 }},
++		{"truncated actionStatus", func(tr *model.DecisionTraceV2) { tr.ActionStatus = tr.ActionStatus[:len(tr.ActionStatus)-1] }},
++		{"missing dispatchOutcome", func(tr *model.DecisionTraceV2) { tr.DispatchOutcome = "" }},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			tr := *base
++			tr.ActionStatus = append([]model.DecisionActionStatusV3(nil), base.ActionStatus...)
++			tc.mutate(&tr)
++			if err := tr.Validate(); err == nil {
++				t.Fatalf("malformed v3 trace (%s) validated", tc.name)
++			}
++		})
++	}
++}
+diff --git a/phorvex/internal/model/decision_trace.go b/phorvex/internal/model/decision_trace.go
+index 33390e9..3880d45 100644
+--- a/phorvex/internal/model/decision_trace.go
++++ b/phorvex/internal/model/decision_trace.go
+@@ -17,6 +17,10 @@ import (
+ const (
+ 	// DecisionTraceSchemaV2 is independent of the enclosing audit-record version.
+ 	DecisionTraceSchemaV2 = "phorvex.decision-trace.v2"
++	// DecisionTraceSchemaV3 adds the complete decision path (T0-C): the per-action
++	// status array, CHi reconstruction terms, round semantics, and the dispatch
++	// outcome. V2 records remain readable: Validate branches on the version.
++	DecisionTraceSchemaV3 = "phorvex.decision-trace.v3"
+ 	// TraceNotAvailable is the explicit, honest value for a string input the running
+ 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
+ 	TraceNotAvailable = "notAvailable"
+@@ -29,6 +33,56 @@ const (
+ 	SelectorStrictPositiveGain = "strict_gain_positive"
+ )
+ 
++// T0-C: the closed per-action status vocabulary (the ticket's ten values). Exactly one
++// row per model.MutatingActions member is recorded, in canonical order.
++const (
++	ActionStatusNotEnabled      = "not-enabled"
++	ActionStatusNoCover         = "no-cover"
++	ActionStatusInfeasible      = "infeasible"
++	ActionStatusConformalSLO    = "conformal-slo"
++	ActionStatusPricedOut       = "priced-out"
++	ActionStatusBudgetExhausted = "budget-exhausted"
++	ActionStatusCandidate       = "candidate"
++	ActionStatusSelected        = "selected"
++	ActionStatusNotEvaluated    = "not-evaluated-by-current-model"
++	ActionStatusNotInstallable  = "not-installable" // emitted by no v3 mapping: capability is never evaluated per-asset
++)
++
++// T0-C: the closed exclusion-kind vocabulary (B.3) — the structural cause, kept
++// distinct from the ticket's status so a data-quality failure never reads as
++// ordinary infeasibility (p1cost.go's deliberate distinction).
++const (
++	ExclusionNone         = "none"
++	ExclusionNotEnabled   = "not-enabled"
++	ExclusionReconCover   = "recon-cover"
++	ExclusionFeasibility  = "feasibility"
++	ExclusionCostNaN      = "cost-nan"
++	ExclusionSLOGate      = "slo-gate"
++	ExclusionReactiveOnly = "reactive-only"
++	ExclusionSelection    = "selection"
++)
++
++// T0-C: the closed dispatch-outcome vocabulary. The runner stamps it after the
++// actuation attempt, before the audit record is written.
++const (
++	DispatchNotAttempted = "not-attempted"
++	DispatchEmitted      = "emitted"
++	DispatchEmittedFalse = "emitted-false"
++	DispatchError        = "dispatch-error"
++)
++
++// DecisionActionStatusV3 is one canonical action's outcome for this asset (T0-C R-2):
++// every MutatingActions member gets exactly one row, so "the action was never
++// considered" is recorded, not absent. Reason carries the existing pipeline string
++// verbatim (redacted); Scored reports whether the greedy loop evaluated a marginal.
++type DecisionActionStatusV3 struct {
++	Action        string `json:"action"`
++	Status        string `json:"status"`
++	ExclusionKind string `json:"exclusionKind"`
++	Reason        string `json:"reason,omitempty"`
++	Scored        bool   `json:"scored"`
++}
++
+ // OptionalFloat distinguishes an observed zero from an unavailable measurement.
+ type OptionalFloat struct {
+ 	Present bool    `json:"present"`
+@@ -80,6 +134,12 @@ type DecisionModelInputsV2 struct {
+ 	ExposureSeconds   OptionalFloat `json:"exposureSeconds"`
+ 	ProactiveFloorSec float64       `json:"proactiveFloorSeconds"`
+ 	AntiOverRotateSec float64       `json:"antiOverRotationWindowSeconds"`
++	// T0-C: the three horizon/headroom inputs the envelope already carried (log.go)
++	// lifted into the trace with presence. ProjectedNextStageSec is present iff a
++	// next stage was projected (NextStage != "").
++	SLOHeadroom           OptionalFloat `json:"sloHeadroom"`
++	NextStage             string        `json:"nextStage"`
++	ProjectedNextStageSec OptionalFloat `json:"projectedNextStageSec"`
+ }
+ 
+ // DecisionFactV2 is one fact presented to the current optimizer. Decomposition
+@@ -96,6 +156,17 @@ type DecisionFactV2 struct {
+ 	UrgencyContribution    OptionalFloat `json:"urgencyContribution"`
+ 	DispersionContribution OptionalFloat `json:"dispersionContribution"`
+ 	RelativeWeight         OptionalFloat `json:"relativeWeight"`
++	// T0-C: CoveringActions lists every canonical action whose declared cover
++	// includes this fact (all actions, not only policy-enabled ones — a fact's
++	// cover set is a property of the fact). CoveredRound is the 1-based greedy
++	// round in which a selected move first covered this fact (absent = never
++	// covered this tick); CoveredBeforeDecision is DERIVED from it
++	// (coveredRound < evaluationRound), recorded computed, not asserted.
++	// DecompositionAvailable names the honest absence of the four decomposition
++	// terms above instead of leaving their absence unexplained.
++	CoveringActions        []string    `json:"coveringActions"`
++	DecompositionAvailable bool        `json:"decompositionAvailable"`
++	CoveredRound           OptionalInt `json:"coveredRound"`
+ }
+ 
+ // DecisionCandidateV2 records either a generated feasible candidate or an
+@@ -119,6 +190,24 @@ type DecisionCandidateV2 struct {
+ 	Feasible           OptionalBool  `json:"feasible"`
+ 	Selected           bool          `json:"selected"`
+ 
++	// T0-C CHi reconstruction terms (B.1). Present exactly where the cost path
++	// computed them: rotate rows carry ConformalQuantile (the post-clamp slack
++	// used in the max) and ConformalCalibrated (measured vs cold-start);
++	// GPUEnvelopeApplied is present wherever cost ran (false for non-rotate);
++	// GPUEnvelopeSlack is present iff the envelope branch fired. NaN-category
++	// rows carry none of the four (the fail-closed return never computes slack).
++	// Law: CostHigh = ExpectedCost + (action==rotate ? max(quantile, applied?slack:0) : 0).
++	ConformalQuantile   OptionalFloat `json:"conformalQuantile"`
++	ConformalCalibrated OptionalBool  `json:"conformalCalibrated"`
++	GPUEnvelopeApplied  OptionalBool  `json:"gpuEnvelopeApplied"`
++	GPUEnvelopeSlack    OptionalFloat `json:"gpuEnvelopeSlack"`
++	// SLOGateResult is present/true for generated candidates (they passed the
++	// conformal SLO gate), present/false for conformal-slo exclusions, absent
++	// for rows excluded upstream of the gate. SelectionRound is per-candidate,
++	// present iff this candidate was selected.
++	SLOGateResult  OptionalBool `json:"sloGateResult"`
++	SelectionRound OptionalInt  `json:"selectionRound"`
++
+ 	ExistingExclusionReason     string `json:"existingExclusionReason,omitempty"`
+ 	SelectionReason             string `json:"selectionReason"`
+ 	NotClassifiedByCurrentModel bool   `json:"notClassifiedByCurrentModel"`
+@@ -173,11 +262,27 @@ type DecisionTraceV2 struct {
+ 	CFlowUnitStatus           string               `json:"cFlowUnitStatus"`
+ 	CostRepresentationVersion string               `json:"costRepresentationVersion"`
+ 	DualUpdate                DecisionDualUpdateV2 `json:"dualUpdate"`
++	// T0-C: CostCeiling is the EFFECTIVE conformal SLO ceiling the generator
++	// enforced (post-defaulting, not the raw policy field); CostModelVersion is
++	// the cost model's own Name(); EvaluationRound is the 1-based greedy round
++	// whose marginal this record carries (the selection round for the selected
++	// asset, the last executed round otherwise).
++	CostCeiling      float64 `json:"costCeiling"`
++	CostModelVersion string  `json:"costModelVersion"`
++	EvaluationRound  int     `json:"evaluationRound"`
+ 
+ 	Inputs     DecisionModelInputsV2 `json:"inputs"`
+ 	Facts      []DecisionFactV2      `json:"facts"`
+ 	Candidates []DecisionCandidateV2 `json:"candidates"`
+ 
++	// T0-C: ActionStatus carries exactly one row per model.MutatingActions member
++	// in canonical order (R-2: the complete action accounting, including actions
++	// the current model never considered). DispatchOutcome/DispatchReason are
++	// stamped by the runner after the actuation attempt, before the audit write.
++	ActionStatus    []DecisionActionStatusV3 `json:"actionStatus"`
++	DispatchOutcome string                   `json:"dispatchOutcome"`
++	DispatchReason  string                   `json:"dispatchReason,omitempty"`
++
+ 	SelectedAction       string      `json:"selectedAction"`
+ 	SelectedCandidateKey string      `json:"selectedCandidateKey,omitempty"`
+ 	SelectionRound       OptionalInt `json:"selectionRound"`
+@@ -213,9 +318,12 @@ func cleanOptional(v OptionalFloat) OptionalFloat {
+ 
+ // Canonical returns a redacted, deterministically ordered deep copy. It never
+ // mutates the trace attached to the decision or any optimizer input.
++// The schema version is set at construction and is NOT rewritten here: a legacy
++// v2 record read from disk re-marshals as v2 (rollback-honest), and a v3 record
++// stays v3. (Pre-T0-C this line forced V2; forcing V3 would mislabel legacy
++// records that lack the v3 arrays.)
+ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
+ 	out := t
+-	out.SchemaVersion = DecisionTraceSchemaV2
+ 	out.DecisionID = redactTraceString(out.DecisionID)
+ 	out.TickID = redactTraceString(out.TickID)
+ 	out.Timestamp = redactTraceString(out.Timestamp)
+@@ -237,6 +345,9 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
+ 	out.CFlowUnitStatus = redactTraceString(out.CFlowUnitStatus)
+ 	out.CostRepresentationVersion = redactTraceString(out.CostRepresentationVersion)
+ 	out.DualUpdate.UpdateReason = redactTraceString(out.DualUpdate.UpdateReason)
++	out.CostModelVersion = redactTraceString(out.CostModelVersion)
++	out.DispatchOutcome = redactTraceString(out.DispatchOutcome)
++	out.DispatchReason = redactTraceString(out.DispatchReason)
+ 
+ 	out.Inputs.Phase = redactTraceString(out.Inputs.Phase)
+ 	out.Inputs.Stage = redactTraceString(out.Inputs.Stage)
+@@ -260,6 +371,9 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
+ 	out.Inputs.StageUrgency = cleanOptional(out.Inputs.StageUrgency)
+ 	out.Inputs.ThreatPosture = cleanOptional(out.Inputs.ThreatPosture)
+ 	out.Inputs.ExposureSeconds = cleanOptional(out.Inputs.ExposureSeconds)
++	out.Inputs.NextStage = redactTraceString(out.Inputs.NextStage)
++	out.Inputs.SLOHeadroom = cleanOptional(out.Inputs.SLOHeadroom)
++	out.Inputs.ProjectedNextStageSec = cleanOptional(out.Inputs.ProjectedNextStageSec)
+ 
+ 	out.Facts = append([]DecisionFactV2(nil), t.Facts...)
+ 	for i := range out.Facts {
+@@ -272,6 +386,13 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
+ 		f.UrgencyContribution = cleanOptional(f.UrgencyContribution)
+ 		f.DispersionContribution = cleanOptional(f.DispersionContribution)
+ 		f.RelativeWeight = cleanOptional(f.RelativeWeight)
++		f.CoveringActions = append([]string(nil), f.CoveringActions...)
++		for j := range f.CoveringActions {
++			f.CoveringActions[j] = redactTraceString(f.CoveringActions[j])
++		}
++		sort.SliceStable(f.CoveringActions, func(a, b int) bool {
++			return canonicalActionRank(f.CoveringActions[a]) < canonicalActionRank(f.CoveringActions[b])
++		})
+ 	}
+ 	sort.SliceStable(out.Facts, func(i, j int) bool { return out.Facts[i].FactKey < out.Facts[j].FactKey })
+ 
+@@ -296,7 +417,21 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
+ 		c.CostHigh = cleanOptional(c.CostHigh)
+ 		c.LambdaContribution = cleanOptional(c.LambdaContribution)
+ 		c.NetGain = cleanOptional(c.NetGain)
++		c.ConformalQuantile = cleanOptional(c.ConformalQuantile)
++		c.GPUEnvelopeSlack = cleanOptional(c.GPUEnvelopeSlack)
++	}
++
++	out.ActionStatus = append([]DecisionActionStatusV3(nil), t.ActionStatus...)
++	for i := range out.ActionStatus {
++		row := &out.ActionStatus[i]
++		row.Action = redactTraceString(row.Action)
++		row.Status = redactTraceString(row.Status)
++		row.ExclusionKind = redactTraceString(row.ExclusionKind)
++		row.Reason = redactTraceString(row.Reason)
+ 	}
++	sort.SliceStable(out.ActionStatus, func(i, j int) bool {
++		return canonicalActionRank(out.ActionStatus[i].Action) < canonicalActionRank(out.ActionStatus[j].Action)
++	})
+ 	sort.SliceStable(out.Candidates, func(i, j int) bool {
+ 		assetKey := func(candidateKey string) string {
+ 			if at := strings.LastIndex(candidateKey, "|"); at >= 0 {
+@@ -334,10 +469,15 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
+ }
+ 
+ // Validate checks the version/build identity and selection-reference invariants.
++// It accepts both V2 (legacy/rollback records, pre-T0-C checks only) and V3
++// (full reconstructability invariants). NOTE (T0-C, B.6.7): Validate has no
++// non-test caller — it is a test-time contract, not a runtime guard; the
++// production reconstruction check lives in the independent validator.
+ func (t DecisionTraceV2) Validate() error {
+-	if t.SchemaVersion != DecisionTraceSchemaV2 {
++	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 {
+ 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
+ 	}
++	isV3 := t.SchemaVersion == DecisionTraceSchemaV3
+ 	finite := func(values ...float64) bool {
+ 		for _, value := range values {
+ 			if math.IsNaN(value) || math.IsInf(value, 0) {
+@@ -417,6 +557,13 @@ func (t DecisionTraceV2) Validate() error {
+ 			t.DualUpdate.LambdaBefore != t.LambdaRuntimeLegacy || t.DualUpdate.UpdateReason == "" {
+ 			return errors.New("dual update is not reconstructable from trace inputs")
+ 		}
++	} else if isV3 {
++		return errors.New("v3 trace must carry the cost representation semantics")
++	}
++	if isV3 {
++		if err := t.validateV3(); err != nil {
++			return err
++		}
+ 	}
+ 	if t.SelectedAction == string(ActionNoop) {
+ 		if selected != 0 || t.SelectedCandidateKey != "" || t.NoopReason == "" {
+@@ -429,3 +576,163 @@ func (t DecisionTraceV2) Validate() error {
+ 	}
+ 	return nil
+ }
++
++// validateV3 enforces the T0-C reconstructability invariants. It runs on the
++// canonical copy from Validate, after the version-agnostic checks.
++func (t DecisionTraceV2) validateV3() error {
++	// (0) Trace-level v3 fields the reconstruction laws depend on are mandatory.
++	if t.CostModelVersion == "" {
++		return errors.New("v3 trace has no costModelVersion")
++	}
++	if math.IsNaN(t.CostCeiling) || math.IsInf(t.CostCeiling, 0) || t.CostCeiling <= 0 {
++		return fmt.Errorf("v3 trace costCeiling %g is not a positive finite ceiling", t.CostCeiling)
++	}
++	// (1) The action accounting is complete: exactly one row per canonical
++	// mutating action, in canonical order, from the closed vocabularies.
++	if len(t.ActionStatus) != len(MutatingActions) {
++		return fmt.Errorf("actionStatus carries %d rows, want exactly %d (one per MutatingActions member)",
++			len(t.ActionStatus), len(MutatingActions))
++	}
++	statusOK := map[string]bool{
++		ActionStatusNotEnabled: true, ActionStatusNoCover: true, ActionStatusInfeasible: true,
++		ActionStatusConformalSLO: true, ActionStatusPricedOut: true, ActionStatusBudgetExhausted: true,
++		ActionStatusCandidate: true, ActionStatusSelected: true, ActionStatusNotEvaluated: true,
++		ActionStatusNotInstallable: true,
++	}
++	kindOK := map[string]bool{
++		ExclusionNone: true, ExclusionNotEnabled: true, ExclusionReconCover: true,
++		ExclusionFeasibility: true, ExclusionCostNaN: true, ExclusionSLOGate: true,
++		ExclusionReactiveOnly: true, ExclusionSelection: true,
++	}
++	selectedRows := 0
++	for i, row := range t.ActionStatus {
++		if row.Action != string(MutatingActions[i]) {
++			return fmt.Errorf("actionStatus[%d] = %q, canonical order wants %q", i, row.Action, MutatingActions[i])
++		}
++		if !statusOK[row.Status] {
++			return fmt.Errorf("actionStatus[%d] status %q is outside the closed vocabulary", i, row.Status)
++		}
++		if !kindOK[row.ExclusionKind] {
++			return fmt.Errorf("actionStatus[%d] exclusionKind %q is outside the closed vocabulary", i, row.ExclusionKind)
++		}
++		// (2) status/kind consistency: a selected row carries no exclusion; a
++		// data-quality exclusion always reads infeasible (never collapsed).
++		if row.Status == ActionStatusSelected {
++			selectedRows++
++			if row.ExclusionKind != ExclusionNone {
++				return fmt.Errorf("actionStatus[%d] selected but exclusionKind=%q", i, row.ExclusionKind)
++			}
++		}
++		if row.ExclusionKind == ExclusionCostNaN && row.Status != ActionStatusInfeasible {
++			return fmt.Errorf("actionStatus[%d] cost-nan must read status=infeasible, got %q", i, row.Status)
++		}
++		if row.Status == ActionStatusNotInstallable {
++			return fmt.Errorf("actionStatus[%d] not-installable is emitted by no v3 mapping (capability is never evaluated per-asset)", i)
++		}
++	}
++	if t.SelectedAction == string(ActionNoop) && selectedRows != 0 {
++		return errors.New("noop trace has a selected actionStatus row")
++	}
++	if t.SelectedAction != string(ActionNoop) {
++		if selectedRows != 1 {
++			return fmt.Errorf("selected trace has %d selected actionStatus rows, want 1", selectedRows)
++		}
++		rank := canonicalActionRank(t.SelectedAction)
++		if rank >= len(t.ActionStatus) {
++			return fmt.Errorf("selected action %q is not a canonical mutating action", t.SelectedAction)
++		}
++		if t.ActionStatus[rank].Status != ActionStatusSelected {
++			return fmt.Errorf("selected action %q is not the selected actionStatus row", t.SelectedAction)
++		}
++	}
++
++	// (3) One asset per record: every candidate key's asset prefix is this asset.
++	asset := t.AssetNamespace + "/" + t.AssetName
++	for _, c := range t.Candidates {
++		key := c.CandidateKey
++		if at := strings.LastIndex(key, "|"); at >= 0 {
++			key = key[:at]
++		}
++		if key != asset {
++			return fmt.Errorf("candidate %q does not belong to this record's asset %q", c.CandidateKey, asset)
++		}
++	}
++
++	// (4) CHi reconstruction law (B.1): CostHigh = ExpectedCost + slack, where
++	// slack = max(conformalQuantile, gpuEnvelopeSlack if applied) for rotate and
++	// 0 otherwise. Rows without a computed CostHigh (NaN, pre-cost exclusions)
++	// are outside the law — and must carry none of the slack terms.
++	for _, c := range t.Candidates {
++		if !c.CostHigh.Present || !c.ExpectedCost.Present {
++			if c.ConformalQuantile.Present || c.GPUEnvelopeSlack.Present {
++				return fmt.Errorf("candidate %q carries slack terms without a computed cost", c.CandidateKey)
++			}
++			continue
++		}
++		want := c.ExpectedCost.Value
++		if c.Action == string(ActionRotate) {
++			if !c.ConformalQuantile.Present {
++				return fmt.Errorf("candidate %q is a costed rotate without the conformal quantile", c.CandidateKey)
++			}
++			slack := c.ConformalQuantile.Value
++			if c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value {
++				if !c.GPUEnvelopeSlack.Present {
++					return fmt.Errorf("candidate %q applied the GPU envelope without recording its value", c.CandidateKey)
++				}
++				if c.GPUEnvelopeSlack.Value > slack {
++					slack = c.GPUEnvelopeSlack.Value
++				}
++			}
++			want += slack
++		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
++			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
++		}
++		if math.Abs(want-c.CostHigh.Value) > 1e-9 {
++			return fmt.Errorf("candidate %q cost high is not reconstructable (want %g, got %g)",
++				c.CandidateKey, want, c.CostHigh.Value)
++		}
++	}
++
++	// (5) coveredBeforeDecision is derived, not asserted: coveredRound present
++	// and strictly before the record's evaluation round.
++	factByKey := map[string]*DecisionFactV2{}
++	for i := range t.Facts {
++		f := &t.Facts[i]
++		want := f.CoveredRound.Present && f.CoveredRound.Value < t.EvaluationRound
++		if f.CoveredBeforeDecision != want {
++			return fmt.Errorf("fact %q coveredBeforeDecision=%t contradicts coveredRound=%+v at evaluationRound=%d",
++				f.FactKey, f.CoveredBeforeDecision, f.CoveredRound, t.EvaluationRound)
++		}
++		factByKey[f.FactKey] = f
++	}
++
++	// (6) Marginal law: the recorded marginal is the sum of final weights over
++	// cover keys not covered before the evaluation round.
++	for _, c := range t.Candidates {
++		if !c.MarginalCoverage.Present {
++			continue
++		}
++		sum := 0.0
++		for _, k := range c.CoverKeys {
++			f, ok := factByKey[k]
++			if !ok {
++				return fmt.Errorf("candidate %q covers fact %q that has no recorded fact row", c.CandidateKey, k)
++			}
++			if !f.CoveredBeforeDecision {
++				sum += f.FinalWeight
++			}
++		}
++		if math.Abs(sum-c.MarginalCoverage.Value) > 1e-9 {
++			return fmt.Errorf("candidate %q marginal coverage is not reconstructable (want %g, got %g)",
++				c.CandidateKey, sum, c.MarginalCoverage.Value)
++		}
++	}
++
++	// (7) Dispatch outcome from the closed vocabulary, always recorded.
++	switch t.DispatchOutcome {
++	case DispatchNotAttempted, DispatchEmitted, DispatchEmittedFalse, DispatchError:
++	default:
++		return fmt.Errorf("dispatchOutcome %q is outside the closed vocabulary", t.DispatchOutcome)
++	}
++	return nil
++}
+diff --git a/phorvex/internal/runner/dispatch_outcome_test.go b/phorvex/internal/runner/dispatch_outcome_test.go
+new file mode 100644
+index 0000000..98d64e6
+--- /dev/null
++++ b/phorvex/internal/runner/dispatch_outcome_test.go
+@@ -0,0 +1,180 @@
++/*
++ * Phorvex — T0-C (B.5): every selected decision's dispatch outcome is stamped on the
++ * trace before the audit write, across the whole pre-Actuate guard surface. A
++ * selected-but-refused move never reads as unselected.
++ */
++
++package runner
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/go-logr/logr"
++
++	"github.com/phorvex/phorvex/internal/actuator"
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++// configurable fake: separate from regate_test's always-emitting fakeActuator.
++type dispatchFakeActuator struct {
++	ensureErr error
++	emit      bool
++	actErr    error
++	calls     int
++}
++
++func (f *dispatchFakeActuator) Name() string { return "dispatch-fake" }
++func (f *dispatchFakeActuator) EnsurePolicy(context.Context, actuator.TenantTarget) error {
++	return f.ensureErr
++}
++func (f *dispatchFakeActuator) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
++	f.calls++
++	return actuator.Result{Emitted: f.emit}, f.actErr
++}
++
++func tracedSelectedDecision() []model.Decision {
++	return []model.Decision{{
++		Selected: true, Feasible: true, Action: model.ActionRotate,
++		Namespace: "ns", Pod: "p1",
++		Trace: &model.DecisionTraceV2{
++			DispatchOutcome: model.DispatchNotAttempted, DispatchReason: "pending-dispatch",
++		},
++	}}
++}
++
++func dispatchOutcomeOf(t *testing.T, ds []model.Decision) (string, string) {
++	t.Helper()
++	if ds[0].Trace == nil {
++		t.Fatal("trace missing")
++	}
++	return ds[0].Trace.DispatchOutcome, ds[0].Trace.DispatchReason
++}
++
++func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
++	feasibleView := map[string]*model.WorkloadView{
++		"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}},
++	}
++	pol := model.Policy{Tenant: "t", MinAvailableReplicas: 1,
++		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
++
++	t.Run("ensure-policy-failed", func(t *testing.T) {
++		fa := &dispatchFakeActuator{ensureErr: errors.New("rbac denied")}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 0 {
++			t.Fatalf("actuated %d under EnsurePolicy failure", n)
++		}
++		if got, want := ds[0].Trace.DispatchReason, "ensure-policy-failed"; got != want {
++			t.Fatalf("reason = %q, want %q", got, want)
++		}
++		if ds[0].Trace.DispatchOutcome != model.DispatchNotAttempted {
++			t.Fatalf("outcome = %q", ds[0].Trace.DispatchOutcome)
++		}
++	})
++
++	t.Run("inviolability-guard", func(t *testing.T) {
++		fa := &dispatchFakeActuator{emit: true}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		ds[0].Feasible = false // selected but infeasible: the invariant-violation path
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
++		if fa.calls != 0 {
++			t.Fatal("infeasible selected move reached Actuate")
++		}
++		if got, want := ds[0].Trace.DispatchReason, "inviolability-guard"; got != want {
++			t.Fatalf("reason = %q, want %q", got, want)
++		}
++	})
++
++	t.Run("no-tick-view", func(t *testing.T) {
++		fa := &dispatchFakeActuator{emit: true}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{})
++		if fa.calls != 0 {
++			t.Fatal("map-miss reached Actuate (fail-open)")
++		}
++		if got, want := ds[0].Trace.DispatchReason, "no-tick-view"; got != want {
++			t.Fatalf("reason = %q, want %q", got, want)
++		}
++	})
++
++	t.Run("emit-boundary-infeasible", func(t *testing.T) {
++		fa := &dispatchFakeActuator{emit: true}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		notReady := map[string]*model.WorkloadView{
++			"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 0}},
++		}
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, notReady)
++		if fa.calls != 0 {
++			t.Fatal("infeasible-at-boundary move reached Actuate")
++		}
++		outcome, reason := dispatchOutcomeOf(t, ds)
++		if outcome != model.DispatchNotAttempted || len(reason) < len("emit-boundary-infeasible") ||
++			reason[:len("emit-boundary-infeasible")] != "emit-boundary-infeasible" {
++			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
++		}
++	})
++
++	t.Run("dispatch-error-failed", func(t *testing.T) {
++		fa := &dispatchFakeActuator{actErr: errors.New("boom")}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
++		outcome, reason := dispatchOutcomeOf(t, ds)
++		if outcome != model.DispatchError || reason != "failed" {
++			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
++		}
++	})
++
++	t.Run("dispatch-error-deadline-expired", func(t *testing.T) {
++		fa := &dispatchFakeActuator{actErr: context.DeadlineExceeded}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
++		outcome, reason := dispatchOutcomeOf(t, ds)
++		if outcome != model.DispatchError || reason != "deadline-expired" {
++			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
++		}
++	})
++
++	t.Run("emitted-false", func(t *testing.T) {
++		fa := &dispatchFakeActuator{emit: false}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
++		outcome, _ := dispatchOutcomeOf(t, ds)
++		if outcome != model.DispatchEmittedFalse {
++			t.Fatalf("outcome = %q", outcome)
++		}
++	})
++
++	t.Run("emitted", func(t *testing.T) {
++		fa := &dispatchFakeActuator{emit: true}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 1 {
++			t.Fatalf("actuated %d, want 1", n)
++		}
++		outcome, reason := dispatchOutcomeOf(t, ds)
++		if outcome != model.DispatchEmitted || reason != "" {
++			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
++		}
++	})
++
++	t.Run("unselected-untouched", func(t *testing.T) {
++		fa := &dispatchFakeActuator{emit: true}
++		m := &Manager{Actuator: fa, Log: logr.Discard()}
++		ds := tracedSelectedDecision()
++		ds[0].Selected = false
++		ds[0].Trace.DispatchReason = "unselected"
++		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
++		outcome, reason := dispatchOutcomeOf(t, ds)
++		if outcome != model.DispatchNotAttempted || reason != "unselected" {
++			t.Fatalf("unselected decision was re-stamped: %q/%q", outcome, reason)
++		}
++	})
++}
+diff --git a/phorvex/internal/runner/manager.go b/phorvex/internal/runner/manager.go
+index 1538531..75ee1fa 100644
+--- a/phorvex/internal/runner/manager.go
++++ b/phorvex/internal/runner/manager.go
+@@ -906,6 +906,12 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
+ 			if decisions[i].Trace != nil {
+ 				decisions[i].Trace.DryRun = true
++				// T0-C: actuate() never runs under dry-run — a selected move is
++				// not-attempted for that reason, not silently un-dispatched.
++				if decisions[i].Selected {
++					decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
++					decisions[i].Trace.DispatchReason = "dry-run"
++				}
+ 			}
+ 		}
+ 	}
+@@ -918,6 +924,10 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 			decisions[i].KillSwitch = true
+ 			if decisions[i].Trace != nil {
+ 				decisions[i].Trace.KillSwitchEngaged = true
++				if decisions[i].Selected {
++					decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
++					decisions[i].Trace.DispatchReason = "kill-switch"
++				}
+ 			}
+ 		}
+ 	}
+@@ -1047,6 +1057,13 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 	}
+ 	if err := m.Actuator.EnsurePolicy(ctx, target); err != nil {
+ 		m.Log.Error(err, "actuator EnsurePolicy failed; suppressing actuation this tick", "tenant", pol.Tenant)
++		// T0-C: a tick-level pre-dispatch guard — every selected move is refused here.
++		for i := range decisions {
++			if decisions[i].Selected && decisions[i].Trace != nil {
++				decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
++				decisions[i].Trace.DispatchReason = "ensure-policy-failed"
++			}
++		}
+ 		return 0
+ 	}
+ 	actuated := 0
+@@ -1054,12 +1071,21 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 		if !decisions[i].Selected {
+ 			continue
+ 		}
++		// T0-C: every guard below stamps the dispatch outcome on the trace before
++		// the audit write, so a selected-but-refused move never reads as unselected.
++		stampDispatch := func(outcome, reason string) {
++			if decisions[i].Trace != nil {
++				decisions[i].Trace.DispatchOutcome = outcome
++				decisions[i].Trace.DispatchReason = reason
++			}
++		}
+ 		// Inviolability guard at the emit boundary (defense in depth): a selected move is
+ 		// ALWAYS feasible (the action-set generator excluded infeasible moves before
+ 		// selection), but never emit one that is not — and shout if the invariant breaks.
+ 		if !decisions[i].Feasible || decisions[i].Action == model.ActionNoop {
+ 			m.Log.Error(nil, "INVARIANT VIOLATION: a selected move was infeasible/noop; refusing to emit",
+ 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
++			stampDispatch(model.DispatchNotAttempted, "inviolability-guard")
+ 			continue
+ 		}
+ 		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
+@@ -1076,11 +1102,13 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 		if !ok {
+ 			m.Log.Error(nil, "EMIT-BOUNDARY VETO (fail-closed): no tick view for the target; refusing to actuate",
+ 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
++			stampDispatch(model.DispatchNotAttempted, "no-tick-view")
+ 			continue
+ 		}
+ 		if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verdict.Feasible {
+ 			m.Log.Error(nil, "EMIT-BOUNDARY INVARIANT VETO: refusing infeasible move at actuate boundary",
+ 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
++			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible: "+verdict.Reason)
+ 			continue
+ 		}
+ 		score := decisions[i].DecisionValue()
+@@ -1098,14 +1126,18 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 		})
+ 		if err != nil {
+ 			outcome := slo.OutcomeFailed
++			dispatchReason := "failed"
+ 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+ 				outcome = slo.OutcomeDeadlineExpired
++				dispatchReason = "deadline-expired"
+ 			}
++			stampDispatch(model.DispatchError, dispatchReason)
+ 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
+ 			m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
+ 			continue
+ 		}
+ 		if res.Emitted {
++			stampDispatch(model.DispatchEmitted, "")
+ 			decisions[i].Actuated = true
+ 			// Carry the native actuator's forensic fields into the audit (empty for Phoenix).
+ 			decisions[i].Handler = res.Handler
+@@ -1126,6 +1158,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
+ 			}
+ 		} else {
++			stampDispatch(model.DispatchEmittedFalse, "")
+ 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
+ 		}
+ 	}

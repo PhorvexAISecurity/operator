@@ -1,0 +1,70 @@
+schema_version: 1
+fix_id: T1-M020
+issues:
+- M-20
+related_issues: []
+title: Count capability gaps while ActionsSupported remains green
+profile: legacy-migrated
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: not-started
+  artifact: null
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/contract-choice-m020-witness-gates-selection
+  base_sha: 4cad00f
+  head_sha: ce9d2b5
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: ce9d2b5
+  merge_sha: null
+  checks: legacy-see-evidence
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: pending
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: human-owner
+  action: Human opens and merges the PR; then record the merge/deployment disposition.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-M020
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: false
+  legacy_blind_deriver: null
+updated_at: '2026-09-06T22:26:59+00:00'
