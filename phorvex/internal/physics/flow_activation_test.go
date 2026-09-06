@@ -71,3 +71,29 @@ func TestUnactivatedFlowLeavesTheAggregateHonest(t *testing.T) {
 		t.Fatal("with every component absent the aggregate must be absent, not 0")
 	}
 }
+
+// The retired queue/backlog term never contributes again — not even when both of its inputs
+// are present. Its formula subtracted a rate from a count, which M-115 lists as a defect
+// (conformance round, 2026-09-06); absence-when-unavailable was not enough.
+func TestQueueTermStaysDisabledEvenWithBothInputsPresent(t *testing.T) {
+	v := &model.WorkloadView{
+		Pod: model.Pod{Namespace: "vllm", Name: "p"},
+		Telemetry: model.Telemetry{
+			QueueDepth: model.PresentSignal(40, "prom"), // both inputs measured...
+			ReqRate:    model.PresentSignal(2, "prom"),  // ...and a large backlog
+		},
+	}
+	for _, c := range Components(v) {
+		if c.Name != "queue" {
+			continue
+		}
+		if c.Present || c.Magnitude != 0 || c.Reason != QueueReasonDisabled {
+			t.Fatalf("queue component = %+v, want permanently absent with reason %q", c, QueueReasonDisabled)
+		}
+		if _, present := Aggregate(Components(v)); present {
+			t.Fatal("a disabled component must not make the aggregate present")
+		}
+		return
+	}
+	t.Fatal("the queue component must still be listed, as a disabled one")
+}

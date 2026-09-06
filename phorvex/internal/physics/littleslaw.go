@@ -48,6 +48,9 @@ const (
 	// 2026-09-06): the per-class verdict is the ruling's, and until a class is ruled
 	// admissible the component is absent and enters neither the aggregate nor any fact.
 	FlowReasonNotActivated = "class-not-activated"
+	// QueueReasonDisabled marks the retired queue/backlog term: a rate subtracted from a
+	// count, one of M-115's own listed defects. Disabled unconditionally, inputs or not.
+	QueueReasonDisabled = "unit-incoherent-disabled"
 )
 
 var (
@@ -200,12 +203,12 @@ func Components(view *model.WorkloadView) []Component {
 		out = append(out, Component{Name: "byte-flow", Reason: "byte-flow-unavailable"})
 	}
 
-	// (2) Queue/backlog: needs BOTH queue depth AND arrival rate.
-	if t.QueueDepth.Usable() && t.ReqRate.Usable() && t.QueueDepth.Value > 0 {
-		out = append(out, Component{Name: "queue", Present: true, Magnitude: clamp01((t.QueueDepth.Value - t.ReqRate.Value) / (t.ReqRate.Value + 8.0))})
-	} else {
-		out = append(out, Component{Name: "queue", Reason: "queue-or-rate-unavailable"})
-	}
+	// (2) Queue/backlog: DISABLED (M-115 conformance, 2026-09-06). Its formula subtracted a
+	// RATE from a COUNT — (QueueDepth − ReqRate)/(ReqRate + 8) — which is the same unit
+	// incoherence the ticket lists among M-115's defects, so it is not merely absent when its
+	// inputs are missing: it never contributes, even when QueueDepth and ReqRate are both
+	// present. A replacement is a separate design; reviving this one is not an option.
+	out = append(out, Component{Name: "queue", Reason: QueueReasonDisabled})
 
 	// (3) Connection fan-out: needs ConnCount AND ReqRate (never fabricated from absence).
 	if t.ConnCount.Usable() && t.ReqRate.Usable() && t.ConnCount.Value > 0 {
