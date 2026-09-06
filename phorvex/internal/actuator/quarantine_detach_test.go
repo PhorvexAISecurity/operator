@@ -45,6 +45,24 @@ func ownedPod(ns, name string, labels map[string]string, owner metav1.OwnerRefer
 	return pod
 }
 
+// TestQuarantineStampsEventValuedEpoch (M-23 D2): quarantine writes an event-valued
+// quarantine-epoch (= ResourceVersion) distinct from the state-valued quarantineLabel (= pod UID).
+// Without it, a re-quarantine of the same pod writes the SAME UID and the anti-over-rotation clock
+// never resets, so the guard could not throttle repeated quarantines.
+func TestQuarantineStampsEventValuedEpoch(t *testing.T) {
+	pod := aiPod("ns", "victim", map[string]string{"app": "x"})
+	pod.UID = types.UID("uid-victim")
+	c := qtnClient(pod)
+	_, got := enactQuarantine(t, c, "ns", "victim")
+	epoch := got.Labels[quarantineEpochLabel]
+	if epoch == "" {
+		t.Fatalf("quarantine-epoch not stamped: %v", got.Labels)
+	}
+	if epoch == got.Labels[quarantineLabel] {
+		t.Fatalf("quarantine-epoch %q equals the state-valued UID label — it must be the event-valued ResourceVersion so a re-quarantine resets the clock", epoch)
+	}
+}
+
 func ctrlRef(apiVersion, kind, name string) metav1.OwnerReference {
 	yes := true
 	return metav1.OwnerReference{APIVersion: apiVersion, Kind: kind, Name: name, UID: types.UID("uid-" + name), Controller: &yes}

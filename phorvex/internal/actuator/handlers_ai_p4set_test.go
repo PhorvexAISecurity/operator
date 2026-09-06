@@ -151,6 +151,34 @@ func TestRequestDrainStopsAdmitsThenAborts(t *testing.T) {
 	}
 }
 
+// TestRequestDrainStampsDrainEpochRollbackUntouched (M-23 A1): request-drain writes an
+// event-valued drain-epoch in the SAME Update as the serving flip (the serving label is boolean and
+// reverts, so it can't clock repeated drains); Rollback re-admits WITHOUT touching the epoch.
+func TestRequestDrainStampsDrainEpochRollbackUntouched(t *testing.T) {
+	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
+	c := fakeC(pod)
+	if _, err := (requestDrainHandler{}).Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drained: 1}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain}); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	var p corev1.Pod
+	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	stamped := p.Labels[labelDrainEpoch]
+	if stamped == "" {
+		t.Fatalf("drain-epoch not stamped in the drain Update: %v", p.Labels)
+	}
+	// Rollback re-admits and must leave the drain-epoch untouched (it records drain EVENTS).
+	if err := (requestDrainHandler{}).Rollback(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "infer"}, ""); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	if p.Labels[labelServing] != "true" {
+		t.Errorf("rollback must re-admit (serving=true), got %q", p.Labels[labelServing])
+	}
+	if p.Labels[labelDrainEpoch] != stamped {
+		t.Errorf("rollback changed drain-epoch %q -> %q; it must leave the event clock untouched", stamped, p.Labels[labelDrainEpoch])
+	}
+}
+
 func TestRequestDrainReachableFailRestoresAdmits(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
 	c := fakeC(pod)

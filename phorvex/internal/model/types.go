@@ -180,18 +180,69 @@ const (
 	VarEnv = "env"
 	// VarGPUBinding = the GPU/MIG binding (DECLARED; Phase 2/3 GPU rebind).
 	VarGPUBinding = "gpuBinding"
-	// VarNetworkIdentity = service/IP/label identity (DECLARED; Phase 2).
+	// VarNetworkIdentity = service/IP/label identity; clocked from the quarantine epoch (M-23).
 	VarNetworkIdentity = "networkIdentity"
-	// VarSession = KV-cache / agent session state (DECLARED; AI path).
+	// VarSession = KV-cache / agent session state; clocked from kv-reset|kv-migrate epochs.
 	VarSession = "session"
+	// M-23 per-action exposure variables — each clocked from the `phorvex.ai/*-epoch`
+	// marker its own handler writes (= pod.ResourceVersion at actuation), so the
+	// anti-over-rotation guard reads a clock the action actually resets.
+	// VarRouteKey = serving route key (endpoint-rotate / route-rotate re-key it).
+	VarRouteKey = "routeKey"
+	// VarIdentity = identity-rotate epoch (relabel only; the SA token is unchanged, so this
+	// is NOT "saToken").
+	VarIdentity = "identity"
+	// VarAdapterEpoch = adapter-rotate epoch.
+	VarAdapterEpoch = "adapterEpoch"
+	// VarDrainEpoch = request-drain epoch (M-23 A1 — a dedicated stamp; the serving toggle
+	// is boolean and reverts on rollback, so it cannot clock repeated drains).
+	VarDrainEpoch = "drainEpoch"
+	// VarGuardrailEpoch = guardrail-rotate epoch.
+	VarGuardrailEpoch = "guardrailEpoch"
 )
 
-// LiveExposureVariables are the dimensions Phorvex P0 actually clocks from the K8s
-// API. The DeclaredExposureVariables extend this set in later phases.
-var LiveExposureVariables = []string{VarPodIdentity, VarNodePlacement}
+// LiveExposureVariables is the SINGLE SOURCE OF TRUTH for the exposure dimensions
+// Phorvex actually clocks — the M-23 completeness invariant enumerates it to prove
+// every exposureVarFor target is a clocked variable (a mapped-but-unclocked variable
+// is a wiring bug caught at build time, so the runtime Check can safely fail-OPEN on an
+// absent clock). ExposureFingerprints emits exactly these keys for a fully-marked pod.
+var LiveExposureVariables = []string{
+	VarPodIdentity, VarNodePlacement, VarSession,
+	VarNetworkIdentity, VarRouteKey, VarIdentity, VarAdapterEpoch, VarDrainEpoch, VarGuardrailEpoch,
+}
 
-// DeclaredExposureVariables are scaffolded but not yet clocked from live signals.
-var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding, VarNetworkIdentity, VarSession}
+// DeclaredExposureVariables are scaffolded dimensions not yet clocked from live signals.
+var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding}
+
+// ExposureFingerprints builds the per-variable fingerprint sample the exposure Clock
+// observes for a pod (M-23). Pod identity, node placement and session are always
+// present (their sources are always populated). The per-action epoch variables are
+// ABSENT-SKIPPED: an empty epoch (never actuated, or its marker stripped by a rollback)
+// is OMITTED rather than seeded with an empty string — seeding "" would make a later
+// rollback that strips the marker look like a fingerprint CHANGE and spuriously reset
+// the clock. An omitted variable stays `!ok` in ExposureByVariable, so the guard
+// fail-OPENs its first actuation (which writes the marker). The emitted key set for a
+// fully-marked pod is exactly LiveExposureVariables (asserted by the completeness test).
+func ExposureFingerprints(p Pod) map[string]string {
+	fp := map[string]string{
+		VarPodIdentity:   p.UID,
+		VarNodePlacement: p.Node,
+		VarSession:       p.SessionEpoch,
+	}
+	for v, epoch := range map[string]string{
+		VarNetworkIdentity: p.QuarantineEpoch,
+		VarRouteKey:        p.RouteKeyEpoch,
+		VarIdentity:        p.IdentityEpoch,
+		VarAdapterEpoch:    p.AdapterEpoch,
+		VarDrainEpoch:      p.DrainEpoch,
+		VarGuardrailEpoch:  p.GuardrailEpoch,
+	} {
+		if epoch != "" {
+			fp[v] = epoch
+		}
+	}
+	return fp
+}
 
 // Telemetry is the per-pod live signal vector ingested from Prometheus. Present is
 // false when no metrics backend answered (Phorvex then degrades to K8s-only signals
@@ -263,7 +314,18 @@ type Pod struct {
 	// model.VarSession — WITHOUT it, a session-affecting action has no exposure clock of its own
 	// and falls through to podIdentity, which it never changes (PHVX-67).
 	SessionEpoch string
-	Stateful     bool // owned by a StatefulSet or mounts a PVC / Job
+	// M-23 per-action exposure epochs — the `phorvex.ai/*-epoch` markers the pod-alive
+	// rotation handlers write (= pod.ResourceVersion at actuation). "" = never actuated /
+	// marker absent, in which case ExposureFingerprints skips it (the variable stays
+	// unclocked and the guard fail-OPENs the first actuation). Each clocks the matching
+	// model.Var* dimension.
+	QuarantineEpoch string // phorvex.ai/quarantine-epoch  -> VarNetworkIdentity (M-23 D2 stamp)
+	RouteKeyEpoch   string // phorvex.ai/route-key         -> VarRouteKey (endpoint- & route-rotate re-key)
+	IdentityEpoch   string // phorvex.ai/identity-epoch    -> VarIdentity
+	AdapterEpoch    string // phorvex.ai/adapter-epoch     -> VarAdapterEpoch
+	DrainEpoch      string // phorvex.ai/drain-epoch       -> VarDrainEpoch (M-23 A1 stamp)
+	GuardrailEpoch  string // phorvex.ai/guardrail-epoch   -> VarGuardrailEpoch
+	Stateful        bool   // owned by a StatefulSet or mounts a PVC / Job
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
@@ -414,8 +476,13 @@ type WorkloadView struct {
 	NeighborCount      int
 	Neighbors          []NeighborRef // reachable neighbors with their values (P1 lateral facts)
 	Events             []SecurityEventInfo
-	ExposureByVariable map[string]time.Duration // per-variable time-since-last-change
-	Physics            PhysicsWitness           // DISCOVERED physics (UCW); honest-absent = neutral
+	ExposureByVariable map[string]time.Duration // per-variable time-since-last-change (observed)
+	// IntentByVariable is the per-variable time-since-EMISSION intent (M-23): a move
+	// stamped at emission (before the next observed snapshot) so the anti-over-rotation
+	// guard throttles a cross-tick burst in the window between actuation and the clock
+	// catching up. Absent => no pending intent for that variable.
+	IntentByVariable map[string]time.Duration
+	Physics          PhysicsWitness // DISCOVERED physics (UCW); honest-absent = neutral
 
 	// InfectionFrontier (P-CONTEXT live-beta Tier-1) is a [1, 1+kappa] AssetValue lift
 	// when this pod touches a KNOWN-INFECTED graph neighbor (a neighbor with an exploit+

@@ -34,7 +34,8 @@ func baseView(name string) *model.WorkloadView {
 		Phase:       model.PhaseWarm,
 		BlastRadius: 0.5,
 		ExposureByVariable: map[string]time.Duration{
-			model.VarPodIdentity: 2 * time.Hour, // past the anti-over-rotation window
+			model.VarPodIdentity:     2 * time.Hour, // past the anti-over-rotation window (rotate's clock)
+			model.VarNetworkIdentity: 2 * time.Hour, // quarantine's M-23 per-action clock, likewise past window
 		},
 	}
 }
@@ -102,7 +103,8 @@ func TestDynamicActionSetChangesWithState(t *testing.T) {
 
 	// 3. Freshly-moved pod (exposure < anti-over-rotation window) => BOTH removed.
 	fresh := baseView("fresh")
-	fresh.ExposureByVariable[model.VarPodIdentity] = 30 * time.Second
+	fresh.ExposureByVariable[model.VarPodIdentity] = 30 * time.Second     // freshly rotated
+	fresh.ExposureByVariable[model.VarNetworkIdentity] = 30 * time.Second // and freshly quarantined (M-23 per-action clock)
 	freshSet := actionsFor(d.Generate([]*model.WorkloadView{fresh}, pol), "ns/fresh")
 	if len(freshSet) != 0 {
 		t.Errorf("freshly-moved pod must have an EMPTY action set (anti-over-rotation), got %v", freshSet)

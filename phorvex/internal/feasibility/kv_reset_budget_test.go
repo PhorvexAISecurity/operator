@@ -53,25 +53,35 @@ func TestKVResetAllowedOnceTheBudgetElapses(t *testing.T) {
 	}
 }
 
-// TestRotateStillUsesPodIdentity guards the actions the old behaviour was correct for. A rotate
-// replaces the pod, so podIdentity IS its clock — reading the session clock for it would let a
-// freshly-rotated pod be rotated again.
+// TestRotateStillUsesPodIdentity guards the actions that REPLACE the pod — podIdentity IS their
+// clock, so a freshly-rotated pod cannot be rotated again inside the window. (M-23 moved quarantine
+// off podIdentity onto its own VarNetworkIdentity clock — see TestPerActionClockThrottles.)
 func TestRotateStillUsesPodIdentity(t *testing.T) {
 	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
 	// Pod replaced 20s ago; session flushed long ago.
 	v := viewWithClocks(20*time.Second, 10*time.Hour)
-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine, model.ActionWarmSwap} {
+	for _, a := range []model.Action{
+		model.ActionRotate, model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
+	} {
 		if (antiOverRotation{}).Check(v, model.Move{Action: a}, pol).Feasible {
 			t.Errorf("%q 20s after the pod was replaced must be blocked — it reads podIdentity", a)
 		}
 	}
 }
 
-// TestUnknownActionFallsBackConservatively pins the default. A new action with no mapping must fall
-// back to podIdentity, which over-restricts rather than under-restricts.
-func TestUnknownActionFallsBackConservatively(t *testing.T) {
-	if got := exposureVarFor(model.Action("some-future-action")); got != model.VarPodIdentity {
-		t.Fatalf("unmapped action fell back to %q; it must default to %q so a missing mapping "+
-			"cannot silently remove a budget", got, model.VarPodIdentity)
+// TestUnmappedActionIsUngovernedFailOpen pins the M-23 default: an action with NO exposure mapping
+// returns "" (ungoverned) and the guard fail-OPENs — the old podIdentity fallback is gone (it hid
+// pod-alive actions behind a clock they never reset). A missing mapping for a REAL generatable
+// action is a build-time failure of TestExposureVarForCompleteness, not a silent runtime pass.
+func TestUnmappedActionIsUngovernedFailOpen(t *testing.T) {
+	if got := ExposureVarFor(model.Action("some-future-action")); got != "" {
+		t.Fatalf("unmapped action mapped to %q; M-23 wants \"\" (ungoverned, fail-open) so a stale "+
+			"podIdentity clock can't silently un-throttle a pod-alive action", got)
+	}
+	// And an ungoverned action on a pod with clocks is feasible (fail-open).
+	v := viewWithClocks(20*time.Second, 20*time.Second)
+	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
+	if got := (antiOverRotation{}).Check(v, model.Move{Action: model.Action("some-future-action")}, pol); !got.Feasible {
+		t.Fatalf("an ungoverned action must be feasible (fail-open), got veto: %s", got.Reason)
 	}
 }
