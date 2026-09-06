@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	ConditionActionsSupported            = "ActionsSupported"
+	ConditionActionsSupported = "ActionsSupported"
+	// ConditionTelemetryDegraded is True while a telemetry SOURCE is unreachable (M-113/M-130).
+	ConditionTelemetryDegraded           = "TelemetryDegraded"
 	DefaultActionsSupportedDebounceTicks = 3
 	actionsSupportedReason               = "AllEnabledActionsSupported"
 	actionsUnsupportedReason             = "UnsupportedActionsEnabled"

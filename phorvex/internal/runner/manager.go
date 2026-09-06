@@ -123,7 +123,11 @@ type Manager struct {
 	// not the policyEntry, so a spec edit (Upsert) does not forget real actuations. It is
 	// in-memory only: a restart or leadership change can only UNDER-report until the next
 	// emit — never claim an actuation the running brain did not perform.
-	emits    map[string][]time.Time
+	emits map[string][]time.Time
+	// degraded tracks each telemetry source's outage state so a whole-source failure is
+	// logged ONCE on transition (down / recovered), surfaced as a policy condition and
+	// counted — never one ERROR line per tick (PHORVEXSEC-200 / M-113, P-LOUD-OUTAGE).
+	degraded map[string]*sourceOutage
 	policies map[string]*policyEntry
 	// Accessed only by the single tick loop. The RLS outcome is capped after its
 	// [0,2] observation window, but ledger-enabled censored entries remain here so
@@ -845,11 +849,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		if t != nil {
 			tele = t
 		}
-		if err != nil {
-			metrics.RecordScrapeFailure(m.MetricsSource.Name())
-			m.Log.Error(err, "telemetry scrape degraded (best-effort telemetry used; per-signal State=Error)",
-				"namespace", e.namespace, "source", m.MetricsSource.Name())
-		}
+		m.observeSourceHealth(e, err)
 	}
 
 	keep := make(map[string]struct{}, len(selPods))
@@ -1300,4 +1300,94 @@ func deterministicTraceID(parts ...string) string {
 // metav1LabelSelector compiles the policy's selector.
 func metav1LabelSelector(p *v1alpha1.PhorvexPolicy) (labels.Selector, error) {
 	return metav1SelAsSel(&p.Spec.Selector)
+}
+
+// sourceOutage is the transition state of one telemetry source.
+type sourceOutage struct {
+	Down   bool
+	Since  time.Time
+	Reason string
+}
+
+// observeSourceHealth classifies this tick's scrape result: counts every failed signal query
+// by reason, detects a whole-source outage from the source's OWN health verdict (a separate
+// check, not an inference from "all signals errored"), logs ERROR exactly once when the source
+// goes down and once when it recovers, and keeps the outage state for updateStatus to publish
+// as the TelemetryDegraded condition. What absence means for phase or cost is T1-C's table.
+func (m *Manager) observeSourceHealth(e *policyEntry, err error) {
+	if m.MetricsSource == nil {
+		return
+	}
+	source := m.MetricsSource.Name()
+	health := ingest.SourceHealth{Source: source}
+	if hr, ok := m.MetricsSource.(ingest.HealthReporter); ok {
+		health = hr.LastHealth()
+	} else if err != nil {
+		health = ingest.SourceHealth{Source: source, Total: 1, Failed: 1}
+	}
+	now := time.Now()
+	m.mu.Lock()
+	if m.degraded == nil {
+		m.degraded = map[string]*sourceOutage{}
+	}
+	st := m.degraded[source]
+	if st == nil {
+		st = &sourceOutage{}
+		m.degraded[source] = st
+	}
+	wasDown, since := st.Down, st.Since
+	if health.Unreachable() {
+		if !wasDown {
+			st.Down, st.Since, st.Reason = true, now, model.ReasonSourceUnreachable
+		}
+	} else if wasDown {
+		st.Down, st.Since, st.Reason = false, time.Time{}, ""
+	}
+	m.mu.Unlock()
+
+	switch {
+	case health.Unreachable():
+		metrics.RecordScrapeFailure(source, "*", model.ReasonSourceUnreachable)
+		if !wasDown {
+			m.Log.Error(err, "telemetry source unreachable: every signal query failed; affected signals read State=Error, no value fabricated",
+				"source", source, "namespace", e.namespace, "failedQueries", health.Failed, "totalQueries", health.Total)
+		}
+	case err != nil:
+		for _, sig := range failedSignals(err) {
+			metrics.RecordScrapeFailure(source, sig, model.ReasonQueryFailed)
+		}
+		m.Log.V(1).Info("telemetry scrape partially degraded (per-signal State=Error with reason)",
+			"source", source, "namespace", e.namespace, "failedQueries", health.Failed, "totalQueries", health.Total)
+		if wasDown {
+			m.Log.Info("telemetry source recovered", "source", source, "namespace", e.namespace, "downFor", now.Sub(since).String())
+		}
+	default:
+		if wasDown {
+			m.Log.Info("telemetry source recovered", "source", source, "namespace", e.namespace, "downFor", now.Sub(since).String())
+		}
+	}
+}
+
+// failedSignals extracts the signal names from PodMetrics' joined error ("sig: err" lines).
+func failedSignals(err error) []string {
+	var out []string
+	for _, line := range strings.Split(err.Error(), "\n") {
+		if i := strings.Index(line, ":"); i > 0 {
+			out = append(out, strings.TrimSpace(line[:i]))
+		}
+	}
+	return out
+}
+
+// sourceOutageState returns a copy of the configured source's outage state.
+func (m *Manager) sourceOutageState() (string, sourceOutage) {
+	if m.MetricsSource == nil {
+		return "", sourceOutage{}
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if st := m.degraded[m.MetricsSource.Name()]; st != nil {
+		return m.MetricsSource.Name(), *st
+	}
+	return m.MetricsSource.Name(), sourceOutage{}
 }

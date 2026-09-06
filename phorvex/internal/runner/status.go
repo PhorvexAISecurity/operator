@@ -111,6 +111,21 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 			ksStatus, ksReason, ksMsg = metav1.ConditionTrue, "Engaged",
 				"actuation suppressed globally; the engine still decides, logs and emits metrics"
 		}
+		// [PHORVEXSEC-200 / M-113] TelemetryDegraded: a whole-source scrape outage is visible on
+		// the policy within one tick, with the source, the reason and since when; cleared on the
+		// first tick the source answers again. Per-signal absence stays per-signal (T1-C).
+		tdStatus, tdReason, tdMsg := metav1.ConditionFalse, "Healthy", "telemetry source answering"
+		if src, st := m.sourceOutageState(); st.Down {
+			tdStatus, tdReason = metav1.ConditionTrue, "SourceUnreachable"
+			tdMsg = "telemetry source " + src + " unreachable since " + st.Since.UTC().Format(time.RFC3339) + " (" + st.Reason + "); affected signals read State=Error, never 0"
+		}
+		meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
+			Type:               ConditionTelemetryDegraded,
+			Status:             tdStatus,
+			Reason:             tdReason,
+			Message:            tdMsg,
+			ObservedGeneration: p.Generation,
+		})
 		meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
 			Type:               "KillSwitch",
 			Status:             ksStatus,

@@ -55,7 +55,7 @@ func TestNonFiniteInputNeverReachesAFactWeight(t *testing.T) {
 	for _, bad := range nonFinite {
 		for _, set := range []func(*model.PhysicsWitness){
 			func(p *model.PhysicsWitness) { p.ImageRarity = bad },
-			func(p *model.PhysicsWitness) { p.EPSS = bad },
+			func(p *model.PhysicsWitness) { p.EPSSMultiplier = bad },
 			func(p *model.PhysicsWitness) { p.CoResidency = bad },
 			func(p *model.PhysicsWitness) { p.ModelRarity = bad },
 			func(p *model.PhysicsWitness) { p.DispersionCap = bad },
