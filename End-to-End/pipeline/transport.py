@@ -12,6 +12,7 @@ import json
 import os
 import shlex
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -121,6 +122,34 @@ class Console:
             return json.loads(out)
         except json.JSONDecodeError as e:
             raise TransportError(f"GET {path} did not return JSON: {out[:200]!r}") from e
+
+    def wait_preflight(self, timeout=60):
+        """Read-only readiness wait before capture/attack; never retry a POST.
+
+        A rolling console can briefly have no Service endpoints. Both health and
+        version must answer within one bounded window; permanent failures remain
+        transport failures and never produce a passing E2E verdict.
+        """
+        deadline = time.monotonic() + timeout
+        last_error = "console did not become ready"
+        while deadline - time.monotonic() > 2:
+            try:
+                health = self.get_json("/api/health", timeout=min(10, deadline - time.monotonic()))
+                if not isinstance(health, dict) or health.get("ok") is not True:
+                    raise TransportError("console health did not return ok=true")
+                remaining = deadline - time.monotonic()
+                if remaining <= 2:
+                    break
+                version = self.get_json("/api/version", timeout=min(10, remaining))
+                if not isinstance(version, dict) or not version.get("operator"):
+                    raise TransportError("console did not report an operator version")
+                return health, version
+            except TransportError as e:
+                last_error = str(e)
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(2, remaining))
+        raise TransportError(f"console readiness deadline ({timeout}s): {last_error}")
 
     def post_json(self, path, body, timeout=40):
         if self.mode == "kubectl-proxy":
