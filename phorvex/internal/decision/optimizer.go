@@ -34,15 +34,11 @@ type ShadowCheckedOptimizer interface {
 
 // RotationObserver is the optional feedback seam implemented by an optimizer with
 // an online rotation-cost learner. The runner invokes it only for completed,
-// measured live rotations; P0 and other stateless optimizers need not implement it.
+// measured live rotations; a stateless optimizer need not implement it.
 type RotationObserver interface {
 	ObserveRotation(tenant string, view *model.WorkloadView, measuredFlow float64)
 }
 
-// Name implements Optimizer for the P0 greedy engine.
-func (*Engine) Name() string { return "p0-greedy" }
-
-var _ Optimizer = (*Engine)(nil)
 var _ Optimizer = (*CoverageEngine)(nil)
 var _ CheckedOptimizer = (*CoverageEngine)(nil)
 var _ ShadowCheckedOptimizer = (*CoverageEngine)(nil)

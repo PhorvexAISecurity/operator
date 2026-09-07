@@ -122,7 +122,7 @@ func main() {
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
 	flag.StringVar(&kubeContext, "context", "", "[scan] kubeconfig context to scan (empty = current-context; the console derives this from your kubeconfig, never hardcoded).")
-	flag.StringVar(&engineName, "engine", "p1", "Decision brain: p1 (submodular recon-coverage) | p0 (greedy baseline).")
+	flag.StringVar(&engineName, "engine", "p1", "Decision brain. Only p1 (submodular recon-coverage) exists; the deprecated p0 greedy baseline was removed (M-107) and is rejected with an error rather than silently ignored.")
 	flag.BoolVar(&ablation, "ablation", false, "One-shot: run the STEP-3 IP ablation (P1 vs random per-dollar) live, print, exit.")
 	flag.StringVar(&ablationNS, "ablation-namespace", "", "[ablation] namespace to evaluate.")
 	flag.StringVar(&ablationSelector, "ablation-selector", "", "[ablation] label selector, e.g. app=demo.")
@@ -288,12 +288,12 @@ func main() {
 		rmgr.Calibration = nil
 		setupLog.Info("scale calibration shadow disabled")
 	}
-	if engineName == "p0" {
-		setupLog.Info("the p0 greedy baseline is deprecated and will be removed in the next release; p1-coverage is the supported brain")
-		rmgr.Optimizer = decision.NewEngine()
-	} else {
-		rmgr.Optimizer = decision.NewCoverageEngine()
+	optimizer, engErr := decision.SelectOptimizer(engineName)
+	if engErr != nil {
+		setupLog.Error(engErr, "refusing to start with an unsupported decision brain")
+		os.Exit(1)
 	}
+	rmgr.Optimizer = optimizer
 	setupLog.Info("decision brain", "engine", rmgr.Optimizer.Name())
 	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetClient(), Namespace: operatorNS}
 
