@@ -12,7 +12,12 @@ export interface FrontierRow {
   arm: string; interval: string;
   prevention: CI; harm: CI; infeasible: CI; win: string;
 }
+export interface ClaimScope {
+  scope: string; detectorSet: string[]; detectorSetKnown: boolean;
+  recallCap: string; note: string; brainImage: string; gitSHA: string;
+}
 export interface OwnerEvent {
+  claim?: ClaimScope; outcomeEvidence?: string;
   tenant: string; namespace: string; pod: string; action: string; actuated: boolean; dryRun: boolean;
   handler?: string; objectsTouched?: string[]; reversible: boolean; attackPrevented: boolean;
   workPreserved: boolean; harmCaused: boolean; sloKept: boolean; attackStage: string; why: string; blindOutcome: string;
@@ -262,6 +267,7 @@ export interface AttackCost {
   ratesSource?: string; operatorCost?: number; r6Churn?: number;
 }
 export interface AttackResult {
+  claim?: ClaimScope;
   id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;
   status: "running" | "done"; outcome: "DEFENDED" | "LANDED" | ""; phorvexAction: string; actuated: boolean; timeToDefendSec: number;
@@ -309,6 +315,7 @@ export interface OptimizerProbeArm {
 }
 export interface OptimizerProbe { b: number; lambda: number; shared: OptimizerProbeArm; disjoint: OptimizerProbeArm }
 export interface BenchResult {
+  claim?: ClaimScope;
   scenario: string; scenarioLabel: string; engine: string; pods: number; stateful: number; attacked: number;
   attackLandedRisk: number; r6BlindCost: number; r6DestroysStateful: number; r6BlindMovesPerHour: number;
   horizonSec: number; r6IntervalSec: number; computeMs: number; optimizerProbe: OptimizerProbe;

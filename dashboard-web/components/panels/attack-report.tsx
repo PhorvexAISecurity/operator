@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, AttackResult, AttackCost } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { csvDownload, Empty } from "@/components/ui/more";
@@ -39,10 +40,11 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
 
   return (
     <div className="space-y-3">
+      <ClaimScopeNote />
       {!compact && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-[12px] font-medium"><Swords className="h-3.5 w-3.5 text-primary" /> Live attack results</div>
-          <div className="text-[11px] text-muted-foreground">{rows.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span>{meanDwell && <> · mean containment dwell <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
+          <div className="text-[11px] text-muted-foreground">{rows.length} attacks · <span className="text-success">{defended} defended</span> · <span className="text-danger">{landed} landed</span>{meanDwell && <> · mean recorded response time <span className="tabular text-foreground">{meanDwell}s</span></>}</div>
           <Button size="sm" variant="outline" onClick={exportCSV} className="ml-auto gap-1.5"><Download className="h-3.5 w-3.5" /> CSV</Button>
         </div>
       )}
@@ -55,15 +57,15 @@ export function AttackResultsPanel({ lens, compact }: { lens: Lens; compact?: bo
 function containmentInfo(r: AttackResult): { tone: "good" | "warn" | "bad"; cls: string; line: string; dwellNote: string; bounded: boolean } {
   switch (r.containment) {
     case "evicted":
-      return { tone: "good", cls: "text-success", line: `${r.pod} rotated away — attacker evicted`, dwellNote: "attacker evicted — window closed", bounded: true };
+      return { tone: "good", cls: "text-success", line: `${r.pod} rotation recorded; wider attacker access unknown`, dwellNote: "recorded rotation-response time", bounded: true };
     case "contained":
-      return { tone: "good", cls: "text-success", line: `${r.pod} quarantined — attacker isolated on its own node`, dwellNote: "foothold network-isolated on its node", bounded: true };
+      return { tone: "good", cls: "text-success", line: `${r.pod} quarantined — isolation attempt recorded; effect confirmation required`, dwellNote: "recorded isolation-response time", bounded: true };
     case "flushed":
-      return { tone: "good", cls: "text-success", line: `${r.pod} kept serving — injected cache state flushed in place`, dwellNote: "planted state cleared — no restart, no downtime", bounded: true };
+      return { tone: "good", cls: "text-success", line: `${r.pod} cache reset recorded; wider attacker state unknown`, dwellNote: "recorded reset-response time", bounded: true };
     case "foothold-active":
-      return { tone: "warn", cls: "text-warning", line: `neighbor ${r.defendedPod} isolated — attacker STILL holds ${r.pod}`, dwellNote: `foothold on ${r.pod} not evicted — lateral spread cut only`, bounded: false };
+      return { tone: "warn", cls: "text-warning", line: `neighbor ${r.defendedPod} isolation recorded; no removal evidence for ${r.pod}`, dwellNote: `no confirmed foothold removal or lateral-spread effect`, bounded: false };
     case "landed":
-      return { tone: "bad", cls: "text-danger", line: "foothold persists — attacker retains access", dwellNote: "attacker never evicted", bounded: false };
+      return { tone: "bad", cls: "text-danger", line: "no defensive response recorded on the foothold", dwellNote: "removal is not confirmed", bounded: false };
     default:
       return { tone: "bad", cls: "text-muted-foreground", line: "", dwellNote: "", bounded: false };
   }
@@ -80,7 +82,7 @@ function AttackCard({ r }: { r: AttackResult }) {
         {/* header */}
         <div className="flex flex-wrap items-center gap-2">
           {running ? <Badge variant="modeled" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> measuring…</Badge>
-            : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> DEFENDED</Badge>
+            : defended ? <Badge variant="real" className="gap-1"><ShieldCheck className="h-3 w-3" /> RESPONSE RECORDED</Badge>
               : <Badge variant="pending" className="gap-1"><ShieldAlert className="h-3 w-3" /> LANDED</Badge>}
           <span className="font-mono text-[12px] font-medium text-foreground">{r.service}</span>
           <span className="text-[12px] text-muted-foreground">· {r.attack}</span>
@@ -88,6 +90,7 @@ function AttackCard({ r }: { r: AttackResult }) {
           <span className="ml-auto font-mono text-[10px] text-muted-foreground/60">{new Date(r.firedAt).toLocaleTimeString()}</span>
         </div>
 
+        <ClaimScopeNote claim={r.claim} />
         {/* actuator line */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
           <span className="text-muted-foreground">Phorvex →
@@ -100,14 +103,14 @@ function AttackCard({ r }: { r: AttackResult }) {
 
         {/* attacker dwell time — how long the intruder held effective access */}
         <div>
-          <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70"><Clock className="h-3 w-3" /> attacker dwell time</div>
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70"><Clock className="h-3 w-3" /> recorded response timing</div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
             {running
               ? <span className="text-muted-foreground">measuring…</span>
               : cinfo.bounded
                 ? <><span className="tabular text-[15px] font-semibold text-success">{r.dwellSec}s</span><span className="text-muted-foreground">{cinfo.dwellNote}</span></>
                 : <><span className="tabular text-[15px] font-semibold text-danger">≥ {r.dwellSec}s</span><span className="text-warning">ongoing — {cinfo.dwellNote}</span></>}
-            <span className="ml-auto text-[10px] text-muted-foreground/60">bounded only when the foothold pod itself is evicted/contained · no defense: unbounded</span>
+            <span className="ml-auto text-[10px] text-muted-foreground/60">Recorded response timing is not a bound on attacker access or out-of-band gains.</span>
           </div>
         </div>
 

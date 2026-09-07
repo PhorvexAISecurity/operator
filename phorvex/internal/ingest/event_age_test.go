@@ -28,6 +28,12 @@ func TestCollectEventsRecordsAgeAndMissingTimestamp(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "nostamp"},
 		Spec:       amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod-a"}, Rule: amtdv1beta1.Rule{Type: "Persistence", ThreatLevel: "high", Source: "det"}},
 	}
+	// M-94: only an admission-stamped, allowlisted detector supplies belief evidence, so the
+	// age fixtures now carry the stamp this fleet's detector would get.
+	trustEvents(t, "vllm/detector-kv-canary")
+	for _, se := range []*amtdv1beta1.SecurityEvent{aged, noStamp} {
+		se.Annotations = map[string]string{CreatorIdentityAnnotation: "system:serviceaccount:vllm:detector-kv-canary"}
+	}
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(aged, noStamp).Build()
 	_, byPod, err := collectEvents(context.Background(), c, now)
 	if err != nil {

@@ -23,7 +23,8 @@ import (
 
 // Record is the serialized form of one decision (stable JSON for the audit trail).
 type Record struct {
-	SchemaVersion string `json:"schemaVersion"`
+	Claim         *model.ClaimScope `json:"claim,omitempty"`
+	SchemaVersion string            `json:"schemaVersion"`
 	// SourceSchemaVersion records the input contract used by the old-to-new read shim.
 	// It is process metadata, not part of the v2 wire representation.
 	SourceSchemaVersion string    `json:"-"`
@@ -199,7 +200,15 @@ func New(log logr.Logger, jsonOut io.Writer) *Logger {
 
 // ToRecord converts a Decision to a Record.
 func ToRecord(d model.Decision) Record {
+	claim := model.NewClaimScope(nil, false, "", "")
+	if d.Trace != nil {
+		claim = model.NewClaimScope(nil, false, d.Trace.BrainImage, d.Trace.GitSHA)
+	}
+	if d.Claim != nil {
+		claim = model.NewClaimScope(d.Claim.DetectorSet, d.Claim.DetectorSetKnown, d.Claim.BrainImage, d.Claim.GitSHA)
+	}
 	return Record{
+		Claim:                 &claim,
 		SchemaVersion:         SchemaVersionCurrent,
 		SourceSchemaVersion:   SchemaVersionCurrent,
 		Kind:                  "phorvex.decision",
@@ -281,7 +290,7 @@ func (l *Logger) Record(d model.Decision) {
 	l.log.Info("decision",
 		"tenant", rec.Tenant, "pod", rec.Namespace+"/"+rec.Pod, "action", rec.Action,
 		"selected", rec.Selected, "feasible", rec.Feasible, "dryRun", rec.DryRun,
-		"engine", rec.Engine, "perDollar", rec.PerDollar, "coveredFacts", rec.CoveredFacts,
+		"claim", rec.Claim, "engine", rec.Engine, "perDollar", rec.PerDollar, "coveredFacts", rec.CoveredFacts,
 		"stage", rec.Stage, "nextStage", rec.NextStage, "hazard", rec.StageHazard,
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,
 		"cost", rec.Cost, "net", rec.Net, "asset", rec.AssetValue, "blast", rec.BlastRadius,

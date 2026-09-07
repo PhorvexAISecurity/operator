@@ -86,8 +86,9 @@ type quarantineHandler struct{}
 func (quarantineHandler) Name() string { return string(model.ActionQuarantine) }
 
 const (
-	quarantineLabel    = "phorvex.ai/quarantined"
-	quarantineSnapAnno = "phorvex.ai/quarantine-snapshot"
+	quarantineLabel      = "phorvex.ai/quarantined"
+	quarantineSnapAnno   = "phorvex.ai/quarantine-snapshot"
+	quarantineEpochLabel = "phorvex.ai/quarantine-epoch" // M-23 D2: event-valued clock for VarNetworkIdentity
 )
 
 type qtnSnapshot struct {
@@ -146,6 +147,12 @@ func (h quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 	}
 	brk.apply(pod.Labels)
 	pod.Labels[quarantineLabel] = qid
+	// M-23 D2: an event-valued epoch clock for VarNetworkIdentity. quarantineLabel is the pod
+	// UID (state-valued: identical on every quarantine of the same pod, so it never resets), so
+	// a re-quarantine could not be throttled. ResourceVersion differs each actuation. Stamped in
+	// this same Update; NOT re-stamped on rollback — the snapshot-restore (taken above, before
+	// this line) strips it, which correctly fail-OPENs the next quarantine after a re-admit.
+	pod.Labels[quarantineEpochLabel] = pod.ResourceVersion
 	pod.OwnerReferences = nil // detach from the controller owner
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		return HandlerResult{}, fmt.Errorf("quarantine detach %s/%s: %w", req.Namespace, req.Pod, err)

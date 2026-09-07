@@ -12,6 +12,7 @@ Severity is about consequence, not confidence:
 """
 
 import math
+import re
 
 from trace import all_numeric_fields, is_finite_number
 
@@ -479,7 +480,7 @@ def b10(ctx):
 
 # ─────────────────────────── 5 · feasibility ───────────────────────────
 
-@check("F01", "feasibility", "every feasibility rejection names a law",
+@check("F01", "feasibility", "every feasibility rejection names a law or capability gate",
        "\"infeasible\" without a reason cannot be audited", "major")
 def f01(ctx):
     prefixes = ctx.inv["law_reason_prefixes"]
@@ -493,6 +494,12 @@ def f01(ctx):
             bad.append(f"{r.get('pod')} action={r.get('action')}")
             continue
         law = next((l for l, pres in prefixes.items() if any(why.startswith(p) or p in why for p in pres)), None)
+        # authz.Checker emits an explicit SSAR deny, not a feasibility-law verdict.
+        # Match the complete resource/verb/namespace tuple; arbitrary "denied" text
+        # and SSAR transport errors must not count as an explained rejection.
+        if law is None and re.fullmatch(
+                r"denied [a-z0-9.-]*/[a-z0-9.-]+:[a-z]+ in [a-z0-9.-]+", why):
+            law = "capability-rbac"
         if law:
             matched[law] = matched.get(law, 0) + 1
         else:
@@ -500,9 +507,9 @@ def f01(ctx):
     if bad:
         return result(FAIL, f"{len(bad)} rejections with no reason", bad[:8])
     if unknown:
-        return result(FAIL, f"{len(unknown)} reasons that map to no known law", unknown[:6])
+        return result(FAIL, f"{len(unknown)} reasons that map to no known law or capability gate", unknown[:6])
     return result(PASS if n else SKIP,
-                  f"{n} rejections, all mapped to a law" if n else "no rejection occurred in this window",
+                  f"{n} rejections, all mapped to a law or capability gate" if n else "no rejection occurred in this window",
                   [f"{k}: {v}" for k, v in sorted(matched.items())])
 
 

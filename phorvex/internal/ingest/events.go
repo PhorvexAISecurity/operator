@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -22,6 +23,11 @@ import (
 // ingests) and projects it to per-pod belief evidence. Phorvex's OWN controller
 // events (Source=PhorvexController) are EXCLUDED so Phorvex never treats its own
 // actuation as threat evidence (no feedback loop).
+//
+// M-94 trust boundary: `spec.rule.source` is a self-declared string, so it decides
+// nothing. Only an event whose ADMISSION-STAMPED creator identity is an allowlisted
+// detector becomes belief evidence (byPod); everything else is ingested and recorded
+// with its Trust verdict but carries no evidence. See eventtrust.go.
 func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model.SecurityEventInfo, map[string][]model.SecurityEventInfo, error) {
 	var seList amtdv1beta1.SecurityEventList
 	if err := c.List(ctx, &seList); err != nil {
@@ -32,8 +38,12 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 	for i := range seList.Items {
 		se := &seList.Items[i]
 		if se.Spec.Rule.Source == actuator.RuleSource {
+			metrics.RecordSecurityEvent(TrustSelf)
 			continue // skip Phorvex's own emitted events
 		}
+		identity := se.Annotations[CreatorIdentityAnnotation]
+		trust := classifyEvent(identity)
+		metrics.RecordSecurityEvent(trust)
 		score := -1.0
 		if se.Spec.AnomalyScore != nil {
 			// ParseFloat accepts the literal strings "NaN"/"Inf" WITHOUT error, and a detector can
@@ -56,6 +66,8 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 		}
 		base := model.SecurityEventInfo{
 			Name:             se.Name,
+			Trust:            trust,
+			CreatorIdentity:  identity,
 			TimestampMissing: missing,
 			Type:             se.Spec.Rule.Type,
 			ThreatLevel:      se.Spec.Rule.ThreatLevel,
@@ -64,9 +76,24 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 			AnomalyScore:     score,
 			Age:              age,
 		}
-		all = append(all, base)
+		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
+		// It used to be turned into a bare name that matched no key — silently dropped. It is
+		// now recorded on the event with a reason and counted.
+		resolved := make([]string, 0, len(se.Spec.Targets))
 		for _, target := range se.Spec.Targets {
-			key := normalizeTarget(target)
+			key, ok := normalizeTarget(target)
+			if !ok {
+				base.UnresolvedTargets = append(base.UnresolvedTargets, strings.TrimSpace(target))
+				metrics.RecordSecurityEvent(TargetUnresolvd)
+				continue
+			}
+			resolved = append(resolved, key)
+		}
+		all = append(all, base)
+		if trust != TrustTrusted {
+			continue // recorded above; an unauthenticated detector supplies no belief evidence
+		}
+		for _, key := range resolved {
 			ev := base
 			ev.TargetsPod = true
 			byPod[key] = append(byPod[key], ev)
@@ -75,12 +102,15 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 	return all, byPod, nil
 }
 
-// normalizeTarget canonicalizes a SecurityEvent target ("namespace/name" or
-// "/name") to a "namespace/name" key.
-func normalizeTarget(target string) string {
+// normalizeTarget canonicalizes a SecurityEvent target ("namespace/name") to a pod key.
+// ok=false for a reference that carries no namespace ("/name" or a bare "name"): the pod
+// map is keyed "namespace/name", so such a target identifies no pod. It used to be turned
+// into a bare name that matched nothing — a silent drop (M-94). The caller records it.
+func normalizeTarget(target string) (string, bool) {
 	target = strings.TrimSpace(target)
-	if strings.HasPrefix(target, "/") {
-		return target[1:] // "/name" -> bare name (cluster-scoped pod ref is uncommon)
+	ns, name, ok := strings.Cut(target, "/")
+	if !ok || ns == "" || name == "" {
+		return "", false
 	}
-	return target
+	return target, true
 }

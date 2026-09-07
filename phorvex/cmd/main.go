@@ -117,13 +117,14 @@ func main() {
 		webhookCertDir       string
 		pcieClassTableRaw    string
 		flowClasses          string
+		trustedDetectors     string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
 	flag.StringVar(&kubeContext, "context", "", "[scan] kubeconfig context to scan (empty = current-context; the console derives this from your kubeconfig, never hardcoded).")
-	flag.StringVar(&engineName, "engine", "p1", "Decision brain: p1 (submodular recon-coverage) | p0 (greedy baseline).")
+	flag.StringVar(&engineName, "engine", "p1", "Decision brain. Only p1 (submodular recon-coverage) exists; the deprecated p0 greedy baseline was removed (M-107) and is rejected with an error rather than silently ignored.")
 	flag.BoolVar(&ablation, "ablation", false, "One-shot: run the STEP-3 IP ablation (P1 vs random per-dollar) live, print, exit.")
 	flag.StringVar(&ablationNS, "ablation-namespace", "", "[ablation] namespace to evaluate.")
 	flag.StringVar(&ablationSelector, "ablation-selector", "", "[ablation] label selector, e.g. app=demo.")
@@ -137,6 +138,7 @@ func main() {
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "TLS port for the validating admission webhook.")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
+	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
@@ -180,7 +182,14 @@ func main() {
 		pcieClasses = parsed
 	}
 	physics.ConfigureFlowActivation(strings.Split(flowClasses, ","))
+	detectors := ingest.NewTrustedDetectors(strings.Split(trustedDetectors, ","))
+	ingest.ConfigureEventTrust(detectors)
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if detectors.Empty() {
+		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")
+	} else {
+		setupLog.Info("SecurityEvent trust boundary active (M-94)", "trustedDetectors", detectors.List())
+	}
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
 		os.Exit(2)
@@ -283,12 +292,12 @@ func main() {
 		rmgr.Calibration = nil
 		setupLog.Info("scale calibration shadow disabled")
 	}
-	if engineName == "p0" {
-		setupLog.Info("the p0 greedy baseline is deprecated and will be removed in the next release; p1-coverage is the supported brain")
-		rmgr.Optimizer = decision.NewEngine()
-	} else {
-		rmgr.Optimizer = decision.NewCoverageEngine()
+	optimizer, engErr := decision.SelectOptimizer(engineName)
+	if engErr != nil {
+		setupLog.Error(engErr, "refusing to start with an unsupported decision brain")
+		os.Exit(1)
 	}
+	rmgr.Optimizer = optimizer
 	setupLog.Info("decision brain", "engine", rmgr.Optimizer.Name())
 	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetClient(), Namespace: operatorNS}
 
@@ -324,7 +333,12 @@ func main() {
 			setupLog.Error(err, "unable to create validating webhook", "webhook", "PhorvexPolicy")
 			os.Exit(1)
 		}
+		if err = controller.SetupSecurityEventWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create mutating webhook", "webhook", "SecurityEvent")
+			os.Exit(1)
+		}
 		setupLog.Info("PhorvexPolicy validating admission webhook enabled", "port", webhookPort, "certDir", webhookCertDir)
+		setupLog.Info("SecurityEvent creator-identity stamp enabled (M-94 trust boundary)", "path", "/stamp-amtd-r6security-com-v1beta1-securityevent")
 	}
 	if err = mgr.Add(rmgr); err != nil {
 		setupLog.Error(err, "unable to add the phorvex tick loop")

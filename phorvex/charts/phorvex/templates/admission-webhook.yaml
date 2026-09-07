@@ -74,4 +74,39 @@ webhooks:
     operations: ["CREATE", "UPDATE"]
     resources: ["phorvexpolicies"]
     scope: Namespaced
+---
+# M-94: bind every SecurityEvent to the identity that created it. The authenticated user is
+# known only to the API server, so the stamp has to happen at admission; ingest then allowlists
+# that identity instead of the self-declared spec.rule.source.
+#
+# failurePolicy is Ignore ON PURPOSE: Phorvex must never be able to block the cluster's
+# security-event flow. An unstamped event is untrusted at ingest, so the failure direction is
+# closed on the belief side rather than on the API server.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ printf "%s-securityevent-stamp" $fullname | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+webhooks:
+- name: stamp-securityevent.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  clientConfig:
+    caBundle: {{ $caCert | b64enc | quote }}
+    service:
+      name: {{ $serviceName }}
+      namespace: {{ .Release.Namespace }}
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
 {{- end }}

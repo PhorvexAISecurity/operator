@@ -130,8 +130,7 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
     # ── 0 · preflight ────────────────────────────────────────────────────────
     log("\n[0/6] preflight")
     n.running(0)
-    ctx.preflight["health"] = console.get_json("/api/health")
-    ctx.preflight["version"] = console.get_json("/api/version")
+    ctx.preflight["health"], ctx.preflight["version"] = console.wait_preflight()
     ctx.controller_pods = cluster.controller_pods(
         cfg.get("operator_namespace", "phorvex-system"))
     ctx.preflight["controllers"] = ctx.controller_pods

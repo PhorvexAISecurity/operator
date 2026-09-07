@@ -37,6 +37,18 @@ phorvex:
   # validated at low load, so this list is empty and the component is recorded absent with
   # reason class-not-activated, entering no aggregate and no fact.
   flowResidualClasses: []
+  # Detector identities whose SecurityEvents may supply belief evidence (M-94). The check is
+  # made against the AUTHENTICATED creator that the admission stamp records, never against the
+  # self-declared spec.rule.source — that string is written by whoever created the event.
+  # Accepted spellings: "namespace/serviceaccount", "namespace:serviceaccount", or a full
+  # "system:serviceaccount:ns:name". An EMPTY list trusts no external detector (fail-closed):
+  # events are still ingested and recorded, they simply carry no evidence.
+  # The defaults below are the identities that actually hold securityevents-create on the
+  # EKS fleet (discovered 2026-09-06 from the bound ClusterRoles); replace them for your fleet.
+  trustedDetectors:
+    - vllm/detector-kv-canary
+    - vllm/detector-adapter-inv
+    - phorvex-system/operator-controller-manager
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false

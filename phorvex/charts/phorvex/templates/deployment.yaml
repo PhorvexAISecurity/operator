@@ -70,6 +70,9 @@ spec:
         {{- with .Values.phorvex.flowResidualClasses }}
         - --flow-residual-classes={{ join "," . }}
         {{- end }}
+        {{- with .Values.phorvex.trustedDetectors }}
+        - --trusted-detectors={{ join "," . }}
+        {{- end }}
         {{- if .Values.phorvex.audit.enabled }}
         - --audit-json={{ .Values.phorvex.audit.path }}
         # int64, because YAML parses 268435456 as a float and Helm would otherwise render
