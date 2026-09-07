@@ -49,8 +49,11 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	// pcieClasses is the M-114 PCIe capacity class fallback (--pcie-class-table), shared by
+	// the live tick, the one-shot scan and the ablation snapshot.
+	pcieClasses ingest.PCIeClassTable
+	scheme      = runtime.NewScheme()
+	setupLog    = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -111,6 +114,7 @@ func main() {
 		admissionWebhook     bool
 		webhookPort          int
 		webhookCertDir       string
+		pcieClassTableRaw    string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -123,6 +127,7 @@ func main() {
 	flag.StringVar(&ablationSelector, "ablation-selector", "", "[ablation] label selector, e.g. app=demo.")
 	flag.IntVar(&ablationBudget, "ablation-budget", 2, "[ablation] move budget B per arm.")
 	flag.IntVar(&ablationSeeds, "ablation-seeds", 40, "[ablation] number of random-arm seeds.")
+	flag.StringVar(&pcieClassTableRaw, "pcie-class-table", os.Getenv("PHORVEX_PCIE_CLASS_TABLE"), "JSON map of DCGM modelName -> {gen,width} used as the PCIe capacity fallback when the exporter publishes no link gen/width (M-114). Merged over the shipped default {\"Tesla T4\":{\"gen\":3,\"width\":16}}.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address the health probe binds to.")
 	flag.BoolVar(&enableLeader, "leader-elect", false, "Enable leader election (single active controller).")
@@ -165,6 +170,12 @@ func main() {
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	if parsed, err := ingest.ParsePCIeClassTable(pcieClassTableRaw); err != nil {
+		setupLog.Error(err, "invalid --pcie-class-table; refusing to start with an unparseable PCIe capacity table")
+		os.Exit(1)
+	} else {
+		pcieClasses = parsed
+	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
@@ -278,7 +289,8 @@ func main() {
 	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetClient(), Namespace: operatorNS}
 
 	// Telemetry source: real Prometheus client if a URL is set, else honest nil source.
-	rmgr.PromURL = promURL // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)
+	rmgr.PromURL = promURL         // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)
+	rmgr.PCIeClasses = pcieClasses // M-114: PCIe capacity class fallback (chart value)
 	if promURL != "" {
 		rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)
 		setupLog.Info("telemetry: prometheus", "url", promURL)
@@ -472,7 +484,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 	}
 	// Live GPU half: when a Prometheus/dcgm-exporter feed is configured, stamp the per-pod
 	// VRAM/SM/PCIe witness so the GPU adapter can consume measured values.
-	gpuIngestErr := ingest.PopulateGPUWitness(ctx, snap, promURL)
+	gpuIngestErr := ingest.PopulateGPUWitness(ctx, snap, promURL, pcieClasses)
 	platformName, phys := platform.Derive(snap)
 	fmt.Printf("=== P-PHYSICS live scan ===\nplatform-adapter: %s\nnodes: %d   pods: %d   PDBs: %d\n",
 		platformName, len(snap.Nodes), len(snap.Pods), len(snap.PDBs))
@@ -533,6 +545,7 @@ func runScan(namespace, promURL, kubeContext string) error {
 	if namespace != "" {
 		rmgr := runner.NewManager(c, ctrl.Log)
 		rmgr.PromURL = promURL // the fresh context/ablation snapshots must receive the same DCGM witness
+		rmgr.PCIeClasses = pcieClasses
 
 		// P4a: wire live telemetry (no longer telemetry-blind). The operator-supplied
 		// --prometheus-url feeds cost/continuity/feasibility/context (the platform K8s-half

@@ -22,6 +22,15 @@ phorvex:
   # Normalized GPU reload/warm-up envelope. 0.2925 is the observed worst case on
   # the production EKS Tesla T4 fleet: 117s time-to-Ready / 400s documented scale.
   gpuEnvelopeMax: 0.2925
+  # PCIe link capacity used to normalize the DCGM RX+TX byte-rate into LinkBandwidth
+  # (M-114). The denominator is DISCOVERED, never chosen: (1) the device's negotiated link
+  # from DCGM_FI_DEV_PCIE_LINK_GEN/_WIDTH when the exporter publishes them; (2) otherwise
+  # this table, keyed by the exporter's own `modelName` label (gen = PCIe generation,
+  # width = lanes; capacity = 2 × width × PCI-SIG per-lane rate); (3) otherwise the signal
+  # is absent — never a borrowed number. Merged over the shipped default (Tesla T4 = Gen3 x16,
+  # NVIDIA T4 datasheet); add classes for other devices, e.g. "NVIDIA A100-SXM4-40GB": {gen: 4, width: 16}.
+  pcieClassCapacity:
+    "Tesla T4": {gen: 3, width: 16}
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false

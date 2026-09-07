@@ -757,6 +757,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		FactsAbsentReason: set.FactsAbsent[v.Pod.Namespace+"/"+v.Pod.Name],
 		Flow:              flowRecord(v),
 		TelemetryStates:   telemetryStates(v.Telemetry),
+		PCIe:              pcieRecord(v.Physics),
 		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:            primed,
 		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
@@ -1288,5 +1289,19 @@ func telemetryStates(t model.Telemetry) []model.DecisionSignalStateV3 {
 		sig("reqRate", t.ReqRate), sig("p99Ms", t.P99Ms), sig("queueDepth", t.QueueDepth), sig("gpuUtil", t.GPUUtil),
 		sig("tokensPerSec", t.TokensPerSec), sig("connCount", t.ConnCount), sig("bytesIn", t.BytesIn), sig("bytesOut", t.BytesOut),
 		sig("syscallRate", t.SyscallRate),
+	}
+}
+
+// pcieRecord builds the M-114 denominator record from the witness.
+func pcieRecord(ph model.PhysicsWitness) model.DecisionPCIeV3 {
+	return model.DecisionPCIeV3{
+		Present:        ph.LinkPresent,
+		Measured:       traceOptional(ph.LinkPresent || ph.LinkReason != "", ph.LinkBandwidth*ph.LinkCapacityBytesPerSec),
+		Capacity:       traceOptional(ph.LinkPresent, ph.LinkCapacityBytesPerSec),
+		CapacitySource: ph.LinkCapacitySource,
+		Gen:            ph.LinkGen,
+		Width:          ph.LinkWidth,
+		Utilization:    traceOptional(ph.LinkPresent, ph.LinkBandwidth),
+		Reason:         ph.LinkReason,
 	}
 }

@@ -144,6 +144,19 @@ type DecisionSignalStateV3 struct {
 	Src    string `json:"src,omitempty"`
 }
 
+// DecisionPCIeV3 records the PCIe utilisation inputs (M-114): the measured RX+TX byte-rate is
+// divided by a DISCOVERED capacity; the record names the capacity, its source and the link.
+type DecisionPCIeV3 struct {
+	Present        bool          `json:"present"`
+	Measured       OptionalFloat `json:"measuredBytesPerSec"`
+	Capacity       OptionalFloat `json:"capacityBytesPerSec"`
+	CapacitySource string        `json:"capacitySource"` // dcgm-link | class-config | absent
+	Gen            int           `json:"gen,omitempty"`
+	Width          int           `json:"width,omitempty"`
+	Utilization    OptionalFloat `json:"utilization"`
+	Reason         string        `json:"reason,omitempty"`
+}
+
 // OptionalFloat distinguishes an observed zero from an unavailable measurement.
 type OptionalFloat struct {
 	Present bool    `json:"present"`
@@ -210,6 +223,8 @@ type DecisionModelInputsV2 struct {
 	ExposureVariable  string                  `json:"exposureVariable"`
 	ExposureSeconds   OptionalFloat           `json:"exposureSeconds"`
 	ProactiveFloorSec float64                 `json:"proactiveFloorSeconds"`
+	// PCIe (M-114): the LinkBandwidth denominator and where it came from.
+	PCIe DecisionPCIeV3 `json:"pcie"`
 	// CostCalibratorTenant names the tenant whose calibrator bucket priced every cost in this
 	// record, BlindCost included (M-110 site 1); BlindCostSource says whether the blind cost
 	// came from that calibrator ("tenant-calibrator") or the stateful maximum ("stateful-max").

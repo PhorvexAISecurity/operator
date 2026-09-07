@@ -90,7 +90,9 @@ type Manager struct {
 	// Authz is the T1-E SSAR capability checker (cached). nil disables the RBAC leg of the
 	// gate (installability + cover + runtime-capability still apply); the boot layer wires
 	// it from the cluster clientset so no-rbac exclusions become live.
-	Authz        *authz.Checker
+	Authz *authz.Checker
+	// PCIeClasses is the chart's hardware-class table for the PCIe denominator (M-114).
+	PCIeClasses  ingest.PCIeClassTable
 	KillSwitch   *KillSwitch
 	BaseInterval time.Duration
 	// PerTickTimeout bounds one tick so a slow/hung API server cannot wedge the loop
@@ -378,7 +380,7 @@ func (m *Manager) tick(ctx context.Context) {
 	// VRAMFraction/SMOccupancy/LinkBandwidth/GPUPresent feed the live decision engine when a Prometheus
 	// feed is wired. Honest-absent (leaves the neutral witness) when PromURL is empty or DCGM has no data.
 	if m.PromURL != "" {
-		ingest.PopulateGPUWitness(ctx, snap, m.PromURL)
+		ingest.PopulateGPUWitness(ctx, snap, m.PromURL, m.PCIeClasses)
 	}
 
 	// Complete post-action feedback before making this tick's decisions. This is
