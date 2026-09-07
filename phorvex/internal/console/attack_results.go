@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type attackCost struct {
@@ -49,17 +51,18 @@ type attackCost struct {
 }
 
 type attackRecord struct {
-	ID        string `json:"id"`
-	FiredAt   string `json:"firedAt"`
-	Service   string `json:"service"`
-	Namespace string `json:"namespace"`
-	Pod       string `json:"pod"`
-	Deploy    string `json:"deploy"`
-	Attack    string `json:"attack"`
-	AttackID  string `json:"attackId"`
-	MITRE     string `json:"mitre"`
-	Expected  string `json:"expectedActuator"`
-	Stateful  bool   `json:"stateful"`
+	Claim     *model.ClaimScope `json:"claim,omitempty"`
+	ID        string            `json:"id"`
+	FiredAt   string            `json:"firedAt"`
+	Service   string            `json:"service"`
+	Namespace string            `json:"namespace"`
+	Pod       string            `json:"pod"`
+	Deploy    string            `json:"deploy"`
+	Attack    string            `json:"attack"`
+	AttackID  string            `json:"attackId"`
+	MITRE     string            `json:"mitre"`
+	Expected  string            `json:"expectedActuator"`
+	Stateful  bool              `json:"stateful"`
 
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
@@ -212,11 +215,11 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 	now := time.Now()
 	deploy := s.firstDeploy(ns)
 	r := &attackRecord{
-		ID:        "atk-" + strconv.FormatInt(now.UnixNano(), 36),
-		FiredAt:   now.UTC().Format(time.RFC3339),
-		Service:   service, Namespace: ns, Pod: pod, Deploy: deploy,
+		ID:      "atk-" + strconv.FormatInt(now.UnixNano(), 36),
+		FiredAt: now.UTC().Format(time.RFC3339),
+		Service: service, Namespace: ns, Pod: pod, Deploy: deploy,
 		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful,
-		Status:       "running",
+		Status: "running",
 		// PRE-FIRE value when the caller captured one (>=0); fall back to a live read only if the
 		// baseline predates this field, so an old caller still gets a number rather than 0.
 		UptimeBefore: func() float64 {
@@ -225,11 +228,11 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 			}
 			return s.workloadUptime(ns, deploy)
 		}(),
-		started:      now,
-		baseEpoch:    base.epoch,
-		baseKVEpoch:  base.kvEpoch,
-		baseQuar:     base.quar,
-		baseNP:       base.nps,
+		started:     now,
+		baseEpoch:   base.epoch,
+		baseKVEpoch: base.kvEpoch,
+		baseQuar:    base.quar,
+		baseNP:      base.nps,
 	}
 	// capture value-at-risk NOW (the attacked pod's node still exists; it may be rotated away before
 	// the watcher finishes) so the cost is grounded in the real node price, not the cluster fallback.
@@ -483,6 +486,15 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	}
 	if w, _ := best["why"].(string); w != "" { // don't clobber an event-derived reason with an empty audit why
 		r.Why = w
+	}
+	// Preserve only the original audit claim; never infer historical configuration.
+	if raw, ok := best["claim"]; ok && raw != nil {
+		if data, err := json.Marshal(raw); err == nil {
+			var claim model.ClaimScope
+			if json.Unmarshal(data, &claim) == nil && claim.Scope == "modeled" {
+				r.Claim = &claim
+			}
+		}
 	}
 	r.Stage, _ = best["stage"].(string)
 	r.R6Would, _ = best["r6Would"].(string)

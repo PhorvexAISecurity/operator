@@ -1030,7 +1030,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	}
 
 	selected, infeasible := 0, 0
+	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
+		decisions[i].Claim = &claim
 		m.Audit.Record(decisions[i])
 		if decisions[i].Selected {
 			selected++

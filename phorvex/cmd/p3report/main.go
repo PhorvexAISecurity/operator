@@ -67,12 +67,12 @@ const (
 var blindIntervalSeconds = 15.0
 
 type armAgg struct {
-	dwell      []float64 // REAL survival (dwell-to-eviction) when stamped, else trial-elapsed
-	disruption []float64
-	actions    []float64
-	secPerCost []float64
-	secUSD     []float64
-	gpuUSD     []float64
+	dwell            []float64 // REAL survival (dwell-to-eviction) when stamped, else trial-elapsed
+	disruption       []float64
+	actions          []float64
+	secPerCost       []float64
+	secUSD           []float64
+	gpuUSD           []float64
 	schwPos, schwTot int
 	detectorAbsent   bool
 	skipped          bool
@@ -263,6 +263,7 @@ func render(rows []Metric, phase string, recon float64, src string) string {
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f, a...); b.WriteByte('\n') }
 
 	w("# EFFECTIVENESS-PHORVEX — the full attack benchmark (GATE #2)")
+	w("Modeled coverage refers to the detector-visible, reversible projection. Fixture outcomes are not confirmation of whole-attacker containment. Trusted detector set and recall are unknown for this aggregate report; use individual record-time build evidence where available.")
 	w("")
 	if phase == "SMOKE" {
 		w("> **PHASE: SMOKE (directional, n=2).** Proves the loop; CIs not meaningful.")
@@ -326,7 +327,7 @@ func render(rows []Metric, phase string, recon float64, src string) string {
 		w("")
 		w("This is the single headline for the deck: **R6 has no feasibility model**, so its only")
 		w("move (Delete) destroys the training job; **PX's hard-constraint generator excludes rotate")
-		w("on a stateful pod and quarantines instead — the foothold is contained and the work survives.**")
+		w("on a stateful pod and quarantines instead — this models an isolation attempt, not confirmation of attacker removal or workload preservation.**")
 	} else {
 		w("\n_(stateful-training scenario not in this run)_")
 	}
@@ -543,8 +544,8 @@ func render(rows []Metric, phase string, recon float64, src string) string {
 	w("")
 	w("### WHAT CUSTOMERS GET")
 	w("- **$ saved** (fewer wasted rotations) + GPU-overhead avoided [GPU-PENDING].")
-	w("- **SLO never broken; stateful work preserved** (the lead demo).")
-	w("- **Zero-day foothold eviction** — the proactive floor evicts even what detection misses.")
+	w("- **Modeled service and work-preservation goals**; dispatch alone does not confirm either.")
+	w("- **Proactive rotation attempts** — the floor can trigger without detection; wider attacker access remains unknown.")
 	w("- **Every action explained** (100%% rationale).")
 	w("")
 
