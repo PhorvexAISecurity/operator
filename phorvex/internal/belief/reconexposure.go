@@ -7,6 +7,7 @@ package belief
 import (
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/r6security/phoenix/api/v1beta1"
+	"time"
 )
 
 // reconExposure is the DEFAULT BeliefEstimator. It blends two evidence streams:
@@ -38,11 +39,15 @@ func (reconExposure) Belief(view *model.WorkloadView, pol model.Policy) float64 
 			}
 			sev := float64(rank) / 4.0 // info..critical -> 0..1
 
-			// Age decay: full weight when fresh, ->0 over the proactive floor horizon.
-			decay := 1.0
-			if pol.ProactiveFloor > 0 {
-				frac := e.Age.Seconds() / pol.ProactiveFloor.Seconds()
-				decay = 1.0 - clampB(frac, 0, 1)
+			// Age decay: full weight when fresh, ->0 over the EVENT-AGE horizon (T1-B's τ_ev,
+			// PHORVEXSEC-188 / M-29) — the same linear model.EventAgeWeight ctxprov and killchain
+			// use, so the three event-decay sites turn on one screw and the hygiene-cadence knob
+			// (ProactiveFloor) no longer stretches how long an alert stays believed. The horizon
+			// is initialised = ProactiveFloor by buildPolicy (inherited, INSUFFICIENT EVIDENCE
+			// until T3-D fits it); unset falls back to the floor, keeping old policies identical.
+			decay := 0.0
+			if !e.TimestampMissing {
+				decay = model.EventAgeWeight(e.Age, eventAgeHorizonBelief(pol))
 			}
 
 			w := sev * decay
@@ -75,3 +80,13 @@ func clampB(x, lo, hi float64) float64 {
 }
 
 func init() { Registry.Register(reconExposure{}) }
+
+// eventAgeHorizonBelief is the dedicated event-decay horizon (τ_ev, T1-B), falling back to
+// ProactiveFloor when unset so a policy built without it is byte-identical (same rule as
+// ctxprov.eventAgeHorizonCtx and killchain.eventAgeHorizon).
+func eventAgeHorizonBelief(pol model.Policy) time.Duration {
+	if pol.EventAgeHorizon > 0 {
+		return pol.EventAgeHorizon
+	}
+	return pol.ProactiveFloor
+}
