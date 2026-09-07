@@ -25,10 +25,20 @@ const (
 	actionsSupportedDegradedReason       = "Degraded"
 )
 
-type unsupportedAction struct {
-	action model.Action
-	reason string
+// actionGap is one enabled AI-capability action that is not serviceable on the WHOLE
+// selected fleet (M-20): unsupported on `unsupported` of `total` pods, first failing
+// predicate `why`. unsupportedEverywhere() (∃ nobody eligible, incl. an empty fleet) is
+// the FLIP set — the only thing that moves the ActionsSupported condition. A PARTIAL gap
+// (0 < unsupported < total) is serviceable somewhere: it never flips, but it is surfaced
+// in the message with its per-asset count (the count-while-green half of the fix).
+type actionGap struct {
+	action      model.Action
+	unsupported int
+	total       int
+	why         string
 }
+
+func (g actionGap) unsupportedEverywhere() bool { return g.unsupported >= g.total }
 
 type actionsSupportStatus struct {
 	status  metav1.ConditionStatus
@@ -36,76 +46,125 @@ type actionsSupportStatus struct {
 	message string
 }
 
-// unsupportedEnabledActions returns the enabled AI-capability actions that NO selected
-// pod can serve (T1-E, the M-20 fix). Honest-∃: an action is unsupported iff ZERO pods
-// are FULLY eligible for it — the per-pod capability conjunction via the shared witness
-// (the same predicate the generator's gate uses, so the two cannot drift). This replaces
-// the old fleet-wide OR of INDEPENDENT predicates, which called an action supported when
-// no single pod satisfied all its requirements (the smeared conjunction: pod A's GPU +
-// pod B's serving endpoint ⇒ kv-reset "supported" though neither pod has both). Normal
-// fleet heterogeneity stays quiet; the condition flips only when nobody can serve, and
-// per-pod gaps live in the message, never the flip (∀-strict would be alert-fatigue).
-func unsupportedEnabledActions(pol model.Policy, views []*model.WorkloadView, wit capability.Witness) []unsupportedAction {
-	var unsupported []unsupportedAction
+// capabilityGaps returns every enabled AI-capability action that is not serviceable on
+// the WHOLE selected fleet, with its per-asset count (T1-E's M-20 witness, now counted).
+// Honest-∃ per pod via the shared witness (the same predicate the generator's gate uses,
+// so the two cannot drift) — replacing the old fleet-wide OR of INDEPENDENT predicates
+// that called an action supported when no single pod satisfied all its requirements (the
+// smeared conjunction: pod A's GPU + pod B's serving endpoint ⇒ kv-reset "supported"
+// though neither has both). A fully-supported action (every pod eligible) yields no gap;
+// a fully-unsupported one is a FLIP gap; a partial one is surfaced but does not flip.
+func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capability.Witness) []actionGap {
+	total := len(views)
+	var gaps []actionGap
 	for action, enabled := range pol.EnabledActions {
 		if !enabled || !capability.AICapabilityActions[action] {
 			continue
 		}
-		eligibleSomewhere, firstWhy := false, ""
+		unsupported := 0
+		whyCount := map[string]int{}
 		for _, v := range views {
-			ok, why := wit.Capable(v, action)
-			if ok {
-				eligibleSomewhere = true
-				break
-			}
-			if firstWhy == "" && why != "" {
-				firstWhy = why
+			if ok, why := wit.Capable(v, action); !ok {
+				unsupported++
+				if why != "" {
+					whyCount[why]++
+				}
 			}
 		}
-		if !eligibleSomewhere {
-			if firstWhy == "" {
-				firstWhy = "no selected pod is eligible"
-			}
-			unsupported = append(unsupported, unsupportedAction{action, firstWhy})
+		// total==0 (selector matches no pods) skips here too: no assets ≠ unsupported —
+		// "your policy selects nothing" is a different signal, not a capability gap (M-20).
+		if unsupported == 0 {
+			continue
 		}
+		gaps = append(gaps, actionGap{action: action, unsupported: unsupported, total: total, why: dominantWhy(whyCount)})
 	}
-	sort.Slice(unsupported, func(i, j int) bool { return unsupported[i].action < unsupported[j].action })
-	return unsupported
+	sort.Slice(gaps, func(i, j int) bool { return gaps[i].action < gaps[j].action })
+	return gaps
 }
 
-func unsupportedMessage(actions []unsupportedAction) string {
-	parts := make([]string, 0, len(actions))
-	for _, unsupported := range actions {
-		parts = append(parts, string(unsupported.action)+": "+unsupported.reason)
+// dominantWhy picks the reason DETERMINISTICALLY — the mode over the unsupported assets,
+// lexical-min on a tie (REQ-2). A view-order-dependent "first why" would flap per tick on
+// a mixed-reason fleet, and because the flip debounce keys on the reason, a flapping why
+// would keep the counter below threshold forever — the condition could never go False.
+func dominantWhy(counts map[string]int) string {
+	best, bestN := "no selected pod is eligible", 0
+	for why, n := range counts {
+		if n > bestN || (n == bestN && why < best) {
+			best, bestN = why, n
+		}
+	}
+	return best
+}
+
+// gapMessage renders gaps as "<action> unsupported on N/M assets (<why>)", the <why>
+// being the witness predicate name — the SAME vocabulary the record's exclusionReason
+// carries (M-20 test c), so a record and this condition never disagree.
+func gapMessage(gaps []actionGap) string {
+	parts := make([]string, 0, len(gaps))
+	for _, g := range gaps {
+		parts = append(parts, fmt.Sprintf("%s unsupported on %d/%d assets (%s)", g.action, g.unsupported, g.total, g.why))
 	}
 	return strings.Join(parts, "; ")
 }
 
-func (m *Manager) debounceActionsSupported(e *policyEntry, unsupported []unsupportedAction) actionsSupportStatus {
+// flipGaps is the subset that moves the condition: an action no pod can serve (∃ nobody
+// eligible). Partial gaps are excluded — they are message-only.
+func flipGaps(gaps []actionGap) []actionGap {
+	var flip []actionGap
+	for _, g := range gaps {
+		if g.unsupportedEverywhere() {
+			flip = append(flip, g)
+		}
+	}
+	return flip
+}
+
+// flipSignature is the debounce key: sorted (action, why) pairs of the FLIP set, WITHOUT
+// counts. A changing fleet size (N/M) must not re-arm the transient-loss debounce while
+// the same actions stay fully unsupported for the same reasons; only the flip set or its
+// reasons changing resets it. (gaps arrive action-sorted from capabilityGaps.)
+func flipSignature(flip []actionGap) string {
+	parts := make([]string, 0, len(flip))
+	for _, g := range flip {
+		parts = append(parts, string(g.action)+"="+g.why)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (m *Manager) debounceActionsSupported(e *policyEntry, gaps []actionGap) actionsSupportStatus {
 	threshold := m.ActionsSupportedDebounce
 	if threshold <= 0 {
 		threshold = DefaultActionsSupportedDebounceTicks
 	}
-	message := unsupportedMessage(unsupported)
+	flip := flipGaps(gaps)
+	// The condition FLIP debounces on the fully-unsupported set ONLY (count-free signature)
+	// — a fluctuating partial count, or a changing fleet size, must never trip or hold the
+	// transient-capability-loss debounce.
+	flipSig := flipSignature(flip)
+	message := gapMessage(gaps) // shown in every state; carries partial + full counts
 
 	m.mu.Lock()
 	entry := m.policies[e.key.String()]
 	if entry == nil {
 		entry = e
 	}
-	if len(unsupported) == 0 {
+	if len(flip) == 0 {
+		// No action is unsupported fleet-wide: the condition stays TRUE. If there are
+		// PARTIAL gaps (serviceable somewhere, not everywhere) surface their per-asset
+		// counts in the message anyway — count-while-green (M-20 test b) — but do not flip.
 		entry.actionsUnsupportedTicks = 0
 		entry.actionsUnsupportedSignature = ""
 		m.mu.Unlock()
-		return actionsSupportStatus{
-			status: metav1.ConditionTrue, reason: actionsSupportedReason,
-			message: "all enabled actions have matching capabilities in the selected fleet",
+		msg := "all enabled actions have matching capabilities in the selected fleet"
+		if len(gaps) > 0 {
+			msg = "all enabled actions serviceable; " + message
 		}
+		return actionsSupportStatus{status: metav1.ConditionTrue, reason: actionsSupportedReason, message: msg}
 	}
-	if entry.actionsUnsupportedSignature == message {
+	if entry.actionsUnsupportedSignature == flipSig {
 		entry.actionsUnsupportedTicks++
 	} else {
-		entry.actionsUnsupportedSignature = message
+		entry.actionsUnsupportedSignature = flipSig
 		entry.actionsUnsupportedTicks = 1
 	}
 	observations := entry.actionsUnsupportedTicks

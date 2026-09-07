@@ -930,7 +930,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	// the SSAR checker (then no-rbac becomes live); NotInstallable is empty on a current
 	// CRD (17/17).
 	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator)
-	actionsSupport := m.debounceActionsSupported(e, unsupportedEnabledActions(pol, views, capWit))
+	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
 			r := capWit.Eligible(v, a, coverKeys)
