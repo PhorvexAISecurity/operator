@@ -67,6 +67,9 @@ spec:
         {{- with .Values.phorvex.pcieClassCapacity }}
         - --pcie-class-table={{ toJson . }}
         {{- end }}
+        {{- with .Values.phorvex.trustedDetectors }}
+        - --trusted-detectors={{ join "," . }}
+        {{- end }}
         {{- if .Values.phorvex.audit.enabled }}
         - --audit-json={{ .Values.phorvex.audit.path }}
         # int64, because YAML parses 268435456 as a float and Helm would otherwise render
