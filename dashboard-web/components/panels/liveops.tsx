@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, liveStream, RunStatus } from "@/lib/api";
 import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { useOwnerTenant } from "@/lib/owner";
@@ -468,6 +469,7 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
         </CardContent>
       </button>
 
+      <div className="px-3 pb-2"><ClaimScopeNote claim={e.claim} /></div>
       {open && (
         <CardContent className="space-y-3 border-t border-border/50 p-3 pt-3 text-[12px]">
           {(date || time) && (
@@ -518,7 +520,7 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
               {num(e.risk) != null && <Metric label="risk" value={num(e.risk)} />}
               {num(e.cost) != null && <Metric label="cost" value={num(e.cost, 4)} />}
               {num(e.net) != null && <Metric label="net value" value={num(e.net)} />}
-              {num(e.perDollar) != null && e.perDollar > 0 && <Metric label="per-$ coverage" value={num(e.perDollar)} />}
+              {num(e.perDollar) != null && e.perDollar > 0 && <Metric label="per-$ modeled coverage" value={num(e.perDollar)} />}
               {typeof e.coveredFacts === "number" && e.coveredFacts > 0 && <Metric label="covered facts" value={e.coveredFacts} />}
               {num(e.coveredWeight) != null && e.coveredWeight > 0 && <Metric label="covered weight" value={num(e.coveredWeight)} />}
               {num(e.belief) != null && <Metric label="belief" value={num(e.belief)} />}
@@ -559,6 +561,7 @@ function OwnerCard({ e }: { e: any }) {
           <span className="ml-auto max-w-md truncate text-foreground/80">{e.why}</span>
         </CardContent>
       </button>
+      <div className="px-3 pb-2"><ClaimScopeNote claim={e.claim} /></div>
       {open && (
         <CardContent className="space-y-2 border-t border-border/50 p-3 pt-3 text-[12px]">
           {(date || time) && <div className="text-[11px] text-muted-foreground">Decided <span className="text-foreground/80">{date}</span> at <span className="text-foreground/80">{time}</span></div>}

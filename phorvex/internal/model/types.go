@@ -575,6 +575,8 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
+	// Claim is attached after selection by the reporting boundary.
+	Claim     *ClaimScope
 	Tenant    string
 	Namespace string
 	Pod       string

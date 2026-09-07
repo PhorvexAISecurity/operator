@@ -26,16 +26,16 @@ import (
 type benchConfig struct {
 	Label                string   `json:"label"`
 	MaxMovesPerTick      int      `json:"maxMovesPerTick"`      // B — the greedy budget (DIRECT p1 effect)
-	NormSparsity         float64  `json:"normSparsity"`        // cost-ceiling term (DIRECT p1 effect)
-	FlowDisruption       float64  `json:"flowDisruption"`      // cost-ceiling term (DIRECT p1 effect)
-	WeightSecrets        float64  `json:"weightSecrets"`       // asset-value lift for secrets (DIRECT p1 effect)
+	NormSparsity         float64  `json:"normSparsity"`         // cost-ceiling term (DIRECT p1 effect)
+	FlowDisruption       float64  `json:"flowDisruption"`       // cost-ceiling term (DIRECT p1 effect)
+	WeightSecrets        float64  `json:"weightSecrets"`        // asset-value lift for secrets (DIRECT p1 effect)
 	MinAvailableReplicas int      `json:"minAvailableReplicas"` // quorum floor / feasibility (DIRECT p1 effect)
-	ProactiveFloorSec    float64  `json:"proactiveFloorSec"`   // proactive hygiene floor + prov() (DIRECT p1 effect)
-	ReactiveOnly         bool     `json:"reactiveOnly"`        // calm-until-attacked gate (DIRECT p1 effect)
-	EnabledActions       []string `json:"enabledActions"`      // action vocabulary (DIRECT p1 effect); empty => rotate+quarantine
-	Lambda               float64  `json:"lambda"`              // budget weight — used by p0-greedy; p1 SOLVES λ online (cadence/pricing note)
-	TickIntervalSec      float64  `json:"tickIntervalSec"`     // evaluation cadence (does NOT change a single decision)
-	AntiOverRotationSec  float64  `json:"antiOverRotationSec"` // re-actuation suppression window (cadence, not a single decision)
+	ProactiveFloorSec    float64  `json:"proactiveFloorSec"`    // proactive hygiene floor + prov() (DIRECT p1 effect)
+	ReactiveOnly         bool     `json:"reactiveOnly"`         // calm-until-attacked gate (DIRECT p1 effect)
+	EnabledActions       []string `json:"enabledActions"`       // action vocabulary (DIRECT p1 effect); empty => rotate+quarantine
+	Lambda               float64  `json:"lambda"`               // budget weight — used by p0-greedy; p1 SOLVES λ online (cadence/pricing note)
+	TickIntervalSec      float64  `json:"tickIntervalSec"`      // evaluation cadence (does NOT change a single decision)
+	AntiOverRotationSec  float64  `json:"antiOverRotationSec"`  // re-actuation suppression window (cadence, not a single decision)
 }
 
 type benchMove struct {
@@ -58,16 +58,16 @@ type benchMove struct {
 }
 
 type benchConfigResult struct {
-	Label   string      `json:"label"`
-	Config  benchConfig `json:"config"`
-	Moves   []benchMove `json:"moves"`
+	Label  string      `json:"label"`
+	Config benchConfig `json:"config"`
+	Moves  []benchMove `json:"moves"`
 
 	// Phorvex(config) — real engine aggregates
 	MovesSelected   int     `json:"movesSelected"`
 	TotalCoverage   float64 `json:"totalCoverage"`
 	TotalCost       float64 `json:"totalCost"`
-	PerDollar       float64 `json:"perDollar"`     // totalCoverage / totalCost (targeting efficiency)
-	AblationRatio   float64 `json:"ablationRatio"` // recon-per-$ vs equal-budget random (>1 = better than random)
+	PerDollar       float64 `json:"perDollar"`       // totalCoverage / totalCost (targeting efficiency)
+	AblationRatio   float64 `json:"ablationRatio"`   // recon-per-$ vs equal-budget random (>1 = better than random)
 	StatefulRotated bool    `json:"statefulRotated"` // no-harm violation (should stay false)
 
 	// greedy-vs-exact optimality (from the engine's own OptimalityOut): on the shipped asset-disjoint
@@ -91,18 +91,18 @@ type benchConfigResult struct {
 // with the exposure clock advanced (and reset on an identity-changing move, per VarPodIdentity's
 // definition), so the anti-over-rotation feasibility law and the online dual-λ evolution both engage.
 type benchTemporal struct {
-	HorizonSec       float64              `json:"horizonSec"`
-	TickSec          float64              `json:"tickSec"`
-	Ticks            int                  `json:"ticks"`
-	PhorvexMoves     int                  `json:"phorvexMoves"`
-	PhorvexCost      float64              `json:"phorvexCost"`
-	PhorvexByAction  map[string]int       `json:"phorvexByAction"`
-	R6IntervalSec    float64              `json:"r6IntervalSec"`
-	R6Moves          int                  `json:"r6Moves"`
-	R6Cost           float64              `json:"r6Cost"`
-	R6StatefulKills  int                  `json:"r6StatefulKills"` // destructive blind rotations of a stateful pod
-	SavingsVsR6      float64              `json:"savingsVsR6"`
-	Series           []benchTemporalPoint `json:"series"`
+	HorizonSec      float64              `json:"horizonSec"`
+	TickSec         float64              `json:"tickSec"`
+	Ticks           int                  `json:"ticks"`
+	PhorvexMoves    int                  `json:"phorvexMoves"`
+	PhorvexCost     float64              `json:"phorvexCost"`
+	PhorvexByAction map[string]int       `json:"phorvexByAction"`
+	R6IntervalSec   float64              `json:"r6IntervalSec"`
+	R6Moves         int                  `json:"r6Moves"`
+	R6Cost          float64              `json:"r6Cost"`
+	R6StatefulKills int                  `json:"r6StatefulKills"` // destructive blind rotations of a stateful pod
+	SavingsVsR6     float64              `json:"savingsVsR6"`
+	Series          []benchTemporalPoint `json:"series"`
 }
 
 type benchTemporalPoint struct {
@@ -114,12 +114,13 @@ type benchTemporalPoint struct {
 
 // benchResult is the whole benchmark: the config-independent baselines + one entry per config.
 type benchResult struct {
-	Scenario   string              `json:"scenario"`
+	Claim         model.ClaimScope `json:"claim"`
+	Scenario      string           `json:"scenario"`
 	ScenarioLabel string           `json:"scenarioLabel"`
-	Engine     string              `json:"engine"`
-	Pods       int                 `json:"pods"`
-	Stateful   int                 `json:"stateful"`
-	Attacked   int                 `json:"attacked"`
+	Engine        string           `json:"engine"`
+	Pods          int              `json:"pods"`
+	Stateful      int              `json:"stateful"`
+	Attacked      int              `json:"attacked"`
 
 	// reference baselines (config-independent)
 	AttackLandedRisk    float64 `json:"attackLandedRisk"`    // Σ AssetValue left fully exposed (no defense)
@@ -178,6 +179,7 @@ func (s *Server) benchmarkSim(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := benchResult{
+		Claim:    model.NewClaimScope(nil, false, "console-build:"+BuildStamp, ""),
 		Scenario: req.Scenario, ScenarioLabel: label, Engine: "p1-coverage",
 		Pods: len(views), Stateful: nStateful, Attacked: nAttacked,
 		R6BlindMovesPerHour: float64(len(views)) * (3600.0 / 15.0), // blind 15s timer rotates every pod
@@ -442,7 +444,7 @@ func benchScenario(name string) ([]*model.WorkloadView, string) {
 		v := &model.WorkloadView{
 			Pod: model.Pod{
 				Namespace: "bench", Name: name, UID: "u-" + name,
-				Labels: map[string]string{"data-class": dataClass},
+				Labels:          map[string]string{"data-class": dataClass},
 				DesiredReplicas: 3, ReadyReplicas: 3, Ready: true, Stateful: stateful,
 			},
 			Phase:              model.PhaseWarm,
@@ -466,11 +468,11 @@ func benchScenario(name string) ([]*model.WorkloadView, string) {
 		}, "NATS JetStream — 3 stateful brokers, broker-0 under a foothold"
 	case "mixed-fleet":
 		return []*model.WorkloadView{
-			pod("crown1", true, false, "restricted", 3*time.Hour, nil),       // long-exposed secret (proactivity probe)
-			pod("crown2", true, false, "restricted", 1*time.Hour, foothold),  // attacked crown
+			pod("crown1", true, false, "restricted", 3*time.Hour, nil),      // long-exposed secret (proactivity probe)
+			pod("crown2", true, false, "restricted", 1*time.Hour, foothold), // attacked crown
 			pod("cheap1", false, false, "public", 2*time.Hour, nil),
 			pod("cheap2", false, false, "internal", 90*time.Minute, nil),
-			pod("stateful-db", true, true, "restricted", 3*time.Hour, nil),   // no-harm probe (never rotate)
+			pod("stateful-db", true, true, "restricted", 3*time.Hour, nil), // no-harm probe (never rotate)
 		}, "Mixed fleet — crowns, cheap pods, a stateful DB; crown2 under a foothold"
 	case "ai-gpu":
 		p0 := pod("infer-0", true, false, "restricted", 1*time.Hour, nil)

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -154,11 +155,13 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 		WithStatusSubresource(&v1.PhorvexPolicy{}).
 		WithObjects(policy, sentinel).Build()
 	fa := &fakeActuator{}
+	var auditSink bytes.Buffer
 	m := &Manager{
+		BrainImage: "record-image", GitSHA: "record-sha",
 		Client:     c,
 		Clock:      exposure.NewClock(),
 		Optimizer:  &killSwitchOptimizer{},
-		Audit:      audit.New(logr.Discard(), nil),
+		Audit:      audit.New(logr.Discard(), &auditSink),
 		Actuator:   fa,
 		KillSwitch: &KillSwitch{Client: c, Namespace: operatorNS},
 		Log:        logr.Discard(),
@@ -196,6 +199,18 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 		t.Fatal("engaged sentinel was not observed")
 	}
 	m.processTenant(context.Background(), snap, e, engaged)
+	// The normal runner attaches record-time metadata even without decision tracing.
+	var recorded audit.Record
+	if err := json.NewDecoder(&auditSink).Decode(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if recorded.Claim == nil || recorded.Claim.BrainImage != "record-image" || recorded.Claim.GitSHA != "record-sha" || !recorded.Claim.DetectorSetKnown {
+		t.Fatalf("missing runner claim: %+v", recorded.Claim)
+	}
+	if recorded.Actuated {
+		t.Fatal("claim metadata bypassed kill-switch")
+	}
+
 	if fa.calls != 0 {
 		t.Fatalf("kill-switch engaged: actuator called %d times, want 0", fa.calls)
 	}

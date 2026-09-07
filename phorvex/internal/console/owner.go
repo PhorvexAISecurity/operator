@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // OwnerEvent is the ONLY shape the owner endpoint returns — the outcome, never the math.
@@ -27,23 +28,25 @@ import (
 // platform + that it helped). NO EMR / scarcity / fact-weight / per-dollar / lambda /
 // hazard / pHold / attribution / raw-risk field appears, by design.
 type OwnerEvent struct {
-	Tenant         string   `json:"tenant"`
-	Time           string   `json:"time,omitempty"` // RFC3339 decision timestamp (owner-safe: when, not score)
-	Namespace      string   `json:"namespace"`
-	Pod            string   `json:"pod"`
-	Action         string   `json:"action"`
-	Actuated       bool     `json:"actuated"`
-	DryRun         bool     `json:"dryRun"`
-	Handler        string   `json:"handler,omitempty"`
-	ObjectsTouched []string `json:"objectsTouched,omitempty"`
-	Reversible     bool     `json:"reversible"`     // mutationKind -> reversible|forward-only chip
-	AttackPrevented bool    `json:"attackPrevented"` // derived boolean (from oracleAchieved)
-	WorkPreserved  bool     `json:"workPreserved"`
-	HarmCaused     bool     `json:"harmCaused"`
-	SLOKept        bool     `json:"sloKept"`        // BOOLEAN ONLY — never the numeric score
-	AttackStage    string   `json:"attackStage"`    // COARSE plain-English label, not the raw enum
-	Why            string   `json:"why"`            // SERVER-AUTHORED, owner-safe outputs only
-	BlindOutcome   string   `json:"blindOutcome"`   // r6 counterfactual OUTCOME, sanitized
+	Claim           model.ClaimScope `json:"claim"`
+	OutcomeEvidence string           `json:"outcomeEvidence"`
+	Tenant          string           `json:"tenant"`
+	Time            string           `json:"time,omitempty"` // RFC3339 decision timestamp (owner-safe: when, not score)
+	Namespace       string           `json:"namespace"`
+	Pod             string           `json:"pod"`
+	Action          string           `json:"action"`
+	Actuated        bool             `json:"actuated"`
+	DryRun          bool             `json:"dryRun"`
+	Handler         string           `json:"handler,omitempty"`
+	ObjectsTouched  []string         `json:"objectsTouched,omitempty"`
+	Reversible      bool             `json:"reversible"`      // mutationKind -> reversible|forward-only chip
+	AttackPrevented bool             `json:"attackPrevented"` // Deprecated: dispatch-derived, not confirmed prevention
+	WorkPreserved   bool             `json:"workPreserved"`   // Deprecated: action-derived, not measured preservation
+	HarmCaused      bool             `json:"harmCaused"`
+	SLOKept         bool             `json:"sloKept"`      // Deprecated: feasibility assumption, not measured SLO
+	AttackStage     string           `json:"attackStage"`  // COARSE plain-English label, not the raw enum
+	Why             string           `json:"why"`          // SERVER-AUTHORED, owner-safe outputs only
+	BlindOutcome    string           `json:"blindOutcome"` // r6 counterfactual OUTCOME, sanitized
 }
 
 // coarseStage maps the internal kill-chain stage enum to a customer-facing label (never the
@@ -77,21 +80,21 @@ func coarseStage(stage string) string {
 func ownerWhy(action string, actuated, reversible, workPreserved, harm bool) string {
 	if !actuated {
 		if action == "" || action == "noop" {
-			return "Evaluated this workload and took no action — no threat warranted intervention."
+			return "Evaluated this workload and took no action. This does not establish absence of a threat."
 		}
 		return "Selected a protective action for this workload, but it was NOT carried out — treat this workload as unprotected for this event."
 	}
 	switch {
 	case action == "quarantine" && workPreserved:
-		return "Contained the threat in place and kept your workload running — no data or job loss."
+		return "Attempted network isolation in place. Attacker removal, workload preservation and out-of-band gains are not confirmed by this record."
 	case action == "rotate":
-		return "Replaced the compromised instance with a clean one to evict the attacker."
+		return "Dispatched instance replacement to attempt eviction. Security effect is not independently confirmed by this record."
 	case action == "kv-reset":
-		return "Cleared injected state on the inference workload without restarting it."
+		return "Dispatched a cache reset to attempt removal of modeled session state. Security effect is not independently confirmed by this record."
 	case reversible:
-		return "Applied a reversible protective change to disrupt the attacker; your service stayed available."
+		return "Dispatched a reversible protective change. Security effect and service availability require separate confirmation."
 	default:
-		return "Took a targeted protective action to evict the attacker while preserving your workload."
+		return "Dispatched a targeted protective action. Security effect and workload preservation require separate confirmation."
 	}
 }
 
@@ -121,7 +124,16 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 	if rec.Action == "quarantine" && rec.Actuated {
 		workPreserved = true
 	}
+	claim := model.NewClaimScope(nil, false, "", "")
+	if rec.DecisionTrace != nil {
+		claim = model.NewClaimScope(nil, false, rec.DecisionTrace.BrainImage, rec.DecisionTrace.GitSHA)
+	}
+	if rec.Claim != nil {
+		claim = model.NewClaimScope(rec.Claim.DetectorSet, rec.Claim.DetectorSetKnown, rec.Claim.BrainImage, rec.Claim.GitSHA)
+	}
 	return OwnerEvent{
+		Claim:           claim,
+		OutcomeEvidence: "dispatch-only",
 		Tenant:          rec.Tenant,
 		Time:            rec.Time.Format(time.RFC3339),
 		Namespace:       rec.Namespace,
@@ -135,7 +147,7 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 		AttackPrevented: rec.Actuated && rec.Selected,
 		WorkPreserved:   workPreserved,
 		HarmCaused:      harm,
-		SLOKept:         true, // boolean only; PX never violates the SLO gate (feasibility-enforced)
+		SLOKept:         true, // Legacy feasibility assumption; not an independently measured outcome.
 		AttackStage:     coarseStage(rec.Stage),
 		Why:             ownerWhy(rec.Action, rec.Actuated, reversible, workPreserved, harm),
 		BlindOutcome:    blindOutcome(rec.Action, rec.Actuated, workPreserved),

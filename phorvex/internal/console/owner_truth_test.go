@@ -27,8 +27,8 @@ func TestOwnerWhyNeverClaimsUnperformedDefence(t *testing.T) {
 			}
 		}
 	}
-	// And the honest positive case still reads as a completed defence when it really happened.
-	if got := ownerWhy("kv-reset", true, false, false, false); !strings.Contains(got, "Cleared injected state") {
+	// An actuated record describes dispatch without claiming a confirmed security effect.
+	if got := ownerWhy("kv-reset", true, false, false, false); !strings.Contains(got, "Dispatched a cache reset") {
 		t.Errorf("actuated kv-reset lost its narrative: %s", got)
 	}
 }
