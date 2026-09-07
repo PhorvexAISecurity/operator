@@ -1264,7 +1264,7 @@ func exposurePressureScaleSeconds(pol model.Policy) float64 {
 // flowRecord builds the M-115 flow basis record from the same physics functions the
 // residual uses, so the record and the number cannot drift apart.
 func flowRecord(v *model.WorkloadView) model.DecisionFlowV3 {
-	fr := physics.FlowResidual(v.Telemetry)
+	fr := physics.FlowResidualFor(v.Pod.Namespace, v.Telemetry)
 	cs := physics.Components(v)
 	agg, aggPresent := physics.Aggregate(cs)
 	out := model.DecisionFlowV3{
