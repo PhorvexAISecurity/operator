@@ -199,6 +199,28 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 	return true, ""
 }
 
+// CapableAndAuthorized is Capable PLUS the no-rbac leg, per (pod, action) — the check the
+// ActionsSupported status uses (M-160) so the condition reflects RBAC exclusions, not only
+// runtime fixtures. It mirrors the generator gate's RBAC step (routing-aware verbs via
+// actuator.RequiredVerbs; the SSAR is the same cached (ns,verb), so no new SSAR volume).
+// RBAC-unknown fails OPEN (ok=true): an SSAR error is not a status gap (P-NO-FREEZE),
+// matching the gate. On a deny the why is "no-rbac: <detail>" — the same ReasonNoRBAC
+// vocabulary the record's exclusionReason carries, so condition and record don't disagree.
+func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action) (bool, string) {
+	if ok, why := w.Capable(v, action); !ok {
+		return false, why
+	}
+	if w.az != nil {
+		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
+			allowed, unknown, why := w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
+			if !unknown && !allowed {
+				return false, ReasonNoRBAC + ": " + why
+			}
+		}
+	}
+	return true, ""
+}
+
 // configWhy returns the missing per-target CONFIG fixture for an AI action, from the
 // model's typed witnesses + the pool index; "" means the config fixtures are present.
 func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
