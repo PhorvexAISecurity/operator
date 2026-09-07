@@ -80,6 +80,7 @@ type pendingRotation struct {
 type Manager struct {
 	Client        client.Client
 	Clock         *exposure.Clock
+	Intents       *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
 	Optimizer     decision.Optimizer
 	Audit         *audit.Logger
 	MetricsSource ingest.MetricsSource
@@ -151,6 +152,7 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 	return &Manager{
 		Client:        c,
 		Clock:         exposure.NewClock(),
+		Intents:       exposure.NewIntents(),
 		Optimizer:     decision.NewCoverageEngine(), // P1 default brain
 		Audit:         audit.New(log, nil),
 		MetricsSource: src,
@@ -864,23 +866,21 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	views := make([]*model.WorkloadView, 0, len(selPods))
 	for _, p := range selPods {
 		t := tele[p.Name]
+		// M-23: one fingerprint per CLOCKED exposure variable — pod identity, node, session,
+		// plus the per-action `*-epoch` markers (absent-skipped when a marker is missing). The
+		// [PHVX-67] session clock still resets when either KV flush bumps p.SessionEpoch.
 		m.Clock.Observe(exposure.Observation{
-			Tenant:    pol.Tenant,
-			Namespace: p.Namespace,
-			Pod:       p.Name,
-			StartedAt: p.StartedAt,
-			Fingerprints: map[string]string{
-				model.VarPodIdentity:   p.UID,
-				model.VarNodePlacement: p.Node,
-				// [PHVX-67] The session clock. kv-reset leaves the pod alive, so podIdentity never
-				// moves and the anti-over-rotation guard could never fire for it — measured on the
-				// live cluster as a 20s median interval against a 15m budget, 2360 times in 10h on
-				// one pod.
-				model.VarSession: p.SessionEpoch,
-			},
+			Tenant:       pol.Tenant,
+			Namespace:    p.Namespace,
+			Pod:          p.Name,
+			StartedAt:    p.StartedAt,
+			Fingerprints: model.ExposureFingerprints(*p),
 		}, snap.Now)
 		keep[exposure.SlotKey(pol.Tenant, p.Namespace, p.Name)] = struct{}{}
 		exp := m.Clock.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
+		// Per-action emit intent (M-23): the most recent EMISSION per variable, stamped at the
+		// emit boundary before the observed epoch catches up. The guard takes min(exp, intent).
+		intent := m.Intents.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
 
 		events := append([]model.SecurityEventInfo{}, snap.EventByPod[p.Namespace+"/"+p.Name]...)
 		nbKeys := snap.Graph.Neighbors(p.Namespace, p.Name)
@@ -918,6 +918,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			Neighbors:          neighbors,
 			Events:             events,
 			ExposureByVariable: exp,
+			IntentByVariable:   intent,
 			Physics:            ph,
 			InfectionFrontier:  infectionFrontier(nbKeys, infected),
 		})
@@ -961,6 +962,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name())
 		m.Clock.RetainTenant(pol.Tenant, keep)
+		m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 			ce.RetainStageClock(pol.Tenant, keep)
 		}
@@ -1053,6 +1055,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	metrics.PublishTick(pol.Tenant, pol.PolicyName, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
 	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode, killEngaged)
 	m.Clock.RetainTenant(pol.Tenant, keep)
+	m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		ce.RetainStageClock(pol.Tenant, keep)
 	}
@@ -1228,6 +1231,13 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if res.Emitted {
 			stampDispatch(model.DispatchEmitted, "")
 			decisions[i].Actuated = true
+			// M-23: stamp per-action emit intent on the SUCCESSFUL-emit path (a failed actuation
+			// takes the `continue` above and never reaches here, so it can't throttle its own
+			// retry). This closes the cross-tick burst hole — the next tick's guard reads this
+			// intent via min(observed-since, intent-since) before the observed `*-epoch` clock
+			// catches up. "" (an ungoverned action) is a no-op inside Mark.
+			m.Intents.Mark(pol.Tenant, decisions[i].Namespace, decisions[i].Pod,
+				feasibility.ExposureVarFor(decisions[i].Action), time.Now())
 			// Carry the native actuator's forensic fields into the audit (empty for Phoenix).
 			decisions[i].Handler = res.Handler
 			decisions[i].ObjectsTouched = res.ObjectsTouched

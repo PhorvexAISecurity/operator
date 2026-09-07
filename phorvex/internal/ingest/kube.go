@@ -313,6 +313,17 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	out.ModelID = p.Annotations["phorvex.ai/model-id"]
 	// Session epoch: either flush bumps it, and either resets the session exposure clock (PHVX-67).
 	out.SessionEpoch = p.Annotations["phorvex.ai/kv-reset-epoch"] + "|" + p.Annotations["phorvex.ai/kv-migrate-epoch"]
+	// M-23 per-action exposure epochs: the `phorvex.ai/*-epoch` labels the pod-alive rotation
+	// handlers stamp (= pod.ResourceVersion at actuation). "" when the marker is absent (never
+	// actuated, or stripped by a rollback) — ExposureFingerprints absent-skips those so the
+	// variable stays unclocked and the guard fail-OPENs the first actuation. VarRouteKey reads
+	// the `route-key` label both endpoint-rotate and route-rotate re-key.
+	out.QuarantineEpoch = p.Labels["phorvex.ai/quarantine-epoch"]
+	out.RouteKeyEpoch = p.Labels["phorvex.ai/route-key"]
+	out.IdentityEpoch = p.Labels["phorvex.ai/identity-epoch"]
+	out.AdapterEpoch = p.Labels["phorvex.ai/adapter-epoch"]
+	out.DrainEpoch = p.Labels["phorvex.ai/drain-epoch"]
+	out.GuardrailEpoch = p.Labels["phorvex.ai/guardrail-epoch"]
 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
 	out.RouteService = p.Annotations["phorvex.ai/route-service"]
 	out.ParallelSize, _ = strconv.Atoi(p.Annotations["phorvex.ai/parallel-size"])

@@ -47,16 +47,29 @@ func covPolicy(b int) model.Policy {
 	}
 }
 
+// allVarsAt clocks every M-23 live exposure variable at the same duration, so a fixture pod is
+// gated the same for any enabled action (before M-23 every action shared the podIdentity clock).
+func allVarsAt(d time.Duration) map[string]time.Duration {
+	m := make(map[string]time.Duration, len(model.LiveExposureVariables))
+	for _, v := range model.LiveExposureVariables {
+		m[v] = d
+	}
+	return m
+}
+
 func covView(name string, secrets bool, exposure time.Duration, stateful bool) *model.WorkloadView {
 	v := &model.WorkloadView{
 		Pod: model.Pod{
 			Namespace: "ns", Name: name, UID: "u-" + name,
 			DesiredReplicas: 3, ReadyReplicas: 3, Ready: true, Stateful: stateful,
 		},
-		Phase:              model.PhaseWarm,
-		BlastRadius:        0.6,
-		Neighbors:          []model.NeighborRef{{Key: "ns/crown", Value: 5.0}},
-		ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: exposure},
+		Phase:       model.PhaseWarm,
+		BlastRadius: 0.6,
+		Neighbors:   []model.NeighborRef{{Key: "ns/crown", Value: 5.0}},
+		// M-23: every action now reads its OWN per-action exposure clock, not a shared
+		// podIdentity default. Clock every live variable at `exposure` so a fixture pod is gated
+		// identically whatever action a test enables (pre-M-23 all read podIdentity=exposure).
+		ExposureByVariable: allVarsAt(exposure),
 	}
 	if secrets {
 		v.Pod.MountedSecrets = []string{"creds"}
