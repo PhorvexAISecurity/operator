@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, BenchConfigInput, BenchResult, BenchConfigResult, BenchTemporal, OptimizerProbe, OptimizerProbeArm } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { csvDownload } from "@/components/ui/more";
@@ -48,8 +49,8 @@ export function BenchStep({ lens }: { lens: Lens }) {
 
   function exportCSV() {
     if (!res) return;
-    const head = ["config", "movesSelected", "totalCoverage", "totalCost", "perDollar", "ablationRatio", "noHarm", "movesPerHour", "vs_r6_blind_cost", "vs_attack_landed_risk", "temporal_phorvex_moves", "temporal_phorvex_cost", "temporal_r6_moves", "temporal_r6_cost", "temporal_r6_stateful_kills", "temporal_savings"];
-    const body = res.configs.map((c) => [c.label, c.movesSelected, c.totalCoverage, c.totalCost, c.perDollar, c.ablationRatio, c.statefulRotated ? "VIOLATED" : "ok", c.phorvexMovesPerHour, res.r6BlindCost, res.attackLandedRisk, c.temporal?.phorvexMoves ?? "", c.temporal?.phorvexCost ?? "", c.temporal?.r6Moves ?? "", c.temporal?.r6Cost ?? "", c.temporal?.r6StatefulKills ?? "", c.temporal?.savingsVsR6 ?? ""]);
+    const head = ["claim.scope", "claim.detectorSetKnown", "claim.note", "claim.detectorSet", "claim.recallCap", "claim.brainImage", "claim.gitSHA", "config", "movesSelected", "modeledCoverage", "totalCost", "perDollar", "ablationRatio", "noHarm", "movesPerHour", "vs_r6_blind_cost", "vs_attack_landed_risk", "temporal_phorvex_moves", "temporal_phorvex_cost", "temporal_r6_moves", "temporal_r6_cost", "temporal_r6_stateful_kills", "temporal_savings"];
+    const body = res.configs.map((c) => [res.claim?.scope ?? "modeled", String(res.claim?.detectorSetKnown ?? false), res.claim?.note ?? "Detector-visible, reversible projection; recall and security effect unknown.", JSON.stringify(res.claim?.detectorSet ?? []), res.claim?.recallCap ?? "unknown", res.claim?.brainImage ?? "unavailable", res.claim?.gitSHA ?? "unavailable", c.label, c.movesSelected, c.totalCoverage, c.totalCost, c.perDollar, c.ablationRatio, c.statefulRotated ? "VIOLATED" : "ok", c.phorvexMovesPerHour, res.r6BlindCost, res.attackLandedRisk, c.temporal?.phorvexMoves ?? "", c.temporal?.phorvexCost ?? "", c.temporal?.r6Moves ?? "", c.temporal?.r6Cost ?? "", c.temporal?.r6StatefulKills ?? "", c.temporal?.savingsVsR6 ?? ""]);
     csvDownload("phorvex-optimizer-bench.csv", [head, ...body]);
   }
 
@@ -210,6 +211,7 @@ function Results({ res, onCSV }: { res: BenchResult; onCSV: () => void }) {
         </div>
       </div>
 
+      <ClaimScopeNote claim={res.claim} />
       {/* comparison table */}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[720px] text-[12px]">
@@ -217,7 +219,7 @@ function Results({ res, onCSV }: { res: BenchResult; onCSV: () => void }) {
             <tr className="border-b border-border bg-panel/40 text-[10px] uppercase tracking-wide text-muted-foreground">
               <th className="px-3 py-2 text-left font-semibold">Config</th>
               <th className="px-3 py-2 text-right font-semibold">Moves</th>
-              <th className="px-3 py-2 text-right font-semibold">Coverage</th>
+              <th className="px-3 py-2 text-right font-semibold">Modeled coverage</th>
               <th className="px-3 py-2 text-right font-semibold">Cost</th>
               <th className="px-3 py-2 text-right font-semibold">Per-$</th>
               <th className="px-3 py-2 text-right font-semibold">vs random</th>
@@ -286,7 +288,7 @@ function ConfigResultCard({ c, r6Blind, r6Destroys, landed }: { c: BenchConfigRe
 
         {/* three-way arms */}
         <div className="grid grid-cols-3 gap-2">
-          <Arm tone="good" label="With Phorvex" big={fmt(c.totalCost)} bigUnit="cost" sub={`${fmt(c.totalCoverage)} coverage · ${cheaper > 1 ? cheaper.toFixed(1) + "× cheaper than R6" : "targeted"}`} />
+          <Arm tone="good" label="With Phorvex" big={fmt(c.totalCost)} bigUnit="cost" sub={`${fmt(c.totalCoverage)} modeled coverage · ${cheaper > 1 ? cheaper.toFixed(1) + "× cheaper than R6" : "targeted"}`} />
           <Arm tone="warn" label="R6 blind timer" big={fmt(r6Blind)} bigUnit="cost" sub={r6Destroys > 0 ? `deletes ${r6Destroys} stateful` : "blind churn"} />
           <Arm tone="bad" label="Attack landed" big={fmt(landed)} bigUnit="risk" sub="0 defense" />
         </div>

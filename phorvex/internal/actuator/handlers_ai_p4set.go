@@ -45,6 +45,7 @@ const (
 	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"    // comma-list of P/D peer endpoints
 	annoKVEpoch          = "phorvex.ai/kv-migrate-epoch"
 	labelServing         = "phorvex.ai/serving"        // K8s readiness-drain target label
+	labelDrainEpoch      = "phorvex.ai/drain-epoch"    // M-23 A1: event-valued clock for VarDrainEpoch
 	labelParallelGroup   = "phorvex.ai/parallel-group" // TP/PP group id (a consistency unit)
 	labelRank            = "phorvex.ai/rank"           // rank within the parallel group
 	annoParallelSize     = "phorvex.ai/parallel-size"  // number of ranks in the group
@@ -265,6 +266,11 @@ func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 	pod.Labels = ensureMap(pod.Labels)
 	prevServing := pod.Labels[labelServing]
 	pod.Labels[labelServing] = "drained"
+	// M-23 A1: stamp an event-valued drain epoch in the SAME Update as the serving flip. The
+	// serving label is boolean and reverts on rollback/failure-restore, so it can't clock
+	// repeated drains; ResourceVersion differs each actuation. The failure-restore below and
+	// Rollback leave this epoch UNTOUCHED (it records drain EVENTS, not admission state).
+	pod.Labels[labelDrainEpoch] = pod.ResourceVersion
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		return HandlerResult{}, fmt.Errorf("request-drain stop-admit %s/%s: %w", req.Namespace, req.Pod, err)
 	}

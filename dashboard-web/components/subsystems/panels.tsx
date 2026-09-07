@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, liveStream, ScanResult, PolicyView, RegistryView, AblationResult } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Table, THead, TH, TR, TD, Loading, ErrorBox, Empty, Pending, Segmented } from "@/components/ui/more";
@@ -107,13 +108,13 @@ export function OptimizationPanel({ lens }: { lens: Lens }) {
   const rows = acted.length ? acted : recs;
   return (
     <div className="space-y-4">
-      <SectionLabel>Coverage − λ·cost scoring · the optimizer's choice per workload</SectionLabel>
+      <SectionLabel>Modeled coverage − λ·cost scoring · the optimizer's choice per workload</SectionLabel>
       <Card><CardContent className="p-0">
         <Table>
-          <THead><TH>Workload</TH><TH>Action</TH><TH>Coverage</TH><TH>Cost (ECost)</TH><TH>Net = cov − λ·cost</TH><TH>per-$</TH><TH>λ</TH></THead>
+          <THead><TH>Workload</TH><TH>Action</TH><TH>Modeled coverage</TH><TH>Cost (ECost)</TH><TH>Net = cov − λ·cost</TH><TH>per-$</TH><TH>λ</TH></THead>
           <tbody>{rows.map((r, i) => (
             <TR key={i} className={cn(r.selected && "bg-primary/[0.04]")}>
-              <TD className="font-mono text-[12px]">{r.namespace}/{r.pod}</TD>
+              <TD className="font-mono text-[12px]">{r.namespace}/{r.pod}<ClaimScopeNote claim={r.claim} /></TD>
               <TD><Badge variant={r.action === "noop" ? "neutral" : "accent"}>{r.action}</Badge>{r.selected && <Badge variant="real">chosen</Badge>}</TD>
               <TD className="tabular">{(r.coveredWeight ?? r.risk ?? 0).toFixed(2)}{r.coveredFacts ? <span className="text-muted-foreground/60"> · {r.coveredFacts}f</span> : null}</TD>
               <TD className="tabular">{(r.cost ?? 0).toFixed(2)}</TD>
@@ -175,10 +176,10 @@ export function CostPanel({ lens }: { lens: Lens }) {
         <Mini label="actuated" value={String(recs.filter((r) => r.actuated).length)} />
       </div>
       <Card><CardContent className="p-4">
-        <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Cost vs coverage · λ = the shadow-price slope (move fires when per-$ &gt; λ)</div>
+        <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Cost vs modeled coverage · λ = the shadow-price slope (move fires when per-$ &gt; λ)</div>
         <svg viewBox="0 0 600 260" className="w-full">
           <line x1="40" y1="220" x2="580" y2="220" stroke="hsl(222 18% 16%)" /><line x1="40" y1="20" x2="40" y2="220" stroke="hsl(222 18% 16%)" />
-          <text x="300" y="250" textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>coverage value →</text>
+          <text x="300" y="250" textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>modeled coverage value →</text>
           {pts.map((p, i) => (
             <circle key={i} cx={40 + (p.cov / maxCov) * 530} cy={220 - (p.cost / maxCost) * 190} r={p.sel ? 6 : 4}
               fill={p.sel ? "hsl(184 78% 46% / 0.7)" : "hsl(215 14% 58% / 0.4)"} stroke={p.sel ? "hsl(184 78% 46%)" : "none"} />
@@ -330,7 +331,7 @@ export function MethodologyPanel({ lens }: { lens: Lens }) {
           <div><Badge variant="real">REAL</Badge> measured on AWS EKS with a 95% CI (Wilson z=1.96 on rates; Student-t 2.093 n≥20 / 2.262 small-n on continuous).</div>
           <div><Badge variant="modeled">MODELED</Badge> a scenario-config assumption (e.g. ROI $), labeled — never measured production savings.</div>
           <div><Badge variant="pending">SP-0-PENDING-P4</Badge> defined-now, magnitude on real GPU; never implied proven.</div>
-          <div className="border-t border-border/50 pt-2"><span className="font-medium text-foreground">Two disclosures the code makes honestly:</span> "SLO kept" in the owner view is an <span className="text-foreground/80">invariant by construction</span> (feasibility-gated), not a per-decision measurement; "attack prevented" is derived from <span className="text-foreground/80">Phorvex having acted on the selected target</span>, not a measured attacker-objective-denied signal on the live cluster.</div>
+          <div className="border-t border-border/50 pt-2">Owner activity reports dispatched actions. Legacy API prevention, preservation and SLO booleans are action-derived assumptions; they do not confirm attacker-objective denial, work preservation or measured service health.</div>
         </div>
       </CardContent></Card>
       {!owner && (

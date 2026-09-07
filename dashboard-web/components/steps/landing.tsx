@@ -33,7 +33,7 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
           <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse-soft" /> Adaptive moving-target defense
         </div>
         <h1 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight tracking-tight sm:text-[2.6rem]">
-          Phorvex watches your platform and <span className="text-primary">evicts attackers</span> before they reach their objective.
+          Phorvex watches your platform and <span className="text-primary">attempts targeted disruption</span> within its modeled scope.
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           A deterministic intelligence layer — no LLM in the decision path. K8s is proven on AWS EKS; the AI/inference product is structurally first-class with defense efficacy honestly <span className="text-warning">[SP-0-PENDING-P4]</span>.
@@ -73,13 +73,13 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
 
       {/* live proof strip */}
       <section>
-        <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Proven now {lens === "owner" ? "· your outcomes" : "· live from the evidence"}</div>
+        <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Recorded activity {lens === "owner" ? "· your activity" : "· live from the evidence"}</div>
         {lens === "owner" ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <ProofTile label="Protective actions" value={rollup ? String(rollup.actions) : "—"} />
-            <ProofTile label="Attacks evicted" value={rollup ? String(rollup.attacksPrevented) : "—"} tone="success" />
-            <ProofTile label="Workloads preserved" value={rollup ? String(rollup.workPreserved) : "—"} tone="success" />
-            <ProofTile label="SLO kept" value={!rollup || rollup.actions === 0 ? "—" : rollup.sloKept === rollup.actions ? "Yes" : `${rollup.sloKept}/${rollup.actions}`} tone="success" />
+            <ProofTile label="Selected actions dispatched" value={rollup ? String(rollup.attacksPrevented) : "—"} tone="success" />
+            <ProofTile label="Isolation attempts" value={rollup ? String(rollup.workPreserved) : "—"} tone="success" />
+            <ProofTile label="Effect confirmation" value="Unavailable" />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">

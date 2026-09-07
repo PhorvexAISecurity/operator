@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, OwnerEvent } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, Skeleton, ErrorState } from "./effectiveness";
@@ -15,15 +16,14 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
   if (!data) return <Skeleton rows={3} />;
 
   const ev = data.events ?? [];
-  const evicted = ev.filter((e) => e.attackPrevented).length;
-  const preserved = ev.filter((e) => e.workPreserved).length;
-  const sloKept = ev.every((e) => e.sloKept);
+  const evicted = ev.filter((e) => e.actuated).length;
+  const preserved = ev.filter((e) => e.actuated && e.action === "quarantine").length;
 
   return (
     <div className="animate-fade-up space-y-7">
       <PageHead
         title="My Platform"
-        sub="What Phorvex changed in your platform — and that it helped. The outcome only: no internal scoring, no algorithms, no proprietary math."
+        sub="Recorded actions on your platform; security effects require independent confirmation. The outcome only: no internal scoring, no algorithms, no proprietary math."
       />
       <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/[0.06] px-4 py-2.5 text-[12px] text-muted-foreground">
         <Lock className="h-3.5 w-3.5 text-primary" />
@@ -32,9 +32,9 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Outcome icon={Boxes} label="Protective actions" value={String(ev.length)} tone="primary" />
-        <Outcome icon={ShieldCheck} label="Attacks evicted" value={String(evicted)} tone="success" />
-        <Outcome icon={CheckCircle2} label="Workloads preserved" value={String(preserved)} tone="success" />
-        <Outcome icon={ShieldCheck} label="SLO kept" value={sloKept ? "Yes" : "—"} tone={sloKept ? "success" : "warning"} />
+        <Outcome icon={ShieldCheck} label="Actions dispatched" value={String(evicted)} tone="success" />
+        <Outcome icon={CheckCircle2} label="Isolation attempts" value={String(preserved)} tone="success" />
+        <Outcome icon={ShieldCheck} label="Effect confirmation" value="Unavailable" tone="warning" />
       </div>
 
       <section>
@@ -82,12 +82,13 @@ function EventRow({ e }: { e: OwnerEvent }) {
             {e.dryRun && <Badge variant="modeled">dry-run</Badge>}
           </div>
           <div className="mt-1.5 text-[13px] text-foreground/90">{e.why}</div>
+          <ClaimScopeNote claim={e.claim} />
           <div className="mt-1 text-[12px] text-muted-foreground">vs. blind: {e.blindOutcome}</div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 text-[11px]">
-          {e.workPreserved && <span className="flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> work preserved</span>}
-          {e.sloKept && <span className="flex items-center gap-1 text-success"><ShieldCheck className="h-3 w-3" /> SLO kept</span>}
-          {!e.harmCaused && <span className="text-muted-foreground">no disruption</span>}
+          {e.workPreserved && <span className="flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> isolation dispatched</span>}
+          {e.sloKept && <span className="flex items-center gap-1 text-success"><ShieldCheck className="h-3 w-3" /> SLO confirmation unavailable</span>}
+          {!e.harmCaused && <span className="text-muted-foreground">disruption not independently confirmed</span>}
         </div>
       </CardContent>
     </Card>

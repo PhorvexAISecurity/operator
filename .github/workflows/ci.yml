@@ -84,6 +84,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Modeled claim language
+        run: |
+          python3 tools/test_claim_language.py
+          python3 tools/check-claim-language.py
+
       - name: Vendored CRD matches config/crd/bases
         run: |
           if ! diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml \

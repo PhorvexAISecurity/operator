@@ -6,6 +6,7 @@ package feasibility
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -85,32 +86,56 @@ type antiOverRotation struct{}
 
 func (antiOverRotation) Name() string { return "anti-over-rotation" }
 
-// exposureVarFor maps an action to the exposure clock it actually resets.
+// ExposureVarFor maps an action to the exposure clock it actually resets. It is TOTAL
+// over model.MutatingActions with NO catch-all podIdentity default (M-23) — every
+// generatable action is cased explicitly, so a NEW action forces an exposure decision
+// instead of silently inheriting the podIdentity clock it never resets. The
+// TestExposureVarForCompleteness invariant fails the build if a MutatingActions member
+// is unmapped or maps outside model.LiveExposureVariables (the clocked set).
 //
-// [PHVX-67] The guard used to read podIdentity for EVERY action. That is only correct for actions
-// that replace the pod. kv-reset flushes the KV cache and leaves the pod alive, so podIdentity never
-// changes, its clock only grows, and `since < window` was never true — the budget could not fire.
-//
-// Measured on the live cluster before this fix: one vllm pod took 2360 kv-resets in 10h21m, a median
-// of 20s apart against a 15m budget. Every flush costs ~0.534s of re-encode, so roughly 3.4% of wall
-// time was spent redoing work, and the user saw a first-token stall each time.
-//
-// An action with no clock of its own falls back to podIdentity, which is the conservative direction:
-// a shared clock over-restricts rather than under-restricts.
-func exposureVarFor(a model.Action) string {
+// [PHVX-67 history] The guard used to read podIdentity for EVERY action. That is only correct for
+// actions that REPLACE the pod (rotate/warm-swap/mig-rebind/model-shard-replace → new UID). A
+// pod-alive action leaves podIdentity untouched, its clock only grows, and `since < window` is never
+// true — so the one per-action brake never engaged. Each action now reads the `phorvex.ai/*-epoch`
+// marker its own handler writes. debugger/custom-inject attach an ephemeral container and write no
+// durable marker, so they keep the podIdentity clock (a conservative shared clock; they are not
+// repeat-rotations). "" (noop/disable/unknown) = ungoverned → the guard fail-OPENs.
+func ExposureVarFor(a model.Action) string {
 	switch a {
+	case model.ActionRotate, model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
+		model.ActionDebugger, model.ActionCustomInject:
+		return model.VarPodIdentity
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate:
 		return model.VarSession
+	case model.ActionQuarantine:
+		return model.VarNetworkIdentity
+	case model.ActionEndpointRotate, model.ActionRouteRotate:
+		return model.VarRouteKey
+	case model.ActionIdentityRotate:
+		return model.VarIdentity
+	case model.ActionAdapterRotate:
+		return model.VarAdapterEpoch
+	case model.ActionRequestDrain:
+		return model.VarDrainEpoch
+	case model.ActionGuardrailRotate:
+		return model.VarGuardrailEpoch
 	default:
-		return model.VarPodIdentity
+		return ""
 	}
 }
 
 func (antiOverRotation) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
-	v := exposureVarFor(move.Action)
-	since, ok := view.ExposureByVariable[v]
+	v := ExposureVarFor(move.Action)
+	// Most-recent reset across the observed clock and the pending emit intent (M-23):
+	// min over "since" durations == max over reset TIMESTAMPS. Either may be absent.
+	since, ok := mostRecentSince(view, v)
 	if !ok {
-		return feasible // no clock yet (first observation): allow
+		// FAIL-OPEN (M-23 D1): the pod has no clock for this variable yet. Markers are
+		// written BY actuation, so a never-actuated pod has none; fail-CLOSED here would
+		// deadlock the very first actuation (the one that creates the marker). A
+		// mapped-but-unclocked VARIABLE is a wiring bug — caught at build time by
+		// TestExposureVarForCompleteness, not by a runtime veto.
+		return feasible
 	}
 	if since < pol.AntiOverRotationWindow {
 		return Verdict{Feasible: false, Reason: fmt.Sprintf(
@@ -118,6 +143,26 @@ func (antiOverRotation) Check(view *model.WorkloadView, move model.Move, pol mod
 			v, since.Round(1e9), pol.AntiOverRotationWindow)}
 	}
 	return feasible
+}
+
+// mostRecentSince returns the smaller of the observed and intent "since" durations for
+// v — the more recent of the two resets — and whether EITHER was present.
+func mostRecentSince(view *model.WorkloadView, v string) (time.Duration, bool) {
+	obs, obsOK := view.ExposureByVariable[v]
+	intent, intOK := view.IntentByVariable[v]
+	switch {
+	case obsOK && intOK:
+		if intent < obs {
+			return intent, true
+		}
+		return obs, true
+	case obsOK:
+		return obs, true
+	case intOK:
+		return intent, true
+	default:
+		return 0, false
+	}
 }
 
 // statefulIntegrity refuses to ROTATE (Delete) a stateful pod — destroying a

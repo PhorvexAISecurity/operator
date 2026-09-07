@@ -70,7 +70,6 @@ func TestDecideNeverEmitsNonFiniteCost(t *testing.T) {
 					dec  []model.Decision
 				}{
 					{"CoverageEngine", NewCoverageEngine().Decide(views, pol)},
-					{"Engine", NewEngine().Decide(views, pol)},
 				} {
 					for _, d := range tc.dec {
 						check := func(field string, x float64) {

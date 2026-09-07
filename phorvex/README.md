@@ -1,5 +1,7 @@
 # Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD (P0 / MVP)
 
+Reported coverage is modeled coverage of the detector-visible, reversible projection, not confirmation of security effect. Live audit claims name their record-time configured trusted-detector set and build; configured does not mean connected, and recall is unmeasured. Historical records without this metadata remain unknown.
+
 Phoenix can **act** (delete / quarantine / probe a workload) but decides **blindly**
 — by a clock or a hand-written exact-match table, with no notion of what a move costs
 or what is worth protecting. **Phorvex is the missing brain.** For the MVP it sits on
