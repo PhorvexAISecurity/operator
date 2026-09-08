@@ -310,7 +310,16 @@ type debuggerHandler struct{}
 func (debuggerHandler) Name() string { return string(model.ActionDebugger) }
 
 func (debuggerHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	return injectEphemeral(ctx, ec, req, "phorvex-debugger", "busybox:1.36", nil)
+	// M-6 Option A: the debugger carries NO command and NO args (empty), so the injected
+	// container runs the pinned image's own entrypoint and nothing operator-supplied. The
+	// VAP requires command+args empty for phorvex-debugger, so this is the paired request.
+	return injectEphemeral(ctx, ec, req, debuggerEphemeralSpec())
+}
+
+// debuggerEphemeralSpec is the exact phorvex-debugger container the VAP allow-set validates
+// (Option A: empty command AND args). Defined once so the handler and its test cannot drift.
+func debuggerEphemeralSpec() corev1.EphemeralContainer {
+	return ephemeralContainerSpec("phorvex-debugger", codeExecImage, nil, nil)
 }
 
 // --- 4. custom-inject (= Phoenix CustomAction) — also the KV-reset carrier — IRREVERSIBLE -
@@ -320,13 +329,62 @@ type customInjectHandler struct{}
 func (customInjectHandler) Name() string { return string(model.ActionCustomInject) }
 
 func (customInjectHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	return injectEphemeral(ctx, ec, req, "phorvex-custom", "busybox:1.36", []string{"sh", "-c", "echo phorvex-custom-action; sleep 1"})
+	// M-6: command/args are SPLIT to match the VAP allow-set exactly — command:["sh","-c"],
+	// args:["echo phorvex-custom-action; sleep 1"]. Emitting the joined form (all in command)
+	// would be DENIED by Phorvex's own admission policy.
+	return injectEphemeral(ctx, ec, req, customInjectEphemeralSpec())
 }
 
-// injectEphemeral appends ONE named ephemeral container via the pods/ephemeralcontainers
+// customInjectEphemeralSpec is the exact phorvex-custom container the VAP allow-set validates
+// (split command/args). Defined once so the handler and its test cannot drift.
+func customInjectEphemeralSpec() corev1.EphemeralContainer {
+	return ephemeralContainerSpec("phorvex-custom", codeExecImage,
+		[]string{"sh", "-c"}, []string{"echo phorvex-custom-action; sleep 1"})
+}
+
+// codeExecImage is the pinned busybox digest (linux/amd64, busybox:1.36) the M-6 contract
+// approves — identical to the value the VAP enforces. Pinning by digest (not the mutable
+// :1.36 tag) means the injected image cannot drift out from under the admission allow-set.
+const codeExecImage = "busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
+
+// hardenedEphemeralSecurityContext is the exact securityContext the M-6 VAP requires: a
+// non-root, non-privileged, no-escalation, read-only-rootfs, all-capabilities-dropped,
+// RuntimeDefault-seccomp container. The handler emits it so Phorvex's own injection passes
+// its own admission policy; the VAP is the durable enforcement of the same profile.
+func hardenedEphemeralSecurityContext() *corev1.SecurityContext {
+	no, yes := false, true
+	id := int64(65534)
+	return &corev1.SecurityContext{
+		Privileged:               &no,
+		AllowPrivilegeEscalation: &no,
+		RunAsNonRoot:             &yes,
+		RunAsUser:                &id,
+		RunAsGroup:               &id,
+		ReadOnlyRootFilesystem:   &yes,
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+}
+
+// ephemeralContainerSpec builds ONE ephemeral container carrying the M-6 paired profile:
+// the pinned digest, the exact hardened securityContext, no tty/stdin, and the given
+// command/args. It is the SINGLE encoding of the VAP allow-set on the emit side, so the
+// handler and the conformance test share exactly these bytes.
+func ephemeralContainerSpec(name, image string, command, args []string) corev1.EphemeralContainer {
+	return corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name: name, Image: image, Command: command, Args: args,
+			TTY: false, Stdin: false,
+			SecurityContext: hardenedEphemeralSecurityContext(),
+		},
+	}
+}
+
+// injectEphemeral appends ONE prebuilt ephemeral container via the pods/ephemeralcontainers
 // subresource. Name-keyed idempotent (skip if present). IRREVERSIBLE — K8s cannot remove
-// an ephemeral container, so there is no rollback, only audit-flagging.
-func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, name, image string, cmd []string) (HandlerResult, error) {
+// an ephemeral container, so there is no rollback, only audit-flagging. The emitted request
+// is the M-6 paired profile the VAP validates; see ephemeralContainerSpec.
+func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, spec corev1.EphemeralContainer) (HandlerResult, error) {
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil {
 		return HandlerResult{}, err
@@ -335,20 +393,18 @@ func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, name, image 
 		return HandlerResult{}, fmt.Errorf("inject: pod %s/%s gone", req.Namespace, req.Pod)
 	}
 	for _, ec2 := range pod.Spec.EphemeralContainers {
-		if ec2.Name == name {
+		if ec2.Name == spec.Name {
 			return HandlerResult{Emitted: true, MutationKind: "irreversible", Note: "ephemeral container already present (idempotent)"}, nil
 		}
 	}
-	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
-		EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: name, Image: image, Command: cmd, TTY: false, Stdin: false},
-	})
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, spec)
 	if err := ec.Client.SubResource("ephemeralcontainers").Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("inject ephemeral container %s into %s/%s: %w", name, req.Namespace, req.Pod, err)
+		return HandlerResult{}, fmt.Errorf("inject ephemeral container %s into %s/%s: %w", spec.Name, req.Namespace, req.Pod, err)
 	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "irreversible",
 		ObjectsTouched: []string{objRef("Pod/ephemeralcontainers", req.Namespace, req.Pod)},
-		Note:           "ephemeral container " + name + " injected (irreversible — audit-flagged)",
+		Note:           "ephemeral container " + spec.Name + " injected (irreversible — audit-flagged)",
 	}, nil
 }
 
