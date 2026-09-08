@@ -106,7 +106,8 @@ type Manager struct {
 	// monitored but never read by production scoring.
 	Calibration *calib.Runtime
 
-	Recorder record.EventRecorder
+	Recorder          record.EventRecorder
+	ActuationRecorder record.EventRecorder
 	// ActionsSupportedDebounce is the number of consecutive mismatching policy ticks
 	// required before status becomes False. <=0 uses the default.
 	ActionsSupportedDebounce int
@@ -1217,6 +1218,8 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if score > 1 {
 			score = 1
 		}
+		// Capture immutable target identity before a handler can delete the Pod.
+		eventTarget := actuationEventTarget(v)
 		actuationStarted := time.Now()
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
 			Tenant:    pol.Tenant,
@@ -1227,6 +1230,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			Reason:    decisions[i].Reason,
 			Score:     score,
 		})
+		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil {
 			outcome := slo.OutcomeFailed
 			dispatchReason := "failed"
