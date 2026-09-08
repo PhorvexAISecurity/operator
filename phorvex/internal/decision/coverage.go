@@ -1200,7 +1200,7 @@ func counterfactualNote(a model.Action, v *model.WorkloadView) string {
 
 func coverageReason(a model.Action, selected bool, as killchain.Assessment, cov, ecost, gain, lambda float64) string {
 	if !selected && a != model.ActionNoop {
-		return fmt.Sprintf("%s not selected by the current greedy/budget result (reported gain=%.2f fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s pHold=%.2f",
+		return fmt.Sprintf("%s: considered (reported gain=%.2f fullValue=%.2f ECost=%.2f lambdaRuntimeLegacy=%.2f); stage=%s pHold=%.2f",
 			a, gain, cov, ecost, lambda, as.StageName, as.PHold)
 	}
 	switch a {
