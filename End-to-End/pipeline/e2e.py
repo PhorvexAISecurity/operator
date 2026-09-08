@@ -198,6 +198,9 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     # ── 2 · fire ─────────────────────────────────────────────────────────────
     attack_response = None
     detector = None
+    captured_post = None
+    attack_started_at = None
+    legacy_clear = None
     if mode == "attack":
         if not ctx.target:
             raise SystemExit("attack mode requires --target")
@@ -206,12 +209,36 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         if ctx.target.get("detector"):
             detector = DetectorSignal(t, ctx.target)
             cleanup.callback(detector.clear)
-            log(f"\n[2/6] firing authenticated E2E signal as {detector.identity}")
-            attack_response = detector.fire()
-        else:
-            log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
-            attack_response = console.post_json(a["path"], a["body"])
-        ctx.attack_fired = True
+
+        def fire_when_stream_ready():
+            nonlocal attack_response, attack_started_at, legacy_clear
+            attack_started_at = time.time()
+            if detector:
+                log(f"\n[2/6] firing authenticated E2E signal as {detector.identity}")
+                attack_response = detector.fire()
+            else:
+                log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
+                # Also clear legacy console signals on exceptions after POST.
+                if ctx.target.get("clear"):
+                    cl = ctx.target["clear"]
+                    cleared = False
+
+                    def clear_once():
+                        nonlocal cleared
+                        if not cleared:
+                            result = console.post_json(cl["path"], cl["body"])
+                            cleared = True
+                            return result
+
+                    legacy_clear = clear_once
+                    cleanup.callback(clear_once)
+                attack_response = console.post_json(a["path"], a["body"])
+            ctx.attack_fired = True
+
+        log("\n[2/6] opening audit stream before injection (waiting for readiness heartbeat)")
+        captured_post, _ = console.stream_decisions(
+            cap["post_attack_seconds"] + cap["settle_seconds"], cap["max_bytes"],
+            on_connected=fire_when_stream_ready)
         log(str(attack_response)[:300], 1)
         # The console answers 200-with-error for an unarmed namespace and 503 when no
         # attackable pod is left, so "did it fire" is a field, not an HTTP code.
@@ -219,7 +246,6 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         n.stage(2, "ok" if fired else "fail",
                 (f"{attack_response.get('pod', '?')} → {attack_response.get('expect', '?')}"
                  if fired else str(attack_response.get("error") or attack_response)[:80]))
-        time.sleep(cap["settle_seconds"])
     else:
         log("\n[2/6] fire — skipped (observe mode; the cluster is left untouched)")
         n.stage(2, "skip", "observe mode")
@@ -229,10 +255,11 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     if win:
         log(f"\n[3/6] post-attack capture ({win}s)")
         n.running(3, f"{win}s")
-        post, _ = console.stream_decisions(win, cap["max_bytes"])
+        post = captured_post
         pre_keys = {(r.get("time"), r.get("pod"), r.get("action")) for r in ctx.pre_records}
         ctx.post_records = [r for r in dedupe(post)
-                            if (r.get("time"), r.get("pod"), r.get("action")) not in pre_keys]
+                            if (r.get("time"), r.get("pod"), r.get("action")) not in pre_keys
+                            and (ctx.parse_time(r.get("time")) or 0) >= attack_started_at]
         log(f"{len(ctx.post_records)} fresh records after firing", 1)
         # An attack that produced no new decision at all is a finding: either the signal
         # never reached ingest or the operator stopped ticking. Warn rather than fail —
@@ -314,7 +341,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     elif ctx.attack_fired and ctx.target.get("clear"):
         cl = ctx.target["clear"]
         log(f"\n[6/6] clearing the attack signal → POST {cl['path']} {json.dumps(cl['body'])}")
-        log(str(console.post_json(cl["path"], cl["body"]))[:250], 1)
+        log(str(legacy_clear())[:250], 1)
     else:
         log("\n[6/6] clear — not needed")
 
@@ -337,6 +364,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         "baselineReasons": {k: v.get("reason") for k, v in known.items() if k in baselined},
         "preflight": ctx.preflight,
         "attackResponse": attack_response,
+        "attackStartedAtEpoch": attack_started_at,
         "policy": {"maxMovesPerTick": ctx.max_moves_per_tick,
                    "mode": ctx.policy_mode, "dryRun": ctx.policy_dryrun},
         "baselinePods": ctx.baseline_pods,

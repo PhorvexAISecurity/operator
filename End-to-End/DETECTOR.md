@@ -27,6 +27,12 @@ fail the run. SIGKILL/host loss cannot execute cleanup: inspect leftover
 `phorvex-e2e-*` events after an interrupted runner, and delete only the recorded
 event for that run. GitHub's `phorvex-e2e-live` concurrency group must remain intact.
 
+The audit stream must acknowledge its readiness heartbeat **before** injection.
+Capture stays open through the injection and observation window; a new post-fire
+connection can miss an immediate reaction because the deployed console's replay
+window is byte-limited. Reaching the capture byte cap now fails explicitly instead
+of silently dropping evidence. Pre-injection replay is excluded from post records.
+
 Before a live run, verify operator/console readiness, the admission policy's
 type-check status, denied out-of-namespace server-side dry-run probes, and the
 absence of any pod-delete permission for this identity. Keep existing safety
