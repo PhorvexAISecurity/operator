@@ -1,0 +1,42 @@
+=== RUN   TestM47APIServerPreconditions
+--- PASS: TestM47APIServerPreconditions (7.70s)
+=== RUN   TestM47OwnershipMatrix
+=== RUN   TestM47OwnershipMatrix/supported
+=== RUN   TestM47OwnershipMatrix/bare
+=== RUN   TestM47OwnershipMatrix/not-controlling
+=== RUN   TestM47OwnershipMatrix/mirror
+=== RUN   TestM47OwnershipMatrix/wrong-uid
+=== RUN   TestM47OwnershipMatrix/dangling
+=== RUN   TestM47OwnershipMatrix/job
+=== RUN   TestM47OwnershipMatrix/scaled-zero
+=== RUN   TestM47OwnershipMatrix/scaled-down
+=== RUN   TestM47OwnershipMatrix/selector-mismatch
+=== RUN   TestM47OwnershipMatrix/terminating
+--- PASS: TestM47OwnershipMatrix (0.03s)
+    --- PASS: TestM47OwnershipMatrix/supported (0.01s)
+    --- PASS: TestM47OwnershipMatrix/bare (0.00s)
+    --- PASS: TestM47OwnershipMatrix/not-controlling (0.00s)
+    --- PASS: TestM47OwnershipMatrix/mirror (0.00s)
+    --- PASS: TestM47OwnershipMatrix/wrong-uid (0.00s)
+    --- PASS: TestM47OwnershipMatrix/dangling (0.00s)
+    --- PASS: TestM47OwnershipMatrix/job (0.00s)
+    --- PASS: TestM47OwnershipMatrix/scaled-zero (0.00s)
+    --- PASS: TestM47OwnershipMatrix/scaled-down (0.00s)
+    --- PASS: TestM47OwnershipMatrix/selector-mismatch (0.00s)
+    --- PASS: TestM47OwnershipMatrix/terminating (0.00s)
+=== RUN   TestM47NameReuseAndMissingBoundary
+--- PASS: TestM47NameReuseAndMissingBoundary (0.00s)
+=== RUN   TestM47ParentAndReplicationController
+--- PASS: TestM47ParentAndReplicationController (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/actuator	7.793s
+=== RUN   TestM47NativeOwnershipVeto
+--- PASS: TestM47NativeOwnershipVeto (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.008s
+=== RUN   TestM47RotationDoesNotClaimReplacementOrProtection
+--- PASS: TestM47RotationDoesNotClaimReplacementOrProtection (0.00s)
+=== RUN   TestM47RefusalVisibleWithoutRawReasonLeak
+--- PASS: TestM47RefusalVisibleWithoutRawReasonLeak (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/console	0.065s
