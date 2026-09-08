@@ -23,8 +23,9 @@ import (
 
 // Record is the serialized form of one decision (stable JSON for the audit trail).
 type Record struct {
-	Claim         *model.ClaimScope `json:"claim,omitempty"`
-	SchemaVersion string            `json:"schemaVersion"`
+	Existential   *model.ExistentialDecision `json:"existential,omitempty"`
+	Claim         *model.ClaimScope          `json:"claim,omitempty"`
+	SchemaVersion string                     `json:"schemaVersion"`
 	// SourceSchemaVersion records the input contract used by the old-to-new read shim.
 	// It is process metadata, not part of the v2 wire representation.
 	SourceSchemaVersion string    `json:"-"`
@@ -208,6 +209,7 @@ func ToRecord(d model.Decision) Record {
 		claim = model.NewClaimScope(d.Claim.DetectorSet, d.Claim.DetectorSetKnown, d.Claim.BrainImage, d.Claim.GitSHA)
 	}
 	return Record{
+		Existential:           d.Existential,
 		Claim:                 &claim,
 		SchemaVersion:         SchemaVersionCurrent,
 		SourceSchemaVersion:   SchemaVersionCurrent,
@@ -284,10 +286,17 @@ func (l *Logger) Record(d model.Decision) {
 		}
 	}
 	l.mu.Unlock()
-	if l.OnlySelected && !d.Selected {
+	if l.OnlySelected && !d.Selected && (d.Existential == nil || (len(d.Existential.Evidence) == 0 && len(d.Existential.Reasons) == 0)) {
 		return
 	}
+	existentialJSON := ""
+	if d.Existential != nil {
+		if b, err := json.Marshal(d.Existential); err == nil {
+			existentialJSON = string(b)
+		}
+	}
 	l.log.Info("decision",
+		"existential", existentialJSON,
 		"tenant", rec.Tenant, "pod", rec.Namespace+"/"+rec.Pod, "action", rec.Action,
 		"selected", rec.Selected, "feasible", rec.Feasible, "dryRun", rec.DryRun,
 		"claim", rec.Claim, "engine", rec.Engine, "perDollar", rec.PerDollar, "coveredFacts", rec.CoveredFacts,

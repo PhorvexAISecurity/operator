@@ -42,8 +42,16 @@ type PhorvexPolicy struct {
 	Status PhorvexPolicyStatus `json:"status,omitempty"`
 }
 
+// ExistentialSpec controls the narrowly scoped M99 availability exception.
+type ExistentialSpec struct {
+	// MayBreachSLO permits only SLO/availability exceptions for qualified M99 full containment.
+	// +kubebuilder:default=false
+	MayBreachSLO bool `json:"mayBreachSLO,omitempty"`
+}
+
 // PhorvexPolicySpec is the desired Phorvex behavior for one tenant's workloads.
 type PhorvexPolicySpec struct {
+	Existential ExistentialSpec `json:"existential,omitempty"`
 	// Tenant is the explicit tenant identity this policy governs. Empty defaults to
 	// the policy's own namespace (the common single-namespace-per-tenant case). When
 	// a vcluster projects a tenant, set Tenant to the vcluster/tenant id so exposure

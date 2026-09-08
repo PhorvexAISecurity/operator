@@ -9,6 +9,9 @@ kind: ClusterRole
 metadata:
   name: phorvex-manager-role
 rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations"]
+  verbs: ["get", "list"]
 # --- READ-ONLY ingest: K8s graph + dynamic capability inputs ---
 - apiGroups: [""]
   resources:
