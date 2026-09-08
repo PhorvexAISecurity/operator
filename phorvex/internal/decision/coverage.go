@@ -215,6 +215,12 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 			exp = d.Seconds()
 		}
 		assess := e.Killchain.Assess(v, pol, exp, floorSec)
+		// M-28: mirror the EVENT-ONLY evidence verdict onto the shared view so the
+		// proactive-cadence feasibility law can read it (a hard law only sees view/move/pol, never
+		// the Assessment). HasEventEvidence (not the broad HasEvidence) so a physics-pinned,
+		// event-less pod — the churn pod — is still capped. The view pointers are shared with the
+		// runner, so generator/shadow/emit-boundary all see the same stamp.
+		v.HasEventEvidence = assess.HasEventEvidence
 		ctxByKey[key] = assetCtx{sig: sig, assess: assess, exposure: exp}
 	}
 
@@ -1264,7 +1270,7 @@ func exposurePressureScaleSeconds(pol model.Policy) float64 {
 // flowRecord builds the M-115 flow basis record from the same physics functions the
 // residual uses, so the record and the number cannot drift apart.
 func flowRecord(v *model.WorkloadView) model.DecisionFlowV3 {
-	fr := physics.FlowResidual(v.Telemetry)
+	fr := physics.FlowResidualFor(v.Pod.Namespace, v.Telemetry)
 	cs := physics.Components(v)
 	agg, aggPresent := physics.Aggregate(cs)
 	out := model.DecisionFlowV3{

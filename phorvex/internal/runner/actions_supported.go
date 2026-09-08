@@ -64,7 +64,9 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
 		unsupported := 0
 		whyCount := map[string]int{}
 		for _, v := range views {
-			if ok, why := wit.Capable(v, action); !ok {
+			// M-160: Capable AND authorized — the condition now reflects no-rbac gaps too,
+			// not only runtime fixtures (RBAC-unknown fails open inside, never a status gap).
+			if ok, why := wit.CapableAndAuthorized(v, action); !ok {
 				unsupported++
 				if why != "" {
 					whyCount[why]++

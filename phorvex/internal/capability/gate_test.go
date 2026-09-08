@@ -2,8 +2,14 @@ package capability
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+
+	authzv1 "k8s.io/api/authorization/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/phorvex/phorvex/internal/authz"
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -273,5 +279,46 @@ func TestTransportUnwired_M79(t *testing.T) {
 	ok, why := wit.Capable(views[0], model.ActionMIGRebind)
 	if ok || !strings.Contains(why, "transport-unwired") {
 		t.Fatalf("mig-rebind with unwired transport: want capability-unsupported transport-unwired, got ok=%v why=%q", ok, why)
+	}
+}
+
+// --- M-160: CapableAndAuthorized (Capable + the no-rbac leg, for the status condition) ---
+
+type denySSAR struct{ denyNS, errNS map[string]bool }
+
+func (d denySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authzv1.SelfSubjectAccessReview, error) {
+	ns := sar.Spec.ResourceAttributes.Namespace
+	if d.errNS[ns] {
+		return nil, errors.New("apiserver blip")
+	}
+	sar.Status.Allowed = !d.denyNS[ns]
+	return sar, nil
+}
+
+func TestCapableAndAuthorized(t *testing.T) {
+	capable := model.Pod{Namespace: "denied", HasGPU: true, ServingEndpointReady: true}
+	az := authz.NewCheckerWithClient(denySSAR{denyNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
+	wit := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, az, okActuator{})
+
+	// Capable but RBAC-denied -> the condition sees a no-rbac gap (M-160).
+	if ok, why := wit.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); ok || !strings.HasPrefix(why, "no-rbac:") {
+		t.Fatalf("capable-but-denied must be no-rbac, got ok=%v why=%q", ok, why)
+	}
+	// Capable AND authorized (different ns) -> supported.
+	okPod := model.Pod{Namespace: "allowed", HasGPU: true, ServingEndpointReady: true}
+	witA := BuildWitness(context.Background(), BuildIndex([]model.Pod{okPod}, nil, nil), nil, az, okActuator{})
+	if ok, _ := witA.CapableAndAuthorized(&model.WorkloadView{Pod: okPod}, model.ActionKVReset); !ok {
+		t.Fatal("capable + authorized must be supported")
+	}
+	// A capability failure short-circuits BEFORE the RBAC leg (no wasted SSAR, capability why wins).
+	noEP := model.Pod{Namespace: "allowed", HasGPU: true, ServingEndpointReady: false}
+	if ok, why := witA.CapableAndAuthorized(&model.WorkloadView{Pod: noEP}, model.ActionKVReset); ok || strings.HasPrefix(why, "no-rbac") {
+		t.Fatalf("capability failure must win before RBAC, got ok=%v why=%q", ok, why)
+	}
+	// RBAC-unknown fails OPEN (never a status gap; criterion 3).
+	azErr := authz.NewCheckerWithClient(denySSAR{errNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
+	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, azErr, okActuator{})
+	if ok, _ := witE.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); !ok {
+		t.Fatal("rbac-unknown must fail open (ok=true)")
 	}
 }
