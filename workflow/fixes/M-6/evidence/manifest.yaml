@@ -365,3 +365,129 @@ artifacts:
   positive_control_for: null
   retention: git
   sensitivity: null
+- id: check-implementation
+  path: 04-diff.patch
+  sha256: e37bba0b63573df69318d85ab793329f6b2e90816f38e17aee6d35cc9b761b38
+  bytes: 133667
+  producer: claude
+  created_at: '2026-09-08T22:05:06+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: git diff --binary 5a0fd3f 9eb1427; go build ./...; no unrelated edits
+  evidence_class: IMPLEMENTATION
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l0
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:05:07+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: go build ./...; go vet; go test ./internal/codeexec/ (content vs trusted
+    contract incl server-defaulting/Cluster-scope; CEL semantic; Helm render) ./internal/capability/
+    ./internal/actuator/
+  evidence_class: L0
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l1
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:05:07+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: go test -v ./internal/codeexec/ (Verify/TTL/epoch/FinalCheck token+live-scope+invalidation/Drift/CEL/Helm);
+    runner M99/pre-submit invariants
+  evidence_class: L1
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l2
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:05:07+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: go test ./internal/... ./cmd/... exit 0 (M99 coexistence); reviewer-rev2-overlay-green.log
+    = skeptic rev2 adversarial overlay PASSES at head; helm-render-{enabled,disabled}.yaml
+  evidence_class: L2
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-positive_control
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:05:07+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: 'positive controls: TestServerDefaultedContractAccepted; TestEnforcementContentDriftRejected
+    control; TestCELAllowsCompliantRequests; TestHelmRenderEnabled==trusted; TestCodeExecPreSubmitGateFailsClosed
+    (c) actuates'
+  evidence_class: CONTROL
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-incident
+  path: evidence/incident.md
+  sha256: b013e073a004b6b865b755ff30bdf30553125426ad46f2f8195e10f582622c60
+  bytes: 4995
+  producer: codex-m006
+  created_at: '2026-09-08T22:13:12+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: Same real-handler envtest overlay at original baseline 79c0370 and head
+    9eb1427 on isolated Kubernetes v1.36.2; exact commands in evidence/incident.md;
+    baseline exit 1 at intended profile assertions, head exit 0
+  evidence_class: INCIDENT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-p3
+  path: evidence/p3/verdict.md
+  sha256: a0710e34634aa9647bd7a5ddf5a2d8c628e6d99bdc806a3beddb3c16927e2693
+  bytes: 2395
+  producer: codex-m006
+  created_at: '2026-09-08T22:13:12+00:00'
+  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+  command: Independent rev2 adversarial overlay at 9eb1427; four impacted package
+    suites with Helm; real baseline/head API incident; exact commands in retained
+    evidence
+  evidence_class: P3
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-red
+  path: evidence/incident-local/baseline.log
+  sha256: 0c2f7af5bce0370a3d93f73a63920766d84cf9c789b0be347993a5189af0e6c7
+  bytes: 5382
+  producer: claude
+  created_at: '2026-09-08T22:17:49+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'go test -mod=mod -modfile=/tmp/phorvex-m6-baseline.mod -overlay=evidence/incident-local/baseline-overlay.json
+    ./internal/actuator -run TestReviewerRealAPIIncident -count=1 -v  (real envtest
+    k8s v1.36.2 @ baseline 79c0370: OriginalProducerProfile security assertions FAIL
+    — API accepted mutable/unhardened producer; head exit 0). red-attestation.md retained
+    as historical qualified evidence.'
+  evidence_class: RED
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null

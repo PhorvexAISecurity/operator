@@ -1,6 +1,6 @@
 schema_version: 1
 protocol_version: 2
-revision: 23
+revision: 58
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -29,12 +29,70 @@ checks:
     source_sha: 5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9
     at: '2026-09-08T20:42:49+00:00'
     baseline_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  implementation:
+    result: PASS
+    by: claude
+    artifact: 04-diff.patch
+    sha256: e37bba0b63573df69318d85ab793329f6b2e90816f38e17aee6d35cc9b761b38
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:05:06+00:00'
+  red:
+    result: PASS
+    by: claude
+    artifact: evidence/incident-local/baseline.log
+    sha256: 0c2f7af5bce0370a3d93f73a63920766d84cf9c789b0be347993a5189af0e6c7
+    source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+    at: '2026-09-08T22:17:49+00:00'
+  l0:
+    result: PASS
+    by: claude
+    artifact: evidence/l0-l2/green-head.log
+    sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:05:07+00:00'
+  l1:
+    result: PASS
+    by: claude
+    artifact: evidence/l0-l2/green-head.log
+    sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:05:07+00:00'
+  l2:
+    result: PASS
+    by: claude
+    artifact: evidence/l0-l2/green-head.log
+    sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:05:07+00:00'
+  positive_control:
+    result: PASS
+    by: claude
+    artifact: evidence/l0-l2/green-head.log
+    sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:05:07+00:00'
+  incident:
+    result: PASS
+    by: codex-m006
+    artifact: evidence/incident.md
+    sha256: b013e073a004b6b865b755ff30bdf30553125426ad46f2f8195e10f582622c60
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:13:12+00:00'
+    baseline_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  p3:
+    result: PASS
+    by: codex-m006
+    artifact: evidence/p3/verdict.md
+    sha256: a0710e34634aa9647bd7a5ddf5a2d8c628e6d99bdc806a3beddb3c16927e2693
+    source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    at: '2026-09-08T22:13:12+00:00'
+    incident_sha256: b013e073a004b6b865b755ff30bdf30553125426ad46f2f8195e10f582622c60
 fix_id: M-6
 issues:
 - M-6
 title: 'M6: enforce and verify the code-exec admission contract'
 profile: standard
-state: AGREED
+state: IN_PR
 roles:
   human_owner: human-owner
   proposer: claude
@@ -62,11 +120,11 @@ blind_derivation:
 implementation:
   branch: parallel/contract-m006-code-exec-admission
   base_sha: 5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9
-  head_sha: null
+  head_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/143
+  reviewed_head: 9eb14271625620aef6b6184386764e29f0d71ea3
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -84,13 +142,13 @@ verification:
   - L4
   live_required: true
   soak_required: true
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: NOT_REQUIRED_PENDING_APPROVAL
   l4: NOT_REQUIRED
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -100,12 +158,11 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: 'Claude: finish signed contract and L0-L2; record own implementation branch/base/head
-    via validated configure, sign owned checks, and hand off independent incident/P3
-    review. After PR_READY push/open under recorded pr_open scope; deliver PR URL
-    without another human checkpoint. No shared live changes authorized.'
-updated_at: '2026-09-08T20:43:31+00:00'
+  owner: coordinator
+  action: 'M6 PR #143 opened. Open companion workflow PR with current evidence snapshot.
+    L3/L4 required and pending, no waiver; after authorized merges perform WORKTREE_HANDOFF
+    and separately authorized live verification. No merge/deploy.'
+updated_at: '2026-09-08T22:19:26+00:00'
 configuration_history:
 - at: '2026-09-08T17:48:57+00:00'
   by: codex-m006
@@ -179,6 +236,31 @@ configuration_history:
   fields:
   - next_action
   approval_ref: null
+- at: '2026-09-08T21:10:56+00:00'
+  by: claude
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-08T21:20:16+00:00'
+  by: codex-m006
+  fields:
+  - next_action
+  approval_ref: null
+- at: '2026-09-08T21:44:20+00:00'
+  by: claude
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-08T22:04:54+00:00'
+  by: claude
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-08T22:19:26+00:00'
+  by: codex-m006
+  fields:
+  - pull_request
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -204,6 +286,47 @@ transitions:
   note: Selected contract approved by actual human owner Mehrdad, recorded by Claude;
     no separate Mostafa signature asserted. Independent decision PASS.
   approval_ref: evidence/decision/human-decision-2026-09-08.md
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-08T21:50:20+00:00'
+  by: codex-m006
+  artifact: 04-diff.patch
+  note: Implementation handoff received at d68a9ed; independent review found round-2
+    defects. This transition records code delivery, not acceptance.
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-08T22:18:32+00:00'
+  by: codex-m006
+  artifact: 05-evidence.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-08T22:18:33+00:00'
+  by: codex-m006
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-08T22:18:34+00:00'
+  by: codex-m006
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-08T22:19:26+00:00'
+  by: codex-m006
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: critique
@@ -234,3 +357,124 @@ check_history:
   sha256: ca53a7ec8b4f1a2839f3044d8979ab478561443df8fcf0b39b3ba99321d22cb4
   source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
   at: '2026-09-08T19:02:56+00:00'
+- check: implementation
+  result: PASS
+  by: claude
+  artifact: 05-evidence.md
+  sha256: aebaa2e538caadde53d2ac53ac05a5f42e296c780ff7adbcee651f6aa5420cba
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:11:19+00:00'
+- check: red
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/red-baseline-source.md
+  sha256: 524292410aa165c115f7d7349423280741b37c2f1346d91cce8060c6fdfcb826
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  at: '2026-09-08T21:11:19+00:00'
+- check: l0
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: eef2d8624d62526fb49b7f6e653ec4b3f611eb574e0749bf071dba2f369f7ea8
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:11:19+00:00'
+- check: l1
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: eef2d8624d62526fb49b7f6e653ec4b3f611eb574e0749bf071dba2f369f7ea8
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:11:19+00:00'
+- check: l2
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: eef2d8624d62526fb49b7f6e653ec4b3f611eb574e0749bf071dba2f369f7ea8
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:11:19+00:00'
+- check: positive_control
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: eef2d8624d62526fb49b7f6e653ec4b3f611eb574e0749bf071dba2f369f7ea8
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:11:20+00:00'
+- check: incident
+  result: UNAVAILABLE
+  by: codex-m006
+  artifact: evidence/incident.md
+  sha256: 6ce73201640b25e3761e5e2023e62f2adf5eb35d472a28ba58b7a4591624c550
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:19:47+00:00'
+  baseline_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+- check: p3
+  result: FAIL
+  by: codex-m006
+  artifact: evidence/p3/verdict.md
+  sha256: e7960c9592c023a72fd4c3a3e1ecc9d282d430a530288c0c729ff790ed65f88c
+  source_sha: 8da845ab8f38b06cab120cfe30239b3722c03c25
+  at: '2026-09-08T21:19:48+00:00'
+- check: implementation
+  result: PASS
+  by: claude
+  artifact: 04-diff.patch
+  sha256: bf02208770d7e8bf2d62fe040b5bc1b24d855fc3ca87607525f4210071463a2f
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:44:31+00:00'
+- check: red
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/red-demo-content.log
+  sha256: 4b0c8f5a2e61803a022795f5e378e6e4b132c6aa816c4ed20baf4a49d2137a40
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  at: '2026-09-08T21:44:32+00:00'
+- check: l0
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: 020688210425ce1c0f71e1e78bded0ad8959f246d01b35d447f89679618e51f5
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:44:32+00:00'
+- check: l1
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: 020688210425ce1c0f71e1e78bded0ad8959f246d01b35d447f89679618e51f5
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:44:32+00:00'
+- check: l2
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: 020688210425ce1c0f71e1e78bded0ad8959f246d01b35d447f89679618e51f5
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:44:33+00:00'
+- check: positive_control
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/green-head.log
+  sha256: 020688210425ce1c0f71e1e78bded0ad8959f246d01b35d447f89679618e51f5
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:44:33+00:00'
+- check: incident
+  result: UNAVAILABLE
+  by: codex-m006
+  artifact: evidence/incident.md
+  sha256: 06749acfd9fc76a7d507928dbb951c5ac35987c39f0cee0ae645b20588222e12
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:50:21+00:00'
+  baseline_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+- check: p3
+  result: FAIL
+  by: codex-m006
+  artifact: evidence/p3/verdict.md
+  sha256: 103e193ae2d6f6752b84be92de273298e07bb47a7a86799259ac607f45c7ad09
+  source_sha: d68a9edb361c81a31afd1e670416b2a6eadce77a
+  at: '2026-09-08T21:50:21+00:00'
+- check: red
+  result: PASS
+  by: claude
+  artifact: evidence/l0-l2/red-attestation.md
+  sha256: 936697c71a908420b28a2f60b01b126508afb7e660d974418eb5158cccce90d7
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  at: '2026-09-08T22:05:06+00:00'

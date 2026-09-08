@@ -1,0 +1,25 @@
+# RED demo (content spec-compare disabled) — command: go test ./internal/codeexec -run TestEnforcementContentDriftRejected
+--- FAIL: TestEnforcementContentDriftRejected (0.00s)
+    --- FAIL: TestEnforcementContentDriftRejected/cel-replaced-by-true (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/all-new-containers-hidden (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/policy-match-condition-false (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/wrong-resource-api-group (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/binding-excludes-subresource (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/binding-namespace-expression-excludes-target (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/binding-object-selector-excludes-target (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/binding-selector-wrong-label (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/validation-dropped (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+    --- FAIL: TestEnforcementContentDriftRejected/variable-added (0.00s)
+        verifier_test.go:141: unsafe enforcement accepted: Verify=<nil> Available=true reason=""
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/codeexec	0.018s
+FAIL

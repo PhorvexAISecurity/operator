@@ -170,8 +170,8 @@ fixes:
     issues:
     - M-6
     related_issues: []
-    state: AGREED
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: parallel/contract-m006-code-exec-admission
-    head_sha: null
+    head_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
