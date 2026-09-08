@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import time
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from notify import Notifier                      # noqa: E402
 from report import render                        # noqa: E402
 from trace import trace_of                       # noqa: E402
 from transport import Cluster, Console, Metrics, Transport, TransportError  # noqa: E402
+from detector import DetectorSignal             # noqa: E402
 
 ROOT = HERE.parent
 
@@ -116,6 +118,13 @@ def read_policy(cluster, namespace):
 
 def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, run_label=None,
         report_url=None, baseline=None):
+    with ExitStack() as cleanup:
+        return _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
+                    report_url, baseline, cleanup)
+
+
+def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
+         report_url, baseline, cleanup):
     ctx = Ctx(cfg)
     t = Transport(cfg["transport"])
     console = Console(t, cfg["console"])
@@ -188,13 +197,20 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
 
     # ── 2 · fire ─────────────────────────────────────────────────────────────
     attack_response = None
+    detector = None
     if mode == "attack":
         if not ctx.target:
             raise SystemExit("attack mode requires --target")
         a = ctx.target["attack"]
-        log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
         n.running(2, ctx.target["name"])
-        attack_response = console.post_json(a["path"], a["body"])
+        if ctx.target.get("detector"):
+            detector = DetectorSignal(t, ctx.target)
+            cleanup.callback(detector.clear)
+            log(f"\n[2/6] firing authenticated E2E signal as {detector.identity}")
+            attack_response = detector.fire()
+        else:
+            log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
+            attack_response = console.post_json(a["path"], a["body"])
         ctx.attack_fired = True
         log(str(attack_response)[:300], 1)
         # The console answers 200-with-error for an unarmed namespace and 503 when no
@@ -292,7 +308,10 @@ def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, ru
 
     # ── 6 · clear + report ───────────────────────────────────────────────────
     n.running(6)
-    if ctx.attack_fired and ctx.target.get("clear"):
+    if detector:
+        log(f"\n[6/6] clearing dedicated E2E event {detector.name}")
+        detector.clear()
+    elif ctx.attack_fired and ctx.target.get("clear"):
         cl = ctx.target["clear"]
         log(f"\n[6/6] clearing the attack signal → POST {cl['path']} {json.dumps(cl['body'])}")
         log(str(console.post_json(cl["path"], cl["body"]))[:250], 1)

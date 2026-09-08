@@ -139,6 +139,10 @@
       "name": "voicebot",
       "namespace": "voice",
       "kind": "workload",
+      "detector": {
+        "identity": "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector",
+        "selector": "r6th.io/rotation-target=true"
+      },
       "attack": {
         "path": "/api/workload/attack",
         "body": {
