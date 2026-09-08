@@ -83,6 +83,7 @@
       "availability-floor",
       "slo-headroom",
       "anti-over-rotation",
+      "proactive-cadence",
       "stateful-integrity",
       "vram-conservation",
       "mig-validity",
@@ -102,6 +103,9 @@
       ],
       "anti-over-rotation": [
         "anti-over-rotation:"
+      ],
+      "proactive-cadence": [
+        "proactive-cadence:"
       ],
       "stateful-integrity": [
         "stateful-integrity:"

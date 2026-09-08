@@ -106,8 +106,11 @@ the messenger.
 
 ## In CI
 
-`.github/workflows/ci.yml` runs this suite on every pull request and again after every
-merge, once ArgoCD has rolled the new version out.
+`.github/workflows/ci.yml` runs the live suite on non-draft pull requests targeting
+main and after a release has successfully rolled out. Draft PRs do not fire attacks.
+The separate `e2e-contract.yml` workflow runs isolated harness/config/chart regressions
+on **all PR bases**, including stacked and draft PRs, without cluster credentials.
+Its success is not a live E2E pass or complete operator/backend validation.
 
 | | pull request | after merge to main |
 |---|---|---|
@@ -153,6 +156,32 @@ after the new image is actually serving.
 Reports are published by `publish-report.sh`, which routes runner → jump host → `kubectl cp`
 into the `ci-reports` nginx pod, because GitHub's runners cannot reach the EKS API directly.
 `summary.py` turns `run-<stamp>.json` into the PR comment.
+
+### Keeping old PRs and the harness current
+
+A rerun uses the workflow and test code of the original revision. It does not
+automatically pick up fixes subsequently merged into main. Update the PR branch
+with current main (preserving its changes), or explicitly backport the reviewed
+harness fix, then validate the new revision. For stacked PRs, update the parent
+first and resolve/review each child; do not replace their source with main.
+
+The September 8 failures had distinct causes:
+
+- Older A05 runs used the console-created signal and post-fire capture. Main's
+  merged #126 supplies a dedicated authenticated detector and connects capture
+  before injection. Do not relax production detector trust to make old tests pass.
+- #140's chart-sync failure found a leftover `leader-election-rbac.yaml` in the
+  runner's shared `/tmp/vendored`. Main's #126 already uses a fresh temporary
+  extraction directory, with positive and negative regression tests.
+- Run `34249621578` received the dedicated signal, but F01 rejected the legitimate
+  `proactive-cadence` veto from deployed 0.4.97. The E2E law map now includes it.
+  A regression replays that exact reason, and a source-inventory test requires
+  every production feasibility law to have a reviewed E2E reason prefix.
+
+Do not add these failures to the baseline or disable the checks. New feasibility
+laws must update `known_laws` and `law_reason_prefixes` together with the code.
+Release rollout failures are separate: if `deploy` fails, `e2e-main` is skipped,
+and no post-deployment E2E success may be claimed.
 
 ## The check catalogue
 
