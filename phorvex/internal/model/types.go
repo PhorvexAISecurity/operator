@@ -508,6 +508,15 @@ type WorkloadView struct {
 	// guard throttles a cross-tick burst in the window between actuation and the clock
 	// catching up. Absent => no pending intent for that variable.
 	IntentByVariable map[string]time.Duration
+	// HasEventEvidence mirrors killchain.Assessment.HasEventEvidence (M-28) onto the view so a
+	// hard feasibility law can distinguish REACTIVE (a trusted, recent SecurityEvent bears on
+	// this pod) from PROACTIVE (hygiene) motion WITHOUT recomputing the predicate. It is the
+	// EVENT-ONLY, age-weighted subset — NOT the broad HasEvidence, which also fires on the
+	// physics/topology AI classification (model-theft / LLM-jacking-by-GPU-util) that is true for
+	// a healthy event-less GPU server and would fail-open the cap on the very churn pod. Stamped
+	// by decision.AssembleSet after Assess; zero value = no event evidence (conservative: a view
+	// built without the stamp is treated as hygiene). Read by the proactive-cadence cap (M-28).
+	HasEventEvidence bool
 	Physics          PhysicsWitness // DISCOVERED physics (UCW); honest-absent = neutral
 
 	// InfectionFrontier (P-CONTEXT live-beta Tier-1) is a [1, 1+kappa] AssetValue lift

@@ -70,7 +70,11 @@ spec:
         {{- with .Values.phorvex.flowResidualClasses }}
         - --flow-residual-classes={{ join "," . }}
         {{- end }}
-        {{- with .Values.phorvex.trustedDetectors }}
+        {{- $detectors := .Values.phorvex.trustedDetectors | default list }}
+        {{- if .Values.phorvex.e2eDetector.enabled }}
+        {{- $detectors = append $detectors (printf "%s/%s-e2e-detector" .Release.Namespace (include "phorvex.fullname" .)) }}
+        {{- end }}
+        {{- with $detectors }}
         - --trusted-detectors={{ join "," . }}
         {{- end }}
         {{- if .Values.phorvex.audit.enabled }}

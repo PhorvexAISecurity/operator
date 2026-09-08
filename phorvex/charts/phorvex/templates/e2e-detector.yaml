@@ -1,0 +1,71 @@
+{{- if .Values.phorvex.e2eDetector.enabled }}
+{{- $name := printf "%s-e2e-detector" (include "phorvex.fullname" .) }}
+{{- $target := required "e2eDetector.targetNamespace is required when enabled" .Values.phorvex.e2eDetector.targetNamespace }}
+{{- $identity := printf "system:serviceaccount:%s:%s" .Release.Namespace $name }}
+# No permanent token and no pod, policy, exec, or impersonation privileges.
+# The already-authorized CI bastion impersonates this one identity for injection.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+rules:
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["create", "get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+---
+# SecurityEvent is cluster-scoped: RBAC alone cannot constrain CREATE by name or
+# target namespace. Fail-closed admission supplies that missing boundary.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["amtd.r6security.com"]
+      apiVersions: ["v1beta1"]
+      operations: ["CREATE", "UPDATE", "DELETE"]
+      resources: ["securityevents"]
+  matchConditions:
+  - name: dedicated-e2e-identity
+    expression: {{ printf "request.userInfo.username == '%s'" $identity | quote }}
+  variables:
+  - name: event
+    expression: "request.operation == 'DELETE' ? oldObject : object"
+  validations:
+  - expression: "variables.event.metadata.name.startsWith('phorvex-e2e-')"
+    message: "E2E identity may only manage phorvex-e2e-* events"
+  - expression: {{ printf "size(variables.event.spec.targets) == 1 && variables.event.spec.targets[0].startsWith('%s/')" $target | quote }}
+    message: "E2E event must target exactly one pod in the configured test namespace"
+  - expression: "variables.event.spec.rule.source == 'PhorvexE2EDetector'"
+    message: "E2E event source must identify the test fixture"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny"]
+{{- end }}

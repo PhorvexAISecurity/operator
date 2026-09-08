@@ -445,6 +445,25 @@ spec:
                       disables the budget path for this service.
                     type: string
                 type: object
+              trust:
+                type: object
+                description: Directional M-34 peer trust; effective tenant keys until M-140.
+                properties:
+                  peerPolicies:
+                    type: array
+                    x-kubernetes-list-type: set
+                    items:
+                      type: string
+                      minLength: 1
+              cover:
+                type: object
+                properties:
+                  warmSwap:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: false
               tenant:
                 description: |-
                   Tenant is the explicit tenant identity this policy governs. Empty defaults to
