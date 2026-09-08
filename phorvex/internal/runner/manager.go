@@ -866,7 +866,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	views := make([]*model.WorkloadView, 0, len(selPods))
 	for _, p := range selPods {
 		t := tele[p.Name]
-		// M-23: one fingerprint per CLOCKED exposure variable — pod identity, node, session,
+		// M-23: one fingerprint per CLOCKED exposure variable — pod identity, session,
 		// plus the per-action `*-epoch` markers (absent-skipped when a marker is missing). The
 		// [PHVX-67] session clock still resets when either KV flush bumps p.SessionEpoch.
 		m.Clock.Observe(exposure.Observation{
