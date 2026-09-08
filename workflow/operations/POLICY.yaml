@@ -1,0 +1,90 @@
+schema_version: 1
+
+default_operation: triage
+
+operations:
+  fix:
+    runbook: operations/FIX.md
+    authority: fixes/*/STATUS.yaml
+    mutating: true
+    terminal_states: [CLOSED, DEFERRED, ACCEPTED_RISK, INVALIDATED]
+  intake:
+    runbook: operations/INTAKE.md
+    authority: intake/*/STATUS.yaml
+    mutating: true
+    terminal_states: [DUPLICATE, FILED, REJECTED, UNAVAILABLE]
+  issue:
+    runbook: operations/ISSUE.md
+    authority: issues/entries/*.md
+    mutating: true
+    terminal_states:
+      - OPEN
+      - IN_PROGRESS
+      - MAIN_PENDING_DEPLOY
+      - DEPLOYED_PENDING_L3
+      - CLOSED
+      - REOPENED
+      - DEFERRED
+      - ACCEPTED_RISK
+      - SUPERSEDED
+  sync:
+    runbook: operations/SYNC.md
+    authority: releases/CURRENT.yaml
+    mutating: true
+    terminal_states: [MAIN_RECORDED, RECONCILED, BLOCKED]
+    main_terminal_states: [MAIN_RECORDED]
+    deployment_terminal_states: [RECONCILED, BLOCKED]
+  campaign:
+    runbook: operations/CAMPAIGN.md
+    authority: campaigns/*/STATUS.yaml
+    mutating: true
+    terminal_states: [CLOSED, PAUSED, ABORTED]
+  audit:
+    runbook: operations/AUDIT.md
+    authority: null
+    mutating: false
+    terminal_states: [REPORTED]
+  triage:
+    runbook: operations/TRIAGE.md
+    authority: null
+    mutating: false
+    terminal_states: [CLASSIFIED, NEEDS_HUMAN_DECISION]
+
+truth:
+  implementation_baseline: reviewed origin/main
+  source_release: releases/CURRENT.yaml code_repository
+  observed_deployment: releases/CURRENT.yaml deployed
+  canonical_anatomy: anatomy/PIN.yaml at observed deployment
+  issue_state: issues/entries/*.md front matter
+  fix_state: fixes/*/STATUS.yaml
+  generated_issue_view: issues/MASTER_ISSUES.md
+  coordination_is_authoritative: false
+
+human_gates:
+  - pull_request_open
+  - pull_request_merge
+  - shared_environment_deploy
+  - rollback
+  - destructive_or_attack_test
+  - prediction_amendment
+  - verification_waiver
+  - ambiguous_dedup
+  - autonomous_issue_filing
+  - accepted_risk
+  - superseded_issue
+  - full_campaign_start
+
+role_separation:
+  implementation_author_cannot_sign:
+    - independent_diff_review
+    - final_verdict
+  campaign_execution_cannot_sign:
+    - independent_campaign_review
+
+evidence_results:
+  - PASS
+  - FAIL
+  - UNAVAILABLE
+  - NON_DISCRIMINATING
+  - NOT_REQUIRED
+  - BLOCKED

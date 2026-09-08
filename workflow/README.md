@@ -1,7 +1,9 @@
-# Phorvex workflow
+# Phorvex agent operations framework
 
 One discoverable, versioned home for:
 
+- routing and governing agent requests;
+- bug, risk, incident and enhancement intake;
 - the generated product anatomy;
 - the master issue register;
 - the two-agent fix loop;
@@ -17,12 +19,15 @@ trees are neither moved nor removed.
 
 | Reader | First file |
 |---|---|
-| Agent starting/resuming a fix | `AGENTS.md` |
+| Agent receiving any request | `AGENTS.md`, then `OPERATIONS.md` |
+| Agent starting/resuming a fix | `operations/FIX.md`, then the stage named by `brief` |
+| Agent reporting or verifying a bug | `operations/INTAKE.md` |
+| Agent reconciling colleague/main changes | `operations/SYNC.md` |
 | Engineer learning the process | `WORKFLOW.md` |
 | Engineer choosing work | `issues/MASTER_ISSUES.md` |
 | Engineer locating code/operations | `anatomy/ANATOMY.md` |
-| Release coordinator | `releases/CURRENT.yaml` and `WORKFLOW.md` |
-| Campaign owner | `campaigns/README.md` |
+| Release coordinator | `operations/SYNC.md` and `releases/CURRENT.yaml` |
+| Campaign owner | `operations/CAMPAIGN.md` |
 
 Run the consistency check from the code-repository root:
 
@@ -34,34 +39,41 @@ Show the bounded context for one issue or fix:
 
 ```bash
 python3 workflow/tools/workflow.py brief M-160
-python3 workflow/tools/workflow.py brief T1-M160
+python3 workflow/tools/workflow.py brief T1-M160 --agent k3
 ```
 
 ## Source-of-truth map
 
 | Fact | Authority |
 |---|---|
-| Process and gates | `WORKFLOW.md` |
+| Request routing and common gates | `OPERATIONS.md`, `operations/POLICY.yaml` |
+| Fix process and gates | `WORKFLOW.md` |
 | Agent startup | `AGENTS.md` |
+| Pre-issue claim and dedup state | `intake/*/STATUS.yaml` |
 | Issue body, state, tier and dependencies | `issues/entries/*.md` front matter |
 | Consolidated issue view | generated `issues/MASTER_ISSUES.md` |
 | Anatomy facts | `anatomy/pipeline/*.{tsv,json}` at `anatomy/PIN.yaml` |
 | Readable anatomy | generated `anatomy/ANATOMY.md` |
 | Current deployed release | `releases/CURRENT.yaml` |
+| Main/release reconciliation | `releases/<sync-id>/STATUS.yaml` |
 | Per-fix current state | `fixes/*/STATUS.yaml` |
-| Evidence provenance | `fixes/*/evidence/manifest.yaml` |
+| Campaign state | `campaigns/*/STATUS.yaml` |
+| Evidence provenance | each record's `evidence/manifest.yaml` |
 | Notifications | `coordination/`; never authoritative |
 
 Generated files are reviewed but not hand-edited.
 
 ## Directory guide
 
+- `operations/`: request-specific runbooks and machine-readable policy.
+- `intake/`: non-canonical reported findings and their verification/dedup state.
 - `issues/`: one source entry per issue plus the generated master view.
 - `anatomy/`: version-pinned source inventories, generators and rendered map.
 - `fixes/`: active and closed cycle records with a common schema.
 - `verification/`: L0–L4 definitions, shared baselines and permanent suites.
 - `releases/`: deployed-build truth and one synchronization record per release.
-- `campaigns/`: explicit-request-only full-system campaigns.
+- `attacks/`: reusable guided tests and read-only preflight; evidence stays in fixes/campaigns.
+- `campaigns/`: requested broad testing, including “test the dev cluster.”
 - `coordination/`: capability registry and notification bus.
 - `archive/`: legacy documents and migration provenance; not startup context.
 - `artifacts/`: large retained evidence, normally excluded from Git.

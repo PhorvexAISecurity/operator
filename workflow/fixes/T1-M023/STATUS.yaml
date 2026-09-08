@@ -28,16 +28,16 @@ implementation:
   head_sha: 13258e3
   stacked_on: []
 pull_request:
-  url: null
+  url: https://github.com/PhorvexSecurity/operator/pull/123
   reviewed_head: 13258e3
-  merge_sha: null
-  checks: legacy-see-evidence
+  merge_sha: 809d80cbfd394dba496e1ad2064d412f2c195ae4
+  checks: passed-merged-2026-09-07
   patch_equivalence: PASS
 deployment:
-  image: null
-  digest: null
-  git_sha: null
-  rolled_out_at: null
+  image: phorvex:0.4.95
+  digest: sha256:e69abb524801cdc76fb8c603085c0243ff1ba8db9722e14a04571fc237c46e61
+  git_sha: 743a9d46b840
+  rolled_out_at: '2026-09-07T15:52:36Z'
 verification:
   required:
   - L0
@@ -48,7 +48,7 @@ verification:
   l0: legacy-see-evidence
   l1: legacy-see-evidence
   l2: legacy-see-evidence
-  l3: pending
+  l3: pending-watch-non-discriminating-window
   l4: NOT_REQUIRED
   positive_control: legacy-see-evidence
 synchronization:
@@ -60,12 +60,17 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: human-owner
-  action: Human opens and merges the PR; release/deploy, then run the scoped L3.
+  owner: k3
+  action: >-
+    Merged (PR #123), live on 0.4.95. L3 in watch phase (evidence/l3/watch.md) —
+    emission watcher running; verdict on first discriminating window.
 migration:
   source: /home/mehrdad/operator/fixes/T1-M023
   original_untouched: true
   historical_gaps_not_fabricated: true
   legacy_closure_precedes_workflow_v1: false
   legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
 updated_at: '2026-09-06T22:26:59+00:00'
+revision: 0

@@ -6,7 +6,7 @@ related_issues:
 - T1-E
 title: Routing-aware RBAC and no-rbac status gaps
 profile: legacy-migrated
-state: PR_READY
+state: CLOSED
 roles:
   human_owner: mehrdad
   proposer: claude
@@ -25,21 +25,20 @@ blind_derivation:
     is not fabricated.
 implementation:
   branch: t1/contract-choice-m160-routing-aware-rbac
-  base_sha: ce9d2b5
-  head_sha: 3f0903f
-  stacked_on:
-  - T1-M020
+  base_sha: 102da1a
+  head_sha: 281abce
+  stacked_on: []
 pull_request:
-  url: null
+  url: https://github.com/PhorvexSecurity/operator/pull/130
   reviewed_head: 3f0903f
-  merge_sha: null
-  checks: legacy-see-evidence
+  merge_sha: c081616
+  checks: passed-merged-2026-09-07
   patch_equivalence: PASS
 deployment:
-  image: null
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.96
   digest: null
-  git_sha: null
-  rolled_out_at: null
+  git_sha: a13b83af3b2d
+  rolled_out_at: '2026-09-07T21:50:14Z'
 verification:
   required:
   - L0
@@ -50,7 +49,7 @@ verification:
   l0: legacy-see-evidence
   l1: legacy-see-evidence
   l2: legacy-see-evidence
-  l3: pending
+  l3: PASS
   l4: NOT_REQUIRED
   positive_control: legacy-see-evidence
 synchronization:
@@ -62,12 +61,16 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: human-owner
-  action: After T1-M020 merges, rebase, prove equivalence, open PR, deploy, and re-L3.
+  owner: none
+  action: 'CLOSED 2026-09-07: deployed in v0.4.96 (21:50Z), L3 PASS — all 5 criteria
+    met (evidence/l3/verdict.md). T1-E criterion-6 failure resolved.'
 migration:
   source: /home/mehrdad/operator/fixes/T1-M160
   original_untouched: true
   historical_gaps_not_fabricated: true
   legacy_closure_precedes_workflow_v1: false
   legacy_blind_deriver: null
-updated_at: '2026-09-06T22:26:59+00:00'
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+updated_at: '2026-09-07T22:25:00+00:00'
+revision: 0

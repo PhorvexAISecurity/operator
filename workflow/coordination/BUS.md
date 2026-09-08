@@ -1,7 +1,7 @@
 # Coordination bus
 
 The bus wakes participants and requests transitions. It never owns current
-state, decisions or evidence; messages point to authoritative fix files.
+state, decisions or evidence; messages point to authoritative workflow files.
 
 ## Layout
 
@@ -17,21 +17,28 @@ coordination/
 ## Message schema
 
 ```yaml
-schema_version: 1
+schema_version: 2
 id: 000001
 created_at: UTC
 from: agent-id
 to: agent-id
-fix_id: T1-M160
+subject:
+  kind: fix
+  id: T1-M160
 role: skeptic
 state_from: IMPLEMENTED
 requested_transition: DIFF_REVIEW_PASSED
 needs_reply: true
-subject: one subject
+subject_line: one-line summary
 refs:
   - fixes/T1-M160/04-diff.patch
   - fixes/T1-M160/05-evidence.md
 ```
+
+`subject.kind` is one of `fix`, `intake`, `issue`, `release`, or `campaign`.
+The CLI still accepts `--fix` as a compatibility shorthand for
+`--subject-kind fix --subject-id ...`; archived schema-v1 messages remain
+valid and are not rewritten.
 
 The body contains questions or a concise outcome. Raw logs stay in evidence
 artifacts.
@@ -52,7 +59,7 @@ artifacts.
 
 After restart:
 
-1. read the assigned fix `STATUS.yaml`;
+1. read the assigned subject's authoritative status;
 2. perform its `next_action` if owned;
 3. inspect the inbox for additional requests;
 4. read archive history only when a current artifact references a message.

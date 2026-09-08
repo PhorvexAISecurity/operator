@@ -400,3 +400,12 @@ Every 🟠 entry is code-verified against the deployed build — but "could we a
 | **Unique total** | | **142 issues (after nine passes) + 10 verified-working** |
 
 Every A-# finding was independently re-verified line-by-line (221/221 confirmed, zero disagreements); live-cluster evidence was collected 2026-08-20/21 for the RBAC seam, the CRD enum regression, the churn, and the missing admission policy. A second live pass (§12, 2026-08-21) upgraded seven entries with direct evidence, added M-134/M-135, confirmed M-22 live on the deployed build (after a first false null was exposed by a fresh-tenant positive control), and corrected the M-9 "Phoenix void" claim (Phoenix is deployed and executes rotate; the gap is the absent feedback loop, not the absent controller). All static entries were then verified against the deployed `v0.4.39` source (§12.1). A sixth pass (2026-08-23) re-screened the register against the `v0.4.39 → v0.4.43` window on the upgraded production build (§12.2): M-112 fixed and live-verified, M-31 resolved by feed-side key convention with its digest-drift residual filed as M-141 (live), M-140/M-109 re-verified as persisting, and all gating entries confirmed byte-stable across the upgrade. A seventh pass (2026-08-27) against `phorvex:0.4.58` re-confirmed M-144 live (runtime λ=0; the policy seed is not λ) and filed **M-145** (console PATCH rewrote `vllm-defense.spec.tenant` to `litellm`). An eighth pass (2026-08-30) reanalyzed the pinned `0.4.50` Round-1 corpus and filed **M-146** after source-confirming the zero-erasing audit schema at current `0.4.58`.
+
+---
+
+## §16. Workflow-filed issues
+
+New issue tokens created after the additive migration are inserted below.
+Their canonical bodies remain in `issues/entries/`.
+
+<!-- WORKFLOW_NEW_ISSUES -->

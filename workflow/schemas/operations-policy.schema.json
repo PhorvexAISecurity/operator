@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "operations-policy.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "default_operation", "operations", "truth",
+    "human_gates", "role_separation", "evidence_results"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "default_operation": {"const": "triage"},
+    "operations": {
+      "type": "object",
+      "required": ["fix", "intake", "issue", "sync", "campaign", "audit", "triage"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["runbook", "authority", "mutating", "terminal_states"],
+        "properties": {
+          "runbook": {"type": "string", "minLength": 1},
+          "authority": {"type": ["string", "null"]},
+          "mutating": {"type": "boolean"},
+          "terminal_states": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "truth": {"type": "object"},
+    "human_gates": {"type": "array", "items": {"type": "string"}},
+    "role_separation": {"type": "object"},
+    "evidence_results": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

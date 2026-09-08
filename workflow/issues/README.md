@@ -2,9 +2,10 @@
 
 Issue source lives in `entries/`, one file per M-number. The consolidated
 `MASTER_ISSUES.md` is generated for humans and must not be edited directly.
-Each rendered issue gets a generated `WORKFLOW` line from its front matter;
-the preserved legacy heading may still describe how the issue was originally
-observed (`LIVE`, `STATIC`, and so on).
+Current headings, state counts and tier counts come from front matter.
+Historical narratives remain unchanged below an evidence-history label; old
+aggregate summaries live only in the migration layout. Keyword-derived joins
+remain suggestions until semantically reviewed at the named source pin.
 
 Each entry preserves the issue narrative and adds machine-readable front
 matter for:
@@ -25,6 +26,13 @@ the issue body. Curated overrides carry a reason and provenance; they do not
 live as hard-coded Python dictionaries.
 
 ## Routine update
+
+For a new issue, first complete `operations/INTAKE.md` when it originated as a
+reported finding, then run `workflow.py new-issue` (or
+`promote-intake`). The command allocates `NEXT_ID`, writes an entry from
+`_template/`, inserts its layout token and creates a pending anatomy join.
+
+For an existing issue:
 
 1. Edit only the target entry.
 2. If its prose/body changed, explicitly accept the new body hash:
@@ -55,12 +63,14 @@ reconstructed current state from a stale backup.
 
 ## State changes
 
+- Use `workflow.py issue-transition` only for triage states. Do not hand-edit
+  `workflow_state`.
 - Issue state and fix-cycle state are deliberately different. An issue stays
   `OPEN` while its fix is `DESIGNING` through `IN_PR`; the generated
   `WORKFLOW` line lists linked fixes, and `workflow.py brief M-NNN` shows both.
-- PR merged: `MAIN_PENDING_DEPLOY`
-- deployed: `DEPLOYED_PENDING_L3`
-- scoped verification passed: `CLOSED`
+- PR merged: `sync-main --publish` records `MAIN_PENDING_DEPLOY`
+- deployed: `release-sync --publish` records `DEPLOYED_PENDING_L3`
+- scoped verification passed: `release-sync --finalize` records `CLOSED`
 - scoped verification failed: `REOPENED` or a distinct regression issue
 - accepted risk/design decision: explicit human approval in the entry
 

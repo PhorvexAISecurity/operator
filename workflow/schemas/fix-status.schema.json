@@ -16,45 +16,237 @@
     "next_action"
   ],
   "properties": {
-    "schema_version": {"const": 1},
-    "fix_id": {"type": "string", "minLength": 1},
+    "schema_version": {
+      "const": 1
+    },
+    "fix_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "issues": {
       "type": "array",
-      "items": {"type": "string", "pattern": "^M-[0-9]+$"},
+      "items": {
+        "type": "string",
+        "pattern": "^M-[0-9]+$"
+      },
       "uniqueItems": true
     },
-    "title": {"type": "string", "minLength": 1},
-    "profile": {"type": "string", "minLength": 1},
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
     "state": {
       "enum": [
-        "TRIAGED", "DESIGNING", "CRITIQUED", "AGREED", "IMPLEMENTED",
-        "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED", "PR_READY", "IN_PR",
-        "MERGED", "DEPLOYED", "LIVE_VERIFIED", "SYNCHRONIZED", "CLOSED",
-        "HELD", "BLOCKED", "DEFERRED", "ACCEPTED_RISK", "REOPENED",
+        "TRIAGED",
+        "DESIGNING",
+        "CRITIQUED",
+        "AGREED",
+        "IMPLEMENTED",
+        "OFFLINE_VERIFIED",
+        "DIFF_REVIEW_PASSED",
+        "PR_READY",
+        "IN_PR",
+        "MERGED",
+        "DEPLOYED",
+        "LIVE_VERIFIED",
+        "SYNCHRONIZED",
+        "CLOSED",
+        "HELD",
+        "BLOCKED",
+        "DEFERRED",
+        "ACCEPTED_RISK",
+        "REOPENED",
         "INVALIDATED"
       ]
     },
     "roles": {
       "type": "object",
       "required": [
-        "human_owner", "proposer", "implementer", "skeptic",
-        "live_verifier", "coordinator"
-      ]
+        "human_owner",
+        "proposer",
+        "implementer",
+        "skeptic",
+        "live_verifier",
+        "coordinator"
+      ],
+      "properties": {
+        "human_owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proposer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "implementer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "skeptic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "live_verifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "coordinator": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
     "implementation": {
       "type": "object",
-      "required": ["branch", "base_sha", "head_sha", "stacked_on"]
+      "required": [
+        "branch",
+        "base_sha",
+        "head_sha",
+        "stacked_on"
+      ]
     },
-    "verification": {"type": "object"},
-    "synchronization": {"type": "object"},
+    "verification": {
+      "type": "object"
+    },
+    "synchronization": {
+      "type": "object"
+    },
     "next_action": {
       "type": "object",
-      "required": ["owner", "action"],
+      "required": [
+        "owner",
+        "action"
+      ],
       "properties": {
-        "owner": {"type": "string", "minLength": 1},
-        "action": {"type": "string", "minLength": 1}
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        }
       }
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "protocol_version": {
+      "const": 2
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "result",
+          "by",
+          "artifact",
+          "sha256",
+          "source_sha",
+          "at"
+        ],
+        "properties": {
+          "result": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNAVAILABLE",
+              "NON_DISCRIMINATING",
+              "NOT_REQUIRED"
+            ]
+          },
+          "by": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifact": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$"
+          },
+          "baseline_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$"
+          },
+          "incident_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approval_ref": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "properties": {
+        "pr_open": {
+          "type": "string",
+          "minLength": 1
+        },
+        "merge": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deploy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "close": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_risk": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "not": {
+              "const": "legacy-migrated"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "protocol_version",
+          "revision",
+          "baseline",
+          "checks",
+          "approvals"
+        ]
+      }
+    }
+  ]
 }

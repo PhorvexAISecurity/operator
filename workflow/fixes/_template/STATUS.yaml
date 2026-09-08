@@ -1,4 +1,9 @@
 schema_version: 1
+protocol_version: 2
+revision: 0
+change_class: null
+approvals: {}
+checks: {}
 fix_id: REPLACE_ME
 issues: []
 title: REPLACE_ME
@@ -50,6 +55,8 @@ deployment:
 
 verification:
   required: [L0, L1, L2]
+  live_required: null
+  soak_required: null
   p3: pending
   l0: pending
   l1: pending

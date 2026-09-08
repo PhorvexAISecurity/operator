@@ -5,7 +5,8 @@ synchronization. P3 belongs in `evidence/p3/verdict.md`.
 
 ## Verdict
 
-`CLOSED`, `REOPENED`, or `INVALIDATED`.
+`Verdict: PASS` (eligible for closure after synchronization), `Verdict: FAIL`
+(reopen), or `Verdict: INVALIDATED` (the model was disproved).
 
 ## Reviewed implementation and deployed identity
 

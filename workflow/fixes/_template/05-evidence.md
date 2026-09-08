@@ -11,6 +11,8 @@
 
 ## RED controls
 
+Incident trace and independent reproduction: `evidence/incident.md`.
+
 ## L0
 
 ## L1

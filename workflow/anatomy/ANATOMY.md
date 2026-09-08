@@ -4,8 +4,8 @@
 what actually happens when it acts.**
 
 **Source pin:** `fb52e6c976df` (v0.4.64) · **Frozen:** bus 223 · **Anchors verified:** 226
-**Companion to:** `PHORVEX_MASTER_ISSUES_V2.md` (what is wrong, joined to this map) and
-`campaign/anatomy-v2/STATE.md` (how to rebuild and re-verify it).
+**Companion to:** `../issues/MASTER_ISSUES.md` (what is wrong, joined to this map) and
+`pipeline/STATE.md` (how to rebuild and re-verify it).
 
 > **This document is generated**, from two kinds of evidence and nothing else.
 >
@@ -333,10 +333,10 @@ flowchart LR
   class actuator_native,actuator_phoenix,bin_go_toolchain,bin_redteam_rl,console,decision_coverage,ext_k8s,ext_kv_local,ext_mig_agent,runner,slo_ledger gap;
 ```
 
-The picture above is `campaign/anatomy-v2/ANATOMY_V2.mmd` verbatim (top-level nodes and their
-wiring). **`ANATOMY_V2.pdf` is that same source rendered by mermaid** — one vector page, and
+The picture above is `generated/ANATOMY.mmd` verbatim (top-level nodes and their
+wiring). **`generated/ANATOMY-map.pdf` is that same source rendered by mermaid** — one vector page, and
 the copy to read if your viewer does not draw mermaid; regenerate it with
-`campaign/anatomy-v2/render_diagram.sh`. `ANATOMY_V2.svg` is a third view: the full inventory
+`pipeline/render_diagram.sh`. `generated/ANATOMY.svg` is a third view: the full inventory
 with all 39 children drawn as cards. All three come from these same inventories. Shapes carry facts: a slanted box is off the decision path, a rounded box is a
 system Phorvex does not own, a dashed outline is declared-but-never-wired, a bold border means
 the node carries a seam, and a thick arrow is a crossing out of the cluster.

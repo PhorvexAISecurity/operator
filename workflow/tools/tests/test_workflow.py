@@ -26,13 +26,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
             legacy
         )
         current_layout = (workflow.ISSUES / "layout.md").read_text(encoding="utf-8")
-        self.assertEqual(current_layout, legacy_layout)
-        self.assertEqual(tokens, legacy_order)
+        self.assertTrue(current_layout.startswith(legacy_layout))
+        self.assertEqual(tokens[: len(legacy_order)], legacy_order)
         for issue_id, body in legacy_entries.items():
             digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
             self.assertEqual(metadata[issue_id]["migration_body_sha256"], digest)
-        self.assertEqual(len(tokens), 159)
-        self.assertEqual(len(metadata), 159)
+        self.assertEqual(len(tokens), len(metadata))
+        self.assertEqual(set(tokens), {workflow.parse_entry(p)[0]["id"] for p in (workflow.ISSUES / "entries").glob("M-*.md")})
         self.assertEqual(len(tokens), len(set(tokens)))
 
     def test_master_is_reproducible(self) -> None:
@@ -61,9 +61,9 @@ class WorkflowIntegrityTests(unittest.TestCase):
     def test_human_gate_and_transition_prerequisites_are_explicit(self) -> None:
         self.assertIn("IN_PR", workflow.HUMAN_GATED_STATES)
         self.assertIn("DEPLOYED", workflow.HUMAN_GATED_STATES)
-        status = workflow.load_yaml(workflow.FIXES / "T1-M160" / "STATUS.yaml")
+        status = workflow.load_yaml(workflow.FIXES / "_template" / "STATUS.yaml")
         missing = workflow.transition_prerequisites(
-            workflow.FIXES / "T1-M160", status, "IN_PR"
+            workflow.FIXES / "_template", status, "IN_PR"
         )
         self.assertIn("pull_request.url", missing)
 

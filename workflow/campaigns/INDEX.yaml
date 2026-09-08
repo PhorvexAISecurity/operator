@@ -1,0 +1,14 @@
+schema_version: 1
+campaigns:
+  2026-08-25-live-validation:
+    directory: campaigns/2026-08-25-live-validation
+    state: DEFERRED
+    profile: legacy-migrated
+  2026-09-07-guardrail-rotation:
+    directory: campaigns/2026-09-07-guardrail-rotation
+    state: PAUSED
+    profile: workflow-v2
+  2026-09-07-quarantine-brain:
+    directory: campaigns/2026-09-07-quarantine-brain
+    state: PAUSED
+    profile: workflow-v2

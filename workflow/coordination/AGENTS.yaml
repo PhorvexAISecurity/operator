@@ -9,6 +9,9 @@ agents:
       merge_authority: true
       deployment_authority: true
       destructive_test_authority: true
+      canonical_issue_authority: true
+      ambiguous_dedup_authority: true
+      campaign_authority: true
 
   - id: claude
     kind: agent
@@ -21,6 +24,9 @@ agents:
       cluster_read: false
       cluster_write: false
       deployment_authority: false
+      intake_investigation: true
+      independent_review: true
+      release_reconciliation: true
 
   - id: k3
     kind: agent
@@ -33,8 +39,12 @@ agents:
       cluster_read: true
       cluster_write: human_gated
       deployment_authority: false
+      intake_investigation: true
+      independent_review: true
+      release_reconciliation: true
+      campaign_execution: human_gated
 
 notes:
   - Capabilities are re-verified at intake; this file is not a permanent entitlement.
   - A replacement agent receives a new ID and explicit capabilities.
-  - Role assignment lives in each fix STATUS.yaml, not here.
+  - Role assignment lives in each fix, intake, release, or campaign STATUS.yaml, not here.

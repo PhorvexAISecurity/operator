@@ -1,5 +1,4 @@
 schema_version: 1
-
 anatomy:
   source_commit: fb52e6c976df
   source_release: v0.4.64
@@ -9,17 +8,14 @@ anatomy:
   seams: 8
   operations: 114
   frozen_at_bus: 223
-  migration_status: copied-byte-for-byte
-
+  migration_status: regenerated-portable-links-at-original-pin
 currency:
   status: stale_pending_first_release_sync
   reason: The accepted V2 anatomy predates the current code and deployed builds.
-
 outputs:
   markdown: ANATOMY.md
   mermaid: generated/ANATOMY.mmd
   svg: generated/ANATOMY.svg
-
 pipeline:
   directory: pipeline
   state_document: pipeline/STATE.md

@@ -1,108 +1,54 @@
-# Agent bootstrap
+# Agent entrypoint
 
-This directory is the authoritative operating system for the Phorvex fix
-program. Chat history and bus archives are not authoritative.
+This harness works through files and explicit roles, not model names or chat
+memory. The current user request controls scope and authorization.
 
-## When asked to “start fix X”
+1. Classify the task using `OPERATIONS.md`; read **one** matching runbook.
+2. Run `python3 workflow/tools/workflow.py doctor` once per work session.
+   Report relevant failures; an unrelated historical gap does not prohibit
+   useful work on your authorized task.
+3. For a fix, run `brief <fix-id> --agent <your-assigned-id>`. Read only its
+   listed stage, issue, source locus, and artifacts. If unassigned, the
+   coordinator records your role first. Do not infer a role from “Claude,”
+   “Cursor,” or an earlier ticket.
+4. Complete the work owned by your role, record evidence, then hand off.
+   Continue through authorized steps you own; stop at a different owner,
+   a concrete blocker, or an action outside recorded approval scope.
 
-1. Read `MANIFEST.yaml` and `WORKFLOW.md`.
-2. Run:
+## Hard boundaries
 
-   ```bash
-   python3 workflow/tools/workflow.py doctor
-   python3 workflow/tools/workflow.py brief X
-   ```
+- The skeptic derives independently **before** reading the proposal, diff,
+  implementation commits, or related messages. Seal `02A` using `seal --by`.
+  Read only the baseline source until sealed. Role alternation is optional;
+  independent derivation and independent review are mandatory.
+- The proposer/implementer cannot sign critique, P3, or final review. The
+  implementer cannot sign live verification of their own change.
+- A `PASS` string is insufficient: `record-check` binds signer, artifact hash,
+  and source/deployment pin. Missing evidence stays unavailable or blocked.
+- Never equate Selected, Dispatched, Emitted, Executed, Confirmed, or
+  Attack-mitigated. A null result requires a positive control.
+- Before P3, independently reproduce the incident through the real producers
+  of the fix's inputs; sign `incident`. A mocked final flag is not that proof.
+- Use `transition --expect-revision <brief-revision>`; stale work must be
+  reread. Commands serialize the complete read/validate/write transaction.
+- Reuse explicit authorization already given. Record its reference and scope
+  (e.g. `pr_open`, `deploy`); do not ask again for that scope. Uncovered merge,
+  deployment, attack, waiver, or accepted-risk decisions remain human gates.
+- Generated register/anatomy files are read-only. Edit their authorities and
+  regenerate. Notifications carry references; they do not change state.
 
-3. Resolve X through `fixes/INDEX.yaml`. Read, in this order:
-   - `issues/entries/<issue>.md`;
-   - the issue's entry in `issues/joins.yaml`;
-   - only the relevant locus in `anatomy/ANATOMY.md`;
-   - `fixes/<fix-id>/STATUS.yaml`, if the cycle already exists.
-4. Confirm the assigned role and the single `next_action` in `STATUS.yaml`.
-   Never infer either from agent names, folder names, prior tickets, or chat.
-5. Confirm the code base SHA, deployed SHA, dependencies, stacked branches,
-   worktree cleanliness, and required capabilities before doing work.
-6. Perform only the current transition. Update the fix artifact and required
-   status fields, then use `python3 workflow/tools/workflow.py transition`
-   (or `sync-index` when recording no state change). Send a handoff that
-   references those files.
+## Context and handoff
 
-## Blind-review rule
+Do not preload the master register, full anatomy, archives, raw corpora, or bus
+history. Use `brief` and targeted source reads; expand only for a demonstrated
+dependency. `WORKFLOW.md` is the compact protocol reference, not required
+startup reading. `MANIFEST.yaml` locates authorities when needed.
 
-For a new cycle, if your role is `skeptic` and
-`blind_derivation.status: pending`, do
-not open:
+Handoff: **fix/operation ID · state + revision · next owner/action · artifact
+references · source/deployment pins · blockers**. Send no proposal content to
+an unsealed skeptic. Record status before notifying; do not send messages
+unless communication is authorized.
 
-- `01-proposal.md`;
-- `04-diff.patch`;
-- the implementation branch or its commits;
-- proposal/diff bus messages.
-
-Write `02A-blind-derivation.md` from the intake, issue entry, anatomy, pinned
-baseline, and source code. Seal it with:
-
-```bash
-python3 workflow/tools/workflow.py seal <fix-id>
-```
-
-Only after the seal succeeds may you read the proposal and write
-`02B-critique.md`.
-
-Migrated cycles may say `legacy-complete` and point to a combined
-`02-critique.md`. Do not rerun their blind stage or invent missing seal
-metadata; follow their structured state and P3 artifact. `not-started` means
-the held legacy cycle never entered design.
-
-## Roles
-
-- `human_owner`: scope, priority, deadlock, merge, deployment, destructive
-  testing, prediction amendments, and waivers.
-- `proposer`: root-cause model, proposal, declared behavioral delta.
-- `implementer`: code, tests, RED/GREEN evidence; defaults to proposer.
-- `skeptic`: blind derivation, adversarial design review, independent diff
-  review, final verdict.
-- `live_verifier`: scoped post-deploy verification; defaults to skeptic and
-  must have cluster access.
-- `coordinator`: state transitions, issue/register synchronization, release
-  synchronization.
-
-One person or agent may fill multiple compatible roles. The implementation's
-author may not sign its independent diff review or final verdict.
-
-## Human gates
-
-Stop and ask the human owner before:
-
-- opening or merging a pull request unless explicitly authorized;
-- deploying or rolling back a shared environment;
-- running a mutating, destructive, fault-injection, or attack test;
-- weakening or amending a pre-registered prediction;
-- resolving a three-round deadlock;
-- waiving a required verification level;
-- closing an accepted-risk or design-call item.
-
-## Evidence rules
-
-- Every code claim names a source SHA.
-- Every live claim names image tag, digest when available, embedded `gitSHA`,
-  observation window, and ambient conditions.
-- A null result requires a positive control.
-- RED must fail at the assertion named by the invariant, not at compile time
-  or an unrelated setup error.
-- Raw artifacts are listed in `evidence/manifest.yaml` with hashes.
-- `Selected`, `Dispatched`, `Emitted`, `Executed`, `Confirmed`, and
-  `Attack-mitigated` are distinct stages.
-
-## Reading limits
-
-Do not scan `archive/`, `artifacts/`, raw campaign corpora, or bus history
-unless a current artifact explicitly points there. A fresh fix should be
-recoverable from this file, the target issue/anatomy locus, and its status.
-
-## Code-repository hygiene
-
-- Use an isolated worktree for implementation and review.
-- Do not disturb unrelated dirty changes.
-- Production commits and PR text contain no agent attribution.
-- Workflow artifacts belong under `workflow/`; production code
-  commits contain only ticket-relevant code and tests.
+Use isolated worktrees for product changes. Preserve unrelated edits. A
+harness-only task may update its existing development worktree. Historical
+records are evidence, not proof of current deployment or permission.

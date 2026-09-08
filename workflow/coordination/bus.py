@@ -21,6 +21,7 @@ INBOX = ROOT / "inbox"
 ARCHIVE = ROOT / "archive"
 LOCK = ROOT / ".bus.lock"
 SEQUENCE = ROOT / "sequence.txt"
+SUBJECT_KINDS = {"fix", "intake", "issue", "release", "campaign"}
 
 
 def utc() -> str:
@@ -69,19 +70,31 @@ def cmd_send(args: argparse.Namespace) -> int:
     validate_agent(args.recipient)
     if args.sender == args.recipient:
         raise SystemExit("sender and recipient must differ")
+    if args.fix_id:
+        if args.subject_kind or args.subject_id:
+            raise SystemExit("--fix cannot be combined with --subject-kind/--subject-id")
+        subject_kind, subject_id = "fix", args.fix_id
+    else:
+        if not args.subject_kind or not args.subject_id:
+            raise SystemExit("provide --fix or both --subject-kind and --subject-id")
+        subject_kind, subject_id = args.subject_kind, args.subject_id
+    if subject_kind not in SUBJECT_KINDS:
+        raise SystemExit(f"unknown subject kind: {subject_kind}")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", subject_id):
+        raise SystemExit(f"unsafe subject id: {subject_id!r}")
     msg_id = next_id()
     metadata: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "id": msg_id,
         "created_at": utc(),
         "from": args.sender,
         "to": args.recipient,
-        "fix_id": args.fix_id,
+        "subject": {"kind": subject_kind, "id": subject_id},
         "role": args.role,
         "state_from": args.state_from,
         "requested_transition": args.requested_transition,
         "needs_reply": args.needs_reply,
-        "subject": args.subject,
+        "subject_line": args.subject,
         "refs": args.ref,
     }
     body = args.body or ""
@@ -176,7 +189,9 @@ def parser() -> argparse.ArgumentParser:
     send = sub.add_parser("send")
     send.add_argument("--from", dest="sender", required=True)
     send.add_argument("--to", dest="recipient", required=True)
-    send.add_argument("--fix", dest="fix_id", required=True)
+    send.add_argument("--fix", dest="fix_id")
+    send.add_argument("--subject-kind", choices=sorted(SUBJECT_KINDS))
+    send.add_argument("--subject-id")
     send.add_argument("--role", required=True)
     send.add_argument("--state-from", required=True)
     send.add_argument("--request", dest="requested_transition", required=True)

@@ -131,12 +131,11 @@ fixes:
     - M-160
     related_issues:
     - T1-E
-    state: PR_READY
+    state: CLOSED
     dependencies: []
-    stacked_on:
-    - T1-M020
+    stacked_on: []
     branch: t1/contract-choice-m160-routing-aware-rbac
-    head_sha: 3f0903f
+    head_sha: 281abce
   T1-M028:
     directory: fixes/T1-M028
     aliases:

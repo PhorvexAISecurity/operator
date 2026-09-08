@@ -1,0 +1,9 @@
+schema_version: 1
+intakes:
+  RPT-20260907-194500-quarantine-enforcement:
+    directory: intake/RPT-20260907-194500-quarantine-enforcement
+    kind: OBSERVATION
+    title: 'M-50 re-observed: dev CNI disables quarantine NetworkPolicy enforcement'
+    state: DUPLICATE
+    issue_id: null
+    aliases: []

@@ -18,8 +18,10 @@ joins:
       > `V2` TOUCHES · ext.vllm · controller · runner.policies · cost.rls · actuator.native
       · slo.ledger (+4 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-23:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · exposure
@@ -29,8 +31,10 @@ joins:
       > `V2` TOUCHES · ext.vllm · ext.guardrail · ext.phoenix · runner.policies ·
       runner.feedback · actuator.phoenix (+13 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-79:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.k8s -> ext.mig_agent, crossing_status=declared-unwired
@@ -52,8 +56,10 @@ joins:
 
       > `V2` TOUCHES · killchain · runner.policies · runner.feedback'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-25:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · killchain
@@ -62,8 +68,10 @@ joins:
 
       > `V2` TOUCHES · physics · recon · platform · console'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-26:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · belief
@@ -72,8 +80,10 @@ joins:
 
       > `V2` TOUCHES · killchain · console.live'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-27:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · belief
@@ -82,8 +92,10 @@ joins:
 
       > `V2` TOUCHES · killchain · ext.k8s · cost.rls'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-28:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
@@ -93,8 +105,10 @@ joins:
       > `V2` TOUCHES · actuator.native.kv-reset · ext.vllm · platform · killchain
       · feasibility · image.console'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-94:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.k8s
@@ -106,8 +120,10 @@ joins:
       Update @ internal/actuator/handlers_k8s.go:493 · ext.vllm · ext.guardrail ·
       ext.phoenix (+12 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-142:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ingest
@@ -118,8 +134,10 @@ joins:
       · rotate Create @ internal/actuator/phoenix.go:140 · ext.vllm · ext.prometheus
       (+9 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-140:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cost.p1
@@ -134,15 +152,24 @@ joins:
     accepted_at: legacy Anatomy V2 join review, bus 228
   M-145:
     kind: LOCUS
-    rendered: '> `V2` **LOCUS** · ext.vllm
+    rendered: '> `V2` **LOCUS** · console
+
+      > Policy editor mutates spec.tenant; the affected service is not the defect
+      locus.'
+    migration_source: legacy-v2-projection
+    review: complete
+    review_reason: Policy editor mutates spec.tenant; the affected service is not
+      the defect locus.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
+    previous_rendered: '> `V2` **LOCUS** · ext.vllm
 
       > matched on `vllm`
 
       > `V2` TOUCHES · runner.policies · console · bin.kubectl · belief · killchain
       · cmd.main (+4 more)'
-    migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    locus: console
+    reviewed_at: '2026-09-07'
+    review_source: issue body and anatomy NODES inventory at fb52e6c976df
   M-104:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.first_epss
@@ -151,8 +178,10 @@ joins:
 
       > `V2` TOUCHES · belief · phoenix.module'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-113:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.prometheus
@@ -161,8 +190,10 @@ joins:
 
       > `V2` TOUCHES · metrics · console.live · ingest · phoenix.module'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-141:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.first_epss
@@ -171,8 +202,10 @@ joins:
 
       > `V2` TOUCHES · ext.vllm · image.console'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-31:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -186,8 +219,10 @@ joins:
 
       > matched on `engine`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-20:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner
@@ -202,24 +237,30 @@ joins:
       > `V2` TOUCHES · feasibility · actuator.router · ext.mig_agent · actionset ·
       ext.vllm'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-30:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · exposure
 
       > matched on `no anatomy token in the title; header tag `CLOCK``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-110:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ingest
 
       > matched on `no anatomy token in the title; header tag `SENSING``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-112:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -235,8 +276,10 @@ joins:
 
       > `V2` TOUCHES · belief'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-111:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ingest
@@ -245,8 +288,10 @@ joins:
 
       > `V2` TOUCHES · physics · platform · console'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-114:
     kind: AFFECTS
     rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
@@ -261,16 +306,20 @@ joins:
 
       > `V2` TOUCHES · phoenix.module'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-130:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ingest
 
       > matched on `no anatomy token in the title; header tag `SENSING``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-118:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -305,8 +354,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.rotate · actuator.native.kv-reset'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-12:
     kind: ABSENCE
     rendered: '> `V2` **ABSENCE** — no positive locus: no actuation-failure metric
@@ -322,8 +373,10 @@ joins:
 
       > `V2` TOUCHES · actuator.phoenix · actuator.native.adapter-rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-73:
     kind: AFFECTS
     rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
@@ -349,8 +402,10 @@ joins:
 
       > `V2` TOUCHES · ext.first_epss · cost.rls'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-98:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cost.p1
@@ -359,8 +414,10 @@ joins:
 
       > `V2` TOUCHES · calib'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-139:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cost.p1
@@ -372,8 +429,10 @@ joins:
       Update @ internal/actuator/handlers_ai_p4set.go:300 · ext.vllm · registry ·
       runner.feedback (+6 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-156:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · slo.contract
@@ -383,8 +442,10 @@ joins:
       > `V2` TOUCHES · runner.feedback · cost.rls · rotate Delete @ internal/actuator/handlers_k8s.go:57
       · rotate Create @ internal/actuator/phoenix.go:140 · model · cost.p1 (+5 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-101:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cost.p1
@@ -393,16 +454,20 @@ joins:
 
       > `V2` TOUCHES · cost.p1'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-106:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · belief
 
       > matched on `belief`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-108:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cost.p1
@@ -412,8 +477,10 @@ joins:
       > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · belief ·
       calib · cost.rls · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-38:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -426,8 +493,10 @@ joins:
       · actuator.native.quarantine · rotate Delete @ internal/actuator/handlers_k8s.go:57
       (+4 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-47:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -437,8 +506,10 @@ joins:
       > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate
       · bin.kubectl · controller · feasibility · slo.contract'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-48:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -450,8 +521,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · actuator.native.quarantine'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-49:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -463,8 +536,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · actuator.native.quarantine · actuator.native (+1 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-57:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · debugger Update @ internal/actuator/handlers_k8s.go:235
@@ -473,8 +548,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.debugger · console.live · vol.trivy_bin'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-62:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -485,8 +562,10 @@ joins:
       · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493 · actuator.native.endpoint-rotate
       · ext.vllm · ext.first_epss'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-65:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
@@ -498,8 +577,10 @@ joins:
       @ internal/actuator/handlers_ai.go:306 · ext.mig_agent · calib · ext.vllm (+1
       more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-67:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100
@@ -511,8 +592,10 @@ joins:
       · warm-swap Delete @ internal/actuator/handlers_ai.go:150 · warm-swap Update
       @ internal/actuator/handlers_ai.go:191 · actuator.native.warm-swap (+2 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-76:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
@@ -521,8 +604,10 @@ joins:
 
       > `V2` TOUCHES · console.server · dashboard.api'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-77:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
@@ -534,8 +619,10 @@ joins:
       · warm-swap Delete @ internal/actuator/handlers_ai.go:150 · warm-swap Update
       @ internal/actuator/handlers_ai.go:191 · console.live (+3 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-81:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.mig_agent
@@ -544,8 +631,10 @@ joins:
 
       > `V2` TOUCHES · recon'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-92:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.policies
@@ -555,16 +644,20 @@ joins:
       > `V2` TOUCHES · ext.vllm · kv-reset Update @ internal/actuator/handlers_ai.go:306
       · cmd.main · actuator.phoenix · console.server · ci.release (+1 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-121:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
 
       > matched on `handlers`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-41:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
@@ -573,8 +666,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.kv-reset · ext.vllm'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-50:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -586,8 +681,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · actuator.native.quarantine · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-51:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -599,8 +696,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · actuator.native.quarantine · controller'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-52:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -612,8 +711,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · actuator.native.quarantine · cost.rls'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-54:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -622,8 +723,10 @@ joins:
 
       > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-58:
     kind: AFFECTS
     rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
@@ -640,8 +743,10 @@ joins:
       · identity-rotate Update @ internal/actuator/handlers_k8s.go:493 · runner.tick
       · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-63:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -651,8 +756,10 @@ joins:
       > `V2` TOUCHES · endpoint-rotate Update @ internal/actuator/handlers_ai.go:347
       · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493 · actuator.native.endpoint-rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-66:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
@@ -662,16 +769,20 @@ joins:
       > `V2` TOUCHES · model-shard-replace Create @ internal/actuator/handlers_ai.go:100
       · warm-swap Create @ internal/actuator/handlers_ai.go:100 · deploy · bin.trivy'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-68:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
 
       > matched on `no anatomy token in the title; header tag `ACTUATION``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-70:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · mig-rebind Update @ internal/actuator/handlers_ai.go:191
@@ -681,32 +792,40 @@ joins:
       > `V2` TOUCHES · mig-rebind Delete @ internal/actuator/handlers_ai.go:241 ·
       ext.mig_agent · actuator.native.mig-rebind'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-82:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.mig_agent
 
       > matched on `mig`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-83:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.mig_agent
 
       > matched on `mig`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-84:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native
 
       > matched on `WireRemoteNodeExec`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-85:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cmd.main
@@ -715,8 +834,10 @@ joins:
 
       > `V2` TOUCHES · runner.policies · actuator.native.rotate · feasibility'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-87:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · the 18 native-rollback operation rows, shipped_reachability=tool-only
@@ -739,8 +860,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · calib · actuator.native.quarantine'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-93:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.vllm
@@ -761,8 +884,10 @@ joins:
       > `V2` TOUCHES · actuator.phoenix · ext.first_epss · actuator.router · ext.k8s
       · controller'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-138:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
@@ -774,8 +899,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · bin.kubectl · runner (+5 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-116:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.guardrail
@@ -784,8 +911,10 @@ joins:
 
       > `V2` TOUCHES · calib · ci.release'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-24:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -804,8 +933,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · actuator.native.quarantine'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-60:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · route-rotate Update @ internal/actuator/handlers_k8s.go:359
@@ -817,8 +948,10 @@ joins:
       Update @ internal/actuator/handlers_k8s.go:418 · route-rotate Update @ internal/actuator/handlers_k8s.go:448
       · console.server · actuator.native.route-rotate (+1 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-61:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · custom-inject Update @ internal/actuator/handlers_k8s.go:235
@@ -827,8 +960,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.custom-inject · actuator.native.kv-reset'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-69:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
@@ -838,16 +973,20 @@ joins:
       > `V2` TOUCHES · mig-rebind Delete @ internal/actuator/handlers_ai.go:241 ·
       ext.mig_agent · actuator.native.rotate · actuator.native.warm-swap · actuator.native.mig-rebind'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-72:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.guardrail
 
       > matched on `guardrail`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-89:
     kind: AFFECTS
     rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
@@ -862,8 +1001,10 @@ joins:
 
       > `V2` TOUCHES · kv-reset Update @ internal/actuator/handlers_ai.go:306 · actuator.native.kv-reset'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-55:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -872,24 +1013,30 @@ joins:
 
       > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-74:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.shadow_validation
 
       > matched on `validation`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-75:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.native.handlers
 
       > matched on `no anatomy token in the title; header tag `ACTUATION``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-90:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · api.v1alpha1
@@ -898,8 +1045,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.handlers'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-148:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · the 3 compensation rows with error_handling=DISCARDED:
@@ -929,8 +1078,10 @@ joins:
       · route-rotate Update @ internal/actuator/handlers_k8s.go:359 · route-rotate
       Update @ internal/actuator/handlers_k8s.go:365 (+9 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-35:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -941,8 +1092,10 @@ joins:
       · endpoint-rotate Update @ internal/actuator/handlers_k8s.go:493 · actuator.native.endpoint-rotate
       · ext.vllm · ext.mig_agent · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-36:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:351
@@ -953,8 +1106,10 @@ joins:
       · ext.guardrail · actuator.native.guardrail-rotate · runner.feedback · actuator.native.handlers
       · ext.mig_agent (+2 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-37:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · model-shard-replace Create @ internal/actuator/handlers_ai.go:100
@@ -968,8 +1123,10 @@ joins:
       · model-shard-replace Delete @ internal/actuator/handlers_ai_p4set.go:112 (+5
       more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-39:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · kv-migrate-invalidate MigrateRemote @ internal/actuator/handlers_ai_p4set.go:424
@@ -991,8 +1148,10 @@ joins:
       > `V2` TOUCHES · request-drain Update @ internal/actuator/handlers_ai_p4set.go:276
       · request-drain Update @ internal/actuator/handlers_ai_p4set.go:300 · actuator.native.request-drain'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-42:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
@@ -1001,8 +1160,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.kv-reset · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-43:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · killchain
@@ -1016,8 +1177,10 @@ joins:
       · model-shard-replace Delete @ internal/actuator/handlers_ai_p4set.go:112 (+8
       more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-95:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.phoenix
@@ -1027,8 +1190,10 @@ joins:
       > `V2` TOUCHES · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
       · recon · phoenix.module · actuator.native.adapter-rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-96:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · killchain
@@ -1037,8 +1202,10 @@ joins:
 
       > `V2` TOUCHES · actuator.phoenix · actuator.native.adapter-rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-34:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100
@@ -1050,24 +1217,30 @@ joins:
       · warm-swap Delete @ internal/actuator/handlers_ai.go:150 · warm-swap Update
       @ internal/actuator/handlers_ai.go:191 · recon (+1 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-105:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · killchain
 
       > matched on `no anatomy token in the title; header tag `KNOWLEDGE``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-45:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · recon
 
       > matched on `facts`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-44:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · rotate Delete @ internal/actuator/handlers_k8s.go:57
@@ -1076,8 +1249,10 @@ joins:
 
       > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-46:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.mig_agent
@@ -1086,8 +1261,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-3:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -1106,8 +1283,10 @@ joins:
       Update @ internal/actuator/handlers_k8s.go:493 · ext.mig_agent · ext.vllm ·
       ext.phoenix (+10 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-8:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.mig_agent
@@ -1116,8 +1295,10 @@ joins:
 
       > `V2` TOUCHES · deploy'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-21:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · phoenix:actuate SecurityEvent.Create @ internal/actuator/phoenix.go:140
@@ -1140,8 +1321,10 @@ joins:
 
       > `V2` TOUCHES · ext.mig_agent · actuator.router'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-123:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · api.v1alpha1
@@ -1153,8 +1336,10 @@ joins:
       Update @ internal/actuator/handlers_k8s.go:418 · route-rotate Update @ internal/actuator/handlers_k8s.go:448
       · recon · actuator.native (+5 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-6:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · api.v1alpha1
@@ -1164,8 +1349,10 @@ joins:
       > `V2` TOUCHES · deploy · feasibility · image.console · actuator.native.debugger
       · actuator.native.custom-inject'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-7:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -1179,8 +1366,10 @@ joins:
 
       > matched on `no anatomy token in the title; header tag `CONTRACT``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-126:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.policies
@@ -1190,8 +1379,10 @@ joins:
       > `V2` TOUCHES · console.server · ext.phoenix · api.v1alpha1 · cost.rls · actuator.native
       · console (+1 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-132:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.phoenix
@@ -1200,8 +1391,10 @@ joins:
 
       > `V2` TOUCHES · runner.policies · actuator.phoenix · actuator.native'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-53:
     kind: AFFECTS
     rendered: '> `V2` **AFFECTS** (below operation granularity) — see §V2-A.'
@@ -1214,8 +1407,10 @@ joins:
 
       > matched on `no anatomy token in the title; header tag `CONTROL``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-22:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.tick
@@ -1224,8 +1419,10 @@ joins:
 
       > `V2` TOUCHES · runner.policies · console.live · ci.release · ext.first_epss'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-86:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.tick
@@ -1238,16 +1435,26 @@ joins:
       @ internal/actuator/handlers_ai.go:150 · warm-swap Update @ internal/actuator/handlers_ai.go:191
       (+5 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-119:
     kind: LOCUS
-    rendered: '> `V2` **LOCUS** · runner.tick
+    rendered: '> `V2` **LOCUS** · ci.release
 
-      > matched on `no anatomy token in the title; header tag `CONTROL``'
+      > Issue explicitly names .github/workflows/ci.yml and missing Go test/vet jobs.'
     migration_source: legacy-v2-projection
     review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review_reason: Issue explicitly names .github/workflows/ci.yml and missing Go
+      test/vet jobs.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
+    previous_rendered: '> `V2` **LOCUS** · runner.tick
+
+      > matched on `no anatomy token in the title; header tag `CONTROL``'
+    locus: ci.release
+    reviewed_at: '2026-09-07'
+    review_source: issue body and anatomy NODES inventory at fb52e6c976df
   M-5:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
@@ -1264,8 +1471,10 @@ joins:
       > `V2` TOUCHES · rotate Create @ internal/actuator/phoenix.go:140 · ext.phoenix
       · cmd.main · runner.policies · actuator.phoenix · actuator.native.rotate'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-135:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · actuator.router
@@ -1275,8 +1484,10 @@ joins:
       > `V2` TOUCHES · runner.policies · ext.phoenix · controller · runner.assembly
       · actuator.phoenix'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-137:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.tick
@@ -1286,48 +1497,60 @@ joins:
       > `V2` TOUCHES · deploy · graph · controller · runner.policies · runner.feedback
       · console.live'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-103:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.tick
 
       > matched on `no anatomy token in the title; header tag `CONTROL``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-78:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.vllm
 
       > matched on `serving`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-91:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.tick
 
       > matched on `no anatomy token in the title; header tag `CONTROL``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-127:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.tick
 
       > matched on `no anatomy token in the title; header tag `CONTROL``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-128:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.policies
 
       > matched on `tenant`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-13:
     kind: ABSENCE
     rendered: '> `V2` **ABSENCE** — no positive locus: no Kubernetes Event is emitted
@@ -1341,8 +1564,10 @@ joins:
 
       > matched on `no anatomy token in the title; header tag `RECORD``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-125:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · cmd.main
@@ -1351,8 +1576,10 @@ joins:
 
       > `V2` TOUCHES · console'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-146:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · audit
@@ -1361,8 +1588,10 @@ joins:
 
       > `V2` TOUCHES · console · console.live'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-32:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · audit
@@ -1371,8 +1600,10 @@ joins:
 
       > `V2` TOUCHES · phoenix.module'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-16:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · audit
@@ -1384,16 +1615,20 @@ joins:
       @ internal/actuator/handlers_k8s.go:165 · quarantine Delete @ internal/actuator/handlers_k8s.go:169
       · quarantine Create @ internal/actuator/phoenix.go:140 · actionset (+7 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-17:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.feedback
 
       > matched on `rotation`'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-18:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.phoenix
@@ -1402,8 +1637,10 @@ joins:
 
       > `V2` TOUCHES · actuator.phoenix · runner · audit'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-19:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · runner.feedback
@@ -1414,35 +1651,52 @@ joins:
       · guardrail-rotate Update @ internal/actuator/handlers_ai_p4set.go:375 · ext.guardrail
       · runner · actionset · audit (+4 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-100:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · decision.coverage
 
       > matched on `no anatomy token in the title; header tag `CHOICE``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-102:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · decision.coverage
 
       > matched on `no anatomy token in the title; header tag `CHOICE``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-131:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · decision.coverage
 
       > matched on `no anatomy token in the title; header tag `CHOICE``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-117:
     kind: LOCUS
-    rendered: '> `V2` **LOCUS** · console.attack
+    rendered: '> `V2` **LOCUS** · feasibility
+
+      > The issue concerns absence of feasible actions for a single-replica stateful
+      workload.'
+    migration_source: legacy-v2-projection
+    review: complete
+    review_reason: The issue concerns absence of feasible actions for a single-replica
+      stateful workload.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
+    previous_rendered: '> `V2` **LOCUS** · console.attack
 
       > matched on `attack`
 
@@ -1451,9 +1705,9 @@ joins:
       @ internal/actuator/handlers_k8s.go:165 · quarantine Delete @ internal/actuator/handlers_k8s.go:169
       · quarantine Create @ internal/actuator/phoenix.go:140 · actuator.native.rotate
       (+1 more)'
-    migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    locus: feasibility
+    reviewed_at: '2026-09-07'
+    review_source: issue body and anatomy NODES inventory at fb52e6c976df
   M-136:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · bin.kubectl
@@ -1463,8 +1717,10 @@ joins:
       > `V2` TOUCHES · cmd.console · ext.vllm · applier · belief · cmd.main · deploy
       (+8 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-4:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · console
@@ -1473,8 +1729,10 @@ joins:
 
       > `V2` TOUCHES · actuator.native · console.server'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-147:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · route-rotate Service.Update @ internal/actuator/handlers_k8s.go:365
@@ -1496,8 +1754,10 @@ joins:
 
       > matched on `no anatomy token in the title; header tag `ECONOMICS``'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-149:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · killchain
@@ -1507,8 +1767,10 @@ joins:
       > `V2` TOUCHES · ext.vllm · ext.prometheus · ingest · cmd.main · feasibility
       · audit (+5 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-150:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ingest
@@ -1517,8 +1779,10 @@ joins:
 
       > `V2` TOUCHES · runner.policies · platform · console.server'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-151:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ingest
@@ -1527,8 +1791,10 @@ joins:
 
       > `V2` TOUCHES · cmd.p3report · ext.vllm'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-152:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · audit
@@ -1538,8 +1804,10 @@ joins:
       > `V2` TOUCHES · ingest · ext.vllm · ext.prometheus · platform · actuator.phoenix
       · metrics (+1 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-153:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · recon
@@ -1563,8 +1831,10 @@ joins:
 
       > `V2` TOUCHES · runner.feedback · runner.killswitch'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-155:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.phoenix
@@ -1574,8 +1844,10 @@ joins:
       > `V2` TOUCHES · ext.k8s · controller · redteam · actuator.phoenix · audit ·
       console.attack (+10 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-157:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · ext.first_epss
@@ -1584,8 +1856,10 @@ joins:
 
       > `V2` TOUCHES · recon · model · slo.contract · console · ci.release · phoenix.module'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-158:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · model
@@ -1595,18 +1869,28 @@ joins:
       > `V2` TOUCHES · api.v1alpha1 · controller · console.live · dashboard.api ·
       ext.first_epss'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-159:
     kind: LOCUS
-    rendered: '> `V2` **LOCUS** · ext.kv_local
+    rendered: '> `V2` **LOCUS** · ci.release
+
+      > Issue explicitly names .github/workflows/ci.yml and missing Go test/vet jobs.'
+    migration_source: legacy-v2-projection
+    review: complete
+    review_reason: Issue explicitly names .github/workflows/ci.yml and missing Go
+      test/vet jobs.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
+    previous_rendered: '> `V2` **LOCUS** · ext.kv_local
 
       > matched on `local`
 
       > `V2` TOUCHES · deploy · recon · cmd.main · killchain · image.console · ci.release'
-    migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    locus: ci.release
+    reviewed_at: '2026-09-07'
+    review_source: issue body and anatomy NODES inventory at fb52e6c976df
   M-160:
     kind: LOCUS
     rendered: '> `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -1618,8 +1902,10 @@ joins:
       @ internal/actuator/handlers_k8s.go:169 · quarantine Create @ internal/actuator/phoenix.go:140
       · ext.vllm · ext.phoenix (+22 more)'
     migration_source: legacy-v2-projection
-    review: complete
-    accepted_at: legacy Anatomy V2 join review, bus 228
+    review: required
+    review_reason: Keyword-derived suggestion; migration preserves it without certifying
+      its meaning.
+    historical_acceptance: legacy Anatomy V2 join review, bus 228
   M-97:
     kind: CLOSED
     rendered: '> `V2` **CLOSED** — administratively closed in the register; not projected
