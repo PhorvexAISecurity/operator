@@ -57,6 +57,21 @@ func allVarsAt(d time.Duration) map[string]time.Duration {
 	return m
 }
 
+// realisticClocks returns ONLY the always-on exposure clocks (podIdentity, nodePlacement, session)
+// at d — the exposure state ExposureFingerprints emits for an UNACTUATED pod, whose 6 *-epoch
+// markers (networkIdentity/quarantine, routeKey, identity, adapter, drain, guardrail) are absent
+// until their first actuation. allVarsAt fabricates those 6 too, which pre-dates the M-28
+// proactive-cadence cap; a fresh-decoy fixture must use this so the cap fail-OPENs on the
+// epoch-clocked actions (quarantine/route/…) — exactly where M-110's provenance floor, not M-28,
+// governs the first move. (M-28 governs re-actuation on podIdentity/session and written epochs.)
+func realisticClocks(d time.Duration) map[string]time.Duration {
+	return map[string]time.Duration{
+		model.VarPodIdentity:   d,
+		model.VarNodePlacement: d,
+		model.VarSession:       d,
+	}
+}
+
 func covView(name string, secrets bool, exposure time.Duration, stateful bool) *model.WorkloadView {
 	v := &model.WorkloadView{
 		Pod: model.Pod{

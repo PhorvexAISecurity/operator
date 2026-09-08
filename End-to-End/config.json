@@ -33,7 +33,8 @@
     "stream_seconds": 12,
     "post_attack_seconds": 45,
     "settle_seconds": 6,
-    "max_bytes": 8000000
+    "_max_bytes_comment": "Full decision traces exhausted 8 MB in ~36s on EKS; budget 16 MB for the bounded 51s live observation, still fail explicitly if exhausted.",
+    "max_bytes": 16000000
   },
   "invariants": {
     "net_identity_tolerance": 0.005,
@@ -139,6 +140,10 @@
       "name": "voicebot",
       "namespace": "voice",
       "kind": "workload",
+      "detector": {
+        "identity": "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector",
+        "selector": "r6th.io/rotation-target=true"
+      },
       "attack": {
         "path": "/api/workload/attack",
         "body": {
