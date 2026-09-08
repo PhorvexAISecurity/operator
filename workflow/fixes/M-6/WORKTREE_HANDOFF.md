@@ -1,5 +1,7 @@
 # M6 bootstrap handoff / workflow PR
 
+PR delivery complete: product [#143](https://github.com/PhorvexSecurity/operator/pull/143) and workflow [144](https://github.com/PhorvexSecurity/operator/pull/144). Both remain unmerged; shared-dev L3/L4 are required and pending.
+
 Authorized by Mehrdad on 2026-09-08: commit/push the workflow changes; when the M6 PR is ready,
 open the docs/workflow PR too. Do not open the workflow PR early or infer merge permission.
 Coordinator owns this follow-up; it is part of the active delivery, not a request for another approval.

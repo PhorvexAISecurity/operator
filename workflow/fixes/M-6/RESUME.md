@@ -8,7 +8,9 @@ GREEN ran through real handlers on isolated Kubernetes 1.36.2; see evidence/inci
 Current roles: Claude implements; codex-m006 independently reviews/verifies and
 coordinates. Current record root remains this bootstrap workflow checkout.
 
-Next: coordinator opens the companion docs/workflow PR. Neither PR is merge or
+Companion workflow PR: https://github.com/PhorvexSecurity/operator/pull/144
+
+Next: await separately authorized merges, then perform WORKTREE_HANDOFF. Neither PR is merge or
 shared deployment authorization. L3/L4 are REQUIRED and PENDING; old unsigned
 verification display strings are not waivers. The signed required-level contract
 and checks govern acceptance.

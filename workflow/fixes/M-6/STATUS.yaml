@@ -1,6 +1,6 @@
 schema_version: 1
 protocol_version: 2
-revision: 58
+revision: 59
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -159,10 +159,11 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: 'M6 PR #143 opened. Open companion workflow PR with current evidence snapshot.
-    L3/L4 required and pending, no waiver; after authorized merges perform WORKTREE_HANDOFF
-    and separately authorized live verification. No merge/deploy.'
-updated_at: '2026-09-08T22:19:26+00:00'
+  action: 'Both PRs open: product #143 and workflow https://github.com/PhorvexSecurity/operator/pull/144.
+    Await separately authorized merges; follow WORKTREE_HANDOFF, preserve latest evidence,
+    then continue separately authorized shared-dev L3/L4 in the retained issue branch.
+    No merge/deploy authority implied.'
+updated_at: '2026-09-08T22:21:34+00:00'
 configuration_history:
 - at: '2026-09-08T17:48:57+00:00'
   by: codex-m006
@@ -260,6 +261,11 @@ configuration_history:
   by: codex-m006
   fields:
   - pull_request
+  approval_ref: null
+- at: '2026-09-08T22:21:34+00:00'
+  by: codex-m006
+  fields:
+  - next_action
   approval_ref: null
 transitions:
 - from: TRIAGED
