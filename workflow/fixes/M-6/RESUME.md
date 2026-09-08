@@ -1,8 +1,9 @@
 # M6 continuation
 
 State: IN_PR. Product PR: https://github.com/PhorvexSecurity/operator/pull/143
-Reviewed head: `9eb14271625620aef6b6184386764e29f0d71ea3`.
-Independent incident/P3 and implementer offline checks PASS. Baseline RED and head
+Reviewed head: `bfe559b92a46fc5015c62e63111dfb6aaa011bfa`.
+Independent incident/P3 and implementer offline checks PASS. Packaging synchronization
+was corrected, independently checked and pushed; new GitHub CI is pending. Baseline RED and head
 GREEN ran through real handlers on isolated Kubernetes 1.36.2; see evidence/incident.md.
 
 Current roles: Claude implements; codex-m006 independently reviews/verifies and

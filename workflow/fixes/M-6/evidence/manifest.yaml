@@ -365,114 +365,6 @@ artifacts:
   positive_control_for: null
   retention: git
   sensitivity: null
-- id: check-implementation
-  path: 04-diff.patch
-  sha256: e37bba0b63573df69318d85ab793329f6b2e90816f38e17aee6d35cc9b761b38
-  bytes: 133667
-  producer: claude
-  created_at: '2026-09-08T22:05:06+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: git diff --binary 5a0fd3f 9eb1427; go build ./...; no unrelated edits
-  evidence_class: IMPLEMENTATION
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
-- id: check-l0
-  path: evidence/l0-l2/green-head.log
-  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
-  bytes: 5213
-  producer: claude
-  created_at: '2026-09-08T22:05:07+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: go build ./...; go vet; go test ./internal/codeexec/ (content vs trusted
-    contract incl server-defaulting/Cluster-scope; CEL semantic; Helm render) ./internal/capability/
-    ./internal/actuator/
-  evidence_class: L0
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
-- id: check-l1
-  path: evidence/l0-l2/green-head.log
-  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
-  bytes: 5213
-  producer: claude
-  created_at: '2026-09-08T22:05:07+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: go test -v ./internal/codeexec/ (Verify/TTL/epoch/FinalCheck token+live-scope+invalidation/Drift/CEL/Helm);
-    runner M99/pre-submit invariants
-  evidence_class: L1
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
-- id: check-l2
-  path: evidence/l0-l2/green-head.log
-  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
-  bytes: 5213
-  producer: claude
-  created_at: '2026-09-08T22:05:07+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: go test ./internal/... ./cmd/... exit 0 (M99 coexistence); reviewer-rev2-overlay-green.log
-    = skeptic rev2 adversarial overlay PASSES at head; helm-render-{enabled,disabled}.yaml
-  evidence_class: L2
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
-- id: check-positive_control
-  path: evidence/l0-l2/green-head.log
-  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
-  bytes: 5213
-  producer: claude
-  created_at: '2026-09-08T22:05:07+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: 'positive controls: TestServerDefaultedContractAccepted; TestEnforcementContentDriftRejected
-    control; TestCELAllowsCompliantRequests; TestHelmRenderEnabled==trusted; TestCodeExecPreSubmitGateFailsClosed
-    (c) actuates'
-  evidence_class: CONTROL
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
-- id: check-incident
-  path: evidence/incident.md
-  sha256: b013e073a004b6b865b755ff30bdf30553125426ad46f2f8195e10f582622c60
-  bytes: 4995
-  producer: codex-m006
-  created_at: '2026-09-08T22:13:12+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: Same real-handler envtest overlay at original baseline 79c0370 and head
-    9eb1427 on isolated Kubernetes v1.36.2; exact commands in evidence/incident.md;
-    baseline exit 1 at intended profile assertions, head exit 0
-  evidence_class: INCIDENT
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
-- id: check-p3
-  path: evidence/p3/verdict.md
-  sha256: a0710e34634aa9647bd7a5ddf5a2d8c628e6d99bdc806a3beddb3c16927e2693
-  bytes: 2395
-  producer: codex-m006
-  created_at: '2026-09-08T22:13:12+00:00'
-  source_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
-  command: Independent rev2 adversarial overlay at 9eb1427; four impacted package
-    suites with Helm; real baseline/head API incident; exact commands in retained
-    evidence
-  evidence_class: P3
-  expected_result: PASS
-  actual_result: PASS
-  positive_control_for: null
-  retention: git
-  sensitivity: null
 - id: check-red
   path: evidence/incident-local/baseline.log
   sha256: 0c2f7af5bce0370a3d93f73a63920766d84cf9c789b0be347993a5189af0e6c7
@@ -486,6 +378,116 @@ artifacts:
     — API accepted mutable/unhardened producer; head exit 0). red-attestation.md retained
     as historical qualified evidence.'
   evidence_class: RED
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-implementation
+  path: 04-diff.patch
+  sha256: c79efd09c2a18ff2d6a7d5939ec03bcfc9c6da70c50b44eb1ae6d519a6b2d340
+  bytes: 191926
+  producer: claude
+  created_at: '2026-09-08T22:31:56+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: git diff --binary 5a0fd3f bfe559b; go build ./...; delta vs reviewed 9eb1427
+    is ONLY the vendored deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz (git diff
+    --stat = 1 Bin file, 0 source lines) — repackaged from the already-reviewed chart
+    source
+  evidence_class: IMPLEMENTATION
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l0
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:31:56+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: go build/vet + go test ./internal/codeexec/ (CEL+Helm) ./internal/capability/
+    ./internal/actuator/ at bfe559b; source byte-identical to reviewed 9eb1427
+  evidence_class: L0
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l1
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:31:57+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: go test -v ./internal/codeexec/ + runner M99/pre-submit invariants at bfe559b
+    (source identical to 9eb1427)
+  evidence_class: L1
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l2
+  path: evidence/l0-l2/chart-sync.log
+  sha256: bcb6566589d51a99ff181a658b400d502003024a04c00157d743fc42707c4a2f
+  bytes: 550
+  producer: claude
+  created_at: '2026-09-08T22:31:57+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: 'go test ./internal/... ./cmd/... exit 0 at bfe559b; PLUS chart-sync: diff
+    -r vendored phorvex-0.1.4.tgz vs phorvex/charts/phorvex clean + tools/test_chart_sync.py
+    OK (evidence/l0-l2/chart-sync.log)'
+  evidence_class: L2
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-positive_control
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:31:57+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: positive controls unchanged at bfe559b (TestServerDefaultedContractAccepted;
+    TestCELAllowsCompliantRequests; TestHelmRenderEnabled==trusted; pre-submit case
+    (c) actuates)
+  evidence_class: CONTROL
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-incident
+  path: evidence/incident.md
+  sha256: dffe16884f9e5cb6416f731c3e41259c760acfe3c79cfb0d9e7b6d5f083f3402
+  bytes: 5561
+  producer: codex-m006
+  created_at: '2026-09-08T22:55:31+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: cd /home/mehrdad/operator-m006/phorvex && /usr/local/go/bin/go test -mod=mod
+    -modfile=/tmp/phorvex-m6-head.mod -overlay=/home/mehrdad/operator-workflow/workflow/fixes/M-6/evidence/incident-local/head-overlay.json
+    ./internal/actuator -run TestReviewerRealAPIIncident -count=1 -v
+  evidence_class: INCIDENT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-p3
+  path: evidence/p3/verdict.md
+  sha256: 2b6cd42982e546ceb13a5db38d121918f7ab20bd020063452f327b5bfc8db663
+  bytes: 1978
+  producer: codex-m006
+  created_at: '2026-09-08T22:55:31+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: Independent archive-member comparison; all chart-sync CI shell steps; retained
+    TestReviewer overlay; real API incident at bfe559b. Evidence in evidence/p3/packaging.
+  evidence_class: P3
   expected_result: PASS
   actual_result: PASS
   positive_control_for: null

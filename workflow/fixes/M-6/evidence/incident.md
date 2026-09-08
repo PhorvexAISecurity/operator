@@ -1,5 +1,7 @@
 # M6 independent incident proof — PASS
 
+**Packaging review:** current head `bfe559b92a46fc5015c62e63111dfb6aaa011bfa` adds only the vendored Phorvex chart archive to prior reviewed `9eb1427`. All chart members match approved source (Chart.yaml parsed equality). The SAME real-API head incident command below was independently rerun at bfe559b and passed; output retained in `p3/packaging/incident-head.log`. Original baseline evidence is unchanged. The account below describes the original baseline/head comparison and its limits. Archive comparison and CI-equivalent chart checks are in `p3/packaging/`.
+
 Reviewer: codex-m006. Original baseline `79c0370dd460a1d6400bc62346638655f64ae709`;
 reviewed implementation base `5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9`;
 head `9eb14271625620aef6b6184386764e29f0d71ea3`.

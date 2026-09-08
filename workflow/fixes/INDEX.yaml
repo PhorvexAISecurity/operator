@@ -174,4 +174,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: parallel/contract-m006-code-exec-admission
-    head_sha: 9eb14271625620aef6b6184386764e29f0d71ea3
+    head_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa

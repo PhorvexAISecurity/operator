@@ -1,36 +1,33 @@
-# M6 independent implementation review — PASS (round 3)
+# M6 independent packaging review — PASS
 
-Reviewer: codex-m006. Head `9eb14271625620aef6b6184386764e29f0d71ea3`;
-implementation base `5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9`.
-Original blind derivation/decision unchanged. Failed reviews are retained in rev1/rev2.
+Reviewer: codex-m006. Current head `bfe559b92a46fc5015c62e63111dfb6aaa011bfa`;
+previous reviewed head `9eb14271625620aef6b6184386764e29f0d71ea3`;
+base `5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9`.
+Prior full reviews retained in rev1/rev2/rev3.
 
-All round-1/2 blocking findings are resolved: complete typed spec comparison now
-canonicalizes actual server defaults without erasing incompatible scope/selector
-values; final scope uses an uncached target namespace GET and rechecks its token
-(epoch, TTL, deadline); namespace read failures invalidate; extra securityContext
-fields are denied. The source diff remains scoped to M6 and companion hardening,
-with the M99 eligibility precedence and unrelated action paths preserved.
+The only delta is deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz. All 15
+archive members match approved source: Chart.yaml compares as parsed YAML because
+Helm reorders metadata; other files are byte-identical. CI's own recursive source
+comparison also passes, including missing/extra-file detection. Phoenix archive,
+application sources, policy contract and chart sources are unchanged.
 
-Independent reruns at this head:
-- Retained rev2 adversarial overlay: all tests PASS, including actual dev API-returned
-  defaulted policy/binding positive controls. `rev3/adversarial.log`.
-- Codeexec, runner, capability and actuator suites PASS with HELM_BIN explicitly set;
-  actual chart rendering and CEL tests ran. `rev3/author-tests.log`.
-- Real baseline/head producer incident against isolated Kubernetes v1.36.2:
-  baseline RED at intended assertions, head GREEN; nine attributed admission rule
-  families and legitimate controls. Signed `../incident.md` provides commands,
-  substitutions, fixture relevance and precise limits.
-- Exact base-to-head diff inspected; git diff --check clean. Product source untouched.
+Independent checks at current head:
+- Every shell run step of .github/workflows/ci.yml's chart-sync job passes with
+  Helm available (v3.16.2 locally; CI configures v3.16.4). This includes umbrella
+  rendering, vendored comparison and chart/E2E-fixture regression tests.
+- Retained reviewer adversarial overlay passes.
+- Real-handler incident rerun against isolated Kubernetes v1.36.2 passes for both
+  producers and all nine admission rule families; legitimate controls remain valid.
+  The original baseline RED remains pinned to 79c0370.
 
-This is implementation/P3 acceptance for PR delivery, not deployed verification or
-closure. Local API tests do not replace shared-dev deployment provenance, effective
-permission migration, full brain/dispatch integration and L4 timing/soak. Admission
-installation/action enablement remain off by default and separately authorized.
-The known final-check-to-submit/API propagation residual is unchanged from the
-approved contract. No new waiver or accepted-risk decision is introduced.
+Evidence: packaging/{archive-comparison.json,chart-sync.log,adversarial.log,
+incident-head.log}; exact incident/adversarial commands are unchanged from the
+previous review, with outputs retained at these new paths. Incident PASS is
+reconfirmed and source-bound to current head; this is not an assertion that the
+old archive already contained the fix.
 
-The previously missing original baseline behavior is now supplied by independent
-incident-local/baseline.log. Implementer should bind the red check to that executed
-baseline evidence rather than the earlier mutation-only attestation before offline
-acceptance is advanced. Once that owned attestation is corrected, proceed to PR_READY
-and open the authorized product PR; then open the workflow PR as requested by Mehrdad.
+Approve pushing this append-only packaging commit to existing PR #143. Updated
+GitHub CI must run. Prior E2E failed at missing console service endpoints before
+M6 behavior; it remains unresolved until a real rerun proves recovery. No merge,
+shared deployment, execution grant or L3/L4 waiver is authorized. Post-deployment
+integration and timing/soak remain required. Workflow PR #144 retains the record.
