@@ -16,6 +16,7 @@
     "next_action"
   ],
   "properties": {
+    "change_class": {"enum": [null, "A", "B"]},
     "schema_version": {
       "const": 1
     },

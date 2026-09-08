@@ -31,8 +31,8 @@ reuse it; do not invent approvals. A gate is missing authorization or evidence,
 not an excuse to stop ordinary authorized work. Unknown requests remain
 read-only until classified. Ambiguous duplicate root causes need a ruling.
 
-A code fix completes after independent review, required verification and
-release/issue synchronization. An intake completes as duplicate/filed/rejected/
+A named-fix request defaults to reviewed PR delivery (`IN_PR`); issue closure
+still requires verification and release synchronization. Intake completes as duplicate/filed/rejected/
 unavailable; a campaign after review and cleanup. Main synchronization ends at
 `MAIN_RECORDED`; deployed reconciliation at `RECONCILED` or a recorded blocker.
 An audit ends with a sourced answer and no repair. A harness change ends with

@@ -1263,8 +1263,26 @@ def cmd_configure(args: argparse.Namespace) -> int:
         existing_roles = status.get("roles", {})
         initialized = any(gates.assigned(v) for v in existing_roles.values())
         authority = existing_roles if initialized else roles
-        if args.by not in {authority.get("coordinator"), authority.get("human_owner")} :
-            raise ValueError("only assigned coordinator/human_owner may configure")
+        if args.by not in {authority.get("coordinator"), authority.get("human_owner")}:
+            # Authors may record their own source pins, never roles, approvals or review results.
+            pins = update.get("implementation", {})
+            if (args.by != authority.get("implementer") or set(update) != {"implementation"}
+                    or not isinstance(pins, dict) or not pins
+                    or set(pins) - {"branch", "base_sha", "head_sha"}):
+                raise ValueError("implementer may configure only implementation branch/base/head")
+            if status.get("state") not in {"AGREED", "IMPLEMENTED", "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED", "PR_READY", "IN_PR"}:
+                raise ValueError("implementation pins require an agreed contract")
+            impl = {**status.get("implementation", {}), **pins}
+            for key in ("base_sha", "head_sha"):
+                if impl.get(key):
+                    commit = subprocess.run(["git", "-C", str(ROOT.parent), "rev-parse", "--verify",
+                                             f"{impl[key]}^{{commit}}"], capture_output=True, text=True)
+                    if commit.returncode or commit.stdout.strip() != impl[key]:
+                        raise ValueError(f"implementation.{key} must be an existing full commit SHA")
+            if impl.get("base_sha") and impl.get("head_sha"):
+                if subprocess.run(["git", "-C", str(ROOT.parent), "merge-base", "--is-ancestor",
+                                   impl["base_sha"], impl["head_sha"]], capture_output=True).returncode:
+                    raise ValueError("implementation head must descend from its base")
         if "approvals" in update and not getattr(args, "approval_ref", None):
             raise ValueError("recording approval scopes requires the user's approval reference")
         if "verification" in update:
@@ -1284,6 +1302,10 @@ def cmd_configure(args: argparse.Namespace) -> int:
             'at': now, 'by': args.by, 'fields': sorted(update),
             'approval_ref': getattr(args, 'approval_ref', None),
         })
+        errors: list[str] = []
+        validate_schema_instance("fix-status.schema.json", status, args.fix_id, errors)
+        if errors:
+            raise ValueError("; ".join(errors))
         index_path = FIXES / 'INDEX.yaml'
         with workflow_transaction([path, index_path]):
             write_yaml(path, status)
@@ -1318,7 +1340,7 @@ def cmd_record_check(args: argparse.Namespace) -> int:
             status.get("roles", {}).get("proposer"), status.get("roles", {}).get("implementer")
         }:
             raise ValueError("independent review cannot be signed by an author")
-        if key in {"critique", "decision"} and status.get("profile") != "legacy-migrated":
+        if key in {"critique", "decision", "base_review"} and status.get("profile") != "legacy-migrated":
             blind = status.get("blind_derivation", {})
             blind_path = gates.local_file(fix, "02A-blind-derivation.md")
             if blind.get("status") != "sealed" or not blind_path or blind.get("sha256") != sha256(blind_path):
@@ -1336,7 +1358,7 @@ def cmd_record_check(args: argparse.Namespace) -> int:
             check["attack_plan_sha256"] = sha256(fix / "attack-plan.yaml")
         if key == "decision":
             check["contract_sha256"] = gates.contract_digest(status)
-        if key == "incident":
+        if key in {"incident", "base_review"}:
             check["baseline_sha"] = status.get("baseline", {}).get("code_sha")
             if not check["baseline_sha"]:
                 raise ValueError("pin the incident baseline before recording evidence")
@@ -1360,7 +1382,7 @@ def cmd_record_check(args: argparse.Namespace) -> int:
             rows = manifest.setdefault("artifacts", [])
             record = {"id": f"check-{key}", "path": args.artifact, "sha256": check["sha256"],
                       "bytes": artifact.stat().st_size, "producer": args.by, "created_at": now,
-                      "source_sha": source, "command": args.command, "evidence_class": {"critique": "DESIGN", "decision": "DESIGN", "implementation": "IMPLEMENTATION",
+                      "source_sha": source, "command": args.command, "evidence_class": {"critique": "DESIGN", "decision": "DESIGN", "base_review": "DESIGN", "implementation": "IMPLEMENTATION",
                                          "positive_control": "CONTROL", "final": "FINAL",
                                          "patch_equivalence": "EQUIVALENCE"}.get(key, key.upper()),
                       "expected_result": "PASS", "actual_result": args.result,
@@ -1397,8 +1419,8 @@ def cmd_packet(args: argparse.Namespace) -> int:
         return 1
     blind = "skeptic" in roles and status.get("blind_derivation", {}).get("status") == "pending"
     state = status.get("state")
-    phase = ("design" if state in {"TRIAGED", "DESIGNING", "CRITIQUED", "AGREED"}
-             else "verify" if state in {"IMPLEMENTED", "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED"}
+    phase = ("design" if state in {"TRIAGED", "DESIGNING", "CRITIQUED"}
+             else "verify" if state in {"AGREED", "IMPLEMENTED", "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED"}
              else "release")
     read = [f"fixes/{fix_id}/STATUS.yaml", f"stages/{phase}.md"]
     read += [f"issues/entries/{pad_issue(i)}.md" for i in status.get("issues", [])]
@@ -1414,12 +1436,14 @@ def cmd_packet(args: argparse.Namespace) -> int:
         scopes = {
             "design": {"proposer": ["01-proposal.md"], "skeptic": ["02A-blind-derivation.md", "02B-critique.md", "03-decision.md"]},
             "verify": {"implementer": ["implementation code/tests", "04-diff.patch", "05-evidence.md", "evidence/"],
-                       "skeptic": ["evidence/p3/verdict.md"]},
+                       "skeptic": ["evidence/incident.md", "evidence/base-review.md", "evidence/p3/verdict.md"]},
             "release": {"live_verifier": ["evidence/l3/", "evidence/l4/"], "skeptic": ["06-verdict.md"]},
         }
         write = [path for role in roles for path in scopes[phase].get(role, [])]
         if "coordinator" in roles:
             write += ["STATUS.yaml via commands", "issue/release synchronization"]
+        elif "implementer" in roles:
+            write += ["implementation branch/base/head via configure"]
         action = status.get("next_action", {}).get("action")
         for name in {"design": ["02A-blind-derivation.md", "01-proposal.md", "02B-critique.md"],
                      "verify": ["03-decision.md", "04-diff.patch", "05-evidence.md", "evidence/incident.md"],
@@ -1427,6 +1451,7 @@ def cmd_packet(args: argparse.Namespace) -> int:
             if (FIXES / fix_id / name).is_file(): read.append(f"fixes/{fix_id}/{name}")
     packet = {"fix": fix_id, "participant": args.agent, "roles": roles, "state": state,
               "revision": status.get("revision", 0), "baseline": status.get("baseline", {}),
+              "default_delivery_target": "IN_PR", "pr_open_authorized": bool(status.get("approvals", {}).get("pr_open")),
               "read": read, "write_scope": write, "do_not_read": forbidden,
               "next_owner": status.get("next_action", {}).get("owner"), "next_action": action,
               "handoff": "record result + source/hash; transition with expected revision; send artifact refs only"}
@@ -1622,6 +1647,40 @@ def cmd_seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def fix_delivery_ref() -> str | None:
+    policy = load_yaml(OPERATIONS / "POLICY.yaml") or {}
+    delivery = policy.get("fix_delivery", {})
+    if delivery.get("target") != "IN_PR":
+        return None
+    reference = delivery.get("authorization_ref")
+    if not reference or not gates.local_file(ROOT, reference):
+        raise ValueError("autonomous PR delivery requires a retained authorization reference")
+    return reference
+
+
+@serialized
+def cmd_start(args: argparse.Namespace) -> int:
+    """Apply the standing PR-delivery scope to an already selected fix; never waive gates."""
+    try:
+        validate_fix_id(args.fix_id)
+        reference = fix_delivery_ref()
+        if not reference:
+            raise ValueError("no standing PR-delivery authorization configured")
+        status = load_yaml(FIXES / args.fix_id / "STATUS.yaml")
+        if not status:
+            raise ValueError("select/create a fix before start")
+        if status.get("state") in {"HELD", "DEFERRED", "CLOSED", "ACCEPTED_RISK", "INVALIDATED", "BLOCKED"}:
+            raise ValueError("start does not silently resume a held, terminal or blocked fix")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", encoding="utf-8") as temp:
+            yaml.safe_dump({"approvals": {"pr_open": reference}}, temp)
+            temp.flush()
+            return cmd_configure(argparse.Namespace(fix_id=args.fix_id, file=temp.name, by=args.by,
+                                 expect_revision=args.expect_revision, approval_ref=reference))
+    except (ValueError, OSError) as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
+
+
 def create_fix_record(
     fix_id: str,
     issue_ids: list[str],
@@ -1661,6 +1720,9 @@ def create_fix_record(
     status["fix_id"] = fix_id
     status["issues"] = issue_ids
     status["title"] = title or "UNSET — complete 00-intake.md"
+    reference = fix_delivery_ref()
+    if reference:
+        status.setdefault("approvals", {})["pr_open"] = reference
     if follow_up_to:
         status["follow_up_to"] = follow_up_to
     status["updated_at"] = utcnow()
@@ -4247,6 +4309,12 @@ def build_parser() -> argparse.ArgumentParser:
     configure.add_argument("--expect-revision", required=True, type=int)
     configure.add_argument("--approval-ref")
     configure.set_defaults(func=cmd_configure)
+
+    start = sub.add_parser("start", help="record standing scope through reviewed PR delivery for an existing fix")
+    start.add_argument("fix_id")
+    start.add_argument("--by", required=True)
+    start.add_argument("--expect-revision", required=True, type=int)
+    start.set_defaults(func=cmd_start)
 
     check = sub.add_parser("record-check", help="sign and hash a retained fix artifact")
     check.add_argument("fix_id")

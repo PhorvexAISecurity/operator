@@ -14,9 +14,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from transport import shared_root
 
 
-ROOT = Path(__file__).resolve().parent
+SCRIPT = Path(__file__).resolve()
+LOCAL = SCRIPT.parent
+WORKFLOW_ROOT = LOCAL.parent
+ROOT = shared_root(LOCAL)
 INBOX = ROOT / "inbox"
 ARCHIVE = ROOT / "archive"
 LOCK = ROOT / ".bus.lock"
@@ -29,7 +34,10 @@ def utc() -> str:
 
 
 def agents() -> set[str]:
-    data = yaml.safe_load((ROOT / "AGENTS.yaml").read_text(encoding="utf-8"))
+    registry = ROOT / "AGENTS.yaml"
+    if not registry.exists():
+        registry = LOCAL / "AGENTS.yaml"
+    data = yaml.safe_load(registry.read_text(encoding="utf-8"))
     return {a["id"] for a in data["agents"] if a.get("active")}
 
 
@@ -39,6 +47,7 @@ def validate_agent(agent: str) -> None:
 
 
 def next_id() -> int:
+    ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     LOCK.touch()
     with LOCK.open("r+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -96,6 +105,7 @@ def cmd_send(args: argparse.Namespace) -> int:
         "needs_reply": args.needs_reply,
         "subject_line": args.subject,
         "refs": args.ref,
+        "workflow_root": str(WORKFLOW_ROOT),
     }
     body = args.body or ""
     if args.body_file:
@@ -173,7 +183,7 @@ def cmd_ack(args: argparse.Namespace) -> int:
 
 
 def cmd_monitor(args: argparse.Namespace) -> int:
-    known = set() if args.existing else {p.name for p in inbox_files(args.agent)}
+    known = {p.name for p in inbox_files(args.agent)} if args.new_only else set()
     print(f"BUS_MONITOR_READY {args.agent}", flush=True)
     while True:
         current = {p.name for p in inbox_files(args.agent)}
@@ -181,6 +191,59 @@ def cmd_monitor(args: argparse.Namespace) -> int:
             print(f"BUS_MESSAGE_READY {INBOX / args.agent / name}", flush=True)
         known = current
         time.sleep(args.interval)
+
+
+def positive_seconds(value: str) -> float:
+    number = float(value)
+    if not 0 < number <= 60:
+        raise argparse.ArgumentTypeError("must be greater than 0 and at most 60 seconds")
+    return number
+
+
+def cmd_wait(args: argparse.Namespace) -> int:
+    """Finite foreground wait: completion is surfaced even by non-streaming runners."""
+    deadline = time.monotonic() + args.timeout
+    while True:
+        pending = inbox_files(args.agent)
+        if pending:
+            for path in pending:
+                print(f"BUS_MESSAGE_READY {path}", flush=True)
+            return 0
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print(f"BUS_WAIT_TIMEOUT {args.agent}", flush=True)
+            return 0
+        time.sleep(min(args.interval, remaining))
+
+
+def cmd_layout(args: argparse.Namespace) -> int:
+    print(f"workflow_root: {WORKFLOW_ROOT}\nbus_root: {ROOT}")
+    return 0
+
+
+def cmd_register(args: argparse.Namespace) -> int:
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", args.agent):
+        raise SystemExit("unsafe agent id")
+    ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with LOCK.open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        registry = ROOT / "AGENTS.yaml"
+        source = registry if registry.exists() else LOCAL / "AGENTS.yaml"
+        data = yaml.safe_load(source.read_text())
+        matches = [entry for entry in data["agents"] if entry["id"] == args.agent]
+        if matches:
+            if not matches[0].get("active"):
+                raise SystemExit("agent is inactive; resolve its registration explicitly")
+        else:
+            data["agents"].append({"id": args.agent, "kind": "agent", "active": True})
+        temp = registry.with_suffix(".tmp")
+        with temp.open("w") as stream:
+            yaml.safe_dump(data, stream, sort_keys=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temp.replace(registry)
+    print(f"registered {args.agent}: {registry}")
+    return 0
 
 
 def parser() -> argparse.ArgumentParser:
@@ -218,9 +281,21 @@ def parser() -> argparse.ArgumentParser:
 
     monitor = sub.add_parser("monitor")
     monitor.add_argument("--agent", required=True)
-    monitor.add_argument("--interval", type=float, default=2.0)
+    monitor.add_argument("--interval", type=positive_seconds, default=2.0)
     monitor.add_argument("--existing", action="store_true")
+    monitor.add_argument("--new-only", action="store_true", help="explicitly skip pending messages")
     monitor.set_defaults(func=cmd_monitor)
+
+    waiting = sub.add_parser("wait", help="return on pending mail or timeout; never acknowledge")
+    waiting.add_argument("--agent", required=True)
+    waiting.add_argument("--timeout", type=positive_seconds, default=45.0)
+    waiting.add_argument("--interval", type=positive_seconds, default=1.0)
+    waiting.set_defaults(func=cmd_wait)
+    layout = sub.add_parser("layout", help="show this worktree and its shared runtime bus")
+    layout.set_defaults(func=cmd_layout)
+    register = sub.add_parser("register", help="register a new assigned identity in the shared runtime registry")
+    register.add_argument("--agent", required=True)
+    register.set_defaults(func=cmd_register)
     return root
 
 

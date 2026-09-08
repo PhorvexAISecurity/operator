@@ -114,7 +114,7 @@ class HarnessContracts(unittest.TestCase):
             fix=w.create_fix_record('FIX-TEST',['M-1'])
             self.assertFalse((fix/'06-verdict.md').exists())
 
-    def test_fresh_cycle_reaches_pr_ready_through_real_commands(self):
+    def test_fresh_cycle_reaches_open_pr_without_another_human_gate(self):
         with sandbox() as (repo,root,baseline):
             fix=w.create_fix_record('FIX-TEST',['M-1'])
             configuration=root/'inputs.yaml'
@@ -158,6 +158,17 @@ class HarnessContracts(unittest.TestCase):
             (fix/'evidence/p3').mkdir();(fix/'evidence/p3/verdict.md').write_text('Verdict: PASS\nIndependent counterexample attempt.\n')
             sign('p3','evidence/p3/verdict.md');advance('DIFF_REVIEW_PASSED');advance('PR_READY')
             self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['state'],'PR_READY')
+            w.write_yaml(configuration,{'pull_request':{'url':'https://example.invalid/pr/42','reviewed_head':head}})
+            self.assertEqual(w.cmd_configure(argparse.Namespace(fix_id='FIX-TEST',file=str(configuration),
+                              by='coordinator',expect_revision=revision(),approval_ref=None)),0)
+            self.assertEqual(w.cmd_transition(argparse.Namespace(fix_id='FIX-TEST',target='IN_PR',
+                by='coordinator',expect_revision=revision(),next_owner='human_owner',next_action='PR delivered; await merge scope.',
+                artifact=None,note=None,approval_ref=None,force=False)),0)
+            final=w.load_yaml(fix/'STATUS.yaml')
+            self.assertEqual(final['state'],'IN_PR')
+            self.assertEqual(final['transitions'][-1]['approval_ref'],'operations/AUTONOMY.md')
+            self.assertNotIn('merge',final['approvals'])
+            self.assertNotIn('deploy',final['approvals'])
 
     def test_valid_snapshot_passes_and_tampering_fails(self):
         with sandbox() as (repo,root,baseline):
@@ -262,6 +273,86 @@ class HarnessContracts(unittest.TestCase):
             self.assertIn('M-1 · Current title · **REOPENED**',result)
             self.assertIn('| REOPENED | 1 |',result)
             self.assertNotIn('### M-1 · Widget drops signals',result)
+
+    def test_new_fix_records_only_pr_open_from_standing_scope(self):
+        with sandbox():
+            fix=w.create_fix_record('FIX-TEST',['M-1'])
+            status=w.load_yaml(fix/'STATUS.yaml')
+            self.assertEqual(status['approvals'],{'pr_open':'operations/AUTONOMY.md'})
+            self.assertEqual(status['state'],'TRIAGED')
+
+    def test_start_preserves_gates_and_does_not_resume_held_work(self):
+        with sandbox():
+            fix=w.create_fix_record('FIX-TEST',['M-1']);status=assign('FIX-TEST')
+            status['approvals']={};w.write_yaml(fix/'STATUS.yaml',status)
+            args=argparse.Namespace(fix_id='FIX-TEST',by='coordinator',expect_revision=0)
+            self.assertEqual(w.cmd_start(args),0)
+            after=w.load_yaml(fix/'STATUS.yaml')
+            self.assertEqual(after['state'],'TRIAGED');self.assertEqual(after['checks'],{})
+            self.assertEqual(set(after['approvals']),{'pr_open'})
+            self.assertEqual(w.cmd_start(args),1)  # stale revision
+            after['state']='HELD';w.write_yaml(fix/'STATUS.yaml',after)
+            args.expect_revision=after['revision']
+            self.assertEqual(w.cmd_start(args),1)
+
+    def test_invalid_configuration_is_rejected_without_writing(self):
+        with sandbox() as (_,root,_):
+            fix=w.create_fix_record('FIX-TEST',['M-1']);assign('FIX-TEST')
+            before=(fix/'STATUS.yaml').read_bytes();index=(root/'fixes/INDEX.yaml').read_bytes()
+            update=root/'configuration.yaml'
+            for value in [{'approvals':{'sec_1':'not-a-supported-scope'}},{'change_class':'INVALID'}]:
+                w.write_yaml(update,value)
+                args=argparse.Namespace(fix_id='FIX-TEST',file=str(update),by='coordinator',expect_revision=0,approval_ref='fixture:approval')
+                self.assertEqual(w.cmd_configure(args),1)
+                self.assertEqual((fix/'STATUS.yaml').read_bytes(),before)
+                self.assertEqual((root/'fixes/INDEX.yaml').read_bytes(),index)
+
+    def test_implementer_can_pin_commits_but_cannot_grant_authority(self):
+        with sandbox() as (_,root,baseline):
+            fix=w.create_fix_record('FIX-TEST',['M-1']);status=assign('FIX-TEST')
+            status['state']='AGREED';w.write_yaml(fix/'STATUS.yaml',status)
+            update=root/'configuration.yaml'
+            args=argparse.Namespace(fix_id='FIX-TEST',file=str(update),by='author',expect_revision=0,approval_ref='fixture:approval')
+            for value in [{'roles':{'skeptic':'author'}},{'approvals':{'deploy':'yes'}},
+                          {'verification':{'required':['L0']}},{'implementation':{'stacked_on':[]}},
+                          {'implementation':{'head_sha':'f'*40}}]:
+                w.write_yaml(update,value);self.assertEqual(w.cmd_configure(args),1)
+            w.write_yaml(update,{'implementation':{'branch':'fix/widget','base_sha':baseline,'head_sha':baseline}})
+            self.assertEqual(w.cmd_configure(args),0)
+            self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['implementation']['head_sha'],baseline)
+
+    def test_base_review_is_independent_and_binds_both_sources(self):
+        with sandbox() as (repo,root,baseline):
+            fix,status=ready_snapshot(repo,baseline)
+            newbase=status['implementation']['head_sha']
+            status['implementation']['base_sha']=newbase;w.write_yaml(fix/'STATUS.yaml',status)
+            artifact=fix/'evidence/base-review.md';artifact.write_text('Independent integration review; relevant producer unchanged and new path covered.\n')
+            args=argparse.Namespace(fix_id='FIX-TEST',check='base_review',by='author',artifact='evidence/base-review.md',
+                result='PASS',command='Compare original baseline to rebased producer and integration paths',
+                approval_ref=None,rationale=None,expect_revision=status['revision'])
+            self.assertEqual(w.cmd_record_check(args),1)
+            args.by='reviewer';self.assertEqual(w.cmd_record_check(args),0)
+            signed=w.load_yaml(fix/'STATUS.yaml')
+            self.assertEqual(w.gates.check_errors(root,fix,signed,'base_review'),[])
+            self.assertEqual(signed['checks']['base_review']['baseline_sha'],baseline)
+            self.assertEqual(signed['checks']['base_review']['source_sha'],newbase)
+            signed['implementation']['base_sha']=baseline
+            self.assertTrue(w.gates.check_errors(root,fix,signed,'base_review'))
+            signed['implementation']['base_sha']=newbase;signed['baseline']['code_sha']=newbase
+            self.assertTrue(w.gates.check_errors(root,fix,signed,'base_review'))
+            artifact.write_text('Changed review')
+            self.assertTrue(w.gates.check_errors(root,fix,w.load_yaml(fix/'STATUS.yaml'),'base_review'))
+
+    def test_agreed_brief_routes_implementer_to_verification(self):
+        with sandbox():
+            fix=w.create_fix_record('FIX-TEST',['M-1']);status=assign('FIX-TEST');status['state']='AGREED'
+            w.write_yaml(fix/'STATUS.yaml',status)
+            out=io.StringIO()
+            with contextlib.redirect_stdout(out):
+                w.cmd_brief(argparse.Namespace(identifier='FIX-TEST',agent='author'))
+            packet=w.yaml.safe_load(out.getvalue())
+            self.assertIn('stages/verify.md',packet['read'])
+            self.assertIn('implementation code/tests',packet['write_scope'])
 
     def test_startup_context_budget(self):
         root=Path(__file__).resolve().parents[2]

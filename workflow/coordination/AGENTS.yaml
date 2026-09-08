@@ -44,6 +44,40 @@ agents:
       release_reconciliation: true
       campaign_execution: human_gated
 
+  - id: codex-m079
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: true
+      go_toolchain: true
+      cluster_read: true
+      deployment_authority: false
+      independent_review: false
+      release_reconciliation: true
+
+  - id: codex-m006
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: false
+      go_toolchain: true
+      cluster_read: true
+      cluster_write: human_gated
+      independent_review: true
+      security_review: true
+      operational_review: true
+      deployment_authority: false
+      release_reconciliation: true
+
+  - id: mostafa
+    kind: human
+    active: true
+    capabilities:
+      security_contract_authority: true
+      scope_authority: true
+
 notes:
   - Capabilities are re-verified at intake; this file is not a permanent entitlement.
   - A replacement agent receives a new ID and explicit capabilities.

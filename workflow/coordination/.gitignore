@@ -4,3 +4,4 @@ inbox/*
 !inbox/.gitkeep
 archive/*
 !archive/.gitkeep
+.runtime/

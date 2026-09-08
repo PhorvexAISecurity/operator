@@ -4,7 +4,10 @@ The coordinator records external state; the live verifier observes behavior;
 the skeptic signs the final verdict. Approval to implement is not deployment
 approval, but an existing explicit authorization need not be requested again.
 
-1. Record PR URL, independently reviewed head and check results. After merge,
+1. At PR_READY, push the reviewed issue branch and open/update the PR using its
+   recorded `pr_open` scope. Record URL, reviewed head and check results, transition
+   to IN_PR, and return the link. This completes default delivery; it does not
+   close the issue or claim post-deployment L3/L4. After separately authorized merge,
    record merge SHA; `sync-main --publish` updates source truth and issue state.
 2. Observe running image, digest, embedded source SHA and rollout time in the
    approved environment. `release-sync --publish` records deployment, then
@@ -29,6 +32,9 @@ approval, but an existing explicit authorization need not be requested again.
 The required live layers belong to the fix even when several fixes share a
 release. An optional future campaign cannot stand in for missing L3/L4.
 A failing release's anatomy still follows what is deployed; its issues reopen.
+Retain the issue branch after its code PR merges, incorporate main without losing
+evidence, and continue verification in that branch's own fix directory. Publish
+later evidence through a follow-up PR; see `operations/WORKTREES.md`.
 
 Historical cycle records may lack new attestations. Do not invent old runs or
 seals. Collect missing current evidence, keep original artifacts and explain

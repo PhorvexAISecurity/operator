@@ -9,6 +9,15 @@
   "properties": {
     "schema_version": {"const": 1},
     "default_operation": {"const": "triage"},
+    "fix_delivery": {
+      "type": "object",
+      "required": ["target", "authorization_ref"],
+      "properties": {
+        "target": {"const": "IN_PR"},
+        "authorization_ref": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
     "operations": {
       "type": "object",
       "required": ["fix", "intake", "issue", "sync", "campaign", "audit", "triage"],

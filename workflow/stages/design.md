@@ -1,36 +1,32 @@
 # Design: TRIAGED → AGREED
 
-Read status, target issue, its reviewed anatomy locus, and source at the pinned
-baseline. Unreviewed joins are search hints. Expand context only for actual
-readers/writers of the touched state.
+Read the issue and pinned baseline; trace the incident's inputs through their real
+producers to the decisive condition. Check defaults, missing/stale inputs and every
+relevant arm of a compound predicate. State the failing case and legitimate control.
 
-Each derivation traces the incident's real inputs through their producers to
-the decisive condition and outcome. Inspect every arm of a compound predicate,
-including defaults, missing/stale inputs and upstream dependencies. A field's
-name or ticket description is not its semantics. Predict both the failing
-case and legitimate behavior that must survive; scale the trace to the change.
+| Owner | Output |
+|---|---|
+| coordinator | roles, baseline, authorized scope and verification requirements in intake/status |
+| proposer | concise cause, minimal change, behavioral prediction and discriminating tests in `01-proposal` |
+| skeptic | independently derive and seal `02A` before seeing proposal/implementation |
+| skeptic | current blocking findings and evidence in `02B`; sign `critique` |
+| proposer + skeptic | one selected contract and verification matrix in `03-decision`; skeptic signs `decision` |
 
-| Owner | Work | Output |
-|---|---|---|
-| coordinator | assign actual participants, capabilities, baseline, dependencies, scope/approval | `00-intake.md`, status |
-| proposer | explain root cause, minimal change, blast radius, exact delta/bands and tests | `01-proposal.md` |
-| skeptic | independently derive cause, expected fix, predictions and adversarial cases | `02A-blind-derivation.md` |
-| skeptic | seal 02A **before** reading proposal; compare models and attack assumptions | `02B-critique.md`, `critique` check |
-| skeptic with proposer | settle attacks with evidence; record chosen scope and criteria | `03-decision.md`, `decision` check |
+Use existing scope from `operations/AUTONOMY.md`. Choose conservative design/security
+options and record who chose them; do not request routine human approval or impersonate
+a named human approver. Keep compatibility consequences visible in the eventual PR.
 
-Seal: `workflow.py seal <fix> --by <skeptic> --expect-revision N`. A seal detects later changes;
-it cannot prove what the participant previously read. If exposed prematurely,
-record that fact and assign an unexposed reviewer; never claim blind derivation.
+Resolve disagreements using the smallest discriminating experiment. There is no
+three-round human escalation. A concrete failed invariant remains blocking; resolve it,
+narrow to a safe in-scope design, or report genuinely missing external input. Never
+approve by exhaustion, majority vote or by weakening a prediction to fit results.
 
-Declare `change_class: A|B`, `verification.required` (at least L0–L2),
-`live_required` and `soak_required` before implementation. L3 is required for a
-live finding, deployment/actuation, external actor or timing contract. L4 is
-required for evolving belief, cost, clocks or retry state. Waivers require a
-human ruling, not an omitted level. Detailed layer meanings: `verification/LEVELS.md`.
+Declare class A/B and required L0–L2; add L3 for live/external behavior and L4 for evolving
+state/timing. Keep those live obligations even when delivery stops at PR. Details:
+`verification/LEVELS.md`. No evidence waiver is granted by autonomous scope.
 
-Every critique item is answered or adopted. After three unresolved rounds,
-record both positions and seek a human ruling. Do not weaken a prediction to
-fit results. Freeze the agreed document through its hash-indexed decision check;
-amendments reference authorization and retain original predictions.
-
-Handoff to implementer: agreed artifact/check, baseline, exact scope and tests.
+Seal using `seal --by --expect-revision`; review/sign using `record-check`. Save superseded
+artifacts, then keep the current proposal and critique concise. Freeze one agreed decision.
+An in-scope amendment requires fresh independent review and the standing authorization
+reference; retain the original prediction. Scope expansion or weaker guarantees aren't
+routine amendments. Handoff: selected contract/hash, baseline, exact change and tests.

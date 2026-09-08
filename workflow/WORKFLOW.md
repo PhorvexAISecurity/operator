@@ -2,6 +2,10 @@
 
 Load the stage you are working on, not this entire reference on every turn.
 
+Default named-issue delivery is an independently reviewed PR link (`IN_PR`).
+`operations/AUTONOMY.md` delegates routine design/security choices and branch push/PR
+opening; it grants neither weaker evidence nor shared-environment changes.
+
 ## Roles
 
 Roles name responsibilities; participants are explicitly assigned in status.
@@ -10,7 +14,7 @@ proposer + implementer, and skeptic + live verifier + coordinator.
 
 | Role | Owns | Must not do |
 |---|---|---|
-| human_owner | scope, explicit authorizations, deadlock/waiver/risk rulings | replace evidence with approval |
+| human_owner | task scope, external authorizations, waiver/risk rulings | replace evidence with approval |
 | proposer | root cause, proposal, predicted behavior and scope | approve their own design |
 | implementer | patch, tests, RED/GREEN and raw evidence | sign P3, live, or final review |
 | skeptic | sealed derivation, critique, agreed decision, P3 and final review | read proposal before sealing; silently edit implementation |
@@ -50,9 +54,11 @@ that substantive review. See `tools/workflow.py … --help` for exact options.
 
 Input edits use `configure <fix> --file <partial.yaml> --by <coordinator>
 --expect-revision N`; it cannot set state, signatures or seals. CLI commands
-print the new revision. Re-read `brief` after another participant writes.
+validate schema before writing and print the new revision. The assigned implementer
+may also configure only branch/base/head, using existing full commit SHAs with
+base ancestry. Other inputs stay coordinator-owned. Re-read `brief` after writes.
 
-Checks: `critique`, `decision`, `implementation`, `red`, `l0`, `l1`, `l2`,
+Checks: `critique`, `decision`, `base_review` (only for a changed base), `implementation`, `red`, `l0`, `l1`, `l2`,
 `positive_control`, `incident`, `p3`, `patch_equivalence`, `l3`, `l4`, `final`.
 
 - Baseline pins critique/decision/RED; implementation head pins offline/P3;
@@ -60,6 +66,10 @@ Checks: `critique`, `decision`, `implementation`, `red`, `l0`, `l1`, `l2`,
 - Changed artifacts/pins invalidate their attestations. Keep prior raw evidence
   immutable; new attempts use new paths. Rebase requires new evidence or an
   independent patch-equivalence review, never a bare `PASS` assertion.
+- A changed implementation base needs independent `base_review`, bound to the new
+  base and original analysis source. Preserve the original blind seal; do not
+  manufacture a new blind derivation after seeing the proposal. Test affected
+  integration paths; the signature alone does not prove compatibility.
 - `NOT_REQUIRED` is a human-signed, explained ruling for an eligible layer.
   FAIL, UNAVAILABLE and NON_DISCRIMINATING never become PASS automatically.
 - RED must fail the intended assertion, not compile/setup. A positive control
@@ -73,20 +83,27 @@ Checks: `critique`, `decision`, `implementation`, `red`, `l0`, `l1`, `l2`,
 - Class A predicts exact behavior changes. Class B predicts falsifiable bands
   for objective/belief/cost/clock changes. Missed criteria reopen the fix;
   disproved models invalidate it. Amendments preserve the original prediction
-  and reference human authorization.
+  and reference the applicable authorization. In-scope design amendments use
+  the standing delegation plus renewed independent review, not another human checkpoint.
 
 ## Ownership and consistency
 
 Before changing state, reread `brief` and supply its revision. The tool locks
 before reading or validating and rejects stale revisions. Keep one canonical
-workflow checkout for coordination; product worktrees contain code, not competing
-copies of live status. Cross-clone Git conflicts still require reconciliation.
+record per issue in its own code worktree (`workflow/fixes/<id>`). Runtime bus data
+is shared through the Git common directory; messages identify their workflow root.
+Follow `operations/WORKTREES.md` for bootstrap handoff and post-merge verification.
+Cross-branch Git conflicts still require reconciliation.
 
 Approvals are scoped references in `STATUS.yaml.approvals` (`pr_open`, `merge`,
 `deploy`, `close`, `accepted_risk`); an explicit command reference overrides the
 matching scope. Evidence requirements remain mandatory even when authorized.
 Do all authorized work before requesting a new gate. Hand off references and
 next action, not conversation transcripts.
+
+New fixes inherit `pr_open` from the delivery policy. `start <fix>` records it for
+an existing authorized fix without changing state. Never resume an explicit hold
+implicitly. Missing repository access is checked early and reported precisely.
 
 ## History and release truth
 

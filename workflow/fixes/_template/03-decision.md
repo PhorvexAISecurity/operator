@@ -6,7 +6,7 @@
 
 ## Resolved critique items
 
-## Human rulings and ticket deviations
+## Delegated decisions, authorization and ticket deviations
 
 ## Exact scope and non-goals
 
@@ -23,5 +23,5 @@
 
 ## Deferred follow-ups
 
-Amendments are appended with human approval; the original prediction is not
-rewritten.
+Retain superseded predictions. In-scope amendments require independent re-review
+under the standing delegation; new scope or weakened guarantees need separate authority.

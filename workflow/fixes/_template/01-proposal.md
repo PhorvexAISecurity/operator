@@ -1,27 +1,20 @@
 # 01 — Proposal
 
-## 1. Root cause
+Target about 300 words plus evidence references; expand only for actual complexity.
+Do not repeat the intake or prior discussion.
 
-## 2. Minimal fix and touched files
+## Cause and minimal change
 
-## 3. Blast radius
+Trace real inputs to the failing condition; identify affected files, reachability,
+compatibility and boundaries.
 
-## 4. Declared behavioral delta
+## Prediction and controls
 
-- Class:
-- Exact delta or falsifiable bands:
-- What must not change:
+Class A exact delta or class B falsifiable bands; failing case, legitimate control,
+relevant missing/stale inputs and bypasses. What must remain true?
 
-## 5. Offline verification plan
+## Verification and delivery
 
-## 6. Live verification plan or pre-declared waiver
-
-- Acceptance thresholds:
-- Positive control:
-- Window/sample:
-- Ambient conditions:
-- Mutation and cleanup:
-
-## 7. Version anchors, rollout and rollback
-
-## 8. Residual risk and non-goals
+Required layers, meaningful RED/GREEN, live targets/cleanup where applicable,
+source pins, rollback and unresolved limitations. Record delegated choices;
+independent review settles them before implementation.

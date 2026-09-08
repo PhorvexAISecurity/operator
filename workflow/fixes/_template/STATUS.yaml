@@ -75,7 +75,7 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: human_owner
-  action: Assign roles, pins, profile, and definition of done in 00-intake.md.
+  owner: coordinator
+  action: Assign participants and pins; deliver independently reviewed PR under standing scope.
 
 updated_at: null

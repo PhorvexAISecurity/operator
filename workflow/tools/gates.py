@@ -15,7 +15,7 @@ STAGES = ('TRIAGED DESIGNING CRITIQUED AGREED IMPLEMENTED OFFLINE_VERIFIED '
           'DIFF_REVIEW_PASSED PR_READY IN_PR MERGED DEPLOYED LIVE_VERIFIED '
           'SYNCHRONIZED CLOSED').split()
 CHECK_ROLES = {
-    'critique': 'skeptic', 'decision': 'skeptic', 'implementation': 'implementer',
+    'critique': 'skeptic', 'decision': 'skeptic', 'base_review': 'skeptic', 'implementation': 'implementer',
     'red': 'implementer', 'l0': 'implementer', 'l1': 'implementer', 'l2': 'implementer',
     'positive_control': 'implementer', 'incident': 'skeptic', 'p3': 'skeptic', 'patch_equivalence': 'skeptic',
     'l3': 'live_verifier', 'l4': 'live_verifier', 'final': 'skeptic',
@@ -54,6 +54,8 @@ def contract_digest(status: dict) -> str:
 
 
 def source_for(status: dict, key: str) -> str | None:
+    if key == 'base_review':
+        return status.get('implementation', {}).get('base_sha')
     if key in BASELINE_CHECKS:
         return status.get('baseline', {}).get('code_sha')
     if key in LIVE_CHECKS:
@@ -90,9 +92,9 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
         problems.append(f'{key}: signer must be assigned {CHECK_ROLES[key]}')
     if key == 'decision' and check.get('contract_sha256') != contract_digest(status):
         problems.append('decision: verification plan changed after agreement')
-    if key == 'incident' and (not status.get('baseline', {}).get('code_sha')
+    if key in {'incident', 'base_review'} and (not status.get('baseline', {}).get('code_sha')
             or check.get('baseline_sha') != status.get('baseline', {}).get('code_sha')):
-        problems.append('incident: evidence baseline differs from current baseline')
+        problems.append(f'{key}: evidence baseline differs from current baseline')
     if key == 'p3':
         incident = status.get('checks', {}).get('incident', {})
         if not incident.get('sha256') or check.get('incident_sha256') != incident.get('sha256'):
@@ -179,7 +181,7 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
             if not impl.get(field):
                 missing.append(f'implementation.{field}')
         if impl.get('base_sha') != baseline.get('code_sha'):
-            missing.append('implementation.base_sha differs from reviewed baseline; rebase requires re-review')
+            missing += check_errors(root, fix, status, 'base_review')
         missing += check_errors(root, fix, status, 'implementation')
         if impl.get('base_sha') and impl.get('head_sha'):
             result = subprocess.run(['git', '-C', str(root.parent), 'diff', '--binary',

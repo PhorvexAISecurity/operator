@@ -2,12 +2,16 @@ schema_version: 1
 
 default_operation: triage
 
+fix_delivery:
+  target: IN_PR
+  authorization_ref: operations/AUTONOMY.md
+
 operations:
   fix:
     runbook: operations/FIX.md
     authority: fixes/*/STATUS.yaml
     mutating: true
-    terminal_states: [CLOSED, DEFERRED, ACCEPTED_RISK, INVALIDATED]
+    terminal_states: [IN_PR, CLOSED, DEFERRED, ACCEPTED_RISK, INVALIDATED]
   intake:
     runbook: operations/INTAKE.md
     authority: intake/*/STATUS.yaml
@@ -61,12 +65,10 @@ truth:
   coordination_is_authoritative: false
 
 human_gates:
-  - pull_request_open
   - pull_request_merge
   - shared_environment_deploy
   - rollback
   - destructive_or_attack_test
-  - prediction_amendment
   - verification_waiver
   - ambiguous_dedup
   - autonomous_issue_filing

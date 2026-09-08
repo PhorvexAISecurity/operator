@@ -1,5 +1,15 @@
 # Phorvex agent operations framework
 
+**Default fix request:** “Start issue X” → an independently reviewed **PR link**.
+Agents handle routine design decisions, tests, peer review and branch/PR publishing
+under [standing authorization](operations/AUTONOMY.md). Merge and shared-cluster
+changes require separate scope. All quality gates and later live-verification
+obligations remain; opening a PR is not closing the issue.
+
+Code and `workflow/fixes/<id>` belong to the same issue branch. Only the runtime
+bus is shared between worktrees. Continue verification on that branch after its
+code PR merges; see [worktree lifecycle](operations/WORKTREES.md).
+
 One discoverable, versioned home for:
 
 - routing and governing agent requests;

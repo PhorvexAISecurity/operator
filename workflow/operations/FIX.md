@@ -1,18 +1,18 @@
-# Fix or review an issue
+# Named issue → reviewed PR
 
-Run `doctor` once, then `brief <fix-id> --agent <assigned-id>`.
-If an issue has multiple cycles, choose the explicit current fix ID; never
-infer ownership from the issue number. If no cycle exists and remediation is
-authorized, use `new-fix --issue M-N`; the coordinator assigns participants.
+“Start issue X” delegates the PR path under `AUTONOMY.md`; merge and shared-cluster
+changes are separate. Explicit narrower user scope wins.
 
-The brief names the stage and minimal reads. Follow `stages/design.md`,
-`stages/verify.md`, or `stages/release.md` for your current work. `WORKFLOW.md`
-is the reference when a contract is unclear; it is not mandatory preload.
+Run `doctor`, select/create the fix, assign two independent participants, then
+`brief <fix> --agent <id>`. Reuse peers or spawn a reviewer with baseline-only context.
+Keep the fix record in the code branch's own `workflow/fixes/<id>` (`WORKTREES.md`).
+Check push/PR access early. New fixes inherit PR scope; coordinator uses `start <fix>
+--by <id> --expect-revision N` for an existing authorized fix. Holds aren't silently resumed.
 
-Use `record-check` for signed evidence, `transition --expect-revision` for
-state changes, and sync operations for main/deployment/closure. Continue through
-steps you own and are authorized to perform. At another owner or a blocker,
-record one next action and hand off artifact references.
+Follow the indicated stage. Agents settle conservative design/security choices with
+evidence, without routine human signoffs. Keep only current findings; `03-decision`
+becomes the single implementation contract. Implementers record their own source pins.
 
-Done means independent verdict + required verification + synchronization.
-PR-ready, merged, and deployed are useful intermediate states, not closure.
+After offline checks and independent incident/P3 pass, push/open the PR, record its
+URL/reviewed head, reach IN_PR and return the link. Don't stop at PR_READY or ask again.
+Required post-deployment L3/L4 remain pending and visible; PR delivery is not closure.

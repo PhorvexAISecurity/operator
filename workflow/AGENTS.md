@@ -1,54 +1,43 @@
 # Agent entrypoint
 
-This harness works through files and explicit roles, not model names or chat
-memory. The current user request controls scope and authorization.
+The user controls scope. A named fix defaults to an independently reviewed PR link,
+under `operations/AUTONOMY.md`, without routine human checkpoints.
 
-1. Classify the task using `OPERATIONS.md`; read **one** matching runbook.
-2. Run `python3 workflow/tools/workflow.py doctor` once per work session.
-   Report relevant failures; an unrelated historical gap does not prohibit
-   useful work on your authorized task.
-3. For a fix, run `brief <fix-id> --agent <your-assigned-id>`. Read only its
-   listed stage, issue, source locus, and artifacts. If unassigned, the
-   coordinator records your role first. Do not infer a role from “Claude,”
-   “Cursor,” or an earlier ticket.
-4. Complete the work owned by your role, record evidence, then hand off.
-   Continue through authorized steps you own; stop at a different owner,
-   a concrete blocker, or an action outside recorded approval scope.
+1. Classify with `OPERATIONS.md`; read one runbook. Run `doctor` once per session;
+   unrelated historical warnings do not block authorized work.
+2. Run `brief <fix> --agent <assigned-id>`; coordinator assigns missing roles.
+   Read its stage, issue, source and artifacts. Don't preload the register, anatomy,
+   archives or raw history. `MANIFEST.yaml` locates authorities.
+3. Complete owned work, record evidence and hand off directly. Continue the peer loop
+   until PR delivery or a concrete external blocker; no human relay is needed.
 
-## Hard boundaries
+## Quality boundaries
 
-- The skeptic derives independently **before** reading the proposal, diff,
-  implementation commits, or related messages. Seal `02A` using `seal --by`.
-  Read only the baseline source until sealed. Role alternation is optional;
-  independent derivation and independent review are mandatory.
-- The proposer/implementer cannot sign critique, P3, or final review. The
-  implementer cannot sign live verification of their own change.
-- A `PASS` string is insufficient: `record-check` binds signer, artifact hash,
-  and source/deployment pin. Missing evidence stays unavailable or blocked.
-- Never equate Selected, Dispatched, Emitted, Executed, Confirmed, or
-  Attack-mitigated. A null result requires a positive control.
-- Before P3, independently reproduce the incident through the real producers
-  of the fix's inputs; sign `incident`. A mocked final flag is not that proof.
-- Use `transition --expect-revision <brief-revision>`; stale work must be
-  reread. Commands serialize the complete read/validate/write transaction.
-- Reuse explicit authorization already given. Record its reference and scope
-  (e.g. `pr_open`, `deploy`); do not ask again for that scope. Uncovered merge,
-  deployment, attack, waiver, or accepted-risk decisions remain human gates.
-- Generated register/anatomy files are read-only. Edit their authorities and
-  regenerate. Notifications carry references; they do not change state.
+- Skeptic derives from pinned baseline BEFORE proposal/diff exposure, then seals
+  `02A`. Never manufacture a blind review after exposure.
+- Authors cannot sign critique, decision, base review, incident, P3 or final review,
+  or live verification of their own implementation.
+- `record-check` binds signer, artifact hash and source. Missing evidence stays missing.
+  Selection, dispatch, execution, confirmation and attack mitigation are distinct.
+- Before P3, independently reproduce the incident through real producers, assert
+  fixture relevance, test relevant predicate arms/defaults/stale inputs, and include
+  a positive control. A mocked final flag is insufficient.
+- Use revision-checked commands. Implementers may configure only source pins.
+  Changed sources/artifacts invalidate affected checks. Preserve superseded evidence.
+- Autonomous scope grants no weaker guarantee or evidence waiver. Merge, shared
+  deployment, live mutation and risk acceptance require separately recorded scope;
+  reuse existing authorization. Branch push and PR opening are already included.
 
-## Context and handoff
+## Handoff
 
-Do not preload the master register, full anatomy, archives, raw corpora, or bus
-history. Use `brief` and targeted source reads; expand only for a demonstrated
-dependency. `WORKFLOW.md` is the compact protocol reference, not required
-startup reading. `MANIFEST.yaml` locates authorities when needed.
+Keep code and `workflow/fixes/<id>` in the same issue worktree; preserve unrelated edits.
+Only runtime bus data is shared through the Git common directory. Follow the message's
+`workflow_root` when handling another worktree's record. See `operations/WORKTREES.md`.
+Generated register/anatomy views are read-only. History is not current deployment proof.
 
-Handoff: **fix/operation ID · state + revision · next owner/action · artifact
-references · source/deployment pins · blockers**. Send no proposal content to
-an unsealed skeptic. Record status before notifying; do not send messages
-unless communication is authorized.
+Never add assistant attribution or `Co-authored-by` trailers to commits.
 
-Use isolated worktrees for product changes. Preserve unrelated edits. A
-harness-only task may update its existing development worktree. Historical
-records are evidence, not proof of current deployment or permission.
+Send fix · state/revision · next owner/action · references · pins · blockers.
+Follow `coordination/BUS.md`: drain/ack mail; use a tested runner adapter or foreground
+`bus.py wait`. Messages change no state. No proposal content goes to an unsealed
+skeptic; communication stays within authorized collaboration.

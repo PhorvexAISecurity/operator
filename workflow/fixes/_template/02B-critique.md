@@ -1,19 +1,13 @@
 # 02B — Proposal critique
 
-## Comparison with sealed 02A
+Keep only current findings; retain prior rounds in evidence rather than appending summaries.
 
-## Blocking findings
+## Comparison with sealed derivation
 
-## Non-blocking findings
+## Blocking findings and discriminating evidence
 
-## Undeclared behavioral deltas
-
-## Test-vacuity and fake-fidelity attacks
-
-## Blast-radius and dependency attacks
-
-## Attempted attack or coverage admission
+Include relevant bypasses, vacuous tests, scope/dependency changes and legitimate controls.
 
 ## Verdict
 
-`ACCEPT`, `CHANGES_REQUESTED`, or `DEADLOCK_TO_HUMAN`.
+`ACCEPT` or `CHANGES_REQUESTED`; identify the next concrete test/correction.
