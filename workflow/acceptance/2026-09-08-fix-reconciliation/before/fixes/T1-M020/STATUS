@@ -1,0 +1,19 @@
+T1-M020 — M-20 count-while-green status message (CONTRACT→CHOICE, MINOR/P3)
+= the T1-E-followup (M-20 core already shipped in T1-E). Base origin/main @ 4cad00f = v0.4.87 (T1-E merged; hard dep met).
+branch: t1/contract-choice-m020-witness-gates-selection (worktree /home/mehrdad/operator-m020)
+
+STATE: ✅ K3 P3 PASS (bus 371) — "ship it". Branch @ ce9d2b5 (amended e1ab97c +N1 test TestFlipSignatureCountFree). READY FOR USER: open PR → merge. 06-verdict written.
+Non-blocking recorded: N2 (event re-fire on fleet change while False, deduped); N3 (flip message colon→counted string; dashboard heads-up).
+NEXT: M-160 (T1-E L3 fail, routing-aware RBAC leg; K3 warm as Skeptic).
+K3 format calls (bus 370) all folded (ack bus 372): REQ-1 zero-diff green, REQ-2 dominantWhy (mode/lexical-min — the debounce-defeat catch), count-free flip signature, total==0 skip. Boss chose M-20 before M-160.
+3 files +198/-50. RED gate captured (count-while-green off → TestCountWhileGreen FAIL; dominantWhy tiebreak broken → TestDominantWhyDeterministic FAIL). Full suite green except pre-existing recon/M-157.
+PR: https://github.com/PhorvexSecurity/operator/pull/new/t1/contract-choice-m020-witness-gates-selection (body = PR_BODY.draft.md)
+
+scope: internal/runner/actions_supported.go ONLY. Ticket's internal/controller+actuator scope is STALE/moot; "move predicates into SupportsAction" REJECTED (mirror rebuild). native SupportsAction already transport-only (T1-E). No actuator/capability/actionset/decision/api/config/chart.
+
+the fix: replace unsupportedEnabledActions/unsupportedMessage with per-action gap {action,unsupported,total,why}; keep Honest-∃ flip (False iff unsupported==total); surface per-asset counts in message even while green (mixed → ConditionTrue + "kv-reset unsupported on 1/2 assets (why)"); debounce on flip-signature only; condition Type/Status/Reason shape unchanged (console contract). why = witness predicate = record exclusionReason vocab (test c).
+
+tests: (a) per-pod exclusion already green in capability/gate_test.go (verify); (b) mixed→count-while-green (RED: old plain "all supported"); (c) message why == record why.
+
+flow: baseline✓ → 01✓ → [K3 §A/format lock, bus 369] → implement → RED → PR → merge → deploy → K3 L3.
+next bus # 370. roles: claude=Proposer+impl · K3=Skeptic+P3+L3.

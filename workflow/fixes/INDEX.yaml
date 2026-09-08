@@ -94,11 +94,11 @@ fixes:
     related_issues:
     - M-158
     - M-160
-    state: REOPENED
+    state: CLOSED
     dependencies: []
     stacked_on: []
     branch: t1/choice-capability-gate
-    head_sha: 3b9bf5a
+    head_sha: 3b9bf5a14464d00e928f6fbba954ce03320ca878
   T1-M020:
     directory: fixes/T1-M020
     aliases:
@@ -106,11 +106,11 @@ fixes:
     issues:
     - M-20
     related_issues: []
-    state: PR_READY
+    state: CLOSED
     dependencies: []
     stacked_on: []
     branch: t1/contract-choice-m020-witness-gates-selection
-    head_sha: ce9d2b5
+    head_sha: b4ac74e0992f8b559d07da653c6e1ba9444bc43a
   T1-M023:
     directory: fixes/T1-M023
     aliases:
@@ -118,11 +118,11 @@ fixes:
     issues:
     - M-23
     related_issues: []
-    state: PR_READY
+    state: DEPLOYED
     dependencies: []
     stacked_on: []
     branch: t1/clock-choice-m023-per-action-exposure-clocks
-    head_sha: 13258e3
+    head_sha: d206caa75cdda476bda0f4967dc141ff35eb2866
   T1-M160:
     directory: fixes/T1-M160
     aliases:
@@ -135,7 +135,7 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: t1/contract-choice-m160-routing-aware-rbac
-    head_sha: 281abce
+    head_sha: 281abce9b0fdaa3c32e9cc13a764f71ea59af274
   T1-M028:
     directory: fixes/T1-M028
     aliases:
@@ -146,9 +146,32 @@ fixes:
     - M-23
     - M-25
     - M-26
-    state: HELD
+    state: CLOSED
     dependencies:
     - T1-M023
     stacked_on: []
-    branch: null
+    branch: t1/belief-m028-proactive-cadence-cap
+    head_sha: aaf01e0be1eb9dbc62e0f3ff14c4fd95d97986f1
+  T1-M079:
+    directory: fixes/T1-M079
+    aliases: []
+    issues:
+    - M-79
+    related_issues: []
+    state: HELD
+    dependencies:
+    - T1-E
+    stacked_on: []
+    branch: t1/contract-choice-m079-wire-or-report-nodeexec
+    head_sha: null
+  M-6:
+    directory: fixes/M-6
+    aliases: []
+    issues:
+    - M-6
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: parallel/contract-m006-code-exec-admission
     head_sha: null

@@ -1,0 +1,58 @@
+{
+  "errors": [],
+  "backup_hashes_checked": 17,
+  "imported_or_derived_hashes_checked": 48,
+  "ancestry": [
+    {
+      "fix": "T1-E",
+      "sha": "3b9bf5a14464d00e928f6fbba954ce03320ca878",
+      "on_main": true
+    },
+    {
+      "fix": "T1-E",
+      "sha": "db04b5d5ddffa839ff03d564311b93a7d6b98c5f",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M020",
+      "sha": "b4ac74e0992f8b559d07da653c6e1ba9444bc43a",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M020",
+      "sha": "835e682a4ed5756722a62f53c7f69a2e39be0a8a",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M023",
+      "sha": "d206caa75cdda476bda0f4967dc141ff35eb2866",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M023",
+      "sha": "809d80cbfd394dba496e1ad2064d412f2c195ae4",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M028",
+      "sha": "aaf01e0be1eb9dbc62e0f3ff14c4fd95d97986f1",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M028",
+      "sha": "847e840f7d44a6594c49d270a01e72c409e90c5a",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M160",
+      "sha": "281abce9b0fdaa3c32e9cc13a764f71ea59af274",
+      "on_main": true
+    },
+    {
+      "fix": "T1-M160",
+      "sha": "c081616dd76648225a5b52ab006afc0a61d2c848",
+      "on_main": true
+    }
+  ],
+  "active_cycles_preserved": true
+}

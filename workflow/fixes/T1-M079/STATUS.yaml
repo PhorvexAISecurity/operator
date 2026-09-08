@@ -1,0 +1,118 @@
+schema_version: 1
+protocol_version: 2
+revision: 4
+change_class: A
+approvals: {}
+checks: {}
+fix_id: T1-M079
+issues:
+- M-79
+title: 'M79: wire node-exec after security prerequisites; verify unwired truth'
+profile: standard
+state: HELD
+roles:
+  human_owner: human-owner
+  proposer: codex-m079
+  implementer: codex-m079
+  skeptic: k3
+  live_verifier: k3
+  coordinator: codex-m079
+capabilities_required:
+  go_toolchain: true
+  cluster_access: true
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.97
+  deployed_git_sha: c8c708145f2f425f0cee86d214671076ae1afcc0
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: t1/contract-choice-m079-wire-or-report-nodeexec
+  base_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: NOT_REQUIRED_PENDING_APPROVAL
+  l4: NOT_REQUIRED
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies:
+- T1-E
+blockers:
+- Path A requires merged PX-P-002/PX-P-003; current source retains unpinned agent
+  lookup, unvalidated transport config and broad console exec. User asked whether
+  to authorize separate prerequisite fixes.
+- Path A L3 requires an isolated MIG-capable fixture; availability not yet established.
+residuals: []
+next_action:
+  owner: human_owner
+  action: M79 parked while M6 proceeds; decide remaining prerequisite ownership before
+    resuming wiring.
+updated_at: '2026-09-08T17:50:10+00:00'
+follow_up_to: T1-E
+configuration_history:
+- at: '2026-09-08T17:33:51+00:00'
+  by: codex-m079
+  fields:
+  - baseline
+  - blockers
+  - capabilities_required
+  - change_class
+  - dependencies
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-08T17:39:13+00:00'
+  by: codex-m079
+  fields:
+  - baseline
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-08T17:33:52+00:00'
+  by: codex-m079
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: HELD
+  at: '2026-09-08T17:50:10+00:00'
+  by: codex-m079
+  artifact: null
+  note: User selected M6 next on 2026-09-08; M6 collaboration is Claude and codex-m006.
+  approval_ref: null
+  forced: false

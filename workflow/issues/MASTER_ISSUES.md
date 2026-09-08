@@ -7,9 +7,10 @@ Entries: 159 · joins: 159 · anatomy pin: `fb52e6c976df`.
 
 | State | Count |
 |---|---|
-| CLOSED | 12 |
+| CLOSED | 14 |
+| DEPLOYED_PENDING_L3 | 1 |
 | MAIN_PENDING_DEPLOY | 3 |
-| OPEN | 142 |
+| OPEN | 139 |
 | SUPERSEDED | 2 |
 
 | Tier | Entries |
@@ -78,7 +79,7 @@ The audit-side claim is unaffected and independently confirmed: λ appears as `0
 ---
 **Eleventh-pass status (`v0.4.74` / `515c56a`, 2026-09-03):** **PERSISTS, re-measured at 0.4.74.** `fe3ef74` (PR #93, "separate lambda audit semantics") is a **rename plus a `DualUpdate` audit block**, not a controller change: seed 0.6, step 0.05, the `excess = -1` decay when demand ≤ budget, the `spent < budget` rise-suppression and the min-clamp at 0 are identical (`internal/cost/dual.go:52,70,109,112-113,119,128-132`; caller `decision/coverage.go:391-407,542`). Live at 0.4.74 (K3, `fixes/T0-C/evidence/live-baseline/00-facts.md`): `lambdaRuntime = 0` with `dualUpdate.updateReason = min_clamp` on **all 20,044 retained records, including the 5 selected ones** — demand never exceeds budget, so the dual never rises. **Consequence for ticket T0-C's tier-exit clause** ("λ observed non-zero on a tenant whose budget does not bind"): not satisfiable by observation on this fleet; it is this entry's trap, not a recording gap, and T0-C must not be held to it.
 
-### M-23 · Anti-over-rotation is mis-clocked for all pod-alive actions · **OPEN** · `CLOCK->CHOICE`
+### M-23 · Anti-over-rotation is mis-clocked for all pod-alive actions · **DEPLOYED_PENDING_L3** · `CLOCK->CHOICE`
 
 Severity: MAJOR · Tier: 1 · Fixes: T1-M023
 
@@ -97,7 +98,7 @@ Severity: MAJOR · Tier: 1 · Fixes: T1-M023
 
 ### M-79 · The node-exec transport is never wired — mig-rebind can never run · **OPEN** · `CONTRACT->CHOICE`
 
-Severity: MAJOR · Tier: 1 · Fixes: T1-E
+Severity: MAJOR · Tier: 1 · Fixes: T1-E, T1-M079
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · ext.k8s -> ext.mig_agent, crossing_status=declared-unwired
@@ -176,7 +177,7 @@ Severity: HIGH · Tier: 1 · Fixes: none
 **Fix:** age the evidence over a half-life, or enforce CR TTL.
 *Sources: N3.*
 
-### M-28 · Standing `kv-reset` churn on zero evidence · **OPEN** · `BELIEF`
+### M-28 · Standing `kv-reset` churn on zero evidence · **CLOSED** · `BELIEF`
 
 Severity: HIGH (SLA) · Tier: 1 · Fixes: T1-M028
 
@@ -340,7 +341,7 @@ Severity: LOW · Tier: 1 · Fixes: none
 
 *Sources: C5.*
 
-### M-20 · The capability witness never gates selection · **OPEN** · `CONTRACT->CHOICE`
+### M-20 · The capability witness never gates selection · **CLOSED** · `CONTRACT->CHOICE`
 
 Severity: MINOR · Tier: 1 · Fixes: T1-E, T1-M020
 
@@ -1664,7 +1665,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-6 · Code-exec defense stack is three-quarters unshipped · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: M-6
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1

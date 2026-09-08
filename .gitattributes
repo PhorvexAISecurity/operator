@@ -1,0 +1,3 @@
+
+# Retained patches are evidence; preserve context-line whitespace verbatim.
+workflow/**/*.patch -whitespace

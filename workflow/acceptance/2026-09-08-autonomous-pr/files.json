@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-08T20:45:09.726710+00:00",
+  "files": {
+    "workflow/tools/workflow.py": "2332844b85a60360f6d99ab9f001f97b5b6b1c7f6d3c4c6c3f8289acb3000b01",
+    "workflow/tools/gates.py": "3ad9ebd9d4fc3b896c8bbbf34befac71467bf43783bddbc702bda10546e1f71d",
+    "workflow/coordination/bridge.py": "7a71eb75ddb87714c6a809762c5d21129ee0e1d934030042fef3766984675e0c",
+    "workflow/operations/POLICY.yaml": "c241c87407b03579d82b4258ff65eda5a3c8d829b48d9a81932de2a0c8e6dcc4",
+    "workflow/operations/AUTONOMY.md": "d8fbf91c73df89d02fbe0dd74607f214255438032f72b18c1e8b930647a4a06e",
+    "workflow/AGENTS.md": "97bdeda668c5587d89565ce584f2fb9e931664a23c17648cde0cd1f04a80f35e",
+    "workflow/operations/FIX.md": "e0f94ada0f3c88e890d54b5ef004ffac3721cc0499196731f41621d55ef5e84c"
+  }
+}

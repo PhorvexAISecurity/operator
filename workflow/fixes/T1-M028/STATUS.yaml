@@ -8,52 +8,61 @@ related_issues:
 - M-26
 title: Proactive cadence cap
 profile: legacy-migrated
-state: HELD
+state: CLOSED
 roles:
   human_owner: mehrdad
-  proposer: unassigned
-  implementer: unassigned
-  skeptic: unassigned
-  live_verifier: unassigned
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
   coordinator: k3
 baseline:
   legacy_status: STATUS
+  reviewed_code_sha: a13b83af3b2d1a43f1365d90dc59b06fbf176459
+  code_sha: a13b83af3b2d1a43f1365d90dc59b06fbf176459
 blind_derivation:
-  status: not-started
-  artifact: null
-  sha256: null
-  sealed_at: null
-  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
-    is not fabricated.
+  status: sealed
+  artifact: 02-critique-sectionA.sealed.md
+  sha256: 17ea34049794ce2d6ffd489bbe830fe8952d122c7e95b0cb184728142478a145
+  sealed_at: '2026-09-07T21:40:41Z'
+  note: Sealed-blind §A under the current protocol; §B in 02-critique.md.
 implementation:
-  branch: null
-  base_sha: null
-  head_sha: null
+  branch: t1/belief-m028-proactive-cadence-cap
+  base_sha: a13b83af3b2d1a43f1365d90dc59b06fbf176459
+  head_sha: aaf01e0be1eb9dbc62e0f3ff14c4fd95d97986f1
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
-  merge_sha: null
-  checks: legacy-see-evidence
+  url: https://github.com/PhorvexSecurity/operator/pull/131
+  reviewed_head: aaf01e0be1eb9dbc62e0f3ff14c4fd95d97986f1
+  merge_sha: 847e840f7d44a6594c49d270a01e72c409e90c5a
+  checks: passed-merged-2026-09-08
   patch_equivalence: PASS
 deployment:
-  image: null
-  digest: null
-  git_sha: null
-  rolled_out_at: null
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.97
+  digest: sha256:e5ba82916f183e971a8cdc874103207124b26ed0f580f72650e35c4caf091502
+  git_sha: c8c708145f2f425f0cee86d214671076ae1afcc0
+  rolled_out_at: '2026-09-08T14:20:59Z'
+  digest_observed_at: '2026-09-08T17:47:38.391409+00:00'
+  digest_evidence: evidence/reconciliation/deployment-observation.json
 verification:
   required:
   - L0
   - L1
   - L2
   - L3
-  p3: pending
+  p3: PASS
   l0: legacy-see-evidence
   l1: legacy-see-evidence
   l2: legacy-see-evidence
-  l3: pending
+  l3: PASS
   l4: NOT_REQUIRED
-  positive_control: legacy-see-evidence
+  positive_control: NON_DISCRIMINATING (reactive); PASS (observed hygiene resumption)
+  live_required: true
+  l3_scope: Legacy K3 PASS for core behavior; criteria 2 (reactive control) and 4
+    (physics-pinned AI case) are NON_DISCRIMINATING.
+  unverified_live_criteria:
+  - reactive positive control
+  - physics-pinned zero-event AI guard reachability
 synchronization:
   issue_entries: imported-and-linked
   master_register: generated-and-validated
@@ -61,12 +70,18 @@ synchronization:
   permanent_tests: missing-legacy-gap
 dependencies:
 - T1-M023
-blockers:
-- Resume only after the M-023/M-020/M-160 chain is merged and deployed
-residuals: []
+blockers: []
+residuals:
+- Live criteria 2 and 4 remain fleet-masked; offline tests are not live proof. Historical
+  reported closure retained without inventing a waiver.
+- L4 was not separately signed; the legacy L3 report covers a multi-hour window. No
+  current-protocol L4 approval is fabricated.
+- Legacy report claims rollout 14:20:59Z; later captured current manager container
+  started 15:03:12Z. Distinct observations retained.
 next_action:
-  owner: human-owner
-  action: Human releases the hold after dependencies are deployed.
+  owner: live_verifier
+  action: Reported core closure retained; obtain an approved discriminating window
+    for live criteria 2 and 4 before claiming complete live coverage. See evidence/l3/verdict.md.
 migration:
   source: /home/mehrdad/operator/fixes/T1-M028
   original_untouched: true
@@ -75,5 +90,18 @@ migration:
   legacy_blind_deriver: null
   protocol_adoption: Historical evidence retained; new transitions require current
     checks.
-updated_at: '2026-09-06T22:26:59+00:00'
-revision: 0
+  last_reconciled_at: '2026-09-08T18:00:39+00:00'
+  last_reconciliation: acceptance/2026-09-08-fix-reconciliation/REPORT.md
+  closure_basis: Imported legacy outcome where CLOSED; not a new full-contract verification
+    certificate.
+updated_at: '2026-09-08T18:00:39+00:00'
+revision: 1
+reconciliation_history:
+- at: '2026-09-08T18:00:39+00:00'
+  by: codex-m006
+  authority: user:2026-09-08-bring-workflow-fixes-up-to-date
+  kind: external-legacy-evidence-import
+  previous_state: CLOSED
+  report: RECONCILIATION.md
+  note: Imports recorded external outcomes; no current-protocol signatures or missing
+    tests fabricated.
