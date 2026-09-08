@@ -1,6 +1,6 @@
 schema_version: 1
 protocol_version: 2
-revision: 59
+revision: 60
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -126,7 +126,7 @@ pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/143
   reviewed_head: 9eb14271625620aef6b6184386764e29f0d71ea3
   merge_sha: null
-  checks: pending
+  checks: FAIL
   patch_equivalence: pending
 deployment:
   image: null
@@ -158,12 +158,12 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: 'Both PRs open: product #143 and workflow https://github.com/PhorvexSecurity/operator/pull/144.
-    Await separately authorized merges; follow WORKTREE_HANDOFF, preserve latest evidence,
-    then continue separately authorized shared-dev L3/L4 in the retained issue branch.
-    No merge/deploy authority implied.'
-updated_at: '2026-09-08T22:21:34+00:00'
+  owner: implementer
+  action: 'Claude: fix PR #143 chart-sync vendored subchart mismatch; repin affected
+    source/evidence and request renewed independent review. e2e preflight is blocked
+    by missing phorvex-console endpoints (see evidence/coordination/ci-first-run.md);
+    no shared deployment/repair authorization. Both PR links delivered; no merge.'
+updated_at: '2026-09-08T22:24:14+00:00'
 configuration_history:
 - at: '2026-09-08T17:48:57+00:00'
   by: codex-m006
@@ -266,6 +266,12 @@ configuration_history:
   by: codex-m006
   fields:
   - next_action
+  approval_ref: null
+- at: '2026-09-08T22:24:14+00:00'
+  by: codex-m006
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
