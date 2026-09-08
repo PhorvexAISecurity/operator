@@ -77,8 +77,8 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
         {lens === "owner" ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <ProofTile label="Protective actions" value={rollup ? String(rollup.actions) : "—"} />
-            <ProofTile label="Selected actions dispatched" value={rollup ? String(rollup.attacksPrevented) : "—"} tone="success" />
-            <ProofTile label="Isolation attempts" value={rollup ? String(rollup.workPreserved) : "—"} tone="success" />
+            <ProofTile label="Selected actions dispatched" value={rollup ? String(rollup.dispatched ?? 0) : "—"} tone="success" />
+            <ProofTile label="Isolation attempts" value={rollup ? String(rollup.isolationAttempts ?? 0) : "—"} tone="success" />
             <ProofTile label="Effect confirmation" value="Unavailable" />
           </div>
         ) : (

@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
+import { ownerNarrative } from "@/lib/owner-narrative";
 import { api, Lens, OwnerEvent } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { PageHead, SectionLabel, Skeleton, ErrorState } from "./effectiveness";
@@ -16,8 +17,8 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
   if (!data) return <Skeleton rows={3} />;
 
   const ev = data.events ?? [];
-  const evicted = ev.filter((e) => e.actuated).length;
-  const preserved = ev.filter((e) => e.actuated && e.action === "quarantine").length;
+  const evicted = ev.filter((e) => e.outcomeEvidence === "emitted-unconfirmed").length;
+  const preserved = ev.filter((e) => e.outcomeEvidence === "emitted-unconfirmed" && e.action === "quarantine").length;
 
   return (
     <div className="animate-fade-up space-y-7">
@@ -38,7 +39,7 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
       </div>
 
       <section>
-        <SectionLabel>Activity — what changed &amp; that it helped</SectionLabel>
+        <SectionLabel>Activity — requests and recorded outcomes</SectionLabel>
         {data.empty ? (
           <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">
             No protective actions recorded yet for your platform. Run an attack scenario (Operator lens) or point the backend at a decision audit trail.
@@ -66,7 +67,7 @@ function Outcome({ icon: Icon, label, value, tone }: { icon: React.ElementType; 
   );
 }
 
-function EventRow({ e }: { e: OwnerEvent }) {
+export function EventRow({ e }: { e: OwnerEvent }) {
   return (
     <Card className="transition-colors hover:border-border/80">
       <CardContent className="flex flex-wrap items-start gap-x-4 gap-y-2 p-4">
@@ -77,17 +78,17 @@ function EventRow({ e }: { e: OwnerEvent }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[13px] text-foreground">{e.namespace}/{e.pod}</span>
             <Badge variant="accent">{e.action}</Badge>
-            {e.reversible ? <Badge variant="real"><RotateCcw className="h-2.5 w-2.5" /> reversible</Badge> : <Badge variant="neutral">forward-only</Badge>}
+            {e.outcomeEvidence === "emitted-unconfirmed" && e.reversible && <Badge variant="neutral"><RotateCcw className="h-2.5 w-2.5" /> rollback supported</Badge>}
             <Badge variant="neutral">{e.attackStage}</Badge>
             {e.dryRun && <Badge variant="modeled">dry-run</Badge>}
           </div>
-          <div className="mt-1.5 text-[13px] text-foreground/90">{e.why}</div>
+          <div className="mt-1.5 text-[13px] text-foreground/90">{ownerNarrative(e)}</div>
           <ClaimScopeNote claim={e.claim} />
-          <div className="mt-1 text-[12px] text-muted-foreground">vs. blind: {e.blindOutcome}</div>
+          <div className="mt-1 text-[12px] text-muted-foreground">No verified comparison with a scheduled defense is available.</div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 text-[11px]">
-          {e.workPreserved && <span className="flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> isolation dispatched</span>}
-          {e.sloKept && <span className="flex items-center gap-1 text-success"><ShieldCheck className="h-3 w-3" /> SLO confirmation unavailable</span>}
+          {e.outcomeEvidence === "emitted-unconfirmed" && e.action === "quarantine" && <span className="flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> isolation dispatched</span>}
+          <span className="text-muted-foreground">SLO confirmation unavailable</span>
           {!e.harmCaused && <span className="text-muted-foreground">disruption not independently confirmed</span>}
         </div>
       </CardContent>
