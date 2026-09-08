@@ -139,17 +139,21 @@ func TestSweepTableSection6(t *testing.T) {
 	}
 	fmt.Printf("\nfirst POSITIVE coverage      : %v\n", firstPositive)
 	fmt.Printf("first BUDGET-COMPETITIVE     : %v  (decoy actually takes the slot)\n", firstCompetitive)
-	fmt.Printf("note: coverage is 0 below antiOverRotationWindow because the candidate is INFEASIBLE\n")
-	if firstPositive != antiOver {
-		t.Errorf("first positive coverage = %v, want anti-over-rotation boundary %v", firstPositive, antiOver)
+	fmt.Printf("note: coverage is 0 below the proactive floor because the M-28 cadence cap vetoes an evidence-less move on an ACTUATED pod within T_cad\n")
+	// M-28 (proactive cadence cap): on an ACTUATED pod (all exposure clocks present, as allVarsAt
+	// models here) an evidence-less move is INFEASIBLE until the proactive floor. The cap raised the
+	// feasibility boundary from the anti-over-rotation window (90s — the pre-M-28 first-positive
+	// point) to ProactiveFloor. Below the floor the provenance ramp is unreachable via Decide (it is
+	// still exercised directly, gate-by-gate, in TestGateComparisonAgainstBaseline). At the floor
+	// prov=1, so the manufactured decoy is both feasible and immediately budget-competitive — the
+	// genuine 14m foothold is itself still within the floor and evidence-less, so it too is capped,
+	// and the decoy takes the slot uncontested. (M-28 caps the churn; M-110 arbitrates first moves
+	// on the epoch-clocked actions, which this actuated-pod sweep does not exercise.)
+	if firstPositive != floor {
+		t.Errorf("first positive coverage = %v, want proactive-floor boundary %v (M-28 cadence cap)", firstPositive, floor)
 	}
-	// The provfloor report recorded 5m while pHold was pinned at 1.00 for every pod past the
-	// proactive floor (M-143). With the capped noisy-OR (PHORVEXSEC-189, p_max 0.5 provisional)
-	// the "due" fleet reads pHold 0.75, its cover weights fall by the same factor, and the
-	// evidence-less decoy becomes budget-competitive one sample earlier, at 4m. The
-	// anti-over-rotation boundary (first POSITIVE coverage) is unchanged.
-	if firstCompetitive != 4*time.Minute {
-		t.Errorf("first budget-competitive exposure = %v, want 4m (was 5m before M-143)", firstCompetitive)
+	if firstCompetitive != floor {
+		t.Errorf("first budget-competitive exposure = %v, want the proactive floor %v (M-28)", firstCompetitive, floor)
 	}
 }
 

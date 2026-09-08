@@ -215,6 +215,12 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 			exp = d.Seconds()
 		}
 		assess := e.Killchain.Assess(v, pol, exp, floorSec)
+		// M-28: mirror the EVENT-ONLY evidence verdict onto the shared view so the
+		// proactive-cadence feasibility law can read it (a hard law only sees view/move/pol, never
+		// the Assessment). HasEventEvidence (not the broad HasEvidence) so a physics-pinned,
+		// event-less pod — the churn pod — is still capped. The view pointers are shared with the
+		// runner, so generator/shadow/emit-boundary all see the same stamp.
+		v.HasEventEvidence = assess.HasEventEvidence
 		ctxByKey[key] = assetCtx{sig: sig, assess: assess, exposure: exp}
 	}
 
