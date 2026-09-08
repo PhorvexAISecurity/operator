@@ -1031,11 +1031,13 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		actuated = m.actuate(ctx, e, pol, decisions, viewByKey)
 	}
 
+	assessmentInput := colocationInput(snap, e)
 	selected, infeasible := 0, 0
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
 		m.Audit.Record(decisions[i])
+		m.recordColocation(assessmentInput, decisions[i], pol)
 		if decisions[i].Selected {
 			selected++
 		}
