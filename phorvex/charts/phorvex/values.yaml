@@ -49,6 +49,11 @@ phorvex:
     - vllm/detector-kv-canary
     - vllm/detector-adapter-inv
     - phorvex-system/operator-controller-manager
+  # Opt-in live E2E identity. Admission confines its events to one test namespace;
+  # the console/operator identity is NOT added to the detector allowlist.
+  e2eDetector:
+    enabled: false
+    targetNamespace: ""
   # Engage the global actuation kill-switch at startup (FR8). Can also be toggled at
   # runtime via the phorvex-killswitch ConfigMap.
   globalKillSwitch: false

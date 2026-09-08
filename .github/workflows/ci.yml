@@ -123,20 +123,24 @@ jobs:
             echo "::error::Run: helm dependency update deploy/helm/phorvex-stack (and bump the dependency in Chart.yaml)"
             exit 1
           fi
-          mkdir -p /tmp/vendored && tar xzf "$TGZ" -C /tmp/vendored
+          # Self-hosted runners retain /tmp between jobs. Never merge an archive
+          # into a shared directory: deleted templates from older runs survive.
+          VENDORED_DIR=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/phorvex-vendored.XXXXXX")
+          trap 'rm -rf -- "$VENDORED_DIR"' EXIT
+          tar xzf "$TGZ" -C "$VENDORED_DIR"
           # templates/, values.yaml and crds/ are archived verbatim, so they diff directly.
           # Chart.yaml does NOT: `helm package` reorders its keys and reflows the folded
           # description, so it is compared as parsed data instead of as text.
           if ! diff -r --exclude=.helmignore --exclude=Chart.yaml \
-                 phorvex/charts/phorvex /tmp/vendored/phorvex; then
+                 phorvex/charts/phorvex "$VENDORED_DIR/phorvex"; then
             echo "::error::the vendored subchart differs from phorvex/charts/phorvex."
             echo "::error::Run: helm dependency update deploy/helm/phorvex-stack && git add deploy/helm/phorvex-stack"
             exit 1
           fi
-          python3 - <<'PY'
+          python3 - "$VENDORED_DIR/phorvex/Chart.yaml" <<'PY'
           import sys, yaml
           a = yaml.safe_load(open("phorvex/charts/phorvex/Chart.yaml"))
-          b = yaml.safe_load(open("/tmp/vendored/phorvex/Chart.yaml"))
+          b = yaml.safe_load(open(sys.argv[1]))
           drift = {k: (a.get(k), b.get(k)) for k in set(a) | set(b) if a.get(k) != b.get(k)}
           if drift:
               for k, (x, y) in drift.items():
@@ -144,6 +148,14 @@ jobs:
               sys.exit("vendored Chart.yaml is stale — helm dependency update")
           print("  Chart.yaml matches")
           PY
+
+      - name: Vendored subchart check regressions
+        run: python3 tools/test_chart_sync.py
+
+      - name: E2E fixture and identity regressions
+        run: |
+          python3 tools/test_e2e_detector_chart.py
+          python3 -m unittest discover -s End-to-End/pipeline -p 'test_*.py'
 
   # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
