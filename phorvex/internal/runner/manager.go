@@ -274,9 +274,9 @@ func (m *Manager) recordEmits(key string, n int, now time.Time, window time.Dura
 	return len(kept)
 }
 
-// NeedLeaderElection keeps the mutating tick loop in controller-runtime's
-// leader-elected runnable group. Without this method every replica starts the
-// loop even when the manager itself has leader election enabled.
+// NeedLeaderElection explicitly documents the mutating tick loop's leader group.
+// controller-runtime v0.21.0 also puts ordinary runnables in this group by default.
+// Election must still be enabled on the enclosing manager.
 func (*Manager) NeedLeaderElection() bool { return true }
 
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
