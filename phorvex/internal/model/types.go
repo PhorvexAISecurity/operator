@@ -382,13 +382,17 @@ func AttackVectorForActuator(actuator string) string {
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 type SecurityEventInfo struct {
-	Name         string // SecurityEvent CR name (audit: which event carried the evidence)
-	Type         string
-	ThreatLevel  string
-	Source       string
-	Description  string
-	AnomalyScore float64 // -1 when unscored
-	Age          time.Duration
+	CreatedAt         time.Time
+	Outcomes          []ProtectedOutcome
+	OutcomeParseError string
+	ResolvedTargets   []string
+	Name              string // SecurityEvent CR name (audit: which event carried the evidence)
+	Type              string
+	ThreatLevel       string
+	Source            string
+	Description       string
+	AnomalyScore      float64 // -1 when unscored
+	Age               time.Duration
 	// TimestampMissing is true when the CR carried no usable CreationTimestamp, so Age is
 	// not trusted: the event's aging weight is 0 and the record says present=false
 	// (M-27). Zero value = present, so every existing literal stays a fresh event.
@@ -488,6 +492,8 @@ func NeutralPhysics() PhysicsWitness {
 // WorkloadView is the fully-assembled per-pod picture the decision engine hands to
 // the swappable interfaces each tick.
 type WorkloadView struct {
+	// OutcomeEvents preserves untrusted and audit-only records independently of belief.
+	OutcomeEvents      []SecurityEventInfo
 	Pod                Pod
 	Telemetry          Telemetry
 	Phase              WorkloadPhase
@@ -529,6 +535,11 @@ type ContextSignals struct {
 // controller builds from a v1alpha1.PhorvexPolicy once per tick, then passes to the
 // interfaces — so interface packages never import the API package.
 type Policy struct {
+	TrustBoundarySince           time.Time
+	DecisionAssets               map[string]string
+	MayBreachSLO                 bool
+	TrustBoundaryReady           bool
+	TrustBoundaryReason          string
 	Tenant                       string
 	Namespace                    string
 	Mode                         string
@@ -575,6 +586,7 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
+	Existential *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Claim     *ClaimScope
 	Tenant    string

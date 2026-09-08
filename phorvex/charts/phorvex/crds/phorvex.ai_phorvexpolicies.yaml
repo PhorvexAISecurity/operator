@@ -266,6 +266,16 @@ spec:
                     - message: tickInterval must be a positive duration
                       rule: duration(self) > duration('0s')
                 type: object
+              existential:
+                description: ExistentialSpec controls the narrowly scoped M99 availability
+                  exception.
+                properties:
+                  mayBreachSLO:
+                    default: false
+                    description: MayBreachSLO permits only SLO/availability exceptions
+                      for qualified M99 full containment.
+                    type: boolean
+                type: object
               mode:
                 default: dryRun
                 description: |-
