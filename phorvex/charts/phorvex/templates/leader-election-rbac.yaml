@@ -1,4 +1,4 @@
-# The v0.33 client-go LeaseLock uses Get/Create/Update only. Lease creation cannot
+# The v0.34 client-go LeaseLock uses Get/Create/Update only. Lease creation cannot
 # be restricted by resourceNames, so keep this grant in the operator namespace.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

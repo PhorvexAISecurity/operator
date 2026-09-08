@@ -1,6 +1,6 @@
 # PHORVEXSEC-211 / M-5 — implementation and remaining verification
 
-Baseline: ea5d5cad4990365f55e61eddb3da2c6bfc2009a1 (v0.4.96), controller-runtime v0.21.0, client-go v0.33.0, chart 0.1.4. DEV: Milad. Independent review requested from Hami. DEVOPS verifier assignment and approval remain open.
+Baseline: ea5d5cad4990365f55e61eddb3da2c6bfc2009a1 (v0.4.96), controller-runtime v0.21.0, client-go v0.34.0, chart 0.1.4. DEV: Milad. Independent review requested from Hami. DEVOPS verifier assignment and approval remain open.
 
 ## Corrected diagnosis and delivered scope
 
