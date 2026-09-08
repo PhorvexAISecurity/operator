@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
@@ -28,11 +29,17 @@ import (
 // SecurityEvent stream. Built once per tick (NFR1: <1s for <=1000 pods) so per-tenant
 // processing is cheap.
 type Snapshot struct {
-	Pods       []model.Pod
-	PodByKey   map[string]*model.Pod
-	Graph      *graph.Graph
-	Events     []model.SecurityEventInfo
-	EventByPod map[string][]model.SecurityEventInfo
+	// M-34 observation substrate, separate from the numerical physics projection.
+	NamespaceLabels         map[string]map[string]string
+	Policies                []v1alpha1.PhorvexPolicy
+	PodInventoryComplete    bool
+	PolicyInventoryComplete bool
+	EventInventoryComplete  bool
+	Pods                    []model.Pod
+	PodByKey                map[string]*model.Pod
+	Graph                   *graph.Graph
+	Events                  []model.SecurityEventInfo
+	EventByPod              map[string][]model.SecurityEventInfo
 	// DryRunNamespaces are namespaces annotated phorvex.ai/dry-run=true|1|yes — a
 	// per-namespace actuation freeze independent of any policy's mode (FR8).
 	DryRunNamespaces map[string]bool
@@ -174,12 +181,14 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	g := graph.Build(gin)
 
 	snap := &Snapshot{
-		Pods:             pods,
-		PodByKey:         map[string]*model.Pod{},
-		Graph:            g,
-		EventByPod:       map[string][]model.SecurityEventInfo{},
-		DryRunNamespaces: dryRunNS,
-		Now:              now,
+		Pods:                 pods,
+		PodByKey:             map[string]*model.Pod{},
+		Graph:                g,
+		EventByPod:           map[string][]model.SecurityEventInfo{},
+		DryRunNamespaces:     dryRunNS,
+		Now:                  now,
+		NamespaceLabels:      nsLabels,
+		PodInventoryComplete: true,
 	}
 	for i := range snap.Pods {
 		snap.PodByKey[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name] = &snap.Pods[i]
@@ -188,8 +197,16 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	// SecurityEvent stream.
 	events, byPod, err := collectEvents(ctx, c, now)
 	if err == nil {
+		snap.EventInventoryComplete = true
 		snap.Events = events
 		snap.EventByPod = byPod
+	}
+
+	// Best effort: failure is UNKNOWN for M-34, not an empty policy inventory.
+	var policies v1alpha1.PhorvexPolicyList
+	if err := c.List(ctx, &policies); err == nil {
+		snap.Policies = policies.Items
+		snap.PolicyInventoryComplete = true
 	}
 
 	// P-PHYSICS additive scan: node capacity + live PodDisruptionBudgets. Best-effort

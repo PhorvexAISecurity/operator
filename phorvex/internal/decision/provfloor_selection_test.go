@@ -38,10 +38,15 @@ func decoyScenario(t *testing.T, decoyWeight float64) (decoySelected, realSelect
 		}
 		return 40
 	}
+	// Fresh, UNACTUATED pods: only the always-on clocks (M-28 fail-opens on the absent epoch
+	// clocks, so the provenance floor — not the cadence cap — governs their first move; the cap
+	// still vetoes the podIdentity/session-clocked actions on the fresh decoy).
 	decoy := covView("decoy", true, 90*time.Second, false) // fresh: just clears feasibility
+	decoy.ExposureByVariable = realisticClocks(90 * time.Second)
 	decoy.Pod.Labels = map[string]string{"role": "decoy"}
 	decoy.Neighbors = []model.NeighborRef{{Key: "ns/decoy-nb", Value: 5.0}}
 	real := covView("foothold", true, 14*time.Minute, false) // genuine, nearly overdue
+	real.ExposureByVariable = realisticClocks(14 * time.Minute)
 	real.Pod.Labels = map[string]string{"role": "real"}
 	real.Neighbors = []model.NeighborRef{{Key: "ns/real-nb", Value: 5.0}}
 
