@@ -290,7 +290,16 @@ func (t Telemetry) AppLevelPresent() bool {
 }
 
 // Pod is the K8s-observed state of one protected pod.
+type RotationOwnership struct {
+	Eligible             bool
+	Reason               string
+	OwnerUID             string
+	OwnerResourceVersion string
+}
+
 type Pod struct {
+	RotationOwnership RotationOwnership
+
 	Namespace       string
 	Name            string
 	UID             string
@@ -529,6 +538,8 @@ type ContextSignals struct {
 // controller builds from a v1alpha1.PhorvexPolicy once per tick, then passes to the
 // interfaces — so interface packages never import the API package.
 type Policy struct {
+	NativeRotate bool // M47: enforce validated ownership for the native delete path.
+
 	Tenant                       string
 	Namespace                    string
 	Mode                         string
