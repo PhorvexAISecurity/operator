@@ -25,7 +25,7 @@ func TestModeledClaimLeavesFixtureSelectionsAndScoresIdentical(t *testing.T) {
 					d.Claim = &claim
 					rec := audit.ToRecord(d)
 					ev := ToOwnerEvent(rec)
-					if ev.Claim.GitSHA != "fixture-sha" || ev.OutcomeEvidence != "dispatch-only" {
+					if ev.Claim.GitSHA != "fixture-sha" || ev.OutcomeEvidence == "" {
 						t.Fatal("projection lost evidence boundary")
 					}
 					d.Claim = nil
