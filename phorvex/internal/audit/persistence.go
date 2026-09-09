@@ -23,9 +23,11 @@ func (l *Logger) writeRecord(tenant string, rec any) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	out := l.jsonOut
+	route := ""
 	if l.sinkFor != nil {
 		if w := l.sinkFor(tenant); w != nil {
 			out = w
+			route = tenant
 		}
 	}
 	if out == nil {
@@ -51,8 +53,15 @@ func (l *Logger) writeRecord(tenant string, rec any) error {
 		}
 	}
 	if err != nil {
+		if l.degraded == nil {
+			l.degraded = map[string]bool{}
+		}
+		l.degraded[route] = true
 		persistenceErrors.Inc()
 		l.log.Error(err, "audit persistence failed", "tenant", tenant)
+	} else if l.degraded[route] {
+		delete(l.degraded, route)
+		l.log.Info("audit sink recovered for subsequent record; prior failed records remain unresolved", "tenant", tenant)
 	}
 	return err
 }

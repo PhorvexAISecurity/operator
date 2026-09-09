@@ -179,7 +179,8 @@ type Logger struct {
 	// [P-VCLUSTER O10] sinkFor, when set, routes each record to a PER-TENANT sink (by rec.Tenant) so a
 	// noisy tenant's rotation cannot evict another tenant's audit history. nil => the single jsonOut
 	// (byte-identical single-tenant path).
-	sinkFor func(tenant string) io.Writer
+	sinkFor  func(tenant string) io.Writer
+	degraded map[string]bool // sink routes awaiting a subsequent successful persistence attempt
 	// OnlySelected, when true, logs only Selected (non-noop) decisions to the logger
 	// to keep operator logs quiet; the JSON sink (if set) always gets every record.
 	OnlySelected bool

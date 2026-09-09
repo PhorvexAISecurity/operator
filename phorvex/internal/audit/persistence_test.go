@@ -113,3 +113,30 @@ func errorCount() float64 {
 	_ = persistenceErrors.Write(&m)
 	return m.GetCounter().GetValue()
 }
+
+func TestM017SinkRecoveryDoesNotClearOtherTenantFailure(t *testing.T) {
+	a, b := &faultSink{syncErr: errors.New("sync failure")}, &faultSink{}
+	l := New(logr.Discard(), nil)
+	l.SetTenantSink(func(tenant string) io.Writer {
+		if tenant == "a" {
+			return a
+		}
+		return b
+	})
+	if err := l.Record(model.Decision{Tenant: "a"}); err == nil {
+		t.Fatal("missing failure")
+	}
+	if err := l.Record(model.Decision{Tenant: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	if !l.degraded["a"] {
+		t.Fatal("other tenant success cleared failed route")
+	}
+	a.syncErr = nil
+	if err := l.Record(model.Decision{Tenant: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if l.degraded["a"] {
+		t.Fatal("recovery not observed")
+	}
+}
