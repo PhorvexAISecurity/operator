@@ -4,7 +4,9 @@ Baseline: ea5d5cad4990365f55e61eddb3da2c6bfc2009a1 (v0.4.96), controller-runtime
 
 ## Corrected diagnosis and delivered scope
 
-The Helm and umbrella defaults already enable election. The binary defaults false. Per the ticket's explicit product-support decision, this PR does **not** change that binary default. Direct production invocation must explicitly use `--leader-elect=true` until its support/default ruling is settled.
+The Helm and umbrella defaults already enable election. Following Mostafa's explicit approval on 2026-09-09 (Telegram group message 1100801, replying to 1100800), the direct binary now also defaults `--leader-elect` to true. His decision: default safety must not depend on installation method. An explicit `--leader-elect=false` remains available for an isolated single-instance run. This approval resolves the default choice only, not operational HA verification or stronger fencing.
+
+Direct manager execution requires working Kubernetes credentials, a resolvable election namespace and Lease permissions in that namespace. All cooperating instances must use the same lock namespace/ID. Existing controller-runtime namespace resolution is unchanged; this change does not add an out-of-cluster namespace override. Missing prerequisites must be corrected rather than silently disabling election.
 
 The existing runner implements NeedLeaderElection=true. Pinned controller-runtime pkg/manager/runnable_group.go also classifies ordinary custom runnables into LeaderElection by default. The historical missing-interface diagnosis is therefore not a demonstrated bypass. Corrected the misleading source comment.
 

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -384,7 +385,14 @@ func (m *Manager) tick(ctx context.Context) {
 	if m.Actuator != nil && m.Actuator.Name() == "native" {
 		ownerReader = m.OwnershipReader
 	}
-	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue, ownerReader)
+	snap, err := ingest.CollectSnapshotForRotationTargets(ctx, m.Client, now, genericAssetValue, ownerReader, func(p *corev1.Pod) bool {
+		for _, e := range due {
+			if p.Namespace == e.namespace && (e.selector == nil || e.selector.Matches(labels.Set(p.Labels))) {
+				return true
+			}
+		}
+		return false
+	})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		return

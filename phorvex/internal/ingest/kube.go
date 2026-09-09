@@ -95,6 +95,21 @@ const gpuPrefix = "nvidia.com/"
 // CollectSnapshot reads pods, Services, NetworkPolicies, RBAC, namespaces and SecurityEvents
 // cluster-wide and projects them into a Snapshot. Read-only (least privilege).
 func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(p *model.Pod) float64, ownerReaders ...client.Reader) (*Snapshot, error) {
+	var reader client.Reader
+	if len(ownerReaders) > 0 {
+		reader = ownerReaders[0]
+	}
+	return collectSnapshot(ctx, c, now, assetValue, reader, nil)
+}
+
+// CollectSnapshotForRotationTargets limits owner API reads to this tick's protected
+// targets while retaining the full Pod inventory for graph and availability inputs.
+func CollectSnapshotForRotationTargets(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, reader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
+	return collectSnapshot(ctx, c, now, assetValue, reader, relevant)
+}
+
+func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, reader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
+	ownerReader := newSnapshotOwnerReader(reader)
 	var podList corev1.PodList
 	if err := c.List(ctx, &podList); err != nil {
 		return nil, err
@@ -124,11 +139,11 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	pods := make([]model.Pod, 0, len(podList.Items))
 	for i := range podList.Items {
 		p := projectPod(&podList.Items[i], now)
-		var ownerReader client.Reader
-		if len(ownerReaders) > 0 {
-			ownerReader = ownerReaders[0]
+		if relevant == nil || relevant(&podList.Items[i]) {
+			p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
+		} else {
+			p.RotationOwnership.Reason = "outside-rotation-targets"
 		}
-		p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
 		ownerKey := p.Namespace + "/" + p.OwnerKind + "/" + p.OwnerName
 		if p.OwnerName != "" {
 			oc := owners[ownerKey]
