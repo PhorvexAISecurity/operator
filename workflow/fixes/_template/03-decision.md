@@ -14,8 +14,12 @@
 
 ## Verification matrix
 
-| Criterion | RED control | GREEN/L0-L2 | L3/L4 | Positive control |
+| Guarantee / real boundary | Baseline fixture + decisive assertion | Head command / owner | Legitimate control | Required layer |
 |---|---|---|---|---|
+
+Use executable commands and realistic producer inputs. Include relevant defaults,
+missing/stale inputs and bypasses. The sealed reviewer starts the baseline fixture
+early; reuse it at head. Do not add another parallel acceptance document.
 
 ## Live safety, abort and cleanup
 

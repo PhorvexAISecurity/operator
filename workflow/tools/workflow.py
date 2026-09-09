@@ -27,6 +27,10 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates
 import attacks
+import evidence_scope
+import delivery
+import preflight
+from types import SimpleNamespace
 from jsonschema import Draft202012Validator, FormatChecker
 
 
@@ -1334,17 +1338,20 @@ def cmd_record_check(args: argparse.Namespace) -> int:
             expected_by = status.get("roles", {}).get("human_owner")
             if key not in {"l2", "l3", "l4", "positive_control"} or not args.approval_ref or not args.rationale:
                 raise ValueError("waiver needs an eligible level, approval reference and rationale")
-        if not gates.assigned(args.by) or args.by != expected_by:
+        if not gates.assigned(args.by) or args.by not in ({expected_by} if args.result == "NOT_REQUIRED" else gates.signers(status, key)):
             raise ValueError(f"check must be signed by {expected_by}")
         if key in {"critique", "decision", "incident", "p3", "patch_equivalence", "final"} and args.by in {
             status.get("roles", {}).get("proposer"), status.get("roles", {}).get("implementer")
         }:
             raise ValueError("independent review cannot be signed by an author")
-        if key in {"critique", "decision", "base_review"} and status.get("profile") != "legacy-migrated":
+        if (key in {"critique", "decision", "base_review"} or (key == "red" and args.by == status.get("roles", {}).get("skeptic"))) and status.get("profile") != "legacy-migrated":
             blind = status.get("blind_derivation", {})
             blind_path = gates.local_file(fix, "02A-blind-derivation.md")
-            if blind.get("status") != "sealed" or not blind_path or blind.get("sha256") != sha256(blind_path):
+            if blind.get("status") != "sealed" or not blind_path or blind.get("sha256") != sha256(blind_path) or blind.get("source_sha") != status.get("baseline", {}).get("code_sha"):
                 raise ValueError("seal independent derivation before reading/reviewing proposal")
+        expected_file = gates.REVIEW_FILES.get(key)
+        if expected_file and args.artifact != expected_file:
+            raise ValueError(f"{key}: must attest {expected_file}")
         if not gates.substantive(fix, args.artifact):
             raise ValueError("artifact missing, outside fix, or unchanged template")
         source = gates.source_for(status, key)
@@ -1367,6 +1374,11 @@ def cmd_record_check(args: argparse.Namespace) -> int:
             if problems:
                 raise ValueError("P3 requires independent incident evidence: " + "; ".join(problems))
             check["incident_sha256"] = status["checks"]["incident"]["sha256"]
+        if getattr(args, "inputs", None):
+            if key not in evidence_scope.REUSABLE or args.result != "PASS":
+                raise ValueError("dependency scopes apply only to reusable PASS checks")
+            check["inputs"] = sorted(args.inputs)
+            check["inputs_sha256"] = evidence_scope.fingerprint(ROOT.parent, source, check["inputs"])
         if key in gates.LIVE_CHECKS:
             check["deployment_digest"] = status.get("deployment", {}).get("digest")
         if args.approval_ref:
@@ -1401,11 +1413,66 @@ def cmd_record_check(args: argparse.Namespace) -> int:
             write_yaml(path, status)
         print(f"{args.fix_id}: {key}={args.result}; revision={status['revision']}")
         return 0
-    except (OSError, ValueError, yaml.YAMLError) as exc:
+    except (OSError, ValueError, subprocess.SubprocessError, yaml.YAMLError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
 
 
+def cmd_submit_review(args):
+    return delivery.transaction(SimpleNamespace(**globals()), args, 'submit')
+
+
+def cmd_review_verdict(args):
+    return delivery.transaction(SimpleNamespace(**globals()), args, 'review')
+
+
+def cmd_review_delta(args):
+    return delivery.delta(SimpleNamespace(**globals()), args)
+
+
+def cmd_handoff_notify(args):
+    try:
+        validate_fix_id(args.fix_id)
+        print(delivery.notification(SimpleNamespace(**globals()), args.fix_id, args.by))
+        return 0
+    except (ValueError, OSError, KeyError, subprocess.SubprocessError) as exc:
+        print(f'FAIL: {exc}', file=sys.stderr)
+        return 1
+
+
+def cmd_preflight(args):
+    try:
+        fix = None
+        status = {}
+        if args.fix_id:
+            validate_fix_id(args.fix_id)
+            fix = FIXES / args.fix_id
+            status = load_yaml(fix / 'STATUS.yaml')
+        base = args.base or status.get('implementation', {}).get('base_sha') or status.get('baseline', {}).get('code_sha') or 'origin/main'
+        head = args.head or status.get('implementation', {}).get('head_sha') or 'HEAD'
+        base = preflight.git(ROOT.parent, 'rev-parse', base + '^{commit}').decode().strip()
+        head = preflight.git(ROOT.parent, 'rev-parse', head + '^{commit}').decode().strip()
+        selected = preflight.plan(ROOT.parent, base, head)
+        if not args.run:
+            shown = selected if getattr(args, 'verbose', False) else {
+                'base_sha': selected['base_sha'], 'head_sha': selected['head_sha'],
+                'changed_path_count': len(selected['changed_paths']),
+                'checks': [{k: job[k] for k in ('id','cwd','tool','version','name') if k in job} for job in selected['jobs']],
+                'external': selected['external']}
+            print(yaml.safe_dump(shown, sort_keys=False)); return 0
+        output = Path(args.output or ('evidence/preflight/receipt.json' if fix else '/tmp/phorvex-preflight.json'))
+        if fix:
+            output = (fix / output).resolve()
+            if fix.resolve() not in output.parents: raise ValueError('receipt must remain inside the fix')
+        output.parent.mkdir(parents=True, exist_ok=True)
+        receipt = preflight.run_plan(ROOT.parent, selected, output, args)
+        print(f'preflight: {receipt["result"]}; receipt={output}')
+        return 0 if receipt['result'] == 'PASS' else 1
+    except (ValueError, OSError, KeyError, subprocess.SubprocessError, yaml.YAMLError) as exc:
+        print(f'FAIL: {exc}', file=sys.stderr); return 1
+
+
+@serialized
 def cmd_packet(args: argparse.Namespace) -> int:
     matches = resolve_fix(args.identifier)
     if len(matches) != 1:
@@ -1422,6 +1489,8 @@ def cmd_packet(args: argparse.Namespace) -> int:
     phase = ("design" if state in {"TRIAGED", "DESIGNING", "CRITIQUED"}
              else "verify" if state in {"AGREED", "IMPLEMENTED", "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED"}
              else "release")
+    if state == 'IN_PR' and status.get('next_action', {}).get('owner') in {'implementer', 'skeptic'}:
+        phase = 'verify'
     read = [f"fixes/{fix_id}/STATUS.yaml", f"stages/{phase}.md"]
     read += [f"issues/entries/{pad_issue(i)}.md" for i in status.get("issues", [])]
     if (FIXES / fix_id / "00-intake.md").is_file():
@@ -1434,7 +1503,7 @@ def cmd_packet(args: argparse.Namespace) -> int:
         action = "Derive independently from the pinned baseline, then seal; only then open the proposal."
     else:
         scopes = {
-            "design": {"proposer": ["01-proposal.md"], "skeptic": ["02A-blind-derivation.md", "02B-critique.md", "03-decision.md"]},
+            "design": {"proposer": ["01-proposal.md"], "skeptic": ["02A-blind-derivation.md", "02B-critique.md", "03-decision.md", "evidence/baseline/", "evidence/repro/", "red attestation"]},
             "verify": {"implementer": ["implementation code/tests", "04-diff.patch", "05-evidence.md", "evidence/"],
                        "skeptic": ["evidence/incident.md", "evidence/base-review.md", "evidence/p3/verdict.md"]},
             "release": {"live_verifier": ["evidence/l3/", "evidence/l4/"], "skeptic": ["06-verdict.md"]},
@@ -1458,6 +1527,12 @@ def cmd_packet(args: argparse.Namespace) -> int:
     packet["owns_next_action"] = status.get("roles", {}).get(
         status.get("next_action", {}).get("owner"), status.get("next_action", {}).get("owner")) == args.agent
     if not blind:
+        packet["checks"] = {key: value.get("result") for key, value in status.get("checks", {}).items()}
+        packet["handoff_commands"] = {
+            "implementer": "preflight --run; submit-review --file submit.yaml",
+            "skeptic": "review-delta; review-verdict --result PASS|FAIL --file review.yaml",
+            "coordinator": "deliver PR under recorded scope; preserve live obligations",
+        }
         packet["implementation"] = status.get("implementation", {})
         packet["deployment"] = status.get("deployment", {})
         packet["allowed_transitions"] = sorted(TRANSITIONS.get(state, []))
@@ -1807,7 +1882,11 @@ def cmd_transition(args: argparse.Namespace) -> int:
     responsible = {"CRITIQUED": "skeptic", "AGREED": "skeptic", "IMPLEMENTED": "implementer",
                    "OFFLINE_VERIFIED": "implementer", "DIFF_REVIEW_PASSED": "skeptic",
                    "PR_READY": "skeptic", "LIVE_VERIFIED": "live_verifier", "CLOSED": "skeptic"}.get(args.target, "coordinator")
-    if args.target in gates.STAGES and args.by not in {
+    review_return = (args.target == "IMPLEMENTED" and status.get("state") == "OFFLINE_VERIFIED"
+                     and args.by == roles.get("skeptic")
+                     and status.get("checks", {}).get("p3", {}).get("result") == "FAIL"
+                     and status["checks"]["p3"].get("source_sha") == status.get("implementation", {}).get("head_sha"))
+    if args.target in gates.STAGES and not review_return and args.by not in {
         roles.get("coordinator"), roles.get("human_owner"), roles.get(responsible)
     }:
         print(f"FAIL: transition belongs to {responsible} or coordinator", file=sys.stderr)
@@ -4323,10 +4402,31 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--artifact", required=True, help="path relative to the fix")
     check.add_argument("--result", choices=["PASS", "FAIL", "UNAVAILABLE", "NON_DISCRIMINATING", "NOT_REQUIRED"], default="PASS")
     check.add_argument("--command", required=True, help="exact reproduction/review command")
+    check.add_argument("--inputs", action="append", help="Complete dependency file/directory; reviewer must approve before reuse")
     check.add_argument("--approval-ref")
     check.add_argument("--rationale")
     check.add_argument("--expect-revision", required=True, type=int)
     check.set_defaults(func=cmd_record_check)
+
+    for name, handler in [('submit-review', cmd_submit_review), ('review-verdict', cmd_review_verdict)]:
+        batch = sub.add_parser(name, help='Atomic role handoff: record evidence, validate gates and notify peer')
+        batch.add_argument('fix_id')
+        batch.add_argument('--file', required=True, help='Role-specific YAML evidence package')
+        batch.add_argument('--by', required=True)
+        batch.add_argument('--expect-revision', type=int, required=True)
+        batch.add_argument('--no-notify', action='store_true', help='Explicit foreground handoff; otherwise bus notification is automatic')
+        if name == 'review-verdict': batch.add_argument('--result', choices=['PASS', 'FAIL'], required=True)
+        batch.set_defaults(func=handler)
+    delta = sub.add_parser('review-delta', help='Changes since last passing independent review; never grants reuse automatically')
+    delta.add_argument('fix_id'); delta.add_argument('--agent', required=True); delta.set_defaults(func=cmd_review_delta)
+    notify = sub.add_parser('handoff-notify', help='Retry a committed handoff notification without repeating checks')
+    notify.add_argument('fix_id'); notify.add_argument('--by', required=True); notify.set_defaults(func=cmd_handoff_notify)
+    local = sub.add_parser('preflight', help='Plan/run selected local CI checks, with matching tool versions')
+    local.add_argument('fix_id', nargs='?'); local.add_argument('--base'); local.add_argument('--head')
+    local.add_argument('--run', action='store_true'); local.add_argument('--output')
+    local.add_argument('--verbose', action='store_true', help='Show full commands and changed paths instead of bounded plan')
+    local.add_argument('--python'); local.add_argument('--helm'); local.add_argument('--timeout', type=int, default=600)
+    local.set_defaults(func=cmd_preflight)
 
     render = sub.add_parser("render-issues", help="render canonical master register")
     render.add_argument("--check", action="store_true")

@@ -8,7 +8,8 @@ under `operations/AUTONOMY.md`, without routine human checkpoints.
 2. Run `brief <fix> --agent <assigned-id>`; coordinator assigns missing roles.
    Read its stage, issue, source and artifacts. Don't preload the register, anatomy,
    archives or raw history. `MANIFEST.yaml` locates authorities.
-3. Complete owned work, record evidence and hand off directly. Continue the peer loop
+3. Complete owned work; use `submit-review` / `review-verdict` for evidence and
+   state handoffs (`operations/HANDOFFS.md`). Continue the peer loop
    until PR delivery or a concrete external blocker; no human relay is needed.
 
 ## Quality boundaries
@@ -17,7 +18,7 @@ under `operations/AUTONOMY.md`, without routine human checkpoints.
   `02A`. Never manufacture a blind review after exposure.
 - Authors cannot sign critique, decision, base review, incident, P3 or final review,
   or live verification of their own implementation.
-- `record-check` binds signer, artifact hash and source. Missing evidence stays missing.
+- `record-check` and batched handoffs bind signer, artifact hash and source. Missing evidence stays missing.
   Selection, dispatch, execution, confirmation and attack mitigation are distinct.
 - Before P3, independently reproduce the incident through real producers, assert
   fixture relevance, test relevant predicate arms/defaults/stale inputs, and include

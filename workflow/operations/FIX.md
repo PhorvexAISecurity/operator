@@ -1,18 +1,19 @@
 # Named issue → reviewed PR
 
-“Start issue X” delegates the PR path under `AUTONOMY.md`; merge and shared-cluster
-changes are separate. Explicit narrower user scope wins.
+“Start issue X” delegates PR delivery under `AUTONOMY.md`; narrower user scope wins.
+Merge and shared-cluster changes remain separate.
 
 Run `doctor`, select/create the fix, assign two independent participants, then
-`brief <fix> --agent <id>`. Reuse peers or spawn a reviewer with baseline-only context.
-Keep the fix record in the code branch's own `workflow/fixes/<id>` (`WORKTREES.md`).
-Check push/PR access early. New fixes inherit PR scope; coordinator uses `start <fix>
---by <id> --expect-revision N` for an existing authorized fix. Holds aren't silently resumed.
+`brief <fix> --agent <id>`. Reuse peers; if none is available, spawn an independent
+reviewer with baseline-only context. Keep code and records in the issue
+worktree (`WORKTREES.md`). Check push/PR access early. New fixes inherit PR scope;
+use `start` for an existing authorized fix. Holds aren't silently resumed.
 
-Follow the indicated stage. Agents settle conservative design/security choices with
-evidence, without routine human signoffs. Keep only current findings; `03-decision`
-becomes the single implementation contract. Implementers record their own source pins.
+Follow the indicated stage. Freeze one implementation contract in `03-decision`.
+After the blind seal, start the baseline reproduction alongside implementation
+preparation. Use `preflight`, `submit-review`, `review-delta` and `review-verdict`;
+read `HANDOFFS.md` for package schemas and reuse rules when needed.
 
-After offline checks and independent incident/P3 pass, push/open the PR, record its
-URL/reviewed head, reach IN_PR and return the link. Don't stop at PR_READY or ask again.
-Required post-deployment L3/L4 remain pending and visible; PR delivery is not closure.
+After offline checks and independent incident/P3 pass, push/open the PR, record
+URL/reviewed head and return the link. Continue until delivery or a concrete blocker.
+Required post-deployment L3/L4 remain pending; opening a PR is not closure.

@@ -59,6 +59,11 @@ def sandbox():
         ):
             directory.mkdir(parents=True, exist_ok=True)
         shutil.copytree(SOURCE_ROOT / "fixes" / "_template", root / "fixes" / "_template")
+        # Existing reconciliation fixtures exercise the legacy command path. New
+        # handoff tests explicitly enable delivery_version=1 and execute preflight.
+        template = root / 'fixes/_template/STATUS.yaml'
+        old_template = yaml.safe_load(template.read_text()); old_template.pop('delivery_version', None)
+        template.write_text(yaml.safe_dump(old_template))
         shutil.copytree(SOURCE_ROOT / "intake" / "_template", root / "intake" / "_template")
         shutil.copytree(
             SOURCE_ROOT / "campaigns" / "_template", root / "campaigns" / "_template"
@@ -258,7 +263,7 @@ def prepare_fix_evidence(fix_id: str, repo: Path) -> None:
                                   'sha256': workflow.sha256(blind), 'sealed_at': workflow.utcnow()}
     workflow.write_yaml(path, status)
     for key, role in workflow.gates.CHECK_ROLES.items():
-        if key == 'patch_equivalence':
+        if key in {'patch_equivalence', 'preflight'}:
             continue
         artifact = workflow.gates.REVIEW_FILES.get(key, f'evidence/{key}.txt')
         target = fix/artifact

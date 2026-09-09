@@ -1,39 +1,40 @@
 # Implement and verify: AGREED → PR_READY
 
-Read status, agreed decision, and the necessary source. The implementer owns
-code and offline evidence; the skeptic owns P3 and must not silently repair
-the patch they are reviewing.
+The implementer owns code and its tests; the skeptic owns independent incident/P3
+review. Both use the frozen acceptance matrix in `03-decision.md`. A missing proof
+is not a passing check. The reviewer never silently fixes the patch under review.
 
-1. Implement in an isolated code worktree at the reviewed baseline. Record
-   branch/base/head using implementer-owned `configure` inputs. If base changed,
-   skeptic signs `base_review` against the new base and original analysis before
-   implementation acceptance; keep the original seal. Regenerate `04-diff.patch` with
-   `git diff --binary <base> <head>`; no unrelated edits.
-2. Prove RED at the intended assertion on the baseline, then GREEN at head.
-   Run L0 build/unit/static checks, L1 invariants, and L2 multi-tick comparisons.
-   Record exact commands, results and positive controls in immutable raw files;
-   summarize criterion→artifact in `05-evidence.md`.
-   Fill `evidence/incident.md`: use realistic inputs through the production
-   producer and changed path; assert the fixture produces the decisive values.
-   Compare baseline/head outcomes and preserve a legitimate positive control.
-   Test relevant bypasses, compound-predicate arms, stale/missing inputs and
-   boundaries. Manually setting the final flag proves only the local branch.
-3. Sign `implementation`, `red`, `l0`, `l1`, `l2`, `positive_control` using
-   `record-check`. Missing layers are unavailable or explicitly waived; a
-   pending field cannot pass a transition.
-4. Skeptic independently compares the complete diff to the agreed scope,
-   challenges RED/test fidelity and behavioral predictions, and attempts at
-   least one adversarial case. Independently reproduce the incident trace,
-   sign `incident`, then write `evidence/p3/verdict.md` and sign `p3`. Missing or
-   non-discriminating incident evidence blocks P3 even with green unit tests.
-   Changing the signal, scope or incident evidence requires renewed review.
-5. Pass → `DIFF_REVIEW_PASSED` → `PR_READY` → push/open PR under recorded scope;
-   failure returns to implementation with counter-evidence. Do not create the
-   final verdict at P3. Required live verification remains explicit in the PR.
+1. Continue the baseline reproduction prepared after the blind seal. Either its
+   implementer or the independent reviewer may sign `red`; one valid baseline
+   signature is enough. Do not send evidence back merely to change its signer.
+   Keep the same real producers, decisive assertions and legitimate controls at head.
+2. Implement at the reviewed base. Commit code, record source pins, and run
+   `preflight <fix> --run`. It selects local CI checks with matching tool versions;
+   shared E2E/deployment are explicitly separate. Missing tools or failed/stale
+   checks block submission. Run the acceptance matrix's L0–L2 tests too: preflight
+   does not invent issue-specific coverage. Retain exact commands and raw outputs.
+3. `submit-review <fix> --file submit.yaml --by <implementer> --expect-revision N`
+   records the author's checks, generates the exact pinned diff, validates the
+   offline gates, advances state and notifies the assigned reviewer in one transaction.
+   The package may include source pins. See `operations/HANDOFFS.md` for its small schema.
+4. Reviewer: run `review-delta <fix> --agent <reviewer>`, inspect the complete changed
+   paths, reproduce the incident, and challenge defaults, missing/stale inputs and
+   relevant predicate arms. A mocked final boolean is not producer evidence. Sign
+   `review-verdict <fix> --result PASS|FAIL --file review.yaml --by <reviewer>
+   --expect-revision N`. PASS requires independent incident evidence; FAIL returns
+   concrete counterexamples to the implementer. PASS advances to PR_READY and hands
+   PR delivery to the coordinator. An existing PR stays open while its new head is reviewed.
+5. Reuse a previous passing check only when its COMPLETE dependency paths were
+   declared and independently approved. Reuse validates unchanged Git tree entries,
+   raw evidence and the retained scope approval; it records the original run source
+   instead of claiming another run. Changed inputs require affected checks again.
+   Incident/P3 still need current independent signoff; P3 is never reused. Packaging
+   changes always need their own archive/render checks even when Go code is unchanged.
 
-Rebase changes the pins: regenerate the patch and revalidate affected checks.
-A signed `patch_equivalence` is required when PR reviewed head differs from
-implementation head. It does not turn stale test evidence into current evidence.
+A failed batch rolls back its status, attestations and transitions. Notification
+happens after commit; if transport fails, use `handoff-notify`, not another submission.
+`record-check` and explicit transitions remain available for individual work and
+historical records. New fixes require local preflight before offline acceptance.
 
-Handoff: reviewed head, P3 artifact, test results, unresolved risk, PR scope.
-Default named-fix delivery includes `pr_open`; do not ask again or stop at PR_READY.
+After PR_READY, push/open under recorded scope and return the link. Required live
+verification remains explicit; opening a PR does not establish deployed behavior.

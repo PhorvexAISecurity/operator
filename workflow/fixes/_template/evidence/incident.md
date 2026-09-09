@@ -1,6 +1,7 @@
 # Incident-to-fix evidence
 
-Implementer supplies the reproduction; skeptic independently runs and signs
+Start the reproduction after the independent seal. Either participant may supply
+the fixture and sign its executed baseline RED; skeptic independently runs and signs
 `record-check <fix> incident --by <skeptic> --artifact evidence/incident.md ...`
 before P3. Keep this artifact immutable after signing; corrections require new
 attestations. Inline results or reference retained raw evidence by path/hash.

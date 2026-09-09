@@ -127,7 +127,8 @@
               "IMPLEMENTATION",
               "FINAL",
               "EQUIVALENCE",
-              "ATTACK"
+              "ATTACK",
+              "PREFLIGHT"
             ]
           },
           "retention": {

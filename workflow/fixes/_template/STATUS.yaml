@@ -1,5 +1,6 @@
 schema_version: 1
 protocol_version: 2
+delivery_version: 1
 revision: 0
 change_class: null
 approvals: {}
@@ -61,8 +62,8 @@ verification:
   l0: pending
   l1: pending
   l2: pending
-  l3: NOT_REQUIRED_PENDING_APPROVAL
-  l4: NOT_REQUIRED
+  l3: pending
+  l4: pending
   positive_control: pending
 
 synchronization:

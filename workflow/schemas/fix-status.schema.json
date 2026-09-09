@@ -16,7 +16,13 @@
     "next_action"
   ],
   "properties": {
-    "change_class": {"enum": [null, "A", "B"]},
+    "change_class": {
+      "enum": [
+        null,
+        "A",
+        "B"
+      ]
+    },
     "schema_version": {
       "const": 1
     },
@@ -225,6 +231,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "delivery_version": {
+      "const": 1
     }
   },
   "additionalProperties": true,

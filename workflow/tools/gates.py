@@ -9,6 +9,7 @@ import hashlib
 import re
 import subprocess
 import attacks
+import evidence_scope
 from pathlib import Path
 
 STAGES = ('TRIAGED DESIGNING CRITIQUED AGREED IMPLEMENTED OFFLINE_VERIFIED '
@@ -16,7 +17,7 @@ STAGES = ('TRIAGED DESIGNING CRITIQUED AGREED IMPLEMENTED OFFLINE_VERIFIED '
           'SYNCHRONIZED CLOSED').split()
 CHECK_ROLES = {
     'critique': 'skeptic', 'decision': 'skeptic', 'base_review': 'skeptic', 'implementation': 'implementer',
-    'red': 'implementer', 'l0': 'implementer', 'l1': 'implementer', 'l2': 'implementer',
+    'red': 'implementer', 'preflight': 'implementer', 'l0': 'implementer', 'l1': 'implementer', 'l2': 'implementer',
     'positive_control': 'implementer', 'incident': 'skeptic', 'p3': 'skeptic', 'patch_equivalence': 'skeptic',
     'l3': 'live_verifier', 'l4': 'live_verifier', 'final': 'skeptic',
 }
@@ -51,6 +52,14 @@ def contract_digest(status: dict) -> str:
     value = {'change_class': status.get('change_class'),
              'verification': {k: verification.get(k) for k in ('required', 'live_required', 'soak_required')}}
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def signers(status: dict, key: str) -> set[str]:
+    roles = status.get('roles', {})
+    owners = {roles.get(CHECK_ROLES[key])}
+    if key == 'red':
+        owners.add(roles.get('skeptic'))
+    return {value for value in owners if assigned(value)}
 
 
 def source_for(status: dict, key: str) -> str | None:
@@ -88,7 +97,7 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
             problems.append(f'{key}: cannot waive this check')
         if check.get('by') != roles.get('human_owner') or not check.get('approval_ref') or not check.get('rationale'):
             problems.append(f'{key}: waiver requires human_owner, approval_ref, and rationale')
-    elif check.get('by') != roles.get(CHECK_ROLES[key]) or not assigned(check.get('by')):
+    elif check.get('by') not in signers(status, key):
         problems.append(f'{key}: signer must be assigned {CHECK_ROLES[key]}')
     if key == 'decision' and check.get('contract_sha256') != contract_digest(status):
         problems.append('decision: verification plan changed after agreement')
@@ -99,6 +108,9 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
         incident = status.get('checks', {}).get('incident', {})
         if not incident.get('sha256') or check.get('incident_sha256') != incident.get('sha256'):
             problems.append('p3: incident evidence changed or was not reviewed; re-sign P3')
+    problems += evidence_scope.validate(root, fix, check)
+    if check.get('reuse_approval') and check['reuse_approval'].get('by') != roles.get('skeptic'):
+        problems.append('reuse approval signer differs from current independent reviewer')
     expected = source_for(status, key)
     if not expected or check.get('source_sha') != expected:
         problems.append(f'{key}: evidence source_sha differs from current {expected}')
@@ -119,6 +131,12 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
         deployment = status.get('deployment', {})
         if check.get('deployment_digest') != deployment.get('digest') or not deployment.get('digest'):
             problems.append(f'{key}: evidence deployment digest differs')
+    if key == 'preflight' and result == 'PASS' and path and path.is_file():
+        try:
+            import preflight
+            preflight.validate_receipt(root.parent, path, status['implementation']['base_sha'], expected)
+        except (ValueError, OSError, KeyError, subprocess.SubprocessError) as exc:
+            problems.append(f'preflight: {exc}')
     # A check is useful only if its raw artifact is retained and hash-indexed.
     import yaml
     manifest_path = fix / 'evidence/manifest.yaml'
@@ -191,6 +209,8 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
             if result.returncode or not patch or not result.stdout or patch.read_bytes() != result.stdout:
                 missing.append('04-diff.patch must equal nonempty git diff --binary base_sha head_sha')
     if reached('OFFLINE_VERIFIED'):
+        if status.get('delivery_version') == 1:
+            missing += check_errors(root, fix, status, 'preflight')
         for key in ('red', 'l0', 'l1', 'l2', 'positive_control'):
             missing += check_errors(root, fix, status, key)
     if reached('DIFF_REVIEW_PASSED'):

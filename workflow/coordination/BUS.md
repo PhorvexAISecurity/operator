@@ -122,3 +122,11 @@ after a turn ends. Report idle resumption as unverified until actually observed.
 
 The migrated legacy bus and its historical agent-specific instructions are
 retained under `archive/coordination-v1/`.
+
+## Batched workflow handoffs
+
+`submit-review` and `review-verdict` commit role-owned evidence/state first, then
+send one reference-only bus notification. If sending fails, the state remains
+committed: retry `handoff-notify`, not the entire evidence batch. Successful sends
+are remembered under shared `.runtime/handoffs`; ambiguous crashes can still
+produce duplicates. These commands never create agents or grant new scope.
