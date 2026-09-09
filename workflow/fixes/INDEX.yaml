@@ -186,4 +186,4 @@ fixes:
     - T0-C
     stacked_on: []
     branch: t1/control-economics-m140-tenant-state-lifecycle
-    head_sha: c36e041390b487ce89ef191cc6dc63057a70589f
+    head_sha: 815e2ac309c167cfaff0f3026a0facbc85cac785
