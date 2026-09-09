@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -155,17 +156,19 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 		WithStatusSubresource(&v1.PhorvexPolicy{}).
 		WithObjects(policy, sentinel).Build()
 	fa := &fakeActuator{}
+	notifications := record.NewFakeRecorder(4)
 	var auditSink bytes.Buffer
 	m := &Manager{
 		BrainImage: "record-image", GitSHA: "record-sha",
-		Client:     c,
-		Clock:      exposure.NewClock(),
-		Optimizer:  &killSwitchOptimizer{},
-		Audit:      audit.New(logr.Discard(), &auditSink),
-		Actuator:   fa,
-		KillSwitch: &KillSwitch{Client: c, Namespace: operatorNS},
-		Log:        logr.Discard(),
-		policies:   map[string]*policyEntry{},
+		Client:            c,
+		Clock:             exposure.NewClock(),
+		Optimizer:         &killSwitchOptimizer{},
+		Audit:             audit.New(logr.Discard(), &auditSink),
+		Actuator:          fa,
+		ActuationRecorder: notifications,
+		KillSwitch:        &KillSwitch{Client: c, Namespace: operatorNS},
+		Log:               logr.Discard(),
+		policies:          map[string]*policyEntry{},
 	}
 	e := &policyEntry{
 		key:       types.NamespacedName{Namespace: namespace, Name: policyName},
@@ -233,6 +236,9 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 		t.Fatalf("engaged status did not match the actuation gate: %+v", gotPolicy.Status)
 	}
 
+	if len(notifications.Events) != 0 {
+		t.Fatal("selected but suppressed decision emitted notification")
+	}
 	var gotSentinel corev1.ConfigMap
 	if err := c.Get(context.Background(), client.ObjectKeyFromObject(sentinel), &gotSentinel); err != nil {
 		t.Fatal(err)
@@ -247,6 +253,9 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	}
 	snap.Now = now.Add(time.Second)
 	m.processTenant(context.Background(), snap, e, engaged)
+	if len(notifications.Events) != 1 {
+		t.Fatalf("active attempt events = %d", len(notifications.Events))
+	}
 	if fa.calls != 1 {
 		t.Fatalf("kill-switch disengaged: actuator called %d times, want 1", fa.calls)
 	}
@@ -269,6 +278,13 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	}); got != 0 {
 		t.Fatalf("successful status reconciliation left disagreement gauge at %v", got)
 	}
+	e.spec.Mode = v1.ModeDryRun
+	snap.Now = now.Add(2 * time.Second)
+	m.processTenant(context.Background(), snap, e, false)
+	if fa.calls != 1 || len(notifications.Events) != 1 {
+		t.Fatal("dry-run dispatched or emitted notification")
+	}
+
 }
 
 func TestKillSwitchStatusDisagreementSurvivesFailedTransition(t *testing.T) {

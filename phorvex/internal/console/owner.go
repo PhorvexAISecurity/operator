@@ -41,10 +41,10 @@ type OwnerEvent struct {
 	Handler         string              `json:"handler,omitempty"`
 	ObjectsTouched  []string            `json:"objectsTouched,omitempty"`
 	Reversible      bool                `json:"reversible"`      // mutationKind -> reversible|forward-only chip
-	AttackPrevented bool                `json:"attackPrevented"` // Deprecated: dispatch-derived, not confirmed prevention
-	WorkPreserved   bool                `json:"workPreserved"`   // Deprecated: action-derived, not measured preservation
+	AttackPrevented bool                `json:"attackPrevented"` // Deprecated: always false, confirmation unavailable
+	WorkPreserved   bool                `json:"workPreserved"`   // Deprecated: always false, confirmation unavailable
 	HarmCaused      bool                `json:"harmCaused"`
-	SLOKept         bool                `json:"sloKept"`      // Deprecated: feasibility assumption, not measured SLO
+	SLOKept         bool                `json:"sloKept"`      // Deprecated: always false, confirmation unavailable
 	AttackStage     string              `json:"attackStage"`  // COARSE plain-English label, not the raw enum
 	Why             string              `json:"why"`          // SERVER-AUTHORED, owner-safe outputs only
 	BlindOutcome    string              `json:"blindOutcome"` // r6 counterfactual OUTCOME, sanitized
@@ -70,23 +70,17 @@ func coarseStage(stage string) string {
 // ownerWhy authors a plain-English rationale from OWNER-SAFE outputs only. It NEVER reads
 // rec.Reason / rec.CounterfactualNote (those inline the EMR/lambda/per-$ math verbatim).
 //
-// [TRUTHFULNESS FIX] Every branch below is written in the PAST TENSE — it asserts to the
-// customer that a defence WAS PERFORMED. Previously this function switched on `action` ALONE
-// and never looked at `actuated`, so a record that was merely EVALUATED (or whose actuation
-// failed) still told the owner "Cleared injected state on the inference workload…". The owner
-// feed admits any record with Selected OR Actuated, so non-actuated records reach here
-// routinely. Claiming a defence that did not happen is the worst failure mode this product
-// has: the customer believes they were protected when they were not. `actuated` is now the
-// FIRST gate — no actuation, no success narrative.
+// Dispatch is not effect confirmation. This legacy helper is used only after
+// ownerRecordWhy has interpreted explicit outcome/mode fields conservatively.
 func ownerWhy(action string, actuated, reversible, workPreserved, harm bool) string {
 	if !actuated {
 		if action == "" || action == "noop" {
 			return "Evaluated this workload and took no action. This does not establish absence of a threat."
 		}
-		return "Selected a protective action for this workload, but it was NOT carried out — treat this workload as unprotected for this event."
+		return "Action selected. No execution result recorded."
 	}
 	switch {
-	case action == "quarantine" && workPreserved:
+	case action == "quarantine":
 		return "Attempted network isolation in place. Attacker removal, workload preservation and out-of-band gains are not confirmed by this record."
 	case action == "rotate":
 		return "Dispatched a rotation request. Pod replacement and security effect are not confirmed by this record."
@@ -104,13 +98,57 @@ func ownerWhy(action string, actuated, reversible, workPreserved, harm bool) str
 // ownerWhy: a counterfactual comparison is meaningless (and flattering) when Phorvex itself
 // did nothing.
 func blindOutcome(action string, actuated, workPreserved bool) string {
-	if !actuated {
-		return "No comparison applies — Phorvex did not act on this event."
+	return "No verified comparison with a scheduled defense is available for this record."
+}
+
+// ownerOutcome interprets existing evidence only. No generic confirmation flag,
+// future field, or elapsed time can promote a record to confirmed effect.
+func ownerOutcome(rec audit.Record) string {
+	dispatch := ""
+	if rec.DecisionTrace != nil {
+		dispatch = rec.DecisionTrace.DispatchOutcome
 	}
-	if action == "quarantine" && workPreserved {
-		return "A blind fixed-interval rotation would have deleted this workload — destroying its state."
+	if rec.DryRun {
+		if rec.Actuated || dispatch == model.DispatchEmitted || dispatch == model.DispatchError {
+			return "unknown"
+		}
+		return "dry-run"
 	}
-	return "A blind fixed-interval defense would have acted on a schedule, not on this specific threat."
+	switch dispatch {
+	case model.DispatchError:
+		return "unknown"
+	case model.DispatchNotAttempted:
+		if rec.Actuated {
+			return "unknown"
+		}
+		return "not-attempted"
+	case model.DispatchEmitted:
+		if !rec.Actuated {
+			return "unknown"
+		}
+		return "emitted-unconfirmed"
+	case model.DispatchEmittedFalse:
+		if rec.Actuated {
+			return "unknown"
+		}
+		if ownerRefusal(rec) != "" {
+			return "not-emitted"
+		}
+		return "unknown"
+	case "":
+		if rec.Actuated {
+			return "emitted-unconfirmed"
+		}
+		if ownerRefusal(rec) != "" {
+			return "not-emitted"
+		}
+		if rec.Selected {
+			return "selected"
+		}
+		return "unknown"
+	default:
+		return "unknown"
+	}
 }
 
 // ToOwnerEvent is the WHITELIST projection: explicit field-copy of owner-safe fields ONLY.
@@ -119,12 +157,6 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 	reversible := rec.MutationKind == "reversible" || rec.MutationKind == "swap"
 	workPreserved := false
 	harm := false
-	// derive owner-safe outcome booleans without exposing any score:
-	// (the harness markers / actuator result already encode these; here from the Record's
-	// owner-safe surface — action + mutationKind + handler.)
-	if rec.Action == "quarantine" && rec.Actuated {
-		workPreserved = true
-	}
 	claim := model.NewClaimScope(nil, false, "", "")
 	if rec.DecisionTrace != nil {
 		claim = model.NewClaimScope(nil, false, rec.DecisionTrace.BrainImage, rec.DecisionTrace.GitSHA)
@@ -135,7 +167,7 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 	return OwnerEvent{
 		Representation:  ownerRepresentation(rec),
 		Claim:           claim,
-		OutcomeEvidence: "dispatch-only",
+		OutcomeEvidence: ownerOutcome(rec),
 		Tenant:          rec.Tenant,
 		Time:            rec.Time.Format(time.RFC3339),
 		Namespace:       rec.Namespace,
@@ -146,10 +178,10 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 		Handler:         rec.Handler,
 		ObjectsTouched:  rec.ObjectsTouched,
 		Reversible:      reversible,
-		AttackPrevented: rec.Actuated && rec.Selected && rec.Action != "rotate",
+		AttackPrevented: false,
 		WorkPreserved:   workPreserved,
 		HarmCaused:      harm,
-		SLOKept:         true, // Legacy feasibility assumption; not an independently measured outcome.
+		SLOKept:         false, // Legacy field disabled: no measured outcome available.
 		AttackStage:     coarseStage(rec.Stage),
 		Why:             ownerRecordWhy(rec, reversible, workPreserved, harm),
 		BlindOutcome:    blindOutcome(rec.Action, rec.Actuated, workPreserved),
@@ -200,7 +232,7 @@ func containsStr(haystack, needle string) bool {
 }
 
 // Only fixed, reviewed native refusal reasons may enter the owner-safe narrative.
-func ownerRecordWhy(rec audit.Record, reversible, workPreserved, harm bool) string {
+func ownerRefusal(rec audit.Record) string {
 	if rec.Action == "rotate" && !rec.Actuated && rec.DecisionTrace != nil {
 		switch rec.DecisionTrace.DispatchReason {
 		case "Rotation not performed: ownerless", "Rotation not performed: owner-unresolved", "Rotation not performed: owner-uid-mismatch", "Rotation not performed: owner-terminating", "Rotation not performed: owner-kind-unsupported", "Rotation not performed: owner-state-ineligible":
@@ -211,5 +243,22 @@ func ownerRecordWhy(rec audit.Record, reversible, workPreserved, harm bool) stri
 			return "Rotation not performed: the target changed before deletion."
 		}
 	}
-	return ownerWhy(rec.Action, rec.Actuated, reversible, workPreserved, harm)
+	return ""
+}
+
+func ownerRecordWhy(rec audit.Record, reversible, workPreserved, harm bool) string {
+	switch ownerOutcome(rec) {
+	case "emitted-unconfirmed":
+		return ownerWhy(rec.Action, true, reversible, false, false)
+	case "not-emitted":
+		return ownerRefusal(rec)
+	case "dry-run":
+		return "Dry-run: action recommended, execution disabled."
+	case "selected":
+		return "Action selected. No execution result recorded."
+	case "not-attempted":
+		return "Action selected but not dispatched by this attempt."
+	default:
+		return "Action outcome unknown. Completion and security effect are not confirmed."
+	}
 }

@@ -45,7 +45,7 @@ rules:
   # quarantine: create the deny-all NetworkPolicy + rollback deletes it.
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
-    verbs: ["create", "get", "delete"]
+    verbs: ["create", "get", "list", "delete"]
   # LOAD-BEARING: quarantine reads the owning controller's selector (ReplicaSet, StatefulSet,
   # DaemonSet, Job) to detach the pod out of it (preserving the stateful job — the lead
   # demo). Read-only. MUST NOT be dropped.
