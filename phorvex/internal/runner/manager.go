@@ -69,6 +69,9 @@ type pendingRotation struct {
 	// owner keys the learned state (M-140); tenant remains the DISPLAY name so ledger
 	// entries and metrics keep their existing identity and comparability.
 	owner                string
+	// epoch is the owner generation this rotation was EMITTED under. Feedback arriving
+	// after a replacement must not be credited to the new identity (M-140 R1.2).
+	epoch                uint64
 	tenant               string
 	// ledgerID is the historical entry identity, built from the display tenant so the
 	// slo.Ledger keeps byte-identical IDs across this change.
@@ -165,6 +168,20 @@ type Manager struct {
 	// was issued under; a write whose owner is absent or whose epoch is stale is dropped
 	// without allocating. Guarded by mu, like the queue.
 	epochs map[string]uint64
+	// [M-140 R1.4] publishedTenants remembers every display name whose ownership signals
+	// were published. publishOwnership iterates only CURRENT names, so without this a name
+	// whose last owner was removed would keep serving its final sample forever.
+	publishedTenants map[string]struct{}
+	// [M-140 R1.2] tickEpochs is the owner->epoch picture captured WITH this tick's due set.
+	// A deferred producer validates against it, so feedback issued under one identity can
+	// never be credited to the replacement that took its place mid-tick. Written and read
+	// only by the tick goroutine.
+	tickEpochs map[string]uint64
+	// epochsTracked records that this manager has registered at least one generation, i.e.
+	// that Upsert is in use. Directly-constructed managers (offline paths and focused tests)
+	// never register one and must not have their feedback dropped; once tracking is on it
+	// applies to every owner, so a retired owner can never masquerade as unregistered.
+	epochsTracked bool
 }
 
 // lifecycleEvent is one ownership transition awaiting the tick-loop drain.
@@ -242,6 +259,15 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	key := types.NamespacedName{Namespace: p.Namespace, Name: p.Name}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// [M-140 R1.3] A UID identifies exactly one economic unit. If another policy already
+	// owns this UID, accepting it would alias two histories and let one removal destroy the
+	// other's state. Reject before touching the registry so the existing policy is unharmed.
+	for otherKey, other := range m.policies {
+		if other != nil && other.uid == string(p.UID) && otherKey != key.String() {
+			return fmt.Errorf("policy %s already owns UID %s; refusing to alias %s onto the same owner",
+				otherKey, p.UID, key.String())
+		}
+	}
 	existing := m.policies[key.String()]
 	last := time.Time{}
 	unsupportedTicks := 0
@@ -281,6 +307,7 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	if m.epochs == nil {
 		m.epochs = map[string]uint64{}
 	}
+	m.epochsTracked = true
 	if _, known := m.epochs[entry.ownerKey()]; !known {
 		m.epochs[entry.ownerKey()] = 1
 	}
@@ -322,6 +349,32 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	}
 }
 
+// ownerEpoch reads an owner's current generation.
+func (m *Manager) ownerEpoch(owner string) uint64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.epochs[owner]
+}
+
+// ownerCurrent reports whether an owner is still live AT the generation a producer was
+// issued under. This is the guard that makes the epoch bookkeeping load-bearing rather
+// than decorative: a write whose epoch has moved on is stale and must be dropped.
+//
+// The distinction is per-MANAGER, not per-owner: a manager that has never registered a
+// generation (offline paths, directly-constructed test managers) has nothing to invalidate
+// and accepts everything. Once Upsert has registered even one owner, generations apply to
+// all of them, so a retired owner whose entry was dropped at the drain can never be
+// mistaken for one that was simply never registered.
+func (m *Manager) ownerCurrent(owner string, epoch uint64) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if !m.epochsTracked {
+		return true // generations are not in use at all on this manager
+	}
+	current, known := m.epochs[owner]
+	return known && current == epoch
+}
+
 // ownersOf counts the live policies sharing one display tenant name.
 func (m *Manager) ownersOf(tenant string) int {
 	m.mu.RLock()
@@ -342,14 +395,32 @@ func (m *Manager) uniqueOwnerOf(tenant string) bool { return m.ownersOf(tenant) 
 // publishOwnership republishes the collision gauge for every live display name and withdraws
 // the legacy per-tenant series wherever a name has stopped being unique.
 func (m *Manager) publishOwnership() {
-	m.mu.RLock()
+	m.mu.Lock()
 	counts := map[string]int{}
 	for _, e := range m.policies {
 		if e != nil {
 			counts[e.tenant]++
 		}
 	}
-	m.mu.RUnlock()
+	if m.publishedTenants == nil {
+		m.publishedTenants = map[string]struct{}{}
+	}
+	// Names that were published before but have no live owner now must be cleared, not
+	// left at their last value. Bounded: an entry is dropped once it has been cleared.
+	retired := make([]string, 0)
+	for tenant := range m.publishedTenants {
+		if _, live := counts[tenant]; !live {
+			retired = append(retired, tenant)
+			delete(m.publishedTenants, tenant)
+		}
+	}
+	for tenant := range counts {
+		m.publishedTenants[tenant] = struct{}{}
+	}
+	m.mu.Unlock()
+	for _, tenant := range retired {
+		metrics.ClearTenantOwnership(tenant)
+	}
 	for tenant, n := range counts {
 		metrics.SetTenantOwnerCount(tenant, n)
 	}
@@ -539,22 +610,39 @@ func (m *Manager) tick(ctx context.Context) {
 	// [M-140] Complete pending ownership transitions BEFORE any snapshot or decision work,
 	// on every tick including ones with no due policy, so a removal is never stranded behind
 	// an idle tenant and no decision is priced from a departed owner's state.
-	m.syncOwnerLiveness()
 	m.DrainLifecycle()
 	m.publishOwnership()
-	m.mu.RLock()
+	// [M-140 R1.2] Liveness and the due-policy snapshot are taken under ONE hold of m.mu.
+	// Doing them separately let a controller Upsert land in between, putting a brand-new UID
+	// into `due` while the engine had not yet been told it was live — the decision would
+	// then be rejected as retired. They must describe the same instant.
+	m.mu.Lock()
 	due := make([]*policyEntry, 0, len(m.policies))
 	nsSet := map[string]bool{}
+	liveOwners := make([]string, 0, len(m.policies))
+	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := time.Now()
 	for _, e := range m.policies {
 		if e.namespace != "" {
 			nsSet[e.namespace] = true
 		}
+		liveOwners = append(liveOwners, e.ownerKey())
 		if now.Sub(e.lastTick) >= e.spec.EffectiveTickInterval() {
 			due = append(due, e)
+			dueEpochs[e.ownerKey()] = m.epochs[e.ownerKey()]
 		}
 	}
-	m.mu.RUnlock()
+	m.mu.Unlock()
+	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+		for _, owner := range liveOwners {
+			ce.SetOwnerLive(owner, true)
+		}
+	}
+	// The epochs captured with `due` travel with this tick: a producer that writes back
+	// later compares against them, so a replacement that happened mid-tick cannot be
+	// credited with the departed identity's feedback.
+	m.tickEpochs = dueEpochs
+	m.PublishTenantCollisions(ctx)
 
 	killEngaged := m.KillSwitch.Engaged(ctx)
 	metrics.SetKillSwitch(killEngaged)
@@ -722,7 +810,8 @@ func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.Workl
 		return true // repeated Phoenix emits must not reset the original recovery clock
 	}
 	m.pendingRotations[key] = pendingRotation{
-		owner: owner, tenant: tenant, ledgerID: rotationLedgerID(tenant, view), startedAt: startedAt,
+		owner: owner, epoch: m.ownerEpoch(owner), tenant: tenant,
+		ledgerID: rotationLedgerID(tenant, view), startedAt: startedAt,
 		referenceAtStart:     cost.ReadyDelayReference,
 		censorDeadline:       startedAt.Add(2 * cost.ReadyDelayReference),
 		view:                 *view,
@@ -907,7 +996,11 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				Elapsed: calibrationElapsed, ReferenceAtStart: p.referenceAtStart,
 			}).Normalized()
 			if costObserver {
-				observer.ObserveRotation(p.owner, &p.view, measuredFlow)
+				// [M-140 R1.2] Drop feedback whose owner is gone or has been replaced since
+				// the rotation was emitted, rather than training the successor on it.
+				if m.ownerCurrent(p.owner, p.epoch) {
+					observer.ObserveRotation(p.owner, &p.view, measuredFlow)
+				}
 			}
 			if m.Calibration != nil {
 				calibrationOutcome := calib.OutcomeObserved

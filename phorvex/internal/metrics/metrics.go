@@ -274,6 +274,18 @@ func ResetOwner(tenant, namespace, policy, uid string) {
 	podPerDollar.DeletePartialMatch(m)
 	podProactiveRate.DeletePartialMatch(m)
 	policyLambda.DeleteLabelValues(tenant, namespace, policy, uid)
+	// [M-140 R1.4] The legacy per-tenant series is derived from whichever owner published
+	// last. When an owner goes away its contribution must go with it, or the removed
+	// policy's lambda keeps being served under the display name.
+	tenantLambda.DeleteLabelValues(tenant)
+}
+
+// ClearTenantOwnership removes every ownership signal for a display name whose last live
+// owner has been removed. Without it, publishOwnership — which iterates only current
+// names — would leave the final collision count and lambda sample published forever.
+func ClearTenantOwnership(tenant string) {
+	tenantCollisions.DeleteLabelValues(tenant)
+	tenantLambda.DeleteLabelValues(tenant)
 }
 
 // SetTenantOwnerCount publishes how many live policies share one display name and keeps the

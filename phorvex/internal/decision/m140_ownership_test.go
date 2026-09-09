@@ -11,6 +11,7 @@
 package decision
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -287,4 +288,84 @@ func TestM140_OfflineProducerUsesDisjointNameKey(t *testing.T) {
 		t.Fatal("offline producer got no bucket")
 	}
 	_ = cost.DefaultLambdaSeed
+}
+
+// R1.1 — removing the LAST owner leaves an empty live set. That must still reject stale
+// producers: an empty tracked set is not the same as offline mode, where liveness was never
+// registered at all. The earlier positive control kept a survivor and so never exercised
+// this arm.
+func TestM140_LastOwnerRemovalStillRejectsLateFeedback(t *testing.T) {
+	e := NewCoverageEngine()
+	only := m140Pol("last", "uid-last", 0.1)
+	e.SetOwnerLive(only.Owner(), true)
+	e.Decide(m140Fleet(), only)
+
+	e.ForgetOwner(only.Owner()) // the set is now empty, not untracked
+	e.ObserveRotation(only.Owner(), m140Fleet()[0], 0.5)
+
+	if _, resurrected := e.BucketMetaFor(only.Owner()); resurrected {
+		t.Fatal("late feedback resurrected the last owner once the live set emptied")
+	}
+	if len(e.costByOwner) != 0 {
+		t.Fatalf("expected no buckets after the last owner left, got %d", len(e.costByOwner))
+	}
+}
+
+// The offline arm of the same distinction: a producer that never registers liveness keeps
+// working exactly as before, so the guard cannot break ablation/benchmark/calib-soak.
+func TestM140_UntrackedOfflineProducerStillCreatesBuckets(t *testing.T) {
+	e := NewCoverageEngine()
+	offline := covPolicy(2)
+	offline.Tenant = "offline"
+	offline.PolicyUID = "" // no API object, so no liveness registration
+
+	e.Decide(m140Fleet(), offline)
+	if _, ok := e.BucketMetaFor(offline.Owner()); !ok {
+		t.Fatal("liveness guard blocked an offline producer that never registered")
+	}
+	e.ObserveRotation(offline.Owner(), m140Fleet()[0], 0.5)
+	if e.costByOwner[offline.Owner()].RLS.Updates() != 1 {
+		t.Fatal("offline producer could not train")
+	}
+}
+
+// R1.2 — a decision captured before removal must be REJECTED, not panic and not allocate.
+// costFor returns nil for a retired owner, so an unguarded caller dereferences nil.
+func TestM140_DecisionForRetiredOwnerIsRejectedNotPanicked(t *testing.T) {
+	e := NewCoverageEngine()
+	retired := m140Pol("retired", "uid-retired", 0.1)
+	survivor := m140Pol("live", "uid-live", 0.1)
+	e.SetOwnerLive(retired.Owner(), true)
+	e.SetOwnerLive(survivor.Owner(), true)
+	e.Decide(m140Fleet(), retired)
+	e.Decide(m140Fleet(), survivor)
+	e.ForgetOwner(retired.Owner())
+
+	decisions, err := e.DecideChecked(m140Fleet(), retired)
+	if err == nil {
+		t.Fatal("a decision for a retired owner was accepted")
+	}
+	if !errors.Is(err, ErrOwnerRetired) {
+		t.Fatalf("unexpected rejection reason: %v", err)
+	}
+	if len(decisions) != 0 {
+		t.Fatalf("retired owner produced %d decisions", len(decisions))
+	}
+	if _, allocated := e.BucketMetaFor(retired.Owner()); allocated {
+		t.Fatal("rejecting the decision still allocated state for the retired owner")
+	}
+
+	// AssembleSet is a separate public entrypoint and must reject the same way.
+	set, ctx := e.AssembleSet(m140Fleet(), retired)
+	if len(set.Candidates) != 0 || len(ctx) != 0 {
+		t.Fatal("AssembleSet priced a retired owner")
+	}
+	if _, allocated := e.BucketMetaFor(retired.Owner()); allocated {
+		t.Fatal("AssembleSet allocated state for a retired owner")
+	}
+
+	// The survivor is unaffected: the guard is narrow.
+	if _, err := e.DecideChecked(m140Fleet(), survivor); err != nil {
+		t.Fatalf("survivor decision rejected: %v", err)
+	}
 }

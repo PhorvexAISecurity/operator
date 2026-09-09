@@ -13,11 +13,13 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/slo"
 )
@@ -58,6 +60,28 @@ func m140TrainOwner(e *decision.CoverageEngine, owner string, n int) {
 }
 
 func ownerOfUID(uid string) string { return model.OwnerKey(model.OwnerKindUID, uid) }
+
+// m140Gauge reads one tenant-labelled gauge from the real controller-runtime registry.
+func m140Gauge(t *testing.T, name, tenant string) float64 {
+	t.Helper()
+	families, err := crmetrics.Registry.Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() != name {
+			continue
+		}
+		for _, metric := range f.GetMetric() {
+			for _, lp := range metric.GetLabel() {
+				if lp.GetName() == "tenant" && lp.GetValue() == tenant {
+					return metric.GetGauge().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
 
 // Remove enqueues; the DRAIN completes the removal. Nothing may be reported as pruned at
 // enqueue, and every store must be gone once the drain has run.
@@ -390,5 +414,205 @@ func TestM140_LifecycleEventsDuringInFlightProcessingAreSafe(t *testing.T) {
 	}
 	if len(m.lifecycle) != 0 {
 		t.Fatalf("lifecycle queue not drained: %d events", len(m.lifecycle))
+	}
+}
+
+// R1.3 — a UID identifies exactly one economic unit. Two different policies claiming the
+// same UID would alias their histories and let one removal destroy the other's state.
+func TestM140_DuplicateOwnerUIDIsRejectedAtomically(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	first := m140Policy("first", "tenant-one", "same-uid")
+	if err := m.Upsert(first); err != nil {
+		t.Fatal(err)
+	}
+	m140TrainOwner(e, ownerOfUID("same-uid"), 3)
+
+	if err := m.Upsert(m140Policy("second", "tenant-two", "same-uid")); err == nil {
+		t.Fatal("a second policy was allowed to claim an owner UID already in use")
+	}
+
+	// Atomic: the rejection must not have disturbed the existing policy or its state.
+	key := types.NamespacedName{Namespace: "ns", Name: "first"}.String()
+	if m.policies[key] == nil || m.policies[key].uid != "same-uid" {
+		t.Fatal("the rejected Upsert damaged the incumbent policy")
+	}
+	if _, registered := m.policies[types.NamespacedName{Namespace: "ns", Name: "second"}.String()]; registered {
+		t.Fatal("the rejected policy was registered anyway")
+	}
+	if got := m140Updates(t, e, ownerOfUID("same-uid")); got != 3 {
+		t.Fatalf("the rejected Upsert disturbed learned state: RLS updates = %d, want 3", got)
+	}
+
+	// Control: a same-UID PATCH of the SAME policy is still accepted.
+	if err := m.Upsert(m140Policy("first", "tenant-one", "same-uid")); err != nil {
+		t.Fatalf("same-UID PATCH of the incumbent was rejected: %v", err)
+	}
+	// Control: an ordinary shared DISPLAY name with distinct UIDs remains supported.
+	if err := m.Upsert(m140Policy("third", "tenant-one", "other-uid")); err != nil {
+		t.Fatalf("two independent owners sharing a display name were rejected: %v", err)
+	}
+}
+
+// R1.4 — when a display name's LAST owner is removed, its ownership signals must be cleared.
+// publishOwnership iterates only current names, so without remembering published names the
+// removed policy's final sample is served forever.
+func TestM140_LastOwnerRemovalClearsDisplayNameTelemetry(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	p := m140Policy("last", "m140-last-owner", "uid-last")
+	if err := m.Upsert(p); err != nil {
+		t.Fatal(err)
+	}
+	m.publishOwnership()
+	metrics.SetPolicyLambda(p.Spec.Tenant, p.Namespace, p.Name, string(p.UID), 0.7, true)
+
+	m.Remove(types.NamespacedName{Namespace: p.Namespace, Name: p.Name})
+	m.DrainLifecycle()
+	m.publishOwnership()
+
+	if got := m140Gauge(t, "phorvex_tenant_lambda", p.Spec.Tenant); got != 0 {
+		t.Fatalf("removed last owner still serves legacy lambda %v", got)
+	}
+	if got := m140Gauge(t, "phorvex_tenant_collisions", p.Spec.Tenant); got != 0 {
+		t.Fatalf("removed last owner still counted: %v", got)
+	}
+	// Bounded bookkeeping: the cleared name is not retained forever.
+	m.mu.RLock()
+	_, retained := m.publishedTenants[p.Spec.Tenant]
+	m.mu.RUnlock()
+	if retained {
+		t.Fatal("cleared display name was kept in the published set")
+	}
+}
+
+// R1.4 — the same clearing must happen on a coalesced replacement and on a zero-due-policy
+// tick, not only on an explicit Remove.
+func TestM140_OwnershipTelemetryClearsOnReplacementAndIdleTick(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	if err := m.Upsert(m140Policy("p", "m140-replaced", "uid-A")); err != nil {
+		t.Fatal(err)
+	}
+	m.publishOwnership()
+	metrics.SetPolicyLambda("m140-replaced", "ns", "p", "uid-A", 0.7, true)
+
+	// Coalesced replacement: same name, new UID, no Remove.
+	if err := m.Upsert(m140Policy("p", "m140-replaced", "uid-B")); err != nil {
+		t.Fatal(err)
+	}
+	m.DrainLifecycle()
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_collisions", "m140-replaced"); got != 1 {
+		t.Fatalf("after replacement the name should have exactly one owner, got %v", got)
+	}
+
+	// Now retire it entirely and run a tick that has no due policy at all.
+	m.Remove(types.NamespacedName{Namespace: "ns", Name: "p"})
+	m.DrainLifecycle()
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_collisions", "m140-replaced"); got != 0 {
+		t.Fatalf("idle tick left a retired display name published: %v", got)
+	}
+}
+
+// R1.2 — deterministic blocked-real-tick coverage. A lifecycle event that lands WHILE a tick
+// is in flight must be visible to the following drain, and the in-flight decision must not
+// resurrect the departed owner.
+func TestM140_LifecycleDuringBlockedTickIsOrderedCorrectly(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	if err := m.Upsert(m140Policy("policy", "pxv1t", "uid-A")); err != nil {
+		t.Fatal(err)
+	}
+	owner := ownerOfUID("uid-A")
+	m140TrainOwner(e, owner, 4)
+
+	// Simulate a tick that captured its due set, then blocked. Remove lands mid-flight.
+	captured := ownerOfUID("uid-A")
+	capturedEpoch := m.ownerEpoch(captured)
+	m.Remove(types.NamespacedName{Namespace: "ns", Name: "policy"})
+
+	// The blocked tick resumes and tries to write back feedback under the captured identity.
+	if m.ownerCurrent(captured, capturedEpoch) {
+		t.Fatal("a removed owner still reported as current at its captured epoch")
+	}
+
+	m.DrainLifecycle()
+	if got := m140Updates(t, e, owner); got != 0 {
+		t.Fatalf("state survived a removal issued during the blocked tick: %d", got)
+	}
+
+	// A replacement arriving during the same window must not inherit the captured epoch.
+	if err := m.Upsert(m140Policy("policy", "pxv1t", "uid-B")); err != nil {
+		t.Fatal(err)
+	}
+	if m.ownerCurrent(captured, capturedEpoch) {
+		t.Fatal("feedback captured under the old identity validated against the replacement")
+	}
+}
+
+// R1.2 — a new owner arriving between liveness and the snapshot must not be treated as
+// retired. Liveness and the due set are captured under one hold, so a policy that is due is
+// always live to the engine.
+func TestM140_NewOwnerArrivingIsNeverDueButAbsent(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	for i := 0; i < 8; i++ {
+		uid := "uid-arrive-" + string(rune('a'+i))
+		if err := m.Upsert(m140Policy("p"+uid, "arrive", uid)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Whatever the manager reports as live must cover every registered policy.
+	m.mu.RLock()
+	owners := make([]string, 0, len(m.policies))
+	for _, entry := range m.policies {
+		owners = append(owners, entry.ownerKey())
+	}
+	m.mu.RUnlock()
+	for _, owner := range owners {
+		e.SetOwnerLive(owner, true)
+	}
+	for _, owner := range owners {
+		if e.OwnerRetired(owner) {
+			t.Fatalf("registered owner %q was reported retired", owner)
+		}
+	}
+}
+
+// The epoch guard must reject stale feedback WITHOUT blocking producers that were never
+// registered through Upsert (offline and directly-constructed managers record no
+// generations). This pins both arms so the narrowing cannot silently widen back.
+func TestM140_EpochGuardRejectsStaleButNotUnregistered(t *testing.T) {
+	// A manager that never registers a generation accepts everything, so offline paths and
+	// directly-constructed managers keep learning.
+	untracked := m140Manager(decision.NewCoverageEngine())
+	if !untracked.ownerCurrent(ownerOfUID("never-registered"), 0) {
+		t.Fatal("feedback from an untracked manager was dropped; offline producers would stop learning")
+	}
+
+	m := m140Manager(decision.NewCoverageEngine())
+	if err := m.Upsert(m140Policy("policy", "pxv1t", "uid-A")); err != nil {
+		t.Fatal(err)
+	}
+	owner := ownerOfUID("uid-A")
+	issued := m.ownerEpoch(owner)
+	if issued == 0 {
+		t.Fatal("a registered owner should carry a non-zero generation")
+	}
+	if !m.ownerCurrent(owner, issued) {
+		t.Fatal("feedback issued under the current generation was dropped")
+	}
+
+	// After removal completes the entry is gone; the stale generation must still be refused,
+	// and must not be mistaken for the unregistered case.
+	m.Remove(types.NamespacedName{Namespace: "ns", Name: "policy"})
+	m.DrainLifecycle()
+	if m.ownerCurrent(owner, issued) {
+		t.Fatal("feedback issued under a retired generation was accepted after cleanup")
+	}
+	if m.ownerCurrent(owner, 0) {
+		t.Fatal("a retired owner was treated as never-registered")
 	}
 }

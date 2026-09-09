@@ -56,8 +56,11 @@ type CoverageEngine struct {
 	// creation that follows it are ordered by identity/event rather than wall clock.
 	creationEvent uint64
 	// [M-140] live is the set of owners whose policy still exists. A deferred producer whose
-	// owner is absent must not lazily recreate its state.
-	live map[string]struct{}
+	// owner is absent must not lazily recreate its state. lifecycleTracked records that the
+	// runner has taken ownership of liveness at least once: without it, removing the LAST
+	// owner would empty the set and silently re-enable resurrection (R1.1).
+	live            map[string]struct{}
+	lifecycleTracked bool
 	// calibrationFrozen is the PHVX-2 off-switch, remembered so lazily-created tenant buckets
 	// inherit it rather than starting to learn behind the operator's back.
 	calibrationFrozen bool
@@ -136,6 +139,7 @@ func (e *CoverageEngine) SetOwnerLive(owner string, live bool) {
 	if e.live == nil {
 		e.live = map[string]struct{}{}
 	}
+	e.lifecycleTracked = true
 	if live {
 		e.live[owner] = struct{}{}
 		return
@@ -144,13 +148,20 @@ func (e *CoverageEngine) SetOwnerLive(owner string, live bool) {
 }
 
 // ownerAbsent reports whether lifecycle tracking is active AND this owner is not live.
+// The test is "was tracking ever enabled", not "is the set non-empty": removing the last
+// owner leaves an EMPTY tracked set, and that must still reject stale producers rather than
+// look like the untracked offline case.
 func (e *CoverageEngine) ownerAbsent(owner string) bool {
-	if len(e.live) == 0 {
-		return false // no lifecycle tracking in use (offline/legacy producers)
+	if !e.lifecycleTracked {
+		return false // offline/legacy producers never register liveness
 	}
 	_, ok := e.live[owner]
 	return !ok
 }
+
+// OwnerRetired reports whether this owner is known-absent under active lifecycle tracking.
+// Callers use it to reject a stale decision BEFORE touching any owned store.
+func (e *CoverageEngine) OwnerRetired(owner string) bool { return e.ownerAbsent(owner) }
 
 // ForgetOwner drops every learned store this engine owns for one policy identity. It is the
 // decision-side half of M-140's lifecycle: called from the runner's drain, never from a
@@ -305,6 +316,11 @@ type assetCtx struct {
 // dynamic feasible action set (with fact weights). Shared by Decide and the ablation
 // so both arms run over identical substrate.
 func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Policy) (actionset.ActionSet, map[string]assetCtx) {
+	// [M-140 R1.2] Same rejection as decideChecked: a retired owner must not be priced,
+	// and must not allocate a bucket by being asked for one.
+	if e.ownerAbsent(pol.Owner()) {
+		return actionset.ActionSet{}, map[string]assetCtx{}
+	}
 	floorSec := pol.ProactiveFloor.Seconds()
 
 	ctxByKey := make(map[string]assetCtx, len(views))
@@ -402,8 +418,18 @@ func (e *CoverageEngine) DecideShadowChecked(views []*model.WorkloadView, pol mo
 }
 
 func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Policy, persist bool) ([]model.Decision, error) {
+	// [M-140 R1.2] A tick captured before this owner was retired can still arrive here.
+	// Reject it BEFORE any owned-store read or write: costFor would otherwise return nil
+	// for the retired owner and the dereference below would panic, and an unguarded
+	// creation would resurrect the very state removal just destroyed.
+	if e.ownerAbsent(pol.Owner()) {
+		return nil, ErrOwnerRetired
+	}
 	now := e.now()
 	tcost := e.costFor(pol.Owner(), pol.Lambda)
+	if tcost == nil {
+		return nil, ErrOwnerRetired
+	}
 	lambda := tcost.Dual.Lambda()
 
 	set, ctxByKey := e.AssembleSet(views, pol)

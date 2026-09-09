@@ -130,3 +130,55 @@ func TestM140_ReconcileSurfacesMissingUIDInsteadOfDowngrading(t *testing.T) {
 		t.Fatalf("condition does not explain the missing UID: %q", cond.Message)
 	}
 }
+
+// R1.5 — TenantCollision is published and cleared through the REAL status path, so an
+// operator can see that one display name has become two independent economic units. This is
+// distinct from a rejected duplicate owner UID, which never reaches the registry at all.
+func TestM140_TenantCollisionConditionIsPublishedAndCleared(t *testing.T) {
+	scheme := m140Scheme(t)
+	first := m140PolicyObj("uid-A")
+	second := m140PolicyObj("uid-B")
+	second.Name = "policy-two" // same spec.tenant, different policy and UID
+	client := fake.NewClientBuilder().WithScheme(scheme).
+		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(first, second).Build()
+	mgr := runner.NewManager(client, logr.Discard())
+	mgr.Optimizer = decision.NewCoverageEngine()
+
+	if err := mgr.Upsert(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.Upsert(second); err != nil {
+		t.Fatalf("two independent owners sharing a display name must be supported: %v", err)
+	}
+	mgr.PublishTenantCollisions(context.Background())
+
+	for _, name := range []string{"policy", "policy-two"} {
+		var obj v1alpha1.PhorvexPolicy
+		if err := client.Get(context.Background(),
+			types.NamespacedName{Namespace: "ns", Name: name}, &obj); err != nil {
+			t.Fatal(err)
+		}
+		cond := meta.FindStatusCondition(obj.Status.Conditions, runner.TenantCollisionCondition)
+		if cond == nil || cond.Status != metav1.ConditionTrue {
+			t.Fatalf("%s has no TenantCollision condition: %+v", name, obj.Status.Conditions)
+		}
+		if !strings.Contains(cond.Message, "SEPARATE") {
+			t.Fatalf("%s condition does not explain the split: %q", name, cond.Message)
+		}
+	}
+
+	// Resolve the collision: the condition must CLEAR, not linger.
+	mgr.Remove(types.NamespacedName{Namespace: "ns", Name: "policy-two"})
+	mgr.DrainLifecycle()
+	mgr.PublishTenantCollisions(context.Background())
+
+	var survivor v1alpha1.PhorvexPolicy
+	if err := client.Get(context.Background(),
+		types.NamespacedName{Namespace: "ns", Name: "policy"}, &survivor); err != nil {
+		t.Fatal(err)
+	}
+	cond := meta.FindStatusCondition(survivor.Status.Conditions, runner.TenantCollisionCondition)
+	if cond == nil || cond.Status != metav1.ConditionFalse {
+		t.Fatalf("TenantCollision did not clear for the surviving unique owner: %+v", cond)
+	}
+}
