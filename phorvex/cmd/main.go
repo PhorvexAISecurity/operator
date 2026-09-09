@@ -277,6 +277,7 @@ func main() {
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
+	rmgr.ActuationRecorder = mgr.GetEventRecorderFor("phorvex-actuation")
 	// T1-E: wire the SSAR capability checker so the gate's no-rbac leg is live. A
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
