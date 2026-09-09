@@ -166,19 +166,19 @@ type PHoldInputs struct {
 	Final    float64 // clamp01(raw * damping) = PHold
 }
 
-// Exposure-clock variable dimensions (the per-VARIABLE exposure scaffold). P0 wires
-// the K8s-observable dimensions (PodIdentity, NodePlacement) live and DECLARES the
-// rest so a later phase fills them without a schema change.
+// Exposure-clock vocabulary: eight clocked-and-consumed dimensions and four
+// declared-only dimensions (M-30). Adding a consumer requires its own model review.
 const (
 	// VarPodIdentity = the pod name/UID/IP — reset on every rotation (LIVE in P0).
 	VarPodIdentity = "podIdentity"
-	// VarNodePlacement = the node the pod runs on — reset on node-rotate (LIVE in P0).
+	// VarNodePlacement: declared-only: no clock, no consumer (M-30).
+	// Wiring placement into a decision requires a separate Math-first ticket.
 	VarNodePlacement = "nodePlacement"
-	// VarImage = the container image digest (DECLARED; Phase 1 mutation overlay).
+	// VarImage: declared-only: no clock, no consumer (container image digest).
 	VarImage = "image"
-	// VarEnv = injected environment (DECLARED; Phase 1 mutation overlay).
+	// VarEnv: declared-only: no clock, no consumer (injected environment).
 	VarEnv = "env"
-	// VarGPUBinding = the GPU/MIG binding (DECLARED; Phase 2/3 GPU rebind).
+	// VarGPUBinding: declared-only: no clock, no consumer (GPU/MIG binding).
 	VarGPUBinding = "gpuBinding"
 	// VarNetworkIdentity = service/IP/label identity; clocked from the quarantine epoch (M-23).
 	VarNetworkIdentity = "networkIdentity"
@@ -207,15 +207,15 @@ const (
 // is a wiring bug caught at build time, so the runtime Check can safely fail-OPEN on an
 // absent clock). ExposureFingerprints emits exactly these keys for a fully-marked pod.
 var LiveExposureVariables = []string{
-	VarPodIdentity, VarNodePlacement, VarSession,
+	VarPodIdentity, VarSession,
 	VarNetworkIdentity, VarRouteKey, VarIdentity, VarAdapterEpoch, VarDrainEpoch, VarGuardrailEpoch,
 }
 
 // DeclaredExposureVariables are scaffolded dimensions not yet clocked from live signals.
-var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding}
+var DeclaredExposureVariables = []string{VarNodePlacement, VarImage, VarEnv, VarGPUBinding}
 
 // ExposureFingerprints builds the per-variable fingerprint sample the exposure Clock
-// observes for a pod (M-23). Pod identity, node placement and session are always
+// observes for a pod (M-23/M-30). Pod identity and session are always
 // present (their sources are always populated). The per-action epoch variables are
 // ABSENT-SKIPPED: an empty epoch (never actuated, or its marker stripped by a rollback)
 // is OMITTED rather than seeded with an empty string — seeding "" would make a later
@@ -225,9 +225,8 @@ var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding}
 // fully-marked pod is exactly LiveExposureVariables (asserted by the completeness test).
 func ExposureFingerprints(p Pod) map[string]string {
 	fp := map[string]string{
-		VarPodIdentity:   p.UID,
-		VarNodePlacement: p.Node,
-		VarSession:       p.SessionEpoch,
+		VarPodIdentity: p.UID,
+		VarSession:     p.SessionEpoch,
 	}
 	for v, epoch := range map[string]string{
 		VarNetworkIdentity: p.QuarantineEpoch,
@@ -391,13 +390,17 @@ func AttackVectorForActuator(actuator string) string {
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 type SecurityEventInfo struct {
-	Name         string // SecurityEvent CR name (audit: which event carried the evidence)
-	Type         string
-	ThreatLevel  string
-	Source       string
-	Description  string
-	AnomalyScore float64 // -1 when unscored
-	Age          time.Duration
+	CreatedAt         time.Time
+	Outcomes          []ProtectedOutcome
+	OutcomeParseError string
+	ResolvedTargets   []string
+	Name              string // SecurityEvent CR name (audit: which event carried the evidence)
+	Type              string
+	ThreatLevel       string
+	Source            string
+	Description       string
+	AnomalyScore      float64 // -1 when unscored
+	Age               time.Duration
 	// TimestampMissing is true when the CR carried no usable CreationTimestamp, so Age is
 	// not trusted: the event's aging weight is 0 and the record says present=false
 	// (M-27). Zero value = present, so every existing literal stays a fresh event.
@@ -497,6 +500,8 @@ func NeutralPhysics() PhysicsWitness {
 // WorkloadView is the fully-assembled per-pod picture the decision engine hands to
 // the swappable interfaces each tick.
 type WorkloadView struct {
+	// OutcomeEvents preserves untrusted and audit-only records independently of belief.
+	OutcomeEvents      []SecurityEventInfo
 	Pod                Pod
 	Telemetry          Telemetry
 	Phase              WorkloadPhase
@@ -549,6 +554,11 @@ type ContextSignals struct {
 type Policy struct {
 	NativeRotate bool // M47: enforce validated ownership for the native delete path.
 
+	TrustBoundarySince           time.Time
+	DecisionAssets               map[string]string
+	MayBreachSLO                 bool
+	TrustBoundaryReady           bool
+	TrustBoundaryReason          string
 	Tenant                       string
 	Namespace                    string
 	Mode                         string
@@ -595,6 +605,7 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
+	Existential *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Claim     *ClaimScope
 	Tenant    string

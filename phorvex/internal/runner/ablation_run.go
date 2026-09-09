@@ -88,7 +88,7 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 		}
 		clock.Observe(exposure.Observation{
 			Tenant: namespace, Namespace: p.Namespace, Pod: p.Name, StartedAt: p.StartedAt,
-			Fingerprints: map[string]string{model.VarPodIdentity: p.UID, model.VarNodePlacement: p.Node},
+			Fingerprints: map[string]string{model.VarPodIdentity: p.UID},
 		}, now)
 		exp := clock.Since(namespace, p.Namespace, p.Name, now)
 
