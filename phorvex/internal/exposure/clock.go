@@ -7,9 +7,9 @@
 // slot it tracks, per mutable VARIABLE (pod identity, node placement, image, env,
 // GPU binding, network identity, session), the time since that variable last
 // CHANGED — so a later phase that mutates image/env/GPU IN PLACE gets independent
-// per-variable exposure without a schema change. P0 feeds the two K8s-observable
-// dimensions live (pod identity, node placement) and the clock GENERICALLY tracks
-// any other fingerprint ingest chooses to pass.
+// per-variable exposure without a schema change. M-23/M-30 feed eight consumed
+// dimensions through model.ExposureFingerprints. Node placement, image, env and
+// GPU binding remain declared-only. The clock generically tracks supplied keys.
 //
 // Restart-safe (NFR3): on first sight of a slot the clock seeds each variable's
 // change time from the pod's StartedAt, so after an operator restart exposure is

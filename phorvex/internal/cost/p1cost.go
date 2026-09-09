@@ -86,8 +86,9 @@ func NewP1CostWithLambda(lambdaSeed float64) *P1Cost {
 }
 
 // Structural components make the quarantine denominator reproducible. The first
-// two are the live exposure clocks; network isolation is the third component that
-// the historical 1/(live+1) anchor was counting but had never named.
+// two are historical structural dimensions, not a count of live clocks (M-30).
+// Node-placement exposure is declared-only; this fixed rubric does not read its
+// clock. Keep the three-element denominator unchanged by clock cleanup.
 const structuralNetworkIsolation = "network-isolation"
 
 var structuralComponents = []string{

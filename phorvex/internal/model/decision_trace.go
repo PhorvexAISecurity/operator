@@ -31,6 +31,7 @@ const (
 	CFlowUnitDimensionlessDisruptionLoss = "confirmed_dimensionless_disruption_loss"
 	// SelectorStrictPositiveGain is the exact P1 production comparator.
 	SelectorStrictPositiveGain = "strict_gain_positive"
+	SelectorM99Containment     = "m99_bounded_full_containment"
 )
 
 // T0-C: the closed per-action status vocabulary (the ticket's ten values). Exactly one
@@ -273,10 +274,11 @@ type DecisionFactV2 struct {
 // action excluded by an existing current-model gate. Optional values say exactly
 // which calculations were reached before an exclusion.
 type DecisionCandidateV2 struct {
-	Action       string   `json:"action"`
-	CandidateKey string   `json:"candidateKey"`
-	CoverKeys    []string `json:"coverKeys"`
-	TieBreakRank int      `json:"tieBreakRank"`
+	Existential  *ExistentialCandidate `json:"existential,omitempty"`
+	Action       string                `json:"action"`
+	CandidateKey string                `json:"candidateKey"`
+	CoverKeys    []string              `json:"coverKeys"`
+	TieBreakRank int                   `json:"tieBreakRank"`
 
 	GrossFullValue     OptionalFloat `json:"grossFullValue"`
 	MarginalCoverage   OptionalFloat `json:"marginalCoverage"`
@@ -334,13 +336,14 @@ type DecisionDualUpdateV2 struct {
 // DecisionTraceV2 is the nested structured audit contract for one asset outcome.
 // Candidate/fact arrays are canonicalized during JSON serialization.
 type DecisionTraceV2 struct {
-	SchemaVersion  string `json:"schemaVersion"`
-	DecisionID     string `json:"decisionID"`
-	TickID         string `json:"tickID"`
-	Timestamp      string `json:"timestamp"`
-	BrainImage     string `json:"brainImage"`
-	GitSHA         string `json:"gitSHA"`
-	DecisionEngine string `json:"decisionEngine"`
+	Existential    *ExistentialDecision `json:"existential,omitempty"`
+	SchemaVersion  string               `json:"schemaVersion"`
+	DecisionID     string               `json:"decisionID"`
+	TickID         string               `json:"tickID"`
+	Timestamp      string               `json:"timestamp"`
+	BrainImage     string               `json:"brainImage"`
+	GitSHA         string               `json:"gitSHA"`
+	DecisionEngine string               `json:"decisionEngine"`
 
 	PolicyNamespace string `json:"policyNamespace"`
 	PolicyName      string `json:"policyName"`
@@ -652,7 +655,7 @@ func (t DecisionTraceV2) Validate() error {
 	if t.CostRepresentationVersion != "" {
 		if t.CostRepresentationVersion != CostRepresentationWeightedDimensionlessV1 ||
 			t.CFlowUnitStatus != CFlowUnitDimensionlessDisruptionLoss ||
-			t.SelectorComparator != SelectorStrictPositiveGain {
+			(t.SelectorComparator != SelectorStrictPositiveGain && t.SelectorComparator != SelectorM99Containment) {
 			return errors.New("unknown cost representation, CFlow unit, or selector comparator")
 		}
 		if t.LambdaConfiguredPolicy != t.LambdaConfiguredSeed || t.LambdaRuntimeLegacy != t.LambdaRuntime {

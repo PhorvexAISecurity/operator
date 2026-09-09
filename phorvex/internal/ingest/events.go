@@ -6,6 +6,7 @@ package ingest
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
@@ -65,6 +66,7 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 			}
 		}
 		base := model.SecurityEventInfo{
+			CreatedAt:        se.CreationTimestamp.Time,
 			Name:             se.Name,
 			Trust:            trust,
 			CreatorIdentity:  identity,
@@ -88,6 +90,13 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 				continue
 			}
 			resolved = append(resolved, key)
+		}
+		base.ResolvedTargets = resolved
+		if raw := se.Annotations["phorvex.ai/protected-outcomes-v1"]; raw != "" {
+			if err := json.Unmarshal([]byte(raw), &base.Outcomes); err != nil {
+				base.OutcomeParseError = "protected-outcomes-invalid-json"
+				base.Outcomes = nil
+			}
 		}
 		all = append(all, base)
 		if trust != TrustTrusted {
