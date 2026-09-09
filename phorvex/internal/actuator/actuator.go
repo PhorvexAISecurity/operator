@@ -42,6 +42,8 @@ type TenantTarget struct {
 
 // Request is one actuation: perform Action on Namespace/Pod for Tenant.
 type Request struct {
+	TargetUID string // Bound identity from the selecting snapshot.
+
 	Tenant    string
 	Namespace string
 	Pod       string
@@ -59,6 +61,8 @@ type Request struct {
 // MutationKind) carry native effects. Emitted is the universal success flag the runner
 // checks at the actuate boundary, regardless of actuator.
 type Result struct {
+	Note string
+
 	Actuator        string
 	AMTDName        string
 	EventName       string
