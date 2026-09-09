@@ -1,5 +1,6 @@
 import json
 import unittest
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -179,9 +180,11 @@ class ControllerPodsTests(unittest.TestCase):
             with patch.object(e2e, 'Transport', return_value=transport), \
                  patch.object(e2e.Console, 'wait_preflight', return_value=({'ok': True}, {'operator': 'test'})), \
                  patch.object(e2e.Metrics, 'scrape', return_value={}), \
-                 patch.object(e2e.Console, 'stream_decisions', side_effect=RuntimeError('stop after preflight')):
-                with self.assertRaisesRegex(RuntimeError, 'stop after preflight'):
-                    e2e.run(cfg, 'observe', None, None, notifier=notifier)
+                 patch.object(e2e.Console, 'stream_decisions', side_effect=RuntimeError('stop after preflight')), \
+                 tempfile.TemporaryDirectory() as directory:
+                doc, rc = e2e.run(cfg, 'observe', None, directory, notifier=notifier)
+                self.assertEqual(rc, 2)
+                self.assertIn('stop after preflight', doc['abort']['error'])
             state = notifier.stage.call_args_list[0].args[1]
             self.assertEqual(state, 'ok' if self.verdict(self.discover(items)) == 'pass' else 'fail')
 
