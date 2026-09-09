@@ -26,6 +26,7 @@ import (
 // contract (clean-room), so the standalone product IP carries no SSPL-derived Go.
 type NativeActuator struct {
 	Client client.Client
+	Reader client.Reader
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -94,7 +95,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, DryRun: n.DryRun}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
@@ -106,7 +107,7 @@ func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) 
 		return nil
 	}
 	if rb, ok := h.(Rollbacker); ok {
-		return rb.Rollback(ctx, EnactCtx{Client: n.Client, DryRun: n.DryRun}, req, ref)
+		return rb.Rollback(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun}, req, ref)
 	}
 	return nil
 }
@@ -117,3 +118,5 @@ var (
 	_ Actuator = (*PhoenixActuator)(nil)
 	_ Actuator = (*NativeActuator)(nil)
 )
+
+func (n *NativeActuator) SetBoundaryReader(r client.Reader) { n.Reader = r }
