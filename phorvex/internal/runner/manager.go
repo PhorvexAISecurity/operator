@@ -404,12 +404,9 @@ func (m *Manager) DrainLifecycle() {
 			stores++
 		}
 		stores += m.closePendingForOwner(ev)
-		m.mu.Lock()
 		// The owner is gone and its cleanup is complete, so the epoch entry can go too:
 		// churn cannot accumulate tombstones. A later same-UID Upsert starts at 1 again.
-		if _, replaced := m.policies[""]; !replaced { // placeholder to keep lock scope explicit
-			_ = replaced
-		}
+		m.mu.Lock()
 		delete(m.epochs, ev.owner)
 		m.mu.Unlock()
 		if m.Audit != nil {
