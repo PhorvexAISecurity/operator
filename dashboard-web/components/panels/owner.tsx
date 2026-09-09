@@ -17,8 +17,7 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
   if (!data) return <Skeleton rows={3} />;
 
   const ev = data.events ?? [];
-  const evicted = ev.filter((e) => e.outcomeEvidence === "emitted-unconfirmed").length;
-  const preserved = ev.filter((e) => e.outcomeEvidence === "emitted-unconfirmed" && e.action === "quarantine").length;
+
 
   return (
     <div className="animate-fade-up space-y-7">
@@ -31,12 +30,7 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
         <span><span className="font-medium text-foreground">IP-protected view.</span> Served by a server-side whitelist — Phorvex's decision internals are never sent to this view (enforced by a redaction test that is the eligibility gate).</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Outcome icon={Boxes} label="Protective actions" value={String(ev.length)} tone="primary" />
-        <Outcome icon={ShieldCheck} label="Actions dispatched" value={String(evicted)} tone="success" />
-        <Outcome icon={CheckCircle2} label="Isolation attempts" value={String(preserved)} tone="success" />
-        <Outcome icon={ShieldCheck} label="Effect confirmation" value="Unavailable" tone="warning" />
-      </div>
+      <OwnerSummary events={ev} />
 
       <section>
         <SectionLabel>Activity — requests and recorded outcomes</SectionLabel>
@@ -93,5 +87,20 @@ export function EventRow({ e }: { e: OwnerEvent }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export function OwnerSummary({ events: ev }: { events: OwnerEvent[] }) {
+  const known = (e: OwnerEvent) => ["emitted-unconfirmed", "not-emitted", "not-attempted", "selected", "dry-run"].includes(e.outcomeEvidence ?? "");
+  const dispatched = ev.every(known) ? ev.filter((e) => e.outcomeEvidence === "emitted-unconfirmed").length : null;
+  const isolation = ev.filter((e) => e.action === "quarantine");
+  const attempts = isolation.every(known) ? isolation.filter((e) => e.outcomeEvidence === "emitted-unconfirmed").length : null;
+  return (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Outcome icon={Boxes} label="Protective actions" value={String(ev.length)} tone="primary" />
+        <Outcome icon={ShieldCheck} label="Actions dispatched" value={dispatched == null ? "—" : String(dispatched)} tone="success" />
+        <Outcome icon={CheckCircle2} label="Isolation attempts" value={attempts == null ? "—" : String(attempts)} tone="success" />
+        <Outcome icon={ShieldCheck} label="Effect confirmation" value="Unavailable" tone="warning" />
+      </div>
   );
 }
