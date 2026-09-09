@@ -1,7 +1,7 @@
 # Coordination bus
 
-The bus delivers files and prints notifications; it does not start or resume
-an agent. The agent runner must surface notifications to an active turn.
+The file bus stores messages; a supervised runner adapter wakes the existing
+agent session. A shell monitor printing output does not provide that wake.
 Messages request transitions and point to authoritative workflow files; the
 bus never owns current state, decisions or evidence.
 
@@ -100,15 +100,46 @@ python3 workflow/coordination/bridge.py run --agent <id> --thread <existing-thre
 python3 workflow/coordination/bridge.py status --agent <id>
 ```
 
+For an existing Claude Code session on Linux with native peer messaging:
+
+```sh
+python3 workflow/coordination/bridge.py run --agent <id> --runner claude --thread <existing-Claude-session-uuid>
+python3 workflow/coordination/bridge.py status --agent <id>
+```
+
+Bind the identity from the assigned Claude session's own `CLAUDE_CODE_SESSION_ID`
+and `CLAUDE_CODE_MESSAGING_SOCKET`, or verified session/process provenance. Never
+choose the newest session or match only its working directory. The adapter resolves
+that exact session in `~/.claude/sessions` (`--claude-sessions` overrides the registry),
+validates process start, Unix peer PID/UID, private paths and peer protocol, then
+sends only a bus-inbox reference. It refuses absent/ambiguous/stale sessions and
+unknown protocols. Resuming the same session with a new process can reconnect;
+a different session requires explicit rebind. No model is launched or forked.
+
+Claude's native socket wraps the input as a **peer** message; this is expected,
+not evidence of a second Claude relay. Inbound permission controls remain in force.
+No tokens are read and no permission settings are changed. Tested with Claude Code
+2.1.266 / peer protocol 1 on Linux. A socket write alone is not acceptance or a wake:
+use the recipient's reply and acknowledgement as the end-to-end check.
+See [Claude's native messaging documentation](https://code.claude.com/docs/en/cross-session-messaging#the-sessions-inbox-socket).
+
 Supervise it with the local service manager (`Restart=on-failure`). One process
 owns each inbox adapter; its thread binding, heartbeat, retry state and queue
 receipts live in the shared bus root's `.runtime/`. Restarting scans all pending
-mail, retries failed queues and preserves successful receipts. To rebind a new
+mail, retries failed queues and preserves submission receipts. Install an enabled
+user service for **each** participant so it survives shell/turn exit and restarts
+after failure; a service for only one side is not bidirectional delivery.
+To rebind a new
 conversation, stop the adapter, retain its old runtime JSON, then start with the
 explicit new thread ID. Never infer a target from the most recent session.
 
-The adapter batches pending files into one wake and waits for acknowledgement
-before queuing another. On wake, drain the WHOLE current inbox, including later
+The adapter batches pending files into one wake with an acknowledgement lease.
+New mail gets its own wake after a two-second burst debounce even if older mail
+is unacknowledged; an old pending task cannot delay a new handoff for the lease.
+Unacknowledged submissions retry after 120 seconds by default (`--ack-timeout`),
+with backoff capped at 15 minutes; old queued receipts also expire. Transport errors
+retry after 30 seconds. A lost notification cannot block the inbox forever.
+On wake, drain the WHOLE current inbox, including later
 arrivals. Unhandled remainder gets a new wake after the earlier batch is handled.
 This reduces redundant turns without deleting messages or auto-acknowledging work.
 
@@ -117,6 +148,10 @@ second agent, copy message bodies into user instructions, acknowledge messages,
 or grant permissions. Ambiguous failures can duplicate a notification; handling
 must be idempotent. **File delivered → CLI queued → agent handled/acknowledged**
 are separate states. A fresh adapter heartbeat is not proof the model is awake.
+`status` reports adapter availability, transport receipts and due retries. `send`
+warns `BUS_NOTIFY_UNAVAILABLE` when the inbox is saved without a healthy adapter;
+do not describe that as a notified or active worker. `--once` runs a diagnostic
+delivery pass without installing a persistent adapter.
 At setup, test a peer challenge/reply through the runner, including resumption
 after a turn ends. Report idle resumption as unverified until actually observed.
 

@@ -1,10 +1,10 @@
-# 03 — Converged decision
+# 03 — Lead fix plan
 
 ## Chosen design
 
 ## Rejected alternatives
 
-## Resolved critique items
+## Investigation and baseline evidence
 
 ## Delegated decisions, authorization and ticket deviations
 
@@ -18,7 +18,7 @@
 |---|---|---|---|---|
 
 Use executable commands and realistic producer inputs. Include relevant defaults,
-missing/stale inputs and bypasses. The sealed reviewer starts the baseline fixture
+missing/stale inputs and bypasses. The lead starts the baseline fixture
 early; reuse it at head. Do not add another parallel acceptance document.
 
 ## Live safety, abort and cleanup
@@ -27,5 +27,6 @@ early; reuse it at head. Do not add another parallel acceptance document.
 
 ## Deferred follow-ups
 
-Retain superseded predictions. In-scope amendments require independent re-review
-under the standing delegation; new scope or weakened guarantees need separate authority.
+Retain superseded predictions. The lead signs in-scope amendments under standing
+delegation and reviews the worker's revised code. New scope or weaker guarantees
+need separate authority. Legacy blind peer fixes retain independent design review.

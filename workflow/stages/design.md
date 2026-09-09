@@ -1,39 +1,34 @@
 # Design: TRIAGED → AGREED
 
-Read the issue and pinned baseline; trace the incident's inputs through their real
-producers to the decisive condition. Check defaults, missing/stale inputs and every
-relevant arm of a compound predicate. State the failing case and legitimate control.
+New fixes use `fix_loop: lead_worker`. Assign proposer, skeptic, coordinator and
+live_verifier to the lead; implementer to the worker.
 
-| Owner | Output |
-|---|---|
-| coordinator | roles, baseline, authorized scope and verification requirements in intake/status |
-| proposer | concise cause, minimal change, behavioral prediction and discriminating tests in `01-proposal` |
-| skeptic | independently derive and seal `02A` before seeing proposal/implementation |
-| skeptic | current blocking findings and evidence in `02B`; sign `critique` |
-| proposer + skeptic | one selected contract and verification matrix in `03-decision`; skeptic signs `decision` |
+1. Lead: pin the baseline and trace the issue through real production inputs.
+   Reproduce the failure with a legitimate control. Inspect the live cluster when
+   useful and authorized; retain observations with source/environment pins.
+2. Lead: write one fix plan in `03-decision.md`: cause, changes, expected behavior,
+   compatibility consequences and discriminating tests. Declare class A/B, L0–L2,
+   required L3/live and L4/soak. Start baseline RED for reuse at head.
+3. Lead: sign `decision`, transition DESIGNING → AGREED, and send the worker the
+   plan, pins and tests with an instruction to implement. No worker proposal,
+   blind seal, critique round or worker approval is required.
+4. Worker: implement and test. Lead: review the committed implementation and
+   independently reproduce the incident. Return precise defects until revisions
+   pass; then deliver the PR. See `verify.md` and `../operations/HANDOFFS.md`.
+5. After merge/deployment, the lead verifies the running fix live before closure.
 
-After sealing, the reviewer starts the smallest real baseline reproduction while
-implementation preparation proceeds independently. Sign baseline `red` directly;
-retain the fixture for head verification. Investigate environment access/toolchain
-constraints now. Do not postpone discovering an unavailable instrument until P3.
+Use standing scope from `../operations/AUTONOMY.md` for routine in-scope decisions.
+If evidence disproves the plan, preserve the old prediction and re-sign the smallest
+amendment with that authorization reference. The revised code still needs review.
+Scope expansion, weaker guarantees and waivers need their actual authority.
 
-Use existing scope from `operations/AUTONOMY.md`. Choose conservative design/security
-options and record who chose them; do not request routine human approval or impersonate
-a named human approver. Keep compatibility consequences visible in the eventual PR.
+## Existing blind peer records
 
-Resolve disagreements using the smallest discriminating experiment. There is no
-three-round human escalation. A concrete failed invariant remains blocking; resolve it,
-narrow to a safe in-scope design, or report genuinely missing external input. Never
-approve by exhaustion, majority vote or by weakening a prediction to fit results.
+Absent `fix_loop` or `blind_peer` retains DESIGNING → CRITIQUED → AGREED: proposer
+writes `01-proposal`; a separate skeptic seals `02A` before exposure, then writes
+`02B` and signs critique/decision. Never manufacture historical blind evidence.
 
-Declare class A/B and required L0–L2; add L3 for live/external behavior and L4 for evolving
-state/timing. Keep those live obligations even when delivery stops at PR. Details:
-`verification/LEVELS.md`. No evidence waiver is granted by autonomous scope.
-
-Seal using `seal --by --expect-revision`; review/sign using `record-check`. Save superseded
-artifacts, then keep the current proposal and critique concise. Freeze one agreed decision. Its existing verification matrix maps every critical
-guarantee to the production boundary, realistic fixture, decisive failure assertion,
-legitimate control, exact command/owner and required evidence layer.
-An in-scope amendment requires fresh independent review and the standing authorization
-reference; retain the original prediction. Scope expansion or weaker guarantees aren't
-routine amendments. Handoff: selected contract/hash, baseline, exact change and tests.
+Before agreement or an implementation head, the coordinator can migrate using
+revision-checked `configure`: set `fix_loop: lead_worker`, assign the roles above,
+and reference the user's instruction with `--approval-ref`. Preserve historical
+artifacts and signatures; re-sign decision for the changed contract.

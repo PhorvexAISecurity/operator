@@ -17,7 +17,7 @@ import (
 // would pass the anti-over-rotation guard. The guard takes min(observed-since,
 // intent-since) — the most recent of the two — so intent throttles that gap.
 //
-// Keyed by the same slotKey as Clock, and GC'd the same way (RetainTenant each tick).
+// Keyed by the same owner-scoped slotKey as Clock, and GC'd the same way (RetainOwner each tick).
 type Intents struct {
 	mu sync.Mutex
 	at map[string]map[string]time.Time // slotKey -> variable -> marked-at
@@ -29,11 +29,11 @@ func NewIntents() *Intents { return &Intents{at: make(map[string]map[string]time
 // Mark records that `variable` was actuated on this slot at `now`. Called once per
 // emitted move, on the SUCCESSFUL-emit path (a failed actuation must not throttle its
 // retry). A later Mark overwrites — only the most recent emission matters.
-func (i *Intents) Mark(tenant, ns, pod, variable string, now time.Time) {
+func (i *Intents) Mark(owner, ns, pod, variable string, now time.Time) {
 	if i == nil || pod == "" || variable == "" {
 		return
 	}
-	key := slotKey(tenant, ns, pod)
+	key := slotKey(owner, ns, pod)
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	vars := i.at[key]
@@ -46,11 +46,11 @@ func (i *Intents) Mark(tenant, ns, pod, variable string, now time.Time) {
 
 // Since returns time-since-emission per variable for a slot (empty if none). A negative
 // interval (clock skew) is clamped to 0, matching Clock.Since.
-func (i *Intents) Since(tenant, ns, pod string, now time.Time) map[string]time.Duration {
+func (i *Intents) Since(owner, ns, pod string, now time.Time) map[string]time.Duration {
 	if i == nil {
 		return nil
 	}
-	key := slotKey(tenant, ns, pod)
+	key := slotKey(owner, ns, pod)
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	vars := i.at[key]
@@ -68,14 +68,14 @@ func (i *Intents) Since(tenant, ns, pod string, now time.Time) map[string]time.D
 	return out
 }
 
-// RetainTenant prunes this tenant's intent slots not in keep (a set of full slot keys),
-// mirroring Clock.RetainTenant so a departed pod's intent is dropped with its clock.
+// RetainOwner prunes this owner's intent slots not in keep (a set of full slot keys),
+// mirroring Clock.RetainOwner so a departed pod's intent is dropped with its clock.
 // Returns the count dropped.
-func (i *Intents) RetainTenant(tenant string, keep map[string]struct{}) int {
+func (i *Intents) RetainOwner(owner string, keep map[string]struct{}) int {
 	if i == nil {
 		return 0
 	}
-	prefix := tenant + "\x00"
+	prefix := owner + "\x00"
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	dropped := 0

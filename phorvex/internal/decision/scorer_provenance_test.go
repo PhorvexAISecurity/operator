@@ -16,17 +16,17 @@ import (
 func TestBlindCostIsPricedByTargetTenantCalibrator(t *testing.T) {
 	e := NewCoverageEngine()
 	e.Now = vtClock()
-	_ = e.costFor("A") // A owns the legacy scalar bucket (e.Cost)
+	_ = e.costFor(ownerName("A")) // A owns the legacy scalar bucket (e.Cost)
 	aView := covView("a-expensive", true, 3*time.Hour, false)
 	for i := 0; i < 50; i++ {
-		e.costFor("A").ObserveRotation(aView, 9.0) // prime A's RLS/Conformal with costly rotations
+		e.costFor(ownerName("A")).ObserveRotation(aView, 9.0) // prime A's RLS/Conformal with costly rotations
 	}
 	bView := covView("b-target", true, 3*time.Hour, false)
 	polB := vtPol("B")
 	polB.TraceEnabled = true
 	rotate := model.Move{Action: model.ActionRotate}
-	wantB := e.costFor("B").ECost(bView, rotate, polB)
-	wrongA := e.costFor("A").ECost(bView, rotate, polB)
+	wantB := e.costFor(ownerName("B")).ECost(bView, rotate, polB)
+	wrongA := e.costFor(ownerName("A")).ECost(bView, rotate, polB)
 	if wantB == wrongA {
 		t.Fatalf("fixture: A's primed bucket and B's bucket price the rotate identically (%v); the test cannot discriminate", wantB)
 	}

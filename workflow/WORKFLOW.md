@@ -9,15 +9,18 @@ opening; it grants neither weaker evidence nor shared-environment changes.
 ## Roles
 
 Roles name responsibilities; participants are explicitly assigned in status.
-One participant may own compatible roles. Two participants normally suffice:
-proposer + implementer, and skeptic + live verifier + coordinator.
+New fixes use `fix_loop: lead_worker`. Two participants suffice: the lead owns
+proposer + skeptic + live verifier + coordinator; the worker owns implementer.
+The lead investigates and writes the plan, directs implementation, reviews revisions
+until accepted, delivers the PR, and verifies the deployed fix live. Existing records
+without `fix_loop` or with `blind_peer` retain their original independent design gates.
 
 | Role | Owns | Must not do |
 |---|---|---|
 | human_owner | task scope, external authorizations, waiver/risk rulings | replace evidence with approval |
-| proposer | root cause, proposal, predicted behavior and scope | approve their own design |
+| proposer (lead) | root cause, fix plan, predicted behavior and scope | claim implementation or live evidence without checking it |
 | implementer | patch, tests, RED/GREEN and raw evidence | sign P3, live, or final review |
-| skeptic | sealed derivation, critique, agreed decision, P3 and final review | read proposal before sealing; silently edit implementation |
+| skeptic (lead) | sign plan, review worker implementation, incident/P3 and final review | implement and then sign their own code review |
 | live_verifier | approved scoped L3/L4, positive controls and cleanup | extrapolate beyond observed environment |
 | coordinator | assignments, pins, revisions, dependencies and synchronization | fabricate another role's evidence or signature |
 
@@ -30,7 +33,7 @@ participant is recorded; it does not transfer a previous review signature.
 
 | State range | Read | Exit evidence |
 |---|---|---|
-| TRIAGED → AGREED | `stages/design.md` | intake, proposal, sealed blind derivation, critique, frozen decision |
+| TRIAGED → AGREED | `stages/design.md` | intake, lead investigation and signed fix plan (`03-decision.md`) |
 | AGREED → PR_READY | `stages/verify.md` | exact patch, RED/GREEN, L0–L2, independent P3 |
 | PR_READY → CLOSED | `stages/release.md` | reviewed PR/merge, observed deployment, L3/L4, final review and synchronization |
 
@@ -67,8 +70,8 @@ Checks: `critique`, `decision`, `base_review` (only for a changed base), `implem
   immutable; new attempts use new paths. Rebase requires new evidence or an
   independent patch-equivalence review, never a bare `PASS` assertion.
 - A changed implementation base needs independent `base_review`, bound to the new
-  base and original analysis source. Preserve the original blind seal; do not
-  manufacture a new blind derivation after seeing the proposal. Test affected
+  base and original analysis source. Preserve any historical blind seal; do not
+  manufacture blind evidence. Test affected
   integration paths; the signature alone does not prove compatibility.
 - `NOT_REQUIRED` is a human-signed, explained ruling for an eligible layer.
   FAIL, UNAVAILABLE and NON_DISCRIMINATING never become PASS automatically.
@@ -84,7 +87,8 @@ Checks: `critique`, `decision`, `base_review` (only for a changed base), `implem
   for objective/belief/cost/clock changes. Missed criteria reopen the fix;
   disproved models invalidate it. Amendments preserve the original prediction
   and reference the applicable authorization. In-scope design amendments use
-  the standing delegation plus renewed independent review, not another human checkpoint.
+  the standing delegation and a re-signed lead plan; the worker’s revised code
+  still requires lead review. Legacy blind peer amendments retain independent design review.
 
 ## Ownership and consistency
 

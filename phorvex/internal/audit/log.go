@@ -358,3 +358,37 @@ func roundEvents(in []model.EventEvidence) []model.EventEvidence {
 	}
 	return out
 }
+
+// TenantLifecycle records the completion of one ownership transition (M-140). It is emitted
+// at the tick-loop DRAIN, which is where removal actually completes — never at enqueue, so
+// the record cannot claim a prune that has not happened yet. replacedBy is set when an
+// Upsert changed identity without a preceding NotFound reconcile.
+func (l *Logger) TenantLifecycle(tenant, owner, replacedBy string, storesPruned int) {
+	event := "removed"
+	if replacedBy != "" {
+		event = "replaced"
+	}
+	l.log.Info("tenant-lifecycle",
+		"tenant", tenant, "owner", owner, "event", event,
+		"replacedBy", replacedBy, "storesPruned", storesPruned)
+}
+
+// TenantDisplayNameChanged records a label-only maintenance event (M-140): the policy's
+// spec.tenant display name changed while its UID — and therefore its economic identity,
+// learned state and creation record — stayed exactly the same. It is deliberately NOT a
+// lifecycle removal: nothing was retired, only stale label series were retracted.
+func (l *Logger) TenantDisplayNameChanged(previousTenant, currentTenant, owner string) {
+	l.log.Info("tenant-display-name-changed",
+		"previousTenant", previousTenant, "tenant", currentTenant, "owner", owner,
+		"economicIdentityRetained", true)
+}
+
+// RotationObservationTerminated records that an in-flight rotation observation ended because
+// its owning policy was removed. ledgerRecorded distinguishes the two honest arms: with an
+// existing entry the ledger is left untouched (its measured or censored amounts stand), and
+// without one a single unmeasured emitted outcome was written.
+func (l *Logger) RotationObservationTerminated(tenant, owner, namespace, pod string, ledgerRecorded bool) {
+	l.log.Info("rotation-observation-terminated",
+		"tenant", tenant, "owner", owner, "namespace", namespace, "pod", pod,
+		"priorLedgerEntry", ledgerRecorded)
+}

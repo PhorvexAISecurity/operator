@@ -86,6 +86,16 @@ TRANSITIONS = {
     "CLOSED": {"REOPENED"},
 }
 HUMAN_GATED_STATES = {"IN_PR", "MERGED", "DEPLOYED", "CLOSED", "ACCEPTED_RISK"}
+
+
+def allowed_transitions(status):
+    targets = set(TRANSITIONS.get(status.get('state'), set()))
+    if gates.lead_worker(status) and status.get('state') == 'DESIGNING':
+        targets.discard('CRITIQUED')
+        targets.add('AGREED')
+    return targets
+
+
 ISSUE_STATES = {
     "OPEN",
     "IN_PROGRESS",
@@ -1260,7 +1270,7 @@ def cmd_configure(args: argparse.Namespace) -> int:
         update = load_yaml(Path(args.file))
         allowed = {"title", "roles", "capabilities", "capabilities_required", "baseline", "implementation",
                    "pull_request", "deployment", "verification", "synchronization", "approvals",
-                   "dependencies", "blockers", "residuals", "next_action", "change_class"}
+                   "dependencies", "blockers", "residuals", "next_action", "change_class", "fix_loop"}
         if not isinstance(update, dict) or set(update) - allowed:
             raise ValueError("configure accepts only role/pin/plan inputs, not state, profile, seals or checks")
         roles = {**status.get("roles", {}), **update.get("roles", {})}
@@ -1292,13 +1302,18 @@ def cmd_configure(args: argparse.Namespace) -> int:
         if "verification" in update:
             if set(update['verification']) - {'required', 'live_required', 'soak_required'}:
                 raise ValueError("use record-check for verification results")
+        if 'fix_loop' in update and update['fix_loop'] != status.get('fix_loop', 'blind_peer'):
+            if status.get('state') not in {'TRIAGED', 'DESIGNING', 'CRITIQUED'} or status.get('implementation', {}).get('head_sha'):
+                raise ValueError('change fix_loop only before agreement and implementation')
+            if initialized and not getattr(args, 'approval_ref', None):
+                raise ValueError('changing an assigned fix loop requires the user instruction reference')
         for key, value in update.items():
             if isinstance(value, dict) and isinstance(status.get(key), dict):
                 status[key] = {**status[key], **value}
             else:
                 status[key] = value
-        if roles.get("skeptic") in {roles.get("proposer"), roles.get("implementer")} and gates.assigned(roles.get("skeptic")):
-            raise ValueError("skeptic must be independent of both authors")
+        if gates.role_errors(status):
+            raise ValueError('; '.join(gates.role_errors(status)))
         now = utcnow()
         status['revision'] = status.get('revision', 0) + 1
         status['updated_at'] = now
@@ -1340,11 +1355,9 @@ def cmd_record_check(args: argparse.Namespace) -> int:
                 raise ValueError("waiver needs an eligible level, approval reference and rationale")
         if not gates.assigned(args.by) or args.by not in ({expected_by} if args.result == "NOT_REQUIRED" else gates.signers(status, key)):
             raise ValueError(f"check must be signed by {expected_by}")
-        if key in {"critique", "decision", "incident", "p3", "patch_equivalence", "final"} and args.by in {
-            status.get("roles", {}).get("proposer"), status.get("roles", {}).get("implementer")
-        }:
+        if gates.self_review(status, key, args.by):
             raise ValueError("independent review cannot be signed by an author")
-        if (key in {"critique", "decision", "base_review"} or (key == "red" and args.by == status.get("roles", {}).get("skeptic"))) and status.get("profile") != "legacy-migrated":
+        if (key in {"critique", "decision", "base_review"} or (key == "red" and args.by == status.get("roles", {}).get("skeptic"))) and status.get("profile") != "legacy-migrated" and not gates.lead_worker(status):
             blind = status.get("blind_derivation", {})
             blind_path = gates.local_file(fix, "02A-blind-derivation.md")
             if blind.get("status") != "sealed" or not blind_path or blind.get("sha256") != sha256(blind_path) or blind.get("source_sha") != status.get("baseline", {}).get("code_sha"):
@@ -1484,7 +1497,8 @@ def cmd_packet(args: argparse.Namespace) -> int:
     if not roles:
         print("FAIL: participant has no assigned role; coordinator must assign it first", file=sys.stderr)
         return 1
-    blind = "skeptic" in roles and status.get("blind_derivation", {}).get("status") == "pending"
+    lead_worker = gates.lead_worker(status)
+    blind = not lead_worker and "skeptic" in roles and status.get("blind_derivation", {}).get("status") == "pending"
     state = status.get("state")
     phase = ("design" if state in {"TRIAGED", "DESIGNING", "CRITIQUED"}
              else "verify" if state in {"AGREED", "IMPLEMENTED", "OFFLINE_VERIFIED", "DIFF_REVIEW_PASSED"}
@@ -1508,17 +1522,19 @@ def cmd_packet(args: argparse.Namespace) -> int:
                        "skeptic": ["evidence/incident.md", "evidence/base-review.md", "evidence/p3/verdict.md"]},
             "release": {"live_verifier": ["evidence/l3/", "evidence/l4/"], "skeptic": ["06-verdict.md"]},
         }
+        if lead_worker:
+            scopes['design'] = {'skeptic': ['03-decision.md', 'evidence/baseline/', 'evidence/repro/', 'red attestation']}
         write = [path for role in roles for path in scopes[phase].get(role, [])]
         if "coordinator" in roles:
             write += ["STATUS.yaml via commands", "issue/release synchronization"]
         elif "implementer" in roles:
             write += ["implementation branch/base/head via configure"]
         action = status.get("next_action", {}).get("action")
-        for name in {"design": ["02A-blind-derivation.md", "01-proposal.md", "02B-critique.md"],
+        for name in {"design": ["03-decision.md"] if lead_worker else ["02A-blind-derivation.md", "01-proposal.md", "02B-critique.md"],
                      "verify": ["03-decision.md", "04-diff.patch", "05-evidence.md", "evidence/incident.md"],
                      "release": ["03-decision.md", "evidence/incident.md", "evidence/p3/verdict.md", "05-evidence.md"]}[phase]:
             if (FIXES / fix_id / name).is_file(): read.append(f"fixes/{fix_id}/{name}")
-    packet = {"fix": fix_id, "participant": args.agent, "roles": roles, "state": state,
+    packet = {"fix": fix_id, "fix_loop": status.get('fix_loop', 'blind_peer'), "participant": args.agent, "roles": roles, "state": state,
               "revision": status.get("revision", 0), "baseline": status.get("baseline", {}),
               "default_delivery_target": "IN_PR", "pr_open_authorized": bool(status.get("approvals", {}).get("pr_open")),
               "read": read, "write_scope": write, "do_not_read": forbidden,
@@ -1535,7 +1551,7 @@ def cmd_packet(args: argparse.Namespace) -> int:
         }
         packet["implementation"] = status.get("implementation", {})
         packet["deployment"] = status.get("deployment", {})
-        packet["allowed_transitions"] = sorted(TRANSITIONS.get(state, []))
+        packet["allowed_transitions"] = sorted(allowed_transitions(status))
     joins = (load_yaml(ISSUES / "joins.yaml") or {}).get("joins", {})
     packet["anatomy"] = {i: {"review": joins.get(i, {}).get("review"),
                              "locus": joins.get(i, {}).get("locus"),
@@ -1892,7 +1908,7 @@ def cmd_transition(args: argparse.Namespace) -> int:
         print(f"FAIL: transition belongs to {responsible} or coordinator", file=sys.stderr)
         return 1
     current = status.get("state")
-    allowed = args.target in TRANSITIONS.get(current, set())
+    allowed = args.target in allowed_transitions(status)
     if not allowed and not args.force:
         print(f"FAIL: transition {current} -> {args.target} is not allowed", file=sys.stderr)
         return 1
@@ -2339,7 +2355,7 @@ def append_fix_transition(
     current = status.get("state")
     if current == target:
         return
-    if target not in TRANSITIONS.get(current, set()):
+    if target not in allowed_transitions(status):
         raise ValueError(
             f"{status.get('fix_id')}: transition {current} -> {target} is not allowed"
         )
@@ -3903,6 +3919,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 source_state = transition.get("from")
                 target_state = transition.get("to")
                 allowed = target_state in TRANSITIONS.get(source_state, set())
+                if gates.lead_worker(status) and source_state == 'DESIGNING' and target_state == 'AGREED':
+                    allowed = True
                 if not allowed and not transition.get("forced"):
                     errors.append(
                         f"{status.get('fix_id')}: invalid recorded fix transition "
@@ -4242,7 +4260,7 @@ def build_parser() -> argparse.ArgumentParser:
     guide = sub.add_parser("guide", help="show the bounded runbook for an operation")
     guide.add_argument(
         "operation",
-        choices=["fix", "intake", "issue", "sync", "campaign", "audit", "triage"],
+        choices=["fix", "intake", "issue", "sync", "campaign", "assessment", "audit", "triage"],
     )
     guide.add_argument("--show", action="store_true", help="also print the runbook")
     guide.set_defaults(func=cmd_guide)

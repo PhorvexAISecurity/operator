@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import json
 import os
 import re
 import sys
@@ -31,6 +32,21 @@ SUBJECT_KINDS = {"fix", "intake", "issue", "release", "campaign"}
 
 def utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def adapter_health(agent: str) -> dict:
+    """A live monitor is insufficient; check the durable runner adapter itself."""
+    try:
+        state = json.loads((ROOT / '.runtime' / f'{agent}.json').read_text())
+        pid = state.get('pid')
+        if type(pid) is not int or pid <= 0:
+            raise ValueError('invalid adapter pid')
+        os.kill(pid, 0)
+        age = time.time() - state.get('heartbeat', 0)
+        return {'available': 0 <= age < 40, 'runner': state.get('runner', 'codex'),
+                'heartbeat_age_seconds': round(age, 1)}
+    except (OSError, ValueError, TypeError):
+        return {'available': False, 'runner': None, 'heartbeat_age_seconds': None}
 
 
 def agents() -> set[str]:
@@ -133,6 +149,9 @@ def cmd_send(args: argparse.Namespace) -> int:
     finally:
         os.close(dir_fd)
     print(target)
+    if not adapter_health(args.recipient)['available']:
+        print(f'BUS_NOTIFY_UNAVAILABLE {args.recipient}: inbox saved, but no healthy runner adapter; '
+              'monitor/wait output alone does not resume an idle session.', file=sys.stderr)
     return 0
 
 

@@ -13,7 +13,9 @@ Record actual agent decisions under this delegation; never invent a human signat
 Prefer conservative, reversible choices and preserved defaults. Record consequential
 compatibility choices in the PR. Resolve disagreement with a concrete counterexample
 and discriminating test, not a round-count approval request. Amend a design within
-scope through independent re-review, retaining the superseded prediction and evidence.
+scope through a re-signed lead plan and review of the worker’s revised code, retaining
+the superseded prediction and evidence. Legacy blind peer fixes retain independent
+design review.
 
 This scope does not authorize merging, shared-cluster changes, attacks, execution grants,
 persisted injections, weakening security guarantees, accepting unresolved risk, or

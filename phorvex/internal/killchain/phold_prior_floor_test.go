@@ -25,6 +25,11 @@ const (
 // one side, so the mean is exact up to float rounding) and whose just-moved damping is
 // switched off (RecoverScale -> ~0 so damping = 1 for any t > 0). The test then reads the
 // capped noisy-OR alone. ConfidenceK = 0 keeps betaMean the plain posterior mean.
+// pholdOwner is the M-140 owner key for this fixture's policy. Assess reads the belief
+// prior under pol.Owner(), so priming the bare tenant name would seed a different key and
+// leave the fixture reading the shipped default instead of the intended betaMean.
+var pholdOwner = model.OwnerKey(model.OwnerKindName, "t")
+
 func pholdModel(t *testing.T, betaMean float64) *Model {
 	t.Helper()
 	m := NewModel()
@@ -33,15 +38,15 @@ func pholdModel(t *testing.T, betaMean float64) *Model {
 	const a0, b0 = 1.0, 4.0 // NewConjugateMemory defaults
 	switch {
 	case betaMean >= 1:
-		m.Memory.Observe("t", 1e12)
+		m.Memory.Observe(pholdOwner, 1e12)
 	case betaMean <= 0:
-		m.Memory.Observe("t", -1e12)
+		m.Memory.Observe(pholdOwner, -1e12)
 	case betaMean > a0/(a0+b0):
-		m.Memory.Observe("t", betaMean*b0/(1-betaMean)-a0) // raise alpha
+		m.Memory.Observe(pholdOwner, betaMean*b0/(1-betaMean)-a0) // raise alpha
 	default:
-		m.Memory.Observe("t", -((1-betaMean)*a0/betaMean - b0)) // raise beta
+		m.Memory.Observe(pholdOwner, -((1-betaMean)*a0/betaMean - b0)) // raise beta
 	}
-	if got := m.Memory.PriorMean("t"); math.Abs(got-betaMean) > 1e-6 {
+	if got := m.Memory.PriorMean(pholdOwner); math.Abs(got-betaMean) > 1e-6 {
 		t.Fatalf("test harness: prior mean = %.9f, want %.3f", got, betaMean)
 	}
 	return m

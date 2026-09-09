@@ -4,7 +4,7 @@ The implementer owns code and its tests; the skeptic owns independent incident/P
 review. Both use the frozen acceptance matrix in `03-decision.md`. A missing proof
 is not a passing check. The reviewer never silently fixes the patch under review.
 
-1. Continue the baseline reproduction prepared after the blind seal. Either its
+1. Continue the baseline reproduction prepared during investigation. Either its
    implementer or the independent reviewer may sign `red`; one valid baseline
    signature is enough. Do not send evidence back merely to change its signer.
    Keep the same real producers, decisive assertions and legitimate controls at head.

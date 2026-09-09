@@ -95,7 +95,7 @@ def transaction(w, args, mode):
             role = 'implementer' if mode == 'submit' else 'skeptic'
             if args.by != original['roles'].get(role):
                 raise ValueError(f'this command belongs to the assigned {role}')
-            if mode == 'review' and args.by in {original['roles']['proposer'], original['roles']['implementer']}:
+            if mode == 'review' and args.by in w.gates.review_authors(original):
                 raise ValueError('review must be independent')
             allowed_states = {'AGREED','IMPLEMENTED','OFFLINE_VERIFIED','IN_PR'} if mode == 'submit' else {'OFFLINE_VERIFIED','IN_PR'}
             if original['state'] not in allowed_states:
@@ -212,7 +212,7 @@ def delta(w,args):
     try:
         w.validate_fix_id(args.fix_id);fix=w.FIXES/args.fix_id;status=w.load_yaml(fix/'STATUS.yaml')
         if args.agent not in status['roles'].values(): raise ValueError('participant is unassigned')
-        if args.agent==status['roles']['skeptic'] and status.get('blind_derivation',{}).get('status')!='sealed':
+        if not w.gates.lead_worker(status) and args.agent==status['roles']['skeptic'] and status.get('blind_derivation',{}).get('status')!='sealed':
             raise ValueError('seal independent analysis before inspecting implementation deltas')
         reviews=[x for x in status.get('check_history',[]) if x.get('check')=='p3' and x.get('result')=='PASS']
         if status.get('checks',{}).get('p3',{}).get('result')=='PASS': reviews.append(status['checks']['p3'])

@@ -1,7 +1,6 @@
 # Request router
 
-Read one runbook, then the exact record it names. Commands below are relative
-to the repository root: `python3 workflow/tools/workflow.py …`.
+Read one runbook and its target record. Commands run from the repository root: `python3 workflow/tools/workflow.py …`.
 
 | Request | Route | First read/command |
 |---|---|---|
@@ -10,6 +9,7 @@ to the repository root: `python3 workflow/tools/workflow.py …`.
 | File/update/defer an issue | `operations/ISSUE.md` | target entry and dedup candidates |
 | Reconcile main or deployment | `operations/SYNC.md` | `sync-main --check` or `release-sync --check` |
 | Test Phorvex/the dev cluster, or run a broad live experiment | `operations/CAMPAIGN.md` | `attacks preflight`, then `new-campaign` and a selected test plan |
+| Regenerate master issues / system assessment | `operations/ASSESSMENT.md` | `guide assessment --show` |
 | Inspect state/provenance | `operations/AUDIT.md` | `doctor`, then bounded `brief` |
 | Unclear request | `operations/TRIAGE.md` | `guide triage` |
 | Improve this harness | `tools/`, `stages/`, relevant tests | inspect and test; no product-fix cycle required |
@@ -26,10 +26,9 @@ to the repository root: `python3 workflow/tools/workflow.py …`.
 
 ## Scope and completion
 
-The user's request may authorize multiple stages. Record that scope once and
-reuse it; do not invent approvals. A gate is missing authorization or evidence,
-not an excuse to stop ordinary authorized work. Unknown requests remain
-read-only until classified. Ambiguous duplicate root causes need a ruling.
+Record user scope once and reuse it across authorized stages. Gates require evidence
+or authorization, not routine permission checks. Classify unknown requests read-only;
+ambiguous duplicate root causes need a ruling.
 
 A named-fix request defaults to reviewed PR delivery (`IN_PR`); issue closure
 still requires verification and release synchronization. Intake completes as duplicate/filed/rejected/

@@ -63,6 +63,7 @@ def sandbox():
         # handoff tests explicitly enable delivery_version=1 and execute preflight.
         template = root / 'fixes/_template/STATUS.yaml'
         old_template = yaml.safe_load(template.read_text()); old_template.pop('delivery_version', None)
+        old_template.pop('fix_loop', None)
         template.write_text(yaml.safe_dump(old_template))
         shutil.copytree(SOURCE_ROOT / "intake" / "_template", root / "intake" / "_template")
         shutil.copytree(

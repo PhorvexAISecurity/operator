@@ -229,7 +229,7 @@ Severity: HIGH · Tier: 1 · Fixes: none
 
 ### M-140 · Tenant-state resurrection: a recreated policy inherits the old tenant's λ, cost model, and belief prior · **OPEN** · `CONTROL->ECONOMICS`
 
-Severity: HIGH · Tier: 1 · Fixes: none
+Severity: HIGH · Tier: 1 · Fixes: M-140
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · cost.p1

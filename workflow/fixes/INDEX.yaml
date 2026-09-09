@@ -175,3 +175,15 @@ fixes:
     stacked_on: []
     branch: parallel/contract-m006-code-exec-admission
     head_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  M-140:
+    directory: fixes/M-140
+    aliases: []
+    issues:
+    - M-140
+    related_issues: []
+    state: IN_PR
+    dependencies:
+    - T0-C
+    stacked_on: []
+    branch: t1/control-economics-m140-tenant-state-lifecycle
+    head_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a

@@ -4,7 +4,11 @@
 
 package decision
 
-import "github.com/phorvex/phorvex/internal/model"
+import (
+	"errors"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
 
 // Optimizer is the swappable BRAIN: it turns the per-tick WorkloadViews + resolved
 // Policy into one Decision per pod (with at most MaxMovesPerTick selected). The P0
@@ -36,10 +40,16 @@ type ShadowCheckedOptimizer interface {
 // an online rotation-cost learner. The runner invokes it only for completed,
 // measured live rotations; a stateless optimizer need not implement it.
 type RotationObserver interface {
-	ObserveRotation(tenant string, view *model.WorkloadView, measuredFlow float64)
+	ObserveRotation(owner string, view *model.WorkloadView, measuredFlow float64)
 }
 
 var _ Optimizer = (*CoverageEngine)(nil)
 var _ CheckedOptimizer = (*CoverageEngine)(nil)
 var _ ShadowCheckedOptimizer = (*CoverageEngine)(nil)
 var _ RotationObserver = (*CoverageEngine)(nil)
+
+// ErrOwnerRetired is returned when a decision arrives for a policy identity whose lifecycle
+// cleanup has already completed (M-140). It is not a failure of the tick: it means the tick
+// was captured before the owner was retired, and the correct action is to drop it rather
+// than price it or recreate its economic unit.
+var ErrOwnerRetired = errors.New("policy owner retired; decision rejected")

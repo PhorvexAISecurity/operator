@@ -6,6 +6,10 @@ under [standing authorization](operations/AUTONOMY.md). Merge and shared-cluster
 changes require separate scope. All quality gates and later live-verification
 obligations remain; opening a PR is not closing the issue.
 
+New fixes use a lead and a worker. The lead investigates and writes the fix plan;
+the worker implements it. The lead reviews each revision until accepted, delivers
+the PR, and verifies the fix live after merge and deployment. See [the fix runbook](operations/FIX.md).
+
 Code and `workflow/fixes/<id>` belong to the same issue branch. Only the runtime
 bus is shared between worktrees. Continue verification on that branch after its
 code PR merges; see [worktree lifecycle](operations/WORKTREES.md).
@@ -16,6 +20,7 @@ One discoverable, versioned home for:
 - bug, risk, incident and enhancement intake;
 - the generated product anatomy;
 - the master issue register;
+- fresh system assessments and evidence-backed recommendations;
 - the two-agent fix loop;
 - per-fix records and reproducible evidence;
 - release synchronization;
@@ -37,6 +42,7 @@ trees are neither moved nor removed.
 | Engineer choosing work | `issues/MASTER_ISSUES.md` |
 | Engineer locating code/operations | `anatomy/ANATOMY.md` |
 | Release coordinator | `operations/SYNC.md` and `releases/CURRENT.yaml` |
+| Full-system investigator / master-register regeneration | `operations/ASSESSMENT.md` |
 | Campaign owner | `operations/CAMPAIGN.md` |
 
 Run the consistency check from the code-repository root:
@@ -76,6 +82,7 @@ Generated files are reviewed but not hand-edited.
 ## Directory guide
 
 - `operations/`: request-specific runbooks and machine-readable policy.
+- `assessments/`: four-axis research, coverage, independent review and recommendations.
 - `intake/`: non-canonical reported findings and their verification/dedup state.
 - `issues/`: one source entry per issue plus the generated master view.
 - `anatomy/`: version-pinned source inventories, generators and rendered map.

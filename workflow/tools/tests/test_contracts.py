@@ -115,12 +115,21 @@ class HarnessContracts(unittest.TestCase):
             self.assertFalse((fix/'06-verdict.md').exists())
 
     def test_fresh_cycle_reaches_open_pr_without_another_human_gate(self):
+        self.fresh_cycle()
+
+    def test_lead_plan_goes_directly_to_implementation_and_reviewed_pr(self):
+        self.fresh_cycle(lead_worker=True)
+
+    def fresh_cycle(self, lead_worker=False):
         with sandbox() as (repo,root,baseline):
             fix=w.create_fix_record('FIX-TEST',['M-1'])
             configuration=root/'inputs.yaml'
             roles={'human_owner':'owner','proposer':'author','implementer':'author',
                    'skeptic':'reviewer','live_verifier':'reviewer','coordinator':'coordinator'}
-            w.write_yaml(configuration,{'roles':roles,'baseline':{'code_sha':baseline},'change_class':'A',
+            if lead_worker:
+                roles.update(proposer='coordinator', skeptic='coordinator', live_verifier='coordinator')
+            w.write_yaml(configuration,{'fix_loop': 'lead_worker' if lead_worker else 'blind_peer',
+                                       'roles':roles,'baseline':{'code_sha':baseline},'change_class':'A',
                                        'verification':{'required':['L0','L1','L2'],'live_required':False,'soak_required':False}})
             self.assertEqual(w.cmd_configure(argparse.Namespace(fix_id='FIX-TEST',file=str(configuration),
                               by='coordinator',expect_revision=0,approval_ref=None)),0)
@@ -132,12 +141,13 @@ class HarnessContracts(unittest.TestCase):
                     approval_ref=None,rationale=None,expect_revision=revision())),0)
             (fix/'00-intake.md').write_text('Scoped widget change, assigned roles, frozen source and verification plan.\n')
             advance('DESIGNING')
-            (fix/'02A-blind-derivation.md').write_text('Independent widget model and falsifying counterexample.\n')
-            self.assertEqual(w.cmd_seal(argparse.Namespace(fix_id='FIX-TEST',by='reviewer',expect_revision=revision(),
-                             force=False,approval_ref=None)),0)
-            (fix/'01-proposal.md').write_text('Widget proposal with exact delta and controls.\n')
-            (fix/'02B-critique.md').write_text('Counterexample rejected by baseline test; design critique PASS.\n')
-            sign('critique','02B-critique.md');advance('CRITIQUED')
+            if not lead_worker:
+                (fix/'02A-blind-derivation.md').write_text('Independent widget model and falsifying counterexample.\n')
+                self.assertEqual(w.cmd_seal(argparse.Namespace(fix_id='FIX-TEST',by='reviewer',expect_revision=revision(),
+                                 force=False,approval_ref=None)),0)
+                (fix/'01-proposal.md').write_text('Widget proposal with exact delta and controls.\n')
+                (fix/'02B-critique.md').write_text('Counterexample rejected by baseline test; design critique PASS.\n')
+                sign('critique','02B-critique.md');advance('CRITIQUED')
             (fix/'03-decision.md').write_text('Agreed widget delta and invariant; all other outputs unchanged.\n')
             sign('decision','03-decision.md');advance('AGREED')
             (repo/'widget.txt').write_text('fixed\n');run(['git','add','widget.txt'],repo)

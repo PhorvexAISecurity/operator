@@ -52,7 +52,8 @@
             "intake",
             "issue",
             "release",
-            "campaign"
+            "campaign",
+            "assessment"
           ]
         },
         "id": {

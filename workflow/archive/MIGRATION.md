@@ -98,3 +98,11 @@ L3 and synchronization. The original local files are unchanged.
   normalization changes generated outputs and the canonical anatomy must next
   be published against the observed deployed SHA, not republished at the old
   pin.
+
+## Audit-origin recovery, 2026-09-09
+
+`audit-origins-20260909/` additively retains 11 original audit/specification/recommendation
+documents and 436 historical bus Markdown files from `operator-old/build/test-harness`.
+Its manifest records byte counts and SHA-256 for every copy. This supplements the original
+migration; it does not update historical register snapshots or certify historical claims.
+Raw evidence outside those Markdown files is not copied in this recovery.
