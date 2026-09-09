@@ -1,0 +1,19 @@
+# Scrape config for the kube-prometheus-stack in the `monitoring` namespace.
+# That Prometheus has empty serviceMonitorSelector / serviceMonitorNamespaceSelector,
+# i.e. it picks up every ServiceMonitor in every namespace — so no release label needed.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: loadgen
+  namespace: phorvex-loadgen
+  labels:
+    app: loadgen
+spec:
+  selector:
+    matchLabels:
+      app: loadgen
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
