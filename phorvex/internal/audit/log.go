@@ -271,23 +271,11 @@ func ToRecord(d model.Decision) Record {
 }
 
 // Record logs one decision.
-func (l *Logger) Record(d model.Decision) {
+func (l *Logger) Record(d model.Decision) error {
 	rec := ToRecord(d)
-	l.mu.Lock()
-	out := l.jsonOut
-	if l.sinkFor != nil { // [P-VCLUSTER O10] route to the tenant's own sink (default-off => byte-identical)
-		if w := l.sinkFor(rec.Tenant); w != nil {
-			out = w
-		}
-	}
-	if out != nil {
-		if b, err := json.Marshal(rec); err == nil {
-			_, _ = out.Write(append(b, '\n'))
-		}
-	}
-	l.mu.Unlock()
+	err := l.writeRecord(rec.Tenant, rec)
 	if l.OnlySelected && !d.Selected && (d.Existential == nil || (len(d.Existential.Evidence) == 0 && len(d.Existential.Reasons) == 0)) {
-		return
+		return err
 	}
 	existentialJSON := ""
 	if d.Existential != nil {
@@ -306,6 +294,7 @@ func (l *Logger) Record(d model.Decision) {
 		"attribution", rec.Attribution,
 		"r6Would", rec.R6Counterfactual, "r6Note", rec.CounterfactualNote,
 		"why", rec.Reason, "infeasibleWhy", rec.InfeasibleWhy)
+	return err
 }
 
 // TickSummary logs a per-tenant tick rollup.

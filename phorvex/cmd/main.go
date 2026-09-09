@@ -320,6 +320,11 @@ func main() {
 		if ferr != nil {
 			setupLog.Error(ferr, "cannot open audit-json; continuing with logger-only audit")
 		} else {
+			defer func() {
+				if err := f.Close(); err != nil {
+					setupLog.Error(err, "audit close failed")
+				}
+			}()
 			rmgr.Audit = audit.New(ctrl.Log, f)
 			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
 		}
