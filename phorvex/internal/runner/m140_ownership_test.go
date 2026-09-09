@@ -8,6 +8,7 @@
 package runner
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/metrics"
@@ -727,5 +729,104 @@ func TestM140_NeverSampledOwnerStaysAbsent(t *testing.T) {
 	}
 	if got := m140Gauge(t, "phorvex_tenant_collisions", p.Spec.Tenant); got != 1 {
 		t.Fatalf("owner count = %v, want 1", got)
+	}
+}
+
+// R4.1 — a successful emission must write its cooldown intent under the OWNER key, because
+// that is what the next tick reads and what both GC paths prune. Marking it under the raw
+// display name wrote it where nothing looks, disabling the cross-tick cooldown and leaking
+// the entry past retirement. Driven through the real Manager.actuate success path.
+func TestM140_SuccessfulEmissionMarksOwnerScopedCooldown(t *testing.T) {
+	fa := &fakeActuator{}
+	m := &Manager{Actuator: fa, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	pol := model.Policy{Tenant: "display", PolicyUID: "owner-uid",
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "p"}}
+	views := map[string]*model.WorkloadView{
+		"ns/p": {Pod: model.Pod{Namespace: "ns", Name: "p", UID: "pod-uid", ReadyReplicas: 3}},
+	}
+
+	// Positive control: the emission really happened.
+	if got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 1 || fa.calls != 1 {
+		t.Fatalf("emission positive control failed: emitted=%d actuator calls=%d", got, fa.calls)
+	}
+
+	now := time.Now()
+	// The next tick reads the cooldown through exactly this accessor and key
+	// (processTenantWithPhysics: intent := m.Intents.Since(pol.Owner(), ns, pod, snap.Now)),
+	// and feeds it into the guard as min(observed exposure, intent age).
+	nextTick := m.Intents.Since(pol.Owner(), "ns", "p", now)
+	if len(nextTick) == 0 {
+		t.Fatal("no owner-scoped intent after a successful emission; the next tick sees no cooldown")
+	}
+	for variable, age := range nextTick {
+		if age < 0 || age > time.Minute {
+			t.Fatalf("cooldown age for %q is not a fresh emission stamp: %v", variable, age)
+		}
+	}
+	if len(m.Intents.Since(pol.Tenant, "ns", "p", now)) != 0 {
+		t.Fatal("emission wrote an intent under the raw display name, outside owner GC")
+	}
+	// Retirement prunes it.
+	m.Intents.RetainOwner(pol.Owner(), nil)
+	if len(m.Intents.Since(pol.Owner(), "ns", "p", now)) != 0 {
+		t.Fatal("intent survived owner retirement")
+	}
+}
+
+// m140FailingActuator reports an unsuccessful emission without touching the shared fixture.
+type m140FailingActuator struct{ calls int }
+
+func (*m140FailingActuator) Name() string { return "m140-failing" }
+func (*m140FailingActuator) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
+func (f *m140FailingActuator) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
+	f.calls++
+	return actuator.Result{Emitted: false, Note: "m140 test: emission refused"}, nil
+}
+func (*m140FailingActuator) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+
+// Control: a FAILED emission must not mark a cooldown, or a retry would be suppressed.
+func TestM140_FailedEmissionMarksNoCooldown(t *testing.T) {
+	fa := &m140FailingActuator{}
+	m := &Manager{Actuator: fa, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	pol := model.Policy{Tenant: "display", PolicyUID: "owner-uid",
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "p"}}
+	views := map[string]*model.WorkloadView{
+		"ns/p": {Pod: model.Pod{Namespace: "ns", Name: "p", UID: "pod-uid", ReadyReplicas: 3}},
+	}
+	if got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 0 {
+		t.Fatalf("failed emission reported %d enacted moves", got)
+	}
+	if len(m.Intents.Since(pol.Owner(), "ns", "p", time.Now())) != 0 {
+		t.Fatal("a failed emission marked a cooldown; the retry would be suppressed")
+	}
+}
+
+// Control: two owners covering the SAME pod keep independent cooldowns, and retiring one
+// does not clear the other's.
+func TestM140_EmissionCooldownsAreIsolatedBetweenOwners(t *testing.T) {
+	fa := &fakeActuator{}
+	m := &Manager{Actuator: fa, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	first := model.Policy{Tenant: "shared", PolicyUID: "uid-1",
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	second := model.Policy{Tenant: "shared", PolicyUID: "uid-2",
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "p"}}
+	views := map[string]*model.WorkloadView{
+		"ns/p": {Pod: model.Pod{Namespace: "ns", Name: "p", UID: "pod-uid", ReadyReplicas: 3}},
+	}
+	m.actuate(context.Background(), &policyEntry{namespace: "ns"}, first, decisions, views)
+	m.actuate(context.Background(), &policyEntry{namespace: "ns"}, second, decisions, views)
+
+	now := time.Now()
+	if len(m.Intents.Since(first.Owner(), "ns", "p", now)) == 0 || len(m.Intents.Since(second.Owner(), "ns", "p", now)) == 0 {
+		t.Fatal("co-resident owners did not each record their own cooldown")
+	}
+	m.Intents.RetainOwner(first.Owner(), nil)
+	if len(m.Intents.Since(second.Owner(), "ns", "p", now)) == 0 {
+		t.Fatal("retiring one owner cleared a co-resident owner's cooldown")
 	}
 }

@@ -1685,7 +1685,12 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			// retry). This closes the cross-tick burst hole — the next tick's guard reads this
 			// intent via min(observed-since, intent-since) before the observed `*-epoch` clock
 			// catches up. "" (an ungoverned action) is a no-op inside Mark.
-			m.Intents.Mark(pol.Tenant, decisions[i].Namespace, decisions[i].Pod,
+			// [M-140 R4.1] The emit intent is OWNER-keyed, like every other slot store: the
+			// next tick reads it back through Intents.Since(pol.Owner(), ...) and both the
+			// per-tick GC and lifecycle cleanup prune it with RetainOwner. Marking it under
+			// the raw display name wrote it where nothing reads, silently disabling the
+			// cross-tick emission cooldown and leaking the entry past owner retirement.
+			m.Intents.Mark(pol.Owner(), decisions[i].Namespace, decisions[i].Pod,
 				feasibility.ExposureVarFor(decisions[i].Action), time.Now())
 			// Carry the native actuator's forensic fields into the audit (empty for Phoenix).
 			decisions[i].Handler = res.Handler
