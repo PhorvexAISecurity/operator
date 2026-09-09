@@ -516,10 +516,12 @@ func TestM140_OwnershipTelemetryClearsOnReplacementAndIdleTick(t *testing.T) {
 	}
 }
 
-// R1.2 — deterministic blocked-real-tick coverage. A lifecycle event that lands WHILE a tick
-// is in flight must be visible to the following drain, and the in-flight decision must not
-// resurrect the departed owner.
-func TestM140_LifecycleDuringBlockedTickIsOrderedCorrectly(t *testing.T) {
+// Unit-level ordering check on the lifecycle primitives: enqueue, generation invalidation
+// and drain. This is NOT blocked-real-tick coverage and does not claim to be — it never runs
+// a tick or blocks a producer. The real blocked-tick proofs live in m140_blocked_tick_test.go
+// (TestM140_RemoveDuringBlockedRealTick and TestM140_ReplacementDuringBlockedRealTick), which
+// hold an actual tick inside MetricsSource.PodMetrics while the controller goroutine acts.
+func TestM140_LifecycleOrderingPrimitives(t *testing.T) {
 	e := decision.NewCoverageEngine()
 	m := m140Manager(e)
 	if err := m.Upsert(m140Policy("policy", "pxv1t", "uid-A")); err != nil {
@@ -528,12 +530,10 @@ func TestM140_LifecycleDuringBlockedTickIsOrderedCorrectly(t *testing.T) {
 	owner := ownerOfUID("uid-A")
 	m140TrainOwner(e, owner, 4)
 
-	// Simulate a tick that captured its due set, then blocked. Remove lands mid-flight.
 	captured := ownerOfUID("uid-A")
 	capturedEpoch := m.ownerEpoch(captured)
 	m.Remove(types.NamespacedName{Namespace: "ns", Name: "policy"})
 
-	// The blocked tick resumes and tries to write back feedback under the captured identity.
 	if m.ownerCurrent(captured, capturedEpoch) {
 		t.Fatal("a removed owner still reported as current at its captured epoch")
 	}
@@ -552,10 +552,10 @@ func TestM140_LifecycleDuringBlockedTickIsOrderedCorrectly(t *testing.T) {
 	}
 }
 
-// R1.2 — a new owner arriving between liveness and the snapshot must not be treated as
-// retired. Liveness and the due set are captured under one hold, so a policy that is due is
-// always live to the engine.
-func TestM140_NewOwnerArrivingIsNeverDueButAbsent(t *testing.T) {
+// Registered owners are never reported retired. This asserts the invariant directly at the
+// engine boundary; it does NOT exercise the tick's snapshot/liveness path, which is covered
+// by the real blocked-tick tests.
+func TestM140_RegisteredOwnersAreNeverReportedRetired(t *testing.T) {
 	e := decision.NewCoverageEngine()
 	m := m140Manager(e)
 	for i := 0; i < 8; i++ {

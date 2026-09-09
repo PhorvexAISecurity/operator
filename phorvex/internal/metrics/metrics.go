@@ -11,6 +11,7 @@
 package metrics
 
 import (
+	"sync"
 	"github.com/prometheus/client_golang/prometheus"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
@@ -274,6 +275,9 @@ func ResetOwner(tenant, namespace, policy, uid string) {
 	podPerDollar.DeletePartialMatch(m)
 	podProactiveRate.DeletePartialMatch(m)
 	policyLambda.DeleteLabelValues(tenant, namespace, policy, uid)
+	ownerSampleMu.Lock()
+	delete(ownerSamples, ownerSampleKey(tenant, namespace, policy, uid))
+	ownerSampleMu.Unlock()
 	// [M-140 R1.4] The legacy per-tenant series is derived from whichever owner published
 	// last. When an owner goes away its contribution must go with it, or the removed
 	// policy's lambda keeps being served under the display name.
@@ -299,13 +303,43 @@ func SetTenantOwnerCount(tenant string, owners int) {
 	}
 }
 
+// ownerSamples retains the last lambda actually observed for each owner, so the legacy
+// per-tenant series can be RESTORED from a real sample when a display name becomes unique
+// again — without waiting for a new decision and without materialising learned state.
+// Nothing is ever fabricated: a name whose survivor has produced no sample stays absent.
+var (
+	ownerSampleMu sync.Mutex
+	ownerSamples  = map[string]float64{}
+)
+
+func ownerSampleKey(tenant, namespace, policy, uid string) string {
+	return tenant + "\x00" + namespace + "\x00" + policy + "\x00" + uid
+}
+
 // SetPolicyLambda publishes one owner's runtime lambda, and mirrors it into the legacy
 // per-tenant series only when this policy is the unique owner of its display name.
 func SetPolicyLambda(tenant, namespace, policy, uid string, lambda float64, uniqueOwner bool) {
 	policyLambda.WithLabelValues(tenant, namespace, policy, uid).Set(lambda)
+	ownerSampleMu.Lock()
+	ownerSamples[ownerSampleKey(tenant, namespace, policy, uid)] = lambda
+	ownerSampleMu.Unlock()
 	if uniqueOwner {
 		tenantLambda.WithLabelValues(tenant).Set(lambda)
 	}
+}
+
+// RestoreUniqueOwnerSample republishes the legacy per-tenant series from the surviving
+// owner's own retained sample when a display name returns to exactly one owner. It reports
+// whether a real sample existed; with none, the series stays absent rather than invented.
+func RestoreUniqueOwnerSample(tenant, namespace, policy, uid string) bool {
+	ownerSampleMu.Lock()
+	sample, ok := ownerSamples[ownerSampleKey(tenant, namespace, policy, uid)]
+	ownerSampleMu.Unlock()
+	if !ok {
+		return false
+	}
+	tenantLambda.WithLabelValues(tenant).Set(sample)
+	return true
 }
 
 // PublishTick records one tenant's tick: re-publishes per-pod gauges, the rollups,

@@ -184,13 +184,21 @@ type Manager struct {
 	epochsTracked bool
 }
 
-// lifecycleEvent is one ownership transition awaiting the tick-loop drain.
+// lifecycleEvent is one ownership transition awaiting the tick-loop drain. It carries the
+// departing owner's full METRIC identity, not just its key: a coalesced replacement never
+// calls Remove, so without this the predecessor's series would be exported forever (R2.2).
 type lifecycleEvent struct {
-	owner  string
-	tenant string
+	owner     string
+	tenant    string
+	namespace string
+	policy    string
+	uid       string
 	// replacedBy is set when an Upsert changed identity, so the drain can report the
 	// actual completion cause rather than inferring a NotFound reconcile that never ran.
 	replacedBy string
+	// metricsOnly marks a display-name change under an UNCHANGED identity: retire the stale
+	// label set, but keep every learned store and the creation record.
+	metricsOnly bool
 }
 
 // NewManager constructs a Manager with sane defaults for any nil collaborators.
@@ -296,9 +304,19 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	// whose Get already sees the new object, so Remove never runs. Detect the identity
 	// change here and enqueue the predecessor's cleanup; otherwise its learned state would
 	// be inherited by the new policy and its stores would leak forever.
+	if existing != nil && existing.uid == entry.uid && existing.tenant != entry.tenant {
+		// Same identity, new display name (R2.2): the old label set must stop being
+		// exported, but learned state and creation metadata belong to the unchanged owner
+		// and are deliberately left alone.
+		m.enqueueLifecycleLocked(lifecycleEvent{
+			owner: existing.ownerKey(), tenant: existing.tenant, namespace: existing.namespace,
+			policy: existing.key.Name, uid: existing.uid, metricsOnly: true,
+		})
+	}
 	if existing != nil && existing.uid != entry.uid {
 		m.enqueueLifecycleLocked(lifecycleEvent{
-			owner: existing.ownerKey(), tenant: existing.tenant, replacedBy: entry.uid,
+			owner: existing.ownerKey(), tenant: existing.tenant, namespace: existing.namespace,
+			policy: existing.key.Name, uid: existing.uid, replacedBy: entry.uid,
 		})
 	}
 	m.policies[key.String()] = entry
@@ -340,13 +358,29 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	delete(m.policies, key.String())
 	delete(m.emits, key.String())
 	if e != nil {
-		m.enqueueLifecycleLocked(lifecycleEvent{owner: e.ownerKey(), tenant: e.tenant})
+		m.enqueueLifecycleLocked(lifecycleEvent{
+			owner: e.ownerKey(), tenant: e.tenant, namespace: e.namespace,
+			policy: e.key.Name, uid: e.uid,
+		})
 	}
 	m.mu.Unlock()
 	if e != nil {
-		metrics.ResetOwner(e.tenant, e.namespace, e.key.Name, e.uid)
+		// Series retirement happens at the drain, with the same identity every other
+		// lifecycle path uses, so Remove and coalesced replacement behave identically.
 		metrics.ResetKillSwitchStatus(e.key.Namespace, e.key.Name)
 	}
+}
+
+// capturedEpoch returns the generation this TICK was admitted under, so a rotation emitted
+// during the tick is stamped with the identity that was actually decided for. Reading the
+// live epoch here instead would stamp a replacement's generation onto its predecessor's
+// rotation whenever an Upsert landed mid-tick. Falls back to the live value for producers
+// that run outside a tick (offline paths and focused tests).
+func (m *Manager) capturedEpoch(owner string) uint64 {
+	if epoch, ok := m.tickEpochs[owner]; ok {
+		return epoch
+	}
+	return m.ownerEpoch(owner)
 }
 
 // ownerEpoch reads an owner's current generation.
@@ -417,12 +451,28 @@ func (m *Manager) publishOwnership() {
 	for tenant := range counts {
 		m.publishedTenants[tenant] = struct{}{}
 	}
+	// Identify each name that is now owned by exactly one policy, so its legacy series can
+	// be restored from that survivor's own retained sample.
+	unique := map[string]*policyEntry{}
+	for _, e := range m.policies {
+		if e != nil && counts[e.tenant] == 1 {
+			unique[e.tenant] = e
+		}
+	}
 	m.mu.Unlock()
 	for _, tenant := range retired {
 		metrics.ClearTenantOwnership(tenant)
 	}
 	for tenant, n := range counts {
 		metrics.SetTenantOwnerCount(tenant, n)
+	}
+	// [M-140 R2.1] SetTenantOwnerCount only withdraws; it cannot restore. A name that has
+	// returned to a single owner republishes that owner's LAST OBSERVED lambda, so the
+	// series does not stay absent until the next decision. If the survivor has produced no
+	// sample the series stays absent — a value is never invented, and no learned state is
+	// allocated to produce one.
+	for tenant, e := range unique {
+		metrics.RestoreUniqueOwnerSample(tenant, e.namespace, e.key.Name, e.uid)
 	}
 }
 
@@ -461,6 +511,21 @@ func (m *Manager) DrainLifecycle() {
 		return
 	}
 	for _, ev := range events {
+		// [M-140 R2.2] Retire the departing identity's series at drain completion. This is
+		// the ONLY cleanup path a coalesced replacement passes through, since it never calls
+		// Remove. It deletes exactly this owner's labels, so a replacement or an unrelated
+		// co-resident owner is untouched.
+		if ev.uid != "" {
+			metrics.ResetOwner(ev.tenant, ev.namespace, ev.policy, ev.uid)
+		}
+		if ev.metricsOnly {
+			// A display-name change under an unchanged identity: labels retired, learned
+			// state and creation metadata deliberately preserved.
+			if m.Audit != nil {
+				m.Audit.TenantLifecycle(ev.tenant, ev.owner, ev.replacedBy, 0)
+			}
+			continue
+		}
 		stores := 0
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 			ce.ForgetOwner(ev.owner) // cost bucket + belief prior + stage clock + alias retirement
@@ -810,7 +875,7 @@ func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.Workl
 		return true // repeated Phoenix emits must not reset the original recovery clock
 	}
 	m.pendingRotations[key] = pendingRotation{
-		owner: owner, epoch: m.ownerEpoch(owner), tenant: tenant,
+		owner: owner, epoch: m.capturedEpoch(owner), tenant: tenant,
 		ledgerID: rotationLedgerID(tenant, view), startedAt: startedAt,
 		referenceAtStart:     cost.ReadyDelayReference,
 		censorDeadline:       startedAt.Add(2 * cost.ReadyDelayReference),
