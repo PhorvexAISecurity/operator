@@ -91,7 +91,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 		before := outcomeCount(t, tenant, "matched")
 		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
-		m.trackRotation(tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
+		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 		m.observeReadyRotations(&ingest.Snapshot{
 			Now: startedAt.Add(30 * time.Second),
 			Pods: []model.Pod{{
@@ -109,7 +109,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 		before := outcomeCount(t, tenant, "censored")
 		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
-		m.trackRotation(tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
+		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 		m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
 		if got := outcomeCount(t, tenant, "censored") - before; got != 1 {
 			t.Fatalf("censored counter moved by %v, want 1", got)
@@ -121,7 +121,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 		before := outcomeCount(t, tenant, "abandoned")
 		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
-		m.trackRotation(tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
+		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 		m.observeReadyRotations(&ingest.Snapshot{
 			Now: startedAt.Add(2 * cost.ReadyDelayReference),
 			Pods: []model.Pod{{
@@ -146,7 +146,7 @@ func TestOutcomeIsCountedOncePerRotationNotPerTick(t *testing.T) {
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 	v := rotationView("old", "old-uid")
-	m.trackRotation(tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
+	m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 
 	// Three ticks while the rotation is still unresolved and inside the window: no outcome yet.
 	for _, d := range []time.Duration{time.Second, 10 * time.Second, 30 * time.Second} {

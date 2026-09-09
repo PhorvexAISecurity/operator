@@ -175,3 +175,17 @@ func (m *ConjugateMemory) PHoldUCBWithEvidence(tenant string, eventAlpha, k floa
 	}
 	return v
 }
+
+// Forget drops one owner's accumulated belief state (M-140). A recreated policy is a new
+// economic unit, so it must start from the shipped default prior rather than inheriting the
+// previous occupant's evidence. The fleet hyperprior is intentionally NOT rewound: it is
+// gated off by default (crossTenantPrior), has no non-test production caller, and evidence
+// already mixed into it cannot be honestly un-mixed for one contributor.
+func (m *ConjugateMemory) Forget(owner string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.tenants, owner)
+}

@@ -95,7 +95,7 @@ func TestO4_RLSConformalNonInfluenceExactZero(t *testing.T) {
 	e.Now = vtClock()
 	aView := covView("a-expensive", true, 3*time.Hour, true) // a GPU/expensive A workload
 	for i := 0; i < 50; i++ {
-		e.costFor("A").ObserveRotation(aView, 9.0) // A's RLS/Conformal bucket absorbs costly rotations
+		e.costFor(ownerName("A")).ObserveRotation(aView, 9.0) // A's RLS/Conformal bucket absorbs costly rotations
 	}
 	var b strings.Builder
 	for tick := 0; tick < 8; tick++ {
@@ -113,21 +113,21 @@ func TestObserveRotationUpdatesOnlyItsTenantBucket(t *testing.T) {
 	pol := vtPol("A")
 	move := model.Move{Action: model.ActionRotate}
 
-	a := e.costFor("A")
+	a := e.costFor(ownerName("A"))
 	before := a.ECost(v, move, pol)
-	e.ObserveRotation("A", v, 0.05)
+	e.ObserveRotation(ownerName("A"), v, 0.05)
 	after := a.ECost(v, move, pol)
 	if !a.RLS.Primed() || after == before {
 		t.Fatalf("tenant A rotation feedback did not reach its RLS: primed=%v before=%v after=%v", a.RLS.Primed(), before, after)
 	}
-	if e.costFor("B").RLS.Primed() {
+	if e.costFor(ownerName("B")).RLS.Primed() {
 		t.Fatal("tenant A rotation feedback primed tenant B's isolated RLS bucket")
 	}
 }
 
 func TestObservedTenantCostFeedsGeneratedCandidates(t *testing.T) {
 	e := NewCoverageEngine()
-	_ = e.costFor("A") // make the legacy scalar belong to another tenant
+	_ = e.costFor(ownerName("A")) // make the legacy scalar belong to another tenant
 	v := covView("b-observed", false, 3*time.Hour, false)
 	pol := vtPol("B")
 
@@ -142,7 +142,7 @@ func TestObservedTenantCostFeedsGeneratedCandidates(t *testing.T) {
 		return 0
 	}
 	before := rotateCost()
-	e.ObserveRotation("B", v, 0.05)
+	e.ObserveRotation(ownerName("B"), v, 0.05)
 	after := rotateCost()
 	if after == before {
 		t.Fatalf("tenant B learned cost did not reach generated candidates: before=%v after=%v", before, after)

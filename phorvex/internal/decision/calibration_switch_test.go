@@ -11,9 +11,9 @@ import (
 
 func TestFreezeAppliesToTenantsCreatedLater(t *testing.T) {
 	e := NewCoverageEngine()
-	early := e.costFor("tenant-a") // exists before the switch is thrown
+	early := e.costFor(ownerName("tenant-a")) // exists before the switch is thrown
 	e.SetCostCalibrationFrozen(true)
-	late := e.costFor("tenant-b") // first seen AFTER
+	late := e.costFor(ownerName("tenant-b")) // first seen AFTER
 
 	if !early.RLS.Frozen() {
 		t.Error("an existing tenant bucket was not frozen")
@@ -33,7 +33,7 @@ func TestFreezeAppliesToTenantsCreatedLater(t *testing.T) {
 // learner, hiding whether it was ever unfrozen.
 func TestFreezeIsIdempotent(t *testing.T) {
 	e := NewCoverageEngine()
-	c := e.costFor("t")
+	c := e.costFor(ownerName("t"))
 	f, y := probeObs()
 	for i := 0; i < 50; i++ {
 		c.RLS.Update(f, y)

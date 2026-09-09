@@ -21,41 +21,56 @@ var (
 	podRisk = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_risk_score",
 		Help: "Per-pod risk score this tick (Grafana heatmap source).",
-	}, []string{"tenant", "namespace", "pod"})
+	}, []string{"tenant", "namespace", "pod", "uid"})
 
 	podCost = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_switching_cost",
 		Help: "Per-pod switching (disruption) cost of the best candidate move this tick.",
-	}, []string{"tenant", "namespace", "pod"})
+	}, []string{"tenant", "namespace", "pod", "uid"})
 
 	podNet = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_net_benefit",
 		Help: "Per-pod net benefit (risk - lambda*cost) of the best candidate move this tick.",
-	}, []string{"tenant", "namespace", "pod"})
+	}, []string{"tenant", "namespace", "pod", "uid"})
 
 	podBlast = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_blast_radius",
 		Help: "Per-pod normalized blast-radius (reachability) score.",
-	}, []string{"tenant", "namespace", "pod"})
+	}, []string{"tenant", "namespace", "pod", "uid"})
 
 	podExposure = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_exposure_seconds",
 		Help: "Per-pod, per-variable exposure clock (seconds since the variable last changed).",
-	}, []string{"tenant", "namespace", "pod", "variable"})
+	}, []string{"tenant", "namespace", "pod", "variable", "uid"})
 
 	podPerDollar = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_per_dollar",
 		Help: "Legacy per-pod full-value/ECost reporting ratio; ECost is dimensionless, not dollars.",
-	}, []string{"tenant", "namespace", "pod"})
+	}, []string{"tenant", "namespace", "pod", "uid"})
 
 	podProactiveRate = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_pod_proactive_rate",
 		Help: "Legacy reporting value perDollar-lambda; it is not the P1 action selector.",
-	}, []string{"tenant", "namespace", "pod"})
+	}, []string{"tenant", "namespace", "pod", "uid"})
 
 	tenantLambda = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "phorvex_tenant_lambda",
 		Help: "Legacy mixed runtime lambda per tenant; move-pressure-updated ECost coefficient, not a certified exact dual.",
+	}, []string{"tenant"})
+
+	// [M-140] policyLambda is the unambiguous per-owner series. phorvex_tenant_lambda above
+	// is the compatible view and is only meaningful while a display name has exactly one
+	// live owner; two policies sharing a spec.tenant are two economic units with two lambdas.
+	policyLambda = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_policy_lambda",
+		Help: "Runtime lambda of one policy-owned economic unit (M-140 owner identity).",
+	}, []string{"tenant", "namespace", "policy", "uid"})
+
+	// [M-140] tenantCollisions is the live owner count for a display name. >1 means the
+	// legacy per-tenant series cannot be truthful and is withdrawn.
+	tenantCollisions = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "phorvex_tenant_collisions",
+		Help: "Number of live policies sharing one spec.tenant display name.",
 	}, []string{"tenant"})
 
 	selectedPods = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -183,7 +198,7 @@ var (
 func init() {
 	crmetrics.Registry.MustRegister(
 		podRisk, podCost, podNet, podBlast, podExposure,
-		podPerDollar, podProactiveRate, tenantLambda,
+		podPerDollar, podProactiveRate, tenantLambda, policyLambda, tenantCollisions,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
 		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
@@ -246,10 +261,11 @@ func ResetKillSwitchStatus(namespace, policy string) {
 	killSwitchStatusDisagreement.DeleteLabelValues(namespace, policy)
 }
 
-// ResetTenant clears a tenant's per-pod series (call before re-publishing a tick, and
-// on tenant removal) so departed pods do not linger in the heatmap.
-func ResetTenant(tenant string) {
-	m := prometheus.Labels{"tenant": tenant}
+// ResetOwner clears ONE owner's per-pod series (M-140). It is called before re-publishing
+// a tick and on removal. It is owner-scoped rather than tenant-scoped because two policies
+// sharing a display name would otherwise delete each other's gauges on every tick.
+func ResetOwner(tenant, namespace, policy, uid string) {
+	m := prometheus.Labels{"tenant": tenant, "uid": uid}
 	podRisk.DeletePartialMatch(m)
 	podCost.DeletePartialMatch(m)
 	podNet.DeletePartialMatch(m)
@@ -257,12 +273,33 @@ func ResetTenant(tenant string) {
 	podExposure.DeletePartialMatch(m)
 	podPerDollar.DeletePartialMatch(m)
 	podProactiveRate.DeletePartialMatch(m)
+	policyLambda.DeleteLabelValues(tenant, namespace, policy, uid)
+}
+
+// SetTenantOwnerCount publishes how many live policies share one display name and keeps the
+// legacy phorvex_tenant_lambda series honest: it is DELETED while the count is not exactly
+// one, because no single value can describe two economic units. It is republished from the
+// unique survivor's own sample when uniqueness returns; no bucket is created to feed it.
+func SetTenantOwnerCount(tenant string, owners int) {
+	tenantCollisions.WithLabelValues(tenant).Set(float64(owners))
+	if owners != 1 {
+		tenantLambda.DeleteLabelValues(tenant)
+	}
+}
+
+// SetPolicyLambda publishes one owner's runtime lambda, and mirrors it into the legacy
+// per-tenant series only when this policy is the unique owner of its display name.
+func SetPolicyLambda(tenant, namespace, policy, uid string, lambda float64, uniqueOwner bool) {
+	policyLambda.WithLabelValues(tenant, namespace, policy, uid).Set(lambda)
+	if uniqueOwner {
+		tenantLambda.WithLabelValues(tenant).Set(lambda)
+	}
 }
 
 // PublishTick records one tenant's tick: re-publishes per-pod gauges, the rollups,
 // and the counters.
-func PublishTick(tenant, policy string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string) {
-	ResetTenant(tenant)
+func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string, uniqueOwner bool) {
+	ResetOwner(tenant, namespace, policy, uid)
 	ticksTotal.WithLabelValues(tenant, policy).Inc()
 	tickDuration.WithLabelValues(tenant).Observe(durSeconds)
 	protectedPods.WithLabelValues(tenant).Set(float64(len(decisions)))
@@ -271,22 +308,25 @@ func PublishTick(tenant, policy string, decisions []model.Decision, exposures ma
 	for _, d := range decisions {
 		// Keep the legacy Prometheus metric stable while the versioned Decision/audit
 		// contract separates P1 coverage value from deprecated P0 threat risk.
-		podRisk.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.DecisionValue())
-		podCost.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Cost)
-		podNet.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.Net)
-		podBlast.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.BlastRadius)
-		podPerDollar.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.PerDollar)
-		podProactiveRate.WithLabelValues(tenant, d.Namespace, d.Pod).Set(d.ProactiveRate)
+		podRisk.WithLabelValues(tenant, d.Namespace, d.Pod, uid).Set(d.DecisionValue())
+		podCost.WithLabelValues(tenant, d.Namespace, d.Pod, uid).Set(d.Cost)
+		podNet.WithLabelValues(tenant, d.Namespace, d.Pod, uid).Set(d.Net)
+		podBlast.WithLabelValues(tenant, d.Namespace, d.Pod, uid).Set(d.BlastRadius)
+		podPerDollar.WithLabelValues(tenant, d.Namespace, d.Pod, uid).Set(d.PerDollar)
+		podProactiveRate.WithLabelValues(tenant, d.Namespace, d.Pod, uid).Set(d.ProactiveRate)
 		decisionsTotal.WithLabelValues(tenant, string(d.Action), mode, boolStr(d.Selected)).Inc()
 	}
+	// [M-140] decisions[0].Lambda is the value FROZEN into this tick's pricing, before the
+	// dual step. With no decisions nothing is published, so a live "seed applied" check must
+	// use the first tick that actually produces decisions.
 	if len(decisions) > 0 {
-		tenantLambda.WithLabelValues(tenant).Set(decisions[0].Lambda)
+		SetPolicyLambda(tenant, namespace, policy, uid, decisions[0].Lambda, uniqueOwner)
 	}
 	// Per-variable exposure: exposures[ns/pod][variable] = seconds.
 	for nsPod, vars := range exposures {
 		ns, pod := splitNSPod(nsPod)
 		for variable, secs := range vars {
-			podExposure.WithLabelValues(tenant, ns, pod, variable).Set(secs)
+			podExposure.WithLabelValues(tenant, ns, pod, variable, uid).Set(secs)
 		}
 	}
 }

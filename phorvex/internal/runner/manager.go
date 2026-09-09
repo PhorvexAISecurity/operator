@@ -66,7 +66,18 @@ type policyEntry struct {
 // controller-created replacement UID reached Ready. knownUIDs prevents an already
 // Ready sibling from being mistaken for the replacement.
 type pendingRotation struct {
+	// owner keys the learned state (M-140); tenant remains the DISPLAY name so ledger
+	// entries and metrics keep their existing identity and comparability.
+	owner                string
 	tenant               string
+	// ledgerID is the historical entry identity, built from the display tenant so the
+	// slo.Ledger keeps byte-identical IDs across this change.
+	ledgerID string
+	// ledgerRecorded reports whether an outcome has already been written for this
+	// rotation. It decides which arm of the removal rule applies: with no entry we may
+	// write one honest unmeasured close; with an entry we must not touch it, because
+	// Ledger.Record REPLACES on an ID match and would erase a measured floor.
+	ledgerRecorded       bool
 	startedAt            time.Time
 	referenceAtStart     time.Duration
 	censorDeadline       time.Time
@@ -144,6 +155,25 @@ type Manager struct {
 	// [0,2] observation window, but ledger-enabled censored entries remain here so
 	// their disruption floor keeps increasing until recovery is actually observed.
 	pendingRotations map[string]pendingRotation
+	// [M-140] lifecycle is the queue of ownership events enqueued by the controller
+	// goroutine (Remove, and Upsert that replaces one identity with another) and drained
+	// by the tick loop. Nothing is pruned at enqueue: removal COMPLETES at the drain,
+	// which is the only point that owns the engine exclusively. Per-owner arrival order
+	// is preserved by appending to a single slice.
+	lifecycle []lifecycleEvent
+	// epochs is the liveness/generation table. A deferred producer carries the epoch it
+	// was issued under; a write whose owner is absent or whose epoch is stale is dropped
+	// without allocating. Guarded by mu, like the queue.
+	epochs map[string]uint64
+}
+
+// lifecycleEvent is one ownership transition awaiting the tick-loop drain.
+type lifecycleEvent struct {
+	owner  string
+	tenant string
+	// replacedBy is set when an Upsert changed identity, so the drain can report the
+	// actual completion cause rather than inferring a NotFound reconcile that never ran.
+	replacedBy string
 }
 
 // NewManager constructs a Manager with sane defaults for any nil collaborators.
@@ -203,6 +233,12 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	if err != nil {
 		return err
 	}
+	// [M-140] Production identity is the policy UID. Without it the owner key would fall
+	// back to the display name and silently reacquire the shared-bucket semantics this fix
+	// removes, so a malformed object is rejected rather than quietly downgraded.
+	if p.UID == "" {
+		return fmt.Errorf("policy %s/%s has no UID; refusing to register an unidentified owner", p.Namespace, p.Name)
+	}
 	key := types.NamespacedName{Namespace: p.Namespace, Name: p.Name}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -217,7 +253,7 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 			unsupportedSignature = existing.actionsUnsupportedSignature
 		}
 	}
-	m.policies[key.String()] = &policyEntry{
+	entry := &policyEntry{
 		key:       key,
 		uid:       string(p.UID),
 		tenant:    p.EffectiveTenant(),
@@ -230,20 +266,190 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 		actionsUnsupportedTicks:     unsupportedTicks,
 		actionsUnsupportedSignature: unsupportedSignature,
 	}
+	// [M-140] A delete immediately followed by a recreate can collapse into ONE reconcile
+	// whose Get already sees the new object, so Remove never runs. Detect the identity
+	// change here and enqueue the predecessor's cleanup; otherwise its learned state would
+	// be inherited by the new policy and its stores would leak forever.
+	if existing != nil && existing.uid != entry.uid {
+		m.enqueueLifecycleLocked(lifecycleEvent{
+			owner: existing.ownerKey(), tenant: existing.tenant, replacedBy: entry.uid,
+		})
+	}
+	m.policies[key.String()] = entry
+	// A same-UID PATCH must NOT bump the epoch: identity is unchanged, so learning continues
+	// and the configured seed is not reconsumed.
+	if m.epochs == nil {
+		m.epochs = map[string]uint64{}
+	}
+	if _, known := m.epochs[entry.ownerKey()]; !known {
+		m.epochs[entry.ownerKey()] = 1
+	}
 	return nil
 }
 
-// Remove drops a tenant policy and clears its metric series.
+// ownerKey is the disjoint identity that owns this entry's learned state.
+func (e *policyEntry) ownerKey() string {
+	return model.OwnerKey(model.OwnerKindUID, e.uid)
+}
+
+// enqueueLifecycleLocked appends an ownership event and invalidates the owner's epoch.
+// Callers hold m.mu. Nothing is pruned here: removal completes at the tick-loop drain.
+func (m *Manager) enqueueLifecycleLocked(ev lifecycleEvent) {
+	m.lifecycle = append(m.lifecycle, ev)
+	// Bump rather than delete so a late producer carrying the old epoch is recognisably
+	// stale; the entry is dropped by the drain once cleanup completes, bounding the table.
+	if m.epochs == nil {
+		m.epochs = map[string]uint64{}
+	}
+	m.epochs[ev.owner] = m.epochs[ev.owner] + 1
+}
+
+// Remove drops a tenant policy and ENQUEUES its learned-state cleanup. The prune itself
+// happens at the tick-loop drain (M-140): pruning here would mutate the decision engine
+// from the controller goroutine, which m.mu does not protect, and would race the tick.
 func (m *Manager) Remove(key types.NamespacedName) {
 	m.mu.Lock()
 	e := m.policies[key.String()]
 	delete(m.policies, key.String())
 	delete(m.emits, key.String())
+	if e != nil {
+		m.enqueueLifecycleLocked(lifecycleEvent{owner: e.ownerKey(), tenant: e.tenant})
+	}
 	m.mu.Unlock()
 	if e != nil {
-		metrics.ResetTenant(e.tenant)
+		metrics.ResetOwner(e.tenant, e.namespace, e.key.Name, e.uid)
 		metrics.ResetKillSwitchStatus(e.key.Namespace, e.key.Name)
 	}
+}
+
+// ownersOf counts the live policies sharing one display tenant name.
+func (m *Manager) ownersOf(tenant string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, e := range m.policies {
+		if e != nil && e.tenant == tenant {
+			n++
+		}
+	}
+	return n
+}
+
+// uniqueOwnerOf reports whether this display name maps to exactly one economic unit, which
+// is the only case in which the legacy per-tenant lambda series can be truthful.
+func (m *Manager) uniqueOwnerOf(tenant string) bool { return m.ownersOf(tenant) == 1 }
+
+// publishOwnership republishes the collision gauge for every live display name and withdraws
+// the legacy per-tenant series wherever a name has stopped being unique.
+func (m *Manager) publishOwnership() {
+	m.mu.RLock()
+	counts := map[string]int{}
+	for _, e := range m.policies {
+		if e != nil {
+			counts[e.tenant]++
+		}
+	}
+	m.mu.RUnlock()
+	for tenant, n := range counts {
+		metrics.SetTenantOwnerCount(tenant, n)
+	}
+}
+
+// syncOwnerLiveness tells the decision engine which owners still exist. A deferred producer
+// (late rotation feedback, a stale tick) that reaches the engine for an absent owner is then
+// dropped instead of lazily recreating that owner's bucket at the DEFAULT seed.
+func (m *Manager) syncOwnerLiveness() {
+	ce, ok := m.Optimizer.(*decision.CoverageEngine)
+	if !ok {
+		return
+	}
+	m.mu.RLock()
+	owners := make([]string, 0, len(m.policies))
+	for _, e := range m.policies {
+		if e != nil {
+			owners = append(owners, e.ownerKey())
+		}
+	}
+	m.mu.RUnlock()
+	for _, owner := range owners {
+		ce.SetOwnerLive(owner, true)
+	}
+}
+
+// DrainLifecycle completes every enqueued ownership transition. It runs at the top of each
+// tick, INCLUDING ticks with no due policy, so a removal is never stranded behind an idle
+// tenant. This is the point at which removal is complete; the audit records that point,
+// not the enqueue. Exported so the controller-level lifecycle tests can drive the same
+// entrypoint the tick loop uses rather than a test-only substitute.
+func (m *Manager) DrainLifecycle() {
+	m.mu.Lock()
+	events := m.lifecycle
+	m.lifecycle = nil
+	m.mu.Unlock()
+	if len(events) == 0 {
+		return
+	}
+	for _, ev := range events {
+		stores := 0
+		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+			ce.ForgetOwner(ev.owner) // cost bucket + belief prior + stage clock + alias retirement
+			stores += 3
+		}
+		if m.Clock != nil {
+			m.Clock.RetainOwner(ev.owner, nil)
+			stores++
+		}
+		if m.Intents != nil {
+			m.Intents.RetainOwner(ev.owner, nil)
+			stores++
+		}
+		stores += m.closePendingForOwner(ev)
+		m.mu.Lock()
+		// The owner is gone and its cleanup is complete, so the epoch entry can go too:
+		// churn cannot accumulate tombstones. A later same-UID Upsert starts at 1 again.
+		if _, replaced := m.policies[""]; !replaced { // placeholder to keep lock scope explicit
+			_ = replaced
+		}
+		delete(m.epochs, ev.owner)
+		m.mu.Unlock()
+		if m.Audit != nil {
+			m.Audit.TenantLifecycle(ev.tenant, ev.owner, ev.replacedBy, stores)
+		}
+	}
+}
+
+// closePendingForOwner terminates in-flight rotation observations for a removed owner and
+// returns how many pending entries were dropped.
+//
+// Two arms, because slo.Ledger.Record REPLACES an entry on an ID match: writing an
+// unmeasured close under an existing ID would erase a measured or right-censored floor,
+// and writing it under a NEW id would double-count the same event.
+func (m *Manager) closePendingForOwner(ev lifecycleEvent) int {
+	dropped := 0
+	for key, p := range m.pendingRotations {
+		if p.owner != ev.owner {
+			continue
+		}
+		if !p.ledgerRecorded && m.Disruption != nil {
+			// Arm 1: nothing was ever recorded for this rotation. One honest entry:
+			// it was emitted and its outcome was never observed. Not right_censored,
+			// which would assert a floor we never measured.
+			m.Disruption.Record(slo.Entry{
+				ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+				Action: model.ActionRotate, Cause: slo.CausePhorvex,
+				StartedAt: p.startedAt, Outcome: slo.OutcomeEmitted,
+				ReplicaImpact: slo.ImpactUnmeasured,
+			})
+		}
+		// Arm 2 is the absence of an else: an already-recorded entry keeps its identity,
+		// amounts, censoring, availability and observation times exactly as observed.
+		if m.Audit != nil {
+			m.Audit.RotationObservationTerminated(p.tenant, ev.owner, p.view.Pod.Namespace, p.view.Pod.Name, p.ledgerRecorded)
+		}
+		delete(m.pendingRotations, key)
+		dropped++
+	}
+	return dropped
 }
 
 // recordEmits appends n enacted moves at now to the policy's ledger, drops entries older
@@ -333,6 +539,12 @@ func (m *Manager) reconcileWedged(ctx context.Context, namespaces []string) {
 
 // tick builds one cluster snapshot and processes all due tenants.
 func (m *Manager) tick(ctx context.Context) {
+	// [M-140] Complete pending ownership transitions BEFORE any snapshot or decision work,
+	// on every tick including ones with no due policy, so a removal is never stranded behind
+	// an idle tenant and no decision is priced from a departed owner's state.
+	m.syncOwnerLiveness()
+	m.DrainLifecycle()
+	m.publishOwnership()
 	m.mu.RLock()
 	due := make([]*policyEntry, 0, len(m.policies))
 	nsSet := map[string]bool{}
@@ -457,21 +669,30 @@ func genericAssetValue(p *model.Pod) float64 {
 	return v
 }
 
-func rotationObservationKey(tenant string, view *model.WorkloadView) string {
+// rotationObservationKey keys a pending rotation by its OWNER (M-140) so two policies
+// sharing a display name track their own feedback independently and a removal prunes only
+// its own entries. The ledger keeps a tenant-built identity; see pendingRotation.ledgerID.
+func rotationObservationKey(owner string, view *model.WorkloadView) string {
+	return owner + "\x00" + view.Pod.Namespace + "\x00" + view.Pod.UID
+}
+
+// rotationLedgerID preserves the pre-M-140 entry identity, built from the DISPLAY tenant,
+// so historical disruption evidence keeps byte-identical IDs and stays comparable.
+func rotationLedgerID(tenant string, view *model.WorkloadView) string {
 	return tenant + "\x00" + view.Pod.Namespace + "\x00" + view.Pod.UID
 }
 
 // trackRotation records only controller-owned rotations for optimizers that can
 // consume feedback. Without a controller identity there is no honest way to match
 // a replacement, so the observation remains unavailable rather than fabricated.
-func (m *Manager) trackRotation(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, startedAt time.Time) bool {
-	return m.trackRotationWithFloor(tenant, view, allViews, -1, startedAt)
+func (m *Manager) trackRotation(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, startedAt time.Time) bool {
+	return m.trackRotationWithFloor(owner, tenant, view, allViews, -1, startedAt)
 }
 
 // trackRotationWithFloor freezes the service's availability threshold at action
 // start so the disruption ledger can record breach-seconds separately from
 // replica-seconds. A negative floor means the threshold was unavailable.
-func (m *Manager) trackRotationWithFloor(tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time) bool {
+func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time) bool {
 	_, costObserver := m.Optimizer.(decision.RotationObserver)
 	if (!costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
 		return false
@@ -499,12 +720,12 @@ func (m *Manager) trackRotationWithFloor(tenant string, view *model.WorkloadView
 	if m.pendingRotations == nil {
 		m.pendingRotations = map[string]pendingRotation{}
 	}
-	key := rotationObservationKey(tenant, view)
+	key := rotationObservationKey(owner, view)
 	if _, alreadyPending := m.pendingRotations[key]; alreadyPending {
 		return true // repeated Phoenix emits must not reset the original recovery clock
 	}
 	m.pendingRotations[key] = pendingRotation{
-		tenant: tenant, startedAt: startedAt,
+		owner: owner, tenant: tenant, ledgerID: rotationLedgerID(tenant, view), startedAt: startedAt,
 		referenceAtStart:     cost.ReadyDelayReference,
 		censorDeadline:       startedAt.Add(2 * cost.ReadyDelayReference),
 		view:                 *view,
@@ -617,7 +838,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				}
 				if m.Calibration != nil {
 					m.Calibration.ObserveRotation(calib.RotationRecord{
-						ID: ref.key, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+						ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
 						Action: string(model.ActionRotate), StartedAt: p.startedAt, RecordedAt: snap.Now,
 						Elapsed: elapsed, Outcome: calib.OutcomeInvalid,
 						InvalidReason:    "original pod UID remained present through the observation deadline",
@@ -689,7 +910,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				Elapsed: calibrationElapsed, ReferenceAtStart: p.referenceAtStart,
 			}).Normalized()
 			if costObserver {
-				observer.ObserveRotation(p.tenant, &p.view, measuredFlow)
+				observer.ObserveRotation(p.owner, &p.view, measuredFlow)
 			}
 			if m.Calibration != nil {
 				calibrationOutcome := calib.OutcomeObserved
@@ -697,7 +918,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 					calibrationOutcome = calib.OutcomeCensored
 				}
 				record := calib.RotationRecord{
-					ID: ref.key, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+					ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
 					Action: string(model.ActionRotate), StartedAt: p.startedAt,
 					Elapsed: calibrationElapsed, Outcome: calibrationOutcome,
 					ReferenceAtStart: p.referenceAtStart, CensorDeadline: p.censorDeadline,
@@ -743,7 +964,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				outcome = slo.OutcomeRightCensored
 			}
 			m.Disruption.Record(slo.Entry{
-				ID:                           ref.key,
+				ID:                           p.ledgerID,
 				Tenant:                       p.tenant,
 				Namespace:                    p.view.Pod.Namespace,
 				Pod:                          p.view.Pod.Name,
@@ -767,6 +988,11 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				AvailabilityBreachStartedAt:  breachStartedAt,
 				AvailabilityBreachObservedAt: breachObservedAt,
 			})
+			// [M-140] From here on this rotation HAS ledger evidence. If its owner is removed
+			// later, the close must not re-Record: Ledger.Record replaces on ID match and would
+			// overwrite these measured amounts with an unmeasured entry.
+			p.ledgerRecorded = true
+			m.pendingRotations[ref.key] = p
 		}
 		if ledgerCensored {
 			if m.Disruption == nil {
@@ -902,17 +1128,17 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		// plus the per-action `*-epoch` markers (absent-skipped when a marker is missing). The
 		// [PHVX-67] session clock still resets when either KV flush bumps p.SessionEpoch.
 		m.Clock.Observe(exposure.Observation{
-			Tenant:       pol.Tenant,
+			Owner:        pol.Owner(),
 			Namespace:    p.Namespace,
 			Pod:          p.Name,
 			StartedAt:    p.StartedAt,
 			Fingerprints: model.ExposureFingerprints(*p),
 		}, snap.Now)
-		keep[exposure.SlotKey(pol.Tenant, p.Namespace, p.Name)] = struct{}{}
-		exp := m.Clock.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
+		keep[exposure.SlotKey(pol.Owner(), p.Namespace, p.Name)] = struct{}{}
+		exp := m.Clock.Since(pol.Owner(), p.Namespace, p.Name, snap.Now)
 		// Per-action emit intent (M-23): the most recent EMISSION per variable, stamped at the
 		// emit boundary before the observed epoch catches up. The guard takes min(exp, intent).
-		intent := m.Intents.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
+		intent := m.Intents.Since(pol.Owner(), p.Namespace, p.Name, snap.Now)
 
 		events := append([]model.SecurityEventInfo{}, snap.EventByPod[p.Namespace+"/"+p.Name]...)
 		nbKeys := snap.Graph.Neighbors(p.Namespace, p.Name)
@@ -1008,10 +1234,10 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		if len(rejected) > 0 || inventory != nil {
 			m.updateExistentialStatus(ctx, e, rejected, inventory)
 		}
-		m.Clock.RetainTenant(pol.Tenant, keep)
-		m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
+		m.Clock.RetainOwner(pol.Owner(), keep)
+		m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-			ce.RetainStageClock(pol.Tenant, keep)
+			ce.RetainStageClock(pol.Owner(), keep)
 		}
 		m.mu.Lock()
 		if cur := m.policies[e.key.String()]; cur != nil {
@@ -1103,12 +1329,13 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	}
 
 	dur := time.Since(start)
-	metrics.PublishTick(pol.Tenant, pol.PolicyName, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
+	metrics.PublishTick(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, decisions, exposuresForMetrics,
+		selected, dur.Seconds(), pol.Mode, m.uniqueOwnerOf(pol.Tenant))
 	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode, killEngaged)
-	m.Clock.RetainTenant(pol.Tenant, keep)
-	m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
+	m.Clock.RetainOwner(pol.Owner(), keep)
+	m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		ce.RetainStageClock(pol.Tenant, keep)
+		ce.RetainStageClock(pol.Owner(), keep)
 	}
 	inventory := outcomeInventory(snap.Events, pol)
 	if inventory != nil {
@@ -1305,7 +1532,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
-				if !m.trackRotationWithFloor(pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted) {
+				if !m.trackRotationWithFloor(pol.Owner(), pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted) {
 					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted)
 				}
 			} else {

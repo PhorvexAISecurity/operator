@@ -49,7 +49,7 @@ func TestIntentsRetainTenant(t *testing.T) {
 	i.Mark("other", "ns", "p", "v", now) // different tenant, must be untouched
 
 	keep := map[string]struct{}{SlotKey("t", "ns", "keep"): {}}
-	if dropped := i.RetainTenant("t", keep); dropped != 1 {
+	if dropped := i.RetainOwner("t", keep); dropped != 1 {
 		t.Fatalf("RetainTenant dropped %d, want 1 (the 'drop' pod)", dropped)
 	}
 	if len(i.Since("t", "ns", "drop", now)) != 0 {

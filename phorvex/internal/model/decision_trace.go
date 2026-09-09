@@ -361,6 +361,16 @@ type DecisionTraceV2 struct {
 	LambdaConfiguredSeed float64 `json:"lambdaConfiguredSeed"`
 	LambdaRuntime        float64 `json:"lambdaRuntime"`
 	// The two fields above remain as wire-compatible aliases for existing readers.
+	// [M-140] Ownership metadata, captured when the economic unit was CREATED and stable
+	// for its life. LambdaConfiguredSeed above re-reads the current policy spec every tick,
+	// so it moves on a PATCH that reseeds nothing; LambdaSeedConsumed is the value actually
+	// handed to the dual solver, and BucketCreatedAt/CreationEvent show a recreate really
+	// did construct a new unit. Emitted even on ticks with no selected decisions.
+	OwnerKey           string  `json:"ownerKey"`
+	OwnerKeyKind       string  `json:"ownerKeyKind"`
+	LambdaSeedConsumed float64 `json:"lambdaSeedConsumed"`
+	BucketCreatedAt    string  `json:"bucketCreatedAt"`
+	BucketCreationEvent uint64 `json:"bucketCreationEvent"`
 	LambdaConfiguredPolicy    float64              `json:"lambdaConfiguredPolicy"`
 	LambdaRuntimeLegacy       float64              `json:"lambdaRuntimeLegacy"`
 	SelectorComparator        string               `json:"selectorComparator"`

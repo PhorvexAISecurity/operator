@@ -40,7 +40,24 @@ type CoverageEngine struct {
 	// tenant's budget pressure / calibration NEVER re-prices another's decisions. Lazily created; the
 	// FIRST (single-tenant default) bucket reuses the original `Cost` singleton → bit-identical
 	// single-tenant path. No cross-tenant feed (each bucket integrates only its own tenant's evidence).
-	costByTenant map[string]*cost.P1Cost
+	costByOwner map[string]*cost.P1Cost
+	// [M-140] bucketMeta records, at creation, the identity that owns each bucket and the
+	// seed actually consumed. LambdaConfiguredSeed on the trace re-reads the CURRENT policy
+	// spec every tick, so it moves on a PATCH that reseeds nothing; these fields are the only
+	// truthful evidence that a recreate consumed a new seed.
+	bucketMeta map[string]BucketMeta
+	// [M-140] aliasOwner is the owner currently holding the legacy e.Cost singleton. The first
+	// bucket reuses e.Cost so the single-tenant path stays bit-identical; once that owner is
+	// removed the alias is RETIRED, so a later creation constructs fresh RLS/conformal/dual
+	// instead of inheriting the departed owner's trained state.
+	aliasOwner   string
+	aliasRetired bool
+	// creationEvent orders bucket creations within a process, so a removal and the
+	// creation that follows it are ordered by identity/event rather than wall clock.
+	creationEvent uint64
+	// [M-140] live is the set of owners whose policy still exists. A deferred producer whose
+	// owner is absent must not lazily recreate its state.
+	live map[string]struct{}
 	// calibrationFrozen is the PHVX-2 off-switch, remembered so lazily-created tenant buckets
 	// inherit it rather than starting to learn behind the operator's back.
 	calibrationFrozen bool
@@ -62,11 +79,11 @@ func (e *CoverageEngine) CalibrationState() map[string]struct {
 		Primed  bool
 		Updates int
 	}{}
-	for tenant, c := range e.costByTenant {
+	for owner, c := range e.costByOwner {
 		if c == nil || c.RLS == nil {
 			continue
 		}
-		out[tenant] = struct {
+		out[owner] = struct {
 			Primed  bool
 			Updates int
 		}{Primed: c.RLS.Primed(), Updates: c.RLS.Updates()}
@@ -82,7 +99,7 @@ func (e *CoverageEngine) SetCostCalibrationFrozen(frozen bool) {
 		return // idempotent: re-freezing every tick must not keep reverting theta
 	}
 	e.calibrationFrozen = frozen
-	for _, c := range e.costByTenant {
+	for _, c := range e.costByOwner {
 		if c != nil && c.RLS != nil {
 			c.RLS.SetFrozen(frozen)
 		}
@@ -92,37 +109,124 @@ func (e *CoverageEngine) SetCostCalibrationFrozen(frozen bool) {
 // CostCalibrationFrozen reports the current state (audit/observability).
 func (e *CoverageEngine) CostCalibrationFrozen() bool { return e.calibrationFrozen }
 
-// costFor resolves the per-tenant cost bucket. An optional lambda seed is consumed only
-// when the bucket is first created; later calls preserve the legacy runtime state.
-func (e *CoverageEngine) costFor(tenant string, lambdaSeed ...float64) *cost.P1Cost {
-	if e.costByTenant == nil {
-		e.costByTenant = map[string]*cost.P1Cost{}
+// BucketMeta is the creation-time ownership record for one economic unit. It is captured
+// once, when the bucket is constructed, and never rewritten: a PATCH that does not reseed
+// leaves it untouched, while a recreate under a new owner produces a new one.
+type BucketMeta struct {
+	OwnerKey           string
+	KeyKind            string
+	LambdaSeedConsumed float64
+	BucketCreatedAt    time.Time
+	// CreationEvent is a monotonically increasing counter. Causality between a removal and
+	// the following creation is carried by this event, not by requiring an injected clock to
+	// advance between two calls in the same tick.
+	CreationEvent uint64
+}
+
+// BucketMetaFor exposes the creation record for telemetry, records and tests.
+func (e *CoverageEngine) BucketMetaFor(owner string) (BucketMeta, bool) {
+	meta, ok := e.bucketMeta[owner]
+	return meta, ok
+}
+
+// SetOwnerLive marks an owner as live (Add/Upsert) or, with live=false, marks it absent so
+// deferred producers stop creating state for it. An engine that has never been told about
+// any owner treats every owner as live, which keeps offline/legacy producers working.
+func (e *CoverageEngine) SetOwnerLive(owner string, live bool) {
+	if e.live == nil {
+		e.live = map[string]struct{}{}
 	}
-	if c := e.costByTenant[tenant]; c != nil {
+	if live {
+		e.live[owner] = struct{}{}
+		return
+	}
+	delete(e.live, owner)
+}
+
+// ownerAbsent reports whether lifecycle tracking is active AND this owner is not live.
+func (e *CoverageEngine) ownerAbsent(owner string) bool {
+	if len(e.live) == 0 {
+		return false // no lifecycle tracking in use (offline/legacy producers)
+	}
+	_, ok := e.live[owner]
+	return !ok
+}
+
+// ForgetOwner drops every learned store this engine owns for one policy identity. It is the
+// decision-side half of M-140's lifecycle: called from the runner's drain, never from a
+// controller goroutine. Retiring the legacy alias when its holder leaves is what makes the
+// NEXT creation genuinely fresh rather than a reused singleton carrying trained RLS state.
+func (e *CoverageEngine) ForgetOwner(owner string) {
+	if e.aliasOwner == owner {
+		e.aliasRetired = true
+		e.aliasOwner = ""
+	}
+	delete(e.costByOwner, owner)
+	delete(e.bucketMeta, owner)
+	delete(e.live, owner)
+	if e.Killchain != nil {
+		if e.Killchain.Memory != nil {
+			e.Killchain.Memory.Forget(owner)
+		}
+		if e.Killchain.StageClock != nil {
+			e.Killchain.StageClock.RetainOwner(owner, nil)
+		}
+	}
+}
+
+// costFor resolves the per-owner cost bucket. An optional lambda seed is consumed only
+// when the bucket is first created; later calls preserve the legacy runtime state.
+func (e *CoverageEngine) costFor(owner string, lambdaSeed ...float64) *cost.P1Cost {
+	if e.costByOwner == nil {
+		e.costByOwner = map[string]*cost.P1Cost{}
+	}
+	if c := e.costByOwner[owner]; c != nil {
 		return c
+	}
+	// [M-140] A deferred producer (rotation feedback, a stale tick) must not resurrect an
+	// owner whose policy is gone, nor allocate under its identity.
+	if e.ownerAbsent(owner) {
+		return nil
 	}
 	seed := cost.DefaultLambdaSeed
 	if len(lambdaSeed) > 0 {
 		seed = lambdaSeed[0]
 	}
 	var c *cost.P1Cost
-	if len(e.costByTenant) == 0 && e.Cost != nil {
+	if len(e.costByOwner) == 0 && e.Cost != nil && !e.aliasRetired {
+		// First bucket reuses the original singleton so the single-tenant path stays
+		// bit-identical. Remember the holder: when it is removed the alias is retired.
 		c = e.Cost
 		c.Dual = cost.NewDualSolverWithSeed(seed)
+		e.aliasOwner = owner
 	} else {
-		c = cost.NewP1CostWithLambda(seed) // isolated per-tenant bucket, zero cross-feed
+		c = cost.NewP1CostWithLambda(seed) // isolated per-owner bucket, zero cross-feed
 	}
 	if c != nil && c.RLS != nil {
 		c.RLS.SetFrozen(e.calibrationFrozen)
 	}
-	e.costByTenant[tenant] = c
+	e.costByOwner[owner] = c
+	if e.bucketMeta == nil {
+		e.bucketMeta = map[string]BucketMeta{}
+	}
+	e.creationEvent++
+	e.bucketMeta[owner] = BucketMeta{
+		OwnerKey: owner, KeyKind: model.OwnerKindOf(owner), LambdaSeedConsumed: seed,
+		BucketCreatedAt: e.now(), CreationEvent: e.creationEvent,
+	}
 	return c
 }
 
 // ObserveRotation implements RotationObserver and keeps the feedback in the same
 // per-tenant bucket used to price that tenant's decisions.
-func (e *CoverageEngine) ObserveRotation(tenant string, view *model.WorkloadView, measuredFlow float64) {
-	e.costFor(tenant).ObserveRotation(view, measuredFlow)
+func (e *CoverageEngine) ObserveRotation(owner string, view *model.WorkloadView, measuredFlow float64) {
+	// [M-140] Deferred rotation feedback can land after its policy is gone. costFor returns
+	// nil for an absent owner rather than lazily recreating the bucket at the DEFAULT seed.
+	c := e.costFor(owner)
+	if c == nil {
+		return
+	}
+	c.ObserveRotation(view, measuredFlow)
 }
 
 // NewCoverageEngine builds the engine from the registered defaults + fresh stateful
@@ -143,9 +247,9 @@ func (e *CoverageEngine) Name() string { return "p1-coverage" }
 
 // RetainStageClock forwards the runner's per-tick GC to the kill-chain stage-dwell tracker
 // (T1-B), using the same keep set that prunes the exposure clock.
-func (e *CoverageEngine) RetainStageClock(tenant string, keep map[string]struct{}) {
+func (e *CoverageEngine) RetainStageClock(owner string, keep map[string]struct{}) {
 	if e.Killchain != nil {
-		e.Killchain.StageClock.RetainTenant(tenant, keep)
+		e.Killchain.StageClock.RetainOwner(owner, keep)
 	}
 }
 
@@ -243,7 +347,7 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 		}
 	}
 
-	tcost := e.costFor(pol.Tenant, pol.Lambda)
+	tcost := e.costFor(pol.Owner(), pol.Lambda)
 	costCeiling := cost.EffectiveCostCeiling(pol)
 	mayRelax := map[string]bool{}
 	if pol.MayBreachSLO {
@@ -299,7 +403,7 @@ func (e *CoverageEngine) DecideShadowChecked(views []*model.WorkloadView, pol mo
 
 func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Policy, persist bool) ([]model.Decision, error) {
 	now := e.now()
-	tcost := e.costFor(pol.Tenant, pol.Lambda)
+	tcost := e.costFor(pol.Owner(), pol.Lambda)
 	lambda := tcost.Dual.Lambda()
 
 	set, ctxByKey := e.AssembleSet(views, pol)
@@ -492,7 +596,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		// set there yielded 0 (no rotate candidate => "blind costs nothing"), which is exactly
 		// backwards: the blind rotate it CANNOT safely take is the most expensive of all.
 		// PHORVEXSEC-196 / M-110 site 1: priced by the TARGET tenant's calibrator bucket
-		// (tcost = costFor(pol.Tenant)). e.Cost is the legacy scalar that costFor hands to the
+		// (tcost = costFor(pol.Owner())). e.Cost is the legacy scalar that costFor hands to the
 		// FIRST tenant registered, so every later tenant's blind cost was priced by that first
 		// tenant's learned RLS/Conformal state.
 		blindCost := tcost.ECost(v, model.Move{Action: model.ActionRotate}, pol)
@@ -620,7 +724,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 				// LOW-P(hold) asset is NEGATIVE evidence they persist (beta up) so the prior
 				// can FALL — fixing the monotone confirmation-bias ratchet (the prior was
 				// alpha-only). evidence = P(hold) - 0.5 in [-0.5, 0.5].
-				e.Killchain.Memory.Observe(pol.Tenant, 0.5*(ac.assess.PHold-0.5))
+				e.Killchain.Memory.Observe(pol.Owner(), 0.5*(ac.assess.PHold-0.5))
 			}
 		}
 	}
@@ -696,6 +800,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 	evaluationRound int,
 ) *model.DecisionTraceV2 {
 	assetKey := v.Pod.Namespace + "/" + v.Pod.Name
+	// [M-140] Ownership metadata comes from the bucket's CREATION record, so it is present
+	// on every record this owner produces — including ticks that select nothing.
+	ownerMeta, _ := e.BucketMetaFor(pol.Owner())
 	tickID := pol.TickID
 	if tickID == "" {
 		tickID = decisionTraceID("tick", now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
@@ -723,6 +830,11 @@ func (e *CoverageEngine) buildDecisionTrace(
 		LambdaRuntime:             lambda,
 		LambdaConfiguredPolicy:    pol.Lambda,
 		LambdaRuntimeLegacy:       lambda,
+		OwnerKey:                  ownerMeta.OwnerKey,
+		OwnerKeyKind:              ownerMeta.KeyKind,
+		LambdaSeedConsumed:        ownerMeta.LambdaSeedConsumed,
+		BucketCreatedAt:           traceTime(ownerMeta.BucketCreatedAt),
+		BucketCreationEvent:       ownerMeta.CreationEvent,
 		SelectorComparator:        model.SelectorStrictPositiveGain,
 		NormWeight:                pol.NormSparsity,
 		FlowWeight:                pol.FlowDisruption,
@@ -767,7 +879,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		PCIe:              pcieRecord(v.Physics),
 		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:            primed,
-		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Tenant)),
+		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Owner())),
 		PHold:             traceOptional(true, ac.assess.PHold),
 		Stage:             ac.assess.StageName,
 		StageHazard:       traceOptional(true, ac.assess.Hazard),
@@ -1311,4 +1423,15 @@ func pcieRecord(ph model.PhysicsWitness) model.DecisionPCIeV3 {
 		Utilization:    traceOptional(ph.LinkPresent, ph.LinkBandwidth),
 		Reason:         ph.LinkReason,
 	}
+}
+
+// traceTime renders a bucket creation time for the decision record, using the same
+// RFC3339Nano shape as the record's other timestamps. A zero time (no bucket yet, e.g. a
+// shadow evaluation that never priced anything) is reported as unavailable rather than as
+// the Unix epoch, so an absent unit is never mistaken for one created in 1970.
+func traceTime(t time.Time) string {
+	if t.IsZero() {
+		return model.TraceNotAvailable
+	}
+	return t.UTC().Format(time.RFC3339Nano)
 }

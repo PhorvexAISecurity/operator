@@ -36,7 +36,7 @@ type ShadowCheckedOptimizer interface {
 // an online rotation-cost learner. The runner invokes it only for completed,
 // measured live rotations; a stateless optimizer need not implement it.
 type RotationObserver interface {
-	ObserveRotation(tenant string, view *model.WorkloadView, measuredFlow float64)
+	ObserveRotation(owner string, view *model.WorkloadView, measuredFlow float64)
 }
 
 var _ Optimizer = (*CoverageEngine)(nil)

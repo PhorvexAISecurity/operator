@@ -198,7 +198,9 @@ func TestActionsSupportedDebouncesAndRecovers(t *testing.T) {
 
 func TestUpsertPreservesDebounceOnlyWithinPolicyGeneration(t *testing.T) {
 	m := &Manager{policies: map[string]*policyEntry{}}
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", Generation: 1}}
+	// M-140: production policies always carry a UID; Upsert refuses an unidentified owner.
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{
+		Namespace: "ns", Name: "policy", UID: "uid-debounce", Generation: 1}}
 	if err := m.Upsert(policy); err != nil {
 		t.Fatal(err)
 	}
