@@ -73,6 +73,22 @@ Output lands in `runs/`: `run-<ts>.json` (everything) and `run-<ts>.html` +
 `latest.html` (the dashboard). Exit code is `1` only when a `critical` or `major` check
 fails.
 
+### Controller health
+
+`controller_deployments` is the nonempty list of expected Deployment names in
+`operator_namespace`. The shipped names match the Phorvex stack and prefixed
+Phoenix manager; configure the list when using another release name or topology.
+Discovery requires read access to Deployments, ReplicaSets and Pods and follows
+their `controller: true` owner UIDs. It does not infer controllers from Pod names,
+labels, or merely sharing the namespace. Unrelated helpers and Jobs are ignored.
+
+Both the preflight board and P05 use the same verdict: every expected Deployment
+must have owned Pods, and observed controller Pods must be Running, Ready and
+within the configured restart limit (including secondary and init containers).
+Missing deployments/pods and unreadable or malformed inventories stay explicitly
+non-green. This is a snapshot health check, not a Deployment rollout-completion
+or desired-replica-count guarantee.
+
 ### Targets
 
 | target | namespace | kind | what it exercises |
@@ -206,7 +222,7 @@ The load-bearing ones:
 | `F03` | no rotate on a stateful pod — **verified with kubectl**, not the record | `stateful-integrity` in reality, not in claim |
 | `A01` `A04` | actuated ⟹ selected ∧ feasible ∧ ¬dryRun | the authorisation chain |
 | `A03` | the cluster confirms the change | pod UID, AMTD ownership, or the workload's own log |
-| `P05` | no controller is crash-looping | a dead operator still lets the dashboard look alive, because a second one keeps writing the audit |
+| `P05` | expected controllers are present, Running and Ready, within restart limits | follows configured Deployment ownership; namespace helpers cannot satisfy or fail controller health |
 | `A06` | absence of actuation matches the writer's real state | "selected but never actuated" has two very different causes — a deliberate kill switch, or a broken actuator. Read from the operator's own `phorvex_kill_switch_engaged` gauge rather than inferred from an absence |
 | `A07` | the dashboard's source identifies itself | a kill-switched mirror whose records don't say so is indistinguishable from a broken actuator |
 

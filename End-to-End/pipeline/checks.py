@@ -126,9 +126,11 @@ def p04(ctx):
        "because another operator keeps writing logs, the dashboard looks healthy", "critical")
 def p05(ctx):
     if not ctx.controller_pods:
-        return result(SKIP, "controller pod status could not be read")
-    bad = [f"{p}: {m['phase']} · restarts={m['restarts']}" for p, m in ctx.controller_pods.items()
-           if m["phase"] != "Running" or m["restarts"] > ctx.max_restarts]
+        return result(FAIL, "no expected controller pod status was observed")
+    bad = [f"{p}: {m['phase']} · restarts={m['restarts']} · "
+           f"{m.get('reason') or ('not Ready' if not m.get('ready', False) else 'unhealthy')}"
+           for p, m in ctx.controller_pods.items()
+           if m["phase"] != "Running" or m["restarts"] > ctx.max_restarts or not m.get("ready", False)]
     if bad:
         return result(FAIL, f"{len(bad)} unhealthy controllers", bad)
     return result(PASS, f"{len(ctx.controller_pods)} healthy controllers",
