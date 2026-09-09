@@ -1,7 +1,7 @@
 schema_version: 1
 protocol_version: 2
 delivery_version: 1
-revision: 75
+revision: 77
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -85,18 +85,27 @@ checks:
     source_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
     at: '2026-09-09T21:20:06+00:00'
   p3:
-    result: FAIL
+    result: PASS
     by: codex-m140
     artifact: evidence/p3/verdict.md
-    sha256: 356e0f4a0853c9891278558dff0c25cd6ade5ec956cba272f60af80aac2836b3
-    source_sha: b7f93bb5d7846541fa42707375b85b9ff4cf73c6
-    at: '2026-09-09T21:15:47+00:00'
+    sha256: 2fec7f53ed4dcd68dd134440f99cb8e1b02cde8aefa34263d3f6147c3d0127eb
+    source_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
+    at: '2026-09-09T21:23:21+00:00'
+    incident_sha256: 4d093a3385e7ecbd1d394c56f0da4eea43cc316147158a008390eaaf42cda206
+  incident:
+    result: PASS
+    by: codex-m140
+    artifact: evidence/incident.md
+    sha256: 4d093a3385e7ecbd1d394c56f0da4eea43cc316147158a008390eaaf42cda206
+    source_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
+    at: '2026-09-09T21:22:47+00:00'
+    baseline_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
 fix_id: M-140
 issues:
 - M-140
 title: Policy-owned tenant state lifecycle
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: human-owner
   proposer: codex-m140
@@ -145,7 +154,7 @@ verification:
   - L4
   live_required: true
   soak_required: true
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -162,10 +171,10 @@ dependencies:
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-09T21:20:08+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-09T21:23:21+00:00'
 configuration_history:
 - at: '2026-09-09T18:16:50+00:00'
   by: codex-m140
@@ -393,6 +402,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-09T21:20:06+00:00'
   by: claude-m140
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-09T21:22:49+00:00'
+  by: codex-m140
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-09T21:22:50+00:00'
+  by: codex-m140
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -1012,11 +1037,26 @@ check_history:
   sha256: 17666efaacb44ae4ff4118ca903ef07c2576c1936d481228fd8ddac8426fa7b2
   source_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
   at: '2026-09-09T21:19:06+00:00'
+- check: p3
+  result: FAIL
+  by: codex-m140
+  artifact: evidence/p3/verdict.md
+  sha256: 356e0f4a0853c9891278558dff0c25cd6ade5ec956cba272f60af80aac2836b3
+  source_sha: b7f93bb5d7846541fa42707375b85b9ff4cf73c6
+  at: '2026-09-09T21:15:47+00:00'
+- check: p3
+  result: PASS
+  by: codex-m140
+  artifact: evidence/p3/verdict.md
+  sha256: ee120f264cc8154294153c480cd753bba8a4f04eca9f326f730a55026c9758dc
+  source_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
+  at: '2026-09-09T21:22:47+00:00'
+  incident_sha256: 4d093a3385e7ecbd1d394c56f0da4eea43cc316147158a008390eaaf42cda206
 fix_loop: lead_worker
 handoff:
-  id: M-140:75:submit
-  from: claude-m140
+  id: M-140:76:review
+  from: codex-m140
   to: codex-m140
-  role: skeptic
-  kind: submit
-  revision: 75
+  role: coordinator
+  kind: review
+  revision: 76

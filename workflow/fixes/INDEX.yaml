@@ -181,7 +181,7 @@ fixes:
     issues:
     - M-140
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies:
     - T0-C
     stacked_on: []
