@@ -3,14 +3,14 @@
  *
  * NATIVE-ACTUATOR LEAST-PRIVILEGE RBAC.
  *
- * The native actuator writes core/networking/discovery objects DIRECTLY — a materially
+ * The native actuator writes core/networking objects DIRECTLY — a materially
  * wider blast radius than the Phoenix-adapter path (which held only phorvex.ai CRD verbs).
  * CONTAINMENT (security review item): bind these verbs to a SEPARATE, NAMESPACED,
  * least-privilege Role (NOT a ClusterRole) per protected tenant namespace — a stolen
  * actuator token is then bounded to mutating protected workloads in granted namespaces:
- * NO secrets-read beyond bound SA tokens, NO node/cluster-admin. The decision SA keeps its
- * minimal phorvex.ai-only Role. The markers below are the exact, minimal verb set each
- * native handler uses (controller-gen emits the Role from them); they are intentionally
+ * NO secrets-read beyond bound SA tokens, NO node/cluster-admin. The Helm profile currently binds routine roles to the manager SA. The raw manifest
+ * uses a dedicated actuator SA. The markers below include native handlers and GC
+ * (the generated union is an unbound review artifact); they are intentionally
  * scoped per-resource to the verbs actually called — nothing broader.
  *
  * pods                          : rotate (get/delete), quarantine/identity/route/kv/endpoint (get/update), warm-swap (list/update/delete)
