@@ -269,6 +269,10 @@ func main() {
 	}
 
 	rmgr := runner.NewManager(mgr.GetClient(), ctrl.Log)
+	rmgr.OwnershipReader = mgr.GetAPIReader()
+	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
+		native.SetBoundaryReader(mgr.GetAPIReader())
+	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
@@ -563,6 +567,9 @@ func runScan(namespace, promURL, kubeContext string) error {
 
 	if namespace != "" {
 		rmgr := runner.NewManager(c, ctrl.Log)
+		if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
+			n.SetBoundaryReader(c)
+		}
 		rmgr.PromURL = promURL // the fresh context/ablation snapshots must receive the same DCGM witness
 		rmgr.PCIeClasses = pcieClasses
 
@@ -655,6 +662,9 @@ func runAblation(namespace, selector string, budget, nseeds int) error {
 		return err
 	}
 	rmgr := runner.NewManager(c, ctrl.Log)
+	if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
+		n.SetBoundaryReader(c)
+	}
 	if nseeds <= 0 {
 		nseeds = 40
 	}
