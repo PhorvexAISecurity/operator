@@ -6,6 +6,7 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       e2e_mode:
@@ -347,8 +348,9 @@ jobs:
   # post-merge run in `deploy`, which executes after ArgoCD has rolled the new image out.
   e2e:
     # A forced release is not a test run: e2e-main covers it after the rollout.
+    # Draft PRs get isolated e2e-contract checks, never attacks on shared workloads.
     if: |
-      github.event_name == 'pull_request'
+      (github.event_name == 'pull_request' && !github.event.pull_request.draft)
       || (github.event_name == 'workflow_dispatch' && !inputs.force_release)
     runs-on: self-hosted
     # The pipeline fires REAL attacks and reads a shared audit stream. Two runs at once

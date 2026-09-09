@@ -43,7 +43,7 @@ const (
 	FactLateralEdge = "lateralEdge"
 	// FactNodePlacement was removed (PHVX-77): it had no producer, no consumer and no cover grant —
 	// two repo-wide references, both its own comment and declaration. The exposure VARIABLE
-	// model.VarNodePlacement is unrelated and still live; do not confuse the two if this is
+	// model.VarNodePlacement is unrelated and declared-only (M-30); do not confuse the two if this is
 	// reintroduced.
 
 	// --- AI / inference recon facts (P-PHYSICS / UCW). The attacker's recon map of an

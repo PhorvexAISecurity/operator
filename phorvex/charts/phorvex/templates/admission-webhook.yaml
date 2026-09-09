@@ -109,4 +109,37 @@ webhooks:
     operations: ["CREATE", "UPDATE"]
     resources: ["securityevents"]
     scope: Cluster
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ printf "%s-protected-outcomes-stamp" $fullname | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+webhooks:
+# M99 outcome-bearing events must never preserve a forged stamp on webhook failure.
+# The general M94 event-flow hook above retains its existing availability policy.
+- name: stamp-protected-outcomes.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  matchConditions:
+  - name: protected-outcomes
+    expression: "has(object.metadata.annotations) && 'phorvex.ai/protected-outcomes-v1' in object.metadata.annotations"
+  clientConfig:
+    caBundle: {{ $caCert | b64enc | quote }}
+    service:
+      name: {{ $serviceName }}
+      namespace: {{ .Release.Namespace }}
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
 {{- end }}

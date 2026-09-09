@@ -22,12 +22,14 @@ import (
 
 // Candidate is one feasible (asset, action) with a non-empty recon cover set and costs.
 type Candidate struct {
-	Key       string // "ns/pod"
-	View      *model.WorkloadView
-	Action    model.Action
-	CoverKeys []string // recon fact keys this move invalidates
-	ECost     float64  // expected (objective) cost
-	CHi       float64  // conformal worst-case cost (used by the hard SLO gate)
+	GenerationRank int
+	SLOExclusions  []string
+	Key            string // "ns/pod"
+	View           *model.WorkloadView
+	Action         model.Action
+	CoverKeys      []string // recon fact keys this move invalidates
+	ECost          float64  // expected (objective) cost
+	CHi            float64  // conformal worst-case cost (used by the hard SLO gate)
 	// RBACUnknown is set when the capability gate's SSAR errored (T1-E fail-open): the
 	// candidate is NOT excluded, but the record flags that its RBAC could not be
 	// confirmed this tick (P-NO-FREEZE) — surfaced in the trace + a metric.
@@ -86,6 +88,7 @@ func (s ActionSet) CollisionError() error {
 
 // Exclusion is one pruned move and the structural or hard-constraint reason.
 type Exclusion struct {
+	GenerationRank       int
 	Key                  string
 	Action               model.Action
 	Reason               string
@@ -119,6 +122,8 @@ const emptyReconCoverReason = "recon-cover: action invalidates no facts for this
 // Deps are the per-tick collaborators the generator binds (supplied by the engine so
 // the generator stays free of context/cost/killchain imports).
 type Deps struct {
+	// RetainSLO is used only for qualified M99 assets with explicit opt-in.
+	RetainSLO   func(string) bool
 	Recon       recon.ReconProfile
 	FactContext func(*model.WorkloadView) recon.FactContext
 	ECost       func(*model.WorkloadView, model.Move, model.Policy) float64
@@ -195,6 +200,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 		out.Candidates = nil
 		return false
 	}
+	rank := 0
 	for _, v := range views {
 		key := v.Pod.Namespace + "/" + v.Pod.Name
 		af := d.Recon.AssetFacts(v, d.FactContext(v))
@@ -240,6 +246,8 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			}
 		}
 		for _, action := range enabledActions(pol) {
+			generationRank := rank
+			rank++
 			coverKeys := af.CoverByAction[action]
 			// (1) T1-E capability gate — cheapest-first, before any scoring. Exactly one
 			// reason per excluded action; an SSAR error flags-but-does-not-exclude. When
@@ -250,7 +258,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				if e := d.Eligible(v, action, coverKeys); e != nil {
 					if e.Excluded {
 						out.Excluded = append(out.Excluded, Exclusion{
-							Key: key, Action: action, Reason: e.Detail, EligibilityKind: e.Kind,
+							GenerationRank: generationRank, Key: key, Action: action, Reason: e.Detail, EligibilityKind: e.Kind,
 							CoverKeys: append([]string(nil), coverKeys...),
 						})
 						continue
@@ -259,15 +267,19 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				}
 			} else if len(coverKeys) == 0 {
 				out.Excluded = append(out.Excluded, Exclusion{
-					Key: key, Action: action, Reason: emptyReconCoverReason,
+					GenerationRank: generationRank, Key: key, Action: action, Reason: emptyReconCoverReason,
 				})
 				continue
 			}
 			move := model.Move{Action: action}
-			// (2) Layer-A hard feasibility.
-			if verdict := feasibility.Evaluate(v, move, pol); !verdict.Feasible {
+			var sloExclusions []string
+			verdict := feasibility.Evaluate(v, move, pol)
+			if d.RetainSLO != nil && d.RetainSLO(key) {
+				verdict, sloExclusions = feasibility.EvaluateWithSLOSeparation(v, move, pol)
+			}
+			if !verdict.Feasible {
 				out.Excluded = append(out.Excluded, Exclusion{
-					Key: key, Action: action, Reason: verdict.Reason,
+					GenerationRank: generationRank, Key: key, Action: action, Reason: verdict.Reason,
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true,
 				})
 				continue
@@ -287,27 +299,33 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					reason += ": " + detail
 				}
 				out.Excluded = append(out.Excluded, Exclusion{
-					Key: key, Action: action, Reason: reason, Category: category, Detail: detail,
+					GenerationRank: generationRank, Key: key, Action: action, Reason: reason, Category: category, Detail: detail,
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true, Feasible: true,
 				})
 				continue
 			}
 			// (4) Conformal SLO-cost gate (worst-case disruption must fit the budget).
 			if d.CostCeiling > 0 && chi > d.CostCeiling {
-				out.Excluded = append(out.Excluded, Exclusion{Key: key, Action: action,
+				out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key, Action: action,
 					Reason:    "conformal-slo: worst-case cost " + ftoa(chi) + " > ceiling " + ftoa(d.CostCeiling),
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true, Feasible: true,
 					CostEvaluated: true, ECost: ecost, CHi: chi})
-				continue
+				if d.RetainSLO == nil || !d.RetainSLO(key) {
+					continue
+				}
+				sloExclusions = append(sloExclusions, "conformal-slo")
+				out.Excluded = out.Excluded[:len(out.Excluded)-1]
 			}
 			out.Candidates = append(out.Candidates, Candidate{
-				Key:         key,
-				View:        v,
-				Action:      action,
-				CoverKeys:   coverKeys,
-				ECost:       ecost,
-				CHi:         chi,
-				RBACUnknown: rbacUnknown,
+				GenerationRank: generationRank,
+				SLOExclusions:  sloExclusions,
+				Key:            key,
+				View:           v,
+				Action:         action,
+				CoverKeys:      coverKeys,
+				ECost:          ecost,
+				CHi:            chi,
+				RBACUnknown:    rbacUnknown,
 			})
 		}
 	}

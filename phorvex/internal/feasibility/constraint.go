@@ -14,6 +14,7 @@ package feasibility
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/registry"
@@ -65,4 +66,29 @@ func Evaluate(view *model.WorkloadView, move model.Move, pol model.Policy) Verdi
 		}
 	}
 	return feasible
+}
+
+// EvaluateWithSLOSeparation retains every non-relaxable veto even when an earlier
+// availability/SLO check fails. Only these concrete built-in laws are relaxable.
+// A panic, including in an SLO law, always remains a hard veto.
+func EvaluateWithSLOSeparation(view *model.WorkloadView, move model.Move, pol model.Policy) (Verdict, []string) {
+	var slo []string
+	hard := feasible
+	for _, c := range Registry.All() {
+		v := checkLaw(c, view, move, pol)
+		if v.Feasible {
+			continue
+		}
+		relaxable := false
+		switch c.(type) {
+		case availabilityFloor, sloHeadroom, tokensFloor:
+			relaxable = true
+		}
+		if relaxable && !strings.Contains(v.Reason, "panicked:") {
+			slo = append(slo, v.Reason)
+		} else if hard.Feasible {
+			hard = v
+		}
+	}
+	return hard, slo
 }
