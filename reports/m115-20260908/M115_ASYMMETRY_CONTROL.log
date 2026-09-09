@@ -1,0 +1,6 @@
+=== RUN   TestFlowResidualProperties
+    flow_residual_test.go:66: antisymmetry broken at L=0 E=0.5: -1 vs 0
+--- FAIL: TestFlowResidualProperties (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/physics	0.008s
+FAIL

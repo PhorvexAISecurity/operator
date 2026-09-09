@@ -49,7 +49,7 @@ func TestExposureVarForCompleteness(t *testing.T) {
 
 // TestExposureFingerprintsCoversClockedVars closes the loop: a fully-marked pod emits EXACTLY
 // LiveExposureVariables (so every mapped variable can actually be observed), and an unmarked pod
-// absent-skips the per-action epochs (leaving only the always-present identity/node/session).
+// absent-skips the per-action epochs (leaving only the always-present identity/session).
 func TestExposureFingerprintsCoversClockedVars(t *testing.T) {
 	full := model.Pod{
 		UID: "u1", Node: "n1", SessionEpoch: "s",
@@ -66,10 +66,10 @@ func TestExposureFingerprintsCoversClockedVars(t *testing.T) {
 			t.Errorf("ExposureFingerprints emitted %q which is not in LiveExposureVariables", v)
 		}
 	}
-	// Absent-skip: a never-actuated pod carries only the always-present three.
+	// Absent-skip: a never-actuated pod carries only the always-present two.
 	bare := model.ExposureFingerprints(model.Pod{UID: "u1", Node: "n1", SessionEpoch: "s"})
-	if len(bare) != 3 {
-		t.Fatalf("unmarked pod emitted %d fingerprints, want 3 (podIdentity/nodePlacement/session); absent epochs must be skipped, not seeded", len(bare))
+	if len(bare) != 2 {
+		t.Fatalf("unmarked pod emitted %d fingerprints, want 2 (podIdentity/session); absent epochs must be skipped, not seeded", len(bare))
 	}
 }
 

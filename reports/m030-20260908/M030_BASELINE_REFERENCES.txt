@@ -1,0 +1,21 @@
+origin/main:phorvex/internal/audit/contract.go:35:		{Category: "fact-kind", Old: "nodePlacement", New: "retired:nodePlacement", Status: "retired", Semantics: "historical attribution is preserved but cannot be interpreted as current cover"},
+origin/main:phorvex/internal/audit/contract.go:53:		case "cover:nodePlacement":
+origin/main:phorvex/internal/audit/contract.go:56:			out[i].Source = "retired:nodePlacement"
+origin/main:phorvex/internal/audit/contract_test.go:43:			{"source":"cover:nodePlacement","contribution":0.4},
+origin/main:phorvex/internal/audit/contract_test.go:62:	wantSources := []string{"cover:modelIdentity", "retired:nodePlacement", "cover:session", "cover:sideChannel"}
+origin/main:phorvex/internal/audit/contract_test.go:69:		t.Fatal("retired nodePlacement contribution was dropped instead of translated")
+origin/main:phorvex/internal/audit/contract_test.go:80:	for _, retired := range []string{`"risk":`, `"belief":`, "modelFingerprint", "cover:nodePlacement"} {
+origin/main:phorvex/internal/audit/contract_test.go:85:	for _, current := range []string{`"schemaVersion":"phorvex.audit.v2"`, `"coverageValue":4.25`, `"pHold":0.75`, "cover:modelIdentity", "retired:nodePlacement", "cover:sideChannel"} {
+origin/main:phorvex/internal/audit/contract_test.go:121:	for _, source := range []string{"cover:modelFingerprint", "cover:nodePlacement"} {
+origin/main:phorvex/internal/audit/contract_test.go:135:		"fact-kind:nodePlacement":      "retired:nodePlacement",
+origin/main:phorvex/internal/audit/log.go:138:			if term.Source == "cover:modelFingerprint" || term.Source == "cover:nodePlacement" {
+origin/main:phorvex/internal/cost/p1cost.go:95:	model.VarNodePlacement,
+origin/main:phorvex/internal/decision/nan_property_test.go:45:		ExposureByVariable: map[string]time.Duration{"podIdentity": 20 * time.Minute, "nodePlacement": 20 * time.Minute},
+origin/main:phorvex/internal/exposure/clock_test.go:20:		Fingerprints: map[string]string{model.VarPodIdentity: "uid-1", model.VarNodePlacement: "n1"},
+origin/main:phorvex/internal/feasibility/anti_over_rotation_test.go:72:		t.Fatalf("unmarked pod emitted %d fingerprints, want 3 (podIdentity/nodePlacement/session); absent epochs must be skipped, not seeded", len(bare))
+origin/main:phorvex/internal/model/types.go:175:	// VarNodePlacement = the node the pod runs on — reset on node-rotate (LIVE in P0).
+origin/main:phorvex/internal/model/types.go:176:	VarNodePlacement = "nodePlacement"
+origin/main:phorvex/internal/model/types.go:210:	VarPodIdentity, VarNodePlacement, VarSession,
+origin/main:phorvex/internal/model/types.go:229:		VarNodePlacement: p.Node,
+origin/main:phorvex/internal/recon/facts.go:46:	// model.VarNodePlacement is unrelated and still live; do not confuse the two if this is
+origin/main:phorvex/internal/runner/ablation_run.go:91:			Fingerprints: map[string]string{model.VarPodIdentity: p.UID, model.VarNodePlacement: p.Node},
