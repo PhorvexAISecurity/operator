@@ -373,6 +373,16 @@ func (l *Logger) TenantLifecycle(tenant, owner, replacedBy string, storesPruned 
 		"replacedBy", replacedBy, "storesPruned", storesPruned)
 }
 
+// TenantDisplayNameChanged records a label-only maintenance event (M-140): the policy's
+// spec.tenant display name changed while its UID — and therefore its economic identity,
+// learned state and creation record — stayed exactly the same. It is deliberately NOT a
+// lifecycle removal: nothing was retired, only stale label series were retracted.
+func (l *Logger) TenantDisplayNameChanged(previousTenant, currentTenant, owner string) {
+	l.log.Info("tenant-display-name-changed",
+		"previousTenant", previousTenant, "tenant", currentTenant, "owner", owner,
+		"economicIdentityRetained", true)
+}
+
 // RotationObservationTerminated records that an in-flight rotation observation ended because
 // its owning policy was removed. ledgerRecorded distinguishes the two honest arms: with an
 // existing entry the ledger is left untouched (its measured or censored amounts stand), and

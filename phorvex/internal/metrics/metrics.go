@@ -11,9 +11,9 @@
 package metrics
 
 import (
-	"sync"
 	"github.com/prometheus/client_golang/prometheus"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
+	"sync"
 
 	"github.com/phorvex/phorvex/internal/model"
 )

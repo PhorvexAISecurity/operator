@@ -366,11 +366,11 @@ type DecisionTraceV2 struct {
 	// so it moves on a PATCH that reseeds nothing; LambdaSeedConsumed is the value actually
 	// handed to the dual solver, and BucketCreatedAt/CreationEvent show a recreate really
 	// did construct a new unit. Emitted even on ticks with no selected decisions.
-	OwnerKey           string  `json:"ownerKey"`
-	OwnerKeyKind       string  `json:"ownerKeyKind"`
-	LambdaSeedConsumed float64 `json:"lambdaSeedConsumed"`
-	BucketCreatedAt    string  `json:"bucketCreatedAt"`
-	BucketCreationEvent uint64 `json:"bucketCreationEvent"`
+	OwnerKey                  string               `json:"ownerKey"`
+	OwnerKeyKind              string               `json:"ownerKeyKind"`
+	LambdaSeedConsumed        float64              `json:"lambdaSeedConsumed"`
+	BucketCreatedAt           string               `json:"bucketCreatedAt"`
+	BucketCreationEvent       uint64               `json:"bucketCreationEvent"`
 	LambdaConfiguredPolicy    float64              `json:"lambdaConfiguredPolicy"`
 	LambdaRuntimeLegacy       float64              `json:"lambdaRuntimeLegacy"`
 	SelectorComparator        string               `json:"selectorComparator"`

@@ -68,11 +68,11 @@ type policyEntry struct {
 type pendingRotation struct {
 	// owner keys the learned state (M-140); tenant remains the DISPLAY name so ledger
 	// entries and metrics keep their existing identity and comparability.
-	owner                string
+	owner string
 	// epoch is the owner generation this rotation was EMITTED under. Feedback arriving
 	// after a replacement must not be credited to the new identity (M-140 R1.2).
-	epoch                uint64
-	tenant               string
+	epoch  uint64
+	tenant string
 	// ledgerID is the historical entry identity, built from the display tenant so the
 	// slo.Ledger keeps byte-identical IDs across this change.
 	ledgerID string
@@ -199,6 +199,8 @@ type lifecycleEvent struct {
 	// metricsOnly marks a display-name change under an UNCHANGED identity: retire the stale
 	// label set, but keep every learned store and the creation record.
 	metricsOnly bool
+	// newTenant is the display name replacing `tenant` on a metricsOnly event.
+	newTenant string
 }
 
 // NewManager constructs a Manager with sane defaults for any nil collaborators.
@@ -310,7 +312,8 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 		// and are deliberately left alone.
 		m.enqueueLifecycleLocked(lifecycleEvent{
 			owner: existing.ownerKey(), tenant: existing.tenant, namespace: existing.namespace,
-			policy: existing.key.Name, uid: existing.uid, metricsOnly: true,
+			policy: existing.key.Name, uid: existing.uid,
+			metricsOnly: true, newTenant: entry.tenant,
 		})
 	}
 	if existing != nil && existing.uid != entry.uid {
@@ -527,10 +530,12 @@ func (m *Manager) DrainLifecycle() {
 			metrics.ResetOwner(ev.tenant, ev.namespace, ev.policy, ev.uid)
 		}
 		if ev.metricsOnly {
-			// A display-name change under an unchanged identity: labels retired, learned
-			// state and creation metadata deliberately preserved.
+			// [M-140 R5.1] A display-name change under an unchanged identity: labels
+			// retired, learned state and creation metadata preserved. This is label
+			// maintenance, NOT retirement, so it must not be recorded as an ownership
+			// removal — TenantLifecycle with an empty replacedBy means "removed".
 			if m.Audit != nil {
-				m.Audit.TenantLifecycle(ev.tenant, ev.owner, ev.replacedBy, 0)
+				m.Audit.TenantDisplayNameChanged(ev.tenant, ev.newTenant, ev.owner)
 			}
 			continue
 		}

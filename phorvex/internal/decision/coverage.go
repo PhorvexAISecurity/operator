@@ -59,7 +59,7 @@ type CoverageEngine struct {
 	// owner is absent must not lazily recreate its state. lifecycleTracked records that the
 	// runner has taken ownership of liveness at least once: without it, removing the LAST
 	// owner would empty the set and silently re-enable resurrection (R1.1).
-	live            map[string]struct{}
+	live             map[string]struct{}
 	lifecycleTracked bool
 	// calibrationFrozen is the PHVX-2 off-switch, remembered so lazily-created tenant buckets
 	// inherit it rather than starting to learn behind the operator's back.

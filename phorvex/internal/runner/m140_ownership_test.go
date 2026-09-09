@@ -9,16 +9,19 @@ package runner
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	"k8s.io/apimachinery/pkg/types"
+	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/metrics"
@@ -777,7 +780,7 @@ func TestM140_SuccessfulEmissionMarksOwnerScopedCooldown(t *testing.T) {
 // m140FailingActuator reports an unsuccessful emission without touching the shared fixture.
 type m140FailingActuator struct{ calls int }
 
-func (*m140FailingActuator) Name() string { return "m140-failing" }
+func (*m140FailingActuator) Name() string                                              { return "m140-failing" }
 func (*m140FailingActuator) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
 func (f *m140FailingActuator) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
 	f.calls++
@@ -829,4 +832,91 @@ func TestM140_EmissionCooldownsAreIsolatedBetweenOwners(t *testing.T) {
 	if len(m.Intents.Since(second.Owner(), "ns", "p", now)) == 0 {
 		t.Fatal("retiring one owner cleared a co-resident owner's cooldown")
 	}
+}
+
+// R5.1 — the lifecycle audit must distinguish label maintenance from retirement of economic
+// state. A rename under an unchanged UID retires stale label series only; recording it as an
+// ownership removal contradicts the completion record, since nothing was retired. All three
+// cases are asserted through the real drain with a capturing logger.
+func TestM140_LifecycleAuditDistinguishesRenameRemovalAndReplacement(t *testing.T) {
+	capture := func() (*[]string, logr.Logger) {
+		var lines []string
+		return &lines, funcr.New(func(prefix, args string) {
+			lines = append(lines, prefix+" "+args)
+		}, funcr.Options{})
+	}
+	contains := func(lines []string, want string) bool {
+		for _, l := range lines {
+			if strings.Contains(l, want) {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("rename is label maintenance, not removal", func(t *testing.T) {
+		lines, log := capture()
+		e := decision.NewCoverageEngine()
+		m := m140Manager(e)
+		m.Audit = audit.New(log, nil)
+		if err := m.Upsert(m140Policy("policy", "name-before", "uid-keep")); err != nil {
+			t.Fatal(err)
+		}
+		owner := ownerOfUID("uid-keep")
+		m140TrainOwner(e, owner, 3)
+		epoch := m.ownerEpoch(owner)
+
+		renamed := m140Policy("policy", "name-after", "uid-keep")
+		renamed.Generation = 2
+		if err := m.Upsert(renamed); err != nil {
+			t.Fatal(err)
+		}
+		m.DrainLifecycle()
+
+		if !m.ownerCurrent(owner, epoch) {
+			t.Fatal("rename invalidated the economic identity")
+		}
+		if !contains(*lines, "tenant-display-name-changed") {
+			t.Fatalf("no display-name-change record: %v", *lines)
+		}
+		if contains(*lines, `"event"="removed"`) {
+			t.Fatalf("a rename was audited as an owner removal: %v", *lines)
+		}
+		if !contains(*lines, `"previousTenant"="name-before"`) || !contains(*lines, `"tenant"="name-after"`) {
+			t.Fatalf("record does not carry both display names: %v", *lines)
+		}
+	})
+
+	t.Run("removal is recorded as removed", func(t *testing.T) {
+		lines, log := capture()
+		m := m140Manager(decision.NewCoverageEngine())
+		m.Audit = audit.New(log, nil)
+		if err := m.Upsert(m140Policy("policy", "gone", "uid-gone")); err != nil {
+			t.Fatal(err)
+		}
+		m.Remove(types.NamespacedName{Namespace: "ns", Name: "policy"})
+		m.DrainLifecycle()
+		if !contains(*lines, "tenant-lifecycle") || !contains(*lines, `"event"="removed"`) {
+			t.Fatalf("removal was not audited as removed: %v", *lines)
+		}
+		if contains(*lines, "tenant-display-name-changed") {
+			t.Fatalf("removal emitted a display-name-change record: %v", *lines)
+		}
+	})
+
+	t.Run("replacement is recorded as replaced", func(t *testing.T) {
+		lines, log := capture()
+		m := m140Manager(decision.NewCoverageEngine())
+		m.Audit = audit.New(log, nil)
+		if err := m.Upsert(m140Policy("policy", "swap", "uid-old")); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.Upsert(m140Policy("policy", "swap", "uid-new")); err != nil {
+			t.Fatal(err)
+		}
+		m.DrainLifecycle()
+		if !contains(*lines, `"event"="replaced"`) || !contains(*lines, `"replacedBy"="uid-new"`) {
+			t.Fatalf("replacement was not audited as replaced by the successor: %v", *lines)
+		}
+	})
 }
