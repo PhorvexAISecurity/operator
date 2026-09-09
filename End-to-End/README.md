@@ -69,9 +69,28 @@ endpoint, waits for the operator to react, then posts the clear — it changes a
 cluster, so it always requires an explicit `--target` and always prints what it is about
 to do.
 
-Output lands in `runs/`: `run-<ts>.json` (everything) and `run-<ts>.html` +
-`latest.html` (the dashboard). Exit code is `1` only when a `critical` or `major` check
-fails.
+Output lands in `runs/`: `run-<unique-id>.json` and `run-<unique-id>.html` plus
+`latest.html` for local browsing. CI uses an isolated run/attempt/job directory and
+passes exact IDs/paths between steps; it never discovers the latest file with a glob.
+`--run-id` and `--source-commit` bind evidence to the harness revision (not the
+deployed application's version). Without a source pin or `GITHUB_SHA`, local provenance
+is explicitly `unknown`.
+
+Exit `1` means a new critical/major check failure under the configured baseline;
+exit `2` means the run aborted (including transport, cleanup or report errors).
+Aborts are never baselinable. Their bounded JSON/HTML reports retain the primary
+error, any cleanup failures, and the owned injection identity when available.
+Unexecuted checks remain skipped; already evaluated checks keep their results.
+An acknowledged delete request is not proof of completed asynchronous deletion.
+
+CI always builds a current-attempt summary even if publication fails. Missing,
+corrupt or wrong-attempt reports produce an explicit fallback, not an old success.
+If local storage is unavailable, consult that attempt's job log; a forced process
+termination or runner loss can prevent report creation and cooperative cleanup.
+No automatic attack retry is performed.
+
+To publish manually, supply the exact ID:
+`./publish-report.sh <runs-dir> <prefix> <run-id>`.
 
 ### Controller health
 
