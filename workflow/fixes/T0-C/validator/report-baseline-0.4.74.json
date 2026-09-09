@@ -1,0 +1,448 @@
+[
+  {
+    "source": "/home/mehrdad/operator/fixes/T1-A/evidence/live/02-vllm-decision-record-0.4.74.json",
+    "decisionID": "253c43da2dddc93e618eed25fa23878b",
+    "tenantPod": "vllm/vllm-77997646c9-nhzv4",
+    "traceVersion": "phorvex.decision-trace.v2",
+    "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.74",
+    "selectedAction": "noop",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v2"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "650 optionals well-formed (146 present, 504 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='noop', no selected candidate"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "1 candidate(s) reconstruct; skipped 1: decisionTrace.candidates[0]: absent cNorm, cFlow, expectedCost"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "1 identity(ies) reconstruct; netGain skipped on 2: decisionTrace.candidates[0]: absent marginalCoverage, lambdaContribution, netGain; decisionTrace.candidates[1]: absent marginalCoverage, netGain"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "reactive-only gate: 1 generated candidate(s) skipped before scoring -> noop; noopReason consistent"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "122 facts sorted; 2 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "4 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='min_clamp'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "3075 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "SKIPPED",
+        "message": "trace is v2; v3 laws (actionStatus/costHigh/coveredBefore/dispatch) not applicable"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.leakage": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.coResidency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        122,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        122
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        122
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        122
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        122
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].provenance": [
+        2,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        1,
+        1
+      ],
+      "decisionTrace.candidates[].netGain": [
+        0,
+        2
+      ],
+      "decisionTrace.candidates[].feasible": [
+        2,
+        0
+      ],
+      "decisionTrace.selectionRound": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "source": "/home/mehrdad/operator/fixes/T0-C/evidence/live-baseline/01-selected-record-rotate-voice-0.4.73.json",
+    "decisionID": "a69f5a97617ae66f97e0fc1c94221ef7",
+    "tenantPod": "voice/voice-bot-79d7f9464d-hdwlg",
+    "traceVersion": "phorvex.decision-trace.v2",
+    "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.73",
+    "selectedAction": "rotate",
+    "status": "PASS",
+    "checks": [
+      {
+        "num": 1,
+        "name": "schema",
+        "status": "PASS",
+        "message": "envelope phorvex.audit.v2; trace phorvex.decision-trace.v2"
+      },
+      {
+        "num": 2,
+        "name": "identity",
+        "status": "PASS",
+        "message": "all six identity fields non-empty"
+      },
+      {
+        "num": 3,
+        "name": "presence-flags",
+        "status": "PASS",
+        "message": "669 optionals well-formed (149 present, 520 absent)"
+      },
+      {
+        "num": 4,
+        "name": "selection-reference",
+        "status": "PASS",
+        "message": "selectedAction='rotate', key='voice/voice-bot-79d7f9464d-hdwlg|rotate'"
+      },
+      {
+        "num": 5,
+        "name": "ecost-law",
+        "status": "PASS",
+        "message": "1 candidate(s) reconstruct; skipped 5: decisionTrace.candidates[1]: absent cNorm, cFlow, expectedCost; decisionTrace.candidates[2]: absent cNorm, cFlow, expectedCost; decisionTrace.candidates[3]: absent cNorm, cFlow, expectedCost; decisionTrace.candidates[4]: absent cNorm, cFlow, expectedCost; decisionTrace.candidates[5]: absent cNorm, cFlow, expectedCost"
+      },
+      {
+        "num": 6,
+        "name": "netgain-law",
+        "status": "PASS",
+        "message": "2 identity(ies) reconstruct; netGain skipped on 5: decisionTrace.candidates[1]: absent marginalCoverage, lambdaContribution, netGain; decisionTrace.candidates[2]: absent marginalCoverage, lambdaContribution, netGain; decisionTrace.candidates[3]: absent marginalCoverage, lambdaContribution, netGain; decisionTrace.candidates[4]: absent marginalCoverage, lambdaContribution, netGain; decisionTrace.candidates[5]: absent marginalCoverage, lambdaContribution, netGain"
+      },
+      {
+        "num": 7,
+        "name": "selection-reconstruction",
+        "status": "PASS",
+        "message": "argmax 'voice/voice-bot-79d7f9464d-hdwlg|rotate' netGain=11.946470871982712 (unique); budget=1, movesSpent=1 -> 'rotate' as recorded"
+      },
+      {
+        "num": 8,
+        "name": "ordering",
+        "status": "PASS",
+        "message": "118 facts sorted; 6 candidates in canonical order; coverKeys sorted"
+      },
+      {
+        "num": 9,
+        "name": "cover-keys-resolve",
+        "status": "PASS",
+        "message": "3 cover key(s) all resolve to facts[].factKey"
+      },
+      {
+        "num": 10,
+        "name": "dual-update",
+        "status": "PASS",
+        "message": "demand/spent/budget/rawExcess/lambdaBefore agree; updateReason='exact_binding_no_update'"
+      },
+      {
+        "num": 11,
+        "name": "redaction",
+        "status": "PASS",
+        "message": "3164 strings scanned, no secret-shaped content"
+      },
+      {
+        "num": 12,
+        "name": "v3-hooks",
+        "status": "SKIPPED",
+        "message": "trace is v2; v3 laws (actionStatus/costHigh/coveredBefore/dispatch) not applicable"
+      }
+    ],
+    "census": {
+      "decisionTrace.inputs.requestRate": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.connectionCount": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.gpuUtilization": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.smOccupancy": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.vramFraction": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.imageRarity": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.modelRarity": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.coResidency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.epss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.cvss": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.dispersionMult": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.dispersionCap": [
+        0,
+        1
+      ],
+      "decisionTrace.inputs.betaMean": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.pHold": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageHazard": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.stageUrgency": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.threatPosture": [
+        1,
+        0
+      ],
+      "decisionTrace.inputs.exposureSeconds": [
+        1,
+        0
+      ],
+      "decisionTrace.facts[].assetValue": [
+        118,
+        0
+      ],
+      "decisionTrace.facts[].pHoldContribution": [
+        0,
+        118
+      ],
+      "decisionTrace.facts[].urgencyContribution": [
+        0,
+        118
+      ],
+      "decisionTrace.facts[].dispersionContribution": [
+        0,
+        118
+      ],
+      "decisionTrace.facts[].relativeWeight": [
+        0,
+        118
+      ],
+      "decisionTrace.candidates[].grossFullValue": [
+        6,
+        0
+      ],
+      "decisionTrace.candidates[].marginalCoverage": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].provenance": [
+        6,
+        0
+      ],
+      "decisionTrace.candidates[].cNorm": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].cFlow": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].expectedCost": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].costHigh": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].lambdaContribution": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].netGain": [
+        1,
+        5
+      ],
+      "decisionTrace.candidates[].feasible": [
+        1,
+        5
+      ],
+      "decisionTrace.selectionRound": [
+        1,
+        0
+      ]
+    }
+  }
+]

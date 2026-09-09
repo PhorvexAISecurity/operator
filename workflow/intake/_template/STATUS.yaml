@@ -1,0 +1,46 @@
+schema_version: 1
+intake_id: null
+kind: BUG
+title: null
+state: REPORTED
+reporter: null
+approval_ref: null
+created_at: null
+updated_at: null
+
+pins:
+  source_main_sha: null
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: null
+
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+
+roles:
+  human_owner: human-owner
+  investigator: null
+  coordinator: null
+
+next_action:
+  owner: investigator
+  action: Triage the report and pin its environment.
+
+transitions: []

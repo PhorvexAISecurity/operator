@@ -1,0 +1,29 @@
+=== RUN   TestReviewerRealAPIIncident
+    reviewer_incident_test.go:45: ISOLATED API v1.36.2; service-account admission disabled by envtest; no nodes/runtime, all ephemeral submissions dryRun=All
+=== RUN   TestReviewerRealAPIIncident/OriginalProducerProfile
+    reviewer_incident_test.go:73: unprotected debugger API accepted payload={"name":"phorvex-debugger","image":"busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f","resources":{},"securityContext":{"capabilities":{"drop":["ALL"]},"privileged":false,"runAsUser":65534,"runAsGroup":65534,"runAsNonRoot":true,"readOnlyRootFilesystem":true,"allowPrivilegeEscalation":false,"seccompProfile":{"type":"RuntimeDefault"}}}
+    reviewer_incident_test.go:73: unprotected custom-inject API accepted payload={"name":"phorvex-custom","image":"busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f","command":["sh","-c"],"args":["echo phorvex-custom-action; sleep 1"],"resources":{},"securityContext":{"capabilities":{"drop":["ALL"]},"privileged":false,"runAsUser":65534,"runAsGroup":65534,"runAsNonRoot":true,"readOnlyRootFilesystem":true,"allowPrivilegeEscalation":false,"seccompProfile":{"type":"RuntimeDefault"}}}
+=== NAME  TestReviewerRealAPIIncident
+    reviewer_incident_test.go:99: enforcement active: actual subresource denied by code-exec/image
+=== RUN   TestReviewerRealAPIIncident/ProtectedRealProducers
+    reviewer_incident_test.go:106: hardened real producer debugger allowed by real API
+    reviewer_incident_test.go:106: hardened real producer custom-inject allowed by real API
+=== RUN   TestReviewerRealAPIIncident/AdmissionControls
+    reviewer_incident_test.go:124: image -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/image: ephemeral container image must be the pinned busybox digest
+    reviewer_incident_test.go:124: name -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom
+    reviewer_incident_test.go:124: privileged -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true
+    reviewer_incident_test.go:124: root-user -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true
+    reviewer_incident_test.go:124: capabilities -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add
+    reviewer_incident_test.go:124: seccomp -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/seccomp: require seccompProfile.type=RuntimeDefault
+    reviewer_incident_test.go:124: custom-args -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args
+    reviewer_incident_test.go:124: apparmor -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)
+    reviewer_incident_test.go:124: command -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args
+    reviewer_incident_test.go:124: stdin -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted
+=== NAME  TestReviewerRealAPIIncident
+    reviewer_incident_test.go:135: all ephemeral submissions remained non-persistent; test server v1.36.2 destroyed on return
+--- PASS: TestReviewerRealAPIIncident (6.82s)
+    --- PASS: TestReviewerRealAPIIncident/OriginalProducerProfile (0.01s)
+    --- PASS: TestReviewerRealAPIIncident/ProtectedRealProducers (0.01s)
+    --- PASS: TestReviewerRealAPIIncident/AdmissionControls (0.05s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/actuator	6.835s

@@ -1,0 +1,34 @@
+{
+  "captured_at": "2026-09-08T19:28:50.550344+00:00",
+  "original_analysis_source": "79c0370dd460a1d6400bc62346638655f64ae709",
+  "observed_main": "5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9",
+  "observed_deployed_source": "a4d91cb196b4f28902b371c33db9157bb7ec26cd",
+  "handler_and_guard_comparison": [
+    {
+      "path": "phorvex/internal/actuator/handlers_k8s.go",
+      "original_blob": "917aedfedc42ee0cb896b1030a1563de3c535a10",
+      "current_main_blob": "917aedfedc42ee0cb896b1030a1563de3c535a10",
+      "unchanged": true
+    },
+    {
+      "path": "phorvex/internal/actuator/actuator.go",
+      "original_blob": "40cf9a6ee2ed6270a6613bc18664e39286ab8dd8",
+      "current_main_blob": "40cf9a6ee2ed6270a6613bc18664e39286ab8dd8",
+      "unchanged": true
+    },
+    {
+      "path": "phorvex/internal/feasibility/actions_native.go",
+      "original_blob": "6cc39352f98c033bf61f969927bda395abe1b750",
+      "current_main_blob": "6cc39352f98c033bf61f969927bda395abe1b750",
+      "unchanged": true
+    },
+    {
+      "path": "phorvex/config/admission/codeexec-denylist.yaml",
+      "original_blob": "e2f9cf47c7b619d33376719481ca475b913832f9",
+      "current_main_blob": "e2f9cf47c7b619d33376719481ca475b913832f9",
+      "unchanged": true
+    }
+  ],
+  "module_diff_deployed_to_main": [],
+  "note": "Original 02A seal and analysis baseline retained. This is an exposed integration review, not a new blind derivation. M99 changed surrounding runner/feasibility paths; verify coexistence before implementing/deploying M6."
+}

@@ -1,0 +1,93 @@
+# GREEN — head 9eb14271625620aef6b6184386764e29f0d71ea3 (base 5a0fd3f); go1.26.1; cel-go v0.23.2; helm v3.16.2
+Tue Sep  8 22:01:59 UTC 2026
+
+=== internal/codeexec (content vs trusted contract incl. server-defaulting + Cluster-scope reject; CEL; Helm; FinalCheck token/live-scope/invalidation) ===
+=== RUN   TestCELAllowsCompliantRequests
+=== RUN   TestCELAllowsCompliantRequests/debugger
+=== RUN   TestCELAllowsCompliantRequests/custom-inject
+--- PASS: TestCELAllowsCompliantRequests (0.01s)
+=== RUN   TestCELDeniesEachViolationIsolated
+=== RUN   TestCELDeniesEachViolationIsolated/wrong-identity
+=== RUN   TestCELDeniesEachViolationIsolated/wrong-name
+=== RUN   TestCELDeniesEachViolationIsolated/wrong-image
+=== RUN   TestCELDeniesEachViolationIsolated/privileged
+=== RUN   TestCELDeniesEachViolationIsolated/root-user
+=== RUN   TestCELDeniesEachViolationIsolated/caps-not-dropped
+=== RUN   TestCELDeniesEachViolationIsolated/seccomp-unconfined
+=== RUN   TestCELDeniesEachViolationIsolated/apparmor-extra
+=== RUN   TestCELDeniesEachViolationIsolated/procmount-extra
+=== RUN   TestCELDeniesEachViolationIsolated/tty-set
+=== RUN   TestCELDeniesEachViolationIsolated/env-set
+=== RUN   TestCELDeniesEachViolationIsolated/debugger-with-command
+=== RUN   TestCELDeniesEachViolationIsolated/custom-wrong-args
+--- PASS: TestCELDeniesEachViolationIsolated (0.04s)
+=== RUN   TestCELNewContainersIgnoresPreexisting
+--- PASS: TestCELNewContainersIgnoresPreexisting (0.00s)
+=== RUN   TestVAPConfigManifestContract
+--- PASS: TestVAPConfigManifestContract (0.00s)
+=== RUN   TestConfigManifestEqualsTrustedContract
+--- PASS: TestConfigManifestEqualsTrustedContract (0.00s)
+=== RUN   TestVAPChartTemplateContract
+--- PASS: TestVAPChartTemplateContract (0.00s)
+=== RUN   TestCodeExecAdmissionDefaultsOff
+--- PASS: TestCodeExecAdmissionDefaultsOff (0.00s)
+=== RUN   TestRuntimeReadGrantIsResourceNameScopedGetOnly
+--- PASS: TestRuntimeReadGrantIsResourceNameScopedGetOnly (0.00s)
+=== RUN   TestChartBindsNoEphemeralContainersWrite
+--- PASS: TestChartBindsNoEphemeralContainersWrite (0.00s)
+=== RUN   TestHelmRenderEnabledProducesEnforcementAndReadGrant
+--- PASS: TestHelmRenderEnabledProducesEnforcementAndReadGrant (0.24s)
+=== RUN   TestHelmRenderDisabledProducesNothing
+--- PASS: TestHelmRenderDisabledProducesNothing (0.24s)
+=== RUN   TestUnavailableBeforeFirstVerify
+--- PASS: TestUnavailableBeforeFirstVerify (0.00s)
+=== RUN   TestVerifyThenAvailableInScopeOnly
+--- PASS: TestVerifyThenAvailableInScopeOnly (0.00s)
+=== RUN   TestEnforcementContentDriftRejected
+=== RUN   TestEnforcementContentDriftRejected/cel-replaced-by-true
+=== RUN   TestEnforcementContentDriftRejected/all-new-containers-hidden
+=== RUN   TestEnforcementContentDriftRejected/policy-match-condition-false
+=== RUN   TestEnforcementContentDriftRejected/wrong-resource-api-group
+=== RUN   TestEnforcementContentDriftRejected/binding-excludes-subresource
+=== RUN   TestEnforcementContentDriftRejected/binding-namespace-expression-excludes-target
+=== RUN   TestEnforcementContentDriftRejected/binding-object-selector-excludes-target
+=== RUN   TestEnforcementContentDriftRejected/failure-policy-ignore
+=== RUN   TestEnforcementContentDriftRejected/version-annotation-wrong
+=== RUN   TestEnforcementContentDriftRejected/binding-no-deny
+=== RUN   TestEnforcementContentDriftRejected/binding-wrong-policyname
+=== RUN   TestEnforcementContentDriftRejected/binding-selector-wrong-label
+=== RUN   TestEnforcementContentDriftRejected/validation-dropped
+=== RUN   TestEnforcementContentDriftRejected/variable-added
+--- PASS: TestEnforcementContentDriftRejected (0.00s)
+=== RUN   TestAbsentAndSSARFailures
+=== RUN   TestAbsentAndSSARFailures/policy-absent
+=== RUN   TestAbsentAndSSARFailures/binding-absent
+=== RUN   TestAbsentAndSSARFailures/ssar-deny
+=== RUN   TestAbsentAndSSARFailures/ssar-error-unknown
+--- PASS: TestAbsentAndSSARFailures (0.00s)
+=== RUN   TestTTLExpiry
+--- PASS: TestTTLExpiry (0.00s)
+=== RUN   TestInvalidationMidVerifyDiscardsInFlightSuccess
+--- PASS: TestInvalidationMidVerifyDiscardsInFlightSuccess (0.00s)
+=== RUN   TestInvalidateThenFreshVerifyRecovers
+--- PASS: TestInvalidateThenFreshVerifyRecovers (0.00s)
+=== RUN   TestFinalCheckRejectsNamespaceLabelRemovedSinceSnapshot
+--- PASS: TestFinalCheckRejectsNamespaceLabelRemovedSinceSnapshot (0.00s)
+=== RUN   TestFinalCheckNamespaceAbsentFailsClosed
+--- PASS: TestFinalCheckNamespaceAbsentFailsClosed (0.00s)
+=== RUN   TestServerDefaultedContractAccepted
+--- PASS: TestServerDefaultedContractAccepted (0.00s)
+=== RUN   TestClusterScopeRejected
+--- PASS: TestClusterScopeRejected (0.00s)
+=== RUN   TestFinalCheckInvalidationDuringScopeReadStopsSubmit
+--- PASS: TestFinalCheckInvalidationDuringScopeReadStopsSubmit (0.00s)
+=== RUN   TestFinalCheckNamespaceReadFailureInvalidates
+--- PASS: TestFinalCheckNamespaceReadFailureInvalidates (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/codeexec	0.547s
+=== capability + runner + actuator code-exec ===
+ok  	github.com/phorvex/phorvex/internal/capability	(cached)
+ok  	github.com/phorvex/phorvex/internal/runner	(cached)
+ok  	github.com/phorvex/phorvex/internal/actuator	(cached)
+=== full module ===
+full-module reference: FULLTEST4_EXIT_0

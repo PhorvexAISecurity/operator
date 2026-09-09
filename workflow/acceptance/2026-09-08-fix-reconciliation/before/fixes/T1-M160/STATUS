@@ -1,0 +1,12 @@
+T1-M160 — routing-aware RBAC verbs + no-rbac in ActionsSupported (CONTRACT→CHOICE, HIGH/🔴LIVE/ACTUATION)
+= the T1-E L3 criterion-6 failure fix (K3 bus 369). Boss decisions: routing-aware via RuleTypeFor; include no-rbac-in-condition.
+branch: t1/contract-choice-m160-routing-aware-rbac @ 3f0903f — STACKED ON M-20 (t1/contract-choice-m020... ce9d2b5); rebases onto main after M-20 merges. worktree /home/mehrdad/operator-m160.
+
+STATE: ✅ K3 P3 PASS (bus 376) — §A converged identically; AMTD Q answered (securityevents:create is THE actuation write; AMTD=policy path); SSAR Group passthrough verified live. Cleared for PR. 06-verdict written.
+6 files +138/-4 (diff vs M-20 base). RED gate captured. Full suite green except pre-existing recon/M-157.
+
+fix: Part A verbs.go RequiredVerbs routing-aware (Phoenix-routed rotate/quarantine → amtd.r6security.com/securityevents:create cluster-wide; native keep actionVerbs). Part B gate.go CapableAndAuthorized (Capable+no-rbac, fail-open) + actions_supported.go capabilityGaps uses it.
+K3 5 criteria mapped in 01 §Acceptance. Open Q to K3 (bus 375): does phoenix actuation also need adaptivemovingtargetdefenses write? (gated on securityevents:create only).
+
+MERGE ORDER: M-20 first (ready, P3-passed), then M-160 (rebase onto main, drops M-20 commits from its diff), then deploy → K3 re-L3 on the 5 criteria.
+next bus # 376. roles: claude=Proposer+impl · K3=Skeptic(§A/P3)+re-L3.

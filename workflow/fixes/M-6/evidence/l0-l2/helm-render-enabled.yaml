@@ -1,0 +1,480 @@
+---
+# Source: phorvex/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: codeexec-phorvex-manager
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: codeexec-phorvex-webhook-cert
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+type: kubernetes.io/tls
+data:
+  ca.crt: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRTzQweEpaMG1hZjJmTjB6dHc3RjU3REFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTlZvWApEVE0yTURrd05USXlNREUxTlZvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTTEyK3BEcjBSS1hLZEhFdkhJa3BIbjMKLytVVHRoVkdrRzk1NGh0eTFjbzErcDlXMzRPbzZhOUZnN0s4T1h2RXNaSE1DVVNQNEVRYW91NkVWNkdmR05GNwp1alFoc1VqQUxwSzg3QWJySzN2OUdTZGxPd3BiajFwcndhTzJEZjZrYTJDTGo3Q0QzVThUYUU1cDJndTMwU05zClFzTVZYKzZpYlU1ZmZuSTlSNnlWZFd1cHBneDJoR0g0S0lXVTNJUWtUY3RDV0JmMEd0dVVqRlgzcXNGRkl2aWkKdGQrcXdkL2E1TVB1SGcwWjZBRVJ1K0dZMlUrd1hGeU54emRkQkdIcnhlK1JEVjFwWm0ycEFmaWF2S0tEdy9kSwppeE52TE1WdVg1dHlhNk5ma1J1NmZTMXQ2eVZZTGlIMG94cXVGTnhUTjd0akxhM252dlE2aVVNWStnMmEveVVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlNUMGRvYTV1ZGZzMXJaMFE4RQo3TlpIYlFMOE9qQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFlK0c4ZzhtZVkxTkwvNWZnYWcxb1lzd09vK2N1Ci9wRHlOVlUzWVhIQ0pLSWNSWFdSOVlNVDY4ZmQ3MVpWdElJVTNKOHV1clQ1WG50RWRta0VMQlBmUERnYUtGSEgKUmV6cHE4aFVNbzNvWmlialFjNHZXYnZBRmZFdkQrbEg3dzErQklBYTRuUVpiV1g3Wjc4UXVtRmhzbzVFc1lKZQpsR1gvQWsvNm13MEVkNmJKSHlPYVhxcUhGSXFxWi9keGdHcTB5bnRqNG1SSWgvY0pRSHhHYlJVMGNFYXhIT09ECk1WWW4vTWxETnIrRWdSK1paS1h1dmRwYlBRemVlVEVFUW9SUGtCVHV4cE1yVmVSTU1qamF5b1BMUDdVUmxreEgKeUdLcGdwSEE0clQ5Y3o5QzdEQmJ2Q00yek1pRnp1Y2hPMkpWRFFkVnlQSmZaVnRDSlFiMncwV2FMdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+  tls.crt: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUQwekNDQXJ1Z0F3SUJBZ0lRSnZtTXZOMm5NNjRmS0lvbzVRN2s0REFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTmxvWApEVE0yTURrd05USXlNREUxTmxvd0l6RWhNQjhHQTFVRUF4TVlZMjlrWldWNFpXTXRjR2h2Y25abGVDMTNaV0pvCmIyOXJNSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTJFQkhhSm5aUmJDVUMySVgKQXVjZ0sxdHhSKzI5VVE4ejNXeDVha25iWUJOQ0dPZlUrMU4yTXdGSHZUL2JrQWtueGxDL0VNaUM0VWhlekNtVwpuVkRTUEh5a2VRWTJhSDlwQ3VJcUxNbnhOYk05eTZMcE9vdWNETGlrdC8wUUhPYW00dVIyV2pLbGpTZFI3TGF6Ckx2bHF1eS9haFdYVWN6SUxLTzZ5MWNOLzl6VDhFUFY1ZGFNSW04TzUzYXFEK3ZRK2tidFVESEdEeTFZYnNFU28KRElvY3d0Z1BVWFV2V1FjVnYxaDZDUURlRHBCN1ZoeEwrZHlNL0l2RGJmRmUvK3REeGRGYmhCSGFNenRSSGIwUgoxbE14L1REYkhuaUFUeDZPS1g0ZG1iVmYvaFh5elZKMWtjd2RBUW9qcThod2M2V2VEdW0xVm5aQzd5V3pOUHNjCml4L210UUlEQVFBQm80SUJCakNDQVFJd0RnWURWUjBQQVFIL0JBUURBZ1dnTUIwR0ExVWRKUVFXTUJRR0NDc0cKQVFVRkJ3TUJCZ2dyQmdFRkJRY0RBakFNQmdOVkhSTUJBZjhFQWpBQU1COEdBMVVkSXdRWU1CYUFGSlBSMmhybQo1MSt6V3RuUkR3VHMxa2R0QXZ3Nk1JR2hCZ05WSFJFRWdaa3dnWmFDR0dOdlpHVmxlR1ZqTFhCb2IzSjJaWGd0CmQyVmlhRzl2YTRJZ1kyOWtaV1Y0WldNdGNHaHZjblpsZUMxM1pXSm9iMjlyTG1SbFptRjFiSFNDSkdOdlpHVmwKZUdWakxYQm9iM0oyWlhndGQyVmlhRzl2YXk1a1pXWmhkV3gwTG5OMlk0SXlZMjlrWldWNFpXTXRjR2h2Y25abAplQzEzWldKb2IyOXJMbVJsWm1GMWJIUXVjM1pqTG1Oc2RYTjBaWEl1Ykc5allXd3dEUVlKS29aSWh2Y05BUUVMCkJRQURnZ0VCQUtjdWJUbHRPQklyVEFTYnhBdmJCeTFFa0JwZFBjdU5rNXBDOUp0S1BPci9SWXpiQ0JCaVBlVmMKYzA0SlloR0l0VUFBSEkxaVdmU0hKVmU3QW1mRXFNTE9nNWpBd283bjVaMEQwWkF3MWR4SGhKTTg0M0FQbGdTMQpnSSsrNXdnelVHWmVZM2tSNzQxSGJsa3RmVnp6bmRLNDU4ZXhJb0FYOXhBZyt3aFRXOEFLRjdteGJuV3hNSCtFCkpYVGxHbUZ6d0t0L0NaN3VrNytoNzgzUHhzWmh4NmwraWRaVWNsYTJnYUxuSUlyWWVpOUViWGJRK01RMmxLR1UKR21tMjIxb0Q2dnd2cVBQV0wzR3d3K1c2aHRKZXJ6Zm5jU2Z2ZEhXWmhGc3F4ZDRrN0hZeitLRmk2bGdmUjY0UwpUeDlNMHVNN2I4dVhoZDdvTWhoL1ZYTHdLSTFMcmpFPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg=="
+  tls.key: "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcEFJQkFBS0NBUUVBMkVCSGFKblpSYkNVQzJJWEF1Y2dLMXR4UisyOVVROHozV3g1YWtuYllCTkNHT2ZVCisxTjJNd0ZIdlQvYmtBa254bEMvRU1pQzRVaGV6Q21XblZEU1BIeWtlUVkyYUg5cEN1SXFMTW54TmJNOXk2THAKT291Y0RMaWt0LzBRSE9hbTR1UjJXaktsalNkUjdMYXpMdmxxdXkvYWhXWFVjeklMS082eTFjTi85elQ4RVBWNQpkYU1JbThPNTNhcUQrdlEra2J0VURIR0R5MVlic0VTb0RJb2N3dGdQVVhVdldRY1Z2MWg2Q1FEZURwQjdWaHhMCitkeU0vSXZEYmZGZS8rdER4ZEZiaEJIYU16dFJIYjBSMWxNeC9URGJIbmlBVHg2T0tYNGRtYlZmL2hYeXpWSjEKa2N3ZEFRb2pxOGh3YzZXZUR1bTFWblpDN3lXek5Qc2NpeC9tdFFJREFRQUJBb0lCQVFDUDRlemhQd1FlWjBlSgpiMkZxTUFmcWNUUWxMSng3RTRkcHV5UHB3V3h5Tno0U1BpWXFkclM5YVF1bmNwYU85bGg5amZvaW01YmhkL3FECkV1VEFsU2JjMGYzSS9JWTA3eGtnQWEwWUVlRW8zckt1REIzc016bklDUTZuMEh2cER0cFpPck00Zmx4Q1Y3Z2QKck0zNTRqL09maCtDQkdmZm9adGxSN1M3b0JGRGs4ZEVVYjlCZWxPL0wzN0E3bERxaTRrd01GQmV5T0pjOXpuOApyR2NacHZMcnRsS0llWVVnN1JCemxwNHdWTHlyVzluMDhWdWpRaTRvbkdvSTl6Qk9wMkMzSFBYR29jQW1iT0Y0Cnk1RDlxWVhTUnhEdUxtdGJhSlJhWk5UbTg1WEV3ZkZ6QnRuL0d4ejdxblAyT21RNjIyUjByUEdWYSs0RXNXeHIKSUdzRHVyRzlBb0dCQU83TllLa2NhRENpMEJCWHRnZElHUUJSeEZhNE9qSmFuNlJWZ2pRcWpoWCtHUHlRZzRGWgpRMU9KeVgwQzluOEZyMzFFajlJWHpPckdjc3c2b3YveVFuaEFFelBuczBlOStnb3ZOT3MwRFhhbWhReDludmt4ClpTVUJwR2NTL3dCNlByaU8zRWc3bXBpTlFySHk4U3lNWWRVZFVldmlsaHp1WDZXM3YvemNEUlhEQW9HQkFPZlQKSkZxSlFaT0QwZ0U0VmV2VjJhRlhIZHVBRm5VNVpsRXh3VWtpOGc5b0Z6TWUvczh2UU01cE5FN1hMM2FuRnlCRQpoaGRPcCtxR05WRjJpMGs0YjcxVVlkMXp3ZVdrUHRGWi80bGhmdkpWRXl5enN2YnpubDd3dzBqUytPdld3MGhzCkg2VmVBY1phc0xKY3hBU09HQmVLOGFtdFlMM2tGSHl4T1hla0FMSW5Bb0dBUGlRWGlTb3BPcTdEY2QxQk12ZmgKK2FGTmREdVFlVlgzd08yM2FoZkF6WnhIcUVGNjF3Z0JheFdwNXV3RWROMW40ek1hTWRPYnNXUmVyeUo3RkJ0WQpqSzR2MFF2MExURVVoZDN1NlYyc096bnQyV2cvSEIxc2NvclEyem1vUGRtUnhMajRQWnUxQ1FtSlY0RWVuVGNTCnBrQnc5dThKblJHeXRnN3cyTDN5Y2IwQ2dZQjdGS3ZwY1pRaWFNdFhvSHhsd04xUi9ybTRiMUg5SE9PSTJqeS8Kd3REM2d4RkdMLytqS25oaTNwSktCWStLbEgzL3dNSGNvQU1nemU2QytNaE1zSzBLdlVGVVhRQW1GMFRPeTlTVApNUE5BWUJEVkcvYzVpL0NhZ1lOOUo1M0hRUGZmZktCMG9PdWFUMDRlOUllUno0dFUvSXoveERCbndTOXJZSUNkClY3S1M0d0tCZ1FDZGx4WWJSTGhKREtHSCtyb3NXV0FCeXpxQlpROE5WZHpRZHhsMDB6V3ptSFpzUDdYQUZJWUUKb1llRUZja0Nkd3ZNOUVLWkNHbzlianRRZERnV0xianZwTkZCQ1M4bHNDZ0dPSmVRcWpTdXRnT0NvSkw1dUwybgphcVJoZFlxR2RTQ1RPbHh4MkVSclZUc3QrZERrZENSU3U2UlZVZWhzbm12QUpqOWxpVjNkMEE9PQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo="
+---
+# Source: phorvex/templates/rbac.yaml
+# LEAST-PRIVILEGE ClusterRole (NFR4): read-only ingest of the K8s graph; write ONLY
+# Phorvex's own CRDs + Phoenix SecurityEvent/AMTD + policy warning Events. NEVER writes pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: codeexec-phorvex-manager-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations"]
+  verbs: ["get", "list"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  # M-6 runtime capability check: GET-by-resourceName ONLY of the two named code-exec admission
+  # objects, so the operator can VERIFY (never modify) that its own deny-policy is in force before
+  # it offers or dispatches an ephemeral-container injection. Read-only, scoped to exactly these two
+  # object names; no list/watch (informer), no create/update/delete. This is NOT an injection grant.
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: ["phorvex-codeexec-ephemeral"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["authorization.k8s.io"]
+  # T1-E capability gate: the operator reviews its OWN permissions (SelfSubjectAccessReview,
+  # "can I?") before offering an action, so an unpermitted move is excluded pre-scoring
+  # (no-rbac) instead of ranked and failing at actuation. Creating a SelfSubjectAccessReview
+  # grants no cluster power — it only asks the apiserver what this ServiceAccount may already do.
+  resources: ["selfsubjectaccessreviews"]
+  verbs: ["create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["adaptivemovingtargetdefenses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies/finalizers"]
+  verbs: ["update"]
+---
+# Source: phorvex/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: codeexec-phorvex-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: codeexec-phorvex-manager-role
+subjects:
+- kind: ServiceAccount
+  name: codeexec-phorvex-manager
+  namespace: default
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: codeexec-phorvex-webhook
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  selector:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+  ports:
+  - name: https-webhook
+    port: 443
+    protocol: TCP
+    targetPort: webhook-server
+---
+# Source: phorvex/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codeexec-phorvex
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex
+      app.kubernetes.io/instance: codeexec
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phorvex
+        app.kubernetes.io/instance: codeexec
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: phorvex
+    spec:
+      serviceAccountName: codeexec-phorvex-manager
+      securityContext:
+        runAsNonRoot: true
+        # Both containers run as non-root with different images; fsGroup makes the mounted
+        # audit volume group-writable and lets the manager read its 0440 webhook key.
+        fsGroup: 65532
+      containers:
+      - name: manager
+        image: "phorvex/phorvex:0.1.0-p0"
+        imagePullPolicy: IfNotPresent
+        args:
+        - --base-interval=10s
+        - --actions-supported-debounce=3
+        - --calibration-shadow=true
+        - --calibration-sample=5m
+        - --calibration-refresh=30m
+        - --calibration-lookback=168h
+        - --calibration-export-dir=/var/run/phorvex-calibration
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --leader-elect=true
+        - --admission-webhook=true
+        - --webhook-port=9443
+        - --webhook-cert-dir=/tmp/k8s-webhook-server/serving-certs
+        - --gpu-envelope-max=0.2925
+        - --pcie-class-table={"Tesla T4":{"gen":3,"width":16}}
+        - --trusted-detectors=vllm/detector-kv-canary,vllm/detector-adapter-inv,phorvex-system/operator-controller-manager
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PHORVEX_BRAIN_IMAGE
+          value: "phorvex/phorvex:0.1.0-p0"
+        ports:
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        - name: webhook-server
+          containerPort: 9443
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts:
+        - name: calibration-evidence
+          mountPath: /var/run/phorvex-calibration
+        - name: webhook-cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+      volumes:
+      - name: calibration-evidence
+        emptyDir: {}
+      - name: webhook-cert
+        secret:
+          secretName: codeexec-phorvex-webhook-cert
+          defaultMode: 0440
+---
+# Source: phorvex/templates/admission-webhook.yaml
+# M-94: bind every SecurityEvent to the identity that created it. The authenticated user is
+# known only to the API server, so the stamp has to happen at admission; ingest then allowlists
+# that identity instead of the self-declared spec.rule.source.
+#
+# failurePolicy is Ignore ON PURPOSE: Phorvex must never be able to block the cluster's
+# security-event flow. An unstamped event is untrusted at ingest, so the failure direction is
+# closed on the belief side rather than on the API server.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: codeexec-phorvex-securityevent-stamp
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+webhooks:
+- name: stamp-securityevent.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRTzQweEpaMG1hZjJmTjB6dHc3RjU3REFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTlZvWApEVE0yTURrd05USXlNREUxTlZvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTTEyK3BEcjBSS1hLZEhFdkhJa3BIbjMKLytVVHRoVkdrRzk1NGh0eTFjbzErcDlXMzRPbzZhOUZnN0s4T1h2RXNaSE1DVVNQNEVRYW91NkVWNkdmR05GNwp1alFoc1VqQUxwSzg3QWJySzN2OUdTZGxPd3BiajFwcndhTzJEZjZrYTJDTGo3Q0QzVThUYUU1cDJndTMwU05zClFzTVZYKzZpYlU1ZmZuSTlSNnlWZFd1cHBneDJoR0g0S0lXVTNJUWtUY3RDV0JmMEd0dVVqRlgzcXNGRkl2aWkKdGQrcXdkL2E1TVB1SGcwWjZBRVJ1K0dZMlUrd1hGeU54emRkQkdIcnhlK1JEVjFwWm0ycEFmaWF2S0tEdy9kSwppeE52TE1WdVg1dHlhNk5ma1J1NmZTMXQ2eVZZTGlIMG94cXVGTnhUTjd0akxhM252dlE2aVVNWStnMmEveVVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlNUMGRvYTV1ZGZzMXJaMFE4RQo3TlpIYlFMOE9qQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFlK0c4ZzhtZVkxTkwvNWZnYWcxb1lzd09vK2N1Ci9wRHlOVlUzWVhIQ0pLSWNSWFdSOVlNVDY4ZmQ3MVpWdElJVTNKOHV1clQ1WG50RWRta0VMQlBmUERnYUtGSEgKUmV6cHE4aFVNbzNvWmlialFjNHZXYnZBRmZFdkQrbEg3dzErQklBYTRuUVpiV1g3Wjc4UXVtRmhzbzVFc1lKZQpsR1gvQWsvNm13MEVkNmJKSHlPYVhxcUhGSXFxWi9keGdHcTB5bnRqNG1SSWgvY0pRSHhHYlJVMGNFYXhIT09ECk1WWW4vTWxETnIrRWdSK1paS1h1dmRwYlBRemVlVEVFUW9SUGtCVHV4cE1yVmVSTU1qamF5b1BMUDdVUmxreEgKeUdLcGdwSEE0clQ5Y3o5QzdEQmJ2Q00yek1pRnp1Y2hPMkpWRFFkVnlQSmZaVnRDSlFiMncwV2FMdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: codeexec-phorvex-webhook
+      namespace: default
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: codeexec-phorvex-protected-outcomes-stamp
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+webhooks:
+# M99 outcome-bearing events must never preserve a forged stamp on webhook failure.
+# The general M94 event-flow hook above retains its existing availability policy.
+- name: stamp-protected-outcomes.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  matchConditions:
+  - name: protected-outcomes
+    expression: "has(object.metadata.annotations) && 'phorvex.ai/protected-outcomes-v1' in object.metadata.annotations"
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRTzQweEpaMG1hZjJmTjB6dHc3RjU3REFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTlZvWApEVE0yTURrd05USXlNREUxTlZvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTTEyK3BEcjBSS1hLZEhFdkhJa3BIbjMKLytVVHRoVkdrRzk1NGh0eTFjbzErcDlXMzRPbzZhOUZnN0s4T1h2RXNaSE1DVVNQNEVRYW91NkVWNkdmR05GNwp1alFoc1VqQUxwSzg3QWJySzN2OUdTZGxPd3BiajFwcndhTzJEZjZrYTJDTGo3Q0QzVThUYUU1cDJndTMwU05zClFzTVZYKzZpYlU1ZmZuSTlSNnlWZFd1cHBneDJoR0g0S0lXVTNJUWtUY3RDV0JmMEd0dVVqRlgzcXNGRkl2aWkKdGQrcXdkL2E1TVB1SGcwWjZBRVJ1K0dZMlUrd1hGeU54emRkQkdIcnhlK1JEVjFwWm0ycEFmaWF2S0tEdy9kSwppeE52TE1WdVg1dHlhNk5ma1J1NmZTMXQ2eVZZTGlIMG94cXVGTnhUTjd0akxhM252dlE2aVVNWStnMmEveVVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlNUMGRvYTV1ZGZzMXJaMFE4RQo3TlpIYlFMOE9qQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFlK0c4ZzhtZVkxTkwvNWZnYWcxb1lzd09vK2N1Ci9wRHlOVlUzWVhIQ0pLSWNSWFdSOVlNVDY4ZmQ3MVpWdElJVTNKOHV1clQ1WG50RWRta0VMQlBmUERnYUtGSEgKUmV6cHE4aFVNbzNvWmlialFjNHZXYnZBRmZFdkQrbEg3dzErQklBYTRuUVpiV1g3Wjc4UXVtRmhzbzVFc1lKZQpsR1gvQWsvNm13MEVkNmJKSHlPYVhxcUhGSXFxWi9keGdHcTB5bnRqNG1SSWgvY0pRSHhHYlJVMGNFYXhIT09ECk1WWW4vTWxETnIrRWdSK1paS1h1dmRwYlBRemVlVEVFUW9SUGtCVHV4cE1yVmVSTU1qamF5b1BMUDdVUmxreEgKeUdLcGdwSEE0clQ5Y3o5QzdEQmJ2Q00yek1pRnp1Y2hPMkpWRFFkVnlQSmZaVnRDSlFiMncwV2FMdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: codeexec-phorvex-webhook
+      namespace: default
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
+---
+# Source: phorvex/templates/codeexec-admission.yaml
+# M-6 — request-level ValidatingAdmissionPolicy + Binding for pods/ephemeralcontainers
+# (code-exec admission). Installer-owned singleton, cluster-scoped, DENY + failurePolicy:Fail.
+# It enforces the SEC-1/SEC-2/PO-1 contract (workflow/fixes/M-6/03-decision.md): in a managed
+# namespace, only the Phorvex manager SA may add an ephemeral container, and only the exact
+# approved profile (name / pinned digest / hardened securityContext / Option A empty debugger
+# command+args / exact custom-inject command+args; forbidden extra fields). Native VAP (no
+# webhook pod). Enabled explicitly (off by default); grants NO injection permission; labels no
+# namespace — an admin opts one in with `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: phorvex-codeexec-ephemeral
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    phorvex.ai/policy: codeexec-ephemeral
+  annotations:
+    # Content/version pin the runtime capability check verifies (not name presence alone).
+    phorvex.ai/policy-version: "m6-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/ephemeralcontainers"]
+  variables:
+    - name: managerSA
+      expression: "'system:serviceaccount:phorvex-system:phorvex-phorvex-manager'"
+    - name: approvedImage
+      expression: "'busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'"
+    # Newly-added ephemeral containers = those in object not already present (by name) in
+    # oldObject. has()-guards let the FIRST injection pass and tolerate an absent new list.
+    - name: newContainers
+      expression: >-
+        has(object.spec.ephemeralContainers)
+          ? object.spec.ephemeralContainers.filter(ec,
+              !(has(oldObject.spec.ephemeralContainers)
+                && oldObject.spec.ephemeralContainers.exists(o, o.name == ec.name)))
+          : []
+  validations:
+    # SEC-2 identity: only the manager SA may ADD an ephemeral container in scope.
+    - expression: "size(variables.newContainers) == 0 || request.userInfo.username == variables.managerSA"
+      reason: Forbidden
+      messageExpression: >-
+        "code-exec/identity: only the Phorvex manager service account may add an ephemeral container in
+        a managed namespace (got '" + request.userInfo.username + "')"
+    # SEC-1 name: exact allowed set.
+    - expression: "variables.newContainers.all(ec, ec.name in ['phorvex-debugger', 'phorvex-custom'])"
+      reason: Forbidden
+      message: "code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom"
+    # SEC-1 image: exact pinned digest.
+    - expression: "variables.newContainers.all(ec, has(ec.image) && ec.image == variables.approvedImage)"
+      reason: Forbidden
+      message: "code-exec/image: ephemeral container image must be the pinned busybox digest"
+    # SEC-1 securityContext core.
+    - expression: >-
+        variables.newContainers.all(ec, has(ec.securityContext)
+          && ec.securityContext.privileged == false
+          && ec.securityContext.allowPrivilegeEscalation == false
+          && ec.securityContext.runAsNonRoot == true
+          && ec.securityContext.runAsUser == 65534
+          && ec.securityContext.runAsGroup == 65534
+          && ec.securityContext.readOnlyRootFilesystem == true)
+      reason: Forbidden
+      message: "code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true"
+    # SEC-1 capabilities: drop ALL, add none.
+    - expression: >-
+        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.capabilities)
+          && ec.securityContext.capabilities.drop == ['ALL']
+          && (!has(ec.securityContext.capabilities.add) || size(ec.securityContext.capabilities.add) == 0))
+      reason: Forbidden
+      message: "code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add"
+    # SEC-1 seccomp: RuntimeDefault.
+    - expression: >-
+        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.seccompProfile)
+          && ec.securityContext.seccompProfile.type == 'RuntimeDefault')
+      reason: Forbidden
+      message: "code-exec/seccomp: require seccompProfile.type=RuntimeDefault"
+    # SEC-1 securityContext is EXACTLY the allow-set: forbid extra confinement-relevant fields
+    # the core rules do not pin (added appArmor/SELinux/Windows/procMount could relax confinement).
+    - expression: >-
+        variables.newContainers.all(ec, !has(ec.securityContext)
+          || (!has(ec.securityContext.appArmorProfile)
+              && !has(ec.securityContext.seLinuxOptions)
+              && !has(ec.securityContext.windowsOptions)
+              && !has(ec.securityContext.procMount)))
+      reason: Forbidden
+      message: "code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)"
+    # SEC-1 forbidden fields.
+    - expression: >-
+        variables.newContainers.all(ec,
+          (!has(ec.tty) || ec.tty == false)
+          && (!has(ec.stdin) || ec.stdin == false)
+          && !has(ec.targetContainerName)
+          && (!has(ec.env) || size(ec.env) == 0)
+          && (!has(ec.envFrom) || size(ec.envFrom) == 0)
+          && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)
+          && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))
+      reason: Forbidden
+      message: "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted"
+    # SEC-1 command/args (C1): debugger MUST have empty command AND args (Option A);
+    # custom-inject MUST match its exact command/args.
+    - expression: >-
+        variables.newContainers.all(ec,
+          ec.name == 'phorvex-debugger'
+            ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))
+            : (ec.name == 'phorvex-custom'
+                ? (has(ec.command) && ec.command == ['sh', '-c']
+                   && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])
+                : true))
+      reason: Forbidden
+      message: "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args"
+---
+# Source: phorvex/templates/codeexec-admission.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: phorvex-codeexec-ephemeral
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    phorvex.ai/policy: codeexec-ephemeral
+spec:
+  policyName: phorvex-codeexec-ephemeral
+  validationActions: ["Deny"]
+  matchResources:
+    # SEC-2 managed scope: installer-applied namespace label a tenant cannot self-apply.
+    # Out-of-scope (unlabelled) namespaces are NOT matched; Phorvex marks its own code-exec
+    # capability unavailable for those targets (C3).
+    namespaceSelector:
+      matchLabels:
+        phorvex.ai/codeexec-managed: "true"
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: codeexec-phorvex-policy-validator
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+webhooks:
+- name: vphorvexpolicy.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  timeoutSeconds: 5
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRTzQweEpaMG1hZjJmTjB6dHc3RjU3REFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTlZvWApEVE0yTURrd05USXlNREUxTlZvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTTEyK3BEcjBSS1hLZEhFdkhJa3BIbjMKLytVVHRoVkdrRzk1NGh0eTFjbzErcDlXMzRPbzZhOUZnN0s4T1h2RXNaSE1DVVNQNEVRYW91NkVWNkdmR05GNwp1alFoc1VqQUxwSzg3QWJySzN2OUdTZGxPd3BiajFwcndhTzJEZjZrYTJDTGo3Q0QzVThUYUU1cDJndTMwU05zClFzTVZYKzZpYlU1ZmZuSTlSNnlWZFd1cHBneDJoR0g0S0lXVTNJUWtUY3RDV0JmMEd0dVVqRlgzcXNGRkl2aWkKdGQrcXdkL2E1TVB1SGcwWjZBRVJ1K0dZMlUrd1hGeU54emRkQkdIcnhlK1JEVjFwWm0ycEFmaWF2S0tEdy9kSwppeE52TE1WdVg1dHlhNk5ma1J1NmZTMXQ2eVZZTGlIMG94cXVGTnhUTjd0akxhM252dlE2aVVNWStnMmEveVVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlNUMGRvYTV1ZGZzMXJaMFE4RQo3TlpIYlFMOE9qQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFlK0c4ZzhtZVkxTkwvNWZnYWcxb1lzd09vK2N1Ci9wRHlOVlUzWVhIQ0pLSWNSWFdSOVlNVDY4ZmQ3MVpWdElJVTNKOHV1clQ1WG50RWRta0VMQlBmUERnYUtGSEgKUmV6cHE4aFVNbzNvWmlialFjNHZXYnZBRmZFdkQrbEg3dzErQklBYTRuUVpiV1g3Wjc4UXVtRmhzbzVFc1lKZQpsR1gvQWsvNm13MEVkNmJKSHlPYVhxcUhGSXFxWi9keGdHcTB5bnRqNG1SSWgvY0pRSHhHYlJVMGNFYXhIT09ECk1WWW4vTWxETnIrRWdSK1paS1h1dmRwYlBRemVlVEVFUW9SUGtCVHV4cE1yVmVSTU1qamF5b1BMUDdVUmxreEgKeUdLcGdwSEE0clQ5Y3o5QzdEQmJ2Q00yek1pRnp1Y2hPMkpWRFFkVnlQSmZaVnRDSlFiMncwV2FMdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: codeexec-phorvex-webhook
+      namespace: default
+      port: 443
+      path: /validate-phorvex-ai-v1alpha1-phorvexpolicy
+  rules:
+  - apiGroups: ["phorvex.ai"]
+    apiVersions: ["v1alpha1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["phorvexpolicies"]
+    scope: Namespaced

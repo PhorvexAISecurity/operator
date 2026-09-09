@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "campaign-status.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "campaign_id", "profile", "question", "state", "owner",
+    "approval_ref", "created_at", "updated_at", "scope", "pins", "safety",
+    "positive_control", "rounds", "findings", "verdict", "roles",
+    "next_action", "transitions"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "campaign_id": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]*$"
+    },
+    "profile": {"const": "workflow-v2"},
+    "question": {"type": "string", "minLength": 1},
+    "state": {
+      "enum": [
+        "DRAFT", "APPROVED", "BASELINED", "RUNNING", "ANALYZING",
+        "REVIEWED", "CLOSED", "PAUSED", "ABORTED"
+      ]
+    },
+    "owner": {"type": "string", "minLength": 1},
+    "approval_ref": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "scope": {"type": "object"},
+    "pins": {"type": "object"},
+    "safety": {"type": "object"},
+    "positive_control": {"type": "string"},
+    "rounds": {"type": "array", "minItems": 1},
+    "findings": {"type": "array"},
+    "verdict": {"type": "object"},
+    "roles": {"type": "object"},
+    "next_action": {"type": "object"},
+    "transitions": {"type": "array"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,345 @@
+diff --git a/phorvex/internal/decision/coverage.go b/phorvex/internal/decision/coverage.go
+index bce7a3c..5d7fa57 100644
+--- a/phorvex/internal/decision/coverage.go
++++ b/phorvex/internal/decision/coverage.go
+@@ -671,6 +671,7 @@ func (e *CoverageEngine) buildDecisionTrace(
+ 		GPUUtilization:    traceOptional(telemetryPresent("gpuUtil"), v.Telemetry.GPUUtil),
+ 		SMOccupancy:       traceOptional(v.Physics.SMSource != "", v.Physics.SMOccupancy),
+ 		VRAMFraction:      traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction),
++		Leakage:           traceOptional(v.Physics.SMSource != "", ac.assess.Leakage), // T1-A gate input
+ 		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
+ 		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
+ 		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+diff --git a/phorvex/internal/decision/leakage_trace_test.go b/phorvex/internal/decision/leakage_trace_test.go
+new file mode 100644
+index 0000000..c2cbee0
+--- /dev/null
++++ b/phorvex/internal/decision/leakage_trace_test.go
+@@ -0,0 +1,50 @@
++/*
++ * Phorvex — T1-A: the decision trace carries the model-theft gate's ACTIVITY input, with
++ * honest-absent semantics. Ships with the fix (references Inputs.Leakage).
++ */
++
++package decision
++
++import (
++	"testing"
++	"time"
++
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++func TestDecisionTraceRecordsLeakageWithHonestAbsence(t *testing.T) {
++	// honest-absent: SMOccupancy unmeasured (SMSource == "") must NOT serialize as a measured 0,
++	// even with VRAM saturated — the exact live shape from bus 084.
++	view := covView("leak", true, 2*time.Hour, false)
++	view.Physics.GPUPresent = true
++	view.Physics.VRAMFraction, view.Physics.VRAMPresent = 0.9931, true
++	view.Physics.SMOccupancy, view.Physics.SMSource = 0, ""
++	trace := fixedTraceEngine().Decide([]*model.WorkloadView{view}, decisionTracePolicy(1, true))[0].Trace
++	if trace == nil {
++		t.Fatal("trace missing")
++	}
++	if err := trace.Validate(); err != nil {
++		t.Fatal(err)
++	}
++	if trace.Inputs.Leakage.Present {
++		t.Fatalf("unmeasured SM occupancy serialized as a measured leakage: %+v", trace.Inputs.Leakage)
++	}
++	// The builder honours VRAMPresent when the witness carries it. LIVE, this flag is dark until
++	// M-152 lands: stampGPU (platform/adapters.go:19-29) never copies VRAMPresent across the
++	// adapter seam, so real records show vramFraction {present:false} even with DCGM flowing.
++	// This assertion is about the builder, not the seam.
++	if !trace.Inputs.VRAMFraction.Present {
++		t.Fatalf("VRAMFraction lost presence; the trace must still show residency beside the gate input")
++	}
++
++	// measured: Leakage == SMOccupancy exactly, VRAM contributes nothing.
++	view.Physics.SMOccupancy, view.Physics.SMSource = 0.85, "DCGM_FI_PROF_SM_ACTIVE"
++	measured := fixedTraceEngine().Decide([]*model.WorkloadView{view}, decisionTracePolicy(1, true))[0].Trace
++	if !measured.Inputs.Leakage.Present || measured.Inputs.Leakage.Value != 0.85 {
++		t.Fatalf("measured leakage = %+v, want present 0.85 (SM only; VRAM=0.9931 must not add)", measured.Inputs.Leakage)
++	}
++	// canonical form keeps the field (it is registered in Canonical(), not silently dropped)
++	if c := measured.Canonical(); !c.Inputs.Leakage.Present || c.Inputs.Leakage.Value != 0.85 {
++		t.Fatalf("Canonical() dropped or altered leakage: %+v", c.Inputs.Leakage)
++	}
++}
+diff --git a/phorvex/internal/killchain/hazard.go b/phorvex/internal/killchain/hazard.go
+index 5ef1380..46efc0b 100644
+--- a/phorvex/internal/killchain/hazard.go
++++ b/phorvex/internal/killchain/hazard.go
+@@ -113,7 +113,11 @@ func consequence(s Stage) float64 {
+ 
+ // Assessment is the per-asset kill-chain belief output.
+ type Assessment struct {
+-	Stage         Stage
++	Stage Stage
++	// Leakage is the ACTIVITY signal the model-theft gate actually tested (T1-A): SMOccupancy
++	// only. Recorded so the decision trace can show the gate input beside its raw sources;
++	// 0 with Physics.SMSource=="" means unmeasured, not idle.
++	Leakage       float64
+ 	StageName     string
+ 	NextStage     Stage
+ 	NextStageName string
+@@ -221,6 +225,13 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
+ // GPU-leakage stages need HasGPU (so they stay absent on a CPU-only cluster);
+ // PHORVEXSEC-115 owns their magnitude calibration.
+ // ModelID/EndpointPath stages fire on a model-annotated pod + the event stream (live).
++// leakageOf is the model-theft gate's activity term (T1-A). Allocation (VRAMFraction) is
++// deliberately NOT a summand: residency is eligibility/context, never activity. Weights on
++// LinkBandwidth/PCIe are 0 — INSUFFICIENT EVIDENCE to set them (Tier 3). Range [0,1].
++func leakageOf(ph model.PhysicsWitness) float64 {
++	return ph.SMOccupancy
++}
++
+ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
+ 	p := view.Pod
+ 	ph := view.Physics
+@@ -243,7 +254,13 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
+ 			exploitEvent = true
+ 		}
+ 	}
+-	leakage := ph.SMOccupancy + ph.VRAMFraction // [0,2]; 0 on kind; PHORVEXSEC-115
++	// T1-A: leakage is ACTIVITY only. VRAMFraction is allocation (model residency) and carries
++	// no weight here at any value — a loaded, idle model server must not read as extraction
++	// (bus 084: VRAM=0.9931, SM=0 satisfied the old sum permanently). Threshold 0.8 and the
++	// zero weights on LinkBandwidth/PCIe are untouched: INSUFFICIENT EVIDENCE (Tier 3).
++	// SMOccupancy is honest-absent (0 with SMSource=="") on stacks without DCP profiling; the
++	// decision trace records SMSource so absent is distinguishable from measured zero.
++	leakage := leakageOf(ph) // [0,1]; 0 on kind; PHORVEXSEC-115
+ 
+ 	// (1) model theft in progress: co-resident GPU reconstructing a rare model.
+ 	if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1.3 && leakage > 0.8 {
+@@ -364,6 +381,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec,
+ 		PHold:                 pHold,
+ 		StageUrgency:          stageUrg,
+ 		HasEvidence:           hasEvidence,
++		Leakage:               leakageOf(view.Physics),
+ 		LateralUrgency:        latUrg,
+ 		PreemptMargin:         preempt,
+ 		ProjectedNextStageSec: projNext,
+diff --git a/phorvex/internal/killchain/leakage_gate_test.go b/phorvex/internal/killchain/leakage_gate_test.go
+new file mode 100644
+index 0000000..7a7a505
+--- /dev/null
++++ b/phorvex/internal/killchain/leakage_gate_test.go
+@@ -0,0 +1,123 @@
++/*
++ * Phorvex — T1-A regression lock for the model-theft leakage gate (hazard.go:246/:249 @ 016361c).
++ *
++ * This file must COMPILE on the pre-fix build and be RED at the named assertion there
++ * (FIX_LOOP §4 "red before green — and red for the right reason"). It therefore uses only
++ * API that exists before the fix: Assess, NeutralPhysics, the Stage constants. Record-field
++ * assertions (leakage / SMSource in the decision record) live in a separate file that ships
++ * WITH the fix, because a test that fails to compile is red while testing nothing.
++ */
++
++package killchain
++
++import (
++	"testing"
++
++	"github.com/phorvex/phorvex/internal/model"
++	"github.com/r6security/phoenix/api/v1beta1"
++)
++
++// gpuView builds the minimal AI workload that satisfies every conjunct of arm (1) EXCEPT the
++// leakage term, so each test isolates exactly the term under test:
++//
++//	HasGPU (pod)  ·  CoResidency > 1  ·  ModelRarity > 1.3  ·  ModelID set (AI classification)
++func gpuView(sm, vram float64, smSource string) *model.WorkloadView {
++	ph := model.NeutralPhysics()
++	ph.GPUPresent = true
++	ph.CoResidency = 1.25 // two namespaces on the node: 1 + (2-1)/4 (platform.go:169)
++	ph.ModelRarity = 2.0  // two distinct models, 1-of-2 each (platform.go:164)
++	ph.SMOccupancy = sm
++	ph.VRAMFraction = vram
++	ph.SMSource = smSource
++	return &model.WorkloadView{
++		Pod:     model.Pod{Namespace: "t", Name: "vllm-a", HasGPU: true, ModelID: "qwen2.5-0.5b"},
++		Physics: ph,
++	}
++}
++
++// Fixture (a) — the live observation from bus 084 / VALIDATION_REPORT:1655:
++// VRAMFraction = 0.9931 (14,990/15,094 MiB), SMOccupancy = 0, SMSource = "" (honest-absent on a
++// T4 without DCP profiling). A loaded, IDLE model server.
++//
++// PRE-FIX: leakage = 0 + 0.9931 = 0.9931 > 0.8 → arm (1) → StageModelTheft. (RED here.)
++// POST-FIX: leakage = SMOccupancy = 0 → arm (1) skipped → arm (2) → StageGPUSideChannel.
++func TestLeakageGate_LoadedIdleIsNotTheft(t *testing.T) {
++	m := NewModel()
++	a := m.Assess(gpuView(0, 0.9931, ""), ctxPolicy(), 60, 3600)
++	if !a.AIClassified {
++		t.Fatalf("fixture must be AI-classified (HasGPU + ModelID); got generic chain")
++	}
++	if a.Stage == StageModelTheft {
++		t.Fatalf("T1-A regression: a loaded-idle GPU (VRAM=0.9931, SM=0) reads model-theft — "+
++			"residency alone satisfied the leakage gate; got stage=%s", a.StageName)
++	}
++	if a.Stage != StageGPUSideChannel {
++		t.Fatalf("loaded-idle co-resident rare model must fall through to gpu-side-channel, got %s", a.StageName)
++	}
++}
++
++// Fixture (b) — POSITIVE CONTROL: an extraction-shaped load, SMOccupancy sustained ≥ 0.8 with a
++// real profiling source. Must read model-theft on BOTH builds (pre-fix: 0.85+0.99 > 0.8;
++// post-fix: 0.85 > 0.8). This proves the rig can still detect theft after the term is dropped;
++// it is NOT a red-before-green test and the ticket's "both fail on current code" is wrong for
++// this fixture — dropping a non-negative term can only ever lower leakage.
++func TestLeakageGate_ExtractionLoadIsTheft_PositiveControl(t *testing.T) {
++	m := NewModel()
++	a := m.Assess(gpuView(0.85, 0.9931, "DCGM_FI_PROF_SM_ACTIVE"), ctxPolicy(), 60, 3600)
++	if a.Stage != StageModelTheft {
++		t.Fatalf("positive control: sustained SM occupancy 0.85 must read model-theft, got %s", a.StageName)
++	}
++}
++
++// Fixture (c) — the boundary: SM exactly at the threshold must NOT fire (gate is strict >).
++// Same on both builds when VRAM = 0; guards against anyone "fixing" 0.8 → 0.79 in passing
++// (ticket trap: do not lower the threshold).
++func TestLeakageGate_ThresholdIsStrict(t *testing.T) {
++	m := NewModel()
++	a := m.Assess(gpuView(0.80, 0, "DCGM_FI_PROF_SM_ACTIVE"), ctxPolicy(), 60, 3600)
++	if a.Stage == StageModelTheft {
++		t.Fatalf("leakage == 0.8 must not satisfy a strict > 0.8 gate; got model-theft")
++	}
++}
++
++// Fixture (d) — allocation must contribute at NO weight (ticket trap: "do not add VRAMFraction
++// back with a smaller weight"). SM just under threshold + VRAM saturated must not tip the gate
++// post-fix. PRE-FIX this reads theft (0.79 + 1.0 > 0.8) → RED here too.
++func TestLeakageGate_AllocationCarriesNoWeight(t *testing.T) {
++	m := NewModel()
++	a := m.Assess(gpuView(0.79, 1.0, "DCGM_FI_PROF_SM_ACTIVE"), ctxPolicy(), 60, 3600)
++	if a.Stage == StageModelTheft {
++		t.Fatalf("T1-A regression: VRAM allocation tipped an under-threshold SM reading into model-theft (stage=%s)", a.StageName)
++	}
++}
++
++// Fixture (e) — K3 02-critique B.1: the DECLARED downgrade this fix unmasks. On a ≥2-model
++// topology, a GPU pod with a LIVE persist-class event (Panic, high) — detector evidence implying
++// the persist stage (consequence 0.6) — reads:
++//
++//	PRE-FIX:  arm (1) fires on residency alone → model-theft (0.9). The inflation masked the
++//	          arm ordering entirely.
++//	POST-FIX: arm (1) is dark (SM unmeasured); arm (2) side-channel (0.15) is checked BEFORE
++//	          arm (3) prompt-inject-persist and Assess overwrites the event stage with a bare
++//	          `=` (hazard.go:291-293) → gpu-side-channel, BELOW the event-implied stage.
++//
++// This is M-25's override surface, unchanged in kind, direction now deflation instead of
++// inflation. Declared in 01-proposal §4 / 03-decision; the re-ordering is M-25's fix, not
++// T1-A's (one issue per cycle). This test pins the declared post-fix behavior so that when M-25
++// lands, its diff flips exactly this assertion and nothing else here.
++func TestLeakageGate_LivePersistEventOnTwoModelFleet_DeclaredDowngrade(t *testing.T) {
++	m := NewModel()
++	v := gpuView(0, 0.9931, "") // bus-084 physics, on a 2-model / 2-namespace topology
++	v.Events = []model.SecurityEventInfo{{Type: v1beta1.TypePanic, ThreatLevel: "high", TargetsPod: true}}
++	a := m.Assess(v, ctxPolicy(), 60, 3600)
++	if a.Stage == StageModelTheft {
++		t.Fatalf("T1-A regression: residency + a live event still reads model-theft (stage=%s)", a.StageName)
++	}
++	if a.Stage != StageGPUSideChannel {
++		t.Fatalf("declared post-fix stage for GPU pod + live persist event on a 2-model fleet is gpu-side-channel "+
++			"(M-25 override, deflation direction); got %s — if this is persist-class, M-25 has landed and this pin must be retired", a.StageName)
++	}
++	if !a.HasEvidence {
++		t.Fatalf("a live Panic event must keep HasEvidence true regardless of stage")
++	}
++}
+diff --git a/phorvex/internal/killchain/leakage_record_test.go b/phorvex/internal/killchain/leakage_record_test.go
+new file mode 100644
+index 0000000..0d2609b
+--- /dev/null
++++ b/phorvex/internal/killchain/leakage_record_test.go
+@@ -0,0 +1,55 @@
++/*
++ * Phorvex — T1-A: the recorded gate input. Ships WITH the fix (references Assessment.Leakage,
++ * which does not exist pre-fix), so it is deliberately separate from leakage_gate_test.go —
++ * the red-before-green lock must compile on the pre-fix build.
++ */
++
++package killchain
++
++import "testing"
++
++// The value the trace records must be the value the gate tested — and that value must be
++// activity only. Three cases pin the semantics:
++//
++//	measured activity → Leakage == SMOccupancy exactly (VRAM contributes nothing)
++//	honest-absent     → Leakage == 0 with SMSource == "" (unmeasured, not idle)
++//	saturated VRAM    → still 0 (the allocation term is gone, not down-weighted)
++func TestLeakageRecord_MatchesGateInput(t *testing.T) {
++	m := NewModel()
++	cases := []struct {
++		name     string
++		sm, vram float64
++		source   string
++		want     float64
++	}{
++		{"measured activity, VRAM ignored", 0.85, 0.9931, "DCGM_FI_PROF_SM_ACTIVE", 0.85},
++		{"honest-absent SM reads as 0, not as VRAM", 0, 0.9931, "", 0},
++		{"saturated VRAM adds nothing at any weight", 0.30, 1.0, "DCGM_FI_PROF_SM_ACTIVE", 0.30},
++	}
++	for _, c := range cases {
++		t.Run(c.name, func(t *testing.T) {
++			a := m.Assess(gpuView(c.sm, c.vram, c.source), ctxPolicy(), 60, 3600)
++			if a.Leakage != c.want {
++				t.Fatalf("Assessment.Leakage = %v, want %v (sm=%v vram=%v source=%q)", a.Leakage, c.want, c.sm, c.vram, c.source)
++			}
++			if a.Leakage != leakageOf(gpuView(c.sm, c.vram, c.source).Physics) {
++				t.Fatalf("recorded Leakage diverged from the gate helper — two sources of truth")
++			}
++		})
++	}
++}
++
++// Non-AI workloads must be byte-identical to before: Leakage is recorded (0) but the generic
++// chain is untouched. Guards the honest-absent contract at the top of aiStageFromView.
++func TestLeakageRecord_GenericChainUnchanged(t *testing.T) {
++	m := NewModel()
++	v := gpuView(0.99, 0.99, "DCGM_FI_PROF_SM_ACTIVE")
++	v.Pod.HasGPU, v.Pod.ModelID = false, "" // not an AI workload
++	a := m.Assess(v, ctxPolicy(), 60, 3600)
++	if a.AIClassified {
++		t.Fatalf("non-AI pod must not be AI-classified regardless of physics")
++	}
++	if a.Stage == StageModelTheft || a.Stage == StageGPUSideChannel {
++		t.Fatalf("non-AI pod reached an AI GPU stage: %s", a.StageName)
++	}
++}
+diff --git a/phorvex/internal/model/decision_trace.go b/phorvex/internal/model/decision_trace.go
+index cce5e88..33390e9 100644
+--- a/phorvex/internal/model/decision_trace.go
++++ b/phorvex/internal/model/decision_trace.go
+@@ -52,11 +52,15 @@ type OptionalBool struct {
+ type DecisionModelInputsV2 struct {
+ 	Phase string `json:"phase"`
+ 
+-	RequestRate       OptionalFloat `json:"requestRate"`
+-	ConnectionCount   OptionalFloat `json:"connectionCount"`
+-	GPUUtilization    OptionalFloat `json:"gpuUtilization"`
+-	SMOccupancy       OptionalFloat `json:"smOccupancy"`
+-	VRAMFraction      OptionalFloat `json:"vramFraction"`
++	RequestRate     OptionalFloat `json:"requestRate"`
++	ConnectionCount OptionalFloat `json:"connectionCount"`
++	GPUUtilization  OptionalFloat `json:"gpuUtilization"`
++	SMOccupancy     OptionalFloat `json:"smOccupancy"`
++	VRAMFraction    OptionalFloat `json:"vramFraction"`
++	// Leakage is the model-theft gate's ACTIVITY input as actually tested (T1-A): SMOccupancy
++	// only, never allocation. Present iff SMOccupancy was measured (SMSource != ""), so an
++	// honest-absent scrape is recorded as absent rather than as an idle GPU.
++	Leakage           OptionalFloat `json:"leakage"`
+ 	ImageRarity       OptionalFloat `json:"imageRarity"`
+ 	ModelRarity       OptionalFloat `json:"modelRarity"`
+ 	CoResidency       OptionalFloat `json:"coResidency"`
+@@ -242,6 +246,7 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
+ 	out.Inputs.GPUUtilization = cleanOptional(out.Inputs.GPUUtilization)
+ 	out.Inputs.SMOccupancy = cleanOptional(out.Inputs.SMOccupancy)
+ 	out.Inputs.VRAMFraction = cleanOptional(out.Inputs.VRAMFraction)
++	out.Inputs.Leakage = cleanOptional(out.Inputs.Leakage)
+ 	out.Inputs.ImageRarity = cleanOptional(out.Inputs.ImageRarity)
+ 	out.Inputs.ModelRarity = cleanOptional(out.Inputs.ModelRarity)
+ 	out.Inputs.CoResidency = cleanOptional(out.Inputs.CoResidency)

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "release-sync.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "sync_id", "kind", "state", "created_at", "updated_at",
+    "code_repository", "deployment", "included_fixes", "included_issues",
+    "issue_results", "anatomy", "next_action", "transitions"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "sync_id": {
+      "type": "string",
+      "pattern": "^(MAIN|DEPLOY)-[0-9]{8}-[0-9]{6}-[a-f0-9]{7,40}$"
+    },
+    "kind": {"enum": ["main", "deployment"]},
+    "state": {
+      "enum": [
+        "SCANNED", "MAIN_RECORDED", "DEPLOY_OBSERVED",
+        "ANATOMY_PUBLISHED", "RECONCILED", "BLOCKED"
+      ]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "approval_ref": {"type": ["string", "null"]},
+    "code_repository": {"type": "object"},
+    "deployment": {"type": "object"},
+    "included_fixes": {"type": "array", "items": {"type": "string"}},
+    "included_issues": {"type": "array", "items": {"type": "string"}},
+    "issue_results": {"type": "object"},
+    "anatomy": {"type": "object"},
+    "next_action": {"type": "object"},
+    "transitions": {"type": "array"}
+  },
+  "additionalProperties": true
+}

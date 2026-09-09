@@ -1,0 +1,34 @@
+{
+  "captured_at": "2026-09-08T19:27:19.782030+00:00",
+  "pod": "phorvex-phorvex-788f5f695d-ltj2z",
+  "method": "Read-only console SSE through transient localhost port-forward; retained provenance fields only; own forward terminated.",
+  "provenance_rows": [
+    [
+      {
+        "path": "/claim/brainImage",
+        "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.98"
+      },
+      {
+        "path": "/claim/gitSHA",
+        "value": "a4d91cb196b4f28902b371c33db9157bb7ec26cd"
+      },
+      {
+        "path": "/time",
+        "value": "2026-09-08T19:27:11.338221428Z"
+      },
+      {
+        "path": "/decisionTrace/timestamp",
+        "value": "2026-09-08T19:27:11.338221428Z"
+      },
+      {
+        "path": "/decisionTrace/brainImage",
+        "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.98"
+      },
+      {
+        "path": "/decisionTrace/gitSHA",
+        "value": "a4d91cb196b4f28902b371c33db9157bb7ec26cd"
+      }
+    ]
+  ],
+  "error": "timed out"
+}

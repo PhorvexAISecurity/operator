@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-09-08T19:00:51.616572+00:00",
+  "result": "PASS",
+  "trigger": "bus-probe-20260908-A",
+  "queue_receipt": "01a0825c-8a54-7bb3-9ba6-2fcd159ce8dd",
+  "thread": "01a07cf1-f416-70f0-93b4-28fba31bd227",
+  "evidence": "The next turn was triggered by the exact previously queued transport probe after the repair turn ended. Probe no longer present in thread queue.",
+  "remaining_queue_ids": [
+    "01a08261-81f2-75f0-a5a8-0cca1386190d",
+    "01a08262-3810-7391-8ccc-5ef749177a21"
+  ],
+  "service": "active"
+}

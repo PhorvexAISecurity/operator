@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intake-status.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "intake_id", "kind", "title", "state", "reporter",
+    "pins", "verification", "dedup", "promotion", "roles", "next_action",
+    "transitions"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "intake_id": {
+      "type": "string",
+      "pattern": "^RPT-[0-9]{8}-[0-9]{6}-[a-z0-9][a-z0-9-]*$"
+    },
+    "kind": {
+      "enum": ["BUG", "INCIDENT", "OBSERVATION", "RISK", "ENHANCEMENT"]
+    },
+    "title": {"type": "string", "minLength": 1},
+    "state": {
+      "enum": [
+        "REPORTED", "TRIAGED", "VERIFYING", "VERIFIED", "DEDUP_REVIEW",
+        "NEEDS_DEDUP_RULING", "DUPLICATE", "FILED", "REJECTED",
+        "UNAVAILABLE"
+      ]
+    },
+    "reporter": {"type": "string", "minLength": 1},
+    "approval_ref": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "pins": {"type": "object"},
+    "verification": {"type": "object"},
+    "dedup": {"type": "object"},
+    "promotion": {"type": "object"},
+    "roles": {"type": "object"},
+    "next_action": {"type": "object"},
+    "transitions": {"type": "array"}
+  },
+  "additionalProperties": true
+}

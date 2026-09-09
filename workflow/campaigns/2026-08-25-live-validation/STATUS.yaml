@@ -1,0 +1,26 @@
+schema_version: 1
+campaign_id: 2026-08-25-live-validation
+state: DEFERRED
+opened_at: 2026-08-23
+last_updated_at: 2026-08-25
+
+build_under_test:
+  image: phorvex:0.4.50
+  git_sha: b163c69
+
+rounds:
+  completed: [1, 2]
+  deferred: [3]
+
+hypotheses:
+  total: 17
+  resolved: 6
+
+reason: Round 3 had a degenerate cost/lambda configuration and was deferred until after fixes.
+resume_gate: Explicit human request, fresh release pins, and revalidated preconditions.
+authoritative_narrative: CAMPAIGN.md
+evidence_manifest: round-1/evidence/manifest.yaml
+migration:
+  historical: true
+  content_rewritten: false
+  raw_corpus_retention: local-original

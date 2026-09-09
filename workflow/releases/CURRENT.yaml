@@ -1,0 +1,35 @@
+schema_version: 1
+recorded_at: 2026-09-06T22:20:00Z
+status: migrated_from_last_live_verdict
+
+code_repository:
+  canonical_branch: main
+  origin_main_sha: 0bc6890acf0c3e3df937ad3bb45b1d99efc9b45a
+  source_release: v0.4.88
+
+deployed:
+  image: phorvex:0.4.86
+  release_commit: dfae789110bb9878f1175e52fd8167056730311e
+  embedded_git_sha: db04b5d5ddffa839ff03d564311b93a7d6b98c5f
+  digest: null
+  observed_by: fixes/T1-E/evidence/L3-verdict.md
+  observed_at: 2026-09-06
+  must_reverify_before_next_live_claim: true
+
+anatomy:
+  source_commit: fb52e6c976df
+  current_for_deployed_release: false
+  refresh_status: pending
+
+pending_release_fixes:
+  - T1-M020
+  - T1-M023
+  - T1-M160
+
+main_pending_deploy_issues:
+  - M-113
+  - M-115
+
+notes:
+  - origin/main is newer than the last live-verified deployment.
+  - Runtime truth must be re-read from the cluster before any new L3 claim.

@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-08T21:04:01.925669+00:00",
+  "files": {
+    "workflow/coordination/bus.py": "0929488e91185c415639b8f1c35139105d432959c89939e4e2c385ac9a5b2212",
+    "workflow/coordination/bridge.py": "d0df44c23e49be7d3ee828fb048c483fac9c22d3eac1ab19964b1fdd2d5847a1",
+    "workflow/coordination/transport.py": "d5bea5f9eeec942f6ae3245fc25b7ea821505037c5d72cf3093153fca8a49a23",
+    "workflow/operations/WORKTREES.md": "2bc4ef60bd306cfe207b4cc4657e502cd4266a34adc338e431c5fbe703a94e41",
+    "AGENTS.md": "f80cf49f483d15a15c9241fc26914b132c619a3c5f58cacb682d88dda7762744"
+  }
+}

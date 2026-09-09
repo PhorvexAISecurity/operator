@@ -1,0 +1,32 @@
+schema_version: 1
+sync_id: null
+kind: deployment
+state: DRAFT
+created_at: null
+updated_at: null
+approval_ref: null
+
+code_repository:
+  previous_main_sha: null
+  observed_main_sha: null
+  source_release: null
+
+deployment:
+  image: null
+  digest: null
+  embedded_git_sha: null
+  release_commit: null
+  observed_at: null
+  observed_by: null
+  environment: null
+
+included_fixes: []
+included_issues: []
+issue_results: {}
+anatomy:
+  source_commit: null
+  status: pending
+next_action:
+  owner: release-synchronizer
+  action: Complete the reconciliation record.
+transitions: []

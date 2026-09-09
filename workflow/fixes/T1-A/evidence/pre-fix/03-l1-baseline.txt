@@ -1,0 +1,13 @@
+--- FAIL: TestLeakageGate_LoadedIdleIsNotTheft (0.00s)
+    leakage_gate_test.go:49: T1-A regression: a loaded-idle GPU (VRAM=0.9931, SM=0) reads model-theft — residency alone satisfied the leakage gate; got stage=model-theft
+--- FAIL: TestLeakageGate_AllocationCarriesNoWeight (0.00s)
+    leakage_gate_test.go:88: T1-A regression: VRAM allocation tipped an under-threshold SM reading into model-theft (stage=model-theft)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/killchain	0.007s
+ok  	github.com/phorvex/phorvex/internal/decision	17.541s
+ok  	github.com/phorvex/phorvex/internal/actionset	0.008s
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.005s
+ok  	github.com/phorvex/phorvex/internal/platform	0.111s
+ok  	github.com/phorvex/phorvex/internal/audit	0.588s
+FAIL
+exit 1

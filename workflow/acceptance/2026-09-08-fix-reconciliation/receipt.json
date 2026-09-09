@@ -1,0 +1,602 @@
+{
+  "at": "2026-09-08T18:00:39+00:00",
+  "by": "codex-m006",
+  "authority": "user:2026-09-08-bring-workflow-fixes-up-to-date",
+  "source_root": "/home/mehrdad/operator/fixes",
+  "source_unchanged": true,
+  "source_files": {
+    "/home/mehrdad/operator/fixes/T1-M020/01-proposal.md": "8ce89342cb9d2835ea4e951ecc96066968eb8a914159805654a46f205efbc254",
+    "/home/mehrdad/operator/fixes/T1-M020/06-verdict.md": "3d294d68c3fc9224a9ee7a8296cfb5ee157357c30aabedef695b5034f277a285",
+    "/home/mehrdad/operator/fixes/T1-M020/04-diff.patch": "cf44850d338f5fa134afeea9ad526fa8989e9736dd67d35a4c2613e4514a19cb",
+    "/home/mehrdad/operator/fixes/T1-M020/T1_M020_BASELINE.md": "65fba98d7b3ada051a4f55da579fb550f508efd04f9092a70a720c2f1d71c444",
+    "/home/mehrdad/operator/fixes/T1-M020/PR_BODY.draft.md": "c179a243df7fa8ba42b4751524f6128a1d742d122f5aa2f0704a2e456ce77bf1",
+    "/home/mehrdad/operator/fixes/T1-M020/STATUS": "9322c5c0881880d0cbac794ce9dcfe86b822114c9c37929b332a5e108dbd0bbc",
+    "/home/mehrdad/operator/fixes/T1-M020/05-evidence.md": "2b63bd221012186b80859b313c17678f04df4b7de118f2b84aaa9f119cbdf8de",
+    "/home/mehrdad/operator/fixes/T1-A/01-proposal.md": "9f456317ada6a5f7c78ced76e5e2245bc23a8b489ae7324a0733f2983d8c6bb5",
+    "/home/mehrdad/operator/fixes/T1-A/README.md": "6e0ca0e1cf95112fe76422c0136b75b6a230484d4b51e56e89ec91661ca2e752",
+    "/home/mehrdad/operator/fixes/T1-A/verify.sh": "f872f03078846e6cc82f6c155dce917dc6ac551f2377a7c0676197aba637f298",
+    "/home/mehrdad/operator/fixes/T1-A/06-verdict.md": "8b9c5ad65b7ad9f948372d3d49267d1833b2363578040e1821c57de7593332c2",
+    "/home/mehrdad/operator/fixes/T1-A/04-diff.patch": "cebbf267d2ec26fe23b9a460d773dddbd33625582dc843b7f33a7475c9ec9409",
+    "/home/mehrdad/operator/fixes/T1-A/03-decision.md": "f1b7abaa13c5a565310def1c1d2117b0fbfce01071805274c5339ed317ab2635",
+    "/home/mehrdad/operator/fixes/T1-A/02-critique.md": "a30b82be07f8fece75e1c8ee7b8a64fcdc6c05941787164c4ca8d269fac6362d",
+    "/home/mehrdad/operator/fixes/T1-A/PR_BODY.draft.md": "dc54f90dde12c1fd9140218a488ec266f8511fa885049359945bacb9fadd0b94",
+    "/home/mehrdad/operator/fixes/T1-A/STATUS": "b1acdab3876181ff2313ce8442453533db7a934bbb7269ad4e5e03d3af21e303",
+    "/home/mehrdad/operator/fixes/T1-A/05-evidence.md": "a164044b73e4785c7062499ea56a73e4960425746e6a691b8d40402a3779efeb",
+    "/home/mehrdad/operator/fixes/T1-C/01-proposal.md": "512c53dfa61107716823ab6cd2c8881745ada1b3b150ac0132135022c34264f7",
+    "/home/mehrdad/operator/fixes/T1-C/T1_C_BASELINE.md": "2c73f169ad3c2b0f488f42188c7a761ad1b4abba1c20fd2f7e837c05bd9343d6",
+    "/home/mehrdad/operator/fixes/T1-C/04-diff.patch": "48a4479c8579c7409da5b87de599d63fcc30e3e68038d4b0a561837dfe587b63",
+    "/home/mehrdad/operator/fixes/T1-C/03-decision.md": "a5454ce3f838bfbe1ca7f557130e05832f3de699faaac23ea91f6f39b2bdc057",
+    "/home/mehrdad/operator/fixes/T1-C/02-critique.md": "310d76445804c786a92b0358064908584a434443448162e7cc258852b3101a6d",
+    "/home/mehrdad/operator/fixes/T1-C/TICKET.md": "9fc23564f424295a1017d6b48ac312ca4cecd8ed45b75204dd613423ebf641fe",
+    "/home/mehrdad/operator/fixes/T1-C/PR_BODY.draft.md": "9260068c256c207bc7054b9beae6a585296d15400625fbaffd31a7435364c518",
+    "/home/mehrdad/operator/fixes/T1-C/STATUS": "a52b6c990b4a0e95dea895565af5ca80092e82b436c006ba7d26df256bc7513e",
+    "/home/mehrdad/operator/fixes/T1-C/05-evidence.md": "5e0f607040f8ece3a377aef5a4931263a39d6bf58b631f268c46eedb5e0d9bf8",
+    "/home/mehrdad/operator/fixes/T1-M028/01-proposal.md": "c17f484c2281dd45238cc1cca1e0916119584b59a56fb96dd5d65e787e46b8ff",
+    "/home/mehrdad/operator/fixes/T1-M028/EVIDENCE_SIGNAL_FIX.md": "d440020f4ce779f75e3fa0ed20d31b5f9fef1109d8b8926da460920c4a57870f",
+    "/home/mehrdad/operator/fixes/T1-M028/02-critique-sectionA.sealed.md": "17ea34049794ce2d6ffd489bbe830fe8952d122c7e95b0cb184728142478a145",
+    "/home/mehrdad/operator/fixes/T1-M028/06-verdict.md": "49c01a6ded6c5bd37ec5c1e7cf0c968babf793fa92dcefd4cbaf134ca60b2cd6",
+    "/home/mehrdad/operator/fixes/T1-M028/03-decision.md": "a190eb8e8f18cd8d76d2b038d5f06377d2d1e9fbfc313e73349b44cff5b02d3d",
+    "/home/mehrdad/operator/fixes/T1-M028/02-critique-sectionA.seal-time": "4e7978b00424620b715c751ac3fddd1e6213d2a276f23c2bebd79bb74b978fc2",
+    "/home/mehrdad/operator/fixes/T1-M028/02-critique.md": "0f824eaee72ad3fafdb73be6833e8882b3fc3e899b517c35407a70f7cb78309d",
+    "/home/mehrdad/operator/fixes/T1-M028/PR_BODY.draft.md": "e355a3c89a49eab217593b78dd5dfc6b32036178701099fd4359ac74a235cf8f",
+    "/home/mehrdad/operator/fixes/T1-M028/02-critique-sectionA.sha256": "9ef2e1af2a709ec905bb185e0f824a12065f5cc760d08b882a9e5bc997dfd277",
+    "/home/mehrdad/operator/fixes/T1-M028/INTERACTION_M110.md": "ca761ed22cb2bd2e514af9b35860f4677e6e40c5af85c7d56616a245d08df2f7",
+    "/home/mehrdad/operator/fixes/T1-M028/STATUS": "031a3431d62b7dec5380461b27850e0505bf7cfbf63c93c7a15a0104332074d0",
+    "/home/mehrdad/operator/fixes/T1-E/01-proposal.md": "d7b4395cf19cb4643e9985c90af2ed936cffe28c038d6ba0eed5489c01e4c5e6",
+    "/home/mehrdad/operator/fixes/T1-E/04-diff.patch": "3f12fa0d64f5a0e51642f2f3e89d9a2408153485e482a1d5666b6003b3303d4e",
+    "/home/mehrdad/operator/fixes/T1-E/03-decision.md": "88ae73743ffe7f7744c2db6c3624b1e0bcfe90f154c8008bc489bc3b9089f6bf",
+    "/home/mehrdad/operator/fixes/T1-E/T1_E_BASELINE.md": "4b99c739ad939b48ff87e73fe4f8c1f5827d3a73ed545d60d47284a62b522e04",
+    "/home/mehrdad/operator/fixes/T1-E/02-critique.md": "86f9dd030da43cc0664dd805ca9586f78ffe3934ce3e88c388fd8d398288bf7e",
+    "/home/mehrdad/operator/fixes/T1-E/PR_BODY.draft.md": "01ab24a5f97f18b97c7ddc487abb7142326b027ad1b58cb90d9541a8a036efde",
+    "/home/mehrdad/operator/fixes/T1-E/STATUS": "d69025bbb02f188be7a1228b5e203801ea5b8b20f80894c8b73d746afeae97e9",
+    "/home/mehrdad/operator/fixes/T1-E/05-evidence.md": "5883e652ab4ff53b54422e6ae79ff24a42982f1d426fbce2cb8a8e8fa2563069",
+    "/home/mehrdad/operator/fixes/T1-M023/01-proposal.md": "501a5ec9667d49cd833324c8655b72e2765ffb0bc23844c5b2e739d320291ffd",
+    "/home/mehrdad/operator/fixes/T1-M023/02-critique-sectionA.sealed.md": "8b91f0f7150cfff566688c0014c6a06386814f97830ffaeaee5e6257c3d3b71c",
+    "/home/mehrdad/operator/fixes/T1-M023/06-verdict.md": "a4ce121d9e19954785e6c20e1260bee1d9945855328543fc3c2bf422296d6014",
+    "/home/mehrdad/operator/fixes/T1-M023/T1_M023_BASELINE.md": "46335e00d8841ede609ad962fdd2e5a2cb52f4efcf39ab4b9509536fb829d160",
+    "/home/mehrdad/operator/fixes/T1-M023/04-diff.patch": "4101ceae260f4a9742b7703717ee560f9f920cac9c4b24b05cd98593a16a2217",
+    "/home/mehrdad/operator/fixes/T1-M023/03-decision.md": "3fd296f13ad1834edf579e352a636db5436021b6272311c29f1b0c82565e41e8",
+    "/home/mehrdad/operator/fixes/T1-M023/02-critique-sectionA.seal-time": "605c9abf66428a8930bb3d281e3e7ff7348f015d8cd857f0e4634cd37e68c480",
+    "/home/mehrdad/operator/fixes/T1-M023/02-critique.md": "b2c808188b43081b997b4aa6e07dd06717dcf98a51c16bd99c6789f2077f80f3",
+    "/home/mehrdad/operator/fixes/T1-M023/PR_BODY.draft.md": "227bbf7aa879caeb996e3a8fd0068f263ee442e951bd68e873bd7ba1d652cf88",
+    "/home/mehrdad/operator/fixes/T1-M023/02-critique-sectionA.sha256": "0d9263309ea55b9fcfa6f637b9f1e7316919c685ac0cddc4b8b0701468a6d15c",
+    "/home/mehrdad/operator/fixes/T1-M023/STATUS": "a1d0e62b15b4ea00ff60c9b2202357b4c16c7140aac8879b14392655346477ff",
+    "/home/mehrdad/operator/fixes/T1-M023/05-evidence.md": "3e6c819113807e7421ef2c38d07e1300f19148d5d24cbc37f14be38578a23796",
+    "/home/mehrdad/operator/fixes/T1-D/01-proposal.md": "37145aa7472d0f6ceca08d923c8be9fc4592d21286e0c103b734655906ee0c40",
+    "/home/mehrdad/operator/fixes/T1-D/T1_D_BASELINE.md": "dd1d16943735dd57fbaa5234fd37efad80ca6c2b70f703d2288ac79181b80795",
+    "/home/mehrdad/operator/fixes/T1-D/04-diff.patch": "baa44b8b9efe59334de89747043859c57b68edceda13427af3ef8c4d02a7e991",
+    "/home/mehrdad/operator/fixes/T1-D/03-decision.md": "08ce769820e785a94bb7d38b9eb70b53d8ac507ed56544bce5e04b40a3f9ddbc",
+    "/home/mehrdad/operator/fixes/T1-D/02-critique.md": "99fe1775f28c05fa143e7b01a117e5cba6209e40a3443cd3e4b61fdbe91197f1",
+    "/home/mehrdad/operator/fixes/T1-D/TICKET.md": "ac9c296a3868eabc0096b1070b8105451b67dc2444fb8627f9bdc434b75d156a",
+    "/home/mehrdad/operator/fixes/T1-D/PR_BODY.draft.md": "0b6e15537d02ab75efac3f871aa45ceb62829771ee64d58f54a3ec1879d69f20",
+    "/home/mehrdad/operator/fixes/T1-D/STATUS": "6260b2dd0766b0fedeef47fa810079cad15da5b8a6309afd4fec0d3fbbe6f688",
+    "/home/mehrdad/operator/fixes/T1-D/05-evidence.md": "917a873612bf05db35f59d84f4f883edec38d1c765c5106958dd2267dbd6ae93",
+    "/home/mehrdad/operator/fixes/T0-C/06-live-verification.md": "57643cf206a30ab1b4b34dfbb01e899188035bba2c86571af84f97d4cf6045df",
+    "/home/mehrdad/operator/fixes/T0-C/01-proposal.md": "e5b2604e663d99056df4c20e10d8a7c2e39c2e0284454b32260e34d8c9bfeb8d",
+    "/home/mehrdad/operator/fixes/T0-C/README.md": "356a02bd03e78975ba5df984f11650f5805e6594f27595b74f919ace6a7c78b9",
+    "/home/mehrdad/operator/fixes/T0-C/04-diff.patch": "b03d15bcbff2948b200dba45e8f2fceb753eb77cddf039737c42edd2401c6d44",
+    "/home/mehrdad/operator/fixes/T0-C/03-decision.md": "5fc84e10d77c83157300aee0c11a5ea3a7109881bf87b978aa3ba5f68c367eef",
+    "/home/mehrdad/operator/fixes/T0-C/AUDIT_V2_GAP_MAP.md": "a38228b7d7ca3d29788e267b68755dff3d3838173a4d5b3521fdfe7479996016",
+    "/home/mehrdad/operator/fixes/T0-C/02-critique.md": "fbd532ef5a82a39f0fdd6457ba14e794011fe2eaf750f227df64d3af7f489e03",
+    "/home/mehrdad/operator/fixes/T0-C/TICKET.md": "38c4cfc1683a4ad77b79abac37f4f3b060b7e78b6e1217a8f0cd397e68e30200",
+    "/home/mehrdad/operator/fixes/T0-C/PR_BODY.draft.md": "1942ef7d07e9760699d6742388cc4340bdb60d302199fefd554f0a3ae521553c",
+    "/home/mehrdad/operator/fixes/T0-C/STATUS": "1e486f81b35cb75e79d9fd91bd57fce92042cceab61e4c9577558e9aa94a2ceb",
+    "/home/mehrdad/operator/fixes/T0-C/05-evidence.md": "b0eee1846e672ac430bd0678268ef087dc8aeb80664e253863d9ca02d047b343",
+    "/home/mehrdad/operator/fixes/M-25/01-proposal.md": "4142180873bf9e1862dae751c62d4905547bf0f7c4c4c4b993175b26b5f4ebe2",
+    "/home/mehrdad/operator/fixes/M-25/04-diff.patch": "43710a809f9e85d73ee6b02fd1d8769858f8c4b1a4f36c43331cd0bb4dd4868a",
+    "/home/mehrdad/operator/fixes/M-25/03-decision.md": "74714b0b50f93879e80c669beeae40dd3e66c934578f8a087a681bdcb80ed326",
+    "/home/mehrdad/operator/fixes/M-25/02-critique.md": "f2d2255e3ac29d8baf2c060b409fea0b965e54137816090d5c5c38d66758a100",
+    "/home/mehrdad/operator/fixes/M-25/T1_M025_BASELINE.md": "2b8bdb2c3f2e21bd4a7154dca11b8c88b8c0d7459e58cfb2456aa65ace04eef0",
+    "/home/mehrdad/operator/fixes/M-25/PR_BODY.draft.md": "ed617d4a47039bc5ee593ec4961f2092221677067b17119798a1dc6bfa2a614a",
+    "/home/mehrdad/operator/fixes/M-25/STATUS": "e0c51317b5cbf861731f106693d2c0a578e3fea1637a9da3ce8bf48bbc79a2ed",
+    "/home/mehrdad/operator/fixes/M-25/05-evidence.md": "02d2180edf27e0b7e95e03fc0d5ee0f43798ba1f1ce01367f92cb8514f6f026b",
+    "/home/mehrdad/operator/fixes/T1-M160/01-proposal.md": "79191835ec6b8d885649474ecbb3df8a44c179dc681d319e031ce1222a18142d",
+    "/home/mehrdad/operator/fixes/T1-M160/06-verdict.md": "52c13f59db4c22bbf168f8faccf2888d2d8a3933a0ef0ccd48cea5cb83a7f79a",
+    "/home/mehrdad/operator/fixes/T1-M160/04-diff.patch": "6de2d703e3db0d6cd8428eef76e6965060c5af8314a94c14a9f920fb7fa89933",
+    "/home/mehrdad/operator/fixes/T1-M160/02-critique.md": "2ea226ac71dc4ee8ca71b43cee2b682ef67b7211d2e3ca95a74c573ba6b1fbe4",
+    "/home/mehrdad/operator/fixes/T1-M160/STATUS": "3507764ca6edc0ad37d68bf21fffab4e5a6580170aabcc67258eb0300e94ac6e",
+    "/home/mehrdad/operator/fixes/T1-M160/05-evidence.md": "03ce941d8e1d1ea8943d98846e02953c26404a7d9f266c22f1815ab662dcd6c8",
+    "/home/mehrdad/operator/fixes/T1-B/01-proposal.md": "fedddd44515f19fb6f190bad20fb402ced010eff72527f1cd821960fb363edd5",
+    "/home/mehrdad/operator/fixes/T1-B/README.md": "fd5e3433464cdf397d610ecbb21e6c3acddeae99b4f154eebf164d8cf3400172",
+    "/home/mehrdad/operator/fixes/T1-B/02-critique-addendum-A1.md": "ea8976ea4a3c7d2512ad505f7ed9c82ec11db6ed1824d03541ad6fb427c74c31",
+    "/home/mehrdad/operator/fixes/T1-B/03-decision.md": "a7399f5ea0633cfd506898591eb75e1634942fcff926b30ef413b3cb6ba57c5d",
+    "/home/mehrdad/operator/fixes/T1-B/02-critique.md": "a4a0cfe6bdf842c6df0cd1831f0a8a5f562c78108dc99cba68c8a24c3d61c866",
+    "/home/mehrdad/operator/fixes/T1-B/TICKET.md": "5c1770d4955c9a2cee960de4cf51cdc738ca6454a9a60642cc6fee14b7686043",
+    "/home/mehrdad/operator/fixes/T1-B/PR_BODY.draft.md": "63d43552a3acff10b5722785287b92af26ef63e350d31fb67f165eb4b047f53b",
+    "/home/mehrdad/operator/fixes/T1-B/STATUS": "d596642032ac67f0b39d86f088012805f3e58658006b590509ebbfc0e59dd66c",
+    "/home/mehrdad/operator/fixes/T1-B/05-evidence.md": "2a18bdddf72c43f0e9c985e59d5e5d3ab6383628fc516cd46cc8e279d4e6e704",
+    "/home/mehrdad/operator/fixes/T1-M020/evidence/RED_gate.txt": "bff980c3ff4946641c1db4a5184f23064d0a6990c2932e691de22b47600aa9c6",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix-fb52e6c-SUPERSEDED-base-moved/00-anchor.txt": "872499a450228acc4577f8f4914ccfb4d85b5778121b307f16c2bf409d53b0eb",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix-fb52e6c-SUPERSEDED-base-moved/01-build.txt": "450ee14526a751680ec51b1db3588bc78fb2eaf200015d9499a934e0cca22931",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix-fb52e6c-SUPERSEDED-base-moved/03-l1-baseline.txt": "b01f8a7ebcce7d7c05b612bc57a9e6441f3b0f4e63733ca29d13414fff643de7",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix-fb52e6c-SUPERSEDED-base-moved/02-red-run.txt": "f4103377c87d417a89343763f6b01abfc6c221b22144562ba1864a8affe5c8f9",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/05-fixture-e-green.txt": "485ab43b65d930926736fa438837f632b501ec1730696b0a7760a91c1e065753",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/00-anchor.txt": "4790bdcf654a7980b315bf0c1784e9b74816a91797076f7c9707f7e5e462fdd9",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/01-build.txt": "9ac8238da27779e76b052247db226d9c6290a861e622a4f822a1b89927bc8241",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/02-green-run.txt": "4749e12ca3c55abaf04e4c996f5687e31bdf013aca43bf349b1fadbef822cdf3",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/01b-vet.txt": "00a5f1d995f1697b6f134bcca3e00d503345a5241662ca72a16f8b0ac5768294",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/04-files-changed.txt": "3919f5f0c8d7029e360935bd82ded8b90bd58bb9a386260389452d577b10096f",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/post-fix/03-l1-postfix.txt": "810ce6e3ca712dfab8507532b84333e3665fef2eff8a2f222b83926f3d0f1481",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix/00-anchor.txt": "18094b22a61967e7b36158b7c2ba099ce79c0916b51dfd59f821d54a4f3bec53",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix/01-build.txt": "9ac8238da27779e76b052247db226d9c6290a861e622a4f822a1b89927bc8241",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix/05-fixture-e-red.txt": "e4bedbe68020e8cb2c87b244596df59f2391f19bf62fd0848977424fd5cbc9ca",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix/03-l1-baseline.txt": "c733e2bb8ddfb2712c6a7203d824461ce720e212921944b0657854535f12cee0",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/pre-fix/02-red-run.txt": "f4103377c87d417a89343763f6b01abfc6c221b22144562ba1864a8affe5c8f9",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live/02-vllm-decision-record-0.4.74.json": "61040102f35322dfba43ee6e9b3d8dedbe4fc03921c153c2959496bdd3b2ed2e",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live/01-L3-post-deploy-0.4.74.md": "72c188a4848c868aeed2001b4ed95b4219b2618fa218d847a4f732ca7357707b",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live-baseline/05-vllm-decision-record-0.4.72.json": "db7d3c604a6599759adb0851d5ae561adbba05b23f6085a22ac5cc454d392200",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live-baseline/04-stage-distribution-and-N.txt": "397faa0041baca66fedc3778e0045656e905fd04e3d08ecf9d3287f9d0586907",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live-baseline/03-fleet-shape.txt": "22ef19a0d7aee89e692849740503fa5564bc93a0a939ac5b59b96f3cdf28a3b6",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live-baseline/01-deployed-tag.txt": "b96a94569f53bed586dd4683754a598b3b2383e6dcb51318dea702d978f61eed",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live-baseline/06-vram-present-flag-investigation.txt": "6ab16cb13cb36510e4281aa1bae8502bca34a2d528ab46105cebae6cda93d967",
+    "/home/mehrdad/operator/fixes/T1-A/evidence/live-baseline/02-dcgm-inventory.txt": "05fa34e1ad179da261978daea1da2a43420061f006eb00977605712ec7069dd4",
+    "/home/mehrdad/operator/fixes/T1-C/evidence/RED_phaseof.txt": "f1b5ea0fd262c25dfb749b36238977c18c0114a4df65849fc731e5d113f54e7b",
+    "/home/mehrdad/operator/fixes/T1-C/evidence/live-l3/06-verdict.md": "6f5eacdd9a2c96ae2279a1b0b701ce23500ef1a2e47bb7c6c0ecab76d7f5bbb0",
+    "/home/mehrdad/operator/fixes/T1-C/evidence/live-l3/01-joint-corpus-scans.txt": "ee823f9eed06b714bf142d1d542b637b089584b8e9c043d0f8a0f83db705e1a6",
+    "/home/mehrdad/operator/fixes/T1-C/evidence/live-l3/02-foothold-capture-0.4.84.txt": "4cea77ab88199f19a6b522a56125a35c139f251732eb94371fb6e304d3e65a29",
+    "/home/mehrdad/operator/fixes/T1-M028/evidence/GREEN_reconciled.txt": "5b1f92cbe647091e26f1521c03d4278ae867d09f67bb5782603cb7bdc19764d8",
+    "/home/mehrdad/operator/fixes/T1-M028/evidence/RED_gate.txt": "ead4395c36c5e51469f746c0e8e4e61990104293934bb3701c27ea428c2bfdfa",
+    "/home/mehrdad/operator/fixes/T1-M028/00-baseline/T1_M028_BASELINE.md": "692048a91cfc8237b51d381ff055d2e83c8193fd027ea2fec50220b0b27b3f85",
+    "/home/mehrdad/operator/fixes/T1-M028/evidence/l3/verdict.md": "f5c68242846ce7a48ae27c8fe7bf9a981becda9fe761e2682265f1f59cf812e4",
+    "/home/mehrdad/operator/fixes/T1-E/evidence/L3-verdict.md": "c8038d72fdd81abcc0a5b260f18d14ca8757617854db6c6add3faa7fa8efc86b",
+    "/home/mehrdad/operator/fixes/T1-E/evidence/RED_gate.txt": "f5d18f2be59f64e629b612184e0ff27be5d44296562637ed4c8c6e371379c773",
+    "/home/mehrdad/operator/fixes/T1-E/evidence/P3-review.md": "ad60ae88b831092374e98516b9b5936209db1963519f3f92870b3a8ebc5f5fcb",
+    "/home/mehrdad/operator/fixes/T1-M023/evidence/RED_gate.txt": "a844def2f38b34a5ee067e4861187f3cbed07ec1b601f4c5d62d4a7b0a8806a3",
+    "/home/mehrdad/operator/fixes/T1-D/evidence/L3-verdict.md": "65dc320787a52dab4eb81d9094dadbd2d8e21ef347954ddfe0dcf0991c988102",
+    "/home/mehrdad/operator/fixes/T1-D/evidence/RED_phase_vocab.txt": "77b82fb288c428343e0c6a9a2c972385f771c01d130450fe6795433bb794796a",
+    "/home/mehrdad/operator/fixes/T1-D/evidence/P3-review.md": "d3c28a0a0b6b44fcff82e8334c182e5c4b9fc8b6f6f547657e11ea094ded812a",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/L0-baseline-515c56a.txt": "cc1402d278f657bf27d82a8d4dd53f32999ef0610fcc8423ad34313d00e94d07",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/skeptic-notes.md": "0b7aab8898e587bd1f4105b3a323235a042cc8b6d78dfb793e9cc939d2951b83",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/02-critique-sectionA.sha256": "7e81818fa5652166007c27645f248e0d048d1e71c28bdc2a84840e4ba5b3eecf",
+    "/home/mehrdad/operator/fixes/T0-C/validator/report-baseline-0.4.74.json": "a4c1e8b3cc123bd7cc4f043d150758a600f092c2db59c3e9e774a5486871dd72",
+    "/home/mehrdad/operator/fixes/T0-C/validator/README.md": "bef5bc1bef2c94b11e8fc47f7533414df4e0775e329f93378b37b5a26d21bc4f",
+    "/home/mehrdad/operator/fixes/T0-C/validator/audit_trace_validator.py": "674d4d3c5130ff6e676140f95eab6a80e65b5b9ee2e540775e97b6bcd1878832",
+    "/home/mehrdad/operator/fixes/T0-C/validator/report-baseline-0.4.74.md": "9025b4f74b56b678ee0e3c6d74ac1d1e636910a87b91561ccdacb044d2fed673",
+    "/home/mehrdad/operator/fixes/T0-C/validator/run_baseline.sh": "7c467c8571543bf52fd1a68219ad9b325902764fb460a2ddbc98a9f981648449",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/02-v3-fixture-records.jsonl": "9a65b57056e6bbc2a0f631c186714a5f6ce7bca805ee4765d5ad2e3dccea6010",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/03-validator-strict-v3-on-fixtures.json": "0c94caf6afe782c51ebee197c17d14271b1cc34ca78f52d2b1acfbd7b509837e",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/03-validator-strict-v3-on-fixtures.md": "7b1d83c5ce34bfe67617c7d75a03eea2e7e6d6a571d3cec568694b3b75bd614b",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/06-skeptic-diff-review.md": "303bf66ca00685c62e0380a5551e93e8c74b1288c1e9692f4d46a2b0e0605d77",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/09-validator-strict-v3-final.md": "3274cc214722fa7dfc593ff8edc706d01ea3dfe3a5a973060de52d80d52bea5d",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/01-build-vet-test-full.txt": "10544e92b33bd2f83f84c9731d512b291a1f2b2a14e3ff916987909215e327e3",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/08-v3-fixture-records-final.jsonl": "47ab1de9f1d57cbfa0c5bd45d2b4c266577311814be311415eb99b5715139fca",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/07-after-rebase-v0.4.75.txt": "6f920bc777eb015143996d3555421f61d44e3a0e0cd1728c1f2a16d8ea5ca30d",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/05-build-vet-test-after-skeptic-fixes.txt": "c861d05fbd03111b4f7a2801bac2cf260eb747e1938ceeb1a005339e9830f2fa",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/post-fix/04-build-vet-test-after-rebase-v0.4.75.txt": "f9c515ae12513533e5355f2b06e716068882c19316f90e0f44610f4d891eff1e",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live-l3/l3-verdict-0.4.80.txt": "436e19033782e3a6f61a771055a21307b8ca5ec3576c2f2e32b5f6b5cef11bd5",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/pre-fix/01-validator-strict-v3-on-v2-records-RED.txt": "36fb654a2c3bcd34da18809fdf83cff883c4b0040be5b378201041659ff64fc5",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live/02-validator-strict-v3-0.4.80.json": "5dba1d569be08b04e34a6a97b4a60ccad86d5165e1d71b358a168af2296c6f3a",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live/02-validator-strict-v3-0.4.80.md": "ec28ec1374b28f26460de749c88f8c93c86b044e819c9fa9fe44dedabc478967",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live/02-validator-stdout.txt": "275ed8616f73de0a4f47e4e06ba3927e177b0d0deeadfa63e1d16dcf0089a2d9",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live/01-post-deploy-0.4.80-17082b7.jsonl": "81fe4732bcfe82db9df5a13fb6879e40e9f10bf9f7f2704d90eada030e6bf6d3",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live/03-size-band-measurement.md": "cfab42269caa4a887043c72eddd4390026fede50b925e1eab2314b93a89fe242",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live-baseline/01-selected-record-rotate-voice-0.4.73.json": "34ab5e80c7f053210087073d44e78edbae6c03540fd76a0c4ab2be0473f70db9",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live-baseline/00-facts.md": "a51f0a3c55cacb15782a2ef4796d7871e2baf5a6653f791be30e8b2f62a0e531",
+    "/home/mehrdad/operator/fixes/T0-C/evidence/live-baseline/02-cluster-mutation-ledger.md": "21eedc54cccabe84ba72bde989921cde80b68237fd5bc276487a2c777c7f1cd6",
+    "/home/mehrdad/operator/fixes/M-25/evidence/RED_downgrade.txt": "a6fb01520808fb434739fd0c903b62493c6af2c1931e304c521298be6a5a556c",
+    "/home/mehrdad/operator/fixes/M-25/evidence/live-l3/06-verdict.md": "0c3e94352038d7ba38e1567128a1717d05a40cfb1bbef0b232373809c39177b4",
+    "/home/mehrdad/operator/fixes/M-25/evidence/live-l3/01-joint-corpus-scans.txt": "ee823f9eed06b714bf142d1d542b637b089584b8e9c043d0f8a0f83db705e1a6",
+    "/home/mehrdad/operator/fixes/M-25/evidence/live-l3/02-foothold-capture-0.4.84.txt": "4cea77ab88199f19a6b522a56125a35c139f251732eb94371fb6e304d3e65a29",
+    "/home/mehrdad/operator/fixes/T1-M160/evidence/RED_gate.txt": "05eb802e6c112ef70830095bb9b8d186f917e70fb981edcd74b14194bd8b34bd",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/02-critique-addendum-A1.seal-time": "69c7622c001c7990d8cc0944f696fc06992637e966e56f2b44e2fa7d9012aa91",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/02-critique-sectionA.sealed.md": "c6bc74e8ae0dba929f737ad59f52386862e13b8d2c12c9ec26d83911c75c1b28",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/02-critique-addendum-A1.sha256": "e78a51920e1b73c2f0e00509e9847c3a08db7defaffdc76e8b5338d54bedfa99",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/02-critique-sectionA.seal-time": "e4ca54138c324014ef7a1fccf4ba83372fa3fd5a4afcc6f4ea956759d3146240",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/02-critique-sectionA.sha256": "6d55f1fa6ed805e1ee63c0f20a990c24509d86e95ab0c639fb7fd91cc6784b80",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/post-fix/02-final-touched-packages.txt": "9891e5aacbb7d1f14f8c1716fe85c3aa0cc37ba10e6f86145dc005c2632fd2ce",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/post-fix/03-after-rebase-v0.4.81.txt": "fbb223ee7f10635b681377407fccf99509e6dbcd97cae86e9430b63c368aea6e",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/post-fix/01-build-vet-test-full.txt": "53b30bca5b36626395ddd47d7450a7f3438ec7af530612d2f14483a7028f50c9",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/live-l3/06-verdict.md": "b491e8d83a0bf6f9b906af145cfedd8937076b1b5d3bcf3d4b237763372ac04f",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/live-l3/01-joint-corpus-scans.txt": "ee823f9eed06b714bf142d1d542b637b089584b8e9c043d0f8a0f83db705e1a6",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/live-l3/02-foothold-capture-0.4.84.txt": "4cea77ab88199f19a6b522a56125a35c139f251732eb94371fb6e304d3e65a29",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/pre-fix/01-stage-dwell-RED-b418692.txt": "113845b114e524ca3f4312bc596fb10d3d67deaf65f1ec03bc3f5b415332eaae",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/live-baseline/00-facts.md": "d8291a9d0933bc06ff52ee7cfdf759d804444a8c578a6544ef74b7062eb0d931",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/live-baseline/01-field-distributions-0.4.80.txt": "bc2b583ce5dfff691acbffba3f7f7b68924b273e5289e57ee2c2a38c95ea5665",
+    "/home/mehrdad/operator/fixes/T1-B/evidence/live-baseline/02-last-record-per-pod.json": "ed90818f3ebdd7724cee7b3135a7eb8eb618ab72d180fb08d5cf48aa2d2543b6"
+  },
+  "imports_and_derived_files": [
+    {
+      "path": "fixes/T1-M020/04-diff.patch",
+      "source": "/home/mehrdad/operator/fixes/T1-M020/04-diff.patch",
+      "sha256": "cf44850d338f5fa134afeea9ad526fa8989e9736dd67d35a4c2613e4514a19cb",
+      "bytes": 18125
+    },
+    {
+      "path": "fixes/T1-M020/STATUS",
+      "source": "/home/mehrdad/operator/fixes/T1-M020/STATUS",
+      "sha256": "9322c5c0881880d0cbac794ce9dcfe86b822114c9c37929b332a5e108dbd0bbc",
+      "bytes": 2652
+    },
+    {
+      "path": "fixes/T1-M023/04-diff.patch",
+      "source": "/home/mehrdad/operator/fixes/T1-M023/04-diff.patch",
+      "sha256": "4101ceae260f4a9742b7703717ee560f9f920cac9c4b24b05cd98593a16a2217",
+      "bytes": 45343
+    },
+    {
+      "path": "fixes/T1-M023/STATUS",
+      "source": "/home/mehrdad/operator/fixes/T1-M023/STATUS",
+      "sha256": "a1d0e62b15b4ea00ff60c9b2202357b4c16c7140aac8879b14392655346477ff",
+      "bytes": 3986
+    },
+    {
+      "path": "fixes/T1-M028/00-baseline/T1_M028_BASELINE.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/00-baseline/T1_M028_BASELINE.md",
+      "sha256": "692048a91cfc8237b51d381ff055d2e83c8193fd027ea2fec50220b0b27b3f85",
+      "bytes": 5672
+    },
+    {
+      "path": "fixes/T1-M028/01-proposal.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/01-proposal.md",
+      "sha256": "c17f484c2281dd45238cc1cca1e0916119584b59a56fb96dd5d65e787e46b8ff",
+      "bytes": 7102
+    },
+    {
+      "path": "fixes/T1-M028/02-critique-sectionA.seal-time",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/02-critique-sectionA.seal-time",
+      "sha256": "4e7978b00424620b715c751ac3fddd1e6213d2a276f23c2bebd79bb74b978fc2",
+      "bytes": 21
+    },
+    {
+      "path": "fixes/T1-M028/02-critique-sectionA.sealed.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/02-critique-sectionA.sealed.md",
+      "sha256": "17ea34049794ce2d6ffd489bbe830fe8952d122c7e95b0cb184728142478a145",
+      "bytes": 6283
+    },
+    {
+      "path": "fixes/T1-M028/02-critique-sectionA.sha256",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/02-critique-sectionA.sha256",
+      "sha256": "9ef2e1af2a709ec905bb185e0f824a12065f5cc760d08b882a9e5bc997dfd277",
+      "bytes": 65
+    },
+    {
+      "path": "fixes/T1-M028/02-critique.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/02-critique.md",
+      "sha256": "0f824eaee72ad3fafdb73be6833e8882b3fc3e899b517c35407a70f7cb78309d",
+      "bytes": 5056
+    },
+    {
+      "path": "fixes/T1-M028/03-decision.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/03-decision.md",
+      "sha256": "a190eb8e8f18cd8d76d2b038d5f06377d2d1e9fbfc313e73349b44cff5b02d3d",
+      "bytes": 2094
+    },
+    {
+      "path": "fixes/T1-M028/evidence/p3/verdict.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/06-verdict.md",
+      "sha256": "49c01a6ded6c5bd37ec5c1e7cf0c968babf793fa92dcefd4cbaf134ca60b2cd6",
+      "bytes": 10426
+    },
+    {
+      "path": "fixes/T1-M028/EVIDENCE_SIGNAL_FIX.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/EVIDENCE_SIGNAL_FIX.md",
+      "sha256": "d440020f4ce779f75e3fa0ed20d31b5f9fef1109d8b8926da460920c4a57870f",
+      "bytes": 3012
+    },
+    {
+      "path": "fixes/T1-M028/INTERACTION_M110.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/INTERACTION_M110.md",
+      "sha256": "ca761ed22cb2bd2e514af9b35860f4677e6e40c5af85c7d56616a245d08df2f7",
+      "bytes": 3578
+    },
+    {
+      "path": "fixes/T1-M028/PR_BODY.draft.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/PR_BODY.draft.md",
+      "sha256": "e355a3c89a49eab217593b78dd5dfc6b32036178701099fd4359ac74a235cf8f",
+      "bytes": 3043
+    },
+    {
+      "path": "fixes/T1-M028/STATUS",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/STATUS",
+      "sha256": "031a3431d62b7dec5380461b27850e0505bf7cfbf63c93c7a15a0104332074d0",
+      "bytes": 5520
+    },
+    {
+      "path": "fixes/T1-M028/evidence/GREEN_reconciled.txt",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/evidence/GREEN_reconciled.txt",
+      "sha256": "5b1f92cbe647091e26f1521c03d4278ae867d09f67bb5782603cb7bdc19764d8",
+      "bytes": 2165
+    },
+    {
+      "path": "fixes/T1-M028/evidence/RED_gate.txt",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/evidence/RED_gate.txt",
+      "sha256": "ead4395c36c5e51469f746c0e8e4e61990104293934bb3701c27ea428c2bfdfa",
+      "bytes": 2823
+    },
+    {
+      "path": "fixes/T1-M028/evidence/l3/verdict.md",
+      "source": "/home/mehrdad/operator/fixes/T1-M028/evidence/l3/verdict.md",
+      "sha256": "f5c68242846ce7a48ae27c8fe7bf9a981becda9fe761e2682265f1f59cf812e4",
+      "bytes": 4234
+    },
+    {
+      "path": "fixes/T1-M160/STATUS",
+      "source": "/home/mehrdad/operator/fixes/T1-M160/STATUS",
+      "sha256": "3507764ca6edc0ad37d68bf21fffab4e5a6580170aabcc67258eb0300e94ac6e",
+      "bytes": 2155
+    },
+    {
+      "path": "fixes/T1-E/evidence/reconciliation/2026-09-08-previous-status.yaml",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/T1-E/STATUS.yaml",
+      "sha256": "21ef8af9568b0c5a89d51f194009e507950b65a8bcbe741b2115e035dfc4e9f9",
+      "bytes": 1874
+    },
+    {
+      "path": "fixes/T1-M020/evidence/reconciliation/2026-09-08-previous-status.yaml",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/T1-M020/STATUS.yaml",
+      "sha256": "d3f3e3f709977a4e857e0d447674319fa47498ab084d9f2aa392f44e7c600370",
+      "bytes": 2036
+    },
+    {
+      "path": "fixes/T1-M023/evidence/reconciliation/2026-09-08-previous-status.yaml",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/T1-M023/STATUS.yaml",
+      "sha256": "e3f739594a854c44f50667c5e6fa26d9fd6d0b186f37dc3b01b8fc24aa01035b",
+      "bytes": 2048
+    },
+    {
+      "path": "fixes/T1-M028/evidence/reconciliation/2026-09-08-previous-status.yaml",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/T1-M028/STATUS.yaml",
+      "sha256": "e0ef0b8e4bf2803614840678a4b9dcddd5a1b63a2535230eb71833b93fbd4fc4",
+      "bytes": 2030
+    },
+    {
+      "path": "fixes/T1-M160/evidence/reconciliation/2026-09-08-previous-status.yaml",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/T1-M160/STATUS.yaml",
+      "sha256": "a2a00a103a94211913a832ae1bc4b24ba2bf99dbd8ac3990a0a07f6d243590b7",
+      "bytes": 1965
+    },
+    {
+      "path": "fixes/T1-M160/04-diff.patch",
+      "source": "git diff --binary recorded-base recorded-head",
+      "sha256": "7720c09bb8def6217ad6a7e3abcd845ba7598e99434d62a1b7678935d772515f",
+      "bytes": 11681
+    },
+    {
+      "path": "fixes/T1-M028/04-diff.patch",
+      "source": "git diff --binary recorded-base recorded-head",
+      "sha256": "673c345da85337f3e02a4e5b36af278f013622486fb27e2eb2549b0be0bc2d43",
+      "bytes": 30034
+    },
+    {
+      "path": "fixes/T1-M020/evidence/reconciliation/rebase-equivalence.txt",
+      "source": "git range-diff",
+      "sha256": "b4d340bcef14f2cd0f7abfd8014c672fbc299b431130782e15465a89ee807056",
+      "bytes": 135
+    },
+    {
+      "path": "fixes/T1-M023/evidence/reconciliation/rebase-equivalence.txt",
+      "source": "git range-diff",
+      "sha256": "8d67ae5b979dfece288820cc2a432beff3c8096e67bd4b75ccc63804e4e0e4b8",
+      "bytes": 151
+    },
+    {
+      "path": "fixes/T1-M160/evidence/reconciliation/rebase-equivalence.txt",
+      "source": "git range-diff",
+      "sha256": "4ec068fa866ece34f266b9a9f76db4086da22b82785c2731c8d95f9ae4877fb5",
+      "bytes": 148
+    },
+    {
+      "path": "fixes/T1-M028/evidence/reconciliation/deployment-observation.json",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/M-6/evidence/baseline/cluster.json",
+      "sha256": "6a2b8425e52bdfb04c348a88a6490bbef2d96c253de338c0fad6b668baba1778",
+      "bytes": 321186
+    },
+    {
+      "path": "fixes/T1-E/evidence/re-L3-M160-verdict.md",
+      "source": "/home/mehrdad/operator-workflow/workflow/fixes/T1-M160/evidence/l3/verdict.md",
+      "sha256": "c815d78104d39cb7d85d2e73db1155d09df366da1476abd899cf38c3554280e0",
+      "bytes": 2973
+    },
+    {
+      "path": "fixes/T1-E/RECONCILIATION.md",
+      "source": "reconciliation-derived",
+      "sha256": "d83854d1affe7f4f079805a339dfb66614fec1ec21f81c5786ed72ffb776cfe3",
+      "bytes": 1228
+    },
+    {
+      "path": "fixes/T1-E/STATUS.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "59bb7d175f6f5608e2867ca6b6e5ce45b46a38462e3b91d5a4d5e40fea2620f8",
+      "bytes": 3120
+    },
+    {
+      "path": "fixes/T1-E/evidence/manifest.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "9fedb0565b1e3789dc16d8f0b6f0bef4fe6768b09b25593b032429911226d613",
+      "bytes": 5294
+    },
+    {
+      "path": "fixes/T1-M020/RECONCILIATION.md",
+      "source": "reconciliation-derived",
+      "sha256": "bf72deffef2cee558803243e5f4e2f33fe2bfb235612066522707950c8482569",
+      "bytes": 1233
+    },
+    {
+      "path": "fixes/T1-M020/STATUS.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "cd2841c559444d400cd4a65e26ecf04638a3860145aaef4b14d47a611ba59340",
+      "bytes": 3054
+    },
+    {
+      "path": "fixes/T1-M020/evidence/manifest.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "53aa8491a6df377ce4741f285b356e0dcbb6606da82e4e82dc03e5930bc4bd98",
+      "bytes": 4643
+    },
+    {
+      "path": "fixes/T1-M023/RECONCILIATION.md",
+      "source": "reconciliation-derived",
+      "sha256": "15f79019819dac7421e0ed6dc69b548c711ef0fb24facea7696af9165467223d",
+      "bytes": 1253
+    },
+    {
+      "path": "fixes/T1-M023/STATUS.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "1b28391bed741737be870f0a315217da9e55c4069b288b0720faedf0f04969a8",
+      "bytes": 3190
+    },
+    {
+      "path": "fixes/T1-M023/evidence/manifest.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "b2ba3e561013a62e2e13b2c70e062eb773ce0a0c963d3cd2eb9855cb0b3495e3",
+      "bytes": 6549
+    },
+    {
+      "path": "fixes/T1-M028/RECONCILIATION.md",
+      "source": "reconciliation-derived",
+      "sha256": "adf14d69c67861e440972a2e5fe729e67bb01a31cf423880baf4f243909891f7",
+      "bytes": 1405
+    },
+    {
+      "path": "fixes/T1-M028/05-evidence.md",
+      "source": "reconciliation-derived",
+      "sha256": "10bfdee9a6e97a9d33998436569cdcb9b32349529f97602eb81d3ca9211391ec",
+      "bytes": 860
+    },
+    {
+      "path": "fixes/T1-M028/STATUS.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "7374eb5780906106495b361d771541ae34d8d873b1cf5beb7420064948bfd7a2",
+      "bytes": 3807
+    },
+    {
+      "path": "fixes/T1-M028/evidence/manifest.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "7c7896e75192593765f943dc28e0b1b7fdf122ff81cc195ba545f6b28244aac1",
+      "bytes": 7857
+    },
+    {
+      "path": "fixes/T1-M160/RECONCILIATION.md",
+      "source": "reconciliation-derived",
+      "sha256": "86a93892f8f9917f24e054340b1ed648298e73c22c120916d08144e0c6aac508",
+      "bytes": 1302
+    },
+    {
+      "path": "fixes/T1-M160/STATUS.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "2fee65e9d8ab63a90cad0fbf251aa332eb99cdb06c3232092f0c88b246b48637",
+      "bytes": 3092
+    },
+    {
+      "path": "fixes/T1-M160/evidence/manifest.yaml",
+      "source": "reconciliation-derived",
+      "sha256": "b5ad96755338bb87f181422088995602d1a0f6b9daa8d08220c1262c8a108265",
+      "bytes": 4258
+    }
+  ],
+  "previous_versions": [
+    {
+      "path": "fixes/T1-M020/04-diff.patch",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M020/04-diff.patch",
+      "sha256": "de9e1a52b22df2f03a24d7aa331b0a5fd7bc12318c5ca0b8bd0f12e1328af9ad"
+    },
+    {
+      "path": "fixes/T1-M020/STATUS",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M020/STATUS",
+      "sha256": "23b62ed18aa5501772a732e8abf2321d995e8ded3209bc27a8614d5841847186"
+    },
+    {
+      "path": "fixes/T1-M023/04-diff.patch",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M023/04-diff.patch",
+      "sha256": "be4cfaaa8c08ea81c21669a910278658a285264fa08ed922bf1e3558e1eed75d"
+    },
+    {
+      "path": "fixes/T1-M023/STATUS",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M023/STATUS",
+      "sha256": "f07be0b7018460111c9579b42c6347aabe6adbb122c5976687eff18e64889308"
+    },
+    {
+      "path": "fixes/T1-M028/STATUS",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M028/STATUS",
+      "sha256": "578e1266a1dd9b9b5fe84df7d84f18411d441577151fb54ba9c50338b3fce383"
+    },
+    {
+      "path": "fixes/T1-M160/STATUS",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M160/STATUS",
+      "sha256": "7bfc810006559b60ad69a0000a6e2feb67628d2f4ad9a7132145d60a79e70b26"
+    },
+    {
+      "path": "fixes/T1-M160/04-diff.patch",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M160/04-diff.patch",
+      "sha256": "6de2d703e3db0d6cd8428eef76e6965060c5af8314a94c14a9f920fb7fa89933"
+    },
+    {
+      "path": "fixes/T1-E/STATUS.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-E/STATUS.yaml",
+      "sha256": "21ef8af9568b0c5a89d51f194009e507950b65a8bcbe741b2115e035dfc4e9f9"
+    },
+    {
+      "path": "fixes/T1-E/evidence/manifest.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-E/evidence/manifest.yaml",
+      "sha256": "bb03f6ac28e0b2c870f7f95a55083f69baf96024e0bab4cdfc7d802f3aee4d0e"
+    },
+    {
+      "path": "fixes/T1-M020/STATUS.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M020/STATUS.yaml",
+      "sha256": "d3f3e3f709977a4e857e0d447674319fa47498ab084d9f2aa392f44e7c600370"
+    },
+    {
+      "path": "fixes/T1-M020/evidence/manifest.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M020/evidence/manifest.yaml",
+      "sha256": "c14be32afdde9b3c233f71f5ad7104c8c7635326e8531c06882f90446207ae4d"
+    },
+    {
+      "path": "fixes/T1-M023/STATUS.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M023/STATUS.yaml",
+      "sha256": "e3f739594a854c44f50667c5e6fa26d9fd6d0b186f37dc3b01b8fc24aa01035b"
+    },
+    {
+      "path": "fixes/T1-M023/evidence/manifest.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M023/evidence/manifest.yaml",
+      "sha256": "0874948cc0cac445890c7cc24ef835f35d76e6fb99901757f15cd0cd1c56cfa6"
+    },
+    {
+      "path": "fixes/T1-M028/STATUS.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M028/STATUS.yaml",
+      "sha256": "e0ef0b8e4bf2803614840678a4b9dcddd5a1b63a2535230eb71833b93fbd4fc4"
+    },
+    {
+      "path": "fixes/T1-M028/evidence/manifest.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M028/evidence/manifest.yaml",
+      "sha256": "a97ba4eb6d1fbb08cd612cc7eeb04cbe980774e0779d5ad3ce9866239d7ad0e9"
+    },
+    {
+      "path": "fixes/T1-M160/STATUS.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M160/STATUS.yaml",
+      "sha256": "a2a00a103a94211913a832ae1bc4b24ba2bf99dbd8ac3990a0a07f6d243590b7"
+    },
+    {
+      "path": "fixes/T1-M160/evidence/manifest.yaml",
+      "backup": "acceptance/2026-09-08-fix-reconciliation/before/fixes/T1-M160/evidence/manifest.yaml",
+      "sha256": "22cc36beff64219c60944bacdb922c16f6ecc5e661d1f93b6ade5743ce067fb1"
+    }
+  ],
+  "large_files_already_indexed": [
+    {
+      "source": "/home/mehrdad/operator/fixes/T0-C/evidence/live/01-post-deploy-0.4.80-17082b7.jsonl",
+      "sha256": "81fe4732bcfe82db9df5a13fb6879e40e9f10bf9f7f2704d90eada030e6bf6d3",
+      "reason": "already hash-indexed local-original; intentionally not copied into Git"
+    },
+    {
+      "source": "/home/mehrdad/operator/fixes/T0-C/evidence/live/02-validator-strict-v3-0.4.80.json",
+      "sha256": "5dba1d569be08b04e34a6a97b4a60ccad86d5165e1d71b358a168af2296c6f3a",
+      "reason": "already hash-indexed local-original; intentionally not copied into Git"
+    },
+    {
+      "source": "/home/mehrdad/operator/fixes/T0-C/evidence/live/02-validator-strict-v3-0.4.80.md",
+      "sha256": "ec28ec1374b28f26460de749c88f8c93c86b044e819c9fa9fe44dedabc478967",
+      "reason": "already hash-indexed local-original; intentionally not copied into Git"
+    }
+  ],
+  "states": {
+    "T1-E": "CLOSED",
+    "T1-M020": "CLOSED",
+    "T1-M023": "DEPLOYED",
+    "T1-M028": "CLOSED",
+    "T1-M160": "CLOSED"
+  },
+  "active_cycles_untouched": [
+    "M-6",
+    "T1-M079"
+  ]
+}

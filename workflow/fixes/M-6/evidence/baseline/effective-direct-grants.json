@@ -1,0 +1,556 @@
+{
+  "source": "cluster.json",
+  "principal": "system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+  "groups": [
+    "system:authenticated",
+    "system:serviceaccounts",
+    "system:serviceaccounts:phorvex-system"
+  ],
+  "scope": "Direct role and standard service-account-group grants from the captured snapshot; not a full alternate-credential/indirect-compromise analysis.",
+  "grants": [
+    {
+      "binding": "phorvex-actuation",
+      "namespace": "litellm",
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "phorvex-actuation"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "delete",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/ephemeralcontainers"
+          ],
+          "verbs": [
+            "get",
+            "create",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "create",
+            "update",
+            "patch",
+            "delete"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "services"
+          ],
+          "verbs": [
+            "get",
+            "update",
+            "patch"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "phorvex-leader-election",
+      "namespace": "phorvex-system",
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "phorvex-leader-election"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            "coordination.k8s.io"
+          ],
+          "resources": [
+            "leases"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "create",
+            "update",
+            "patch",
+            "delete"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "create",
+            "patch"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "phorvex-actuation",
+      "namespace": "vllm",
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "phorvex-actuation"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "delete",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/ephemeralcontainers"
+          ],
+          "verbs": [
+            "get",
+            "create",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "create",
+            "update",
+            "patch",
+            "delete"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "services"
+          ],
+          "verbs": [
+            "get",
+            "update",
+            "patch"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "phorvex-feasibility-read",
+      "namespace": null,
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "phorvex-feasibility-read"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            "policy"
+          ],
+          "resources": [
+            "poddisruptionbudgets"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods",
+            "services",
+            "endpoints"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "replicasets",
+            "deployments",
+            "statefulsets"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "discovery.k8s.io"
+          ],
+          "resources": [
+            "endpointslices"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "phorvex-phorvex-manager-rolebinding",
+      "namespace": null,
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "phorvex-phorvex-manager-role"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods",
+            "namespaces",
+            "nodes",
+            "services",
+            "configmaps"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "create",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "rbac.authorization.k8s.io"
+          ],
+          "resources": [
+            "roles",
+            "clusterroles",
+            "rolebindings",
+            "clusterrolebindings"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "amtd.r6security.com"
+          ],
+          "resources": [
+            "securityevents"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "create",
+            "update",
+            "patch",
+            "delete"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/log"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/exec"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "amtd.r6security.com"
+          ],
+          "resources": [
+            "adaptivemovingtargetdefenses"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "create",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "phorvex.ai"
+          ],
+          "resources": [
+            "phorvexpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "phorvex.ai"
+          ],
+          "resources": [
+            "phorvexpolicies/status"
+          ],
+          "verbs": [
+            "get",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "phorvex.ai"
+          ],
+          "resources": [
+            "phorvexpolicies/finalizers"
+          ],
+          "verbs": [
+            "update"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "system:basic-user",
+      "namespace": null,
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "system:basic-user"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "system:discovery",
+      "namespace": null,
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "system:discovery"
+      },
+      "rules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "system:public-info-viewer",
+      "namespace": null,
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "system:public-info-viewer"
+      },
+      "rules": [
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    },
+    {
+      "binding": "system:service-account-issuer-discovery",
+      "namespace": null,
+      "role": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "system:service-account-issuer-discovery"
+      },
+      "rules": [
+        {
+          "nonResourceURLs": [
+            "/.well-known/openid-configuration",
+            "/.well-known/openid-configuration/",
+            "/openid/v1/jwks",
+            "/openid/v1/jwks/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    }
+  ]
+}

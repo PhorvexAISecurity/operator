@@ -1,0 +1,14 @@
+# 01 — Deployed image tag (bus 257 fact 1)
+
+Command (via SSH to cluster jumphost, 2026-09-02 ~13:10 UTC):
+
+    kubectl -n phorvex-system get deploy phorvex-phorvex -o jsonpath="{.spec.template.spec.containers[*].image}"
+
+Output:
+
+    753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.72 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console:0.4.72
+
+**Deployed = `phorvex:0.4.72`**, which is the tag of the branch base commit `016361c`. The cluster moved
+0.4.67 → 0.4.72 within the last ~24h (brain pod `phorvex-phorvex-69d7f869d7-j6xsg` restarted ~13:00 UTC).
+Trace v2 fields exist (≥ v0.4.68 confirmed — see 05's `decisionTrace` block, schemaVersion
+`phorvex.decision-trace.v2`, `brainImage` = 0.4.72, `gitSHA` = ad4d3b8).

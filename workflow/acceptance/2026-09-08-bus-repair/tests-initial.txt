@@ -1,0 +1,279 @@
+test_campaign_can_report_failure_but_requires_cleanup (test_attacks.AttackIntegrationTests.test_campaign_can_report_failure_but_requires_cleanup) ... ok
+test_campaign_transition_and_aggregate_attestation_consume_plan (test_attacks.AttackIntegrationTests.test_campaign_transition_and_aggregate_attestation_consume_plan) ... ok
+test_catalogue_and_aliases (test_attacks.AttackIntegrationTests.test_catalogue_and_aliases) ... ok
+test_doctor_resolves_campaign_evidence_from_its_round (test_attacks.AttackIntegrationTests.test_doctor_resolves_campaign_evidence_from_its_round) ... ok
+test_evidence_is_portable_and_tamper_blocks_gate (test_attacks.AttackIntegrationTests.test_evidence_is_portable_and_tamper_blocks_gate) ... ok
+test_health_runner_fails_for_unready_targets (test_attacks.AttackIntegrationTests.test_health_runner_fails_for_unready_targets) ... ok
+test_missing_capability_is_blocked_not_silently_excluded (test_attacks.AttackIntegrationTests.test_missing_capability_is_blocked_not_silently_excluded) ... ok
+test_nonexecution_cannot_claim_defense_and_health_cannot_pass_l3 (test_attacks.AttackIntegrationTests.test_nonexecution_cannot_claim_defense_and_health_cannot_pass_l3) ... ok
+test_pass_requires_oracles_real_signal_bounded_execution_and_role (test_attacks.AttackIntegrationTests.test_pass_requires_oracles_real_signal_bounded_execution_and_role) ... ok
+test_plan_transaction_rolls_back_partial_writes (test_attacks.AttackIntegrationTests.test_plan_transaction_rolls_back_partial_writes) ... ok
+test_preflight_only_gets_explicit_context_and_omits_sensitive_fields (test_attacks.AttackIntegrationTests.test_preflight_only_gets_explicit_context_and_omits_sensitive_fields) ... ok
+test_replace_keeps_history_and_requires_new_result (test_attacks.AttackIntegrationTests.test_replace_keeps_history_and_requires_new_result) ... ok
+test_targets_cannot_escape_preflight_scope (test_attacks.AttackIntegrationTests.test_targets_cannot_escape_preflight_scope) ... ok
+test_wrong_pin_or_absent_scope_rejected (test_attacks.AttackIntegrationTests.test_wrong_pin_or_absent_scope_rejected) ... ok
+test_failure_retries_without_losing_message (test_bus.BusTransportTests.test_failure_retries_without_losing_message) ... created campaigns/2026-09-07-evidence-root
+BUS_QUEUE_FAILED 000001-author-test.md: queue exited 1: offline
+BUS_QUEUED 000001-author-test.md
+ok
+test_monitor_includes_existing_by_default (test_bus.BusTransportTests.test_monitor_includes_existing_by_default) ... ok
+test_new_message_delivered_after_previous_archived (test_bus.BusTransportTests.test_new_message_delivered_after_previous_archived) ... BUS_QUEUED 000001-author-test.md
+/tmp/tmpr5wstlwg/archive/2026/000001-author-test.md
+BUS_QUEUED 000002-author-test.md
+ok
+test_other_recipient_and_acknowledged_mail_not_delivered (test_bus.BusTransportTests.test_other_recipient_and_acknowledged_mail_not_delivered) ... ok
+test_success_persists_and_restart_does_not_requeue (test_bus.BusTransportTests.test_success_persists_and_restart_does_not_requeue) ... /tmp/tmpbvm55ku3/archive/2026/000001-author-test.md
+BUS_QUEUED 000001-author-test.md
+ok
+test_timeout_remains_unqueued (test_bus.BusTransportTests.test_timeout_remains_unqueued) ... BUS_QUEUE_FAILED 000001-author-test.md: Command '['/codex', 'queue', '--thread', 'thread-1', '--message', "[Automated Phorvex bus notification; peer message, not user approval.] Inbox for reviewer: /tmp/tmprhwqhxa3/inbox/reviewer/000001-author-test.md. Read the message and the subject's current workflow status, perform only already-authorized work in your assigned role, reply through the bus if requested, and acknowledge when handled. Duplicate notifications are possible; an archived/acknowledged message needs no repeat action. Do not create another agent or change roles."]' timed out after 20 seconds
+ok
+test_wait_finishes_when_empty (test_bus.BusTransportTests.test_wait_finishes_when_empty) ... ok
+test_wait_returns_existing_without_ack (test_bus.BusTransportTests.test_wait_returns_existing_without_ack) ... ok
+test_blind_packet_omits_implementation_and_proposal (test_contracts.HarnessContracts.test_blind_packet_omits_implementation_and_proposal) ... ok
+test_changed_verification_plan_invalidates_decision (test_contracts.HarnessContracts.test_changed_verification_plan_invalidates_decision) ... ok
+test_configure_cannot_forge_state_or_checks (test_contracts.HarnessContracts.test_configure_cannot_forge_state_or_checks) ... FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: stale revision; read brief again
+ok
+test_duplicate_transition_is_rejected_without_lost_history (test_contracts.HarnessContracts.test_duplicate_transition_is_rejected_without_lost_history) ... FAIL: stale/missing revision; read brief again (current revision 1)
+ok
+test_every_forward_stage_rejects_empty_template (test_contracts.HarnessContracts.test_every_forward_stage_rejects_empty_template) ... ok
+test_force_cannot_bypass_any_forward_gate (test_contracts.HarnessContracts.test_force_cannot_bypass_any_forward_gate) ... FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+ok
+test_fresh_cycle_reaches_pr_ready_through_real_commands (test_contracts.HarnessContracts.test_fresh_cycle_reaches_pr_ready_through_real_commands) ... ok
+test_green_checks_without_incident_cannot_pass_p3_or_pr_gate (test_contracts.HarnessContracts.test_green_checks_without_incident_cannot_pass_p3_or_pr_gate) ... FAIL: P3 requires independent incident evidence: checks.incident: needs PASS evidence or an explicit NOT_REQUIRED ruling
+ok
+test_incident_pins_both_sources_and_changed_evidence_requires_new_p3 (test_contracts.HarnessContracts.test_incident_pins_both_sources_and_changed_evidence_requires_new_p3) ... ok
+test_incident_requires_independent_signer_and_cannot_be_waived (test_contracts.HarnessContracts.test_incident_requires_independent_signer_and_cannot_be_waived) ... FAIL: check must be signed by reviewer
+FAIL: independent review cannot be signed by an author
+FAIL: waiver needs an eligible level, approval reference and rationale
+ok
+test_new_evidence_manifest_conforms_to_schema (test_contracts.HarnessContracts.test_new_evidence_manifest_conforms_to_schema) ... ok
+test_new_fix_does_not_ship_a_final_verdict (test_contracts.HarnessContracts.test_new_fix_does_not_ship_a_final_verdict) ... ok
+test_register_header_uses_metadata_not_historical_claim (test_contracts.HarnessContracts.test_register_header_uses_metadata_not_historical_claim) ... ok
+test_same_author_and_old_build_evidence_cannot_close (test_contracts.HarnessContracts.test_same_author_and_old_build_evidence_cannot_close) ... ok
+test_seal_is_owned_revision_checked_and_immutable (test_contracts.HarnessContracts.test_seal_is_owned_revision_checked_and_immutable) ... FAIL: only the assigned skeptic may seal
+FAIL: stale/missing revision; read brief again
+ok
+test_startup_context_budget (test_contracts.HarnessContracts.test_startup_context_budget) ... FAIL
+test_unindexed_or_changed_patch_is_not_evidence (test_contracts.HarnessContracts.test_unindexed_or_changed_patch_is_not_evidence) ... ok
+test_valid_snapshot_passes_and_tampering_fails (test_contracts.HarnessContracts.test_valid_snapshot_passes_and_tampering_fails) ... ok
+test_ambiguous_dedup_cannot_allocate_an_issue (test_operations.AgentOperationsTests.test_ambiguous_dedup_cannot_allocate_an_issue) ... ok
+test_anatomy_publish_rejects_latest_main_when_deploy_is_older (test_operations.AgentOperationsTests.test_anatomy_publish_rejects_latest_main_when_deploy_is_older) ... ok
+test_campaign_can_link_only_a_tracked_intake_finding (test_operations.AgentOperationsTests.test_campaign_can_link_only_a_tracked_intake_finding) ... ok
+test_every_declared_state_edge_targets_a_known_state (test_operations.AgentOperationsTests.test_every_declared_state_edge_targets_a_known_state) ... ok
+test_force_cannot_skip_fix_closure_prerequisites (test_operations.AgentOperationsTests.test_force_cannot_skip_fix_closure_prerequisites) ... ok
+test_fresh_agent_matrix_covers_every_operation (test_operations.AgentOperationsTests.test_fresh_agent_matrix_covers_every_operation) ... ok
+test_issue_allocator_skips_existing_number (test_operations.AgentOperationsTests.test_issue_allocator_skips_existing_number) ... ok
+test_issue_transition_cannot_close_or_mark_deployed (test_operations.AgentOperationsTests.test_issue_transition_cannot_close_or_mark_deployed) ... ok
+test_main_scan_finds_referenced_and_unattributed_work (test_operations.AgentOperationsTests.test_main_scan_finds_referenced_and_unattributed_work) ... ok
+test_main_to_deployment_to_verdict_reconciliation (test_operations.AgentOperationsTests.test_main_to_deployment_to_verdict_reconciliation) ... ok
+test_promote_intake_requires_positive_control (test_operations.AgentOperationsTests.test_promote_intake_requires_positive_control) ... ok
+test_report_file_must_stay_inside_workflow_tree (test_operations.AgentOperationsTests.test_report_file_must_stay_inside_workflow_tree) ... ok
+test_transaction_restores_files_and_new_directories (test_operations.AgentOperationsTests.test_transaction_restores_files_and_new_directories) ... ok
+test_triage_guide_is_read_only (test_operations.AgentOperationsTests.test_triage_guide_is_read_only) ... ok
+test_v1_and_v2_evidence_schemas_are_both_valid (test_operations.AgentOperationsTests.test_v1_and_v2_evidence_schemas_are_both_valid) ... ok
+test_verified_duplicate_bug_stops_at_existing_issue (test_operations.AgentOperationsTests.test_verified_duplicate_bug_stops_at_existing_issue) ... ok
+test_verified_new_bug_promotes_atomically_and_starts_fix (test_operations.AgentOperationsTests.test_verified_new_bug_promotes_atomically_and_starts_fix) ... ok
+test_bus_parser_accepts_legacy_fix_and_typed_subject (test_operations.BusCompatibilityTests.test_bus_parser_accepts_legacy_fix_and_typed_subject) ... ok
+test_bus_send_preserves_typed_subject (test_operations.BusCompatibilityTests.test_bus_send_preserves_typed_subject) ... ok
+test_active_issue_resolution (test_workflow.WorkflowIntegrityTests.test_active_issue_resolution) ... ok
+test_all_indexed_statuses_have_next_action (test_workflow.WorkflowIntegrityTests.test_all_indexed_statuses_have_next_action) ... ok
+test_fix_ids_cannot_escape_fix_root (test_workflow.WorkflowIntegrityTests.test_fix_ids_cannot_escape_fix_root) ... ok
+test_human_gate_and_transition_prerequisites_are_explicit (test_workflow.WorkflowIntegrityTests.test_human_gate_and_transition_prerequisites_are_explicit) ... ok
+test_issue_split_is_lossless (test_workflow.WorkflowIntegrityTests.test_issue_split_is_lossless) ... ok
+test_master_is_reproducible (test_workflow.WorkflowIntegrityTests.test_master_is_reproducible) ... ok
+
+======================================================================
+FAIL: test_startup_context_budget (test_contracts.HarnessContracts.test_startup_context_budget)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/mehrdad/operator-workflow/workflow/tools/tests/test_contracts.py", line 272, in test_startup_context_budget
+    self.assertLessEqual(common+len(stage.read_text().split()),1250)
+AssertionError: 1260 not less than or equal to 1250
+
+----------------------------------------------------------------------
+Ran 65 tests in 14.724s
+
+FAILED (failures=1)
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> HELD
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> DESIGNING
+sealed FIX-TEST: aae8137d78c681584d2767ad287bf14e18f3b215cf40fb0d6d63240a50b9fd46
+FIX-TEST: critique=PASS; revision=4
+FIX-TEST: DESIGNING -> CRITIQUED
+FIX-TEST: decision=PASS; revision=6
+FIX-TEST: CRITIQUED -> AGREED
+FIX-TEST: configured; revision=8
+FIX-TEST: implementation=PASS; revision=9
+FIX-TEST: AGREED -> IMPLEMENTED
+FIX-TEST: red=PASS; revision=11
+FIX-TEST: l0=PASS; revision=12
+FIX-TEST: l1=PASS; revision=13
+FIX-TEST: l2=PASS; revision=14
+FIX-TEST: positive_control=PASS; revision=15
+FIX-TEST: IMPLEMENTED -> OFFLINE_VERIFIED
+FIX-TEST: incident=PASS; revision=17
+FIX-TEST: p3=PASS; revision=18
+FIX-TEST: OFFLINE_VERIFIED -> DIFF_REVIEW_PASSED
+FIX-TEST: DIFF_REVIEW_PASSED -> PR_READY
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: incident=PASS; revision=14
+FIX-TEST: p3=PASS; revision=15
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+sealed FIX-TEST: 247458c95b7e481af4c58572e493ed5f11fc927045ae6756b39ecd17e531efe0
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+created intake/RPT-20260907-000004-ambiguous
+created intake/RPT-20260907-000003-campaign-finding
+created campaigns/2026-09-07-cross-fix-study
+2026-09-07-cross-fix-study: DRAFT -> APPROVED
+published releases/MAIN-20260908-185741-cb69c335aaf1
+published releases/DEPLOY-20260908-185741-cb69c335aaf1; verification remains pending
+T1-M001: critique=PASS; revision=2
+T1-M001: decision=PASS; revision=3
+T1-M001: implementation=PASS; revision=4
+T1-M001: red=PASS; revision=5
+T1-M001: l0=PASS; revision=6
+T1-M001: l1=PASS; revision=7
+T1-M001: l2=PASS; revision=8
+T1-M001: positive_control=PASS; revision=9
+T1-M001: incident=PASS; revision=10
+T1-M001: p3=PASS; revision=11
+T1-M001: l3=PASS; revision=12
+T1-M001: l4=NOT_REQUIRED; revision=13
+T1-M001: final=PASS; revision=14
+DEPLOY-20260908-185741-cb69c335aaf1: RECONCILED
+created intake/RPT-20260907-000005-no-control
+operation: triage
+runbook: operations/TRIAGE.md
+authority: None
+mutating: False
+terminal_states: CLASSIFIED, NEEDS_HUMAN_DECISION
+created intake/RPT-20260907-000001-widget-signals
+RPT-20260907-000001-widget-signals: REPORTED -> TRIAGED
+RPT-20260907-000001-widget-signals: TRIAGED -> VERIFYING
+RPT-20260907-000001-widget-signals: VERIFYING -> VERIFIED
+M-1	score=11	Widget drops signals	terms=active,drops,signals,telemetry,widget
+recorded dedup candidates for RPT-20260907-000001-widget-signals
+RPT-20260907-000001-widget-signals: VERIFIED -> DEDUP_REVIEW
+RPT-20260907-000001-widget-signals: DEDUP_REVIEW -> DUPLICATE
+created intake/RPT-20260907-000002-new-root-cause
+RPT-20260907-000002-new-root-cause: FILED as M-2; started T1-M002
+/tmp/workflow-bus-test-oh06vho1/inbox/k3/000001-claude-review-campaign.md

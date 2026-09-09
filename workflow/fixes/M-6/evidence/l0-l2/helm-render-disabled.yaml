@@ -1,0 +1,332 @@
+---
+# Source: phorvex/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: codeexec-phorvex-manager
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: codeexec-phorvex-webhook-cert
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+type: kubernetes.io/tls
+data:
+  ca.crt: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRVFFWT3lxNDJtV1gyT09BaUZDa3FMakFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTmxvWApEVE0yTURrd05USXlNREUxTmxvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTWJPNzJCelRvTVZVMWpmMnkrSE1SZ3IKS1pNekVRQWFXUHZYOFk3RjlNaGRmVWpGZ1FXVjIwamkra3Y0NDVXN2N0RVFjdmxvRFV6UDRSVzRldG1aSVRBdApPVCtaMHdXNHVqcEU4NmQrRy9haGloU0JuWHYyaXFOSnVsU2h4YWRZajhndlJqTDUvemd0L1BhWU9ZYnhUWHJ2ClpsL0NrcnpQM3N4MkJwa25iT2lIY1BNMEtnWWtaMEpzVVZWN0VyVU0vNkJkY2loQ3FWODFoaU52QkI2NnJLTm0KTW1GNFJzWjZZRzlPbk0yclZKOGtWc0FqMEoxR0hSYlFCZWJZMTFtemZlVDVSNzBPTDQ1WHI2dGd5bUhsRkxXagpISTRPOU52REFlUHNFS045S082TUdIWHFJMHRLWW9PRlluTFB6VGV4TWltUGRJNm01MXpiQnNWamV4ZWVCeFVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlFQU01JQnhCSVZzaGVDaUdFWApKWUdUNzFiZUVqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFvNmE5cEJDZFlTNEhFay9jaFhobndpU0hDem51CkZjNzZJNXRSOGpTMFp2blozc0d4eWVQOGlyelF5NlhEOUdTVHo5eHFUQjNOWUQ3b29lT1hFSk9VVXZVb2o0ZE8KelhqTlBsWnZLb0Jrc2trVlFraTZ3NUpFcGJUMzl5WWVlMnFsNkdYZXkrdUVYMGpoblNwNEVUTDJkZjIwbVhNMgpkVHF5bStuTmdVNVJ3Qnl4UW1EMSttK2dnUUhmd055bExKeEZOZXZneWhtK2VXdEhBM1dpWkZkdjJRRGt0NGhQCjRKaXhlZE51b29vL3RLVWZZRmFIYjlKa2cybkhGcFcrdGV1bHR1REhBalFIY2h5bXpDUkxNcmJFY2d0OE5SdHUKTnpIRUFmaUVsVk15TmZIWjliczBRdW0vcWh0NVFVWUJTelgyUUFRamEwSGQybGkwS2p6SUZuMk1Qdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+  tls.crt: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUQxRENDQXJ5Z0F3SUJBZ0lSQU82NkRwRmNTdkZ4MGorR2J3RFJQYzR3RFFZSktvWklodmNOQVFFTEJRQXcKSGpFY01Cb0dBMVVFQXhNVFkyOWtaV1Y0WldNdGNHaHZjblpsZUMxallUQWVGdzB5TmpBNU1EZ3lNakF4TlRaYQpGdzB6TmpBNU1EVXlNakF4TlRaYU1DTXhJVEFmQmdOVkJBTVRHR052WkdWbGVHVmpMWEJvYjNKMlpYZ3RkMlZpCmFHOXZhekNDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFPR3BzZ3ZwdlpHN1VPZzQKK291aWxEc0pVd2tSN2RLU080b0NVaURZQVdmTUNIangrTzFYOFVKY2Uvd3VHQ1phZ3dPNmlSaFd1Qkc1akkvMwpIUDM4RlZVdmpkMjVPbURjUldDWHVVUDVOQkIvRTdzbFUwZDh0bDErejZ0QXIxeGF1T09MeDhpL0VUSXhFVTBNCkdIN2x2U3ZyVjNmTzZwMytlRHN1RExQMGU0c2dJa1NtVG5nSGNvaFdoQ25sQzRJUkxobHNTQVI4OHdmbXhWZEgKZkR2cXloRyttT1dEYk5LdGl0RlRnY055aFZER0Qvb2RFUVdEV1JzbFpQeGNHdXp6MzR3WnpROStlbCtyWm81MQoxY21IUFovRUNFUG4wSXZlLy9nZHNETzBrTklienM1ZnpjOCt4TnJMczVDMnFrTXBrd2FhNDJPTDY3OTdVTEdNCjhRd0F3L01DQXdFQUFhT0NBUVl3Z2dFQ01BNEdBMVVkRHdFQi93UUVBd0lGb0RBZEJnTlZIU1VFRmpBVUJnZ3IKQmdFRkJRY0RBUVlJS3dZQkJRVUhBd0l3REFZRFZSMFRBUUgvQkFJd0FEQWZCZ05WSFNNRUdEQVdnQlFQU01JQgp4QklWc2hlQ2lHRVhKWUdUNzFiZUVqQ0JvUVlEVlIwUkJJR1pNSUdXZ2hoamIyUmxaWGhsWXkxd2FHOXlkbVY0CkxYZGxZbWh2YjJ1Q0lHTnZaR1ZsZUdWakxYQm9iM0oyWlhndGQyVmlhRzl2YXk1a1pXWmhkV3gwZ2lSamIyUmwKWlhobFl5MXdhRzl5ZG1WNExYZGxZbWh2YjJzdVpHVm1ZWFZzZEM1emRtT0NNbU52WkdWbGVHVmpMWEJvYjNKMgpaWGd0ZDJWaWFHOXZheTVrWldaaGRXeDBMbk4yWXk1amJIVnpkR1Z5TG14dlkyRnNNQTBHQ1NxR1NJYjNEUUVCCkN3VUFBNElCQVFCZzB2UkJwSjQwNHVuQzFoQzkyeHRLeG9lNzJHdUl4eDF0TVZyYUR5V0NDOEFiN3dLRDFJdk0KanREMXA0VCtOV0M3Q3hQWlR5TENTVzdjQ2h5OElSWDhMUkMvdDIrc2lIc0ZibG9LL0VjbTg5SlVYbEVjaWFrSApDSHREVk9EaWdyZGk4OFEwNVRVd3ZMVThKSmRRVEFQTnpMUXppYUpYblVOcHFETVFsSGNSemhNQjhEaGIwWXlnCmNubkhQMERrREJpWGV6cG1ZQlU3aytVbkw0d1Q1NnVzWTFrTHlrWjBUU2tWVThPNVlkRXEyOFJtVFB0Y3hyaHYKTzR4Y1NWZE5zbkFZQzFWRkJhU3ZNd1dZcWhaaTN3a29FMFMzY0U1QXlSU3MvdTNieXVqTWxTaVpWcDVVclM4dgpkUVR2V1YxTDFFbTVkZmNoV0d5Y3JTeC96TzFwYTVZRgotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg=="
+  tls.key: "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcEFJQkFBS0NBUUVBNGFteUMrbTlrYnRRNkRqNmk2S1VPd2xUQ1JIdDBwSTdpZ0pTSU5nQlo4d0llUEg0CjdWZnhRbHg3L0M0WUpscURBN3FKR0ZhNEVibU1qL2NjL2Z3VlZTK04zYms2WU54RllKZTVRL2swRUg4VHV5VlQKUjN5MlhYN1BxMEN2WEZxNDQ0dkh5TDhSTWpFUlRRd1lmdVc5Syt0WGQ4N3FuZjU0T3k0TXMvUjdpeUFpUktaTwplQWR5aUZhRUtlVUxnaEV1R1d4SUJIenpCK2JGVjBkOE8rcktFYjZZNVlOczBxMkswVk9CdzNLRlVNWVAraDBSCkJZTlpHeVZrL0Z3YTdQUGZqQm5ORDM1Nlg2dG1qblhWeVljOW44UUlRK2ZRaTk3LytCMndNN1NRMGh2T3psL04Keno3RTJzdXprTGFxUXltVEJwcmpZNHZydjN0UXNZenhEQUREOHdJREFRQUJBb0lCQUhZemhPZG9qN3Q5K21zcApMVk5tM1czdS9HZUwxSjZ2cWpBbjl3enRHQTllZURHaHpWbkU3c0pyM3lYQW56VzN3MWg0cE1ieTVZZWpRVlZICmd4QW1zcVhrT3RNZzZzdEJsYlY2dzdndkdHNXJvZEl0UXVuM0VTNzM5WjhtU3JSOWNNci90SzRhSnMrN2sreGYKb1pVV2tYZ24xYkVUMlNEWTRmRmR0Wm10UGVrbzkzOFF1a1VIZEx6d3NRbWtRNUFJN2RRemh0WFZuWDZhR0JTOQpmcC9IMEppOTlhaVJyRDZQWGVQM2J0YVBTOENKOGc5c1MzUjk4WmE2VUhpUGIvUTgrQ1Y4UzdLbnBqNHYwZk5RCkJYZFdtRnhCYXJoT2JPVml2ZHVDSVJjNEFva2pjSElTSG5jNGJucTVuVm5vZGYvRmV1NWZCNDJqdjcrZ2crNmkKbWgvTHU0RUNnWUVBNGJZR0dLU2lFellrZUQ4TG44dlZIUmFXaUpXVUdTWEwyTHJ6RXF1ZlhvRkg1YTg2bExEaQptQ0RTNitJRXBJcGdNdHRzK2lEaVM4aGl6Wm12dDRYell2Tkd2ZHNCMk5WUkJWRFFRYXdxMSsrTlYxZDhUQVVxCmJpblBNbUR5ekhBUjFweWhwNW9XWktNQnl2U0VTT214dklwMHhEY3lYTS9BZDdmZVZKRUpjcHNDZ1lFQS8vSUUKYmI1aUJLcEZ2OVZ6bWpiaklUTkV3SDg1SU5qTkkwU0hWakhPSWNMVHgvd1B4ZzJwRm5YZ2NCSStxNEFFUGJMbApHd0QxQWZQOXg2RDFkN2dLOUVHUm1wUDZKZ0JRbURsRzVJcHl4Wm1XM3NuODNxVEd6UjdvTTB4VjFGejdvNnpOClBUbndVQllVaXR2QU1UUEwvMklBMlpNOUFEU0QvbU5vKzQ5aXZZa0NnWUVBeTVBQW00VVBiMGdyU0ErRUNsQXAKR2h6ZkVydmtYM0hKRU9RNmlTSWpqM1lGUTg3dmhGNnJYZ3hzYmJUZi93MlZpUWlBbG0zRjZoY0ZsT3dBb0FHOAo2Z2NDVEFRUy9GNFd2amFPUEV4c0wyZXJENVNsVTJKdFRBR0ZEcWlGRVlBWmRuYTVESkZabE5XMnJqWXNnQjNUCjRIajJxbWdsa2JNRW9IUkJuZjlZaC9VQ2dZRUE3WW9ZUWlJbnBsekJUMEV6Z1RUZnA3aUZYb0swNnA5TUJDZGQKMDhsMW5pL0xqaGVLTEM0UmVCNytwZ1RJMVRLQ3ZTQ0RNWVM1MzQ0clFsTklma3Y1SHFpY0VmSzBmd0Jiekd1YwpPQSttWlc0ZWI3YlhVV3RzZG9Md3ptdFNYVDNPN2lFNmVsQ0RrRkJ0MEZJVEZaY1ZCWGhYZ1piOVRtdHU5WElkCnhSdFdjTUVDZ1lBZkdWaTU2TzlaMmJ3bmVGQWZQQnJVSVJmcUJJbDVoNmFCT0VDQUlNTmdFNTQwNUNsdmJyOU0KaGhqZythMXFvRHdKeTV5YVl5QmFjcjVvSVJTOVc2UWt3NzZkc2VZRnVsZ3diUlZuN3VGNVo2UHN5bUZDU2hzZApGMW9OSjZDa0FuTG9zNFpoaFc3SFpWcnZLMmRXWEtZdE45K0RFOVovRW9neDNsdzJNR0xxZ0E9PQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo="
+---
+# Source: phorvex/templates/rbac.yaml
+# LEAST-PRIVILEGE ClusterRole (NFR4): read-only ingest of the K8s graph; write ONLY
+# Phorvex's own CRDs + Phoenix SecurityEvent/AMTD + policy warning Events. NEVER writes pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: codeexec-phorvex-manager-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["authorization.k8s.io"]
+  # T1-E capability gate: the operator reviews its OWN permissions (SelfSubjectAccessReview,
+  # "can I?") before offering an action, so an unpermitted move is excluded pre-scoring
+  # (no-rbac) instead of ranked and failing at actuation. Creating a SelfSubjectAccessReview
+  # grants no cluster power — it only asks the apiserver what this ServiceAccount may already do.
+  resources: ["selfsubjectaccessreviews"]
+  verbs: ["create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["adaptivemovingtargetdefenses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies/finalizers"]
+  verbs: ["update"]
+---
+# Source: phorvex/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: codeexec-phorvex-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: codeexec-phorvex-manager-role
+subjects:
+- kind: ServiceAccount
+  name: codeexec-phorvex-manager
+  namespace: default
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: codeexec-phorvex-webhook
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  selector:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+  ports:
+  - name: https-webhook
+    port: 443
+    protocol: TCP
+    targetPort: webhook-server
+---
+# Source: phorvex/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codeexec-phorvex
+  namespace: default
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex
+      app.kubernetes.io/instance: codeexec
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phorvex
+        app.kubernetes.io/instance: codeexec
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: phorvex
+    spec:
+      serviceAccountName: codeexec-phorvex-manager
+      securityContext:
+        runAsNonRoot: true
+        # Both containers run as non-root with different images; fsGroup makes the mounted
+        # audit volume group-writable and lets the manager read its 0440 webhook key.
+        fsGroup: 65532
+      containers:
+      - name: manager
+        image: "phorvex/phorvex:0.1.0-p0"
+        imagePullPolicy: IfNotPresent
+        args:
+        - --base-interval=10s
+        - --actions-supported-debounce=3
+        - --calibration-shadow=true
+        - --calibration-sample=5m
+        - --calibration-refresh=30m
+        - --calibration-lookback=168h
+        - --calibration-export-dir=/var/run/phorvex-calibration
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --leader-elect=true
+        - --admission-webhook=true
+        - --webhook-port=9443
+        - --webhook-cert-dir=/tmp/k8s-webhook-server/serving-certs
+        - --gpu-envelope-max=0.2925
+        - --pcie-class-table={"Tesla T4":{"gen":3,"width":16}}
+        - --trusted-detectors=vllm/detector-kv-canary,vllm/detector-adapter-inv,phorvex-system/operator-controller-manager
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PHORVEX_BRAIN_IMAGE
+          value: "phorvex/phorvex:0.1.0-p0"
+        ports:
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        - name: webhook-server
+          containerPort: 9443
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts:
+        - name: calibration-evidence
+          mountPath: /var/run/phorvex-calibration
+        - name: webhook-cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+      volumes:
+      - name: calibration-evidence
+        emptyDir: {}
+      - name: webhook-cert
+        secret:
+          secretName: codeexec-phorvex-webhook-cert
+          defaultMode: 0440
+---
+# Source: phorvex/templates/admission-webhook.yaml
+# M-94: bind every SecurityEvent to the identity that created it. The authenticated user is
+# known only to the API server, so the stamp has to happen at admission; ingest then allowlists
+# that identity instead of the self-declared spec.rule.source.
+#
+# failurePolicy is Ignore ON PURPOSE: Phorvex must never be able to block the cluster's
+# security-event flow. An unstamped event is untrusted at ingest, so the failure direction is
+# closed on the belief side rather than on the API server.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: codeexec-phorvex-securityevent-stamp
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+webhooks:
+- name: stamp-securityevent.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRVFFWT3lxNDJtV1gyT09BaUZDa3FMakFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTmxvWApEVE0yTURrd05USXlNREUxTmxvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTWJPNzJCelRvTVZVMWpmMnkrSE1SZ3IKS1pNekVRQWFXUHZYOFk3RjlNaGRmVWpGZ1FXVjIwamkra3Y0NDVXN2N0RVFjdmxvRFV6UDRSVzRldG1aSVRBdApPVCtaMHdXNHVqcEU4NmQrRy9haGloU0JuWHYyaXFOSnVsU2h4YWRZajhndlJqTDUvemd0L1BhWU9ZYnhUWHJ2ClpsL0NrcnpQM3N4MkJwa25iT2lIY1BNMEtnWWtaMEpzVVZWN0VyVU0vNkJkY2loQ3FWODFoaU52QkI2NnJLTm0KTW1GNFJzWjZZRzlPbk0yclZKOGtWc0FqMEoxR0hSYlFCZWJZMTFtemZlVDVSNzBPTDQ1WHI2dGd5bUhsRkxXagpISTRPOU52REFlUHNFS045S082TUdIWHFJMHRLWW9PRlluTFB6VGV4TWltUGRJNm01MXpiQnNWamV4ZWVCeFVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlFQU01JQnhCSVZzaGVDaUdFWApKWUdUNzFiZUVqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFvNmE5cEJDZFlTNEhFay9jaFhobndpU0hDem51CkZjNzZJNXRSOGpTMFp2blozc0d4eWVQOGlyelF5NlhEOUdTVHo5eHFUQjNOWUQ3b29lT1hFSk9VVXZVb2o0ZE8KelhqTlBsWnZLb0Jrc2trVlFraTZ3NUpFcGJUMzl5WWVlMnFsNkdYZXkrdUVYMGpoblNwNEVUTDJkZjIwbVhNMgpkVHF5bStuTmdVNVJ3Qnl4UW1EMSttK2dnUUhmd055bExKeEZOZXZneWhtK2VXdEhBM1dpWkZkdjJRRGt0NGhQCjRKaXhlZE51b29vL3RLVWZZRmFIYjlKa2cybkhGcFcrdGV1bHR1REhBalFIY2h5bXpDUkxNcmJFY2d0OE5SdHUKTnpIRUFmaUVsVk15TmZIWjliczBRdW0vcWh0NVFVWUJTelgyUUFRamEwSGQybGkwS2p6SUZuMk1Qdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: codeexec-phorvex-webhook
+      namespace: default
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: codeexec-phorvex-protected-outcomes-stamp
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+webhooks:
+# M99 outcome-bearing events must never preserve a forged stamp on webhook failure.
+# The general M94 event-flow hook above retains its existing availability policy.
+- name: stamp-protected-outcomes.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  reinvocationPolicy: IfNeeded
+  timeoutSeconds: 5
+  matchConditions:
+  - name: protected-outcomes
+    expression: "has(object.metadata.annotations) && 'phorvex.ai/protected-outcomes-v1' in object.metadata.annotations"
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRVFFWT3lxNDJtV1gyT09BaUZDa3FMakFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTmxvWApEVE0yTURrd05USXlNREUxTmxvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTWJPNzJCelRvTVZVMWpmMnkrSE1SZ3IKS1pNekVRQWFXUHZYOFk3RjlNaGRmVWpGZ1FXVjIwamkra3Y0NDVXN2N0RVFjdmxvRFV6UDRSVzRldG1aSVRBdApPVCtaMHdXNHVqcEU4NmQrRy9haGloU0JuWHYyaXFOSnVsU2h4YWRZajhndlJqTDUvemd0L1BhWU9ZYnhUWHJ2ClpsL0NrcnpQM3N4MkJwa25iT2lIY1BNMEtnWWtaMEpzVVZWN0VyVU0vNkJkY2loQ3FWODFoaU52QkI2NnJLTm0KTW1GNFJzWjZZRzlPbk0yclZKOGtWc0FqMEoxR0hSYlFCZWJZMTFtemZlVDVSNzBPTDQ1WHI2dGd5bUhsRkxXagpISTRPOU52REFlUHNFS045S082TUdIWHFJMHRLWW9PRlluTFB6VGV4TWltUGRJNm01MXpiQnNWamV4ZWVCeFVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlFQU01JQnhCSVZzaGVDaUdFWApKWUdUNzFiZUVqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFvNmE5cEJDZFlTNEhFay9jaFhobndpU0hDem51CkZjNzZJNXRSOGpTMFp2blozc0d4eWVQOGlyelF5NlhEOUdTVHo5eHFUQjNOWUQ3b29lT1hFSk9VVXZVb2o0ZE8KelhqTlBsWnZLb0Jrc2trVlFraTZ3NUpFcGJUMzl5WWVlMnFsNkdYZXkrdUVYMGpoblNwNEVUTDJkZjIwbVhNMgpkVHF5bStuTmdVNVJ3Qnl4UW1EMSttK2dnUUhmd055bExKeEZOZXZneWhtK2VXdEhBM1dpWkZkdjJRRGt0NGhQCjRKaXhlZE51b29vL3RLVWZZRmFIYjlKa2cybkhGcFcrdGV1bHR1REhBalFIY2h5bXpDUkxNcmJFY2d0OE5SdHUKTnpIRUFmaUVsVk15TmZIWjliczBRdW0vcWh0NVFVWUJTelgyUUFRamEwSGQybGkwS2p6SUZuMk1Qdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: codeexec-phorvex-webhook
+      namespace: default
+      port: 443
+      path: /stamp-amtd-r6security-com-v1beta1-securityevent
+  rules:
+  - apiGroups: ["amtd.r6security.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["securityevents"]
+    scope: Cluster
+---
+# Source: phorvex/templates/admission-webhook.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: codeexec-phorvex-policy-validator
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: codeexec
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+webhooks:
+- name: vphorvexpolicy.phorvex.ai
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  timeoutSeconds: 5
+  clientConfig:
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lRVFFWT3lxNDJtV1gyT09BaUZDa3FMakFOQmdrcWhraUc5dzBCQVFzRkFEQWUKTVJ3d0dnWURWUVFERXhOamIyUmxaWGhsWXkxd2FHOXlkbVY0TFdOaE1CNFhEVEkyTURrd09ESXlNREUxTmxvWApEVE0yTURrd05USXlNREUxTmxvd0hqRWNNQm9HQTFVRUF4TVRZMjlrWldWNFpXTXRjR2h2Y25abGVDMWpZVENDCkFTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTWJPNzJCelRvTVZVMWpmMnkrSE1SZ3IKS1pNekVRQWFXUHZYOFk3RjlNaGRmVWpGZ1FXVjIwamkra3Y0NDVXN2N0RVFjdmxvRFV6UDRSVzRldG1aSVRBdApPVCtaMHdXNHVqcEU4NmQrRy9haGloU0JuWHYyaXFOSnVsU2h4YWRZajhndlJqTDUvemd0L1BhWU9ZYnhUWHJ2ClpsL0NrcnpQM3N4MkJwa25iT2lIY1BNMEtnWWtaMEpzVVZWN0VyVU0vNkJkY2loQ3FWODFoaU52QkI2NnJLTm0KTW1GNFJzWjZZRzlPbk0yclZKOGtWc0FqMEoxR0hSYlFCZWJZMTFtemZlVDVSNzBPTDQ1WHI2dGd5bUhsRkxXagpISTRPOU52REFlUHNFS045S082TUdIWHFJMHRLWW9PRlluTFB6VGV4TWltUGRJNm01MXpiQnNWamV4ZWVCeFVDCkF3RUFBYU5oTUY4d0RnWURWUjBQQVFIL0JBUURBZ0trTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3IKQmdFRkJRY0RBakFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlFQU01JQnhCSVZzaGVDaUdFWApKWUdUNzFiZUVqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFvNmE5cEJDZFlTNEhFay9jaFhobndpU0hDem51CkZjNzZJNXRSOGpTMFp2blozc0d4eWVQOGlyelF5NlhEOUdTVHo5eHFUQjNOWUQ3b29lT1hFSk9VVXZVb2o0ZE8KelhqTlBsWnZLb0Jrc2trVlFraTZ3NUpFcGJUMzl5WWVlMnFsNkdYZXkrdUVYMGpoblNwNEVUTDJkZjIwbVhNMgpkVHF5bStuTmdVNVJ3Qnl4UW1EMSttK2dnUUhmd055bExKeEZOZXZneWhtK2VXdEhBM1dpWkZkdjJRRGt0NGhQCjRKaXhlZE51b29vL3RLVWZZRmFIYjlKa2cybkhGcFcrdGV1bHR1REhBalFIY2h5bXpDUkxNcmJFY2d0OE5SdHUKTnpIRUFmaUVsVk15TmZIWjliczBRdW0vcWh0NVFVWUJTelgyUUFRamEwSGQybGkwS2p6SUZuMk1Qdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    service:
+      name: codeexec-phorvex-webhook
+      namespace: default
+      port: 443
+      path: /validate-phorvex-ai-v1alpha1-phorvexpolicy
+  rules:
+  - apiGroups: ["phorvex.ai"]
+    apiVersions: ["v1alpha1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["phorvexpolicies"]
+    scope: Namespaced
