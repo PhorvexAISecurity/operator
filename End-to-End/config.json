@@ -91,6 +91,7 @@
       "ai-context-required",
       "tokens-floor",
       "code-exec-guard",
+      "native-rotation-owner",
       "panicking-law"
     ],
     "_law_reason_prefixes": "A law's Verdict.Reason does not always start with its Name() — e.g. availability-floor writes 'availability:'. These are the literal prefixes in internal/feasibility/*.go, so the check matches the code instead of guessing.",
@@ -127,6 +128,9 @@
       ],
       "code-exec-guard": [
         "code-exec-guard:"
+      ],
+      "native-rotation-owner": [
+        "native-rotation-owner: "
       ],
       "panicking-law": [
         "feasibility law "

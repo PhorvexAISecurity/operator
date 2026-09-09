@@ -15,6 +15,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,8 +23,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/model"
@@ -35,7 +36,7 @@ func runNativeActuatorDemo(ns string) error {
 		return err
 	}
 	ctx := context.Background()
-	na := actuator.NewNativeActuator(c)
+	na := newDemoActuator(c)
 
 	_ = c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
 	defer cleanupDemo(ctx, c, ns)
@@ -59,19 +60,39 @@ func runNativeActuatorDemo(ns string) error {
 
 	fmt.Println("=== P-ACTUATOR: native actuator LIVE on kind ===")
 
-	// 1. rotate — pod deleted (UID gone).
-	if p, e := demoPod(ctx, c, ns, "victim-rotate", nil); e == nil {
-		uid := string(p.UID)
-		res, err := na.Actuate(ctx, req("victim-rotate", "rotate"))
-		_, exists, _ := getDemoPod(ctx, c, ns, "victim-rotate", uid)
-		record("rotate", "pod UID deleted", fmt.Sprintf("emitted=%v sameUIDexists=%v kind=%s err=%v", res.Emitted, exists, res.MutationKind, err), res.Emitted && !exists && err == nil)
+	// 1. rotate — supported controller-owned target, original UID gone.
+	if _, e := demoDeployment(ctx, c, ns, "victim-rotate"); e != nil {
+		record("rotate", "controller-owned fixture", e.Error(), false)
+	} else if name := waitDeployPod(ctx, c, ns, "victim-rotate"); name == "" {
+		record("rotate", "controller-owned fixture", "no running pod", false)
+	} else {
+		p, e := waitPodRunning(ctx, c, ns, name)
+		if e != nil {
+			record("rotate", "observed target", e.Error(), false)
+		} else {
+			r := req(name, "rotate")
+			r.TargetUID = string(p.UID)
+			res, err := demoActuate(ctx, na, r)
+			_, exists, readErr := getDemoPod(ctx, c, ns, name, r.TargetUID)
+			gone := apierrors.IsNotFound(readErr) || (readErr == nil && !exists)
+			record("rotate", "original UID gone; replacement unconfirmed", fmt.Sprintf("emitted=%v uidGone=%v err=%v", res.Emitted, gone, err), res.Emitted && gone && err == nil)
+		}
+	}
+	if p, e := demoPod(ctx, c, ns, "victim-rotate-bare", nil); e != nil {
+		record("rotate.bare", "bare Pod refused", e.Error(), false)
+	} else {
+		r := req(p.Name, "rotate")
+		r.TargetUID = string(p.UID)
+		res, err := demoActuate(ctx, na, r)
+		_, exists, readErr := getDemoPod(ctx, c, ns, p.Name, r.TargetUID)
+		record("rotate.bare", "bare Pod refused and untouched", fmt.Sprintf("emitted=%v sameUID=%v note=%s err=%v", res.Emitted, exists, res.Note, err), !res.Emitted && exists && readErr == nil && err == nil && strings.Contains(res.Note, "ownerless"))
 	}
 
 	// 2. quarantine — deny-all NP + detach, POD STILL ALIVE (lead-demo fidelity).
 	if _, e := demoDeployment(ctx, c, ns, "victim-qtn"); e == nil {
 		pod := waitDeployPod(ctx, c, ns, "victim-qtn")
 		if pod != "" {
-			res, err := na.Actuate(ctx, req(pod, "quarantine"))
+			res, err := demoActuate(ctx, na, req(pod, "quarantine"))
 			alive, np, detached := verifyQuarantine(ctx, c, ns, pod)
 			ok := res.Emitted && err == nil && alive && np && detached
 			record("quarantine", "NP + detach + POD ALIVE", fmt.Sprintf("alive=%v denyAllNP=%v detached=%v kind=%s", alive, np, detached, res.MutationKind), ok)
@@ -86,7 +107,7 @@ func runNativeActuatorDemo(ns string) error {
 	for _, a := range []string{"debugger", "custom-inject"} {
 		name := "victim-" + a
 		if _, e := demoPod(ctx, c, ns, name, nil); e == nil {
-			res, err := na.Actuate(ctx, req(name, a))
+			res, err := demoActuate(ctx, na, req(name, a))
 			has := podHasEphemeral(ctx, c, ns, name)
 			record(a, "ephemeral container injected", fmt.Sprintf("hasEphemeral=%v kind=%s err=%v", has, res.MutationKind, err), res.Emitted && has && err == nil)
 		}
@@ -96,7 +117,7 @@ func runNativeActuatorDemo(ns string) error {
 	for _, pair := range [][2]string{{"identity-rotate", "phorvex.ai/identity-epoch"}, {"route-rotate", "phorvex.ai/route-epoch"}} {
 		name := "victim-" + pair[0]
 		if _, e := demoPod(ctx, c, ns, name, nil); e == nil {
-			res, err := na.Actuate(ctx, req(name, pair[0]))
+			res, err := demoActuate(ctx, na, req(name, pair[0]))
 			labeled := podHasLabel(ctx, c, ns, name, pair[1])
 			record(pair[0], pair[1]+" set", fmt.Sprintf("labeled=%v kind=%s err=%v", labeled, res.MutationKind, err), res.Emitted && labeled && err == nil)
 		}
@@ -104,7 +125,7 @@ func runNativeActuatorDemo(ns string) error {
 
 	// 7. kv-reset (AI pod) — pod ALIVE + flush epoch annotation (no kill).
 	if _, e := demoPod(ctx, c, ns, "victim-kv", map[string]string{"phorvex.ai/model-id": "llama-70b"}); e == nil {
-		res, err := na.Actuate(ctx, req("victim-kv", "kv-reset"))
+		res, err := demoActuate(ctx, na, req("victim-kv", "kv-reset"))
 		alive := podAlive(ctx, c, ns, "victim-kv")
 		anno := podHasAnno(ctx, c, ns, "victim-kv", "phorvex.ai/kv-reset-epoch")
 		record("kv-reset", "pod ALIVE + flush epoch", fmt.Sprintf("alive=%v flushEpoch=%v err=%v", alive, anno, err), res.Emitted && alive && anno && err == nil)
@@ -112,14 +133,14 @@ func runNativeActuatorDemo(ns string) error {
 
 	// 8. endpoint-rotate (AI pod) — epoch label.
 	if _, e := demoPod(ctx, c, ns, "victim-ep", map[string]string{"phorvex.ai/model-id": "llama-70b"}); e == nil {
-		res, err := na.Actuate(ctx, req("victim-ep", "endpoint-rotate"))
+		res, err := demoActuate(ctx, na, req("victim-ep", "endpoint-rotate"))
 		labeled := podHasLabel(ctx, c, ns, "victim-ep", "phorvex.ai/endpoint-epoch")
 		record("endpoint-rotate", "endpoint-epoch set", fmt.Sprintf("labeled=%v err=%v", labeled, err), res.Emitted && labeled && err == nil)
 	}
 
 	// 9. warm-swap — shadow promoted to leader + old leader retired (orchestration LIVE; ColdLoadSec SP-0).
 	if leader := setupWarmGroup(ctx, c, ns); leader != "" {
-		res, err := na.Actuate(ctx, req(leader, "warm-swap"))
+		res, err := demoActuate(ctx, na, req(leader, "warm-swap"))
 		promoted := countByRole(ctx, c, ns, "wsg", "leader") == 1
 		oldGone := !podAlive(ctx, c, ns, leader)
 		record("warm-swap", "shadow promoted + old leader retired", fmt.Sprintf("oneLeader=%v oldRetired=%v kind=%s err=%v", promoted, oldGone, res.MutationKind, err), res.Emitted && promoted && oldGone && err == nil)
@@ -127,17 +148,17 @@ func runNativeActuatorDemo(ns string) error {
 
 	// 10-11. mig-rebind + model-shard-replace — FAIL-CLOSED without GPU/model (honest SP-0).
 	if _, e := demoPod(ctx, c, ns, "victim-mig", map[string]string{"phorvex.ai/model-id": "llama-70b"}); e == nil {
-		_, err := na.Actuate(ctx, req("victim-mig", "mig-rebind"))
+		_, err := demoActuate(ctx, na, req("victim-mig", "mig-rebind"))
 		record("mig-rebind", "FAIL-CLOSED (no MIG device) [SP-0]", fmt.Sprintf("failClosed=%v err=%v", err != nil, errShort(err)), err != nil)
-		_, err2 := na.Actuate(ctx, req("victim-mig", "model-shard-replace"))
+		_, err2 := demoActuate(ctx, na, req("victim-mig", "model-shard-replace"))
 		record("model-shard-replace", "FAIL-CLOSED (no model shard) [SP-0]", fmt.Sprintf("failClosed=%v err=%v", err2 != nil, errShort(err2)), err2 != nil)
 	}
 
 	// 12. dry-run guard — a dry-run actuator must REFUSE to mutate.
-	naDry := actuator.NewNativeActuator(c)
+	naDry := newDemoActuator(c)
 	naDry.DryRun = true
 	if _, e := demoPod(ctx, c, ns, "victim-dry", nil); e == nil {
-		_, err := naDry.Actuate(ctx, req("victim-dry", "rotate"))
+		_, err := demoActuate(ctx, naDry, req("victim-dry", "rotate"))
 		stillAlive := podAlive(ctx, c, ns, "victim-dry")
 		record("dry-run guard", "refuse + pod untouched", fmt.Sprintf("refused=%v podAlive=%v", err != nil, stillAlive), err != nil && stillAlive)
 	}
@@ -152,6 +173,24 @@ func runNativeActuatorDemo(ns string) error {
 		return fmt.Errorf("native-demo: %d checks failed", fail)
 	}
 	return nil
+}
+
+// Both production demo paths and caller-level tests use this wiring.
+func newDemoActuator(c client.Client) *actuator.NativeActuator {
+	n := actuator.NewNativeActuator(c)
+	n.SetBoundaryReader(c) // client.New above is an uncached direct reader.
+	return n
+}
+
+func demoActuate(ctx context.Context, n *actuator.NativeActuator, req actuator.Request) (actuator.Result, error) {
+	if req.TargetUID == "" {
+		var p corev1.Pod
+		if err := n.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, &p); err != nil {
+			return actuator.Result{}, err
+		}
+		req.TargetUID = string(p.UID)
+	}
+	return n.Actuate(ctx, req)
 }
 
 // --- demo helpers ------------------------------------------------------------------------

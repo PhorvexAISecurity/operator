@@ -35,7 +35,8 @@ func TestNativeRBACMarkersAreLeastPrivilege(t *testing.T) {
 		`namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update`,
 		`namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update`,
 		`namespace=phorvex-tenant,groups="",resources=services,verbs=get;list;update`,
-		`namespace=phorvex-tenant,groups=apps,resources=replicasets;statefulsets;daemonsets,verbs=get`,
+		`namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get`,
+		`namespace=phorvex-tenant,groups=apps,resources=replicasets;statefulsets;daemonsets;deployments,verbs=get`,
 		`namespace=phorvex-tenant,groups=batch,resources=jobs,verbs=get`,
 		`namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;delete`,
 	}
