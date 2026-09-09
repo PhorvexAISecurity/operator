@@ -30,6 +30,10 @@ checks:
   positive_control: {artifact: evidence/control.txt, command: "EXACT_CONTROL_COMMAND"}
 ```
 
+Already-valid checks at this head, including explicitly authorized waivers, may
+be omitted; the batch validates them without changing their signer. It cannot
+create a waiver or carry one to a different source implicitly.
+
 Sign `red` once before submission, by whoever executed it (implementer or sealed
 independent reviewer). A failure must be the intended baseline assertion, with its
 positive control. Merely disabling the new guard at head is not baseline execution.

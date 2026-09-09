@@ -152,8 +152,10 @@ def transaction(w, args, mode):
                     preflight.validate_receipt(w.ROOT.parent,receipt,impl['base_sha'],impl['head_sha'])
                     sign(w,args.fix_id,'preflight',{'artifact':data['preflight'],'command':f'workflow.py preflight {args.fix_id} --run'},args.by)
                     required = {'implementation','l0','l1','l2','positive_control'}
-                    if required-(set(checks)|set(reuses)):
-                        raise ValueError('submission needs implementation, l0, l1, l2 and positive_control')
+                    missing = [key for key in required-(set(checks)|set(reuses))
+                               if w.gates.check_errors(w.ROOT, fix, w.load_yaml(fix/'STATUS.yaml'), key)]
+                    if missing:
+                        raise ValueError('submission lacks current evidence: '+', '.join(sorted(missing)))
                 for key in ['implementation','red','l0','l1','l2','positive_control','incident','p3']:
                     if key in checks: sign(w,args.fix_id,key,checks[key],args.by)
                     if key in reuses: reuse(w,fix,args.fix_id,key,args.by)

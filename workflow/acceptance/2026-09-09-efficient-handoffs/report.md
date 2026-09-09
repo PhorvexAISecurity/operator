@@ -12,12 +12,12 @@ retroactively upgraded or waived.
 
 Validation on Python 3.11.16:
 - `PATH=/tmp/phorvex-workflow-ci-311/bin:$PATH bash workflow/tools/check.sh`: PASS,
-  93 tests, reproducible index/register, doctor 0 errors / 13 pre-existing warnings.
+  94 tests, reproducible index/register, doctor 0 errors / 13 pre-existing warnings.
 - New preflight command exercised end to end against this workflow worktree with
   the Python 3.11 environment: diff/workflow checks PASS. Its final full check was
   rerun after the last implementation changes; retained output is check.txt.
 - Regression cases cover one-revision handoffs, early reviewer-owned RED, role
-  separation, stale revisions, missing preflight, rollback of partially signed
+  separation, retaining current evidence/authorized waivers without re-signing, stale revisions, missing preflight, rollback of partially signed
   batches and later failed scope approvals, missing incident proof, explicit
   reuse approval, changed dependencies, dirty code, modified raw output, blind
   review protection, notification failures/retry/deduplication, CI tool-version

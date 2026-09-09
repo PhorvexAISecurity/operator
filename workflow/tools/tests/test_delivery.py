@@ -79,6 +79,17 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(s['reuse_approvals']['l0']['by'],'reviewer')
             self.assertNotIn('merge',s['approvals'])
 
+    def test_existing_current_checks_and_authorized_waiver_need_no_resigning(self):
+        with sandbox() as (repo,root,baseline):
+            fix=setup(repo,baseline)
+            self.assertEqual(w.cmd_record_check(argparse.Namespace(fix_id=fix.name,check='l2',by='owner',
+                artifact='evidence/l2.txt',result='NOT_REQUIRED',command='record explicit scoped waiver',
+                approval_ref='fixture:approved',rationale='Synthetic stateless fixture has no multi-tick behavior.',
+                expect_revision=revision(fix))),0)
+            before=w.load_yaml(fix/'STATUS.yaml')['checks']['l2']
+            self.assertEqual(submit(fix,{'preflight':receipt(repo,fix),'checks':{}}),0)
+            self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['checks']['l2'],before)
+
     def test_partial_batch_rolls_back_files_and_pin_updates(self):
         with sandbox() as (repo,root,baseline):
             fix=setup(repo,baseline);data=package(fix,receipt(repo,fix))
