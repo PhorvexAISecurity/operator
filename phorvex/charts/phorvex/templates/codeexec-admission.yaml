@@ -1,0 +1,133 @@
+{{- if .Values.phorvex.codeExecAdmission.enabled }}
+# M-6 — request-level ValidatingAdmissionPolicy + Binding for pods/ephemeralcontainers
+# (code-exec admission). Installer-owned singleton, cluster-scoped, DENY + failurePolicy:Fail.
+# It enforces the SEC-1/SEC-2/PO-1 contract (workflow/fixes/M-6/03-decision.md): in a managed
+# namespace, only the Phorvex manager SA may add an ephemeral container, and only the exact
+# approved profile (name / pinned digest / hardened securityContext / Option A empty debugger
+# command+args / exact custom-inject command+args; forbidden extra fields). Native VAP (no
+# webhook pod). Enabled explicitly (off by default); grants NO injection permission; labels no
+# namespace — an admin opts one in with `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: phorvex-codeexec-ephemeral
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: codeexec-ephemeral
+  annotations:
+    # Content/version pin the runtime capability check verifies (not name presence alone).
+    phorvex.ai/policy-version: "m6-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/ephemeralcontainers"]
+  variables:
+    - name: managerSA
+      expression: "'system:serviceaccount:phorvex-system:phorvex-phorvex-manager'"
+    - name: approvedImage
+      expression: "'busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'"
+    # Newly-added ephemeral containers = those in object not already present (by name) in
+    # oldObject. has()-guards let the FIRST injection pass and tolerate an absent new list.
+    - name: newContainers
+      expression: >-
+        has(object.spec.ephemeralContainers)
+          ? object.spec.ephemeralContainers.filter(ec,
+              !(has(oldObject.spec.ephemeralContainers)
+                && oldObject.spec.ephemeralContainers.exists(o, o.name == ec.name)))
+          : []
+  validations:
+    # SEC-2 identity: only the manager SA may ADD an ephemeral container in scope.
+    - expression: "size(variables.newContainers) == 0 || request.userInfo.username == variables.managerSA"
+      reason: Forbidden
+      messageExpression: >-
+        "code-exec/identity: only the Phorvex manager service account may add an ephemeral container in
+        a managed namespace (got '" + request.userInfo.username + "')"
+    # SEC-1 name: exact allowed set.
+    - expression: "variables.newContainers.all(ec, ec.name in ['phorvex-debugger', 'phorvex-custom'])"
+      reason: Forbidden
+      message: "code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom"
+    # SEC-1 image: exact pinned digest.
+    - expression: "variables.newContainers.all(ec, has(ec.image) && ec.image == variables.approvedImage)"
+      reason: Forbidden
+      message: "code-exec/image: ephemeral container image must be the pinned busybox digest"
+    # SEC-1 securityContext core.
+    - expression: >-
+        variables.newContainers.all(ec, has(ec.securityContext)
+          && ec.securityContext.privileged == false
+          && ec.securityContext.allowPrivilegeEscalation == false
+          && ec.securityContext.runAsNonRoot == true
+          && ec.securityContext.runAsUser == 65534
+          && ec.securityContext.runAsGroup == 65534
+          && ec.securityContext.readOnlyRootFilesystem == true)
+      reason: Forbidden
+      message: "code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true"
+    # SEC-1 capabilities: drop ALL, add none.
+    - expression: >-
+        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.capabilities)
+          && ec.securityContext.capabilities.drop == ['ALL']
+          && (!has(ec.securityContext.capabilities.add) || size(ec.securityContext.capabilities.add) == 0))
+      reason: Forbidden
+      message: "code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add"
+    # SEC-1 seccomp: RuntimeDefault.
+    - expression: >-
+        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.seccompProfile)
+          && ec.securityContext.seccompProfile.type == 'RuntimeDefault')
+      reason: Forbidden
+      message: "code-exec/seccomp: require seccompProfile.type=RuntimeDefault"
+    # SEC-1 securityContext is EXACTLY the allow-set: forbid extra confinement-relevant fields
+    # the core rules do not pin (added appArmor/SELinux/Windows/procMount could relax confinement).
+    - expression: >-
+        variables.newContainers.all(ec, !has(ec.securityContext)
+          || (!has(ec.securityContext.appArmorProfile)
+              && !has(ec.securityContext.seLinuxOptions)
+              && !has(ec.securityContext.windowsOptions)
+              && !has(ec.securityContext.procMount)))
+      reason: Forbidden
+      message: "code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)"
+    # SEC-1 forbidden fields.
+    - expression: >-
+        variables.newContainers.all(ec,
+          (!has(ec.tty) || ec.tty == false)
+          && (!has(ec.stdin) || ec.stdin == false)
+          && !has(ec.targetContainerName)
+          && (!has(ec.env) || size(ec.env) == 0)
+          && (!has(ec.envFrom) || size(ec.envFrom) == 0)
+          && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)
+          && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))
+      reason: Forbidden
+      message: "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted"
+    # SEC-1 command/args (C1): debugger MUST have empty command AND args (Option A);
+    # custom-inject MUST match its exact command/args.
+    - expression: >-
+        variables.newContainers.all(ec,
+          ec.name == 'phorvex-debugger'
+            ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))
+            : (ec.name == 'phorvex-custom'
+                ? (has(ec.command) && ec.command == ['sh', '-c']
+                   && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])
+                : true))
+      reason: Forbidden
+      message: "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: phorvex-codeexec-ephemeral
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: codeexec-ephemeral
+spec:
+  policyName: phorvex-codeexec-ephemeral
+  validationActions: ["Deny"]
+  matchResources:
+    # SEC-2 managed scope: installer-applied namespace label a tenant cannot self-apply.
+    # Out-of-scope (unlabelled) namespaces are NOT matched; Phorvex marks its own code-exec
+    # capability unavailable for those targets (C3).
+    namespaceSelector:
+      matchLabels:
+        phorvex.ai/codeexec-managed: "true"
+{{- end }}

@@ -18,6 +18,16 @@ rules:
 - apiGroups: ["admissionregistration.k8s.io"]
   resources: ["mutatingwebhookconfigurations"]
   verbs: ["get", "list"]
+{{- if .Values.phorvex.codeExecAdmission.enabled }}
+- apiGroups: ["admissionregistration.k8s.io"]
+  # M-6 runtime capability check: GET-by-resourceName ONLY of the two named code-exec admission
+  # objects, so the operator can VERIFY (never modify) that its own deny-policy is in force before
+  # it offers or dispatches an ephemeral-container injection. Read-only, scoped to exactly these two
+  # object names; no list/watch (informer), no create/update/delete. This is NOT an injection grant.
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: ["phorvex-codeexec-ephemeral"]
+  verbs: ["get"]
+{{- end }}
 - apiGroups: [""]
   resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
   verbs: ["get", "list", "watch"]

@@ -36,6 +36,7 @@ import (
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
+	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
@@ -78,6 +79,38 @@ type pendingRotation struct {
 }
 
 // Manager owns the tenant registry and the tick loop.
+// codeExecVerifier is the M-6 admission oracle the runner consumes: the O(1) cached gate
+// check (Available, via capability.AdmissionVerifier) plus the pre-submit FinalCheck (a
+// fresh, deadline-bounded re-verify + unexpired + epoch + scope) used immediately before an
+// irreversible ephemeral-container injection. *codeexec.Verifier satisfies it.
+type codeExecVerifier interface {
+	capability.AdmissionVerifier
+	FinalCheck(ctx context.Context, namespace string) (ok bool, reason string)
+}
+
+// codeExecAwareEligibility is the production capability closure the CoverageEngine invokes
+// per (asset, action). PRECEDENCE is the M-6 regression invariant: the full T1-E gate
+// (capWit.Eligible — which includes the code-exec admission leg) is consulted FIRST, and the
+// M99 no-rbac fallback applies ONLY when Eligible returns nil (eligible). So a code-exec move
+// whose admission is unverified is excluded by the code-exec leg and can NEVER be re-admitted
+// by the qualified-outcome/SLO path. Extracted from the tick closure so the precedence is
+// unit-tested against the exact code the runtime runs.
+func codeExecAwareEligibility(
+	capWit capability.Witness,
+	authzNil bool,
+	hasQualified func(*model.WorkloadView) bool,
+	v *model.WorkloadView, a model.Action, coverKeys []string,
+) *actionset.Eligibility {
+	r := capWit.Eligible(v, a, coverKeys)
+	if r == nil {
+		if authzNil && hasQualified(v) {
+			return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
+		}
+		return nil
+	}
+	return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+}
+
 type Manager struct {
 	OwnershipReader client.Reader // uncached, read-only owner evidence
 	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
@@ -96,6 +129,12 @@ type Manager struct {
 	// gate (installability + cover + runtime-capability still apply); the boot layer wires
 	// it from the cluster clientset so no-rbac exclusions become live.
 	Authz *authz.Checker
+	// CodeExec is the M-6 code-exec admission-capability verifier. nil disables the code-exec
+	// leg (debugger/custom-inject then fall through the other gates); the boot layer wires a
+	// real verifier + starts its periodic re-verify, so at runtime an unverified admission
+	// policy fail-closes those two actions out of both the offer set (gate: Available) and the
+	// dispatch path (pre-submit: FinalCheck).
+	CodeExec codeExecVerifier
 	// PCIeClasses is the chart's hardware-class table for the PCIe denominator (M-114).
 	PCIeClasses  ingest.PCIeClassTable
 	KillSwitch   *KillSwitch
@@ -962,18 +1001,14 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	// two can never drift into the M-20 mirror. m.Authz is nil until the boot layer wires
 	// the SSAR checker (then no-rbac becomes live); NotInstallable is empty on a current
 	// CRD (17/17).
-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator)
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator).
+		WithCodeExec(m.CodeExec, snap.NamespaceLabels)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+		authzNil := m.Authz == nil
 		ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
-			r := capWit.Eligible(v, a, coverKeys)
-			if r == nil {
-				if m.Authz == nil && decision.HasQualifiedOutcome(v, pol) {
-					return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
-				}
-				return nil
-			}
-			return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+			return codeExecAwareEligibility(capWit, authzNil,
+				func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) }, v, a, coverKeys)
 		}
 	}
 
@@ -1258,6 +1293,26 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
 			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible: "+verdict.Reason)
 			continue
+		}
+		// M-6 pre-submit gate: a code-exec injection (debugger/custom-inject) is submitted ONLY
+		// after a FRESH admission re-verification (unexpired + matching epoch + target in verified
+		// scope). This closes most of the gate-to-submit window; the residual race is covered by
+		// the API-server VAP as the durable enforcement. Fail-closed: an unwired verifier or an
+		// unverified policy refuses the dispatch. Guards BOTH the direct dispatch here and any
+		// queued work that reaches this boundary.
+		if decisions[i].Action == model.ActionDebugger || decisions[i].Action == model.ActionCustomInject {
+			if m.CodeExec == nil {
+				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec verifier unwired; refusing ephemeral-container injection",
+					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
+				stampDispatch(model.DispatchNotAttempted, codeexec.ReasonUnverified+": verifier-unwired")
+				continue
+			}
+			if ok, why := m.CodeExec.FinalCheck(ctx, decisions[i].Namespace); !ok {
+				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec admission not verified at pre-submit; refusing injection",
+					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", why)
+				stampDispatch(model.DispatchNotAttempted, why)
+				continue
+			}
 		}
 		score := decisions[i].DecisionValue()
 		if score > 1 {
