@@ -1,0 +1,5 @@
+Successfully packaged chart and saved it to: ../deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz
+==> Linting charts/phorvex
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed

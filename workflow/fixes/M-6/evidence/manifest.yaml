@@ -1,0 +1,495 @@
+schema_version: 1
+fix_id: M-6
+artifacts:
+- id: baseline-cluster
+  path: evidence/baseline/cluster.json
+  sha256: 6a2b8425e52bdfb04c348a88a6490bbef2d96c253de338c0fad6b668baba1778
+  bytes: 321186
+  producer: codex-m006
+  created_at: '2026-09-08T17:50:10.499078+00:00'
+  source_sha: c8c708145f2f425f0cee86d214671076ae1afcc0
+  command: Read-only kubectl version/get snapshot via SSH; see BASELINE.md and source-pin.json
+  evidence_class: INTAKE
+  expected_result: Observe current configuration without mutations
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: internal
+- id: baseline-source-pin
+  path: evidence/baseline/source-pin.json
+  sha256: eb8e61d97519a041b36a4923f3de7552a7e1d70a98e37949b65f06f2a54ce46d
+  bytes: 459
+  producer: codex-m006
+  created_at: '2026-09-08T17:50:10.499078+00:00'
+  source_sha: c8c708145f2f425f0cee86d214671076ae1afcc0
+  command: Read-only kubectl version/get snapshot via SSH; see BASELINE.md and source-pin.json
+  evidence_class: INTAKE
+  expected_result: Observe current configuration without mutations
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: internal
+- id: review-6d31afa688bb
+  path: evidence/baseline/authorization-review.json
+  bytes: 4234
+  sha256: 63bc6f0857b4e53da13cad1fc65e90d0dbe2a688a3e403213e473d1fe07b53e9
+  producer: codex-m006
+  created_at: '2026-09-08T18:20:28+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  evidence_class: INTAKE
+  command: Read-only authorization reviews; exact commands in JSON
+  expected_result: Retain source and review evidence
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-754a3abd1866
+  path: evidence/critique/critique-round1-3a2b7e7dc551.md
+  bytes: 4755
+  sha256: 3a2b7e7dc5516ff1009cf595bf001bd29e427ff670f2a8f0891e0343dc83ed22
+  producer: codex-m006
+  created_at: '2026-09-08T18:20:28+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  evidence_class: DESIGN
+  command: Immutable snapshot of reviewed design artifact; original content retained
+  expected_result: Retain source and review evidence
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-d8a637110a2c
+  path: evidence/critique/proposal-rev2-dc15c7a5537e.md
+  bytes: 16080
+  sha256: dc15c7a5537eb2e6ffdbf74906b83eece916231bf2a6be254a65195af4fa8172
+  producer: codex-m006
+  created_at: '2026-09-08T18:20:28+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  evidence_class: DESIGN
+  command: Immutable snapshot of reviewed design artifact; original content retained
+  expected_result: Retain source and review evidence
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: baseline-effective-direct-grants
+  path: evidence/baseline/effective-direct-grants.json
+  bytes: 11299
+  sha256: 715024a667c65583d437e9a4afbe8243d219a7d43d20e0750a4668dbc9eaae32
+  producer: codex-m006
+  created_at: '2026-09-08T18:27:46+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  evidence_class: INTAKE
+  command: Match captured RoleBinding/ClusterRoleBinding subjects against the deployed
+    operator SA and standard SA groups; resolve roleRef from cluster.json
+  expected_result: Retain matched direct-grant inventory
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-proposal-rev3-e07c2e63700c
+  path: evidence/critique/proposal-rev3-e07c2e63700c.md
+  sha256: e07c2e63700c39b999991a4161f90f440129f4032c7125d005796f3195618d19
+  bytes: 21296
+  producer: codex-m006
+  created_at: '2026-09-08T18:37:46.081696+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Immutable snapshot before round-3 critique; compare referenced proposal
+    sections
+  evidence_class: DESIGN
+  expected_result: Retain reviewed artifact
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-critique-round2-00d004c61006
+  path: evidence/critique/critique-round2-00d004c61006.md
+  sha256: 00d004c610061c7fabe3ea046c6b0bffae1aa036baa6c52cc5f8d95b6d7df403
+  bytes: 8827
+  producer: codex-m006
+  created_at: '2026-09-08T18:37:46.081696+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Immutable snapshot before round-3 critique; compare referenced proposal
+    sections
+  evidence_class: DESIGN
+  expected_result: Retain reviewed artifact
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: baseline-busybox-1-36-amd64
+  path: evidence/baseline/busybox-1.36-amd64.json
+  sha256: 7a88f5282a40b858432905be6fbcee3fe2268b2752815262ffd4936de7e6a19c
+  bytes: 1412
+  producer: codex-m006
+  created_at: '2026-09-08T19:01:46.379800+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'Read-only Docker Registry v2: busybox 1.36 index, linux/amd64 manifest,
+    config blob; digest verification'
+  evidence_class: INTAKE
+  expected_result: Resolve candidate digest and image configuration without execution
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-proposal-rev4-677710b45012
+  path: evidence/critique/proposal-rev4-677710b45012.md
+  sha256: 677710b450123ce252640ab88fc0c83a524749f0ae202f4173a0a6a5bce8e504
+  bytes: 18809
+  producer: codex-m006
+  created_at: '2026-09-08T19:02:56.760068+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Retain exact reviewed proposal/prior critique before closure review
+  evidence_class: DESIGN
+  expected_result: Retain reviewed artifact
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-critique-round3-72d6b7a4af0e
+  path: evidence/critique/critique-round3-72d6b7a4af0e.md
+  sha256: 72d6b7a4af0eb601bba54ab2928d8f6688652712838386b9402f36956db3861d
+  bytes: 13016
+  producer: codex-m006
+  created_at: '2026-09-08T19:02:56.760068+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Retain exact reviewed proposal/prior critique before closure review
+  evidence_class: DESIGN
+  expected_result: Retain reviewed artifact
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-proposal-rev5-022a2b00fe9f
+  path: evidence/critique/proposal-rev5-022a2b00fe9f.md
+  sha256: 022a2b00fe9ffabaa8884718eb80f6364b5583ba89f6f8b51cfd3acea59d07cc
+  bytes: 22495
+  producer: codex-m006
+  created_at: '2026-09-08T19:08:55.176831+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Snapshot exact proposal and preceding critique before rev5 technical convergence
+  evidence_class: DESIGN
+  expected_result: Retain reviewed artifact
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-critique-closure-rev4-ca53a7ec8b4f
+  path: evidence/critique/critique-closure-rev4-ca53a7ec8b4f.md
+  sha256: ca53a7ec8b4f1a2839f3044d8979ab478561443df8fcf0b39b3ba99321d22cb4
+  bytes: 18053
+  producer: codex-m006
+  created_at: '2026-09-08T19:08:55.176831+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Snapshot exact proposal and preceding critique before rev5 technical convergence
+  evidence_class: DESIGN
+  expected_result: Retain reviewed artifact
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: check-critique
+  path: 02B-critique.md
+  sha256: d6f94dc70ae64f87518504a7ee6e4cee8cc5735e1de0559bc7f28a25c0ae8be7
+  bytes: 21824
+  producer: codex-m006
+  created_at: '2026-09-08T19:08:55+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Compare retained rev5 with C1-C3 and sealed model; validate command constraints,
+    invalidation epoch and target scope contract; distinguish technical critique from
+    pending decision and live proof
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: baseline-authorization-boundary-review
+  path: evidence/baseline/authorization-boundary-review.json
+  sha256: 15fc0d3c18b0feb93e6e7c30f90ca2ffa122b6e98e9c4b5113ea39befd0caf3b
+  bytes: 33312
+  producer: codex-m006
+  created_at: '2026-09-08T19:24:48.154830+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 60 read-only kubectl auth can-i probes through SSH; exact commands/outcomes
+    and live actor identity in JSON
+  evidence_class: INTAKE
+  expected_result: Observe current direct authorization and remaining protection scope
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-93113107cc53
+  path: evidence/decision/package-before-final-review-604ae206a7c9.md
+  sha256: 604ae206a7c9a38b81101745a286a567f53f4d584dafd2545d705a78f229e54b
+  bytes: 12052
+  producer: codex-m006
+  created_at: '2026-09-08T19:29:49.332118+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Retained joint-review snapshot, read-only cluster provenance/authz, and
+    exact Git source comparison; see individual artifact method
+  evidence_class: DESIGN
+  expected_result: Retain evidence with actual observation scope
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-d62a48ac8b4c
+  path: evidence/baseline/live-0.4.98-source-pin.json
+  sha256: d822f7eb943b6bd180eaf60248e4ad2067e6f25cd360b4e460c2fe419d20e0d7
+  bytes: 1005
+  producer: codex-m006
+  created_at: '2026-09-08T19:29:49.332118+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Retained joint-review snapshot, read-only cluster provenance/authz, and
+    exact Git source comparison; see individual artifact method
+  evidence_class: INTAKE
+  expected_result: Retain evidence with actual observation scope
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-044cc583371c
+  path: evidence/baseline/source-drift-0.4.98.json
+  sha256: 86de17ae4148381f814bc05ea8017b25afb97009c4e2ec7844a6595980d517b9
+  bytes: 1521
+  producer: codex-m006
+  created_at: '2026-09-08T19:29:49.332118+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Retained joint-review snapshot, read-only cluster provenance/authz, and
+    exact Git source comparison; see individual artifact method
+  evidence_class: INTAKE
+  expected_result: Retain evidence with actual observation scope
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: review-e483e11f0054
+  path: evidence/baseline/named-admission-reads.json
+  sha256: f2da503d41cf81ab298e71d81abcff9d6f512cdc82568198fae2af6acaacb197
+  bytes: 2399
+  producer: codex-m006
+  created_at: '2026-09-08T19:29:49.332118+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Retained joint-review snapshot, read-only cluster provenance/authz, and
+    exact Git source comparison; see individual artifact method
+  evidence_class: INTAKE
+  expected_result: Retain evidence with actual observation scope
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: decision-review-55fc5a5d72a1
+  path: evidence/decision/technical-review.md
+  sha256: 2572df531cb0382d899e94b3c829167ca4aa020adb40038d36ab41a64d78c580
+  bytes: 1569
+  producer: codex-m006
+  created_at: '2026-09-08T19:30:45.599231+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: Independent technical package review and concrete human-decision handoff;
+    no decision-check approval
+  evidence_class: DESIGN
+  expected_result: Prepare reviewable pending security decisions
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: approval-f4a6d95a5075
+  path: evidence/decision/package-approved-input-3c6646a751e5.md
+  sha256: 3c6646a751e54be3feff196e4cbcc7c902275f837a44c922cf7e653147ff3928
+  bytes: 14143
+  producer: codex-m006
+  created_at: '2026-09-08T19:37:40.177903+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'Record actual human-owner contract choices from Claude relay #33; retain
+    pre-approval technical package'
+  evidence_class: DESIGN
+  expected_result: Accountable approval attribution and selected contract
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: approval-f7ae2d176032
+  path: evidence/decision/human-decision-2026-09-08.md
+  sha256: 10b0c7882e2e86b72e767170926b771854398b909c67398b01c98266234e55cf
+  bytes: 1835
+  producer: claude
+  created_at: '2026-09-08T19:37:40.177903+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'Record actual human-owner contract choices from Claude relay #33; retain
+    pre-approval technical package'
+  evidence_class: DESIGN
+  expected_result: Accountable approval attribution and selected contract
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: approval-9204bbdaa00a
+  path: MOSTAFA_REVIEW.md
+  sha256: 4b65a573fdde262410e70af6b87a76fd376ff6531563ccad66a5fac3fddb4ee4
+  bytes: 3052
+  producer: codex-m006
+  created_at: '2026-09-08T19:37:40.177903+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'Record actual human-owner contract choices from Claude relay #33; retain
+    pre-approval technical package'
+  evidence_class: DESIGN
+  expected_result: Accountable approval attribution and selected contract
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: check-decision
+  path: 03-decision.md
+  sha256: 9d566b9f4a406e8085a1bae1a9c8843e0e53ebe2ecf86707f1b51e4c43927879
+  bytes: 14781
+  producer: codex-m006
+  created_at: '2026-09-08T19:38:14+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'Independent signoff: compare selected Option A, namespace scope, singleton/platform/version
+    and L4 targets against retained technical package and human-owner approval relay
+    #33; preserve original seal and current-main integration review'
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: implementation-base-observation
+  path: evidence/decision/implementation-base.json
+  sha256: c54b14625c3df7032a65be7170f269b188f49e5e2247c229b5d224836b7a0e69
+  bytes: 433
+  producer: codex-m006
+  created_at: '2026-09-08T19:42:36.311452+00:00'
+  source_sha: 5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9
+  command: git rev-parse HEAD; git branch --show-current; git status --porcelain;
+    git merge-base --is-ancestor 47cc544 5a0fd3f; compare signed decision hash
+  evidence_class: DESIGN
+  expected_result: Confirm reviewed implementation base and unchanged signed contract
+  actual_result: PASS
+  retention: git
+  sensitivity: internal
+- id: check-base_review
+  path: evidence/base-review.md
+  sha256: f6a2a1f1365df407071fda65c6e72b97855b34c5707ba71b450d31422b636a14
+  bytes: 1533
+  producer: codex-m006
+  created_at: '2026-09-08T20:42:49+00:00'
+  source_sha: 5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9
+  command: git diff 79c0370..5a0fd3f -- phorvex/cmd/main.go phorvex/internal/runner/manager.go
+    phorvex/internal/actionset/generator.go phorvex/internal/feasibility/constraint.go
+    phorvex/charts/phorvex/templates/rbac.yaml; compare exact M6 substrate blobs in
+    source-drift-0.4.98.json
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-red
+  path: evidence/incident-local/baseline.log
+  sha256: 0c2f7af5bce0370a3d93f73a63920766d84cf9c789b0be347993a5189af0e6c7
+  bytes: 5382
+  producer: claude
+  created_at: '2026-09-08T22:17:49+00:00'
+  source_sha: 79c0370dd460a1d6400bc62346638655f64ae709
+  command: 'go test -mod=mod -modfile=/tmp/phorvex-m6-baseline.mod -overlay=evidence/incident-local/baseline-overlay.json
+    ./internal/actuator -run TestReviewerRealAPIIncident -count=1 -v  (real envtest
+    k8s v1.36.2 @ baseline 79c0370: OriginalProducerProfile security assertions FAIL
+    — API accepted mutable/unhardened producer; head exit 0). red-attestation.md retained
+    as historical qualified evidence.'
+  evidence_class: RED
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-implementation
+  path: 04-diff.patch
+  sha256: c79efd09c2a18ff2d6a7d5939ec03bcfc9c6da70c50b44eb1ae6d519a6b2d340
+  bytes: 191926
+  producer: claude
+  created_at: '2026-09-08T22:31:56+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: git diff --binary 5a0fd3f bfe559b; go build ./...; delta vs reviewed 9eb1427
+    is ONLY the vendored deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz (git diff
+    --stat = 1 Bin file, 0 source lines) — repackaged from the already-reviewed chart
+    source
+  evidence_class: IMPLEMENTATION
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l0
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:31:56+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: go build/vet + go test ./internal/codeexec/ (CEL+Helm) ./internal/capability/
+    ./internal/actuator/ at bfe559b; source byte-identical to reviewed 9eb1427
+  evidence_class: L0
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l1
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:31:57+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: go test -v ./internal/codeexec/ + runner M99/pre-submit invariants at bfe559b
+    (source identical to 9eb1427)
+  evidence_class: L1
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l2
+  path: evidence/l0-l2/chart-sync.log
+  sha256: bcb6566589d51a99ff181a658b400d502003024a04c00157d743fc42707c4a2f
+  bytes: 550
+  producer: claude
+  created_at: '2026-09-08T22:31:57+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: 'go test ./internal/... ./cmd/... exit 0 at bfe559b; PLUS chart-sync: diff
+    -r vendored phorvex-0.1.4.tgz vs phorvex/charts/phorvex clean + tools/test_chart_sync.py
+    OK (evidence/l0-l2/chart-sync.log)'
+  evidence_class: L2
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-positive_control
+  path: evidence/l0-l2/green-head.log
+  sha256: 037a2059d4a63015bc813cd72df5e58d4bf65a167ad4d72f54a1fe08d2b87902
+  bytes: 5213
+  producer: claude
+  created_at: '2026-09-08T22:31:57+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: positive controls unchanged at bfe559b (TestServerDefaultedContractAccepted;
+    TestCELAllowsCompliantRequests; TestHelmRenderEnabled==trusted; pre-submit case
+    (c) actuates)
+  evidence_class: CONTROL
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-incident
+  path: evidence/incident.md
+  sha256: dffe16884f9e5cb6416f731c3e41259c760acfe3c79cfb0d9e7b6d5f083f3402
+  bytes: 5561
+  producer: codex-m006
+  created_at: '2026-09-08T22:55:31+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: cd /home/mehrdad/operator-m006/phorvex && /usr/local/go/bin/go test -mod=mod
+    -modfile=/tmp/phorvex-m6-head.mod -overlay=/home/mehrdad/operator-workflow/workflow/fixes/M-6/evidence/incident-local/head-overlay.json
+    ./internal/actuator -run TestReviewerRealAPIIncident -count=1 -v
+  evidence_class: INCIDENT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-p3
+  path: evidence/p3/verdict.md
+  sha256: 2b6cd42982e546ceb13a5db38d121918f7ab20bd020063452f327b5bfc8db663
+  bytes: 1978
+  producer: codex-m006
+  created_at: '2026-09-08T22:55:31+00:00'
+  source_sha: bfe559b92a46fc5015c62e63111dfb6aaa011bfa
+  command: Independent archive-member comparison; all chart-sync CI shell steps; retained
+    TestReviewer overlay; real API incident at bfe559b. Evidence in evidence/p3/packaging.
+  evidence_class: P3
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null

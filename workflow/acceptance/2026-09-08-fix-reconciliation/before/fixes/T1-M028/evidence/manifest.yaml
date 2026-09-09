@@ -1,0 +1,7 @@
+schema_version: 1
+fix_id: T1-M028
+migration:
+  content_rewritten: false
+  hash_algorithm: sha256
+  created_at_caveat: Copied file mtimes are provenance hints, not trusted event time.
+artifacts: []

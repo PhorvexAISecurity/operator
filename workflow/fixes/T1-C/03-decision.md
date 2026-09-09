@@ -1,0 +1,27 @@
+# T1-C — 03 Decision (claude, Proposer/decider) — SENSING->ECONOMICS
+
+Base `62d6f48`. Commit `7c0cfeb` on `t1/sensing-honest-absent` (pushed). Roles: I implement + run Go, K3 blind-derived §A + §B + does P3 + L3 (K3 takes proposer on the next ticket — alternation debt recorded, bus 321/324).
+
+## Design decided (D-1..D-8 resolutions)
+- **D-5 / B.1 — enum:** KEEP the existing 5-value `model.WorkloadPhase`. NO `PhaseBusy`. PhaseOf returns `PhaseWarm` for both busy-measured and warm-by-absence; the switching-cost table is UNCHANGED (P2). The measured/assumed split lives only in the record's `phaseReason`. The stale 01/D3 "return PhaseBusy" prose is corrected. A-10 residue = exhaustive lint (below); the ticket's "move enum / delete cost copy" is stale text (one enum already, no cost copy).
+- **B.2 — retype is 1:1, not lossy:** field-complete typed retype keeping every name (`P99Ms` not renamed, `LatencyMs` separate, `BytesIn`/`BytesOut` SEPARATE so the littles-law flow ratio is intact, `SyscallRate` typed, `TokensPerSec` typed AND in `AppLevelPresent`). No merge to CPU/Mem/NetBytes/LatencyP95/SLOHeadroom — those ticket-snippet names don't exist in the scrape and were not invented. `PresentSignals` deleted; the record's `present.{reqRate,connCount,gpuUtil}` keys are re-derived from typed State → coverage ≥ T0-D's key set (B.2.6).
+- **D-8 / A.4 — littleslaw scope fork: DECIDED = option (a) per-term `Usable()` gates.** The phantom fan-out (real ConnCount vs absent-zero ReqRate fabricating a lateral-probing residual) fed LIVE selection; each term now gates on its own signal's usability, with NO change to bands/blend/pol_floor. **Option (b) REJECTED-with-reason:** a compat shim that byte-preserves the phantom knowingly keeps a false residual in the optimizer to satisfy strict scope — unacceptable when it is already miscoloring selection.
+- **A.4 — excluded-package migration:** deleting the bool forces a *mechanical, logic-free* rename in physics(only littleslaw, which got the real per-term fix)/feasibility/cmd/benchmarks. `platform` genuinely untouched (its `.Present` is EPSS, a different type). No cost constants, no phase thresholds, no physics math changed (P2).
+- **D-6 — NaN:** recon guards cited as ALREADY LANDED (nonfinite_guard green on base); M-111's remaining surface is ingest-side `Signal.State=Error` on a non-finite sample.
+- **D-4 / B.5 — SLO:** skip decided at `feasibility/defaults.go` and `ctxprov/sensed.go` via `P99Ms.Usable()`; headroom computed ONLY when usable; recorded absent otherwise (no silent 1.0 in the record); `phorvex_slo_gate_skipped_total{tenant,reason}` counts the skip; never blocks (P-NO-FREEZE).
+- **B.4 — failed-job pods appear with State=Error**, not vanished; the pod universe includes last-good keys. Test asserts presence-with-Error.
+- **B.3 — Stale cache:** owner `PromHTTP.lastGood[ns\x00pod][sig]` + `lastAgg`, `mu`-guarded; maxAge = 3×`ScrapeInterval` (OUR poll interval, K3 Q3), default 30s; `pruneCache` evicts past maxAge each tick (bounded on pod churn).
+- **File location deviation:** `Signal`/`State` live in `internal/model` (signal.go), not `internal/ingest` as the ticket snippet showed — `model.Telemetry` embeds them and `model` cannot import `ingest`. Justified, recorded.
+
+## Deliberate test-semantics change (evidence-discipline)
+`nan_guard_test.go` (a): the pre-T1-C assertion "all-NaN ⇒ pod dropped entirely" is INVERTED to "all-NaN ⇒ pod present, every signal State=Error/unusable." This is required by the sanctioned P-SENSING/B.4 design (Error must be distinguishable from Absent). Not a green-wash: the RED capture (evidence/RED_phaseof.txt) proves the behavioral flip on the old code, and the new assertion is strictly stronger.
+
+## Scoped follow-ups (named, not silently dropped)
+1. **TelemetryDegraded CRD status condition** — the scrape failure is surfaced now via `phorvex_scrape_failures_total` + an ERROR log; the operator-facing PhorvexPolicy status condition is a bounded follow-up (runner/status.go path). M-130 is surfaced; the condition is the nicety.
+2. **Raw cAdvisor deltas into the record** — `ConnDeltaPerSec`/`BytesDeltaPerSec` are COMPUTED and carried on Telemetry; serializing them into the trace is deferred until T1-M142 (their only consumer) exists.
+3. **exhaustive lint CI wiring** — `.golangci.yml` lands with the code and the WorkloadPhase switches are exhaustive-clean (arm removal fails `golangci-lint run`); wiring the lint step into ci.yml is the CI owner's step (same pattern as T0-C's hami E2E stage).
+4. **slo_gate_skipped once-per-transition** — currently a per-skip counter (rate-able); transition-dedup is a refinement.
+5. **F1 (K3 P3): scrape-failure ERROR log fires per-tick while degraded** — ticket wanted once-per-transition. `phorvex_scrape_failures_total` carries the countable signal; transition-dedup on the log (a small manager map) is a named follow-up, NOT silently dropped.
+6. **F2 (K3 P3): computeDeltas zero-baseline** — an unusable signal contributes a 0 aggregate, so the first delta after a gap can read inflated. No consumer in T1-C (logged only); a code caveat now names it for the T1-M142 handoff (its only future reader).
+
+**K3 P3 F3 (drift risk) — FIXED in code, not deferred:** PhaseOf and PhaseReasonOf now delegate to a single `classifyPhase(p,t) (WorkloadPhase, string)`, so phase and reason cannot drift. Pure refactor, behavior-identical (touched-package tests green). types.go has no stale Present paragraph; cmd/main.go .Value-zeros are a debug-CLI cosmetic only.

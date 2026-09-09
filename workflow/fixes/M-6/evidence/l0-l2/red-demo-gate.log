@@ -1,0 +1,6 @@
+# RED demo A (gate leg disabled) — command: go test ./internal/capability/ -run TestEligible_CodeExecUnverifiedExcluded
+--- FAIL: TestEligible_CodeExecUnverifiedExcluded (0.00s)
+    gate_codeexec_test.go:45: debugger must be excluded when admission is unverified
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/capability	0.014s
+FAIL

@@ -1,0 +1,10 @@
+=== RUN   TestM016SerializedFallbackAndSelection
+    m016_serialized_test.go:50: fallback mislabeled: quarantine not selected by the current greedy/budget result (reported gain=2.25 fullValue=2.25 ECost=0.28 lambdaRuntimeLegacy=0.00); stage=recon pHold=0.60
+    m016_serialized_test.go:50: fallback mislabeled: quarantine not selected by the current greedy/budget result (reported gain=2.25 fullValue=2.25 ECost=0.28 lambdaRuntimeLegacy=0.00); stage=recon pHold=0.60
+    m016_serialized_test.go:63: actual engine -> audit JSONL: selected=1 fallback=2
+--- FAIL: TestM016SerializedFallbackAndSelection (0.01s)
+=== RUN   TestM016NoCandidateDoesNotInventAction
+--- PASS: TestM016NoCandidateDoesNotInventAction (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/decision	0.046s
+FAIL

@@ -1,0 +1,15 @@
+=== capture files (jump host /tmp/campaign/round1) ===
+   159 /tmp/campaign/round1/brain-log.ndjson
+     7 /tmp/campaign/round1/gpu.ndjson
+    40 /tmp/campaign/round1/pods.ndjson
+     4 /tmp/campaign/round1/securityevents.ndjson
+   210 total
+
+=== arm A policy status ===
+NAME          TENANT        MODE     SELECTED   DECISIONS   ACTIONS                                                                LASTTICK   AGE
+cv1-defense   cv1-control   active   2                      all enabled actions have matching capabilities in the selected fleet   5s         6m15s
+
+=== latest arm A tick lines ===
+{"capture_ts":"2026-08-25T14:38:43.577Z","src":"brain","raw":"2026-08-25T14:38:43.530317415Z 2026-08-25T14:38:43Z\tINFO\taudit\ttick\t{\"tenant\": \"cv1-control\", \"pods\": 2, \"selected\": 0, \"infeasible\": 2, \"mode\": \"active\", \"killSwitch\": false, \"durationMs\": 13}\n"}
+{"capture_ts":"2026-08-25T14:39:03.744Z","src":"brain","raw":"2026-08-25T14:39:03.653893088Z 2026-08-25T14:39:03Z\tINFO\taudit\ttick\t{\"tenant\": \"cv1-control\", \"pods\": 2, \"selected\": 0, \"infeasible\": 2, \"mode\": \"active\", \"killSwitch\": false, \"durationMs\": 15}\n"}
+{"capture_ts":"2026-08-25T14:39:13.781Z","src":"brain","raw":"2026-08-25T14:39:13.687266477Z 2026-08-25T14:39:13Z\tINFO\taudit\ttick\t{\"tenant\": \"cv1-control\", \"pods\": 2, \"selected\": 0, \"infeasible\": 2, \"mode\": \"active\", \"killSwitch\": false, \"durationMs\": 14}\n"}

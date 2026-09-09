@@ -1,0 +1,226 @@
+diff --git a/phorvex/internal/actuator/verbs.go b/phorvex/internal/actuator/verbs.go
+index 8dc521e..336514e 100644
+--- a/phorvex/internal/actuator/verbs.go
++++ b/phorvex/internal/actuator/verbs.go
+@@ -41,9 +41,26 @@ var actionVerbs = map[model.Action][]authz.Verb{
+ 	model.ActionKVMigrateInvalidate: {{Resource: "pods", Verb: "update"}},
+ }
+ 
+-// RequiredVerbs returns the RBAC verbs the capability gate must confirm before action a
+-// is offered. A non-generatable action (e.g. noop) or an unmapped one returns nil (no
+-// RBAC gate); the completeness test guarantees every generatable action is mapped.
++// phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the
++// operator does NOT mutate pods — it CREATES a controlled SecurityEvent (RuleTypeFor) that
++// Phoenix (R6) enacts. The operator holds this grant CLUSTER-WIDE (rbac.yaml base rule
++// amtd.r6security.com/securityevents:[get,list,watch,create]), whereas the native pod
++// verbs are bound only per phorvex.actuatorNamespaces. (M-160.)
++var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "create"}}
++
++// RequiredVerbs returns the RBAC verbs the capability gate must confirm before action a is
++// offered — ROUTING-AWARE (M-160). A Phoenix-routed action (RuleTypeFor != "") is gated on
++// the SecurityEvent-create verb the operator actually uses, NOT the native handler's pod
++// verbs it never touches on that path — the fix for the no-rbac false-exclusion of
++// rotate/quarantine outside the native-bound namespaces. Native-routed actions keep their
++// own verbs. A non-generatable/unmapped action returns nil (no RBAC gate).
++//
++// This tracks the HYBRID actuator's routing (the production default; hybrid.go delegates by
++// exactly this RuleTypeFor). A pure-native actuator would take the native path for
++// rotate/quarantine; making that precise is the Actuator-interface method (deferred).
+ func RequiredVerbs(a model.Action) []authz.Verb {
++	if RuleTypeFor(a) != "" {
++		return phoenixRuleVerbs
++	}
+ 	return actionVerbs[a]
+ }
+diff --git a/phorvex/internal/actuator/verbs_test.go b/phorvex/internal/actuator/verbs_test.go
+index 2118657..d74c062 100644
+--- a/phorvex/internal/actuator/verbs_test.go
++++ b/phorvex/internal/actuator/verbs_test.go
+@@ -28,6 +28,27 @@ func TestRequiredVerbsCoversEveryMutatingAction(t *testing.T) {
+ 	}
+ }
+ 
++// TestRequiredVerbsRoutingAware (M-160): a Phoenix-routed action (RuleTypeFor != "") is gated
++// on the SecurityEvent-create verb the operator actually uses on that path — held cluster-wide —
++// NOT the native pod verbs it never touches (which are bound only per actuatorNamespaces). A
++// native-routed action keeps its own verbs. This is the fix for the no-rbac false-exclusion of
++// rotate/quarantine outside the native-bound namespaces.
++func TestRequiredVerbsRoutingAware(t *testing.T) {
++	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
++		got := RequiredVerbs(a)
++		if len(got) != 1 || got[0].Group != "amtd.r6security.com" || got[0].Resource != "securityevents" || got[0].Verb != "create" {
++			t.Errorf("Phoenix-routed %q must gate on amtd.r6security.com/securityevents:create, got %+v", a, got)
++		}
++	}
++	// Native-routed actions keep their native handler verbs.
++	if got := RequiredVerbs(model.ActionKVReset); len(got) != 1 || got[0].Resource != "pods" || got[0].Verb != "update" {
++		t.Errorf("native-routed kv-reset must keep pods/update, got %+v", got)
++	}
++	if got := RequiredVerbs(model.ActionRouteRotate); len(got) != 2 {
++		t.Errorf("native-routed route-rotate must keep its 2 native verbs, got %+v", got)
++	}
++}
++
+ // TestRequiredVerbsAreWellFormed: every declared verb names a resource and a verb (a blank
+ // tuple would make the SSAR meaningless / always-allow).
+ func TestRequiredVerbsAreWellFormed(t *testing.T) {
+diff --git a/phorvex/internal/capability/gate.go b/phorvex/internal/capability/gate.go
+index f85667d..f5019e2 100644
+--- a/phorvex/internal/capability/gate.go
++++ b/phorvex/internal/capability/gate.go
+@@ -199,6 +199,28 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
+ 	return true, ""
+ }
+ 
++// CapableAndAuthorized is Capable PLUS the no-rbac leg, per (pod, action) — the check the
++// ActionsSupported status uses (M-160) so the condition reflects RBAC exclusions, not only
++// runtime fixtures. It mirrors the generator gate's RBAC step (routing-aware verbs via
++// actuator.RequiredVerbs; the SSAR is the same cached (ns,verb), so no new SSAR volume).
++// RBAC-unknown fails OPEN (ok=true): an SSAR error is not a status gap (P-NO-FREEZE),
++// matching the gate. On a deny the why is "no-rbac: <detail>" — the same ReasonNoRBAC
++// vocabulary the record's exclusionReason carries, so condition and record don't disagree.
++func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action) (bool, string) {
++	if ok, why := w.Capable(v, action); !ok {
++		return false, why
++	}
++	if w.az != nil {
++		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
++			allowed, unknown, why := w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
++			if !unknown && !allowed {
++				return false, ReasonNoRBAC + ": " + why
++			}
++		}
++	}
++	return true, ""
++}
++
+ // configWhy returns the missing per-target CONFIG fixture for an AI action, from the
+ // model's typed witnesses + the pool index; "" means the config fixtures are present.
+ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
+diff --git a/phorvex/internal/capability/gate_test.go b/phorvex/internal/capability/gate_test.go
+index 835ed9e..4ca34b4 100644
+--- a/phorvex/internal/capability/gate_test.go
++++ b/phorvex/internal/capability/gate_test.go
+@@ -2,9 +2,15 @@ package capability
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"strings"
+ 	"testing"
+ 
++	authzv1 "k8s.io/api/authorization/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++
++	"github.com/phorvex/phorvex/internal/authz"
++
+ 	"github.com/phorvex/phorvex/internal/actuator"
+ 	"github.com/phorvex/phorvex/internal/ingest"
+ 	"github.com/phorvex/phorvex/internal/model"
+@@ -275,3 +281,44 @@ func TestTransportUnwired_M79(t *testing.T) {
+ 		t.Fatalf("mig-rebind with unwired transport: want capability-unsupported transport-unwired, got ok=%v why=%q", ok, why)
+ 	}
+ }
++
++// --- M-160: CapableAndAuthorized (Capable + the no-rbac leg, for the status condition) ---
++
++type denySSAR struct{ denyNS, errNS map[string]bool }
++
++func (d denySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authzv1.SelfSubjectAccessReview, error) {
++	ns := sar.Spec.ResourceAttributes.Namespace
++	if d.errNS[ns] {
++		return nil, errors.New("apiserver blip")
++	}
++	sar.Status.Allowed = !d.denyNS[ns]
++	return sar, nil
++}
++
++func TestCapableAndAuthorized(t *testing.T) {
++	capable := model.Pod{Namespace: "denied", HasGPU: true, ServingEndpointReady: true}
++	az := authz.NewCheckerWithClient(denySSAR{denyNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
++	wit := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, az, okActuator{})
++
++	// Capable but RBAC-denied -> the condition sees a no-rbac gap (M-160).
++	if ok, why := wit.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); ok || !strings.HasPrefix(why, "no-rbac:") {
++		t.Fatalf("capable-but-denied must be no-rbac, got ok=%v why=%q", ok, why)
++	}
++	// Capable AND authorized (different ns) -> supported.
++	okPod := model.Pod{Namespace: "allowed", HasGPU: true, ServingEndpointReady: true}
++	witA := BuildWitness(context.Background(), BuildIndex([]model.Pod{okPod}, nil, nil), nil, az, okActuator{})
++	if ok, _ := witA.CapableAndAuthorized(&model.WorkloadView{Pod: okPod}, model.ActionKVReset); !ok {
++		t.Fatal("capable + authorized must be supported")
++	}
++	// A capability failure short-circuits BEFORE the RBAC leg (no wasted SSAR, capability why wins).
++	noEP := model.Pod{Namespace: "allowed", HasGPU: true, ServingEndpointReady: false}
++	if ok, why := witA.CapableAndAuthorized(&model.WorkloadView{Pod: noEP}, model.ActionKVReset); ok || strings.HasPrefix(why, "no-rbac") {
++		t.Fatalf("capability failure must win before RBAC, got ok=%v why=%q", ok, why)
++	}
++	// RBAC-unknown fails OPEN (never a status gap; criterion 3).
++	azErr := authz.NewCheckerWithClient(denySSAR{errNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
++	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, azErr, okActuator{})
++	if ok, _ := witE.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); !ok {
++		t.Fatal("rbac-unknown must fail open (ok=true)")
++	}
++}
+diff --git a/phorvex/internal/runner/actions_supported.go b/phorvex/internal/runner/actions_supported.go
+index 0b56d42..de7a4fc 100644
+--- a/phorvex/internal/runner/actions_supported.go
++++ b/phorvex/internal/runner/actions_supported.go
+@@ -62,7 +62,9 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
+ 		unsupported := 0
+ 		whyCount := map[string]int{}
+ 		for _, v := range views {
+-			if ok, why := wit.Capable(v, action); !ok {
++			// M-160: Capable AND authorized — the condition now reflects no-rbac gaps too,
++			// not only runtime fixtures (RBAC-unknown fails open inside, never a status gap).
++			if ok, why := wit.CapableAndAuthorized(v, action); !ok {
+ 				unsupported++
+ 				if why != "" {
+ 					whyCount[why]++
+diff --git a/phorvex/internal/runner/actions_supported_test.go b/phorvex/internal/runner/actions_supported_test.go
+index e3d26b7..c59cccb 100644
+--- a/phorvex/internal/runner/actions_supported_test.go
++++ b/phorvex/internal/runner/actions_supported_test.go
+@@ -7,6 +7,7 @@ import (
+ 	"testing"
+ 	"time"
+ 
++	authzv1 "k8s.io/api/authorization/v1"
+ 	"k8s.io/apimachinery/pkg/api/meta"
+ 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ 	"k8s.io/apimachinery/pkg/runtime"
+@@ -16,6 +17,7 @@ import (
+ 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+ 
+ 	"github.com/phorvex/phorvex/api/v1alpha1"
++	"github.com/phorvex/phorvex/internal/authz"
+ 	"github.com/phorvex/phorvex/internal/capability"
+ 	"github.com/phorvex/phorvex/internal/model"
+ )
+@@ -266,3 +268,26 @@ func TestUnsupportedConditionEmitsOnePolicyEvent(t *testing.T) {
+ func clientKey(object client.Object) types.NamespacedName {
+ 	return types.NamespacedName{Namespace: object.GetNamespace(), Name: object.GetName()}
+ }
++
++// --- M-160: the ActionsSupported condition now reflects no-rbac gaps ---
++
++type runnerDenySSAR struct{ deny bool }
++
++func (d runnerDenySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authzv1.SelfSubjectAccessReview, error) {
++	sar.Status.Allowed = !d.deny
++	return sar, nil
++}
++
++// TestConditionSurfacesNoRBAC: a pod capable of kv-reset but RBAC-denied must appear as a gap in
++// the condition (M-160 part B) — before, the condition read capability only and stayed silent.
++func TestConditionSurfacesNoRBAC(t *testing.T) {
++	pod := model.Pod{Namespace: "denied", Name: "p", HasGPU: true, ServingEndpointReady: true}
++	az := authz.NewCheckerWithClient(runnerDenySSAR{deny: true}, authz.DefaultTTL)
++	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, nil)
++	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
++
++	gaps := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}}, wit)
++	if len(gaps) != 1 || gaps[0].action != model.ActionKVReset || !strings.HasPrefix(gaps[0].why, "no-rbac:") {
++		t.Fatalf("condition must surface the kv-reset no-rbac gap, got %+v", gaps)
++	}
++}

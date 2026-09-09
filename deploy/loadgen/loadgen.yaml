@@ -1,0 +1,181 @@
+# phorvex-loadgen — synthetic user traffic for the demo apps on phorvex-dev-eks.
+#
+# The generator source lives in loadgen.py and is mounted from a ConfigMap that apply.sh
+# builds from that file — same no-image-build pattern as the crm and mcp-server demo apps.
+# Apply with ./apply.sh (which creates the ConfigMap first); `kubectl apply -f loadgen.yaml`
+# alone will leave the pod waiting on a missing `loadgen-code` ConfigMap.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phorvex-loadgen
+  labels:
+    app.kubernetes.io/part-of: phorvex
+    phorvex.ai/role: traffic-generator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: loadgen
+  namespace: phorvex-loadgen
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loadgen
+  namespace: phorvex-loadgen
+  labels:
+    app: loadgen
+spec:
+  type: ClusterIP
+  selector:
+    app: loadgen
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: phorvex-loadgen
+  labels:
+    app: loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadgen
+  template:
+    metadata:
+      labels:
+        app: loadgen
+      annotations:
+        # roll the pod whenever the code ConfigMap changes (apply.sh stamps this)
+        phorvex.ai/code-hash: "unset"
+    spec:
+      serviceAccountName: loadgen
+      # traffic generation is best-effort background load: it must never win a
+      # scheduling fight against the apps it is supposed to be exercising
+      priorityClassName: ""
+      terminationGracePeriodSeconds: 20
+      containers:
+        - name: loadgen
+          image: python:3.11-slim
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # espeak-ng gives the synthetic caller real words. Without it the voice
+              # driver falls back to speech-shaped tones, which trip the bot's VAD but
+              # produce no transcript — so the call stops before the LLM.
+              #
+              # apt normally drops privileges to the `_apt` user, which needs SETUID/SETGID,
+              # and writes to dirs this container cannot touch with capabilities dropped.
+              # Pointing its state at /tmp and telling it not to switch users lets the
+              # install work while the container keeps `drop: [ALL]`.
+              export DEBIAN_FRONTEND=noninteractive
+              mkdir -p /tmp/apt/lists/partial /tmp/apt/archives/partial
+              APT_OPTS="-o APT::Sandbox::User=root \
+                        -o Dir::State::Lists=/tmp/apt/lists \
+                        -o Dir::Cache::Archives=/tmp/apt/archives"
+              apt-get $APT_OPTS update -qq \
+                && apt-get $APT_OPTS install -y -qq --no-install-recommends espeak-ng \
+                || echo "WARN: espeak-ng install failed; voice falls back to tones"
+              rm -rf /tmp/apt
+
+              pip install --no-cache-dir 'httpx>=0.27,<0.29' 'websockets>=12,<14' \
+                && exec python -u /app/loadgen.py
+          env:
+            # ── targets ────────────────────────────────────────────────────────
+            - name: CRM_URL
+              value: "http://crm.crm.svc.cluster.local:8080"
+            - name: VOICE_URL
+              value: "http://voice-bot.voice.svc.cluster.local:8080"
+            - name: VOICE_WS_URL
+              value: "ws://voice-bot.voice.svc.cluster.local:8080/ws"
+            - name: LITELLM_URL
+              value: "http://litellm.litellm.svc.cluster.local:4000"
+            - name: LITELLM_KEY
+              value: "sk-phorvex-demo-1234"
+            - name: VLLM_URL
+              value: "http://vllm.vllm.svc.cluster.local:8000"
+            - name: VLLM_MODEL
+              value: "Qwen/Qwen2.5-7B-Instruct-AWQ"
+            - name: MCP_URL
+              value: "http://mcp-server.mcp.svc.cluster.local:8000/mcp"
+            - name: CHROMA_URL
+              value: "http://chroma.document-store.svc.cluster.local:8000"
+            - name: CHROMA_COLLECTION
+              value: "knowledge_base"
+            # ── shape of the load ──────────────────────────────────────────────
+            - name: LOADGEN_APPS
+              value: "crm,voice,vllm,litellm,mcp,chroma"
+            - name: LOADGEN_RATE_SCALE   # one dial for overall volume
+              value: "1.0"
+            - name: DIURNAL
+              value: "1"
+            - name: TZ_OFFSET_HOURS      # users are Pacific; cluster is us-east-2
+              value: "-8"
+            # peak sessions per minute, before the diurnal curve scales them down
+            - name: CRM_SPM
+              value: "6"
+            - name: VOICE_CPM            # concurrent phone calls are expensive; keep low
+              value: "1.2"
+            - name: VLLM_SPM
+              value: "4"
+            - name: LITELLM_SPM
+              value: "3"
+            - name: MCP_SPM
+              value: "2.5"
+            - name: CHROMA_SPM
+              value: "5"
+            # ── mutations ──────────────────────────────────────────────────────
+            - name: ENABLE_WRITES
+              value: "1"
+            - name: WRITES_PER_MIN       # hard ceiling on CRM refunds/resets/appointments
+              value: "2"
+            - name: SYNTH_TAG
+              value: "[synthetic-loadgen]"
+            - name: VOICE_USE_ECHO
+              value: "1"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: METRICS_PORT
+              value: "9090"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false   # pip needs to write into the image's site-packages
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: code
+              mountPath: /app
+      volumes:
+        - name: code
+          configMap:
+            name: loadgen-code

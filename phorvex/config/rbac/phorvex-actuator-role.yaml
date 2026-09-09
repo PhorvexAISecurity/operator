@@ -50,7 +50,10 @@ rules:
   # DaemonSet, Job) to detach the pod out of it (preserving the stateful job — the lead
   # demo). Read-only. MUST NOT be dropped.
   - apiGroups: ["apps"]
-    resources: ["replicasets", "statefulsets", "daemonsets"]
+    resources: ["replicasets", "statefulsets", "daemonsets", "deployments"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["replicationcontrollers"]
     verbs: ["get"]
   - apiGroups: ["batch"]
     resources: ["jobs"]

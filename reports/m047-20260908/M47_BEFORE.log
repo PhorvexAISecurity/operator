@@ -1,0 +1,8 @@
+=== RUN   TestM47OwnershipMatrix
+=== RUN   TestM47OwnershipMatrix/bare
+    m047_rotate_test.go:64: {Note:deleted; owner respawns clean (the respawn IS recovery) Actuator:native AMTDName: EventName: RuleType: RuleThreatLevel: RuleSource: Emitted:true Handler:rotate ObjectsTouched:[Pod/ns/p] RollbackRef: MutationKind:forward-only} want refusal ownerless
+--- FAIL: TestM47OwnershipMatrix (0.01s)
+    --- FAIL: TestM47OwnershipMatrix/bare (0.01s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/actuator	0.055s
+FAIL

@@ -1,0 +1,52 @@
+T0-C L3 LIVE VERIFICATION — 2026-09-04 ~17:53 UTC
+Cluster: live EKS (us-east-2), brain phorvex-phorvex-85d8ddbb5-l6wpg on ip-172-27-12-248
+Image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.80 (contains T0-C merge 098ab89)
+Method: read-only reader pod on brain node, python scan of /audit/live.jsonl* (full corpus),
+        per-record v3 invariant checks (fixtures B.7 laws re-verified against live data).
+
+total decision records scanned: 15159
+records by build: {'0.4.80': 15159}
+schemaVersion by build: {'0.4.80|phorvex.decision-trace.v3': 15159}
+selected by build: {'0.4.80': 2}
+v3 records: 15159
+v3 selected records: 2
+vllm non-not-enabled row signatures (status,kind,scored):
+  {(('infeasible','feasibility',False), ('candidate','reactive-only',False)): 817}
+v3 record size: mean 83308 B over 15159
+
+ALL V3 CHECKS PASS
+  - exactly 15 actionStatus rows, canonical order, closed enums (status/exclusionKind/dispatchOutcome)
+  - selected rows carry exclusionKind=none; cost-nan rows are status=infeasible
+  - coveredBeforeDecision derived from coveredRound < evaluationRound on every fact
+  - CHi law (B.1), marginal law (B.2), expectedCost/netGain laws hold on every candidate row
+  - costModelVersion + effective costCeiling recorded at trace level
+  - dispatchOutcome consistent with selected bit (2 selected records, both stamped)
+  - no secret-pattern hits in any raw record line
+  - vllm: 817 records, all rows honest — infeasible/feasibility + candidate/reactive-only/scored=false
+    (pre-T0-C these read as bare "candidate" with no distinction)
+
+NOTES / INCIDENTS DURING VERIFICATION
+1. Node flap: brain node ip-172-27-12-51 went NotReady ~17:29 UTC. Brain failed over to
+   ip-172-27-12-248 after RWO force-detach (~18 min downtime, 17:28-17:46). Record gap in
+   that window. Old node still NotReady at report time — infra item, not Phorvex.
+2. RETENTION FINDING: the pre-0.4.80 corpus (0.4.73/74/75 v2 records, present in this
+   morning's scan) is GONE from /audit — rotated out. v3 records average ~83 KB (vs ~15-20 KB
+   for v2), so size-capped retention now evicts history ~4-5x faster. Effective audit history
+   depth has shrunk accordingly; if long retention matters, the cap needs revisiting.
+3. Only 2 selected records in the v3 window (reactive-only posture, no active campaign) —
+   dispatch paths beyond not-attempted are thinly exercised live; both selected records
+   passed dispatch sanity.
+
+ADDENDUM (18:11 UTC, second scan + frozen export per Claude's L3 spec, bus 294):
+records=12988 (window rotated further; still 100% 0.4.80)
+gitSHA dist: {17082b7fbcf436bde72723996fcbbe149fe3bfff: 12988}  (deployed = v0.4.80 build commit)
+size bytes: median=87043 mean=83239 min=22501 max=101144
+sloHeadroom: present=0 absent=12988 (as spec'd)
+leakage: OptionalFloat {"present": false, "value": 0} on all (absent-by-presence, as spec'd)
+costCeiling>0: 12988/12988; costModelVersion non-empty: 12988/12988
+selected: 2, both voice/rotate (0.015%; baseline was 5/20044=0.025% rotate on voice)
+Frozen slice for Claude's validator: ../live/01-post-deploy-0.4.80-17082b7.jsonl
+  (2,002 records = newest 2,000 + all 2 selected; 161 MB; gitSHA-verified 100% 17082b7)
+Size band vs 0.4.74/75 mixed baseline mean (~63.6 KB): +31% mean/mean — OVER the +5% band;
+flagged to Claude with composition caveats (no 0.4.75 median survives; schema adds only ~2-4 KB).
+Reader pods l3/l3b/l3c/l3d all deleted; one write op: force-delete of own evicted pod l3b.

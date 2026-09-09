@@ -1,0 +1,3 @@
+Head: d68a9edb361c81a31afd1e670416b2a6eadce77a
+At UTC: 2026-09-08T21:48:51.944439+00:00
+Original manifest and Cluster-scope variation submitted with kubectl create --dry-run=server -f - -o json via authorized dev jump host. Both exit codes 0. Original stdout contains two consecutive JSON documents; api-defaulted-objects.json wraps them in an array without field edits. No policy/binding installed; subsequent kubectl get validatingadmissionpolicy,validatingadmissionpolicybinding phorvex-codeexec-ephemeral --ignore-not-found -o name returned exit 0, empty stdout. These API probes establish admission object validation/defaulting, not activation or ephemeralcontainers enforcement.

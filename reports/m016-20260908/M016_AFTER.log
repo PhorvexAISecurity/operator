@@ -1,0 +1,7 @@
+=== RUN   TestM016SerializedFallbackAndSelection
+    m016_serialized_test.go:63: actual engine -> audit JSONL: selected=1 fallback=2
+--- PASS: TestM016SerializedFallbackAndSelection (0.01s)
+=== RUN   TestM016NoCandidateDoesNotInventAction
+--- PASS: TestM016NoCandidateDoesNotInventAction (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/decision	0.041s

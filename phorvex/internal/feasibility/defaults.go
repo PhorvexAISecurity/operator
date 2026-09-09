@@ -186,3 +186,22 @@ func init() {
 	Registry.Register(antiOverRotation{})
 	Registry.Register(statefulIntegrity{})
 }
+
+// nativeRotationOwner reuses the same validated verdict as the destructive boundary.
+type nativeRotationOwner struct{}
+
+func (nativeRotationOwner) Name() string { return "native-rotation-owner" }
+func (nativeRotationOwner) Check(v *model.WorkloadView, m model.Move, p model.Policy) Verdict {
+	if m.Action != model.ActionRotate || !p.NativeRotate {
+		return feasible
+	}
+	if !v.Pod.RotationOwnership.Eligible {
+		reason := v.Pod.RotationOwnership.Reason
+		if reason == "" {
+			reason = "owner-unresolved"
+		}
+		return Verdict{Reason: "native-rotation-owner: " + reason}
+	}
+	return feasible
+}
+func init() { Registry.Register(nativeRotationOwner{}) }

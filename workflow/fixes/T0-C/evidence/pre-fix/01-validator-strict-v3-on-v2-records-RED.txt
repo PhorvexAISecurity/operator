@@ -1,0 +1,7 @@
+# Artifact-level RED-before-green: validator --strict-v3 on two PRE-FIX (v2) live records, 2026-09-03T17:38:52Z
+[FAIL] ../../T1-A/evidence/live/02-vllm-decision-record-0.4.74.json decisionID=253c43da2ddd vllm/vllm-77997646c9-nhzv4 noop
+    check 12 v3-hooks: FAIL - --strict-v3: trace is 'phorvex.decision-trace.v2', not phorvex.decision-trace.v3
+[FAIL] ../evidence/live-baseline/01-selected-record-rotate-voice-0.4.74.json decisionID=a69f5a97617a voice/voice-bot-79d7f9464d-hdwlg rotate
+    check 12 v3-hooks: FAIL - --strict-v3: trace is 'phorvex.decision-trace.v2', not phorvex.decision-trace.v3
+records=2 pass=0 fail=2 undecidable=0
+exit=1

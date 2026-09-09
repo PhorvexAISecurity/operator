@@ -166,19 +166,19 @@ type PHoldInputs struct {
 	Final    float64 // clamp01(raw * damping) = PHold
 }
 
-// Exposure-clock variable dimensions (the per-VARIABLE exposure scaffold). P0 wires
-// the K8s-observable dimensions (PodIdentity, NodePlacement) live and DECLARES the
-// rest so a later phase fills them without a schema change.
+// Exposure-clock vocabulary: eight clocked-and-consumed dimensions and four
+// declared-only dimensions (M-30). Adding a consumer requires its own model review.
 const (
 	// VarPodIdentity = the pod name/UID/IP — reset on every rotation (LIVE in P0).
 	VarPodIdentity = "podIdentity"
-	// VarNodePlacement = the node the pod runs on — reset on node-rotate (LIVE in P0).
+	// VarNodePlacement: declared-only: no clock, no consumer (M-30).
+	// Wiring placement into a decision requires a separate Math-first ticket.
 	VarNodePlacement = "nodePlacement"
-	// VarImage = the container image digest (DECLARED; Phase 1 mutation overlay).
+	// VarImage: declared-only: no clock, no consumer (container image digest).
 	VarImage = "image"
-	// VarEnv = injected environment (DECLARED; Phase 1 mutation overlay).
+	// VarEnv: declared-only: no clock, no consumer (injected environment).
 	VarEnv = "env"
-	// VarGPUBinding = the GPU/MIG binding (DECLARED; Phase 2/3 GPU rebind).
+	// VarGPUBinding: declared-only: no clock, no consumer (GPU/MIG binding).
 	VarGPUBinding = "gpuBinding"
 	// VarNetworkIdentity = service/IP/label identity; clocked from the quarantine epoch (M-23).
 	VarNetworkIdentity = "networkIdentity"
@@ -207,15 +207,15 @@ const (
 // is a wiring bug caught at build time, so the runtime Check can safely fail-OPEN on an
 // absent clock). ExposureFingerprints emits exactly these keys for a fully-marked pod.
 var LiveExposureVariables = []string{
-	VarPodIdentity, VarNodePlacement, VarSession,
+	VarPodIdentity, VarSession,
 	VarNetworkIdentity, VarRouteKey, VarIdentity, VarAdapterEpoch, VarDrainEpoch, VarGuardrailEpoch,
 }
 
 // DeclaredExposureVariables are scaffolded dimensions not yet clocked from live signals.
-var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding}
+var DeclaredExposureVariables = []string{VarNodePlacement, VarImage, VarEnv, VarGPUBinding}
 
 // ExposureFingerprints builds the per-variable fingerprint sample the exposure Clock
-// observes for a pod (M-23). Pod identity, node placement and session are always
+// observes for a pod (M-23/M-30). Pod identity and session are always
 // present (their sources are always populated). The per-action epoch variables are
 // ABSENT-SKIPPED: an empty epoch (never actuated, or its marker stripped by a rollback)
 // is OMITTED rather than seeded with an empty string — seeding "" would make a later
@@ -225,9 +225,8 @@ var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding}
 // fully-marked pod is exactly LiveExposureVariables (asserted by the completeness test).
 func ExposureFingerprints(p Pod) map[string]string {
 	fp := map[string]string{
-		VarPodIdentity:   p.UID,
-		VarNodePlacement: p.Node,
-		VarSession:       p.SessionEpoch,
+		VarPodIdentity: p.UID,
+		VarSession:     p.SessionEpoch,
 	}
 	for v, epoch := range map[string]string{
 		VarNetworkIdentity: p.QuarantineEpoch,
@@ -290,7 +289,16 @@ func (t Telemetry) AppLevelPresent() bool {
 }
 
 // Pod is the K8s-observed state of one protected pod.
+type RotationOwnership struct {
+	Eligible             bool
+	Reason               string
+	OwnerUID             string
+	OwnerResourceVersion string
+}
+
 type Pod struct {
+	RotationOwnership RotationOwnership
+
 	Namespace       string
 	Name            string
 	UID             string
@@ -544,6 +552,8 @@ type ContextSignals struct {
 // controller builds from a v1alpha1.PhorvexPolicy once per tick, then passes to the
 // interfaces — so interface packages never import the API package.
 type Policy struct {
+	NativeRotate bool // M47: enforce validated ownership for the native delete path.
+
 	TrustBoundarySince           time.Time
 	DecisionAssets               map[string]string
 	MayBreachSLO                 bool

@@ -25,3 +25,6 @@ phorvex/bin/console-audit.jsonl
 .DS_Store
 Thumbs.db
 *.log
+
+# Retained workflow proof is versioned; runtime logs elsewhere remain ignored.
+!workflow/fixes/**/evidence/**/*.log

@@ -1,0 +1,9 @@
+# Copy under the owning fix or campaign round; pass --criteria-file <relative path>.
+targets:
+  - namespace: replace-me
+    workload: replace-me
+duration_seconds: 300
+request_limit: 20
+success: Replace with numeric effect and benign-service acceptance thresholds.
+abort: Replace with immediate stop conditions and resource/time/cost ceilings.
+cleanup: Replace with owned artifact removal and restoration/readback steps.

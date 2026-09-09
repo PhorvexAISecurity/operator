@@ -1,0 +1,76 @@
+schema_version: 1
+fix_id: T1-A
+issues: []
+related_issues:
+- M-149
+- M-150
+- M-151
+- M-152
+title: Separate GPU residency from activity in the leakage gate
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/sensing-separate-residency-activity
+  base_sha: 016361c
+  head_sha: d66f67d
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/98
+  reviewed_head: 57790cb
+  merge_sha: 35c1206
+  checks: legacy-see-evidence
+  patch_equivalence: legacy-see-evidence
+deployment:
+  image: phorvex:0.4.74
+  digest: null
+  git_sha: 35c1206
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: verify.sh-present
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: No action; re-run verify.sh on affected releases.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-A
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: true
+  legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+updated_at: '2026-09-06T22:26:59+00:00'
+revision: 0

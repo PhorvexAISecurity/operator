@@ -1,0 +1,47 @@
+# POST-FIX executor run at f552557 (2026-09-03T17:38:56Z); tree clean: 0 changes
+go version go1.27.1 linux/amd64
+--- go build ./...
+BUILD-OK
+--- go vet ./...
+VET-OK
+--- go test ./... (whole suite)
+ok  	github.com/phorvex/phorvex/api/v1alpha1	0.754s
+ok  	github.com/phorvex/phorvex/benchmarks/cost-validation/cmd/costprobe	0.028s
+?   	github.com/phorvex/phorvex/cmd	[no test files]
+?   	github.com/phorvex/phorvex/cmd/calib-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3deep	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3report	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p4b-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/redteam-rl	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	0.004s
+ok  	github.com/phorvex/phorvex/internal/actuator	0.197s
+ok  	github.com/phorvex/phorvex/internal/applier	0.047s
+ok  	github.com/phorvex/phorvex/internal/audit	1.138s
+?   	github.com/phorvex/phorvex/internal/belief	[no test files]
+ok  	github.com/phorvex/phorvex/internal/buildinfo	0.004s
+ok  	github.com/phorvex/phorvex/internal/calib	0.158s
+ok  	github.com/phorvex/phorvex/internal/console	2.479s
+ok  	github.com/phorvex/phorvex/internal/controller	0.063s
+ok  	github.com/phorvex/phorvex/internal/cost	0.016s
+ok  	github.com/phorvex/phorvex/internal/ctxprov	0.029s
+ok  	github.com/phorvex/phorvex/internal/decision	18.257s
+ok  	github.com/phorvex/phorvex/internal/epssfeed	0.059s
+ok  	github.com/phorvex/phorvex/internal/exposure	0.007s
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.006s
+ok  	github.com/phorvex/phorvex/internal/graph	0.005s
+ok  	github.com/phorvex/phorvex/internal/ingest	0.255s
+ok  	github.com/phorvex/phorvex/internal/killchain	0.010s
+ok  	github.com/phorvex/phorvex/internal/metrics	0.029s
+ok  	github.com/phorvex/phorvex/internal/model	0.011s
+ok  	github.com/phorvex/phorvex/internal/pendinggate	0.522s
+?   	github.com/phorvex/phorvex/internal/physics	[no test files]
+ok  	github.com/phorvex/phorvex/internal/platform	0.040s
+ok  	github.com/phorvex/phorvex/internal/recon	0.088s
+ok  	github.com/phorvex/phorvex/internal/redteam	8.932s
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/runner	0.048s
+ok  	github.com/phorvex/phorvex/internal/slo	0.005s
+ok  	github.com/phorvex/phorvex/internal/soak	0.003s
+test-exit=0

@@ -1,0 +1,225 @@
+{
+ "actionset": {
+  "refs": {
+   "internal": 6,
+   "test": 7
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "actuator": {
+  "refs": {
+   "internal": 3,
+   "test": 2,
+   "cmd": 2,
+   "other": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "applier": {
+  "refs": {},
+  "build_tagged_importers": 0,
+  "status": "unreferenced"
+ },
+ "audit": {
+  "refs": {
+   "test": 5,
+   "internal": 4,
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "belief": {
+  "refs": {
+   "internal": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "calib": {
+  "refs": {
+   "internal": 1,
+   "test": 1,
+   "cmd": 2
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "console": {
+  "refs": {
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "cmd-attached"
+ },
+ "controller": {
+  "refs": {
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "cmd-attached"
+ },
+ "cost": {
+  "refs": {
+   "internal": 4,
+   "test": 6,
+   "cmd": 1,
+   "other": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "ctxprov": {
+  "refs": {
+   "internal": 2
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "decision": {
+  "refs": {
+   "internal": 4,
+   "test": 1,
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "epssfeed": {
+  "refs": {
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "cmd-attached"
+ },
+ "exposure": {
+  "refs": {
+   "test": 1,
+   "internal": 2
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "feasibility": {
+  "refs": {
+   "internal": 3,
+   "test": 2
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "graph": {
+  "refs": {
+   "test": 1,
+   "internal": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "ingest": {
+  "refs": {
+   "test": 10,
+   "internal": 7,
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "killchain": {
+  "refs": {
+   "internal": 2,
+   "test": 4
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "metrics": {
+  "refs": {
+   "internal": 4,
+   "test": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "model": {
+  "refs": {
+   "test": 78,
+   "api": 1,
+   "internal": 55,
+   "cmd": 2,
+   "other": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "pendinggate": {
+  "refs": {
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "cmd-attached"
+ },
+ "physics": {
+  "refs": {
+   "internal": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "platform": {
+  "refs": {
+   "internal": 4,
+   "test": 2,
+   "cmd": 2
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "recon": {
+  "refs": {
+   "internal": 4,
+   "test": 8
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "redteam": {
+  "refs": {
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "cmd-attached"
+ },
+ "registry": {
+  "refs": {
+   "internal": 9
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "runner": {
+  "refs": {
+   "internal": 1,
+   "cmd": 2
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "slo": {
+  "refs": {
+   "internal": 1,
+   "test": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "library"
+ },
+ "soak": {
+  "refs": {
+   "cmd": 1
+  },
+  "build_tagged_importers": 0,
+  "status": "cmd-attached"
+ }
+}

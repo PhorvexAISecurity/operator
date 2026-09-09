@@ -1,0 +1,11 @@
+T1-M028 — proactive cadence cap (BELIEF composition; feasibility law). HIGH(SLA)/🔴LIVE/P1.
+
+STATE: ⏸ HELD (boss, 2026-09-06). Not started. Pick up against a clean, DEPLOYED main after the M-023/M-20/M-160 chain merges + deploys.
+
+DEPENDENCY ANALYSIS (done, against origin/main @ v0.4.87 — don't re-derive):
+- M-20, M-160: IRRELEVANT — not in M-28's dep list; no file/logic overlap (M-28 = new feasibility law + audit + metric; M-20 = runner status msg; M-160 = actuator verbs/RBAC).
+- M-23: HARD DEP. M-28's cap reads ExposureVarFor(action) + per-action ExposureByVariable epochs + emit intent — ALL M-023-only (NOT on main; main has only the old 2-arm exposureVarFor + no intent). ⇒ M-28 WON'T COMPILE off main; must stack on M-023 (like M-160 on M-20), OR branch off main AFTER M-023 merges.
+- Already satisfied: M-025 merged (PR #113 ✓); HasEvidence present (killchain.Assessment.HasEvidence, hazard.go:153 ✓); ProactiveFloor/T_cad present (T1-B, types.go:458 ✓). So M-023 is the only unmerged CODE blocker; M-026 matters for live CLOSURE.
+- Codeable-now only if stacked on M-023. NOT verifiable/closeable until M-023+M-025+M-026 merged AND deployed + live cadence checked (ticket says so).
+
+WHEN RESUMED: branch t1/belief-m028-proactive-cadence-cap off main (M-023 in). One new law internal/feasibility/proactive_cadence.go: reactive-first (HasEvidence→feasible), else cap on min(ExposureByVariable[v], intent) < ProactiveFloor → veto "proactive-cadence: within floor". Reuse M-023's mostRecentSince pattern + feasibility.ExposureVarFor (NOT exposure.ExposureVarFor — ticket sketch names are approximate). Metric phorvex_feasibility_vetoes_total{law=proactive-cadence,action} (NB: M-023 DEFERRED this same metric — M-28 can own it). Tests (a)-(e) per ticket; RED = cap-off lets kv-reset fire at 110s. Do NOT touch reactive path / gates / cadence value.

@@ -1,0 +1,3808 @@
+diff --git a/deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz b/deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz
+index 7a29e4210db7e626aaf5db2f087d642cb959f515..472d09e2ab1bf2432a0485bf08e47a3f7865781a 100644
+GIT binary patch
+literal 23759
+zcmV)7K*zryiwG0|00000|0w_~VMtOiV@ORlOnEsqVl!4SWK%V1T2nbTPgYhoO;>Dc
+zVQyr3R8em|NM&qo0PMZ%dK)*kAi96+Db~>4Z7NZbl&>*8?jA*=6YWT{jwCzXllC}Z
+z6-Xi~0@VOYGTZU__B)*Yee($CJ<hzzev<QHEub!B6-CRAlRcB#`|DUN6fO%3>xOm7
+zW=dc2xBdMY)3&!@^YmXn`7;;{29F**!2b>ggXRAY9u6M<%kIN_4+p!0hmRjV`j^4(
+zy+@Dl{R<2}{Zv+;+*qdnW$@8sEidjr$-^@7ifbd39KzMTEtX})pM&0RZxCgJt%RFc
+zi_GG$r-U%@AOH66U}qc>Zn>TdDU1~{2x)nmiYb>dhm<Y2hKbT}_Nae4Q(TI-uy=fM
+z(1X1sF<XEgj5QMyx(Sa(!r^)*;u%~keVHnjfK@P8S9}MqXI$<8lZkJ^VmBQaFF<8h
+z%*8*2oPyzTu7zD}0Zf^YJOSqZYb+$f=p0u7u`+fWlmx3XP!o80a{S`p@cH5B0Q?+#
+zTawNB5d7KLvWtulfn`}LV&?kTx~jtH!Pc+6i68NV^MA$CoSR>U0IWa%_wKKr|NFc5
+zAO3#+KgZ+uf4Bu8=4{H{KL9k(lo3|xMR5xH;WW7SS)Qh+Di!f!2#1psWluFXTv~i-
+z*>nh<Ks`EJ0C(VPW;j?8Um}IjS1d)kKm;Tf?l3{BR0iFQ>&SA+q=lFzNJnN$D$Nsr
+zX19A=0AptOq3>x3y90xx>?`R=fE8C9a%u7`Q`))@$HujEN7ulZPn71chXll&7mda|
+zR&#FPIZF-iVSg7h%{gSaP@KI1{x;@3F~C47J!dHxA*U&iGL?Yl4wtN>P$>svMVf-i
+z^@PQaI3-$4EM!{EGn+2l0BmUr2Yjq@8S^3Br{$!%v0O(c<FS~C7);Dk4lzr`SmSDX
+za6V&+x{j1g7ek;!3`}$2Z~d|y$($?cHj^hi*e}g5(<;e{iketyH^o><E2QhfD#+cA
+z%{Z8u$TFU|m&P(_4dl{_6g0mQ{MxOfG9f}AF4;Kc$q=m0IsRhUJWDG(_Hgd;Y@)fD
+zmA~H~(2G>5%Q1^Dhp_wTs~L5QD>@K*2>mOj`#P5aC!@*?aD}H@&AFZN+#sgF%d;cG
+zH=go2w|W6WPPwr?7|k=gfM<V(@4hk!MKEG2S!$pw74|h@W9{fZPr!XDVuKi%6+^t#
+z=@2@E=O>61;-5T$Z%$u==8lW?ubG}lc?Miw@l<8J2ZP?dC-)wLFbHD8Po6lwXB^%e
+z4t^!>b!DeU-<`t+Hz|XQ2QW!Fw?o+7eQdyrIghN0&NxdJ(1!<ufq_KD`J78PbwnLE
+z?`f8g{4|c)+o7KcL2dt#Ln`DY#4Ka6unUI-$b@BB7f$G4|C?ht`|Fn%e}(bF@<=nw
+z-N9CHB;@7SOeWVNu`}$ndmQcVKG^QT1)g=O=0Y;7v|IbZ;rafHSEIAh!461%#Wln;
+zWw;zdcX!(phbs~Dy9OkmDl2do+ze@Fw3_2w-aJ2ib1-`K=5+sX^ycXB<hwWDj86J*
+zzCS#;_!cDx?8_es4Ou=;g_&^#{`@I)?`?y!Gp?_N;U4O4XB-mmz$ITe>aeKwao2#l
+zmhj_TB|JT0bN(ZwY|K;WPPv3<1j;FwoRHF=I|mea1}T%=JS~Cz4DP}I`k(&w|N5Wq
+z<LLbG8*rr1wFL*??WfSaUzsPJO~h5~To_<uM}tu^BWN-hE3MTvPeA7LG1omf=6dQV
+zqI+FE-3gztJhjj*u<IFo!{vQ=yZeY{fAZ?^;Be2qNtk73#<|^o3M@$=PMI;>;0eR|
+z`E4^hz<bjkbo{4#yMsY={@3FN(SyM^Uw4M^ZtC{>!456mo%Q#4v|_>cU7!0NLPS+M
+zVQR&f_p4vxB)<=WW0+IdiE<`mF*n<A?XU}ugtaNZYoe50!z5MLj&O@4XQ>0?-u}hm
+ztG$cS0b%aL?Z65+?g#b@S6n9|wlL<Yl2as?4w!RhXQ1;`$mtG9W%2id<ghCyQZ^Q;
+zTM;k=YJy$g8{B&o4W2}UM{vA%@vZBCC*U@4LCb)>ug^y(7tp;*(>Vwkr+LDYZBK{Y
+zz(Pi5VJx3Rta52V5I?+PsYvk5Fbi&>4m3Mp6d`yjjB5%UX`o{iuCG|lGbK6p0-DE4
+zC$0m+t!v?rwdTw?VcN|vlFCMonO(WDcEC{_<R?-An@%;KI{M)HmkK5<whp8Y@Mj+G
+z`?Og@_~A8ne!wk{kwzq3T44n@e(%n`gg?6CjuXw<0vwx97j7#Ap8&rSBs6r7qbGsv
+z#53+B4+6@ZCA`oJ+=BOBUVJ+`xj5X%U5_<K@?>X>UbAE_3<@a5vU%n~Vgkjg^n~3T
+zo=&2K$0>6ni(}nAx1l|wavgK8HZcpvB8Y^6Yb~thsLNc>6p=wU2~PXL-BJk&_u`mm
+zmby(HmYE@R3Iy*vCL&_aVnl+@PUYQj<(+cmVUnjrJvxLwOU;JT3|$wU9_&dN9iLwO
+zjgZFb+*sqblfSiGOO~P@h<nzZFp)-astixIhuAx(-EwjXNkzncy>t?AY{xCv@!z@I
+z&zNbwz!Ch8mgmsZDuc)G8oR|qP$COLn8h|{X}W-!N|Qo2q`5={VH7F-#yQrC92L5W
+zFtMYMJgFW|WH+d>s$3>PIy+M-H``C0$egkmXEH}hxKO#K4&BTVVot;(C>bJY5x67W
+z53q|aucDYqrWcKGS;8_W4+?qZ-v{}JcCW88$8VI5oFJ!FnsOb@nPgM0afvT78wm-i
+zlaELDMgd|Ar;i6DkCmJV$qfi=!p2zzN^-E=SSV2HX(69D$xx-d7{2J&VfV?43&$i#
+zj0gq;L=={$>e```gAc#Q18kOL$cdB3y<(xK+@2IT9fYotoU$q5z%*53meSUvz;r3n
+zG&0x1#xuZE$F$8e=srLDYP$#fOae=df-wiHrqdKjB@sABUFRIG1S28LgW7fI``dS*
+znjW(Z<tiNcJCUa6__mxl!d)nLNGfvaivTP~9f)^U=jv4!;ufeZq+DCm3Y$b2Hr1Rv
+zaqqd(L%0_tY+Um9LMH0kX-c)9oq}WB@gS9>_`TW#OA<lTKXMX|8N$2w#Zf%{_SIjb
+zCu5*9@6<2Uv#vOtu#+fO#?r(cCJ34Ej7x_bPRz!2x^;jdK^s?vG|@t$xIqqTL`v-g
+ze}P<To)S~To>4s$+@L0+j6Go|d+tRGsP4cKX9?H9Q%*9q1O2yq&?QZd212CvM+hZ=
+z6h9idZwj^M4m>YO9qgZt_AW;Km!}7N7o!T-aNWmR852zePm^FkBlQ`Cykc57wW_3V
+z@yuzFUV3!;91=<E_za#yWHC<kbDY2tY^S<$ZJmzjAe3?KG!M><KcrqqrSUa$#1}hF
+zauQF$ETm;`NpX}DrDL8fZP$1K`)3ERKRQBW46FN|k7r6<wyAwiSRTTY2M-9l+$2eX
+zv-7Nf`IU*T>H7%vAKmw>iCja+t-ZqawUEhPl4x!m!yA4z_zKMmGtN>wJJo8;S6l3Q
+zg)C4DQnbRMvyS{5CxkgN=S2DL^^9xoaL?(UrZ7)5op<cn0nmL+m=P7|gmB-kXqMH1
+zz20#8;^586-tp-CbZ>v;02<z}61P1hWlDonhq+9KFk6hZNFdSTiko1wg#9xEdnX4(
+zVuj|hh0A=*W1B+8?Cj~%G_Y?sl_2;FL&~04m)v>vl3@?d(TKqlKoE_2%z|+s5t9km
+zC~ye_SHg&KN=HMG(#7&bSm^EzcK_qw{-3?U18|a_wvO>$*O;_bc|7wXPfV<J8%0%N
+zVV)Z&YeU8~5oa}lgd2epmUSqv8R{K&<_J2>m`tLKS?rL@E4X6X8(a{U1#pj%IVRu@
+zPNl8@gbi*o66smrLp^kXqG!hSMCmzbm0KZc-9;Y>%yUaNr+^IOMF97Z)`<t5B?*dB
+z!RQ@1fzWCF;!31^>II(>i)T)<)(g<?RBE(Am4i7sr0@R69R)`b90F&`392XDy1q|6
+zp(J(gjH5aGoLiy==Op==UicTVIOc}X;4O<C5twq@&oie{xQ%hE=8;y`OZT3LCz%q`
+zhTmf*k*VMTGI&UoHcy=(ufxzI|IK;oCIFhxnQ(|H1y8EmRveB}Q#g(uL97xU@wYs#
+z5Zz2GOXsl%FP=ZILB7go0w_s|GM1stq^>2W<-8&dO2}y;A$h|6B?Lfs3oDdLxSL1B
+zvl*Xr&C+d>L=Q$Mhof^~a)F(?UFjEX9HU`Ex><PMAsi0RJ!%$P47p5kKWwodb3}2P
+zJ<Bq!uKct!ttKMnJCLP0y`Bpx<}7u4fr^NOWn^OIbpIcx-2S*srV9CoYcUaAgG9Th
+zC0>nEq9$?J+eeYZ12T_bV^xkg2s!O1!r*a4J18IL(<#^eI5$?!BO!m{v2}`?Ffi4Q
+z6%yrs0rU#@lk2dxT~vx1phw5X9RWua76x)jlDgBm7#N;0$4?3UXZf7TXo_-#u{_&G
+zOhg+F9>!900!LDkxsaeTTRU`ay@f*jW1zNV2a*Q<t2BQOVq=eqet{l-Yo9qb`C|_b
+zxLly=F_1f9z_5vvNIgp>elz1Nag>kA1-O24gbYG#$IA%+$dM*m6lnd<CGhp=`HQoW
+z6CFrKO8Dq4j|+ru6_iG&=jXuRW~mZ3%Cs7LaTH<}&p4^p1xMAKC5W7;CNY?x4O}_E
+z$7sFZe>H*$_Xz69!k7p9uVXvH&QxxJf#%~}qzN%B?1gD!b<9D(CUo=6w2Q=XXn9h-
+z&5PVO_<rtG+*4*}L+EoG*Dg5Rxb&H89?^n-GH8_b24;tvZdqXz1D-T8vykyjE2(mm
+zE_yIROHKt)NO(c>2w~=X#6#+4#1p^jiqwa41~WFgl<HbWQ>7Bx1jk1ij9KCb@3ooL
+z!!Y}#_qx%FnbVg2m@vzJB%OMv#!&g&%pF6bm{tKxHCmbZTd%wY!S#S=saiM{gqGqa
+zzC%cWxF)BSLFb%F;|WOOjVY*n7(B3e&FlM~vrAM+9Wr?ZF36_wf^fg-4G~|Qr4yW;
+z5@CS(K2b)%J6*gWa=VE()F6D&$1#&m3qe$MXz9^=DvEWVb4xf!k`sc<n?y2^@l;6e
+z<SerUa>r~qOQ;tzM%2_fW|@~#PzcPenj@{!xs*;q#>+aVJ#cB2UO@C`xX|JX|MC3r
+z?EHdGZ}jKNm>w;{%nz-T_}r2cp7<LM&-?et{)4B|ZBK+&A7myK89+&bDp^p1@KZSw
+zJ^0Z<c;Q#}V-T1K7?V6r;U_hwbBz=)(Thmul4j_L1s(3j;|*Y(e3z$AR^ELK_u&io
+zf1U6$HyMh{)i0{E2|uN&x;|yv3U^SdZze(;`||8)2s3LlGwk<SCVKd5Pw8pj?NR?~
+zw_gwx0PD8ElN75|YWny~^=(*D?Y@<s>a8pLN6rk7Yu{HdS06p>4LX(I*WSoFP%(KS
+z=3M2rGy;Ivbq_d89G;%@Sjof;;r^q+AbeOuh;p`gE=aod27zKpr+J!s@y^R>bbV(v
+z8_BE6PeB$jWw)uA3-{SOh_ieMoqL@fnDaS;<lZ*|-fxw_`bW-9rS0xuFt0Rz_~^K7
+zE>*(Mz3^F?u2reOpsCK3O(sI3jouqNzDL2Lc2`YmjiZI|ujemLj*w(~V>4O9z&IUq
+zZopwpA5CtaGd@2&8j%oURKfS?#)(u=w0xkfgr8aE`zq-onvG|RVEYdw%Ma}(v^-7d
+zd=hDO8a7?|SmvfDS!QOAwy{gp_N_uTgIkDFw_9Q>bIl0Ju@SBgxnt_-zyO{F>5C`J
+zf&wZAreyEJ8lFy|i=F|JrM^>Y*PE(sA_sH!_Unapvj4qDUp=`0@WI1JG!w3kFxKgy
+z0gvv$9-O|~uWN;pwAllp=>nv(n=@gMh?-nqk)#m}VL11q*DICgbKD>^L-YQa+iUKx
+z7mEd!7b%1Yg@_7=C+CL;BY1H#g3}iVJ4L@n!5L=>;@JzYOPhQ$aq611;pSxY{Jekm
+z{a+Di{<g=V3g-#;e5A<)1K`%irgWoL@Du<e{>g{%@Efs3`d}_=vnHa96rr*L;cWw%
+z!XfVjo7DnsN3n`hMU13sBnVxSh*(+$a0vH7T1q^@8ec#YrFvri_2xaexK<UB!vtoH
+zdjqTv(yem;c8VQhDPkPj`%p=cumoWDD+wx2yFzSn=W_J?9QA87VfcF`B|SbPTjWS{
+zda&<7;?T^A7pXh*X!!6#l+(<OzlVUI@_7a`MN-wB(jcge7fw9hrDDS4MeJB#9l&0I
+za-s+iSG)x%6BVqa*u3>@*BDckDHXUwTqyjtmiLee@T<X-fu{|}6{R&y97puFvHjx%
+z=q9+W{Y1r=PE(|2y#xHy0ol_8t&|-Ca$@}ZnvWe(%Ci17A8$4Cm?aMLa1GaJU@?`p
+zj~-xC(v(chG7d9ZniqK|DVx@>K59FG=54RCIk6LMLEdbOoq8o&*q|*DP`FoUWwHZv
+zY%q5)X3}~Mk`dcTN@1LEVa5z;hFgXF8*F5b10i>E1Y5(mJe||UCMsEubMNVC;E_w5
+zd<nuHz8-`HjQ!s=KyTH6T>WBq<pT%ptwu(^%EW67{0<zFT?codZhYTAJ0KCaG{$vt
+z?XgZw9}=O1QHV5KC;Dyow)}7VX9u3n{@PA_AMph5KFjA>>iBa1<i*A4yl3CqPd3I4
+z{@?fR4<0S~e?GYX_;>%$&+-I!?sxB?M==0<g$p>me_t3yorGAie05y=Ga^>K@{Z;G
+z`%Z6bEA;8T+ivs_U+aqvhjxqH1*o_0zCtTuHiIvhy+OKPqBHo?P3!g!S)dI1@1UQi
+zFqd0+|5f)2C&9oGS0TeS;9Mmn8!TP7TnSbm9==4^_O1Oh1Ko2ct?zET$-~L$)#xmU
+zF_}tCZ)<C}7Ys2BDh{vSlG^oLTu7%7pXG80-aGzFNYxa+4EJI?=wTD?y0?dp85Ora
+zsOv&BDYRGq7M(DIo$JljE=#i++kNAIpwZC<yxPx{Td1}W+(5LqwRNut-#hkEh|vbR
+zUVkU~Zadro6>Kk6)A}4E32lhv8XM2V`tRNaw<qWXi|Qm#Q*=&&o@*XW;Afa>o)vEU
+zTlaf#9&5*#J-muby>B#|Fv$=TV8)r9vkbc4MaOV0oSG5fl&R#6YxoAyXnXS&IJO*3
+zl)h#<`GA#tHTY_PcbsmVIM*pehU8u+8RDCMSWtb*Z??7`^xz_xjVo>t6Lj|>G}{5g
+zEqNw6>>dVG?|Nax;O&ErXLR4cg;oG!x!#}3ds)={6|T6}BH@M{*HC@k98%sJhb*>k
+zFB-fpqR2@oQ7SCgEPck&>4S{u|Ct%^ul%g?|2H$9I-R;_vriNXa#Q@*<Hrw{`2WLu
+zzw`gk^SpZ(LBc0OR_GDYqUinmtw2g$D=riKZL8^%l7zV?u0^JWv=iw3(L{eVo%*>i
+zzU#oxPJ)&(Ji3qn6!Y_ZG7)c~6O~=99ht7|s4>g3o+CF}a?4Fms6GX9H4)vC;5K}Q
+zQV&LAER(F}_WnjM8ZYW!gsb$%k20ohq$XvY*^O(h8)Hu@@V<$u6mEdkG5)3T{1=z#
+z!8zxngTmII|J_}8=IiJG@x4d)e?R}9<8k;PCeV9D@qfj2^^${E&zp(BAIU!i^n&5D
+z^|%)f@gF?$p7@U{^ugm<r_yWXt5}oIXY)tsD%SXA%=Wpq?yF8oO8#I|)AI9oe6jp1
+zUL6WKb-$-dUFI2du68@nq3exKlQdJEap*`)P_roe>&_UCSNzgTm}St3SufVMv)$Uj
+zre=c{mweILUV+3j=n9$ew{4@s&oF-UAmQ=$D!5v|4HIhl*v)Y5w{EHp-}2Pdw$kmu
+zl*|1+=vHtbW|f`ahWn2m4$6-bX>eC?^MtW=46Jn1bNs3Ha&=p`mp<s3tN2zQ_558;
+z4+Z)Sx+sC*(RRw^Ir@I$#?-!-BCV_&!Qo)HiU@y*Sr7l&u+ccs>RZ}Ldg=aMWzNXn
+zDskkyTbDv6L+|9ZHRqP$h4vOe!H}!x<o$d9#(Uhf=?PolJ#@%eh(~Lg_5^vL2S0-p
+z=)MXM+_x0PU1z~IHCth3bP8y09#DvvT*mM-{3BP^Pr;)+wG41;Z+giWMN<d3rj}6@
+zwLuVfw-tot-hUPtI;GKl7xY2u<CbDq^QY@YFS<{_xknxlXx<3ypmOC9oQ^ZCtcq1S
+zgp2*tN*uu{wyHZIuWUrY2Q{AxV|~=^<ySb>VwXxULC-G91HyY(H*a2rjFI6b^3hsK
+zSJ~M*`S>F@(=Xi&w*n}y>Xx9=cdhF3eTH$r9ztdaKRA~7+98EV_-HcWu{A?DQRojl
+zVIs{n54S_lnMk*QtPA0{(LZu=#ZtO2vgD&scp^M>2Qw91S^_DpGiG1sGD-Ochqdrv
+z2=@zXPEUA!^9fqTvf@TO#N0)}guz4<ENxK@zFR=CAB4;-6W?f+X9&>}@}1ZIoQOKa
+zsYCyk3~b>g1tN5IphNzozEOEkQw|UedcFzzgAPld`2^3y9XO7jJQ%`Q$PkuTw|x5B
+zts?4&Jg0mJo1i;%V7Z;S_jEm+8?Hf^tvi4oZQhTF`q?`@ByR=16K?7$^3Gpi%~+Ok
+z3Cxx_`P4_0xyG^#EOPzhWXgafa=QXGp?=o}>-DzoY~87&FbD&OQ>iqE7bkG~^6d1*
+z`KU~af{yBR+cxHaHaM$boT~V;>eznQO)LbYMHpm-@sJp1mrGnNg@95NW-fjBm|HZh
+zv;d8tp7;5uYv!#x;Db{9y|NFEbSJdt6yaZ&5bxcB`W>U2`z>i-Ei5m>mH%qw4@a-h
+z=og@Ygg$Gjpyoned9Q)W#X5R={BJ=d3DRtClSn@*4nnNv(bevlTee%@g*BAY_0cQ)
+z=*4Q@Ml!METT{$>{AitE`cTkYN)I1(ete(<Pa>6DOknaW9ilsM{NxGvNkn7LFud6Z
+zkXGnora8HyF_<XKML@(|$smh`1Jm0g?-vS$OX2v*1L`lrpnYu0#_EdK+@uQ~yBcoq
+zZ`OKCM|~A|zlO|ni_?ys?JG%<nKf~Ebxk3Aist0*51kn^U2=Ku1^nt&96Gn*Pk(~D
+zmB@t#B)i(Z3qr!0UOK;1rQZfss%Yt}_P+-EZ=MJnWmoYhO9pns{m<^B!C?9R=i$A<
+z@Alu%@l?!{D>h(<2!-Ld`EAAdwrU~{c^c~8(hbhh6RqYXX0JHFCOj2mjDW`3mHx2g
+z^GF)QwL-5_u1z03EVL=oK?JXZtvkyexrGDh0?=8(KqZRI`z)OA9giSWNg-#KzQ4>`
+zMxm-|>rN4iSGs(j&xrR4Tlxntd8%HcbM}lO@A5%g<b3KBj?(?KJ9>V;UG+2t1|dw{
+zDM1OPtU`C#W&_e`*dY4~7qFi)F>jVCZn{FkUHptjCW=2jRtb{28h$uB=Q>5_y_+$!
+z>H$r&tNwBl0N|}s6?(bi-MH+n==-71Z=Q$vCx^P-^w&QBtMtDJQ!J#Pk7Wcm-2Xk=
+zUGe{WeE;#I-|7G7cv|lNR)R$9)crVmgidk(I7BJG;^{`g(jh9nDgJru4s;uWxwm`4
+zg*Sv|dm3n!+zBQXAIrQ02cwg}!Iw)yxRb%1I&o-2ehYFYJRj{xyM6b+_xh(VqFu`R
+z!D0*DYo#xpp3$F(x7_rPqeuP0{V1@s-aOeJ)&jM+Dxv>7MO<8I8KV1lIN!s}0W3j+
+zUjU)xK*XGi?~%PY7UsjdLufZ8HiJH7LOO^f0_|UYm@%Dj$_zrH;l7fVzjd!D4Grx1
+zgkK>Ld+QFwYCdN&`I70Wfj$iiwfO8>lc#PQ$0A9%ByVuQ)FNiP2PYIw@oMiB6DZy(
+zl)6kM+dUY0EaGpoRK&tD&aRqFD)IT-Pkj)0TLAdeGD^D&^ANyM3DtHi*@tM~K0N!Q
+zt^=0NK?C1y&mHhlJQTH>iUQ}=%EnQup?o1q*x`({eV^ypAsJ$0ND2_MtcV52+-g47
+z9J6Lp9t~3Toh-*vB}2f*%ABGim2zkPDBA55+<%Q0y|1K$y^yxx%EYA4f;tAUqLOu9
+zm$8e>I#}ghT?MNtUaLm*7CMIQF|E(Im`_m8JsmjTE5afxdimYvENt~GU&Wu{zrM@6
+zo!UTwU>wfbls67G&dp-1-u^c;WA`3D8jc@N?k8V8N*?jA9!%oh$B%cviXVJ6juXE7
+z;Njq_!Q%;I_mYQ?9uFSe8$663J$XESFisvOlgHyH{N9tv-4LvN!mrasM1e021kS)S
+zu$auRupeM3ObCb~ys^+7FM#g#MTojrY4U;$4lrY;yB$q)rV|4xC+&g)pDRSe$$Kd4
+zQ;Y~l0zsJ!CBKHWh+hv-ll*$W<VUMe`*T#FLdA%J7YD^s%MP|H0lI&I8yfc}BDGw1
+zdAw8k%sv05i(?gw-()y?{`4of`LiBH$amEaD7>GAXU~Ag_|NU_YNtNF#$Rz&2?nyz
+z;+kbx@~<Vnw|8*R!uK3DAP)~4QbSfJId_XA)vImOwwvz&e*QU#BfZ>keJCdi{}EPH
+zeqEfwP7&zEj2q^8;A%zikuhw_N6iS(DP)y?!@`#tzbUioU}*h%DInlHlB<SXFx{!L
+zaJK_ru37V!(7C(ascg`$M{;8CcuR(If^7tO3$%MIO&yK~3~~GRLogObL8iF7Qy35<
+zk|XZE-rf-0!zyI`j2j??gNMveK?`4=2RL!FHjg?$DAdtIq$Wz;3MTHH^0<e+q7^m#
+zQAfZUZN3#)!n~U>2geJ5!TcJuE>G|M`s#3478YZr8xLXy{WpZgQqNU#LhxB?&@1v@
+zB@SrSgbeN9P!fmm;mE`+rMQQUd(gSuGbc)(DP`SPmH6o!K6+`mc3(Vt`0)ON%|1b?
+z<O9CpEO{Z*g`3;+(m3R2xqS=tSsGzj#G#hJe}-_|fi}>F_f^25$n1Y|V0l)q_8Bg9
+z2b$M{AJ#Fl5HT?pC($Z{y`!TYq?yvEGWzt`>2{#`Rj)dso3Xgsx`(rW_6&ZwyLWVS
+z_jUc_?tj@}z#dDIZO7t}5pLAjF~#lMAV(eY0W($>^z4Vdqoda$Il=PyE950s^K1xb
+zq(B^yuJ_sZ(9h$Pbm*IRvEIIC7a3CWyY*$<z2y-kkOTlXjP<NO&U%t942=G|w|{Z;
+zH=o-eRo9W>cIcILuc`a|zH=^Zq<PA(n6zGf_uZ4FTyvk9Hc=>^I~A}?LOsi}Jv~>t
+ze?B@AGJo5r?6RhxX%!!%bVJ!kG*8*v>WJGPx#KNIrMi(n|J;6}!o(Z)-{U~rmxkj?
+z$%3*XXs`M3nn3g69~Q9OzSSXK>Mp{~AHos@`t^17>$9!wC)1p;fa|%imM73%#y^xe
+z_&;)%*76aSh`1z+mL?>^zK=tV3Sf)vw|0Rvlm1!A0^4o$*Cs-S5Act+Pl^H1k+hi1
+ziBp(bI_L7LM!)fIB+>03JlATz{1N@O?nAn$!fi9Puj?;v?&5%oI5hN8yty@xp)DVR
+zwTnK2y59iHK9^U0zvg~*_Wjy4R*`c_k|4`vAB~&c{oU<hVfuvQm**FB4@Wjp-xf3J
+zQu|;u-G1sjt(!%$1GGwc?-N$qN^!(bhSovfa{OmS-Kx=*zd*OxN<Wp_CKkWp_SJUY
+z&A8T<eyHs;Jwxa=&B!ZzE0&1AV8BXkbYi&y;wT=OnNu92xF#c2QM5Kq>HxP1zvl5w
+zEoplZ)mVB8CgnVX-Mg<>jU<%B<94DFO@6qlcOo^U8U{7Y^7ixkEUT>xqkl<3tDkm0
+z+C_cIChad~ev78*U<#%tCpS;3G)(#GUPJhybHL>SEwXq@&+7NN!EzNWEZ%jdOa&Y=
+zM3$x(x<ClQ^hMGso=&jwBBWP*k=sa3=w1rCxy0{Mo@`gsOgqwb^1@RPo;<CXjr3)i
+zoV>ueK!ZyAdoI1BTgrWU17)}mad71BzL&X*LC<Tk8&D1PFZ1xNxfdBihqSfd&@J}w
+z&uyR8`~Na;)TeR)yP^K$qx%mZFWvt?8r*yE`~Cmtcxs#^%S_2JN`IwWxeI+pM<Jh4
+z*$iRVyYGB@k2XpwS$9(NE@3hA@hf9q^$jaL!Z1<=-FSU^wljsrn_glTU8)R+>T<$a
+zlB)QU9NZ+o#>~i`!C*pVx><O&Un%{i(gdjZBtn-`F4r<C`UaF%6et%H1>qE(xUulI
+z+~5+ChoLCJr#@jVMNgh_3hP<+lB&l8HgJ@W2obzZkYJ!@em)iSbx*p)>^8=_uL{Rx
+zk9n|?A@`(pSxw0sDvMk;$(C2n6$9(AZkP6`uJngu`kLte(DxnqTG?6k+SdC@N+lz$
+zlur&F3V>L;cQ8+3;?3KXw7ZhlywWu}g!=O{b<MHp1tl$#38dU-`wF*bnlq}lGI;P{
+zQ23Nw@<p%c)sH(wqx!uXj0!vjN(=8-RC)^3?&gb6{UuAM!MBgH<d(TH;r;tzYctEH
+z@cw<L-tTE8X=dw}WoFIl);K+&#E%G~Xv_?cLS@}&4c%4i<yO0LANw-2QBg0~X)#!c
+zwyCGKqP5GtR!Xu)28+}-^;WHA+kk{^-f8Q<S{WYmp4~Kjy+rN0{(K(wn>t*|!oRM^
+zQ114oE<?L@eNl<hC=vQbfQO2@%OJ0v7aGAQ9E-+6CK01bOHKW+R%}}CiK;eXJqdne
+zcg-c9mb<K$U~1~6QoL&e?AnAn;<;H)l=G}coL!R;UGCuAc$k)lat)Wqsb)H9+t!ti
+ze5tJ)cD4lqwc5tZ(<xs@xo#vjt)Fi`1D+Yv2KTZe$Fo{2T>p=z1Kq}+ic%j-0dW1!
+zcJt7o{zv=R>!<*BvF7-14u_SxV9OIKN<J3CcGHB`cGGg=r&%6_g4NNSy>05ZUQBwq
+z(?;+7mEyiD_!SFIWp*PJ2;8_<{i{*3DlWAGv2oCbVzbM`x+YO51RVMD!EWrIl#tNb
+z>1;ImA3}9YOgpnYjpZVs@N-dq4Kvhia4yO+nQi>CGKFV8N~HQ*w{~D6eve1tWn(_0
+z?m9hhdwbIzsmx#r@E$0|EIu6QO*FhF|1J}5jBxwODA`C#Ney(wq9zUtX&*h<DH7ZN
+zZSVL9GNv6W6$J?>NBtyKjI#D)GHFuo%EH}LbFA7k=C;4r3%&3!2VYfcJxo$I?H#(&
+zUoj^M|HNZ!inydQQNF)&o#YjFmpfEFf@v?VGYMR4rGbsH+LFWql&MH4Tltj(MXv!^
+zbM`hGFD!3l(gd+kp8<X*P~C3hmdmKFP$hgHRZ@>WTTzKNr3yu2^X1l7{f*7jX4S7{
+z5H7E(A~`7(wK9*Ddj|ybbFJpX+GPY@ik<PvaOsKyf2XQ4MWAg#?pFu>_Qlz&(O=(u
+zeYSUa^5*b(@0*pOe*vAQ?Hq=3iM4I4Pjqkp;^p4Oi?h{PHme`h;ZmsZt@eH-uRg)n
+z7a57_%kz?OWmSdddFpE-d^K44iUi)ZAMJh`0hY#F%74^4?rntErrb*{Figc2m)sbX
+z^sD$kvo`yN+xn64@!ABdf7V~ELJ2@fVFgPMc*+(<9R2RY>O{E~Dk<LGD>p`SmWU6Y
+z8oILIc4liPwp&iD)nEjzK6}FzXUJxEyy3F@W6dS3wyH#{YzRMe_KuDk!z3z=tH)~z
+zm5TP2W4AkKU>6Ohu9~XwVRo=4JHl-aQ`I+Ncze}G76k_@P^(laY|}JK?WT74!rnF*
+z4L@3l@-ZepB6zd8Rs^e`v9`vo1cV!HKQy(PMdV5(T*iFkncl`o@(F3N)7>|R>IRzs
+zhvI_&sWmo~s_|4-;=jHF|MBnt_8<TLZ$+3t{rR8k|BJPpFBQMqp)jRT6sx=+8&W0V
+z8;e^NJ=f*-wgOi{#9xquk`v^yvQ;QFMYOtC^m=Hiyp)hLt_2#<sZ!TnvsBk{r&>jh
+zS(pfkHMmo5P0=0JtqV1&`*^W+>5ED%m%ebiN+rL7FXU7ov*<SzBchZHT1;n7n+es_
+zDSDx7<HI(4OQ!m=(j7f(O!Wa>HxzH{&2MA6ulKN_312JKXdw)p;f+gO7rN%-bzfZb
+z@zMt@N%XUIYhD)MK9n!qfsv2vE!5NHgda;)rjHI^jr@VB=B1l3ydkZ0j8<=}K=NyD
+z?4J9gOEsJEUQJFZpI=K+Lx+w<VZ#z0x3B|z0wd}jIN}z5^z9&uOw8nuRM)yZLFX}(
+z(1+96!id;_W#er}V`3^+g%!RI_P;sqe{=d0E2Z`-{a-jx#7w$w&d;6$hDp*L^@LOP
+zHCCyR1J~#?Gz(Sc&|x<fm~e2$H4>sq@5?1C;pN#8CT!6v%P^4%9c?$W8A~UiCXo4M
+zP+{&)F6W$?T=N8@#LK?FIepo8%fjhzcQD@<xZ$QVNaE?--)>;?NHDQxnUK>SPW^|W
+zd-Hk+%fikP<Aj?}ZOg+o2CngD+cjB>Pc=ttaVVtIY4{y~{<L^fGbxmt>N!o&o=?wS
+z9KUfpz{p)J7!+&U%O#ey#7IH(GZa{VuG0Ho>SlfDntV(Q#`LBNv2nXN)MKr#4cArV
+z1izsMx7}}duT|#{v))MOU*3~V6#o{b+-=ndDY<Q=@n*FU-UVfF$LoIX4ZOce`@6r9
+z_IIPgeB0qGW2{q)|98?p3m$u;7WzSo-e**wK19I313{>JLqeT9-(CpCoG3NXZqB5b
+zII4kGG-Y~Jx9oz?Ghd*x(lJVhl=`X%-@6Z5LKiV9?}Ukz?AU!f&x(lE!V%;@{_WqZ
+zeOK!DUUHt%WKk@tB+PQ-QBJJu8A{y_7yXP@bwt|t$j-CoU2yZ-S^?oNV~SW(s(u+$
+z1>tXjx*uerXtYnnq11czs1>eVjU5-C)bCf@z`Wt9YCcnI`)Kv_qbF<1oK{_C?0#tX
+z_iD+WR#|OoYFsR!ccnmi3s^RRQ-hX%Gxj%3VdL@E*=07e%6!D&H)H-<8w-`9sP1i9
+zoMNNRZL!>VS?n0A><u0~7_3{?$`6hA7S#f{W%F8D+#2qzzt7lw+)9<*vURoe?k_TG
+zsN`Gm1r4=*Z#Ukr?QZ>>dshAbs~!QLCIaAw{I3rlKfJ%}|G#_h-tYeZpX2#3KNIvX
+zk*meH>Ru%4T}Fz2C`QTkROCSIRL7<Fr6-CoWkXbH{lq$JXTRJ_7`-S7QCUfI`mH~j
+z;YtNVU+YVH5#|n@C=5Skk_uv6I*pq$BVZC)3Srv;{+7o(PIMG=CtoN@X-bN;8zv+@
+z_t~%_mfM-q;-5T${X-ZtLnR)Huemq#qW6AS(!>oAvS76&hF!AGHWwI@A5>Y0<yN8e
+zT<`nBK_e)C%h8K^%;H{HWOL}E&trY2(zZHCVVXW2_lC*1Z%U+n#q}89QOrYU2Rc)3
+z-G36Ea?3lfKXNtgp_jEqsg!%Ckg%*Z18o7ULanJ=lVese1Xm+Q+#V08XiQy?6lN(?
+z=Mc`m-rJ|-fFZ^u4vGDMa-V}w0SB1H+0%<+20cs)82L&kg$M{H$Cyn+S|<J~r!ZEz
+zOqgE$(g_`FF#a^T3^z_Le?xlt8xzd$K<8j|G^%7gyy=XrDMXO)go^zjcL=lz`>n>p
+zS6q14rf<9ZM{~DRA=@=GU@h5Vp{V*K{Y!Zd!zcwTuy<PbUHD6xFb{@4WnX7C=Ur=F
+zFsd3;bJOZkIrr~{opp;ic?Xk_ovn;4AKe?3RD8}BWV5HZ6sUgsg|Dp9S(!@(o=Zvd
+zXlj@R(1!<OVE-=s=})k()enQ$wI%$~^zUwW3jV!hkF76;N*JMO$2YI$OUJM@8SaU&
+z>IqN4a#K0wt1DcA_Hx}O+)y7#J-RmvqQKoIXwwA!cQ{Xi|AZp(aV`__*5;aj#?bpF
+zB2tZluhZmpVedETJ`M6ey10i*?4LpdxIzBEw>wy_|NZFU{l~w{|DWSo6D?aa19scY
+zoxXH`a})*VN$6o4in<V^)AMu80Ih_@IG`ezFpFpP;tgbtr6jJJr-~(p%0*l_q1Oo&
+zzRcX1&TBklx_*_M@`?AXm@%0Y`5b)W+2GA>XMF2U#iav|U%WiII0s>emHSQ(`@wig
+zi4|4iT@{Ev?trlHlOrNVSOeEgxKqD%2L*B#;vG>eNff7eTui>&gFWgZ&miF$mkF1#
+zFQk`>D{Oi_;~KMVP6b`lVwE=(sbHb<AVX<B&P7UfE2v?@4eCtBx{bP?aRiRiIJ~e}
+z+1NlTE;%62LinQfzSzW|YLTwtuYJc#Sx5A;e#(rEu#jIgRjL3kP9LGBmHbyV-ns)m
+zD2AIJ?CGi6KM1KdylIIjFcsMAW0hdaX(3F=J?%5V7aQ?(>rTbD9@B8lI7<t6_$+l&
+zDb<j&l;J~jL*}O1D)2JUv6E(fsTi=CTyJXX{-tB$!^GOAR0(Vv!p~c6%@FiubV}#l
+z`wsf`mjnH7RQuoJY2p7!xj#?+r``LHA1&Me9zNXtJ^#mNc{b($H}dzj=D~ncH`)f*
+zl`4$d%Zz_=Q`W~OxLQqF5vzHoBzlV$;8<71s0465aYVJm9*wqAzoF$u#80k5xXDm+
+zD4h<ZG-;butrwYo$UKsh;NZOmj1wI&9|M(lH@#oZp!b=!q1kS@Y9!25vSb=eg|VN>
+z4*0oX@t@S(_+7EIQWB=EbB!a-jnyKiK-)fP4W*MRY7K=XXuLX53j2;c`l>W2i`M5(
+zR+=fd{Tx&JP+4W>Z5^TR!-pcsM#tkfM9VfkM1^U=)ZXEghw#H@vUF*5svSpfpQmlO
+z-MRdb1NmEm{_T$KuXSFln=)oLo>d5=R~G*h0Y8}NOg!UBp03ddiJ|*ub<?TIjZ^$@
+z`j%SJC$W-ot~HnOqPSbYtfkl;mQS4I>A$M6`BoUm;g7^zSaLC)Fp=`4`Q1-yd{N7w
+zRn2!bX7Qz(OnmbY%*bLZuJ{3GNh%~SJVw{9rSY4JcS&su(2&Rr8j^W^&_?gxt9wy?
+zfZ#??6)@1A46K5-;c*O!X&d(KgxAAw*WaZsImoVY#$B5~ta$y>aJ`&3t9aR%RtwrQ
+zZuuEilG!f@wEJXowdD3ouDUnK#6=vAmqF{WU4FZY9S!2~GA=Z@&XUXY{z?Kds5qEe
+zEv^=|@z%s9l?%epHjPng{%ko`2{w#ZYVNH$ZVAxm(<eRtq0=7=**7!Cb0Z#i>RFpH
+z#>p}K4EnjzeT;0wFK`^_TcuJ%e=L2v7NI}H!yGpEGKaOE=FsYG4y}ISD`*joD`lPN
+zsd*bacvKxs*CJYt4#6*&t`0sy$~styd4p<3CAXGmEBjG<P05v8vn>%r!RW-LVV8Qr
+z;HHdeE1EOqReD1#qn7JCt><1^Q+U4V<3b*8olT3!bW>-Sd<}>ia$2qSFcI3=w#;57
+zaIo3Sv!nH$A=a<&2%D@1uP^sxVkRTUE>zwaCs~!Qn7p8d%U#wYs$hdeEzq8<1=b{N
+zfsK>4z-H{ODO(9_&dOSt*?&Gd+Zfri42V`JHpcfnScb`_v>Y!h*HQCYRLRG20%(u$
+zSqbXcWTuUw1~*Ny<)aPIx7leOS{>Jycl1N0v<;@z=+6#qKJA}jLaVOs(CF@dyQx(E
+zS--AZz5gkrEzzasm-qj8IJmds|M7VD{_pocpW|7RLOSKzwqF3n%GeWjvgcY=?|`b7
+zow<@u+!S)!i<Rcei8Axj(o=>gpXF_~&YL1{44ZKDD*PPgp!PTwf)z{150a&n{k-~J
+z`-M#Hpaz4&lq{$fcg8SQv0?yS`iQm#M%6dbj~4;{J`B}H%5;0@mf74K2*akDW63s8
+zPx#wR4`I&Uc74}xE=8KYp%i>?41V?|seHE$e})k6G*P-aq?Kk@{p@*_LoC~N48P(U
+z%k0KlSP^5<7bKI*S76vWpU;_I6ss(%mou4oZ#t;t5d>NUgxM7RB;3SWWOli96W~o*
+z;i*I=?|dC9BaC&23hSaTYPHjsheV$qX2IdB1tqJT+RxnUQ#8RITxcE~YtB$Cz*LTy
+zT*2p07t-O8^<PB(S^_ga76qy5DDc8B<BZHw=T_-?ZR;xwH~G9PWUSo*>t5z#{w7n&
+zn?hR+*x)T(=8aXBrSGa-ztERDZD+N!)1(ML>-Ze)wbz+Sp8emQ4TweWi&Cq7-*nU9
+z5z^0`${ND^_pi6N;m^<3V6gw-Vy3y7skFlVZ$N$j;f7d$&9p4jqHKor1%6`q42~w`
+z6g1D!aV}kKi02^_e_3eQ_r{YFdv60F_qc;WK3PKE+)1%7Jvj5r2$R9fKP)`}jLt)4
+zl!n8eDs>6|hQz`0io=-OYtAKT9xEA(R1k=J%anQz)otUAO$TqE+P;*OSl_j+oja4y
+zVZ4AYm7Cfr&(01-7SU%rFyYMRnr}mSGy|n}(|IGAe3MrOp;P(8!#N^%L8?D3@=-Qg
+zEOJgG7Y>&U+^oW^;hGsZVJ92n;=6aydH1dZ@8828Xu`fM0ls<v9^d$1CQ8>t;*~GU
+z%3kHi{f2g#N~+zv8S}SDZ>nav35KL7X}G=$_(Usi=rXK+soN8F(kmQXSyc%uw+~%4
+zqkrTK9cO)jiO*0bLFq(DrWYVpG~vvMamsz22X|76(!0$X!mllp{{DQvXI1~hOXE-F
+z`iIXA{(lb!_ji}{zXuQRKm1+)`y9`$9qK-$zR@qOn~?|5(P;1dB04=ge06v<`esyh
+zNrLXl^Roxr!%BV_A*bBQ+Y=O|zx&F-RI_aMlv3fqi<6_jZQTis%x5&*KRYn+rTdXf
+z@wOh}*xx(8IDjvMV&S<Z;5*ZUlhLcuSxB>!spJ>%n!8E*^%7j9$>-zt;BE=CT@wto
+z>IH;Og+fk!=8O>jMG{4)$*IS?+O>*Y2_L=XaS>uwmAgK4rgz{tdQ>QEm13LmjK`Nl
+z_-1qwjTceXbqNtBV3WO8xGhOpxU-BEqoQo%mMs2Ge0?=KJAD2(=u&9OTqR<%*d~v%
+zkjyaQauIn{b8-U8IWaF&GGSE#HJNaY{+fv}8S|O{BosAMqf(kL<HfNA93GM#s)vfz
+z>_Xh0opFOJtgM3$_*0OI-0QBf9&%U6iPCefx1C(#BXzusT%SUyOEKr<#RXL(@UtLy
+zyWTR|Toti&1w0W7f*Xe;ZLb$&^5|-IISUxyP*ipm6Kf%Ln|X}xK&LGEihrqu{^4mR
+z{(H$Ut`Yrrpo6gOyuNwp^^xpZb2pOPYo#xRoVK1^-=qNhEhgJa?N&!~#EQT}<gfVK
+z{iE2``uo~uf8f+wXLScIcB4_17)+Vv!}{sf{7Ud^O2qi$`xB~2j%aA0d(P9zIl0yC
+zp>Nh1w%)<cJMQ2g{-v|+k1(BG$3Y6+iK<6R$YoiDf3B`DF-FitAk#cDG1^?Q->y`V
+z1NSxtT5*;*8l{=M^ocs1=76JEpwbFR0WirM{tPX%#?HM<tUKI35G_;JTw^|9;oV}H
+zx%6p~GeJcLDCcmKAMKniLgEWZ)XL#EJe_#IM21uG;BLh6)t$X%8i)_cuXP7JdBfx7
+zi5wPrMo{sD*aT)Tsb$BVG0mHOi^mJ>SLYJt2@IE}w9Y*kv3Q35c$ELc&O#pC&~Kv1
+zK70qDIiEB9=o2hc?!F%zQ#+Ge#p&L~{<ov^a`Hs`eecar*h~y^^jV%YPb_Ei=)X$y
+zXE3?G!uZC*>XJ+2yCkfC7N?x)vddz^9=Np~`;p4#_<&8{0uuv^sbs0+u50Hz<}krn
+z$#HIdWT)#a(d=68K+0K>X*d89a+z>Vbzd)UBsY#u6(rbuDHp`Jnpk8xL)@m_zTUcJ
+z2KVLE?Ia|dd|Y0d|LU39mlL($fdih3F$Q*~M30kR-6&7#MQA4_=aiw{@Ev~#keEIS
+zXF>wH1jTvE^wu4;yEt7T1ztEk1ghqvUqj*3xU?8{${g^49->as!O<Lr-?~FpRD%y4
+zn*Qa&&7^}f_eZ4~ms}iXoK#g{D<}abm%jrH|2;#)RGDO<PEUG`g2Nq;z;DPngeiZ^
+z#Z>ZjJJ~Z;Q{yB;pYfNP<Th4w$F-1OQC`s|VW^*~X_HXZJgciTomaAyI^qCvu2aX%
+zL_$Mf9UUFx!mYx?OZwa^@_K+iWJ(w%Jq0k$lX6JV!bRGpy^R<OOIT*b6`w0dIw%K5
+z!Y5psjYOxl1Y-qig}GcbNTT%a1H`sZJYt_r?u`R~(s8hwf%qraOJjXZRLG{$S|6f=
+zdolInRPj$5t@S|`gb#@j`P9ZD2PDnp)Tdyh-x~@phH7EO$EGwFouGNXKU<8oNT8@I
+zrd4i*<TcUV32-dEW(!l!F6qIMFkVQe%bBe^UK&_4yvnRkOjS-C%M_4ajajOkT%X%;
+z?exjQ#@6iaA236$pKatpu(B5wSl1#~Hb&n+Y-UN?B=B;HVtK)-7W?&SHQO~w;Fj1z
+zwiMY$dMwXU5i`RrDgKsOKFQPYcf$BwN&M?(<~a5=a%qU4)OeGxo0J}Jg;)pSUo@uf
+zw}_gbCZO(vSN6%t>K~fO>L1$a>hG6;|0g}+{;xOV>6{YpeDX1F@c$eP?l0&6xIcLO
+zyZ`5BdA{h`dA9XMZ_F;YdI#rk&aKjXt2Y()cM9--!V}JatP|5OwX8QwO4Ua>1gt;*
+zk00NE@VI{d?+tbz|DONnvpg#)Ei=L2S}sxXSyh8`W7Yi33y%jJgA;_3HK}gJH7r)r
+zYL%v3M^i2_yc%=VagCi9?gxY3?&IFQLcm!@!4f;`Uecv&G!sG4p@F@ddDV#)e|IwN
+zcdPH5K8NqKG}kO$nE}2tGo>k=cu3Bhz0JbEs6Dk4a+;@1*LzuDmH?IUAryjFLQ=OW
+zbIX=~<fmFl%k{oW^SLZW{K+UukwQK16YLdGvSJhXE~-CK#I><Hc<|Lb$#~qGtAy7&
+zI4*y<;d7dU!8jhCoT|jsIy(0+YMr@tO?}9FQ*Q~61%l*4*}~78`a1}(KB&XE$Wr{n
+zU%LOT=RSJ&tm8ALp640Xl}kF?uX{d2Y;8>6?nB^_GGi}9e0d?}^}de$i&|$+yISq4
+z2pvTAQz(pVG?o>yWqx*3-rO0zzS?DJHe-~l0n6hRDHK%3<=*MxtNZ7*pO-u^e~wz6
+z(!DwSbaWP7j867WE}-Vi0VdZIr(IAUM_#yw9=|$;?&)B=SLyi>t?NY~W^}&);&gNX
+z6RqZu3W=pphd@OT5xb$wst&P~Wz*Z<s}AB?{e&1ui9m}lwn1G>Q#e)B7FM`s1VjWb
+zr$X|o<GDN3XabK@6<?Yix{e*^$&}ljPyil{|Ha*^w<V=;$rnCtDXpZe59^+Jo>~#%
+zD}pilM?lIfI$m3?Cc^f%mi%JfIi|o<IKMc1xqtEUYy@+GZvO=QvjaHYJG+3#uzz-d
+zx<0dF4qX$X^ZJ!8>4HyOap?O+K_5)2pbyL#Zqe8VeXv?gr(7HNI~^0~gCi%~{x(LY
+z)r<(5XPO%>iAO*@Qz8yoQF(?=+_>X@!gmdb)NQFIf7-w89Ul?aQ4mC>=S0kjbEVuE
+z_+hZK`x-8#8XM@QY(7rd4tX74^H6oxEhGH7jeB!2+CMzrs}?3azc@QQ`R2TqRd(!}
+zPEy6J@zrn3yr}Mcj#FV~JSkkoVueZ8$o(fgUBh{3ao50}RCAUt&SOk|3Zw6j_x9Ye
+zg+81zDdNI+eg_fg3nD+;zI1NYOZZBO#L)C0W>QHJv(y_bLc;ChI-d3@(~8ouM3Yo0
+z9rhcMsnWGD-m$4@{~VhEmmFy0XIvKuh8xsny~`f!;g6l!Vk)>qfGOP>F7F!V=N3vv
+zLWbnG7Un{Vc|HfN0-i7|7gZq`nN}Is%Q3_iX{Hu5*-p^h<7gm#1&I@Dd@(%Fmoaaw
+zqmSg_g`pHRB&K_>km;-5^*MssILRST6G8=TF}`3bv9bsCjhAXz+?8S4ape4xr4)g_
+zvqT|~O0WfJjviRKtn_z9R`8|P#|rZYPZX7cG{b&>Dr}JPVl|)VQrJZw#WgX`t<t8S
+z@GGA7jhIGE$1~w}D%ZTvG7*(HZF=+MPGM544ZFfA=|Rct1GdLWYjgohUC|QDT?p6m
+zXQT6r!no-xqmYYQ(R2kaVSgMng`9AoZ@8dATqc<k()x>CfeGXD@!YWuUrfMl-Ez14
+zl!b20y-!H8+~82cKAZD&pBes{_sZ>xiQFb^v|CMimqO#h3nV<tDUp`8w#H=79m5J2
+z>OM_%5D><E#;%0YC^^)_;&60in|Do_m$DASX5s*aUrAHmfwd^;9xnwJl-~PKgxeap
+zQZXAlsej=l6O)e}dr=d3hg6L3{3B<YIc(+cx0kovqr~aJUj@xs<_JQ`9}dW!rAvJg
+z-T%Le4#To~&^<jnXv#?88@%(ge&5?(Y19rh!1NjTVbiNkfaji(hnNRo2_Z~1!IN?o
+zrvohHqMSHDD~4|1rUZ%A>HBrc1WG`cUzM=hehN~ljEY_3wVs$$-STt+?23uh&9Z5O
+z0EFf9M(At~gn&mEiwwOwlw3t6;>walp5k({dm8QSU%cGAcyYGvK8Y>CagwKL>tH2P
+zKJ}37SHQzkqn2>Z!?#~St}DU3D+uYOt%ISzLl7!ha>ZoKlm6ZzipF%4N{b=~Bez#7
+zvyqS}%8Rs*StbfRG2FHe<&%>m+oW}USy>lJWgKRh-OdR>fuiKP@$3O&c;1lag`UU{
+z()zj_ytRqLy4IHoALr9)O>wC=h|&5Ik&kq1t582Cx?#Fn<(A*n=$h$yWUg8Jtmk4H
+zY4l}iZE|@PIo8`g<-lQYnvK&b(#Xu1P9mS#zqPGL#2cYN3_MCSTgk{$w!#AXnu+wL
+z?k=yQxtMBZc_gIwMsIJO2vdpoTz*=Zarw-JJVa_#WMORTfN9MZjql$^Wu`-{_aFHo
+z8@8&2*}JFI1#iVtOHDH28ht@CuA@w$q-@;w$e4Q_&53zr4Zv&L9ZH&mbOICoHE}(e
+zP@M-XQlVKQav$pBIb~)3?|Qx7hqFcO`3yULuGRb-*LNF_M2gjz5@}O-x##PK5n-ZI
+z@2{shi)Y?Ty}!C{DuDrAb=691PRJ9&n|Qv&Qf=Ghr$Q<-iQnW3tn(IDNjNiBD&?%{
+zY`L90YDnK1o~jvi-3EMU+YOG^(oWzk5k<ZyTY=-41`RS}?iDo0h8S9l<}8iY_6;?|
+zLmM+%bL1MP*orLA3n<qo{oUwqG-b#9)x`h$YVYXf2%<kPEyPcCr;Ts+ragFvA<1#d
+zj2XhakZ_wPL+I@G2A!Qkp&deJ(0kC?fh-@VBE~;=JMZ83U=K2t+-*9>5Mt9Kq7q)o
+z4T9vHy`@@o<y?WqS{YNVEOyBkE85>iu%;dxvx$D#W_(}m$RVwF`fr3bT2&HsGK+0N
+z>geN^{=1l%zffHr6?OX9T@$i|^|`!q7=iLpP_@WEnjC)3y6*R1oLr1fF3z`mFhV)4
+zDuZ<fy{|g!z}s>r*1&$uQ_+-OuLkU|u~E6t-qhKhsWjR4T|mkf+{w@1zBqd|`s?{<
+zKid83NyA+Ga2)MExZfZl-k=+KQ}C(g#{GA{UJ}1$>g{^cYIhFRvo~}0c83fRoC0@z
+z$YB^i%KR5#xt@DtU&|md%QBvTRKhHx7iW-ttI`CX!I)ci%$bBQA?w=hFS@%?_-PyC
+zAzJ!#jo}$h@{75U-Q69qZ}{7+f8qXj8@dQv(7BuWj#KRCu(#cVLkpLjQ{H{}np@U3
+zfHIbAfz@r@$6h<K;P7`*n&UAKYU0<^hooH5GuVxAnt#TBxtYSBVbDg`jPjizOXUW3
+zDX0k<U(sozxar}o)SRWkKt<FK1C7yDy*t?1-G16eKbsEI!;ag&SS2m&72xpX{N?lK
+zhx>=4lM5KVIy@Mi?2qtdXIfq1tp!VA(0jN86JcF%7x$wBU{fZfv2<ee922-$7GH85
+zVQLod%-=#PGiDtbAHx6m!_WU?@b}&igXqcYFaPl2=N^_t(4`uit4~xGZ)`YkR6K0V
+zOVEeFj6s9#w0xR{XUeWM#EN2AQ1UMP{4;bDm5)>2b-!ZTl->aT^e3qO`d?wUH&_)S
+z*O57=eB4HO{u+zrRw!S>-LV(aF^!n?CCHd&bN4&ma+S660`(6UT#Xi=sgOJndo-Zx
+zD^FmlxP_SsBqB6az~B$1o|hs`_h*ejSOLU$q3troH+(LlW2P_F6&TB=9A@mFOt)=3
+z&bS4|ZxkWTjAae#PUD2nU0X6<WBz4FvyvLISOIWr$3QFfKqnFCUT@GwAgZUe`@?SZ
+z<TakwFS_B_ZvW-yaD>08yx(p<&aj#2Y}8LG*YZ4OX;BGaGf=HDnE{+vyUlnEQxR}6
+zo-xg0#~TpulWU%)jx*v_F{XWr5n~7~+&^eq?QjElF1S;um`3J`*1>QkjCZGAxi_Bq
+zIBiNhLQgS{=);S}r!$_WRDE&E>FRmSZf&5uKq#HLt_da{n=^}U5sx0MZRu~?+N=oS
+zS@p7Lex_M|E)u>!V^Z?;H#$i%&sh9hg&^MYv)?M{(scf>EWQ+S`Wu}f684K3pZr$$
+z*XM`)t<FxXd1epM$b9;no+)PN`%TX6M$^sO2J0k6bj!Gvs7MYS7+_|?B^M>K@Wjw5
+zQgdZ29J9B_>WZ6Ft}jG<Sq7sy%x&n}H9C}*>noP-cw+*JDQr$AhzY}BX!M-flUBUA
+z;`+?{bx<-#3dnBK`<lH&PV4R`O0M{c1nVwA>~@x2);QOX(d(O6Us$oc&&!l$Aq|N8
+z`F!tqgm9cQr_=a?jBRo)YInu;m+M3t5%>9(K)6JjTk-^;TaA!r=vrjl>wys3wv15S
+zPPATK<0=}BLJ#NbmDpcSLu}r>LP@L&<K9<stsWQ}6{=tH!`*?o+jJK_uOFiut_1Gi
+zj8)6$(qm1=b!4mOG&pa4-DV_gCju=uqXlsstl7kNqF8qp`<U~ybndHOW;G|X?b55H
+zfqb-de!TbB!{e97g>7NzGb-dVo-sM)3A&=BN=^gzFHJ`n;Hj93_B%Z)1Yf|Tq*|I!
+znNHAe5q-%Pe&$M-IkGGj$2Y?GYzA%n`~2)-<6+#L{aS}{$zAaC9YR~-O&cIym6eq!
+z<Q;$u&QgbL+x3ltdjs=p0ld2I&j#)_f(xcKaeSv~8){oHDqEtK@1sX(FC^1iU8jqX
+znC|$=lNuRow9LmGyZ%t4)SNB8M!WC%(Tf|1cT+i>hNT@>dZYvc){sH@{OCo$MvjYF
+zx1pD#B$)npB0L->d76g&Fmo<j?iJTx%C6Z#r&cv>od-dp7ialuhc}b;W0e%wcvRZ}
+zGx_wOLtS>DOQ#SA+Q#FUa06dbBAPFOBN)B6eZv6b-1_vJ<VVHLQ|J&i>QwHH(*-2t
+zf8gDq$OmmEGIHU^<TH&vA~eq+a3Y+-Z>wjd*~KVogJ0w;YqsoEBk3so_HUynyeORh
+z{hq|i*oZD9IXY{Jd2l5!2XexW`@QK9jD83ya$Z9O<cJSnxSuf<yO7h!jqy4Fu;}%j
+zciMMv{k{8#%kY(tKSuD_FS`MgrNTSj6-%JNg74rNNTuiJ8Pi7C#TWZ;+@J7e+aXTX
+z^?@)t$Kk)&f8%~YFu?!!|32*Pe!abXuVkLCUKX`<{%+8FurugAdcU3r-E4EL&+=24
+za-Y|F3;`JAr{goA)MGh3WRl{WC{@OgC(Ak`?ir8O71xU$M;N6~E$UA5H>WTAM@PpY
+zEfhH>Dm}-{K}pcQ*mUXyvu5s5KJ_hX*dgc)dXHM}#$hv~dKIlc#TJ}Y`YSfTqw6#1
+z%$%y^#Lz3I1skW_pa*9Mx)|fc45Y%^)ctFnElC;7J->p+EiiiUF)+Hp=t9KgV`#t;
+zk*=j{Ck%mg3*#J<Yo6}jB^Ndy*p>1rix)*UVNcUqhPa-Ict+7*St@u)HCH_fBS(rn
+z=7$=(zL1QaaY>Gk6u!_hh}*%4vP%};0?fx(<cT1Ex{Ud>dfu4?GtHqp7~VSde6XHW
+zZQ4}qhzbfPjFJxHeIbtR_0uG0>B_yikQlf%c)e3N^t1`sm7+Rji1A%RvL@2xl+Cl&
+z<9GvEtX^|>2R~PD$12xnpZnh1v(F&W*KW9Bw^==JzRIrOSwDl_L2vc*HD}5+mhFR$
+zPE%0~FrF!8Jep@Jctd$a%e1n1jYe`o7_f(UK`w2L_KFuyqQ>6J9Eq;OyOs1^p`eP-
+ztBqYE6NnZ1Yv|Q@otyOq8_z~>@kq7rWeqsXpU^FFDkw2MdE^zLnVSD27aFT%wO%1!
+zp!;Xp4wtlda?rFI_+-%xYi8<$w!#|(w%1XNk5k(L2A6!{O~A5D-su{*4yrkZ$sy)k
+za*8Bqj(ZEwCYP(1d<}D5f`}W{%gD5T_d|$EEtkwPq~z;w6;`6hYHx3r4xoVA#?xOb
+z9Y8gwbqJiJeY$H1_6}cXA|oGCAH}nN1L%3>s9n)LVd$aUffHrje^C7=jq5;hbD}K%
+z^3m|2seLNwP;XS9hdk`v@~g3lrU!?UdUkMO;823neyQs*V#dQD)P11%QppGzT4Vnn
+zdP>)TcgvytFlc_HHx&4qve*geIi)8DjLha!5wE{r<9f;g(|fMl%e4f_&v%pUzB&4V
+zp0*eWX4SlPMV`L3M8aVl2yYuSD)y^Qtl8}D@WaD8T9;JeryuW#f8*|KcFZbsA{OGk
+z)ZaNyf!O*UGA6X?!5-#XNqOy^k8-bc(>f4(*18?NVyWX;7PIX0l=zpLtZ?ZaxSlCP
+zY=^Qf2m_r<zUb_%@wTlV)6Svn>=dCXwZm61N3;ue@Ezrb{vgJF+Y9C;^qI449rl=1
+z-AepBdJ#D1jOnC)5yj;dPgTaBx=nYwCbHCPjGZ5&_0(tK7BZAJYZ$`oGjzA<IKMJH
+z2^J=ks(0CwC&y-IF64!}<kFmSea>U|_g;wqJo70#Z*gy2S<lxkH};!B$~}84y}6Y+
+z1wB>1B7m|i-3b8?;YPidrhd*AU__fZHRh?hhU13C2TO>sOZSE2VkZ3UjOC^wz&$+s
+zN}7C5rXFEJ-teUK5x8cHp^pci&)o~B(qZL*Vj9=XP;%Wh${^nS?O=Hc+;&W%o`6_u
+z32&uTu`+g_oa}F~{&#kJ_c|YGTl6D^V^Q^WsH^{YV1n~M$(D&v9MPtTD{_`kp>A*`
+zQ(HxmhY(tWDu0>%#aoBkw)cn8`NiS!-o+?-dGc!S=<s0gVs!AjDL}-*X^7#@shVO)
+zZl;nTQOw&fX0tT+Dq_X0-B_K+HrFhLInz@iY1*gXzWQtQg!P|{Z_?{OfkW&KC{&s&
+z>D+p3Uh5OP8Oj{2?YX!tc60%9S%kEMPeUAe|JRn@gR2Bv02>>n$HVZUlm8r1_Bi76
+z&6Wl$bS^JQlbyASLB_HL$54ZSfFTQ$CoG<TpS-xJqh(on#G$6c<2F;8w`m4Xm@&7^
+zK&IV%J!c7l5Vbycyb%tij!@;HZ4e9|#xkRBZr4Hia||wan!#kEbPHX)*){DWy)K-7
+zEaOkWfR3si1>BlwUr$s`$}A{C2HYu26k+YKn78^XogyQq%v`5u2bEMMOJ4H0lbu0t
+zu-hrJiRC6|DLi@dN1)OQZ8XXgBZ{{+MV1{IFG})yD=yI_Fx<c{njH)`+lodO?RTWc
+zo+sWv22NG7Oe}y&ma1vaw_BrWS0t}Qt89rSlh6<{UzO6>FXBS9B&dB1Iv>}&Dm`no
+z%BQm|w;p&7$HFyHnPdhA@T{fdT*gW|ZCFU2K-X#NdxzzxExuL1I2}Mq_oJMyTnB}>
+z*^?*5(FtORkT4f%Dm+&yBzIDiGR+eaw>vCm%Ge0oyS|B5m?pe(psxe@SAwVy(|PVm
+z;0CbmoYg-m93Ey2YrRpV%EgO|y(7;6TjgA4i^wg<pi#s5yEIN(^i(uyyisXQdP3~?
+zTG-jl>9PfvCFz0W|Gy*DD?+@<#}-3wk~OiDM4`RlF=qmcV+iwi`FHtu>t8&B?k?ux
+zsKKW#x6c=TRuRyAc;Y(St8pVYDngRVVf$Z-3AEF^<xYxE{w|3Knwb{z(g7I-3hz;!
+z>sBWnC&U=#Noa_&#)Sft3#`}H`@1COq%`C*W7=?p%bc^;Zlwy{^qTdK8<^JhNBc3?
+z{g$;#kq%J572pIW;gB4!C=-m6Dr7RJ{k4g2WnW&(^yR0VY?T{sb|~w><9mY{lIl*F
+z#r**!Y+*V*`0re|IY-n)0l$+OvokMQI1HyzKW#v})p=7m#ae?*ZAT7-CNBn-!f|x}
+z0c4zO>h>w{$;8XW{_gpbFPz$JMT%kV4RM0&4H>TUQ=k2~8C^bQjv2Vg{=0$YcP``+
+zms2}im9x+j<O5;99z54f&(E*hBK>bP<lcNCwKn4#Y>;Awp0$38getc&<57m`A{kx?
+zlJvM2@=(>Tbf<0)q-k(YZs?ybh5gN~JNnhzTl7qu&#|(boTfY~UPcw?i<lX{-GlFE
+zya_sGvfz*+*c8Q_cJNNiFVQFF46Xac5*>99?&3{0B%c=;P0?j;VB`zj>qq-%WX#0^
+zgqD(xmT7@2NoO1SA1^?&>k=-#Y98k2XD^Q7=<s9&FHR^c0C6BzNg%ue^7a!Jvi#l(
+zQ$mJdx)ojWt1fybJaXD!gszy9NOITn`W72ky<n-anzQ+KVO*yKf02?EulpiV1Pc1?
+z856_A-r<}Ma7sHxtok`78NEds#j>+sHciy194LrO1o<Y2LH9XJW7YpIAM-suSGs?y
+z)tuWI&)dWh6p-l_cN<6{6ns)d4}ENUs3kyujJWb$y{kfFPE&Oqye;ZLp`7?SPkGNL
+zlciglbz=F1d!u$G;@rcei?YfO9fa{=0k_UhCo7=bc^!f_+N8-i=9wc=X$n5q?k&7J
+zHuR(Wg!hY@)46*g(-!ZF4|Sw(-RQH*P?$edb7Q!H)3X<Q`xl3=M$j!X<tUjhwka>=
+zu*B6JywS(>T%uL1Ckf1n>As$`NO`Cj>tpDA#bGi_84#4KUdbpZZ#8^tQ=+g^tV0oD
+zxYHoSbT(F+GTlqqI}FuL=S*L6?enesNGPAlyC8clLxd2dYEn=i>Eh0b7nGACAAWJA
+zWGq`4*xx%k_9CXwBGVd}=qa-1CR5Ucg0}AT@3?O<kFi%43Bo-%AjBZNs3#z4vnCW&
+zo=UDpv;&bZx>}?a{-n_n%?<%k$Y#6zYmsnp=|zL)AC-pbrQd^t(elr!TKXk$v8@f3
+zLZvG<PT!2J12t7++?+ClGdZOOg{o2P{D7Rzxl<o+nY0<d#d&H>TZqTiLduz={n86(
+z*Lb~wksz2`*L_mf8Mc~A<u{Gc9BPWS(+lOes6Rqx2`uIi&+zs`bDL|4cVvX<syX-;
+zkDs@%Go)*w)H#zVPwx0bNxcLk`SlEI!Rtk&a|x-Ka4Y7G3FQ&g6YGUUW0|)8Y-8{h
+ze`|4=Ho39++?0h^ZrHv3qG70PXdFRL7CUf&(J?#ZJcckHY3&H1<Lu{nt=U9Em#e$1
+zPP~;>HqWed&q%msA~hj9IWQ+M6xOCV*R8ikbSy$4fxXj12nCgzXwpqeB37BvOd6cu
+zg_yUdCEC=#ZMDbJ&Cyu8ocDFfJy2}Xy0|=++|v?rr%_IeY4`g=7c*ZUVH^a<8K)cn
+zbWuA#;Dd2{Kn`%MxW2xW>RRrQ7kq9)NdTO0(W3)5`Rs(4UdM${uxiiwU7C~=W_e^q
+ztJUh}oW0(W`y=<rcS9_6md}~Q%NcJu^zURMVup_J0a@AD5erYv{FdFYD?aA{5*Vkl
+z`;1j><`?!hm|yPSd;I9D+kz?Zl5e==6mt5p5L@lB>e=c*QWjg9mTd}u-V*;Dn{eXc
+zm^qm&&(?wPIp!)fmdTj!fS5E7B1|9{=>m4|?O@0vPHDAv)!Wy-hNTDtPj;5(DGa#X
+zRufp0gc^{ApiJh-mp63y*;GjtFV=C>8CjQW<%WxwP4cT~&dkT71NBmpa}3I#YBrxU
+zD`IcFnh36|$H*sFb{_`bT7dhm@#JxXgLSG^lE;{kZ-V(*#YDtadb-Fsojj^V1N?19
+z^{axbpiJ<BK**^nE!Ifa+I@Z9N7pm%?MW54!)nk2FiZ==q;<;d-s#~w^5FZZP;OS1
+zG`WFNc=AHD7%#F^#p(EF^0GU)w+6}DY{20uy?}n$i~c){{`tD=|1pT3yxAGP{-W~d
+z>$WhT4G3A2KwUmHZ1wyyND!sC=$NURzy)fj|37=z*V{A<#NYW8)}E4S$+Q<hAT*7&
+zlMvgGwjmx$rMZcdMs?yUO@IpV-O-)@#A%$SElBWCKTWll#PP*<_q+4`ZosrVBcBV@
+zc83ueoWP~rkt6KJd-V6Kd;bx>u*(a9fiQ7vOS33*2yU$;5h7$iXujkuj6{CkOR1xq
+zt)ebo4$6l&ky0@ACV~3vRR82(dSAn>{r>5>f9YAWHJt>FV1?6D|I+H~ExS1IPPgTw
+z2M&AAIjqfk*zS{?p0i6zt+NZB+U3OzrzX3>r!Mf6(`B$=YsdH1bN4>%D(^5{wD~6o
+zJeN^xusJzj=QXD)Ppy`@<g$7}j7U%q8wes&UFqGfUbpGZh4GQbMM~4dyy%ac7a=7}
+z8ZbZQVn(?{K4qFI@opYo`wCfO>VMq0jVv>}S=j-MAPd5yoLe-C?Rq(Pc#P9=<@--h
+zMC9P)f$i#Ha_Ge?KO|qk>H&xO8GYqvwCX_B<H^xFTg}myMrY<kRmdu{s$xZlzs@WW
+zs<Ks<FZr5$qXjYmB5Y<KY6CM}+Y;9gAQ(JG-B&S~ASvsjkS2SA5F9>%t1y~&ufRZ^
+zQ=MKgW2}&c@uG}_lXR!Et%Y=eIEZ7y8LK2d!8u7pT@p=l3(EYv6T`!-Kb+&$`^WM9
+zlfqGCgdTB2PF6IF^<uwEq^in7rYbZs%B%SrgK`E9TxHztDB~zD!~%RYG{+*!LvmF#
+zkw(3C>U)zohvaG#38AW-NT3b}<Et0-p6CVap8E54d)LF?&h5rEFy98xYMXtaL7>oz
+z9F4C(jK(A4agnAhehZqer$PvkaFPPK99cfYzUvnCVw2boO#RjxYL<j@9$*wy`r*pB
+z!7_s-i`*;U1O~Hc@t5a=n=4qJeYN~{DOl6Ggq~_q=QCE~c_E~_8sA@CKfw}eNU_O>
+z#n_YL^m1i7IZ($wjM38(<p@<wR-}Gt2$zFdT?K`xT(i)RWAq&H6he4r@8V|-`B*|T
+zUYE=#u|Sc-8_I|SXR+H|!vww{XSpcXZ#vLo210;T;1=EDAj;@ga=Rb~hpSMV+j>A|
+z9<8BW+2|Z{H;%s>`@;k9`@M;s5;|031B>QD*K^-Y9x@3W-s6%*VT(_^_2x@enoF}P
+z?~zvEv;{jq%9XX^;j2oNvdo$JrJflAQayF$dy${NUi@pC{bM_}V>`D0uKf-G0RR74
+KO0UBJhyef{y)SkE
+
+literal 21218
+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
+RzW@LL|Ns1wv?%~!0RXYn@z4MO
+
+diff --git a/phorvex/charts/phorvex/templates/codeexec-admission.yaml b/phorvex/charts/phorvex/templates/codeexec-admission.yaml
+new file mode 100644
+index 0000000..c907991
+--- /dev/null
++++ b/phorvex/charts/phorvex/templates/codeexec-admission.yaml
+@@ -0,0 +1,133 @@
++{{- if .Values.phorvex.codeExecAdmission.enabled }}
++# M-6 — request-level ValidatingAdmissionPolicy + Binding for pods/ephemeralcontainers
++# (code-exec admission). Installer-owned singleton, cluster-scoped, DENY + failurePolicy:Fail.
++# It enforces the SEC-1/SEC-2/PO-1 contract (workflow/fixes/M-6/03-decision.md): in a managed
++# namespace, only the Phorvex manager SA may add an ephemeral container, and only the exact
++# approved profile (name / pinned digest / hardened securityContext / Option A empty debugger
++# command+args / exact custom-inject command+args; forbidden extra fields). Native VAP (no
++# webhook pod). Enabled explicitly (off by default); grants NO injection permission; labels no
++# namespace — an admin opts one in with `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`.
++apiVersion: admissionregistration.k8s.io/v1
++kind: ValidatingAdmissionPolicy
++metadata:
++  name: phorvex-codeexec-ephemeral
++  labels:
++    {{- include "phorvex.labels" . | nindent 4 }}
++    phorvex.ai/policy: codeexec-ephemeral
++  annotations:
++    # Content/version pin the runtime capability check verifies (not name presence alone).
++    phorvex.ai/policy-version: "m6-1"
++spec:
++  failurePolicy: Fail
++  matchConstraints:
++    resourceRules:
++      - apiGroups: [""]
++        apiVersions: ["v1"]
++        operations: ["UPDATE"]
++        resources: ["pods/ephemeralcontainers"]
++  variables:
++    - name: managerSA
++      expression: "'system:serviceaccount:phorvex-system:phorvex-phorvex-manager'"
++    - name: approvedImage
++      expression: "'busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'"
++    # Newly-added ephemeral containers = those in object not already present (by name) in
++    # oldObject. has()-guards let the FIRST injection pass and tolerate an absent new list.
++    - name: newContainers
++      expression: >-
++        has(object.spec.ephemeralContainers)
++          ? object.spec.ephemeralContainers.filter(ec,
++              !(has(oldObject.spec.ephemeralContainers)
++                && oldObject.spec.ephemeralContainers.exists(o, o.name == ec.name)))
++          : []
++  validations:
++    # SEC-2 identity: only the manager SA may ADD an ephemeral container in scope.
++    - expression: "size(variables.newContainers) == 0 || request.userInfo.username == variables.managerSA"
++      reason: Forbidden
++      messageExpression: >-
++        "code-exec/identity: only the Phorvex manager service account may add an ephemeral container in
++        a managed namespace (got '" + request.userInfo.username + "')"
++    # SEC-1 name: exact allowed set.
++    - expression: "variables.newContainers.all(ec, ec.name in ['phorvex-debugger', 'phorvex-custom'])"
++      reason: Forbidden
++      message: "code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom"
++    # SEC-1 image: exact pinned digest.
++    - expression: "variables.newContainers.all(ec, has(ec.image) && ec.image == variables.approvedImage)"
++      reason: Forbidden
++      message: "code-exec/image: ephemeral container image must be the pinned busybox digest"
++    # SEC-1 securityContext core.
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext)
++          && ec.securityContext.privileged == false
++          && ec.securityContext.allowPrivilegeEscalation == false
++          && ec.securityContext.runAsNonRoot == true
++          && ec.securityContext.runAsUser == 65534
++          && ec.securityContext.runAsGroup == 65534
++          && ec.securityContext.readOnlyRootFilesystem == true)
++      reason: Forbidden
++      message: "code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true"
++    # SEC-1 capabilities: drop ALL, add none.
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.capabilities)
++          && ec.securityContext.capabilities.drop == ['ALL']
++          && (!has(ec.securityContext.capabilities.add) || size(ec.securityContext.capabilities.add) == 0))
++      reason: Forbidden
++      message: "code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add"
++    # SEC-1 seccomp: RuntimeDefault.
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.seccompProfile)
++          && ec.securityContext.seccompProfile.type == 'RuntimeDefault')
++      reason: Forbidden
++      message: "code-exec/seccomp: require seccompProfile.type=RuntimeDefault"
++    # SEC-1 securityContext is EXACTLY the allow-set: forbid extra confinement-relevant fields
++    # the core rules do not pin (added appArmor/SELinux/Windows/procMount could relax confinement).
++    - expression: >-
++        variables.newContainers.all(ec, !has(ec.securityContext)
++          || (!has(ec.securityContext.appArmorProfile)
++              && !has(ec.securityContext.seLinuxOptions)
++              && !has(ec.securityContext.windowsOptions)
++              && !has(ec.securityContext.procMount)))
++      reason: Forbidden
++      message: "code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)"
++    # SEC-1 forbidden fields.
++    - expression: >-
++        variables.newContainers.all(ec,
++          (!has(ec.tty) || ec.tty == false)
++          && (!has(ec.stdin) || ec.stdin == false)
++          && !has(ec.targetContainerName)
++          && (!has(ec.env) || size(ec.env) == 0)
++          && (!has(ec.envFrom) || size(ec.envFrom) == 0)
++          && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)
++          && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))
++      reason: Forbidden
++      message: "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted"
++    # SEC-1 command/args (C1): debugger MUST have empty command AND args (Option A);
++    # custom-inject MUST match its exact command/args.
++    - expression: >-
++        variables.newContainers.all(ec,
++          ec.name == 'phorvex-debugger'
++            ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))
++            : (ec.name == 'phorvex-custom'
++                ? (has(ec.command) && ec.command == ['sh', '-c']
++                   && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])
++                : true))
++      reason: Forbidden
++      message: "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args"
++---
++apiVersion: admissionregistration.k8s.io/v1
++kind: ValidatingAdmissionPolicyBinding
++metadata:
++  name: phorvex-codeexec-ephemeral
++  labels:
++    {{- include "phorvex.labels" . | nindent 4 }}
++    phorvex.ai/policy: codeexec-ephemeral
++spec:
++  policyName: phorvex-codeexec-ephemeral
++  validationActions: ["Deny"]
++  matchResources:
++    # SEC-2 managed scope: installer-applied namespace label a tenant cannot self-apply.
++    # Out-of-scope (unlabelled) namespaces are NOT matched; Phorvex marks its own code-exec
++    # capability unavailable for those targets (C3).
++    namespaceSelector:
++      matchLabels:
++        phorvex.ai/codeexec-managed: "true"
++{{- end }}
+diff --git a/phorvex/charts/phorvex/templates/rbac.yaml b/phorvex/charts/phorvex/templates/rbac.yaml
+index 3279f87..59ef862 100644
+--- a/phorvex/charts/phorvex/templates/rbac.yaml
++++ b/phorvex/charts/phorvex/templates/rbac.yaml
+@@ -18,6 +18,16 @@ rules:
+ - apiGroups: ["admissionregistration.k8s.io"]
+   resources: ["mutatingwebhookconfigurations"]
+   verbs: ["get", "list"]
++{{- if .Values.phorvex.codeExecAdmission.enabled }}
++- apiGroups: ["admissionregistration.k8s.io"]
++  # M-6 runtime capability check: GET-by-resourceName ONLY of the two named code-exec admission
++  # objects, so the operator can VERIFY (never modify) that its own deny-policy is in force before
++  # it offers or dispatches an ephemeral-container injection. Read-only, scoped to exactly these two
++  # object names; no list/watch (informer), no create/update/delete. This is NOT an injection grant.
++  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
++  resourceNames: ["phorvex-codeexec-ephemeral"]
++  verbs: ["get"]
++{{- end }}
+ - apiGroups: [""]
+   resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
+   verbs: ["get", "list", "watch"]
+diff --git a/phorvex/charts/phorvex/values.yaml b/phorvex/charts/phorvex/values.yaml
+index d4ae307..45fe3eb 100644
+--- a/phorvex/charts/phorvex/values.yaml
++++ b/phorvex/charts/phorvex/values.yaml
+@@ -94,6 +94,17 @@ phorvex:
+   # ReplicaSets and Services. Service access is exactly get/update so route-rotate and
+   # endpoint-rotate can restitch selectors; Secrets and EndpointSlices remain denied.
+   actuatorNamespaces: []
++  # M-6 code-exec admission protection. OFF by default: enabling it renders the installer-owned
++  # ValidatingAdmissionPolicy + Binding (phorvex-codeexec-ephemeral) that DENIES any
++  # pods/ephemeralcontainers UPDATE in a managed namespace unless it exactly matches the approved
++  # profile, plus the minimal resourceName-scoped `get` the operator's runtime verifier needs to
++  # confirm the policy is in force before offering/dispatching debugger/custom-inject. This grants
++  # NO injection permission (the ephemeralcontainers write Role stays unbound — a separate,
++  # human-gated step) and labels no namespace: an admin opts a namespace in with
++  # `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`. Deny-only, so it is safe to enable
++  # ahead of any execution grant, and required to be verified BEFORE one.
++  codeExecAdmission:
++    enabled: false
+   # EPSS exploit-probability cache. The operator reads it from a file so a scored CVE feed
+   # can be refreshed without a rebuild; the file arrives as a ConfigMap.
+   epss:
+diff --git a/phorvex/cmd/main.go b/phorvex/cmd/main.go
+index 2a0752f..23b8981 100644
+--- a/phorvex/cmd/main.go
++++ b/phorvex/cmd/main.go
+@@ -29,6 +29,7 @@ import (
+ 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+ 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+ 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
++	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
+ 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+ 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+ 
+@@ -37,6 +38,7 @@ import (
+ 	"github.com/phorvex/phorvex/internal/audit"
+ 	"github.com/phorvex/phorvex/internal/authz"
+ 	"github.com/phorvex/phorvex/internal/calib"
++	"github.com/phorvex/phorvex/internal/codeexec"
+ 	"github.com/phorvex/phorvex/internal/controller"
+ 	"github.com/phorvex/phorvex/internal/cost"
+ 	"github.com/phorvex/phorvex/internal/decision"
+@@ -277,11 +279,35 @@ func main() {
+ 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
+ 	// cover and runtime capability, just not RBAC (never a silent actuation of an
+ 	// unpermitted action: the actuation itself still fails closed on real RBAC).
+-	if cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie()); csErr == nil {
++	cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
++	if csErr == nil {
+ 		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
+ 	} else {
+ 		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
+ 	}
++	// M-6: the code-exec admission-capability verifier. It is ALWAYS wired (never nil at
++	// runtime), starts UNAVAILABLE (fail-closed until the first successful verification), and
++	// re-verifies every poll interval via GET-by-resourceName + SSAR (no watch). Registered as
++	// a manager Runnable so its lifecycle tracks the operator process. If the clientset could
++	// not be built, the verifier reads through an always-fail reader and stays unavailable, so
++	// debugger/custom-inject are fail-closed out of BOTH the offer set and the dispatch path.
++	var ceReader codeexec.PolicyReader
++	if csErr == nil {
++		ceReader = codeexec.NewK8sReader(cs)
++	} else {
++		ceReader = codeexec.NewUnavailableReader("cluster clientset unavailable at boot")
++	}
++	codeExecVerifier := codeexec.New(ceReader, codeexec.Config{})
++	rmgr.CodeExec = codeExecVerifier
++	if addErr := mgr.Add(ctrlmanager.RunnableFunc(func(ctx context.Context) error {
++		codeExecVerifier.Run(ctx)
++		return nil
++	})); addErr != nil {
++		setupLog.Error(addErr, "cannot register M-6 code-exec admission verifier loop; verifier stays unavailable (fail-closed)")
++	}
++	setupLog.Info("M-6 code-exec admission verifier wired (fail-closed until first successful verification)",
++		"policy", codeexec.PolicyName, "version", codeexec.PolicyVersion,
++		"deadline", codeexec.DefaultDeadline, "ttl", codeexec.DefaultTTL, "poll", codeexec.DefaultPoll)
+ 	if calibrationShadow {
+ 		rmgr.Calibration = calib.NewRuntime(calib.RuntimeConfig{
+ 			RefreshInterval: calibrationRefresh, SampleInterval: calibrationSample,
+diff --git a/phorvex/config/admission/codeexec-ephemeral-vap.yaml b/phorvex/config/admission/codeexec-ephemeral-vap.yaml
+new file mode 100644
+index 0000000..80148b6
+--- /dev/null
++++ b/phorvex/config/admission/codeexec-ephemeral-vap.yaml
+@@ -0,0 +1,140 @@
++# M-6 — request-level ValidatingAdmissionPolicy for pods/ephemeralcontainers (code-exec admission).
++#
++# Enforces the SEC-1/SEC-2/PO-1 contract frozen in workflow/fixes/M-6/03-decision.md
++# (SHA256 9d566b9f…): only the Phorvex manager SA may add an ephemeral container in a MANAGED
++# namespace, and only the exact approved profile (name / pinned digest / hardened securityContext /
++# Option A empty debugger command+args / exact custom-inject command+args; forbidden extra fields).
++#
++# Native VAP (no webhook pod). GA in k8s >=1.30 (validation target 1.36.2). failurePolicy: Fail;
++# the Binding uses validationActions:[Deny]; namespace scope is on the Binding (installer-set label a
++# tenant cannot self-apply — the manager SA was observed unable to patch namespaces). Each rule is a
++# SEPARATE validation so a denial is attributable to its own rule (P4). Pre-existing ephemeral
++# containers pass unchanged (migration): only NEWLY-ADDED containers are validated.
++apiVersion: admissionregistration.k8s.io/v1
++kind: ValidatingAdmissionPolicy
++metadata:
++  name: phorvex-codeexec-ephemeral
++  labels:
++    app.kubernetes.io/part-of: phorvex
++    phorvex.ai/policy: codeexec-ephemeral
++  annotations:
++    # Content/version pin the runtime capability check verifies (not name presence alone).
++    phorvex.ai/policy-version: "m6-1"
++spec:
++  failurePolicy: Fail
++  matchConstraints:
++    resourceRules:
++      - apiGroups: [""]
++        apiVersions: ["v1"]
++        operations: ["UPDATE"]
++        resources: ["pods/ephemeralcontainers"]
++  variables:
++    # The approved manager principal (SEC-2 identity rule).
++    - name: managerSA
++      expression: "'system:serviceaccount:phorvex-system:phorvex-phorvex-manager'"
++    # The pinned image (SEC-1): busybox:1.36 linux/amd64 digest captured in
++    # evidence/baseline/busybox-1.36-amd64.json — identical to the handler's pinned value.
++    - name: approvedImage
++      expression: "'busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'"
++    # Newly-added ephemeral containers = those in object not already present (by name) in oldObject.
++    # has()-guards let the FIRST injection (no prior list) pass, and tolerate an absent new list.
++    - name: newContainers
++      expression: >-
++        has(object.spec.ephemeralContainers)
++          ? object.spec.ephemeralContainers.filter(ec,
++              !(has(oldObject.spec.ephemeralContainers)
++                && oldObject.spec.ephemeralContainers.exists(o, o.name == ec.name)))
++          : []
++  validations:
++    # --- SEC-2 identity: only the manager SA may ADD an ephemeral container in scope. A request that
++    # adds nothing new passes here (no injection); any added container requires the manager SA. ---
++    - expression: "size(variables.newContainers) == 0 || request.userInfo.username == variables.managerSA"
++      reason: Forbidden
++      messageExpression: >-
++        "code-exec/identity: only the Phorvex manager service account may add an ephemeral container in
++        a managed namespace (got '" + request.userInfo.username + "')"
++    # --- SEC-1 name: exact allowed set (no prefix). ---
++    - expression: "variables.newContainers.all(ec, ec.name in ['phorvex-debugger', 'phorvex-custom'])"
++      reason: Forbidden
++      message: "code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom"
++    # --- SEC-1 image: exact pinned digest. ---
++    - expression: "variables.newContainers.all(ec, has(ec.image) && ec.image == variables.approvedImage)"
++      reason: Forbidden
++      message: "code-exec/image: ephemeral container image must be the pinned busybox digest"
++    # --- SEC-1 securityContext core: present, non-privileged, non-root with the exact numeric IDs. ---
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext)
++          && ec.securityContext.privileged == false
++          && ec.securityContext.allowPrivilegeEscalation == false
++          && ec.securityContext.runAsNonRoot == true
++          && ec.securityContext.runAsUser == 65534
++          && ec.securityContext.runAsGroup == 65534
++          && ec.securityContext.readOnlyRootFilesystem == true)
++      reason: Forbidden
++      message: "code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true"
++    # --- SEC-1 capabilities: drop ALL, add none. ---
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.capabilities)
++          && ec.securityContext.capabilities.drop == ['ALL']
++          && (!has(ec.securityContext.capabilities.add) || size(ec.securityContext.capabilities.add) == 0))
++      reason: Forbidden
++      message: "code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add"
++    # --- SEC-1 seccomp: RuntimeDefault. ---
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.seccompProfile)
++          && ec.securityContext.seccompProfile.type == 'RuntimeDefault')
++      reason: Forbidden
++      message: "code-exec/seccomp: require seccompProfile.type=RuntimeDefault"
++    # --- SEC-1 securityContext is EXACTLY the allow-set: forbid any extra hardening-relevant
++    # field the core rules do not pin (an added appArmor/SELinux/Windows/procMount setting could
++    # relax confinement). "securityContext equals the selected allow-set" per the contract. ---
++    - expression: >-
++        variables.newContainers.all(ec, !has(ec.securityContext)
++          || (!has(ec.securityContext.appArmorProfile)
++              && !has(ec.securityContext.seLinuxOptions)
++              && !has(ec.securityContext.windowsOptions)
++              && !has(ec.securityContext.procMount)))
++      reason: Forbidden
++      message: "code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)"
++    # --- SEC-1 forbidden fields: no tty/stdin/targetContainer/env/envFrom/mounts/devices. ---
++    - expression: >-
++        variables.newContainers.all(ec,
++          (!has(ec.tty) || ec.tty == false)
++          && (!has(ec.stdin) || ec.stdin == false)
++          && !has(ec.targetContainerName)
++          && (!has(ec.env) || size(ec.env) == 0)
++          && (!has(ec.envFrom) || size(ec.envFrom) == 0)
++          && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)
++          && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))
++      reason: Forbidden
++      message: "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted"
++    # --- SEC-1 command/args (C1): debugger MUST have empty command AND args (Option A); custom-inject
++    # MUST match its exact command/args. "Not specified" is not enough — emptiness is required. ---
++    - expression: >-
++        variables.newContainers.all(ec,
++          ec.name == 'phorvex-debugger'
++            ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))
++            : (ec.name == 'phorvex-custom'
++                ? (has(ec.command) && ec.command == ['sh', '-c']
++                   && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])
++                : true))
++      reason: Forbidden
++      message: "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args"
++---
++apiVersion: admissionregistration.k8s.io/v1
++kind: ValidatingAdmissionPolicyBinding
++metadata:
++  name: phorvex-codeexec-ephemeral
++  labels:
++    app.kubernetes.io/part-of: phorvex
++    phorvex.ai/policy: codeexec-ephemeral
++spec:
++  policyName: phorvex-codeexec-ephemeral
++  validationActions: ["Deny"]
++  matchResources:
++    # SEC-2 managed scope: installer-applied namespace label a tenant cannot self-apply (the manager SA
++    # was observed unable to patch/update namespaces). Out-of-scope (unlabelled) namespaces are NOT
++    # matched here; Phorvex marks its own code-exec capability unavailable for those targets (C3).
++    namespaceSelector:
++      matchLabels:
++        phorvex.ai/codeexec-managed: "true"
+diff --git a/phorvex/go.mod b/phorvex/go.mod
+index d6bfd17..4a401e4 100644
+--- a/phorvex/go.mod
++++ b/phorvex/go.mod
+@@ -18,6 +18,15 @@ require (
+ )
+ 
+ require (
++	github.com/google/cel-go v0.23.2
++	github.com/prometheus/client_model v0.6.1
++	k8s.io/apiextensions-apiserver v0.33.0
++	sigs.k8s.io/yaml v1.6.0
++)
++
++require (
++	cel.dev/expr v0.19.1 // indirect
++	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+ 	github.com/beorn7/perks v1.0.1 // indirect
+ 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+ 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+@@ -45,15 +54,16 @@ require (
+ 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
+ 	github.com/pkg/errors v0.9.1 // indirect
+ 	github.com/pmezard/go-difflib v1.0.0 // indirect
+-	github.com/prometheus/client_model v0.6.1 // indirect
+ 	github.com/prometheus/common v0.62.0 // indirect
+ 	github.com/prometheus/procfs v0.15.1 // indirect
+ 	github.com/spf13/pflag v1.0.6 // indirect
++	github.com/stoewer/go-strcase v1.3.0 // indirect
+ 	github.com/x448/float16 v0.8.4 // indirect
+ 	go.uber.org/multierr v1.11.0 // indirect
+ 	go.uber.org/zap v1.27.0 // indirect
+ 	go.yaml.in/yaml/v2 v2.4.2 // indirect
+ 	go.yaml.in/yaml/v3 v3.0.4 // indirect
++	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+ 	golang.org/x/net v0.43.0 // indirect
+ 	golang.org/x/oauth2 v0.27.0 // indirect
+ 	golang.org/x/sync v0.16.0 // indirect
+@@ -62,18 +72,18 @@ require (
+ 	golang.org/x/text v0.28.0 // indirect
+ 	golang.org/x/time v0.9.0 // indirect
+ 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
++	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
++	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
+ 	google.golang.org/protobuf v1.36.7 // indirect
+ 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
+ 	gopkg.in/inf.v0 v0.9.1 // indirect
+ 	gopkg.in/yaml.v3 v3.0.1 // indirect
+-	k8s.io/apiextensions-apiserver v0.33.0 // indirect
+ 	k8s.io/klog/v2 v2.130.1 // indirect
+ 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
+ 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
+ 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
+ 	sigs.k8s.io/randfill v1.0.0 // indirect
+ 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
+-	sigs.k8s.io/yaml v1.6.0 // indirect
+ )
+ 
+ replace github.com/r6security/phoenix => ../build/phoenix-extended
+diff --git a/phorvex/go.sum b/phorvex/go.sum
+index 449e751..208a5c2 100644
+--- a/phorvex/go.sum
++++ b/phorvex/go.sum
+@@ -1,5 +1,11 @@
++cel.dev/expr v0.19.1 h1:NciYrtDRIR0lNCnH1LFJegdjspNx9fI59O7TWcua/W4=
++cel.dev/expr v0.19.1/go.mod h1:MrpN08Q+lEBs+bGYdLxxHkZoUSsCp0nSKTs0nTymJgw=
+ github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
+ github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
++github.com/antlr4-go/antlr/v4 v4.13.0 h1:lxCg3LAv+EUK6t1i0y1V6/SLeUi0eKEKdhQAlS8TVTI=
++github.com/antlr4-go/antlr/v4 v4.13.0/go.mod h1:pfChB/xh/Unjila75QW7+VU4TSnWnnk9UTnmpPaOR2g=
++github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
++github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
+ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
+ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+ github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=
+@@ -39,6 +45,8 @@ github.com/gogo/protobuf v1.3.2 h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=
+ github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q=
+ github.com/google/btree v1.1.3 h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=
+ github.com/google/btree v1.1.3/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
++github.com/google/cel-go v0.23.2 h1:UdEe3CvQh3Nv+E/j9r1Y//WO0K0cSyD7/y0bzyLIMI4=
++github.com/google/cel-go v0.23.2/go.mod h1:52Pb6QsDbC5kvgxvZhiL9QX1oZEkcUF/ZqaPx1J5Wwo=
+ github.com/google/gnostic-models v0.7.0 h1:qwTtogB15McXDaNqTZdzPJRHvaVJlAl+HVQnLmJEJxo=
+ github.com/google/gnostic-models v0.7.0/go.mod h1:whL5G0m6dmc5cPxKc5bdKdEN3UjI7OUGxBlw57miDrQ=
+ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+@@ -103,6 +111,8 @@ github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR
+ github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
+ github.com/spf13/pflag v1.0.6 h1:jFzHGLGAlb3ruxLB8MhbI6A8+AQX/2eW4qeyNZXNp2o=
+ github.com/spf13/pflag v1.0.6/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
++github.com/stoewer/go-strcase v1.3.0 h1:g0eASXYtp+yvN9fK8sH94oCIk0fau9uV1/ZdJ0AVEzs=
++github.com/stoewer/go-strcase v1.3.0/go.mod h1:fAH5hQ5pehh+j3nZfvwdk2RgEgQjAoM8wodgtPmh1xo=
+ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+ github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
+ github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
+@@ -133,6 +143,8 @@ go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
+ golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
+ golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
+ golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
++golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 h1:2dVuKD2vS7b0QIHQbpyTISPd0LeHDbnYEryqj5Q1ug8=
++golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56/go.mod h1:M4RDyNAINzryxdtnbRXRL/OHtkFuWGRjvuhBJpk2IlY=
+ golang.org/x/mod v0.2.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
+ golang.org/x/mod v0.3.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
+ golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
+@@ -173,6 +185,10 @@ golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8T
+ golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+ gomodules.xyz/jsonpatch/v2 v2.4.0 h1:Ci3iUJyx9UeRx7CeFN8ARgGbkESwJK+KB9lLcWxY/Zw=
+ gomodules.xyz/jsonpatch/v2 v2.4.0/go.mod h1:AH3dM2RI6uoBZxn3LVrfvJ3E0/9dG4cSrbuBJT4moAY=
++google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 h1:CkkIfIt50+lT6NHAVoRYEyAvQGFM7xEwXUUywFvEb3Q=
++google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576/go.mod h1:1R3kvZ1dtP3+4p4d3G8uJ8rFk/fWlScl38vanWACI08=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 h1:8ZmaLZE4XWrtU3MyClkYqqtl6Oegr3235h7jxsDyqCY=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576/go.mod h1:5uTbfoYQed2U9p3KIj2/Zzm02PYhndfdmML0qC3q3FU=
+ google.golang.org/protobuf v1.36.7 h1:IgrO7UwFQGJdRNXH/sQux4R1Dj1WAKcLElzeeRaXV2A=
+ google.golang.org/protobuf v1.36.7/go.mod h1:jduwjTPXsFjZGTmRluh+L6NjiWu7pchiJ2/5YcXBHnY=
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+diff --git a/phorvex/internal/actuator/handlers_codeexec_test.go b/phorvex/internal/actuator/handlers_codeexec_test.go
+new file mode 100644
+index 0000000..1f3815e
+--- /dev/null
++++ b/phorvex/internal/actuator/handlers_codeexec_test.go
+@@ -0,0 +1,120 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * The paired handler profile MUST match the VAP allow-set exactly, or Phorvex's own
++ * injection is denied by its own admission policy. These L0-L2 tests assert the emitted
++ * ephemeral container carries: the pinned busybox DIGEST (not the mutable tag); the exact
++ * hardened securityContext; and the split command/args — Option A EMPTY for the debugger,
++ * command:["sh","-c"] args:["echo phorvex-custom-action; sleep 1"] for custom-inject.
++ */
++
++package actuator
++
++import (
++	"context"
++	"reflect"
++	"testing"
++
++	corev1 "k8s.io/api/core/v1"
++
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++// The frozen contract values the VAP enforces (kept literal here so a drift in the handler
++// away from the allow-set fails this test rather than silently shipping a denied request).
++const (
++	wantImageDigest = "busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
++)
++
++// assertHardenedProfile checks the fields common to BOTH actions against the VAP allow-set.
++func assertHardenedProfile(t *testing.T, ec corev1.EphemeralContainer) {
++	t.Helper()
++	if ec.Image != wantImageDigest {
++		t.Errorf("image = %q, want pinned digest %q", ec.Image, wantImageDigest)
++	}
++	if ec.TTY || ec.Stdin || ec.TargetContainerName != "" {
++		t.Errorf("tty/stdin/targetContainerName must be unset, got tty=%v stdin=%v target=%q", ec.TTY, ec.Stdin, ec.TargetContainerName)
++	}
++	if len(ec.Env) != 0 || len(ec.EnvFrom) != 0 || len(ec.VolumeMounts) != 0 || len(ec.VolumeDevices) != 0 {
++		t.Errorf("env/envFrom/volumeMounts/volumeDevices must be empty")
++	}
++	sc := ec.SecurityContext
++	if sc == nil {
++		t.Fatal("securityContext must be set")
++	}
++	if sc.Privileged == nil || *sc.Privileged {
++		t.Error("privileged must be false")
++	}
++	if sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
++		t.Error("allowPrivilegeEscalation must be false")
++	}
++	if sc.RunAsNonRoot == nil || !*sc.RunAsNonRoot {
++		t.Error("runAsNonRoot must be true")
++	}
++	if sc.RunAsUser == nil || *sc.RunAsUser != 65534 {
++		t.Error("runAsUser must be 65534")
++	}
++	if sc.RunAsGroup == nil || *sc.RunAsGroup != 65534 {
++		t.Error("runAsGroup must be 65534")
++	}
++	if sc.ReadOnlyRootFilesystem == nil || !*sc.ReadOnlyRootFilesystem {
++		t.Error("readOnlyRootFilesystem must be true")
++	}
++	if sc.Capabilities == nil || !reflect.DeepEqual(sc.Capabilities.Drop, []corev1.Capability{"ALL"}) || len(sc.Capabilities.Add) != 0 {
++		t.Errorf("capabilities must drop=[ALL] add=none, got %+v", sc.Capabilities)
++	}
++	if sc.SeccompProfile == nil || sc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
++		t.Error("seccompProfile.type must be RuntimeDefault")
++	}
++}
++
++func TestDebuggerEmitsOptionAEmptyCommand(t *testing.T) {
++	ec := debuggerEphemeralSpec()
++	if ec.Name != "phorvex-debugger" {
++		t.Fatalf("name = %q, want phorvex-debugger", ec.Name)
++	}
++	assertHardenedProfile(t, ec)
++	// Option A: command AND args MUST be empty.
++	if len(ec.Command) != 0 {
++		t.Errorf("debugger command must be empty (Option A), got %v", ec.Command)
++	}
++	if len(ec.Args) != 0 {
++		t.Errorf("debugger args must be empty (Option A), got %v", ec.Args)
++	}
++}
++
++func TestCustomInjectEmitsSplitCommandArgs(t *testing.T) {
++	ec := customInjectEphemeralSpec()
++	if ec.Name != "phorvex-custom" {
++		t.Fatalf("name = %q, want phorvex-custom", ec.Name)
++	}
++	assertHardenedProfile(t, ec)
++	if !reflect.DeepEqual(ec.Command, []string{"sh", "-c"}) {
++		t.Errorf("custom-inject command = %v, want [sh -c]", ec.Command)
++	}
++	if !reflect.DeepEqual(ec.Args, []string{"echo phorvex-custom-action; sleep 1"}) {
++		t.Errorf("custom-inject args = %v, want [echo phorvex-custom-action; sleep 1]", ec.Args)
++	}
++}
++
++// The handler actually enacts the spec through the ephemeralcontainers subresource and
++// reports an irreversible emit (the injection path itself, end to end).
++func TestCodeExecHandlersEnactIrreversibly(t *testing.T) {
++	for _, tc := range []struct {
++		h      ActionHandler
++		action model.Action
++	}{
++		{debuggerHandler{}, model.ActionDebugger},
++		{customInjectHandler{}, model.ActionCustomInject},
++	} {
++		pod := aiPod("ns", "victim", map[string]string{"app": "web"})
++		c := fakeC(pod)
++		res, err := tc.h.Enact(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "victim", Action: tc.action})
++		if err != nil {
++			t.Fatalf("%s enact: %v", tc.action, err)
++		}
++		if !res.Emitted || res.MutationKind != "irreversible" {
++			t.Fatalf("%s result = %+v, want emitted irreversible", tc.action, res)
++		}
++	}
++}
+diff --git a/phorvex/internal/actuator/handlers_k8s.go b/phorvex/internal/actuator/handlers_k8s.go
+index 917aedf..8adb19d 100644
+--- a/phorvex/internal/actuator/handlers_k8s.go
++++ b/phorvex/internal/actuator/handlers_k8s.go
+@@ -310,7 +310,16 @@ type debuggerHandler struct{}
+ func (debuggerHandler) Name() string { return string(model.ActionDebugger) }
+ 
+ func (debuggerHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+-	return injectEphemeral(ctx, ec, req, "phorvex-debugger", "busybox:1.36", nil)
++	// M-6 Option A: the debugger carries NO command and NO args (empty), so the injected
++	// container runs the pinned image's own entrypoint and nothing operator-supplied. The
++	// VAP requires command+args empty for phorvex-debugger, so this is the paired request.
++	return injectEphemeral(ctx, ec, req, debuggerEphemeralSpec())
++}
++
++// debuggerEphemeralSpec is the exact phorvex-debugger container the VAP allow-set validates
++// (Option A: empty command AND args). Defined once so the handler and its test cannot drift.
++func debuggerEphemeralSpec() corev1.EphemeralContainer {
++	return ephemeralContainerSpec("phorvex-debugger", codeExecImage, nil, nil)
+ }
+ 
+ // --- 4. custom-inject (= Phoenix CustomAction) — also the KV-reset carrier — IRREVERSIBLE -
+@@ -320,13 +329,62 @@ type customInjectHandler struct{}
+ func (customInjectHandler) Name() string { return string(model.ActionCustomInject) }
+ 
+ func (customInjectHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+-	return injectEphemeral(ctx, ec, req, "phorvex-custom", "busybox:1.36", []string{"sh", "-c", "echo phorvex-custom-action; sleep 1"})
++	// M-6: command/args are SPLIT to match the VAP allow-set exactly — command:["sh","-c"],
++	// args:["echo phorvex-custom-action; sleep 1"]. Emitting the joined form (all in command)
++	// would be DENIED by Phorvex's own admission policy.
++	return injectEphemeral(ctx, ec, req, customInjectEphemeralSpec())
++}
++
++// customInjectEphemeralSpec is the exact phorvex-custom container the VAP allow-set validates
++// (split command/args). Defined once so the handler and its test cannot drift.
++func customInjectEphemeralSpec() corev1.EphemeralContainer {
++	return ephemeralContainerSpec("phorvex-custom", codeExecImage,
++		[]string{"sh", "-c"}, []string{"echo phorvex-custom-action; sleep 1"})
++}
++
++// codeExecImage is the pinned busybox digest (linux/amd64, busybox:1.36) the M-6 contract
++// approves — identical to the value the VAP enforces. Pinning by digest (not the mutable
++// :1.36 tag) means the injected image cannot drift out from under the admission allow-set.
++const codeExecImage = "busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
++
++// hardenedEphemeralSecurityContext is the exact securityContext the M-6 VAP requires: a
++// non-root, non-privileged, no-escalation, read-only-rootfs, all-capabilities-dropped,
++// RuntimeDefault-seccomp container. The handler emits it so Phorvex's own injection passes
++// its own admission policy; the VAP is the durable enforcement of the same profile.
++func hardenedEphemeralSecurityContext() *corev1.SecurityContext {
++	no, yes := false, true
++	id := int64(65534)
++	return &corev1.SecurityContext{
++		Privileged:               &no,
++		AllowPrivilegeEscalation: &no,
++		RunAsNonRoot:             &yes,
++		RunAsUser:                &id,
++		RunAsGroup:               &id,
++		ReadOnlyRootFilesystem:   &yes,
++		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
++		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
++	}
++}
++
++// ephemeralContainerSpec builds ONE ephemeral container carrying the M-6 paired profile:
++// the pinned digest, the exact hardened securityContext, no tty/stdin, and the given
++// command/args. It is the SINGLE encoding of the VAP allow-set on the emit side, so the
++// handler and the conformance test share exactly these bytes.
++func ephemeralContainerSpec(name, image string, command, args []string) corev1.EphemeralContainer {
++	return corev1.EphemeralContainer{
++		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
++			Name: name, Image: image, Command: command, Args: args,
++			TTY: false, Stdin: false,
++			SecurityContext: hardenedEphemeralSecurityContext(),
++		},
++	}
+ }
+ 
+-// injectEphemeral appends ONE named ephemeral container via the pods/ephemeralcontainers
++// injectEphemeral appends ONE prebuilt ephemeral container via the pods/ephemeralcontainers
+ // subresource. Name-keyed idempotent (skip if present). IRREVERSIBLE — K8s cannot remove
+-// an ephemeral container, so there is no rollback, only audit-flagging.
+-func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, name, image string, cmd []string) (HandlerResult, error) {
++// an ephemeral container, so there is no rollback, only audit-flagging. The emitted request
++// is the M-6 paired profile the VAP validates; see ephemeralContainerSpec.
++func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, spec corev1.EphemeralContainer) (HandlerResult, error) {
+ 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
+ 	if err != nil {
+ 		return HandlerResult{}, err
+@@ -335,20 +393,18 @@ func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, name, image
+ 		return HandlerResult{}, fmt.Errorf("inject: pod %s/%s gone", req.Namespace, req.Pod)
+ 	}
+ 	for _, ec2 := range pod.Spec.EphemeralContainers {
+-		if ec2.Name == name {
++		if ec2.Name == spec.Name {
+ 			return HandlerResult{Emitted: true, MutationKind: "irreversible", Note: "ephemeral container already present (idempotent)"}, nil
+ 		}
+ 	}
+-	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+-		EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: name, Image: image, Command: cmd, TTY: false, Stdin: false},
+-	})
++	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, spec)
+ 	if err := ec.Client.SubResource("ephemeralcontainers").Update(ctx, pod); err != nil {
+-		return HandlerResult{}, fmt.Errorf("inject ephemeral container %s into %s/%s: %w", name, req.Namespace, req.Pod, err)
++		return HandlerResult{}, fmt.Errorf("inject ephemeral container %s into %s/%s: %w", spec.Name, req.Namespace, req.Pod, err)
+ 	}
+ 	return HandlerResult{
+ 		Emitted: true, MutationKind: "irreversible",
+ 		ObjectsTouched: []string{objRef("Pod/ephemeralcontainers", req.Namespace, req.Pod)},
+-		Note:           "ephemeral container " + name + " injected (irreversible — audit-flagged)",
++		Note:           "ephemeral container " + spec.Name + " injected (irreversible — audit-flagged)",
+ 	}, nil
+ }
+ 
+diff --git a/phorvex/internal/capability/gate.go b/phorvex/internal/capability/gate.go
+index f5019e2..8f7fcb5 100644
+--- a/phorvex/internal/capability/gate.go
++++ b/phorvex/internal/capability/gate.go
+@@ -24,6 +24,7 @@ import (
+ 
+ 	"github.com/phorvex/phorvex/internal/actuator"
+ 	"github.com/phorvex/phorvex/internal/authz"
++	"github.com/phorvex/phorvex/internal/codeexec"
+ 	"github.com/phorvex/phorvex/internal/ingest"
+ 	"github.com/phorvex/phorvex/internal/model"
+ )
+@@ -34,8 +35,21 @@ const (
+ 	ReasonNoCover        = "no-cover"
+ 	ReasonCapability     = "capability-unsupported"
+ 	ReasonNoRBAC         = "no-rbac"
++	// ReasonCodeExec excludes an ephemeral-container injection (debugger/custom-inject) whose
++	// API-server admission deny-policy is not currently VERIFIED to be in force for the target
++	// namespace (M-6). RBAC-allowed ≠ admission-verified: this is a distinct, attributable
++	// class so a code-exec exclusion never masquerades as a generic capability miss.
++	ReasonCodeExec = codeexec.ReasonUnverified
+ )
+ 
++// AdmissionVerifier is the O(1) cached code-exec admission-capability oracle (M-6). Available
++// answers whether the deny-policy is verified in force AND covers the target namespace (from
++// its labels). It is satisfied by *codeexec.Verifier; nil ⇒ the code-exec leg is skipped
++// (e.g. in unit fixtures that do not wire it), never a silent pass at runtime.
++type AdmissionVerifier interface {
++	Available(nsLabels map[string]string) (ok bool, reason string)
++}
++
+ // Pod capability-witness label/role keys (extracted from the pre-T1-E runner).
+ const (
+ 	labelSwapGroup     = "phorvex.ai/swap-group"
+@@ -143,6 +157,11 @@ type Witness struct {
+ 	notInstall model.InstallSet
+ 	az         *authz.Checker
+ 	act        actuator.Actuator
++	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
++	// per-namespace label sets (already GET-derived observation substrate) so the scope
++	// check is O(1) and needs no per-candidate network read.
++	codeExec AdmissionVerifier
++	nsLabels map[string]map[string]string
+ }
+ 
+ // BuildWitness assembles the per-tick witness.
+@@ -150,6 +169,20 @@ func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, a
+ 	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act}
+ }
+ 
++// WithCodeExec returns a copy of the witness with the M-6 code-exec admission leg wired.
++// Kept separate from BuildWitness so existing callers/fixtures are untouched (a nil verifier
++// simply skips the leg — the runtime path always wires a real one).
++func (w Witness) WithCodeExec(cev AdmissionVerifier, nsLabels map[string]map[string]string) Witness {
++	w.codeExec = cev
++	w.nsLabels = nsLabels
++	return w
++}
++
++// isCodeExecAction reports the two in-pod code-execution (ephemeral-container) injections.
++func isCodeExecAction(a model.Action) bool {
++	return a == model.ActionDebugger || a == model.ActionCustomInject
++}
++
+ // Eligible runs the full cheapest-first gate for one (asset, action). nil = eligible.
+ func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys []string) *Reason {
+ 	if w.notInstall.Has(action) {
+@@ -161,6 +194,15 @@ func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys
+ 	if ok, why := w.Capable(v, action); !ok {
+ 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
+ 	}
++	// M-6 code-exec admission leg: a debugger/custom-inject move is offered ONLY if the
++	// API-server deny-policy is verified in force for THIS namespace. Local + cached (no
++	// network on the gate path), so it precedes the SSAR. Fail-closed: an unwired verifier
++	// at runtime is a boot error, not a silent pass (the runtime always sets one).
++	if isCodeExecAction(action) && w.codeExec != nil {
++		if ok, why := w.codeExec.Available(w.nsLabels[v.Pod.Namespace]); !ok {
++			return &Reason{Excluded: true, Kind: ReasonCodeExec, Detail: why}
++		}
++	}
+ 	// RBAC is LAST: only a candidate that passed the free local checks reaches an SSAR.
+ 	if w.az != nil {
+ 		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
+diff --git a/phorvex/internal/capability/gate_codeexec_test.go b/phorvex/internal/capability/gate_codeexec_test.go
+new file mode 100644
+index 0000000..645addb
+--- /dev/null
++++ b/phorvex/internal/capability/gate_codeexec_test.go
+@@ -0,0 +1,89 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * The T1-E gate's code-exec admission leg: debugger/custom-inject are offered ONLY when the
++ * admission verifier reports available for the target namespace; the exclusion is attributed
++ * to the distinct ReasonCodeExec class; non-code-exec actions are unaffected; and the tick's
++ * per-namespace labels are threaded to the verifier (the C3 scope input).
++ */
++
++package capability
++
++import (
++	"testing"
++
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++// recordingAdmission is a fake AdmissionVerifier: it returns a configured verdict and records
++// the namespace labels the gate passed (to prove the C3 scope input is threaded through).
++type recordingAdmission struct {
++	ok        bool
++	reason    string
++	sawLabels map[string]string
++	calls     int
++}
++
++func (r *recordingAdmission) Available(nsLabels map[string]string) (bool, string) {
++	r.calls++
++	r.sawLabels = nsLabels
++	return r.ok, r.reason
++}
++
++func codeExecView() *model.WorkloadView {
++	return &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "victim"}}
++}
++
++func TestEligible_CodeExecUnverifiedExcluded(t *testing.T) {
++	_, wit := capFleet()
++	adm := &recordingAdmission{ok: false, reason: ReasonCodeExec + ": not verified"}
++	wit = wit.WithCodeExec(adm, map[string]map[string]string{"ns": {"phorvex.ai/codeexec-managed": "true"}})
++
++	for _, action := range []model.Action{model.ActionDebugger, model.ActionCustomInject} {
++		r := wit.Eligible(codeExecView(), action, []string{"cover-key"})
++		if r == nil || !r.Excluded {
++			t.Fatalf("%s must be excluded when admission is unverified", action)
++		}
++		if r.Kind != ReasonCodeExec {
++			t.Fatalf("%s exclusion must be attributed to %q, got %q (detail %q)", action, ReasonCodeExec, r.Kind, r.Detail)
++		}
++	}
++	// The tick's namespace labels were threaded to the verifier (C3 scope input).
++	if adm.sawLabels["phorvex.ai/codeexec-managed"] != "true" {
++		t.Fatalf("gate must pass the target namespace labels to the verifier, saw %v", adm.sawLabels)
++	}
++}
++
++func TestEligible_CodeExecVerifiedOffered(t *testing.T) {
++	_, wit := capFleet()
++	adm := &recordingAdmission{ok: true}
++	wit = wit.WithCodeExec(adm, map[string]map[string]string{"ns": {"phorvex.ai/codeexec-managed": "true"}})
++	for _, action := range []model.Action{model.ActionDebugger, model.ActionCustomInject} {
++		if r := wit.Eligible(codeExecView(), action, []string{"cover-key"}); r != nil {
++			t.Fatalf("%s must be eligible when admission is verified+in-scope, got %+v", action, r)
++		}
++	}
++}
++
++// A non-code-exec action is never touched by the code-exec leg (even with a verifier that
++// reports unavailable): rotate stays eligible.
++func TestEligible_NonCodeExecUnaffectedByAdmissionLeg(t *testing.T) {
++	_, wit := capFleet()
++	adm := &recordingAdmission{ok: false, reason: "unverified"}
++	wit = wit.WithCodeExec(adm, map[string]map[string]string{"ns": {"x": "y"}})
++	if r := wit.Eligible(codeExecView(), model.ActionRotate, []string{"cover-key"}); r != nil {
++		t.Fatalf("rotate must be unaffected by the code-exec admission leg, got %+v", r)
++	}
++	if adm.calls != 0 {
++		t.Fatalf("the admission verifier must not be consulted for a non-code-exec action (calls=%d)", adm.calls)
++	}
++}
++
++// A nil verifier (unit fixtures that do not wire one) skips the leg — never a hard failure.
++// The runtime path always wires a real verifier, so this documents the fixture-only behavior.
++func TestEligible_NilVerifierSkipsLeg(t *testing.T) {
++	_, wit := capFleet()
++	if r := wit.Eligible(codeExecView(), model.ActionDebugger, []string{"cover-key"}); r != nil {
++		t.Fatalf("with no verifier wired the leg is skipped; got exclusion %+v", r)
++	}
++}
+diff --git a/phorvex/internal/codeexec/cel_eval_test.go b/phorvex/internal/codeexec/cel_eval_test.go
+new file mode 100644
+index 0000000..343e049
+--- /dev/null
++++ b/phorvex/internal/codeexec/cel_eval_test.go
+@@ -0,0 +1,237 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * Real CEL SEMANTIC evaluation of the SHIPPED ValidatingAdmissionPolicy expressions (parsed
++ * from config/admission/codeexec-ephemeral-vap.yaml) with cel-go: the compliant debugger and
++ * custom-inject requests are ALLOWED (every validation true), and each isolated violation is
++ * DENIED by its own validation (attributable). This exercises the expressions, not string
++ * matches. It is NOT real API-server admission (that is L3) — it evaluates the same CEL text
++ * the API server would, over crafted object/oldObject/request/variables activations.
++ */
++
++package codeexec
++
++import (
++	"context"
++	"testing"
++
++	"github.com/google/cel-go/cel"
++)
++
++func celEnv(t *testing.T) *cel.Env {
++	t.Helper()
++	env, err := cel.NewEnv(
++		cel.Variable("object", cel.DynType),
++		cel.Variable("oldObject", cel.DynType),
++		cel.Variable("request", cel.DynType),
++		cel.Variable("variables", cel.DynType),
++	)
++	if err != nil {
++		t.Fatalf("cel env: %v", err)
++	}
++	return env
++}
++
++func celEval(t *testing.T, env *cel.Env, expr string, act map[string]any) any {
++	t.Helper()
++	ast, iss := env.Compile(expr)
++	if iss != nil && iss.Err() != nil {
++		t.Fatalf("compile %q: %v", expr, iss.Err())
++	}
++	prg, err := env.Program(ast)
++	if err != nil {
++		t.Fatalf("program %q: %v", expr, err)
++	}
++	out, _, err := prg.Eval(act)
++	if err != nil {
++		t.Fatalf("eval %q: %v", expr, err)
++	}
++	return out.Value()
++}
++
++// policyExprs pulls the shipped variable + validation expressions from the config manifest.
++func policyExprs(t *testing.T) (vars map[string]string, validations []string) {
++	t.Helper()
++	raw := repoFile(t, "config/admission/codeexec-ephemeral-vap.yaml")
++	p, _, err := ParseContract([]byte(raw))
++	if err != nil {
++		t.Fatalf("parse config manifest: %v", err)
++	}
++	vars = map[string]string{}
++	for _, v := range p.Spec.Variables {
++		vars[v.Name] = v.Expression
++	}
++	for _, val := range p.Spec.Validations {
++		validations = append(validations, val.Expression)
++	}
++	if len(validations) != 9 || len(vars) != 3 {
++		t.Fatalf("unexpected manifest shape: %d validations, %d variables", len(validations), len(vars))
++	}
++	return vars, validations
++}
++
++const managerSAName = "system:serviceaccount:phorvex-system:phorvex-phorvex-manager"
++const approvedImg = "busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
++
++func hardenedSC() map[string]any {
++	return map[string]any{
++		"privileged": false, "allowPrivilegeEscalation": false, "runAsNonRoot": true,
++		"runAsUser": int64(65534), "runAsGroup": int64(65534), "readOnlyRootFilesystem": true,
++		"capabilities":   map[string]any{"drop": []any{"ALL"}},
++		"seccompProfile": map[string]any{"type": "RuntimeDefault"},
++	}
++}
++
++func debuggerContainer() map[string]any {
++	return map[string]any{"name": "phorvex-debugger", "image": approvedImg, "securityContext": hardenedSC()}
++}
++
++func customContainer() map[string]any {
++	c := map[string]any{"name": "phorvex-custom", "image": approvedImg, "securityContext": hardenedSC()}
++	c["command"] = []any{"sh", "-c"}
++	c["args"] = []any{"echo phorvex-custom-action; sleep 1"}
++	return c
++}
++
++// activation builds object/oldObject/request/variables for a request that ADDS `containers`
++// (oldObject has none — first injection), submitted by `user`.
++func activation(t *testing.T, env *cel.Env, vars map[string]string, user string, containers ...map[string]any) map[string]any {
++	t.Helper()
++	ecs := make([]any, len(containers))
++	for i, c := range containers {
++		ecs[i] = c
++	}
++	object := map[string]any{"spec": map[string]any{"ephemeralContainers": ecs}}
++	oldObject := map[string]any{"spec": map[string]any{}} // no ephemeralContainers => all are new
++	base := map[string]any{"object": object, "oldObject": oldObject}
++	managerSA := celEval(t, env, vars["managerSA"], base)
++	approvedImage := celEval(t, env, vars["approvedImage"], base)
++	newContainers := celEval(t, env, vars["newContainers"], base)
++	return map[string]any{
++		"object":    object,
++		"oldObject": oldObject,
++		"request":   map[string]any{"userInfo": map[string]any{"username": user}},
++		"variables": map[string]any{"managerSA": managerSA, "approvedImage": approvedImage, "newContainers": newContainers},
++	}
++}
++
++func allValidationsTrue(t *testing.T, env *cel.Env, validations []string, act map[string]any) (allTrue bool, firstFalse int) {
++	t.Helper()
++	firstFalse = -1
++	allTrue = true
++	for i, expr := range validations {
++		if celEval(t, env, expr, act).(bool) != true {
++			allTrue = false
++			if firstFalse < 0 {
++				firstFalse = i
++			}
++		}
++	}
++	return
++}
++
++func TestCELAllowsCompliantRequests(t *testing.T) {
++	env := celEnv(t)
++	vars, validations := policyExprs(t)
++	for _, tc := range []struct {
++		name string
++		c    map[string]any
++	}{
++		{"debugger", debuggerContainer()},
++		{"custom-inject", customContainer()},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			act := activation(t, env, vars, managerSAName, tc.c)
++			if ok, ff := allValidationsTrue(t, env, validations, act); !ok {
++				t.Fatalf("compliant %s must be ALLOWED; validation[%d] denied", tc.name, ff)
++			}
++		})
++	}
++	// A request that ADDS NOTHING (no new containers) passes (migration / non-injection).
++	act := activation(t, env, vars, "someone:else")
++	if ok, _ := allValidationsTrue(t, env, validations, act); !ok {
++		t.Fatal("a request adding no new ephemeral container must be allowed")
++	}
++}
++
++func TestCELDeniesEachViolationIsolated(t *testing.T) {
++	env := celEnv(t)
++	vars, validations := policyExprs(t)
++	// validations index -> the rule expected to deny (in shipped order):
++	// 0 identity, 1 name, 2 image, 3 securityContext core, 4 capabilities, 5 seccomp,
++	// 6 securityContext-extra, 7 forbidden fields, 8 command/args.
++	cases := []struct {
++		name    string
++		user    string
++		mutate  func(map[string]any)
++		wantIdx int
++	}{
++		{"wrong-identity", "attacker:evil", func(map[string]any) {}, 0},
++		{"wrong-name", managerSAName, func(c map[string]any) { c["name"] = "evil" }, 1},
++		{"wrong-image", managerSAName, func(c map[string]any) { c["image"] = "busybox:1.36" }, 2},
++		{"privileged", managerSAName, func(c map[string]any) { c["securityContext"].(map[string]any)["privileged"] = true }, 3},
++		{"root-user", managerSAName, func(c map[string]any) { c["securityContext"].(map[string]any)["runAsUser"] = int64(0) }, 3},
++		{"caps-not-dropped", managerSAName, func(c map[string]any) {
++			c["securityContext"].(map[string]any)["capabilities"] = map[string]any{"drop": []any{}}
++		}, 4},
++		{"seccomp-unconfined", managerSAName, func(c map[string]any) {
++			c["securityContext"].(map[string]any)["seccompProfile"] = map[string]any{"type": "Unconfined"}
++		}, 5},
++		{"apparmor-extra", managerSAName, func(c map[string]any) {
++			c["securityContext"].(map[string]any)["appArmorProfile"] = map[string]any{"type": "Unconfined"}
++		}, 6},
++		{"procmount-extra", managerSAName, func(c map[string]any) { c["securityContext"].(map[string]any)["procMount"] = "Unmasked" }, 6},
++		{"tty-set", managerSAName, func(c map[string]any) { c["tty"] = true }, 7},
++		{"env-set", managerSAName, func(c map[string]any) { c["env"] = []any{map[string]any{"name": "X", "value": "y"}} }, 7},
++		{"debugger-with-command", managerSAName, func(c map[string]any) { c["command"] = []any{"sh"} }, 8},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			c := debuggerContainer()
++			tc.mutate(c)
++			act := activation(t, env, vars, tc.user, c)
++			if celEval(t, env, validations[tc.wantIdx], act).(bool) {
++				t.Fatalf("%s: validation[%d] must DENY but returned true", tc.name, tc.wantIdx)
++			}
++			// And the overall request is not allowed.
++			if ok, _ := allValidationsTrue(t, env, validations, act); ok {
++				t.Fatalf("%s: request must be denied overall", tc.name)
++			}
++		})
++	}
++	// custom-inject with wrong args is denied by the command rule (index 8).
++	t.Run("custom-wrong-args", func(t *testing.T) {
++		c := customContainer()
++		c["args"] = []any{"echo pwned"}
++		act := activation(t, env, vars, managerSAName, c)
++		if celEval(t, env, validations[8], act).(bool) {
++			t.Fatal("custom-inject wrong args must be denied by the command rule")
++		}
++	})
++}
++
++// TestCELNewContainersIgnoresPreexisting proves the oldObject boundary: a container already in
++// oldObject is NOT re-validated (migration), while a genuinely new one still is.
++func TestCELNewContainersIgnoresPreexisting(t *testing.T) {
++	env := celEnv(t)
++	vars, _ := policyExprs(t)
++	preexisting := map[string]any{"name": "legacy", "image": "whatever:latest"}
++	added := debuggerContainer()
++	// oldObject already has "legacy"; object has "legacy" + a new debugger. Only the debugger is new.
++	object := map[string]any{"spec": map[string]any{"ephemeralContainers": []any{preexisting, added}}}
++	oldObject := map[string]any{"spec": map[string]any{"ephemeralContainers": []any{preexisting}}}
++	nc := celEval(t, env, vars["newContainers"], map[string]any{"object": object, "oldObject": oldObject})
++	// Evaluate size() over the computed list via CEL (its runtime list type is not []any).
++	sz := celEval(t, env, "size(variables.newContainers)", map[string]any{"variables": map[string]any{"newContainers": nc}})
++	if sz.(int64) != 1 {
++		t.Fatalf("only the newly-added container must be in newContainers, got size %v", sz)
++	}
++	// And a request whose only container is pre-existing yields an EMPTY new set.
++	obj2 := map[string]any{"spec": map[string]any{"ephemeralContainers": []any{preexisting}}}
++	nc2 := celEval(t, env, vars["newContainers"], map[string]any{"object": obj2, "oldObject": oldObject})
++	sz2 := celEval(t, env, "size(variables.newContainers)", map[string]any{"variables": map[string]any{"newContainers": nc2}})
++	if sz2.(int64) != 0 {
++		t.Fatalf("a pre-existing-only request must yield no new containers, got size %v", sz2)
++	}
++	_ = context.Background()
++}
+diff --git a/phorvex/internal/codeexec/chart_contract_test.go b/phorvex/internal/codeexec/chart_contract_test.go
+new file mode 100644
+index 0000000..98d97c6
+--- /dev/null
++++ b/phorvex/internal/codeexec/chart_contract_test.go
+@@ -0,0 +1,143 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * Static chart/manifest contract for the code-exec admission package (an L0-L2 "chart render"
++ * check without a helm binary, matching internal/actuator/rbac_contract_test.go's style):
++ *   - the VAP is Deny + failurePolicy:Fail, version-pinned, scoped to the managed label, and
++ *     targets pods/ephemeralcontainers UPDATE;
++ *   - the emitted profile the VAP allows (digest / securityContext / Option A / custom-inject)
++ *     is present verbatim;
++ *   - the runtime read grant is resourceName-scoped GET only (no list/watch/write), gated by
++ *     the off-by-default flag, and no ephemeral-container WRITE grant is bound by the chart;
++ *   - the standalone config manifest and the chart template agree on the load-bearing fields.
++ */
++
++package codeexec
++
++import (
++	"os"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++)
++
++func repoFile(t *testing.T, rel string) string {
++	t.Helper()
++	_, thisFile, _, ok := runtime.Caller(0)
++	if !ok {
++		t.Fatal("locate test source")
++	}
++	// internal/codeexec -> repo root (phorvex/)
++	root := filepath.Join(filepath.Dir(thisFile), "..", "..")
++	raw, err := os.ReadFile(filepath.Join(root, rel))
++	if err != nil {
++		t.Fatalf("read %s: %v", rel, err)
++	}
++	return string(raw)
++}
++
++func mustContain(t *testing.T, name, hay string, needles ...string) {
++	t.Helper()
++	for _, n := range needles {
++		if !strings.Contains(hay, n) {
++			t.Errorf("%s: missing required content %q", name, n)
++		}
++	}
++}
++
++// vapContent asserts the load-bearing VAP fields the verifier and the enforcement both rely on.
++func vapContent(t *testing.T, name, text string) {
++	t.Helper()
++	mustContain(t, name, text,
++		"failurePolicy: Fail",
++		`validationActions: ["Deny"]`,
++		`phorvex.ai/policy-version: "m6-1"`,
++		`phorvex.ai/codeexec-managed: "true"`,
++		"pods/ephemeralcontainers",
++		`operations: ["UPDATE"]`,
++		"policyName: phorvex-codeexec-ephemeral",
++		// the paired profile the VAP allows:
++		"busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f",
++		"ec.securityContext.runAsUser == 65534",
++		"ec.securityContext.capabilities.drop == ['ALL']",
++		"'RuntimeDefault'",
++		"['sh', '-c']",
++		"['echo phorvex-custom-action; sleep 1']",
++		// Option A: debugger command AND args required empty.
++		"ec.name == 'phorvex-debugger'",
++	)
++}
++
++func TestVAPConfigManifestContract(t *testing.T) {
++	vapContent(t, "config/admission", repoFile(t, "config/admission/codeexec-ephemeral-vap.yaml"))
++}
++
++// TestConfigManifestEqualsTrustedContract proves the deployed config/admission manifest's
++// enforcement spec is byte-identical (normalized) to the embedded trusted contract the verifier
++// checks against — so the policy the installer applies and the policy the runtime demands cannot
++// drift. (The rendered Helm chart's agreement is proven in chart_render_test.go.)
++func TestConfigManifestEqualsTrustedContract(t *testing.T) {
++	p, b, err := ParseContract([]byte(repoFile(t, "config/admission/codeexec-ephemeral-vap.yaml")))
++	if err != nil {
++		t.Fatalf("parse config manifest: %v", err)
++	}
++	if why := validatePolicyContent(p); why != "" {
++		t.Fatalf("config VAP spec != trusted contract: %s", why)
++	}
++	if why := validateBindingContent(b); why != "" {
++		t.Fatalf("config Binding spec != trusted contract: %s", why)
++	}
++}
++
++func TestVAPChartTemplateContract(t *testing.T) {
++	text := repoFile(t, "charts/phorvex/templates/codeexec-admission.yaml")
++	vapContent(t, "chart", text)
++	// Gated off by default: the whole template is wrapped in the enable flag.
++	mustContain(t, "chart", text, "{{- if .Values.phorvex.codeExecAdmission.enabled }}")
++}
++
++func TestCodeExecAdmissionDefaultsOff(t *testing.T) {
++	values := repoFile(t, "charts/phorvex/values.yaml")
++	// The block must exist and default to disabled.
++	if !strings.Contains(values, "codeExecAdmission:") {
++		t.Fatal("values.yaml: missing codeExecAdmission block")
++	}
++	idx := strings.Index(values, "codeExecAdmission:")
++	after := values[idx:]
++	nextEnabled := strings.Index(after, "enabled:")
++	if nextEnabled < 0 || !strings.Contains(after[nextEnabled:nextEnabled+20], "false") {
++		t.Fatal("values.yaml: codeExecAdmission.enabled must default to false")
++	}
++}
++
++func TestRuntimeReadGrantIsResourceNameScopedGetOnly(t *testing.T) {
++	rbac := repoFile(t, "charts/phorvex/templates/rbac.yaml")
++	mustContain(t, "rbac", rbac,
++		"{{- if .Values.phorvex.codeExecAdmission.enabled }}",
++		`resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]`,
++		`resourceNames: ["phorvex-codeexec-ephemeral"]`,
++		`verbs: ["get"]`,
++	)
++	// The read grant must NOT smuggle list/watch or any write on those objects. Inspect just
++	// the read-grant stanza (from its resourceNames line to the end of that rule's verbs).
++	i := strings.Index(rbac, `resourceNames: ["phorvex-codeexec-ephemeral"]`)
++	if i < 0 {
++		t.Fatal("read-grant stanza not found")
++	}
++	stanza := rbac[i : i+120]
++	for _, forbidden := range []string{"list", "watch", "create", "update", "patch", "delete"} {
++		if strings.Contains(stanza, forbidden) {
++			t.Errorf("read grant must be get-only; found %q in %q", forbidden, stanza)
++		}
++	}
++}
++
++// The chart must NOT bind any pods/ephemeralcontainers WRITE (the execution grant) — that is a
++// separate, human-gated step. The manager ClusterRole and the routine actuator Role both omit it.
++func TestChartBindsNoEphemeralContainersWrite(t *testing.T) {
++	rbac := repoFile(t, "charts/phorvex/templates/rbac.yaml")
++	if strings.Contains(rbac, "ephemeralcontainers") {
++		t.Fatal("chart rbac.yaml must not grant pods/ephemeralcontainers (execution grant stays unbound)")
++	}
++}
+diff --git a/phorvex/internal/codeexec/chart_render_test.go b/phorvex/internal/codeexec/chart_render_test.go
+new file mode 100644
+index 0000000..1dc9aa8
+--- /dev/null
++++ b/phorvex/internal/codeexec/chart_render_test.go
+@@ -0,0 +1,127 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * Actual Helm rendering of the chart (not string search over templates): with
++ * codeExecAdmission.enabled=true the VAP + Binding + minimal resourceName-scoped read grant
++ * render (Deny / failurePolicy:Fail / managed scope), the rendered VAP spec EQUALS the trusted
++ * contract, and NO ephemeral-container write (execution) grant appears; with enabled=false none
++ * of them render. Requires a helm binary: set HELM_BIN or have helm on PATH. If absent, the test
++ * SKIPS with a precise message rather than silently downgrading the requirement (the published
++ * evidence carries the executed render from a real helm binary).
++ */
++
++package codeexec
++
++import (
++	"bytes"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++
++	admissionv1 "k8s.io/api/admissionregistration/v1"
++	"sigs.k8s.io/yaml"
++)
++
++func helmBin(t *testing.T) string {
++	t.Helper()
++	if b := os.Getenv("HELM_BIN"); b != "" {
++		return b
++	}
++	if b, err := exec.LookPath("helm"); err == nil {
++		return b
++	}
++	t.Skip("helm binary not found (set HELM_BIN or add helm to PATH); executed render is in evidence/l0-l2/helm-render-*.yaml")
++	return ""
++}
++
++func chartDir(t *testing.T) string {
++	t.Helper()
++	_, thisFile, _, ok := runtime.Caller(0)
++	if !ok {
++		t.Fatal("locate test source")
++	}
++	return filepath.Join(filepath.Dir(thisFile), "..", "..", "charts", "phorvex")
++}
++
++func render(t *testing.T, enabled string) string {
++	t.Helper()
++	cmd := exec.Command(helmBin(t), "template", "codeexec-test", chartDir(t),
++		"--set", "phorvex.codeExecAdmission.enabled="+enabled)
++	var out, errb bytes.Buffer
++	cmd.Stdout, cmd.Stderr = &out, &errb
++	if err := cmd.Run(); err != nil {
++		t.Fatalf("helm template (enabled=%s): %v\n%s", enabled, err, errb.String())
++	}
++	return out.String()
++}
++
++// docsByKind splits a multi-doc render and returns the raw docs whose `kind:` matches.
++func docsByKind(rendered, kind string) []string {
++	var got []string
++	for _, d := range strings.Split(rendered, "\n---") {
++		if strings.Contains(d, "\nkind: "+kind+"\n") || strings.HasPrefix(strings.TrimSpace(d), "kind: "+kind) {
++			got = append(got, d)
++		}
++	}
++	return got
++}
++
++func TestHelmRenderEnabledProducesEnforcementAndReadGrant(t *testing.T) {
++	rendered := render(t, "true")
++
++	vaps := docsByKind(rendered, "ValidatingAdmissionPolicy")
++	if len(vaps) != 1 {
++		t.Fatalf("enabled render must contain exactly one ValidatingAdmissionPolicy, got %d", len(vaps))
++	}
++	bindings := docsByKind(rendered, "ValidatingAdmissionPolicyBinding")
++	if len(bindings) != 1 {
++		t.Fatalf("enabled render must contain exactly one Binding, got %d", len(bindings))
++	}
++
++	// The rendered VAP is a valid typed object whose spec EQUALS the trusted contract.
++	var vap admissionv1.ValidatingAdmissionPolicy
++	if err := yaml.Unmarshal([]byte(vaps[0]), &vap); err != nil {
++		t.Fatalf("rendered VAP does not parse: %v", err)
++	}
++	if why := validatePolicyContent(&vap); why != "" {
++		t.Fatalf("rendered VAP is not the trusted contract: %s", why)
++	}
++	var binding admissionv1.ValidatingAdmissionPolicyBinding
++	if err := yaml.Unmarshal([]byte(bindings[0]), &binding); err != nil {
++		t.Fatalf("rendered Binding does not parse: %v", err)
++	}
++	if why := validateBindingContent(&binding); why != "" {
++		t.Fatalf("rendered Binding is not the trusted contract: %s", why)
++	}
++
++	// The minimal resourceName-scoped read grant renders; NO ephemeral-container write grant does.
++	if !strings.Contains(rendered, `resourceNames: ["phorvex-codeexec-ephemeral"]`) {
++		t.Fatal("enabled render must include the resourceName-scoped read grant")
++	}
++	// No RBAC (Cluster)Role may grant pods/ephemeralcontainers (the execution grant stays unbound).
++	// Checked on RBAC docs only — the VAP legitimately NAMES pods/ephemeralcontainers as the
++	// subresource it validates, which is not a grant.
++	for _, kind := range []string{"ClusterRole", "Role"} {
++		for _, d := range docsByKind(rendered, kind) {
++			if strings.Contains(d, "ephemeralcontainers") {
++				t.Fatalf("enabled render must NOT bind pods/ephemeralcontainers in a %s (execution grant)", kind)
++			}
++		}
++	}
++}
++
++func TestHelmRenderDisabledProducesNothing(t *testing.T) {
++	rendered := render(t, "false")
++	if len(docsByKind(rendered, "ValidatingAdmissionPolicy")) != 0 {
++		t.Fatal("disabled render must not contain a ValidatingAdmissionPolicy")
++	}
++	if len(docsByKind(rendered, "ValidatingAdmissionPolicyBinding")) != 0 {
++		t.Fatal("disabled render must not contain a Binding")
++	}
++	if strings.Contains(rendered, "codeexec-managed") || strings.Contains(rendered, `resourceNames: ["phorvex-codeexec-ephemeral"]`) {
++		t.Fatal("disabled render must not contain the code-exec scope label or read grant")
++	}
++}
+diff --git a/phorvex/internal/codeexec/expected_vap.yaml b/phorvex/internal/codeexec/expected_vap.yaml
+new file mode 100644
+index 0000000..5036478
+--- /dev/null
++++ b/phorvex/internal/codeexec/expected_vap.yaml
+@@ -0,0 +1,106 @@
++# M-6 TRUSTED CONTRACT — the canonical enforcement content the runtime verifier compares the
++# LIVE ValidatingAdmissionPolicy + Binding against, field-for-field (normalized), before it will
++# report code-exec admission available. This is the single source of truth; a test asserts that
++# config/admission/codeexec-ephemeral-vap.yaml and the rendered Helm chart both equal this spec,
++# so the deployed policy and the verifier's expectation can never drift. The annotation is NOT the
++# check — the entire normalized spec is.
++apiVersion: admissionregistration.k8s.io/v1
++kind: ValidatingAdmissionPolicy
++metadata:
++  name: phorvex-codeexec-ephemeral
++  annotations:
++    phorvex.ai/policy-version: "m6-1"
++spec:
++  failurePolicy: Fail
++  matchConstraints:
++    resourceRules:
++      - apiGroups: [""]
++        apiVersions: ["v1"]
++        operations: ["UPDATE"]
++        resources: ["pods/ephemeralcontainers"]
++  variables:
++    - name: managerSA
++      expression: "'system:serviceaccount:phorvex-system:phorvex-phorvex-manager'"
++    - name: approvedImage
++      expression: "'busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'"
++    - name: newContainers
++      expression: >-
++        has(object.spec.ephemeralContainers)
++          ? object.spec.ephemeralContainers.filter(ec,
++              !(has(oldObject.spec.ephemeralContainers)
++                && oldObject.spec.ephemeralContainers.exists(o, o.name == ec.name)))
++          : []
++  validations:
++    - expression: "size(variables.newContainers) == 0 || request.userInfo.username == variables.managerSA"
++      reason: Forbidden
++      messageExpression: >-
++        "code-exec/identity: only the Phorvex manager service account may add an ephemeral container in
++        a managed namespace (got '" + request.userInfo.username + "')"
++    - expression: "variables.newContainers.all(ec, ec.name in ['phorvex-debugger', 'phorvex-custom'])"
++      reason: Forbidden
++      message: "code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom"
++    - expression: "variables.newContainers.all(ec, has(ec.image) && ec.image == variables.approvedImage)"
++      reason: Forbidden
++      message: "code-exec/image: ephemeral container image must be the pinned busybox digest"
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext)
++          && ec.securityContext.privileged == false
++          && ec.securityContext.allowPrivilegeEscalation == false
++          && ec.securityContext.runAsNonRoot == true
++          && ec.securityContext.runAsUser == 65534
++          && ec.securityContext.runAsGroup == 65534
++          && ec.securityContext.readOnlyRootFilesystem == true)
++      reason: Forbidden
++      message: "code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true"
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.capabilities)
++          && ec.securityContext.capabilities.drop == ['ALL']
++          && (!has(ec.securityContext.capabilities.add) || size(ec.securityContext.capabilities.add) == 0))
++      reason: Forbidden
++      message: "code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add"
++    - expression: >-
++        variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.seccompProfile)
++          && ec.securityContext.seccompProfile.type == 'RuntimeDefault')
++      reason: Forbidden
++      message: "code-exec/seccomp: require seccompProfile.type=RuntimeDefault"
++    - expression: >-
++        variables.newContainers.all(ec, !has(ec.securityContext)
++          || (!has(ec.securityContext.appArmorProfile)
++              && !has(ec.securityContext.seLinuxOptions)
++              && !has(ec.securityContext.windowsOptions)
++              && !has(ec.securityContext.procMount)))
++      reason: Forbidden
++      message: "code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)"
++    - expression: >-
++        variables.newContainers.all(ec,
++          (!has(ec.tty) || ec.tty == false)
++          && (!has(ec.stdin) || ec.stdin == false)
++          && !has(ec.targetContainerName)
++          && (!has(ec.env) || size(ec.env) == 0)
++          && (!has(ec.envFrom) || size(ec.envFrom) == 0)
++          && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)
++          && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))
++      reason: Forbidden
++      message: "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted"
++    - expression: >-
++        variables.newContainers.all(ec,
++          ec.name == 'phorvex-debugger'
++            ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))
++            : (ec.name == 'phorvex-custom'
++                ? (has(ec.command) && ec.command == ['sh', '-c']
++                   && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])
++                : true))
++      reason: Forbidden
++      message: "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args"
++---
++apiVersion: admissionregistration.k8s.io/v1
++kind: ValidatingAdmissionPolicyBinding
++metadata:
++  name: phorvex-codeexec-ephemeral
++spec:
++  policyName: phorvex-codeexec-ephemeral
++  validationActions: ["Deny"]
++  matchResources:
++    namespaceSelector:
++      matchLabels:
++        phorvex.ai/codeexec-managed: "true"
+diff --git a/phorvex/internal/codeexec/reader_k8s.go b/phorvex/internal/codeexec/reader_k8s.go
+new file mode 100644
+index 0000000..9e73488
+--- /dev/null
++++ b/phorvex/internal/codeexec/reader_k8s.go
+@@ -0,0 +1,119 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ */
++
++package codeexec
++
++import (
++	"context"
++
++	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
++	authorizationv1 "k8s.io/api/authorization/v1"
++	apierrors "k8s.io/apimachinery/pkg/api/errors"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/client-go/kubernetes"
++)
++
++const (
++	admissionGroup  = "admissionregistration.k8s.io"
++	policyResource  = "validatingadmissionpolicies"
++	bindingResource = "validatingadmissionpolicybindings"
++)
++
++// k8sReader is the production PolicyReader: GET-by-resourceName over the typed
++// admissionregistration/v1 client, resourceName-scoped SSARs, and a by-name namespace GET.
++// It performs NO list/watch — exactly the minimal get-only grant the contract requires. It
++// returns the FULL typed objects (no projection), so content verification sees every field.
++type k8sReader struct {
++	cs kubernetes.Interface
++}
++
++// NewK8sReader builds the production reader over a cluster clientset.
++func NewK8sReader(cs kubernetes.Interface) PolicyReader { return &k8sReader{cs: cs} }
++
++func (r *k8sReader) GetPolicy(ctx context.Context) (*admissionregistrationv1.ValidatingAdmissionPolicy, error) {
++	p, err := r.cs.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, PolicyName, metav1.GetOptions{})
++	if apierrors.IsNotFound(err) {
++		return nil, nil
++	}
++	if err != nil {
++		return nil, err
++	}
++	return p, nil
++}
++
++func (r *k8sReader) GetBinding(ctx context.Context) (*admissionregistrationv1.ValidatingAdmissionPolicyBinding, error) {
++	b, err := r.cs.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Get(ctx, PolicyName, metav1.GetOptions{})
++	if apierrors.IsNotFound(err) {
++		return nil, nil
++	}
++	if err != nil {
++		return nil, err
++	}
++	return b, nil
++}
++
++// GetNamespaceLabels reads the CURRENT labels of one namespace by name (uncached).
++func (r *k8sReader) GetNamespaceLabels(ctx context.Context, namespace string) (map[string]string, bool, error) {
++	ns, err := r.cs.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
++	if apierrors.IsNotFound(err) {
++		return nil, false, nil
++	}
++	if err != nil {
++		return nil, false, err
++	}
++	return ns.Labels, true, nil
++}
++
++// CanRead confirms, via SelfSubjectAccessReview, that the operator may `get` BOTH named
++// admission objects by resourceName. Both must be allowed; an SSAR error is unknown=true.
++func (r *k8sReader) CanRead(ctx context.Context) (allowed, unknown bool, err error) {
++	for _, res := range []string{policyResource, bindingResource} {
++		ok, unk, e := r.ssarGet(ctx, res, PolicyName)
++		if unk {
++			return false, true, e
++		}
++		if !ok {
++			return false, false, nil
++		}
++	}
++	return true, false, nil
++}
++
++func (r *k8sReader) ssarGet(ctx context.Context, resource, name string) (allowed, unknown bool, err error) {
++	sar := &authorizationv1.SelfSubjectAccessReview{
++		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
++			ResourceAttributes: &authorizationv1.ResourceAttributes{
++				Group:    admissionGroup,
++				Resource: resource,
++				Verb:     "get",
++				Name:     name,
++			},
++		},
++	}
++	res, err := r.cs.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, sar, metav1.CreateOptions{})
++	if err != nil {
++		return false, true, err
++	}
++	return res.Status.Allowed, false, nil
++}
++
++// unavailableReader is a PolicyReader whose every read fails — used at boot when a cluster
++// clientset cannot be built, so the verifier is non-nil but permanently UNAVAILABLE.
++type unavailableReader struct{ reason string }
++
++// NewUnavailableReader builds a reader that always fails verification with the given reason.
++func NewUnavailableReader(reason string) PolicyReader { return unavailableReader{reason: reason} }
++
++func (r unavailableReader) GetPolicy(context.Context) (*admissionregistrationv1.ValidatingAdmissionPolicy, error) {
++	return nil, verifyError(r.reason)
++}
++func (r unavailableReader) GetBinding(context.Context) (*admissionregistrationv1.ValidatingAdmissionPolicyBinding, error) {
++	return nil, verifyError(r.reason)
++}
++func (r unavailableReader) CanRead(context.Context) (bool, bool, error) {
++	return false, true, verifyError(r.reason)
++}
++func (r unavailableReader) GetNamespaceLabels(context.Context, string) (map[string]string, bool, error) {
++	return nil, false, verifyError(r.reason)
++}
+diff --git a/phorvex/internal/codeexec/verifier.go b/phorvex/internal/codeexec/verifier.go
+new file mode 100644
+index 0000000..1825829
+--- /dev/null
++++ b/phorvex/internal/codeexec/verifier.go
+@@ -0,0 +1,580 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ */
++
++// Package codeexec is the RUNTIME admission-capability verifier for the two in-pod
++// code-execution actions (debugger / custom-inject). It answers, fail-closed, one
++// question the T1-E capability gate and the actuate boundary both ask:
++//
++//	"Is the ephemeral-container admission policy (the ValidatingAdmissionPolicy +
++//	 Binding phorvex-codeexec-ephemeral) currently PRESENT, its ENTIRE enforcement content
++//	 EQUAL to the trusted contract, Deny + failurePolicy:Fail, and does it cover THIS
++//	 namespace RIGHT NOW?"
++//
++// RBAC-allowed is NOT admission-verified, and a matching name/annotation is NOT enforcement:
++// a policy whose CEL was gutted (validations replaced by `true`, `newContainers` emptied, a
++// match-condition that skips it, a wrong resource group, a binding that excludes the target)
++// must be REJECTED. So the verifier compares the complete NORMALIZED spec of the live objects,
++// field-for-field, against an embedded trusted contract (config/admission + the rendered chart
++// are tested to equal it), tolerating only an explicit, justified set of API-defaulted fields.
++// The API-server VAP remains the durable enforcement; this is the operator-side fail-closed gate.
++//
++// Verification discipline (the M-6 frozen contract §6):
++//   - UNCACHED reads via GET-by-resourceName of the two named objects + an SSAR that the
++//     minimal read grant is present, all under a single AGGREGATE deadline D.
++//   - An independent TTL expiry (a quiet process never refreshes it — no watch).
++//   - A process-local, atomically-published invalidationEpoch: ANY observed invalidation
++//     — including a timeout or a partial read failure — increments it, and a verification
++//     success republishes valid state ONLY if its captured startEpoch still equals the
++//     current epoch at completion. A fresh verification after a timeout recovers.
++//   - A final pre-submit check that re-verifies the policy AND reads the target namespace's
++//     scope LIVE (uncached, by identity) within the aggregate deadline — never a stale label.
++//
++// Off by default and fail-closed: UNAVAILABLE until the first successful verification.
++package codeexec
++
++import (
++	"context"
++	_ "embed"
++	"encoding/json"
++	"sync"
++	"sync/atomic"
++	"time"
++
++	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"sigs.k8s.io/yaml"
++)
++
++// Object identity + version the verifier checks (the installer-owned singleton).
++const (
++	// PolicyName is the resourceName of both the ValidatingAdmissionPolicy and its Binding.
++	PolicyName = "phorvex-codeexec-ephemeral"
++	// PolicyVersion is the value of the phorvex.ai/policy-version annotation (a cheap signal,
++	// NOT the check — the full spec comparison is). A chart/policy change bumps it.
++	PolicyVersion = "m6-1"
++	// ManagedLabelKey/Val is the installer-set namespace label the Binding selects on.
++	ManagedLabelKey = "phorvex.ai/codeexec-managed"
++	ManagedLabelVal = "true"
++)
++
++const versionAnnotation = "phorvex.ai/policy-version"
++
++// The §2 exact timing targets (L4 asserts against these; changing them requires a
++// recorded contract amendment).
++const (
++	// DefaultDeadline (D) is the AGGREGATE deadline shared by all reads of one verification.
++	DefaultDeadline = 2000 * time.Millisecond
++	// DefaultTTL is the independent expiry of a successful verification.
++	DefaultTTL = 30 * time.Second
++	// DefaultPoll is the periodic re-verify cadence (a GET, not a watch).
++	DefaultPoll = 10 * time.Second
++)
++
++// ReasonUnverified is the capability-gate / dispatch exclusion reason when code-exec
++// admission is not currently verified for the target.
++const ReasonUnverified = "codeexec-admission-unverified"
++
++// PolicyReader is the injectable read surface: GET-by-resourceName of the two named objects
++// (typed, so NOTHING security-relevant is projected away), an SSAR that the minimal read grant
++// is present, and a LIVE namespace-label read for the pre-submit scope check. Every method MUST
++// honor the ctx deadline (the aggregate D is applied by the verifier).
++type PolicyReader interface {
++	// GetPolicy GETs the ValidatingAdmissionPolicy PolicyName. A not-found object returns
++	// (nil, nil) — only a read FAILURE returns a non-nil error.
++	GetPolicy(ctx context.Context) (*admissionregistrationv1.ValidatingAdmissionPolicy, error)
++	// GetBinding GETs the ValidatingAdmissionPolicyBinding PolicyName (same not-found rule).
++	GetBinding(ctx context.Context) (*admissionregistrationv1.ValidatingAdmissionPolicyBinding, error)
++	// CanRead is the SSAR confirming the operator may `get` both named objects — a positive
++	// check the minimal read grant is installed. unknown=true means the SSAR itself errored.
++	CanRead(ctx context.Context) (allowed, unknown bool, err error)
++	// GetNamespaceLabels reads the CURRENT labels of a namespace (uncached) for the pre-submit
++	// scope check. found=false means the namespace is absent (⇒ out of scope, fail-closed).
++	GetNamespaceLabels(ctx context.Context, namespace string) (labels map[string]string, found bool, err error)
++}
++
++// --- the embedded trusted contract ------------------------------------------------------
++
++//go:embed expected_vap.yaml
++var expectedContractYAML []byte
++
++var (
++	expectedPolicyNorm  []byte            // normalized spec JSON of the trusted VAP
++	expectedBindingNorm []byte            // normalized spec JSON of the trusted Binding
++	expectedSelector    map[string]string // the trusted Binding namespaceSelector.matchLabels
++)
++
++// ExpectedPolicy / ExpectedBinding return fresh typed copies of the trusted contract (for
++// tests that build fixtures from it). They are parsed once from the embedded YAML.
++var expectedPolicy = &admissionregistrationv1.ValidatingAdmissionPolicy{}
++var expectedBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
++
++func init() {
++	p, b, err := ParseContract(expectedContractYAML)
++	if err != nil {
++		panic("codeexec: embedded trusted contract is unparseable: " + err.Error())
++	}
++	expectedPolicy, expectedBinding = p, b
++	expectedPolicyNorm = normalizedPolicySpecJSON(p)
++	expectedBindingNorm = normalizedBindingSpecJSON(b)
++	if b.Spec.MatchResources != nil && b.Spec.MatchResources.NamespaceSelector != nil {
++		expectedSelector = b.Spec.MatchResources.NamespaceSelector.MatchLabels
++	}
++	if len(expectedSelector) == 0 {
++		panic("codeexec: embedded trusted contract has no namespaceSelector matchLabels")
++	}
++}
++
++// ParseContract splits a two-document (policy---binding) YAML into the typed objects.
++func ParseContract(raw []byte) (*admissionregistrationv1.ValidatingAdmissionPolicy, *admissionregistrationv1.ValidatingAdmissionPolicyBinding, error) {
++	docs := splitYAMLDocs(raw)
++	p := &admissionregistrationv1.ValidatingAdmissionPolicy{}
++	b := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
++	if err := yaml.Unmarshal(docs.policy, p); err != nil {
++		return nil, nil, err
++	}
++	if err := yaml.Unmarshal(docs.binding, b); err != nil {
++		return nil, nil, err
++	}
++	return p, b, nil
++}
++
++// ExpectedContract returns fresh deep copies of the trusted policy + binding (for fixtures).
++func ExpectedContract() (*admissionregistrationv1.ValidatingAdmissionPolicy, *admissionregistrationv1.ValidatingAdmissionPolicyBinding) {
++	return expectedPolicy.DeepCopy(), expectedBinding.DeepCopy()
++}
++
++// --- the verifier -----------------------------------------------------------------------
++
++// verifiedState is the immutable published result of one successful verification.
++type verifiedState struct {
++	valid         bool
++	at            time.Time
++	epochAtVerify uint64
++	selector      map[string]string
++	detail        string
++}
++
++// Verifier is the process-local, atomically-invalidated admission-capability oracle.
++type Verifier struct {
++	reader   PolicyReader
++	deadline time.Duration
++	ttl      time.Duration
++	poll     time.Duration
++	now      func() time.Time
++
++	epoch atomic.Uint64
++
++	mu    sync.RWMutex
++	state verifiedState
++}
++
++// Config carries the (all-optional) knobs; zero values fall back to the §2 defaults.
++type Config struct {
++	Deadline time.Duration
++	TTL      time.Duration
++	Poll     time.Duration
++	Now      func() time.Time
++}
++
++// New builds a Verifier in the initial UNAVAILABLE state (fail-closed until first success).
++func New(reader PolicyReader, cfg Config) *Verifier {
++	v := &Verifier{
++		reader:   reader,
++		deadline: orDur(cfg.Deadline, DefaultDeadline),
++		ttl:      orDur(cfg.TTL, DefaultTTL),
++		poll:     orDur(cfg.Poll, DefaultPoll),
++		now:      cfg.Now,
++	}
++	if v.now == nil {
++		v.now = time.Now
++	}
++	v.state = verifiedState{valid: false, detail: "not yet verified"}
++	return v
++}
++
++func orDur(d, def time.Duration) time.Duration {
++	if d <= 0 {
++		return def
++	}
++	return d
++}
++
++// Invalidate records an observed invalidation: it increments the epoch (so any in-flight
++// success started before now can no longer publish) and marks the published state invalid.
++func (v *Verifier) Invalidate(reason string) {
++	v.epoch.Add(1)
++	v.mu.Lock()
++	v.state.valid = false
++	v.state.detail = reason
++	v.mu.Unlock()
++}
++
++// Verify performs one uncached verification under the aggregate deadline D.
++func (v *Verifier) Verify(ctx context.Context) error {
++	dctx, cancel := context.WithTimeout(ctx, v.deadline)
++	defer cancel()
++	return v.verifyUnder(dctx)
++}
++
++// verifyUnder runs one verification using ctx as the (already deadline-bounded) aggregate. On
++// success it republishes valid state IFF no invalidation intervened; on any failure it invalidates.
++func (v *Verifier) verifyUnder(ctx context.Context) error {
++	startEpoch := v.epoch.Load()
++
++	allowed, unknown, err := v.reader.CanRead(ctx)
++	if err != nil || unknown {
++		return v.fail("ssar-read-check failed (fail-closed)")
++	}
++	if !allowed {
++		return v.fail("minimal read grant absent: operator cannot get the named admission objects")
++	}
++	policy, err := v.reader.GetPolicy(ctx)
++	if err != nil {
++		return v.fail("policy read failed (fail-closed): " + err.Error())
++	}
++	binding, err := v.reader.GetBinding(ctx)
++	if err != nil {
++		return v.fail("binding read failed (fail-closed): " + err.Error())
++	}
++	if why := validatePolicyContent(policy); why != "" {
++		return v.fail("policy invalid: " + why)
++	}
++	if why := validateBindingContent(binding); why != "" {
++		return v.fail("binding invalid: " + why)
++	}
++
++	v.mu.Lock()
++	defer v.mu.Unlock()
++	if v.epoch.Load() != startEpoch {
++		v.state.detail = "verification superseded by a concurrent invalidation; discarded"
++		return context.Canceled
++	}
++	v.state = verifiedState{
++		valid:         true,
++		at:            v.now(),
++		epochAtVerify: startEpoch,
++		selector:      copyLabels(expectedSelector), // == the verified live selector
++		detail:        "verified",
++	}
++	return nil
++}
++
++func (v *Verifier) fail(reason string) error {
++	v.Invalidate(reason)
++	return verifyError(reason)
++}
++
++type verifyError string
++
++func (e verifyError) Error() string { return string(e) }
++
++// globalReady reports whether a valid verification is currently unexpired AND epoch-matched.
++func (v *Verifier) globalReady() (bool, string) {
++	v.mu.RLock()
++	st := v.state
++	v.mu.RUnlock()
++	if !st.valid {
++		if st.detail == "" {
++			return false, "not verified"
++		}
++		return false, st.detail
++	}
++	if v.now().Sub(st.at) >= v.ttl {
++		return false, "verification expired (TTL)"
++	}
++	if st.epochAtVerify != v.epoch.Load() {
++		return false, "verification invalidated"
++	}
++	return true, "verified"
++}
++
++// Available is the O(1) cached gate check for the pre-scoring capability gate: is admission
++// verified AND does the verified Binding scope cover the target namespace? nsLabels are the
++// tick snapshot's labels (best-effort, cheap; the authoritative live scope check is FinalCheck).
++func (v *Verifier) Available(nsLabels map[string]string) (bool, string) {
++	ready, why := v.globalReady()
++	if !ready {
++		return false, ReasonUnverified + ": " + why
++	}
++	v.mu.RLock()
++	sel := v.state.selector
++	v.mu.RUnlock()
++	if !scopeMatch(sel, nsLabels) {
++		return false, ReasonUnverified + ": target namespace not in the verified managed scope (C3)"
++	}
++	return true, ""
++}
++
++// FinalCheck is the pre-submit re-confirmation immediately before an irreversible inject. It
++// carries the target namespace IDENTITY (not stale labels): it re-verifies the policy AND reads
++// the namespace's CURRENT labels LIVE (uncached), all within one aggregate deadline D, then
++// requires unexpired + epoch-matched verification + the live namespace in verified scope. A
++// managed label removed since the tick is therefore caught here. ok=false carries ReasonUnverified.
++func (v *Verifier) FinalCheck(ctx context.Context, namespace string) (bool, string) {
++	dctx, cancel := context.WithTimeout(ctx, v.deadline)
++	defer cancel()
++	_ = v.verifyUnder(dctx) // fresh verify sharing the aggregate D; failure invalidates
++
++	// Capture the verification TOKEN before the scope I/O.
++	ready, why := v.globalReady()
++	if !ready {
++		return false, ReasonUnverified + ": " + why
++	}
++	v.mu.RLock()
++	tokenEpoch := v.state.epochAtVerify
++	tokenAt := v.state.at
++	sel := v.state.selector
++	v.mu.RUnlock()
++
++	labels, found, err := v.reader.GetNamespaceLabels(dctx, namespace)
++	if err != nil {
++		// A partial read failure (incl. a deadline) is an observed invalidation: bump the epoch
++		// so this and any concurrent gating decision fail closed, not just this call.
++		v.Invalidate("live namespace scope read failed for " + namespace + ": " + err.Error())
++		return false, ReasonUnverified + ": live namespace scope read failed for " + namespace + " (fail-closed): " + err.Error()
++	}
++	if !found {
++		return false, ReasonUnverified + ": target namespace " + namespace + " not found (out of scope)"
++	}
++
++	// RE-CHECK the token AFTER the I/O: an invalidation observed DURING the namespace read (a
++	// concurrent poll seeing the policy weakened), a TTL expiry, or a blown aggregate deadline
++	// all void this submit. This is distinct from the accepted post-check last-moment race.
++	if v.epoch.Load() != tokenEpoch {
++		return false, ReasonUnverified + ": verification invalidated during the final scope read"
++	}
++	if v.now().Sub(tokenAt) >= v.ttl {
++		return false, ReasonUnverified + ": verification expired during the final scope read (TTL)"
++	}
++	if dctx.Err() != nil {
++		return false, ReasonUnverified + ": final check exceeded the aggregate deadline: " + dctx.Err().Error()
++	}
++	if !scopeMatch(sel, labels) {
++		return false, ReasonUnverified + ": target namespace " + namespace + " not in the verified managed scope (C3)"
++	}
++	return true, ""
++}
++
++// Run drives the periodic re-verify loop (a GET every poll interval; no watch). Returns on ctx.
++func (v *Verifier) Run(ctx context.Context) {
++	_ = v.Verify(ctx)
++	t := time.NewTicker(v.poll)
++	defer t.Stop()
++	for {
++		select {
++		case <-ctx.Done():
++			return
++		case <-t.C:
++			_ = v.Verify(ctx)
++		}
++	}
++}
++
++// Status returns the current availability + detail for boot logs / degraded-status reporting.
++func (v *Verifier) Status() (available bool, detail string) {
++	return v.globalReady()
++}
++
++// --- content validation (full normalized spec vs the trusted contract) ------------------
++
++// validatePolicyContent rejects a live VAP whose annotation, failurePolicy, or ANY normalized
++// spec field differs from the trusted contract. The whole spec is compared, so an unexpected
++// enforcement change (gutted CEL, emptied variable, added match-condition, wrong resource) is
++// caught rather than silently projected away.
++func validatePolicyContent(p *admissionregistrationv1.ValidatingAdmissionPolicy) string {
++	if p == nil {
++		return "ValidatingAdmissionPolicy " + PolicyName + " not found"
++	}
++	if p.Annotations[versionAnnotation] != PolicyVersion {
++		return "phorvex.ai/policy-version annotation is not " + PolicyVersion
++	}
++	if p.Spec.FailurePolicy == nil || *p.Spec.FailurePolicy != admissionregistrationv1.Fail {
++		return "failurePolicy is not Fail"
++	}
++	if !bytesEqual(normalizedPolicySpecJSON(p), expectedPolicyNorm) {
++		return "policy enforcement content does not match the trusted contract (validations/variables/matchConstraints/matchConditions)"
++	}
++	return ""
++}
++
++// validateBindingContent rejects a live Binding whose normalized spec differs from the trusted
++// contract — a wrong policyName, a missing Deny, added exclusions, an object selector, or a
++// namespace selector (matchLabels OR matchExpressions) that narrows/skips the target.
++func validateBindingContent(b *admissionregistrationv1.ValidatingAdmissionPolicyBinding) string {
++	if b == nil {
++		return "ValidatingAdmissionPolicyBinding " + PolicyName + " not found"
++	}
++	if b.Spec.PolicyName != PolicyName {
++		return "binding.policyName does not reference " + PolicyName
++	}
++	if !hasDeny(b.Spec.ValidationActions) {
++		return "validationActions does not contain Deny"
++	}
++	if !bytesEqual(normalizedBindingSpecJSON(b), expectedBindingNorm) {
++		return "binding enforcement content does not match the trusted contract (validationActions/matchResources/selectors/exclusions)"
++	}
++	return ""
++}
++
++// normalizedPolicySpecJSON deep-copies the spec, FILLS the API-server defaults to their canonical
++// values (rather than clearing them), and marshals deterministically. Filling — not clearing — is
++// what lets the same canonical form come out of BOTH the raw committed manifest (defaults absent)
++// AND the actual server-returned object (defaults populated: matchPolicy=Equivalent, empty
++// namespace/object selectors, scope="*"), while a NON-default incompatible value (e.g. scope
++// Cluster, or a real narrowing selector) is preserved and so mismatches the trusted contract.
++// Every other field participates in the comparison, so nothing security-relevant is dropped.
++func normalizedPolicySpecJSON(p *admissionregistrationv1.ValidatingAdmissionPolicy) []byte {
++	spec := p.Spec.DeepCopy()
++	if spec.MatchConstraints != nil {
++		spec.MatchConstraints.MatchPolicy = fillMatchPolicy(spec.MatchConstraints.MatchPolicy)
++		spec.MatchConstraints.NamespaceSelector = fillSelector(spec.MatchConstraints.NamespaceSelector)
++		spec.MatchConstraints.ObjectSelector = fillSelector(spec.MatchConstraints.ObjectSelector)
++		for i := range spec.MatchConstraints.ResourceRules {
++			if spec.MatchConstraints.ResourceRules[i].Scope == nil {
++				all := admissionregistrationv1.AllScopes // "*" — the server default; a real Cluster/Namespaced stays as-is
++				spec.MatchConstraints.ResourceRules[i].Scope = &all
++			}
++		}
++	}
++	out, _ := json.Marshal(spec)
++	return out
++}
++
++func normalizedBindingSpecJSON(b *admissionregistrationv1.ValidatingAdmissionPolicyBinding) []byte {
++	spec := b.Spec.DeepCopy()
++	if spec.MatchResources != nil {
++		spec.MatchResources.MatchPolicy = fillMatchPolicy(spec.MatchResources.MatchPolicy)
++		spec.MatchResources.NamespaceSelector = fillSelector(spec.MatchResources.NamespaceSelector)
++		spec.MatchResources.ObjectSelector = fillSelector(spec.MatchResources.ObjectSelector)
++	}
++	out, _ := json.Marshal(spec)
++	return out
++}
++
++// fillMatchPolicy returns Equivalent (the server default) when unset, else the explicit value.
++func fillMatchPolicy(mp *admissionregistrationv1.MatchPolicyType) *admissionregistrationv1.MatchPolicyType {
++	if mp == nil {
++		eq := admissionregistrationv1.Equivalent
++		return &eq
++	}
++	return mp
++}
++
++// fillSelector returns an empty (match-everything) selector when unset — the server default —
++// so an absent selector and a server-populated empty selector canonicalize identically. A
++// non-empty selector (matchLabels or matchExpressions) is left intact, so a narrowing selector
++// still differs from the trusted contract.
++func fillSelector(s *metav1.LabelSelector) *metav1.LabelSelector {
++	if s == nil {
++		return &metav1.LabelSelector{}
++	}
++	return s
++}
++
++func hasDeny(actions []admissionregistrationv1.ValidationAction) bool {
++	for _, a := range actions {
++		if a == admissionregistrationv1.Deny {
++			return true
++		}
++	}
++	return false
++}
++
++// scopeMatch reports whether nsLabels satisfy the verified Binding selector (every selector
++// label present with the same value). An empty selector never matches (fail-closed).
++func scopeMatch(selector, nsLabels map[string]string) bool {
++	if len(selector) == 0 {
++		return false
++	}
++	for k, val := range selector {
++		if nsLabels[k] != val {
++			return false
++		}
++	}
++	return true
++}
++
++func copyLabels(m map[string]string) map[string]string {
++	if m == nil {
++		return nil
++	}
++	out := make(map[string]string, len(m))
++	for k, v := range m {
++		out[k] = v
++	}
++	return out
++}
++
++func bytesEqual(a, b []byte) bool {
++	if len(a) != len(b) {
++		return false
++	}
++	for i := range a {
++		if a[i] != b[i] {
++			return false
++		}
++	}
++	return true
++}
++
++type yamlDocs struct{ policy, binding []byte }
++
++// splitYAMLDocs splits a "policy\n---\nbinding" document pair. It splits on a line that is
++// exactly "---" so the "---" inside folded scalars/comments is never a separator.
++func splitYAMLDocs(raw []byte) yamlDocs {
++	lines := splitLines(raw)
++	var cur []byte
++	var docs [][]byte
++	for _, ln := range lines {
++		if string(ln) == "---" {
++			docs = append(docs, cur)
++			cur = nil
++			continue
++		}
++		cur = append(cur, ln...)
++		cur = append(cur, '\n')
++	}
++	docs = append(docs, cur)
++	// Keep the two non-empty documents (skip a possible empty leading/trailing doc).
++	var nonEmpty [][]byte
++	for _, d := range docs {
++		if len(trimSpace(d)) > 0 {
++			nonEmpty = append(nonEmpty, d)
++		}
++	}
++	out := yamlDocs{}
++	if len(nonEmpty) > 0 {
++		out.policy = nonEmpty[0]
++	}
++	if len(nonEmpty) > 1 {
++		out.binding = nonEmpty[1]
++	}
++	return out
++}
++
++func splitLines(raw []byte) [][]byte {
++	var lines [][]byte
++	start := 0
++	for i := 0; i < len(raw); i++ {
++		if raw[i] == '\n' {
++			lines = append(lines, raw[start:i])
++			start = i + 1
++		}
++	}
++	if start < len(raw) {
++		lines = append(lines, raw[start:])
++	}
++	return lines
++}
++
++func trimSpace(b []byte) []byte {
++	i, j := 0, len(b)
++	for i < j && (b[i] == ' ' || b[i] == '\t' || b[i] == '\n' || b[i] == '\r') {
++		i++
++	}
++	for j > i && (b[j-1] == ' ' || b[j-1] == '\t' || b[j-1] == '\n' || b[j-1] == '\r') {
++		j--
++	}
++	return b[i:j]
++}
+diff --git a/phorvex/internal/codeexec/verifier_test.go b/phorvex/internal/codeexec/verifier_test.go
+new file mode 100644
+index 0000000..b285e9e
+--- /dev/null
++++ b/phorvex/internal/codeexec/verifier_test.go
+@@ -0,0 +1,395 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * L0-L2 verifier tests through the PRODUCTION reader (NewK8sReader over a fake transport):
++ * fail-closed boot, full-content drift rejection (the reviewer's seven enforcement-drift
++ * bypasses + more, isolated with a positive control), C3 scope, TTL, epoch interleaving, and
++ * the LIVE pre-submit scope check (a managed label removed since the tick is caught by a fresh
++ * namespace GET). These exercise the real projection + trusted-contract comparison, not fakes.
++ */
++
++package codeexec
++
++import (
++	"context"
++	"errors"
++	"sync"
++	"testing"
++	"time"
++
++	admissionv1 "k8s.io/api/admissionregistration/v1"
++	authorizationv1 "k8s.io/api/authorization/v1"
++	corev1 "k8s.io/api/core/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/apimachinery/pkg/runtime"
++	"k8s.io/client-go/kubernetes/fake"
++	ktesting "k8s.io/client-go/testing"
++)
++
++func managedLabels() map[string]string { return map[string]string{ManagedLabelKey: ManagedLabelVal} }
++
++// fakeClient builds a clientset holding the given policy+binding (+extra objects) with SSAR
++// allowed. reactorErr, when set, makes the SSAR error (unknown). ssarDeny denies it.
++func fakeClient(p *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding, extra ...runtime.Object) *fake.Clientset {
++	objs := append([]runtime.Object{}, extra...)
++	if p != nil {
++		objs = append(objs, p)
++	}
++	if b != nil {
++		objs = append(objs, b)
++	}
++	cs := fake.NewSimpleClientset(objs...)
++	cs.PrependReactor("create", "selfsubjectaccessreviews", func(ktesting.Action) (bool, runtime.Object, error) {
++		return true, &authorizationv1.SelfSubjectAccessReview{Status: authorizationv1.SubjectAccessReviewStatus{Allowed: true}}, nil
++	})
++	return cs
++}
++
++func verifierOver(cs *fake.Clientset, cfg Config) *Verifier { return New(NewK8sReader(cs), cfg) }
++
++// --- boot: fail-closed before the first verification -------------------------------------
++
++func TestUnavailableBeforeFirstVerify(t *testing.T) {
++	p, b := ExpectedContract()
++	v := verifierOver(fakeClient(p, b), Config{})
++	if ok, _ := v.Available(managedLabels()); ok {
++		t.Fatal("code-exec must be UNAVAILABLE before the first successful verification")
++	}
++}
++
++// --- allow path + C3 out-of-scope --------------------------------------------------------
++
++func TestVerifyThenAvailableInScopeOnly(t *testing.T) {
++	p, b := ExpectedContract()
++	v := verifierOver(fakeClient(p, b), Config{})
++	if err := v.Verify(context.Background()); err != nil {
++		t.Fatalf("valid contract must verify: %v", err)
++	}
++	if ok, why := v.Available(managedLabels()); !ok {
++		t.Fatalf("in-scope namespace must be available: %s", why)
++	}
++	if ok, why := v.Available(map[string]string{"team": "x"}); ok {
++		t.Fatalf("out-of-scope namespace must be unavailable (C3), got available (%s)", why)
++	}
++	if ok, _ := v.Available(nil); ok {
++		t.Fatal("nil-label namespace must be out of scope (C3)")
++	}
++}
++
++// --- full enforcement-content drift: each isolated mutation of the trusted manifest must be
++// REJECTED through the production reader; the unmutated positive control verifies. -------------
++
++func TestEnforcementContentDriftRejected(t *testing.T) {
++	ignore := admissionv1.Ignore
++	cases := []struct {
++		name   string
++		mutate func(*admissionv1.ValidatingAdmissionPolicy, *admissionv1.ValidatingAdmissionPolicyBinding)
++	}{
++		// The seven reviewer bypasses:
++		{"cel-replaced-by-true", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.Validations = []admissionv1.Validation{{Expression: "true"}}
++		}},
++		{"all-new-containers-hidden", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.Variables[2].Expression = "[]"
++		}},
++		{"policy-match-condition-false", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.MatchConditions = []admissionv1.MatchCondition{{Name: "skip", Expression: "false"}}
++		}},
++		{"wrong-resource-api-group", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.MatchConstraints.ResourceRules[0].APIGroups = []string{"example.invalid"}
++		}},
++		{"binding-excludes-subresource", func(p *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding) {
++			b.Spec.MatchResources.ExcludeResourceRules = p.Spec.MatchConstraints.ResourceRules
++		}},
++		{"binding-namespace-expression-excludes-target", func(_ *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding) {
++			b.Spec.MatchResources.NamespaceSelector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "team", Operator: metav1.LabelSelectorOpIn, Values: []string{"restricted"}}}
++		}},
++		{"binding-object-selector-excludes-target", func(_ *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding) {
++			b.Spec.MatchResources.ObjectSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"only": "other-pods"}}
++		}},
++		// More:
++		{"failure-policy-ignore", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.FailurePolicy = &ignore
++		}},
++		{"version-annotation-wrong", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Annotations = map[string]string{versionAnnotation: "bogus"}
++		}},
++		{"binding-no-deny", func(_ *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding) {
++			b.Spec.ValidationActions = []admissionv1.ValidationAction{admissionv1.Warn}
++		}},
++		{"binding-wrong-policyname", func(_ *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding) {
++			b.Spec.PolicyName = "other"
++		}},
++		{"binding-selector-wrong-label", func(_ *admissionv1.ValidatingAdmissionPolicy, b *admissionv1.ValidatingAdmissionPolicyBinding) {
++			b.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{"x": "y"}
++		}},
++		{"validation-dropped", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.Validations = p.Spec.Validations[:len(p.Spec.Validations)-1] // drop the command rule
++		}},
++		{"variable-added", func(p *admissionv1.ValidatingAdmissionPolicy, _ *admissionv1.ValidatingAdmissionPolicyBinding) {
++			p.Spec.Variables = append(p.Spec.Variables, admissionv1.Variable{Name: "sneak", Expression: "true"})
++		}},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			p, b := ExpectedContract()
++			tc.mutate(p, b)
++			v := verifierOver(fakeClient(p, b), Config{})
++			err := v.Verify(context.Background())
++			ok, why := v.Available(managedLabels())
++			if err == nil || ok {
++				t.Fatalf("unsafe enforcement accepted: Verify=%v Available=%v reason=%q", err, ok, why)
++			}
++		})
++	}
++	// Positive control: the unmutated trusted contract verifies and is available.
++	p, b := ExpectedContract()
++	v := verifierOver(fakeClient(p, b), Config{})
++	if err := v.Verify(context.Background()); err != nil {
++		t.Fatalf("positive control must verify: %v", err)
++	}
++	if ok, why := v.Available(managedLabels()); !ok {
++		t.Fatalf("positive control must be available: %s", why)
++	}
++}
++
++// --- absent objects + SSAR failures ------------------------------------------------------
++
++func TestAbsentAndSSARFailures(t *testing.T) {
++	t.Run("policy-absent", func(t *testing.T) {
++		_, b := ExpectedContract()
++		v := verifierOver(fakeClient(nil, b), Config{})
++		if err := v.Verify(context.Background()); err == nil {
++			t.Fatal("absent policy must fail")
++		}
++	})
++	t.Run("binding-absent", func(t *testing.T) {
++		p, _ := ExpectedContract()
++		v := verifierOver(fakeClient(p, nil), Config{})
++		if err := v.Verify(context.Background()); err == nil {
++			t.Fatal("absent binding must fail")
++		}
++	})
++	t.Run("ssar-deny", func(t *testing.T) {
++		p, b := ExpectedContract()
++		cs := fakeClient(p, b)
++		cs.PrependReactor("create", "selfsubjectaccessreviews", func(ktesting.Action) (bool, runtime.Object, error) {
++			return true, &authorizationv1.SelfSubjectAccessReview{Status: authorizationv1.SubjectAccessReviewStatus{Allowed: false}}, nil
++		})
++		v := verifierOver(cs, Config{})
++		if err := v.Verify(context.Background()); err == nil {
++			t.Fatal("SSAR deny must fail (read grant absent)")
++		}
++	})
++	t.Run("ssar-error-unknown", func(t *testing.T) {
++		p, b := ExpectedContract()
++		cs := fakeClient(p, b)
++		cs.PrependReactor("create", "selfsubjectaccessreviews", func(ktesting.Action) (bool, runtime.Object, error) {
++			return true, nil, errors.New("apiserver blip")
++		})
++		v := verifierOver(cs, Config{})
++		if err := v.Verify(context.Background()); err == nil {
++			t.Fatal("SSAR error (unknown) must fail-closed")
++		}
++	})
++}
++
++// --- TTL expiry --------------------------------------------------------------------------
++
++func TestTTLExpiry(t *testing.T) {
++	clock := &fakeClock{t: time.Unix(1000, 0)}
++	p, b := ExpectedContract()
++	v := verifierOver(fakeClient(p, b), Config{TTL: 30 * time.Second, Now: clock.now})
++	if err := v.Verify(context.Background()); err != nil {
++		t.Fatalf("verify: %v", err)
++	}
++	clock.advance(29 * time.Second)
++	if ok, _ := v.Available(managedLabels()); !ok {
++		t.Fatal("must still be available just before TTL")
++	}
++	clock.advance(2 * time.Second)
++	if ok, why := v.Available(managedLabels()); ok {
++		t.Fatalf("must be unavailable after TTL (%s)", why)
++	}
++}
++
++// --- epoch interleaving ------------------------------------------------------------------
++
++func TestInvalidationMidVerifyDiscardsInFlightSuccess(t *testing.T) {
++	p, b := ExpectedContract()
++	cs := fakeClient(p, b)
++	v := verifierOver(cs, Config{})
++	// A concurrent invalidation fires while this verify reads the binding. The read returns
++	// valid content, but the publish MUST be discarded because the epoch advanced.
++	cs.PrependReactor("get", "validatingadmissionpolicybindings", func(ktesting.Action) (bool, runtime.Object, error) {
++		v.Invalidate("external enforcement weakened mid-verify")
++		return false, nil, nil // fall through to the tracker (returns the stored binding)
++	})
++	if err := v.Verify(context.Background()); err == nil {
++		t.Fatal("verify racing a mid-flight invalidation must not report a published success")
++	}
++	if ok, _ := v.Available(managedLabels()); ok {
++		t.Fatal("a stale in-flight success must not clear a later invalidation")
++	}
++}
++
++func TestInvalidateThenFreshVerifyRecovers(t *testing.T) {
++	p, b := ExpectedContract()
++	v := verifierOver(fakeClient(p, b), Config{})
++	if err := v.Verify(context.Background()); err != nil {
++		t.Fatalf("initial verify: %v", err)
++	}
++	v.Invalidate("simulated read timeout")
++	if ok, _ := v.Available(managedLabels()); ok {
++		t.Fatal("must be unavailable immediately after an invalidation")
++	}
++	if err := v.Verify(context.Background()); err != nil {
++		t.Fatalf("fresh verify after timeout must recover: %v", err)
++	}
++	if ok, why := v.Available(managedLabels()); !ok {
++		t.Fatalf("must recover after a fresh successful verify (%s)", why)
++	}
++}
++
++// --- FinalCheck reads LIVE namespace scope (stale-label bypass closed) --------------------
++
++func managedNS(name string) *corev1.Namespace {
++	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{ManagedLabelKey: ManagedLabelVal}}}
++}
++
++func TestFinalCheckRejectsNamespaceLabelRemovedSinceSnapshot(t *testing.T) {
++	ctx := context.Background()
++	p, b := ExpectedContract()
++	ns := managedNS("managed-fixture")
++	cs := fakeClient(p, b, ns)
++	v := verifierOver(cs, Config{})
++
++	if ok, why := v.FinalCheck(ctx, "managed-fixture"); !ok {
++		t.Fatalf("initial legitimate control must pass: %s", why)
++	}
++	// Remove the managed label live, then FinalCheck must reject AND must have read the
++	// namespace fresh (a stale snapshot label cannot authorize the submit).
++	ns.Labels = map[string]string{}
++	if _, err := cs.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{}); err != nil {
++		t.Fatal(err)
++	}
++	cs.ClearActions()
++	ok, why := v.FinalCheck(ctx, "managed-fixture")
++	reads := 0
++	for _, a := range cs.Actions() {
++		if a.GetVerb() == "get" && a.GetResource().Resource == "namespaces" {
++			reads++
++		}
++	}
++	if ok {
++		t.Fatalf("stale scope authorized submit after label removed: reason=%q", why)
++	}
++	if reads == 0 {
++		t.Fatal("FinalCheck must read the namespace LIVE (zero fresh namespace GETs)")
++	}
++}
++
++func TestFinalCheckNamespaceAbsentFailsClosed(t *testing.T) {
++	p, b := ExpectedContract()
++	v := verifierOver(fakeClient(p, b), Config{}) // no namespace object
++	if ok, why := v.FinalCheck(context.Background(), "ghost"); ok {
++		t.Fatalf("absent namespace must be out of scope (fail-closed), got ok (%s)", why)
++	}
++}
++
++// apiDefaulted mirrors what the real API server ADDS to the committed manifest on write:
++// matchPolicy=Equivalent, empty namespace/object selectors, rule scope "*". (Confirmed by a
++// server-side dry-run: evidence/p3/rev2/api-defaulted-objects.json.)
++func apiDefaulted() (*admissionv1.ValidatingAdmissionPolicy, *admissionv1.ValidatingAdmissionPolicyBinding) {
++	p, b := ExpectedContract()
++	eq := admissionv1.Equivalent
++	all := admissionv1.AllScopes
++	p.Spec.MatchConstraints.MatchPolicy = &eq
++	p.Spec.MatchConstraints.NamespaceSelector = &metav1.LabelSelector{}
++	p.Spec.MatchConstraints.ObjectSelector = &metav1.LabelSelector{}
++	p.Spec.MatchConstraints.ResourceRules[0].Scope = &all
++	b.Spec.MatchResources.MatchPolicy = &eq
++	b.Spec.MatchResources.ObjectSelector = &metav1.LabelSelector{}
++	return p, b
++}
++
++// The actual server-defaulted object must be ACCEPTED (defaults canonicalized on both sides),
++// or the verifier would refuse a legitimately-installed policy and never enable code-exec.
++func TestServerDefaultedContractAccepted(t *testing.T) {
++	p, b := apiDefaulted()
++	if why := validatePolicyContent(p); why != "" {
++		t.Fatalf("server-defaulted policy rejected: %s", why)
++	}
++	if why := validateBindingContent(b); why != "" {
++		t.Fatalf("server-defaulted binding rejected: %s", why)
++	}
++	v := verifierOver(fakeClient(p, b), Config{})
++	if err := v.Verify(context.Background()); err != nil {
++		t.Fatalf("server-defaulted install must verify: %v", err)
++	}
++}
++
++// A Cluster-scoped rule cannot protect namespaced pods; filling defaults must NOT erase an
++// explicit incompatible scope, so it is rejected (scope "*"/Namespaced default is fine).
++func TestClusterScopeRejected(t *testing.T) {
++	p, b := ExpectedContract()
++	cluster := admissionv1.ClusterScope
++	p.Spec.MatchConstraints.ResourceRules[0].Scope = &cluster
++	v := verifierOver(fakeClient(p, b), Config{})
++	if err := v.Verify(context.Background()); err == nil {
++		t.Fatal("a Cluster-scoped rule must be rejected (cannot cover namespaced pods)")
++	}
++}
++
++// An invalidation observed DURING the final namespace read (a concurrent poll seeing the policy
++// weakened) must void the submit even though the labels read back valid.
++func TestFinalCheckInvalidationDuringScopeReadStopsSubmit(t *testing.T) {
++	p, b := ExpectedContract()
++	cs := fakeClient(p, b, managedNS("managed-fixture"))
++	v := verifierOver(cs, Config{})
++	cs.PrependReactor("get", "namespaces", func(ktesting.Action) (bool, runtime.Object, error) {
++		v.Invalidate("concurrent poll observed policy removed during final namespace read")
++		return false, nil, nil // fall through: labels read back valid
++	})
++	if ok, why := v.FinalCheck(context.Background(), "managed-fixture"); ok {
++		t.Fatalf("FinalCheck must not authorize after an invalidation observed during the read: %s", why)
++	}
++	if avail, _ := v.Status(); avail {
++		t.Fatal("global status must be unavailable after the observed invalidation")
++	}
++}
++
++// A namespace read failure (incl. a deadline) is a partial read: it must invalidate global
++// state (bump the epoch), not merely refuse this one call.
++func TestFinalCheckNamespaceReadFailureInvalidates(t *testing.T) {
++	p, b := ExpectedContract()
++	cs := fakeClient(p, b)
++	v := verifierOver(cs, Config{})
++	cs.PrependReactor("get", "namespaces", func(ktesting.Action) (bool, runtime.Object, error) {
++		return true, nil, context.DeadlineExceeded
++	})
++	before := v.epoch.Load()
++	ok, _ := v.FinalCheck(context.Background(), "managed-fixture")
++	avail, _ := v.Status()
++	if ok || avail || v.epoch.Load() == before {
++		t.Fatalf("a partial read failure must invalidate: FinalCheck=%v Available=%v epochBefore=%d epochAfter=%d", ok, avail, before, v.epoch.Load())
++	}
++}
++
++// --- fakeClock ---------------------------------------------------------------------------
++
++type fakeClock struct {
++	mu sync.Mutex
++	t  time.Time
++}
++
++func (c *fakeClock) now() time.Time {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	return c.t
++}
++func (c *fakeClock) advance(d time.Duration) {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.t = c.t.Add(d)
++}
+diff --git a/phorvex/internal/runner/codeexec_m99_test.go b/phorvex/internal/runner/codeexec_m99_test.go
+new file mode 100644
+index 0000000..031666f
+--- /dev/null
++++ b/phorvex/internal/runner/codeexec_m99_test.go
+@@ -0,0 +1,71 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * M99 coexistence regression: the qualified-outcome / SLO-breach path must NOT be able to
++ * re-admit a code-exec move whose API-server admission is unverified. The production tick
++ * closure is codeExecAwareEligibility; these tests exercise that exact function so the
++ * precedence (full gate first, M99 no-rbac fallback only when eligible) cannot regress.
++ */
++
++package runner
++
++import (
++	"context"
++	"testing"
++
++	"github.com/phorvex/phorvex/internal/capability"
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++type fakeAdmission struct {
++	ok     bool
++	reason string
++}
++
++func (f fakeAdmission) Available(map[string]string) (bool, string) { return f.ok, f.reason }
++
++func unverifiedCodeExecWitness() capability.Witness {
++	// Empty fleet/index; no installability gaps; no SSAR checker; code-exec admission
++	// UNVERIFIED for the labelled namespace.
++	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, nil, nil).
++		WithCodeExec(
++			fakeAdmission{ok: false, reason: capability.ReasonCodeExec + ": not verified"},
++			map[string]map[string]string{"ns": {"phorvex.ai/codeexec-managed": "true"}},
++		)
++}
++
++func TestM99CannotBypassCodeExecAdmissionGate(t *testing.T) {
++	wit := unverifiedCodeExecWitness()
++	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "victim"}}
++	qualified := func(*model.WorkloadView) bool { return true } // M99 active
++
++	// authzNil=true + qualified outcome = the M99 fallback path. A code-exec move is STILL
++	// excluded by the admission leg, attributed to the code-exec class — never re-admitted.
++	for _, action := range []model.Action{model.ActionDebugger, model.ActionCustomInject} {
++		got := codeExecAwareEligibility(wit, true, qualified, v, action, []string{"cover-key"})
++		if got == nil || !got.Excluded {
++			t.Fatalf("%s must be excluded under M99 (authzNil+qualified), got %+v", action, got)
++		}
++		if got.Kind != capability.ReasonCodeExec {
++			t.Fatalf("%s exclusion must be attributed to %q, got %q", action, capability.ReasonCodeExec, got.Kind)
++		}
++	}
++}
++
++// Positive control: a non-code-exec action that is otherwise eligible still receives the
++// M99 no-rbac marker under authzNil+qualified — proving the extraction preserved the M99
++// path exactly and the code-exec leg does not disturb it.
++func TestM99NoRBACPathPreservedForNonCodeExec(t *testing.T) {
++	wit := unverifiedCodeExecWitness()
++	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "victim"}}
++	got := codeExecAwareEligibility(wit, true, func(*model.WorkloadView) bool { return true }, v, model.ActionRotate, []string{"cover-key"})
++	if got == nil || !got.Excluded || got.Kind != capability.ReasonNoRBAC {
++		t.Fatalf("rotate under M99+authzNil must carry the m99 no-rbac marker, got %+v", got)
++	}
++	// And with a live SSAR checker (authzNil=false) + no qualified outcome, an eligible action
++	// is not excluded at all.
++	got = codeExecAwareEligibility(wit, false, func(*model.WorkloadView) bool { return false }, v, model.ActionRotate, []string{"cover-key"})
++	if got != nil {
++		t.Fatalf("rotate with live authz and no qualified outcome must be eligible, got %+v", got)
++	}
++}
+diff --git a/phorvex/internal/runner/codeexec_presubmit_test.go b/phorvex/internal/runner/codeexec_presubmit_test.go
+new file mode 100644
+index 0000000..b0e7062
+--- /dev/null
++++ b/phorvex/internal/runner/codeexec_presubmit_test.go
+@@ -0,0 +1,71 @@
++/*
++ * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (M-6)
++ *
++ * The pre-submit admission gate at the actuate boundary: a code-exec move (debugger/custom-
++ * inject) is dispatched ONLY after a fresh FinalCheck (by namespace identity) passes. Fail-
++ * closed on a nil verifier (unwired) and on an unverified/unavailable verifier; a verified+in-
++ * scope verifier lets the dispatch proceed (positive control). Guards both direct dispatch and
++ * any queued work reaching this boundary.
++ */
++
++package runner
++
++import (
++	"context"
++	"testing"
++
++	"github.com/go-logr/logr"
++
++	"github.com/phorvex/phorvex/internal/capability"
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++// fakeAdmissionFinal implements the runner's codeExecVerifier (Available + FinalCheck).
++type fakeAdmissionFinal struct {
++	ok     bool
++	reason string
++	sawNS  string
++}
++
++func (f *fakeAdmissionFinal) Available(map[string]string) (bool, string) { return f.ok, f.reason }
++func (f *fakeAdmissionFinal) FinalCheck(_ context.Context, namespace string) (bool, string) {
++	f.sawNS = namespace
++	return f.ok, f.reason
++}
++
++func TestCodeExecPreSubmitGateFailsClosed(t *testing.T) {
++	view := map[string]*model.WorkloadView{
++		"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", ReadyReplicas: 3}},
++	}
++	dec := func() []model.Decision {
++		return []model.Decision{{Selected: true, Feasible: true, Action: model.ActionDebugger, Namespace: "ns", Pod: "p1"}}
++	}
++	pol := model.Policy{Tenant: "t", EnabledActions: map[model.Action]bool{model.ActionDebugger: true}}
++	e := &policyEntry{namespace: "ns"}
++
++	// (a) nil verifier (unwired) => fail-closed, zero actuations.
++	fa := &fakeActuator{}
++	m := &Manager{Actuator: fa, Log: logr.Discard()}
++	if n := m.actuate(context.Background(), e, pol, dec(), view); n != 0 || fa.calls != 0 {
++		t.Fatalf("nil verifier must fail-closed (n=%d, Actuate calls=%d)", n, fa.calls)
++	}
++
++	// (b) unavailable verifier => refused before the irreversible submit; FinalCheck saw the
++	// target namespace identity (not stale labels).
++	fa = &fakeActuator{}
++	adm := &fakeAdmissionFinal{ok: false, reason: capability.ReasonCodeExec + ": not verified"}
++	m = &Manager{Actuator: fa, Log: logr.Discard(), CodeExec: adm}
++	if n := m.actuate(context.Background(), e, pol, dec(), view); n != 0 || fa.calls != 0 {
++		t.Fatalf("unavailable verifier must refuse dispatch (n=%d, Actuate calls=%d)", n, fa.calls)
++	}
++	if adm.sawNS != "ns" {
++		t.Fatalf("FinalCheck must receive the target namespace identity, saw %q", adm.sawNS)
++	}
++
++	// (c) verified => the code-exec gate does not block; dispatch proceeds once.
++	fa = &fakeActuator{}
++	m = &Manager{Actuator: fa, Log: logr.Discard(), CodeExec: &fakeAdmissionFinal{ok: true}}
++	if n := m.actuate(context.Background(), e, pol, dec(), view); n != 1 || fa.calls != 1 {
++		t.Fatalf("verified verifier must allow dispatch (n=%d, Actuate calls=%d)", n, fa.calls)
++	}
++}
+diff --git a/phorvex/internal/runner/manager.go b/phorvex/internal/runner/manager.go
+index 17079b4..6139843 100644
+--- a/phorvex/internal/runner/manager.go
++++ b/phorvex/internal/runner/manager.go
+@@ -35,6 +35,7 @@ import (
+ 	"github.com/phorvex/phorvex/internal/buildinfo"
+ 	"github.com/phorvex/phorvex/internal/calib"
+ 	"github.com/phorvex/phorvex/internal/capability"
++	"github.com/phorvex/phorvex/internal/codeexec"
+ 	"github.com/phorvex/phorvex/internal/cost"
+ 	"github.com/phorvex/phorvex/internal/decision"
+ 	"github.com/phorvex/phorvex/internal/exposure"
+@@ -77,6 +78,38 @@ type pendingRotation struct {
+ }
+ 
+ // Manager owns the tenant registry and the tick loop.
++// codeExecVerifier is the M-6 admission oracle the runner consumes: the O(1) cached gate
++// check (Available, via capability.AdmissionVerifier) plus the pre-submit FinalCheck (a
++// fresh, deadline-bounded re-verify + unexpired + epoch + scope) used immediately before an
++// irreversible ephemeral-container injection. *codeexec.Verifier satisfies it.
++type codeExecVerifier interface {
++	capability.AdmissionVerifier
++	FinalCheck(ctx context.Context, namespace string) (ok bool, reason string)
++}
++
++// codeExecAwareEligibility is the production capability closure the CoverageEngine invokes
++// per (asset, action). PRECEDENCE is the M-6 regression invariant: the full T1-E gate
++// (capWit.Eligible — which includes the code-exec admission leg) is consulted FIRST, and the
++// M99 no-rbac fallback applies ONLY when Eligible returns nil (eligible). So a code-exec move
++// whose admission is unverified is excluded by the code-exec leg and can NEVER be re-admitted
++// by the qualified-outcome/SLO path. Extracted from the tick closure so the precedence is
++// unit-tested against the exact code the runtime runs.
++func codeExecAwareEligibility(
++	capWit capability.Witness,
++	authzNil bool,
++	hasQualified func(*model.WorkloadView) bool,
++	v *model.WorkloadView, a model.Action, coverKeys []string,
++) *actionset.Eligibility {
++	r := capWit.Eligible(v, a, coverKeys)
++	if r == nil {
++		if authzNil && hasQualified(v) {
++			return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
++		}
++		return nil
++	}
++	return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
++}
++
+ type Manager struct {
+ 	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
+ 	BoundaryReader client.Reader
+@@ -94,6 +127,12 @@ type Manager struct {
+ 	// gate (installability + cover + runtime-capability still apply); the boot layer wires
+ 	// it from the cluster clientset so no-rbac exclusions become live.
+ 	Authz *authz.Checker
++	// CodeExec is the M-6 code-exec admission-capability verifier. nil disables the code-exec
++	// leg (debugger/custom-inject then fall through the other gates); the boot layer wires a
++	// real verifier + starts its periodic re-verify, so at runtime an unverified admission
++	// policy fail-closes those two actions out of both the offer set (gate: Available) and the
++	// dispatch path (pre-submit: FinalCheck).
++	CodeExec codeExecVerifier
+ 	// PCIeClasses is the chart's hardware-class table for the PCIe denominator (M-114).
+ 	PCIeClasses  ingest.PCIeClassTable
+ 	KillSwitch   *KillSwitch
+@@ -947,18 +986,14 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 	// two can never drift into the M-20 mirror. m.Authz is nil until the boot layer wires
+ 	// the SSAR checker (then no-rbac becomes live); NotInstallable is empty on a current
+ 	// CRD (17/17).
+-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator)
++	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator).
++		WithCodeExec(m.CodeExec, snap.NamespaceLabels)
+ 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
+ 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
++		authzNil := m.Authz == nil
+ 		ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
+-			r := capWit.Eligible(v, a, coverKeys)
+-			if r == nil {
+-				if m.Authz == nil && decision.HasQualifiedOutcome(v, pol) {
+-					return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
+-				}
+-				return nil
+-			}
+-			return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
++			return codeExecAwareEligibility(capWit, authzNil,
++				func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) }, v, a, coverKeys)
+ 		}
+ 	}
+ 
+@@ -1244,6 +1279,26 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible: "+verdict.Reason)
+ 			continue
+ 		}
++		// M-6 pre-submit gate: a code-exec injection (debugger/custom-inject) is submitted ONLY
++		// after a FRESH admission re-verification (unexpired + matching epoch + target in verified
++		// scope). This closes most of the gate-to-submit window; the residual race is covered by
++		// the API-server VAP as the durable enforcement. Fail-closed: an unwired verifier or an
++		// unverified policy refuses the dispatch. Guards BOTH the direct dispatch here and any
++		// queued work that reaches this boundary.
++		if decisions[i].Action == model.ActionDebugger || decisions[i].Action == model.ActionCustomInject {
++			if m.CodeExec == nil {
++				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec verifier unwired; refusing ephemeral-container injection",
++					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
++				stampDispatch(model.DispatchNotAttempted, codeexec.ReasonUnverified+": verifier-unwired")
++				continue
++			}
++			if ok, why := m.CodeExec.FinalCheck(ctx, decisions[i].Namespace); !ok {
++				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec admission not verified at pre-submit; refusing injection",
++					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", why)
++				stampDispatch(model.DispatchNotAttempted, why)
++				continue
++			}
++		}
+ 		score := decisions[i].DecisionValue()
+ 		if score > 1 {
+ 			score = 1
