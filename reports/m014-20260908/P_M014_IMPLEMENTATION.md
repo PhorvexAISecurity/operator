@@ -23,3 +23,7 @@ Synthetic replay follows JSONL -> actual owner HTTP handler -> OwnerEvent/rollup
 Commands: `GOMAXPROCS=2 go test -p 2 ./internal/console`; focused matrix/HTTP/M47/SSE/tenant/claim tests; esbuild bundle of dashboard-web/tests/owner-outcomes.tsx followed by Node against the HTTP fixture; tools/check-claim-language.py. Logs retained. The lightweight render uses locally available React/esbuild tooling and does not replace a full supported-version browser test. No full Next build or full TypeScript build run on the shared host.
 
 Independent review and rendered-console QA remain required. Rollout must update backend and frontend, refresh stale browser assets; legacy payloads fall back to unknown in the new UI. Old API consumers must stop interpreting the deprecated false flags as measured outcomes. Reverting this correction restores unsupported claims. M-9 confirmation integration is a separate future capability, no Mostafa/MATH gate is required for this conservative correction.
+
+## September 9 review correction
+
+Landing now renders an em dash when dispatched/isolationAttempts is absent, retaining numeric zero only for explicit zero. OwnerPanel also preserves unknown aggregate counts when relevant entries lack recognized emission evidence, including mixed legacy/current payloads. Actual Landing and OwnerPanel summary components have legacy, explicit-zero, unknown and mixed-payload rendering regressions. No old success counters are reused as dispatch counts.
