@@ -367,28 +367,76 @@ class Cluster:
                 pods[f[0]] = {"uid": f[1], "owner": f[2], "phase": f[3]}
         return pods
 
-    def controller_pods(self, namespace="phorvex-system"):
-        """Health of the operator pods themselves. A crash-looping operator still lets the
-        dashboard look alive, because a second operator keeps writing the audit.
+    def controller_pods(self, namespace="phorvex-system", deployments=None):
+        """Resolve expected Deployments -> ReplicaSets -> Pods by controller UID.
 
-        Completed CronJob/Job pods share the operator namespace but are not controllers;
-        counting them makes every E2E run fail between the job completing and its TTL
-        cleanup. Keep failed Jobs out for the same reason: their health belongs to the
-        job-specific check, not the controller liveness invariant.
+        Namespace membership and labels alone are not controller identity. Synthetic
+        deployment entries preserve missing/unknown observations for the health gate.
+        The shipped defaults follow the stack's Phorvex and Phoenix Deployment names;
+        other releases must explicitly configure controller_deployments.
         """
+        expected = deployments if deployments is not None else [
+            "phorvex-phorvex", "operator-controller-manager"]
+        if (not isinstance(expected, list) or not expected or
+                any(not isinstance(name, str) or not name.strip() for name in expected) or
+                len(set(expected)) != len(expected)):
+            raise TransportError("controller_deployments must be a nonempty list of unique Deployment names")
+
+        def unavailable(phase, reason):
+            return {f"deployment/{name}": {"phase": phase, "restarts": 0,
+                    "ready": False, "reason": reason} for name in expected}
+
         rc, out, _ = self.kubectl(
-            f"-n {shlex.quote(namespace)} get pod "
-            "-o jsonpath='{range .items[*]}{.metadata.name}|{.status.phase}|"
-            "{.status.containerStatuses[0].restartCount}|"
-            "{.metadata.ownerReferences[0].kind}{\"\\n\"}{end}'")
-        pods = {}
+            f"-n {shlex.quote(namespace)} get deployments.apps,replicasets.apps,pods -o json")
         if rc != 0:
+            return unavailable("Unknown", "controller inventory could not be read")
+        try:
+            items = json.loads(out)["items"]
+            if not isinstance(items, list) or any(not isinstance(x, dict) for x in items):
+                raise ValueError("invalid inventory")
+
+            def owner(obj, kind):
+                return next((r.get("uid") for r in obj.get("metadata", {}).get("ownerReferences", [])
+                             if r.get("controller") is True and r.get("kind") == kind), None)
+
+            by_name = {x["metadata"]["name"]: x for x in items if x.get("kind") == "Deployment"}
+            pods = {}
+            for name in expected:
+                deployment = by_name.get(name)
+                uid = (deployment or {}).get("metadata", {}).get("uid")
+                if not uid:
+                    pods[f"deployment/{name}"] = {"phase": "Missing", "restarts": 0,
+                        "ready": False, "reason": "expected Deployment not observed"}
+                    continue
+                replica_sets = {x["metadata"]["uid"] for x in items
+                                if x.get("kind") == "ReplicaSet" and owner(x, "Deployment") == uid
+                                and x.get("metadata", {}).get("uid")}
+                owned = [x for x in items if x.get("kind") == "Pod"
+                         and owner(x, "ReplicaSet") in replica_sets]
+                if not owned:
+                    pods[f"deployment/{name}"] = {"phase": "Missing", "restarts": 0,
+                        "ready": False, "reason": "expected Deployment has no owned Pods"}
+                for pod in owned:
+                    status = pod.get("status", {})
+                    containers = status.get("containerStatuses", [])
+                    if status.get("phase") == "Running":
+                        declared = {c["name"] for c in pod.get("spec", {}).get("containers", [])}
+                        observed = {c.get("name") for c in containers if "restartCount" in c}
+                        if not declared or not declared.issubset(observed):
+                            raise ValueError("missing running container restart evidence")
+                    restarts = [c.get("restartCount", 0) for c in containers + status.get("initContainerStatuses", [])]
+                    if any(type(count) is not int or count < 0 for count in restarts):
+                        raise ValueError("invalid restart count")
+                    pods[pod["metadata"]["name"]] = {
+                        "phase": status.get("phase", "Unknown"),
+                        "restarts": max(restarts, default=0),
+                        "ready": any(c.get("type") == "Ready" and c.get("status") == "True"
+                                     for c in status.get("conditions", [])),
+                        "deployment": name,
+                    }
             return pods
-        for line in out.strip("'").splitlines():
-            f = line.strip().split("|")
-            if len(f) >= 4 and f[0] and f[3] != "Job":
-                pods[f[0]] = {"phase": f[1], "restarts": int(f[2]) if f[2].isdigit() else 0}
-        return pods
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return unavailable("Unknown", "controller inventory was malformed")
 
     def pod_is_stateful(self, namespace, pod):
         """Mirror of ingest/kube.go:406 — StatefulSet-owned, or mounts a PVC, or a Job."""
