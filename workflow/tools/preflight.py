@@ -45,27 +45,30 @@ def worktree(repo):
     return digest({'code_tree': code_tree(repo, 'HEAD'), 'dirty': dirty})
 
 
-def plan(repo: Path, base: str, head: str) -> dict:
+def plan(repo: Path, base: str, head: str, *, pinned: bool = False) -> dict:
     # A newer main must not make unrelated upstream changes look like this PR's delta.
     base = git(repo, 'merge-base', base, head).decode().strip()
     paths = set(git(repo, 'diff', '--name-only', base, head).decode().splitlines())
-    paths.update(p for p in git(repo, 'diff', '--name-only', 'HEAD').decode().splitlines() if not evidence_path(p))
-    paths.update(p for p in git(repo, 'ls-files', '--others', '--exclude-standard').decode().splitlines() if not evidence_path(p))
+    if not pinned:
+        paths.update(p for p in git(repo, 'diff', '--name-only', 'HEAD').decode().splitlines() if not evidence_path(p))
+        paths.update(p for p in git(repo, 'ls-files', '--others', '--exclude-standard').decode().splitlines() if not evidence_path(p))
+    def source_bytes(file):
+        return git(repo, 'show', head + ':' + file.relative_to(repo).as_posix()) if pinned else file.read_bytes()
     jobs = [{'id': 'diff', 'cwd': '.', 'script': f'git diff --check {base} {head}\ngit diff --check HEAD', 'tool': None}]
     if any(p.startswith(('workflow/', 'AGENTS.md', '.github/workflows/workflow-harness')) for p in paths):
         file = repo / '.github/workflows/workflow-harness.yml'
-        config = yaml.safe_load(file.read_text())
+        config = yaml.safe_load(source_bytes(file))
         steps = config['jobs']['harness']['steps']
         version = next(str(s['with']['python-version']) for s in steps if str(s.get('uses', '')).startswith('actions/setup-python@'))
         runs = [s['run'].strip() for s in steps if 'run' in s]
         if runs != ['python -m pip install -r workflow/requirements.txt', 'bash workflow/tools/check.sh']:
             raise ValueError('workflow CI commands changed: update the local preflight adapter explicitly')
         jobs.append({'id': 'workflow', 'cwd': '.', 'script': runs[-1], 'tool': 'python', 'version': version,
-                     'ci_sha256': hashlib.sha256(file.read_bytes()).hexdigest()})
+                     'ci_sha256': hashlib.sha256(source_bytes(file)).hexdigest()})
     chart_paths = ('phorvex/', 'deploy/helm/', 'build/phoenix-extended/charts/', 'tools/', 'End-to-End/', '.github/workflows/ci.yml', '.github/workflows/e2e-contract.yml')
     if any(p.startswith(chart_paths) for p in paths):
         file = repo / '.github/workflows/ci.yml'
-        job = yaml.safe_load(file.read_text())['jobs']['chart-sync']
+        job = yaml.safe_load(source_bytes(file))['jobs']['chart-sync']
         if job.get('env') or job.get('container'): raise ValueError('chart-sync now needs CI environment setup; review adapter')
         steps = job['steps']
         if any('uses' in step and not step['uses'].startswith(('actions/checkout@', 'azure/setup-helm@')) for step in steps):
@@ -78,10 +81,10 @@ def plan(repo: Path, base: str, head: str) -> dict:
                 raise ValueError('chart-sync now depends on CI context; review the adapter before running')
             jobs.append({'id': f'chart-{i}', 'name': step.get('name'), 'cwd': step.get('working-directory', '.'),
                          'script': step['run'], 'tool': 'helm', 'version': version,
-                         'ci_sha256': hashlib.sha256(file.read_bytes()).hexdigest()})
+                         'ci_sha256': hashlib.sha256(source_bytes(file)).hexdigest()})
     for module in ['phorvex', 'build/phoenix-extended']:
         if any(p.startswith(module + '/') and p.endswith(('.go', 'go.mod', 'go.sum')) for p in paths):
-            lines = (repo / module / 'go.mod').read_text().splitlines()
+            lines = source_bytes(repo / module / 'go.mod').decode().splitlines()
             version = next(line.split()[1] for line in lines if line.startswith('go '))
             jobs.append({'id': 'go-' + module.replace('/', '-'), 'cwd': module, 'tool': 'go',
                          'version': version, 'script': 'go build ./...\ngo test ./...\ngo vet ./...'})
@@ -167,13 +170,16 @@ def run_plan(repo, selected, output, args):
     return receipt
 
 
-def validate_receipt(repo, path, base, head):
+def validate_receipt(repo, path, base, head, *, require_worktree=True):
+    # Submission binds the current checkout. Historical attestations bind their pinned
+    # source, even when doctor runs on a newer main or GitHub's synthetic merge checkout.
     receipt = json.loads(path.read_text())
-    if worktree(repo) != digest({'code_tree': code_tree(repo, head), 'dirty': {}}):
+    pinned_worktree = digest({'code_tree': code_tree(repo, head), 'dirty': {}})
+    if require_worktree and worktree(repo) != pinned_worktree:
         raise ValueError('commit code before final preflight; worktree must match the pinned implementation')
-    selected = plan(repo, base, head)
+    selected = plan(repo, base, head, pinned=True)
     if (receipt.get('result') != 'PASS' or receipt.get('plan_sha256') != digest(selected)
-            or receipt.get('worktree_sha256') != worktree(repo)):
+            or receipt.get('worktree_sha256') != pinned_worktree):
         raise ValueError('preflight missing, failed or stale; rerun for this source/worktree')
     expected = {x['id'] for x in selected['jobs']}
     rows = receipt.get('results', [])

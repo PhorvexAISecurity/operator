@@ -29,6 +29,35 @@ class PreflightTests(unittest.TestCase):
             self.assertEqual(next(j['version'] for j in jobs if j['id']=='workflow'),'3.11')
             self.assertEqual(next(j['version'] for j in jobs if j['tool']=='helm'),'v3.16.4')
             self.assertNotIn('DO_NOT_',json.dumps(jobs))
+            pinned_head = selected['head_sha']
+            (ci/'workflow-harness.yml').write_text('invalid: later-checkout-config')
+            run(['git', 'add', '.github'], repo)
+            run(['git', 'commit', '-m', 'Change CI on later main'], repo)
+            self.assertEqual(preflight.plan(repo, baseline, pinned_head, pinned=True), selected)
+
+
+    def test_pinned_receipt_survives_new_checkout_but_submission_and_tampering_fail(self):
+        with sandbox() as (repo, root, baseline):
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            output = root/'fixes/FIX-TEST/evidence/preflight/pinned.json'
+            selected = preflight.plan(repo, baseline, head)
+            receipt = preflight.run_plan(repo, selected, output,
+                argparse.Namespace(python=None, helm=None, timeout=10))
+            self.assertEqual(receipt['result'], 'PASS')
+            preflight.validate_receipt(repo, output, baseline, head)
+            # A later main/merge checkout has different code and CI configuration.
+            (repo/'later-code.txt').write_text('new main code')
+            ci = repo/'.github/workflows'; ci.mkdir(parents=True, exist_ok=True)
+            (ci/'workflow-harness.yml').write_text('new incompatible CI configuration')
+            run(['git', 'add', 'later-code.txt', '.github'], repo)
+            run(['git', 'commit', '-m', 'Later main'], repo)
+            preflight.validate_receipt(repo, output, baseline, head, require_worktree=False)
+            with self.assertRaisesRegex(ValueError, 'worktree must match'):
+                preflight.validate_receipt(repo, output, baseline, head)
+            log = output.parent/receipt['results'][0]['log']
+            log.write_text('tampered')
+            with self.assertRaisesRegex(ValueError, 'raw output missing or changed'):
+                preflight.validate_receipt(repo, output, baseline, head, require_worktree=False)
 
     def test_wrong_tool_versions_are_not_silently_accepted(self):
         args=argparse.Namespace(python=sys.executable,helm='/tmp/helm')

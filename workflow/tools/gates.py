@@ -167,7 +167,8 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
     if key == 'preflight' and result == 'PASS' and path and path.is_file():
         try:
             import preflight
-            preflight.validate_receipt(root.parent, path, status['implementation']['base_sha'], expected)
+            preflight.validate_receipt(root.parent, path, status['implementation']['base_sha'], expected,
+                                       require_worktree=False)
         except (ValueError, OSError, KeyError, subprocess.SubprocessError) as exc:
             problems.append(f'preflight: {exc}')
     # A check is useful only if its raw artifact is retained and hash-indexed.

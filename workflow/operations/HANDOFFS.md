@@ -14,6 +14,9 @@ environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`); Go follows
 go.mod (`GO_BIN`/PATH). Tool absence/version mismatch is unavailable, never skipped.
 Shared E2E, image builds and deployment do not run locally or acquire authorization.
 A local PASS is not a claim that all remote CI is green.
+Recorded receipts are validated against their attested source and its CI recipes, even
+when doctor runs on a newer main or PR merge checkout. Submission additionally requires
+the current code worktree to match the pinned implementation; that check is not waived.
 
 `submit-review <fix> --file submit.yaml --by <implementer> --expect-revision N`:
 
