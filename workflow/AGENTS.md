@@ -1,7 +1,7 @@
 # Agent entrypoint
 
-The user controls scope. A named fix defaults to an independently reviewed PR link,
-under `operations/AUTONOMY.md`, without routine human checkpoints.
+The user controls scope. Named fixes default to reviewed PR delivery under
+`operations/AUTONOMY.md`, without routine human checkpoints.
 
 1. Classify with `OPERATIONS.md`; read one runbook. Run `doctor` once per session;
    unrelated historical warnings do not block authorized work.
@@ -14,10 +14,12 @@ under `operations/AUTONOMY.md`, without routine human checkpoints.
 
 ## Quality boundaries
 
-- Skeptic derives from pinned baseline BEFORE proposal/diff exposure, then seals
-  `02A`. Never manufacture a blind review after exposure.
-- Authors cannot sign critique, decision, base review, incident, P3 or final review,
-  or live verification of their own implementation.
+- New fixes use `fix_loop: lead_worker`: lead investigates/signs `03-decision.md`,
+  worker implements, lead reviews revisions until accepted, then delivers the PR
+  and verifies the deployed fix live. Assign proposer, skeptic, coordinator and
+  live_verifier to the lead; implementer to the worker.
+- Implementation authors cannot review or live-verify their own code. Older absent
+  `fix_loop`/`blind_peer` records retain independent blind design gates; never invent seals.
 - `record-check` and batched handoffs bind signer, artifact hash and source. Missing evidence stays missing.
   Selection, dispatch, execution, confirmation and attack mitigation are distinct.
 - Before P3, independently reproduce the incident through real producers, assert
@@ -31,14 +33,14 @@ under `operations/AUTONOMY.md`, without routine human checkpoints.
 
 ## Handoff
 
-Keep code and `workflow/fixes/<id>` in the same issue worktree; preserve unrelated edits.
-Only runtime bus data is shared through the Git common directory. Follow the message's
-`workflow_root` when handling another worktree's record. See `operations/WORKTREES.md`.
+Keep code and fix records in the same issue worktree; preserve unrelated edits.
+Bus runtime is shared through Git common directory. Follow each message’s
+`workflow_root`; see `operations/WORKTREES.md`.
 Generated register/anatomy views are read-only. History is not current deployment proof.
 
 Never add assistant attribution or `Co-authored-by` trailers to commits.
 
 Send fix · state/revision · next owner/action · references · pins · blockers.
-Follow `coordination/BUS.md`: drain/ack mail; use a tested runner adapter or foreground
-`bus.py wait`. Messages change no state. No proposal content goes to an unsealed
-skeptic; communication stays within authorized collaboration.
+Follow `coordination/BUS.md`: drain/ack mail with a tested adapter or `bus.py wait`.
+Messages change no state. Legacy unsealed skeptics cannot read proposals.
+Communication stays within authorized collaboration.

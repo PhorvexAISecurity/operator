@@ -16,6 +16,9 @@
     "next_action"
   ],
   "properties": {
+    "fix_loop": {
+      "enum": ["lead_worker", "blind_peer"]
+    },
     "change_class": {
       "enum": [
         null,

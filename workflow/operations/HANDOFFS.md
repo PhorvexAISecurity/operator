@@ -5,6 +5,9 @@ worktree. Evidence files live in its fix directory; do not paste logs into bus m
 
 ## Implementer
 
+In the lead/worker loop, implement the lead's signed `03-decision.md` after AGREED.
+Report concrete contradictions if found; a separate worker proposal is not required.
+
 Commit code before the final preflight. `preflight <fix>` prints the selected local
 checks; add `--run` to execute. Python follows workflow CI (an explicit `--python`
 environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`); Go follows
@@ -34,8 +37,8 @@ Already-valid checks at this head, including explicitly authorized waivers, may
 be omitted; the batch validates them without changing their signer. It cannot
 create a waiver or carry one to a different source implicitly.
 
-Sign `red` once before submission, by whoever executed it (implementer or sealed
-independent reviewer). A failure must be the intended baseline assertion, with its
+Sign `red` once before submission, by whoever executed it (worker or lead; legacy
+blind reviewers must seal first). A failure must be the intended baseline assertion, with its
 positive control. Merely disabling the new guard at head is not baseline execution.
 
 ## Reviewer
@@ -54,7 +57,10 @@ approve_reuse: [l0]
 ```
 
 For FAIL, supply `p3.result: FAIL` and actionable counter-evidence; no passing incident
-is required to reject a patch. Authors cannot sign reviews or approve reuse scopes.
+is required to reject a patch. The worker fixes the findings and resubmits; repeat
+until the lead accepts the implementation. Implementation authors cannot sign their
+own reviews or approve reuse scopes. Writing the plan is the lead's responsibility
+and does not disqualify the lead from reviewing the worker's implementation.
 
 To reuse an approved, unchanged check, replace its `checks` entry with `reuse: [l0]`
 (or `incident` in the reviewer's package). The tool rejects missing scope approval,

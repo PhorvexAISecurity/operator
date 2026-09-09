@@ -46,11 +46,42 @@ def assigned(value) -> bool:
     return isinstance(value, str) and value.strip().lower() not in {'', 'unassigned', 'unset', 'replace_me'}
 
 
+def lead_worker(status: dict) -> bool:
+    # Records without this field retain the original blind peer contract.
+    return status.get('fix_loop') == 'lead_worker'
+
+
+def review_authors(status: dict) -> set[str]:
+    roles = status.get('roles', {})
+    keys = ('implementer',) if lead_worker(status) else ('proposer', 'implementer')
+    return {roles.get(key) for key in keys}
+
+
+def role_errors(status: dict) -> list[str]:
+    roles = status.get('roles', {})
+    errors = []
+    if assigned(roles.get('skeptic')) and roles['skeptic'] in review_authors(status):
+        errors.append('skeptic must differ from implementer' if lead_worker(status)
+                      else 'skeptic must differ from proposer and implementer')
+    if lead_worker(status):
+        lead = roles.get('coordinator')
+        if assigned(lead) and any(roles.get(key) != lead for key in ('proposer', 'skeptic', 'live_verifier')):
+            errors.append('lead_worker assigns proposer, skeptic and live_verifier to the coordinator (lead)')
+    return errors
+
+
+def self_review(status: dict, key: str, by: str) -> bool:
+    return key in {'critique', 'decision', 'base_review', 'incident', 'p3',
+                   'patch_equivalence', 'l3', 'l4', 'final'} and by in review_authors(status)
+
+
 def contract_digest(status: dict) -> str:
     import json
     verification = status.get('verification', {})
     value = {'change_class': status.get('change_class'),
              'verification': {k: verification.get(k) for k in ('required', 'live_required', 'soak_required')}}
+    if lead_worker(status):
+        value['fix_loop'] = 'lead_worker'
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
@@ -99,6 +130,8 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
             problems.append(f'{key}: waiver requires human_owner, approval_ref, and rationale')
     elif check.get('by') not in signers(status, key):
         problems.append(f'{key}: signer must be assigned {CHECK_ROLES[key]}')
+    if result == 'PASS' and self_review(status, key, check.get('by')):
+        problems.append(f'{key}: implementation authors cannot sign their own review or live verification')
     if key == 'decision' and check.get('contract_sha256') != contract_digest(status):
         problems.append('decision: verification plan changed after agreement')
     if key in {'incident', 'base_review'} and (not status.get('baseline', {}).get('code_sha')
@@ -158,19 +191,20 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
     for role in ('human_owner', 'proposer', 'implementer', 'skeptic', 'live_verifier', 'coordinator'):
         if not assigned(roles.get(role)):
             missing.append(f'roles.{role}: assign a participant')
-    if roles.get('skeptic') in {roles.get('proposer'), roles.get('implementer')}:
-        missing.append('skeptic must differ from proposer and implementer')
+    missing += role_errors(status)
     baseline = status.get('baseline', {})
     if not re.fullmatch(r'[0-9a-f]{7,40}', str(baseline.get('code_sha', ''))):
         missing.append('baseline.code_sha: pin source before design')
     if status.get('profile') not in {'standard', 'light', 'batch', 'legacy-migrated'}:
         missing.append('unsupported code-fix profile; route no-code decisions through intake/issue')
     for stage, paths in ARTIFACTS.items():
+        if lead_worker(status) and stage == 'CRITIQUED':
+            continue
         if reached(stage) and not (status.get('profile') == 'legacy-migrated' and stage in {'DESIGNING', 'CRITIQUED'}):
             for path in paths:
                 if not substantive(fix, path):
                     missing.append(f'{path}: missing or unchanged template')
-    if reached('CRITIQUED') and status.get('profile') != 'legacy-migrated':
+    if reached('CRITIQUED') and status.get('profile') != 'legacy-migrated' and not lead_worker(status):
         blind = status.get('blind_derivation', {})
         path = local_file(fix, '02A-blind-derivation.md')
         if (blind.get('status') != 'sealed' or not path or blind.get('sha256') != digest(path)

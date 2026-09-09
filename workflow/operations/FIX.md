@@ -1,19 +1,21 @@
-# Named issue → reviewed PR
+# Named issue → reviewed PR → live verification
 
-“Start issue X” delegates PR delivery under `AUTONOMY.md`; narrower user scope wins.
-Merge and shared-cluster changes remain separate.
+“Start issue X” delegates PR delivery under `AUTONOMY.md`. Merge and shared-cluster
+changes use their separately recorded scope.
 
-Run `doctor`, select/create the fix, assign two independent participants, then
-`brief <fix> --agent <id>`. Reuse peers; if none is available, spawn an independent
-reviewer with baseline-only context. Keep code and records in the issue
-worktree (`WORKTREES.md`). Check push/PR access early. New fixes inherit PR scope;
-use `start` for an existing authorized fix. Holds aren't silently resumed.
+Run `doctor`, select/create the fix and reuse the assigned peers. New fixes use
+`fix_loop: lead_worker`: assign proposer, skeptic, coordinator and live_verifier
+to the lead; implementer to the worker. Keep code/records in the issue worktree
+(`WORKTREES.md`). Read `brief <fix> --agent <id>`.
 
-Follow the indicated stage. Freeze one implementation contract in `03-decision`.
-After the blind seal, start the baseline reproduction alongside implementation
-preparation. Use `preflight`, `submit-review`, `review-delta` and `review-verdict`;
-read `HANDOFFS.md` for package schemas and reuse rules when needed.
+The lead investigates, using authorized live observations when useful, and signs
+one plan in `03-decision.md`. Transition DESIGNING → AGREED and instruct the worker
+to implement. Older blind peer records retain their gates unless migrated.
 
-After offline checks and independent incident/P3 pass, push/open the PR, record
-URL/reviewed head and return the link. Continue until delivery or a concrete blocker.
-Required post-deployment L3/L4 remain pending; opening a PR is not closure.
+The worker implements/tests and runs `preflight` and `submit-review`. The lead
+uses `review-delta` / `review-verdict` to return defects until accepted. See
+`HANDOFFS.md`. After offline and independent incident/P3 pass, deliver the PR.
+
+After merge/deployment the lead verifies the running source/digest, fix behavior
+and controls. Keep L3/L4 pending until evidence passes; reopen on failure.
+PR delivery is not closure. Continue authorized work until delivery or a concrete blocker.

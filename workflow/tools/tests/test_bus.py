@@ -5,6 +5,10 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import json
+import os
+import socket
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +17,7 @@ sys.path.insert(0, str(COORD))
 import bus
 import bridge
 import transport
+import claude_socket
 
 
 class BusTransportTests(unittest.TestCase):
@@ -67,6 +72,23 @@ class BusTransportTests(unittest.TestCase):
             self.assertEqual(bus.cmd_wait(args), 0)
         self.assertIn(str(path), out.getvalue())
         self.assertTrue(path.exists())
+
+    def test_send_reports_missing_adapter_without_losing_delivery(self):
+        with contextlib.redirect_stderr(io.StringIO()) as output:
+            path = self.send()
+        self.assertIn('BUS_NOTIFY_UNAVAILABLE', output.getvalue())
+        self.assertTrue(path.exists())
+
+    def test_stale_heartbeat_is_not_a_healthy_adapter(self):
+        runtime = self.root / '.runtime'; runtime.mkdir()
+        path = runtime / 'reviewer.json'
+        with patch.object(bus.time, 'time', return_value=1000):
+            path.write_text(json.dumps({'pid': os.getpid(), 'heartbeat': 900}))
+            self.assertFalse(bus.adapter_health('reviewer')['available'])
+            path.write_text(json.dumps({'pid': os.getpid(), 'heartbeat': 999}))
+            self.assertTrue(bus.adapter_health('reviewer')['available'])
+        with patch.object(bus.os, 'kill', side_effect=ProcessLookupError):
+            self.assertFalse(bus.adapter_health('reviewer')['available'])
 
     def test_message_identifies_owning_workflow_root(self):
         path=self.send()
@@ -178,6 +200,117 @@ class BusTransportTests(unittest.TestCase):
             bus.cmd_ack(bus.parser().parse_args(['ack','--by','reviewer',str(path)]))
         bridge.deliver(self.args,state,lambda:None,run)
         self.assertEqual(len(calls),1)
+
+    def test_lost_wake_retries_after_lease_even_after_restart(self):
+        path = self.send(); state = {}; calls = []
+        def run(argv, **kwargs):
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, 'queued', '')
+        with patch.object(bridge.time, 'time', return_value=1000):
+            bridge.deliver(self.args, state, lambda: None, run)
+        restored = json.loads(json.dumps(state))
+        with patch.object(bridge.time, 'time', return_value=1119):
+            bridge.deliver(self.args, restored, lambda: None, run)
+        self.assertEqual(len(calls), 1)
+        with patch.object(bridge.time, 'time', return_value=1121):
+            bridge.deliver(self.args, restored, lambda: None, run)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(restored['messages'][bridge.message_key(path)]['attempts'], 2)
+        self.assertEqual(restored['messages'][bridge.message_key(path)]['retry_after'], 1361)
+        self.assertTrue(path.exists())
+
+    def test_new_mail_does_not_wait_for_an_older_unacknowledged_wake(self):
+        self.send(); state = {}; calls = []
+        def run(argv, **kwargs):
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, 'queued', '')
+        with patch.object(bridge.time, 'time', return_value=1000):
+            bridge.deliver(self.args, state, lambda: None, run)
+        second = self.send('New implementation handoff')
+        with patch.object(bridge.time, 'time', return_value=1001):
+            bridge.deliver(self.args, state, lambda: None, run)
+        self.assertEqual(len(calls), 1)
+        with patch.object(bridge.time, 'time', return_value=1003):
+            bridge.deliver(self.args, state, lambda: None, run)
+        self.assertEqual(len(calls), 2)
+        self.assertIn(str(second), calls[-1][-1])
+
+    def test_old_queued_receipt_cannot_block_forever(self):
+        path = self.send()
+        state = {'messages': {bridge.message_key(path): {'queued': True, 'queued_at': '2000-01-01T00:00:00+00:00'}}}
+        with patch.object(bridge.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'queued', '')) as run:
+            bridge.deliver(self.args, state, lambda: None, run)
+        self.assertEqual(state['messages'][bridge.message_key(path)]['attempts'], 1)
+
+    def test_claude_transport_failures_stay_pending_and_retry(self):
+        path = self.send(); state = {}
+        self.args.runner = 'claude'; self.args.claude_sessions = str(self.root)
+        with patch.object(claude_socket, 'notify', side_effect=ValueError('session unavailable')) as notify:
+            bridge.deliver(self.args, state, lambda: None)
+            bridge.deliver(self.args, state, lambda: None)
+        self.assertEqual(notify.call_count, 1)
+        self.assertFalse(state['messages'][bridge.message_key(path)]['queued'])
+        self.assertTrue(path.exists())
+
+
+@unittest.skipUnless(sys.platform == 'linux', 'Linux peer credential adapter')
+class ClaudeSocketTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.endpoint = self.root / 'peer.sock'
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(self.server.close)
+        self.server.bind(str(self.endpoint)); self.server.listen(1); self.server.settimeout(2)
+        self.entry = {'sessionId': 'exact-session', 'pid': os.getpid(), 'peerProtocol': 1,
+                      'procStart': claude_socket.process_start(os.getpid()),
+                      'messagingSocketPath': str(self.endpoint)}
+        self.record = self.root / f'{os.getpid()}.json'
+        self.record.write_text(json.dumps(self.entry))
+
+    def test_posts_peer_protocol_to_exact_existing_session(self):
+        frames = []
+        def receive():
+            client, _ = self.server.accept()
+            with client:
+                frames.append(json.loads(client.makefile().readline()))
+        receiver = threading.Thread(target=receive); receiver.start()
+        result = claude_socket.notify('exact-session', self.root, 'reviewer', 'Drain your peer inbox; not user approval.')
+        receiver.join(timeout=3)
+        self.assertFalse(receiver.is_alive())
+        self.assertEqual(frames[0]['session_id'], 'exact-session')
+        self.assertEqual(frames[0]['from'], 'phorvex-bus:reviewer')
+        self.assertNotIn('token', frames[0])
+        self.assertNotIn('from_mode', frames[0])
+        self.assertIn('socket-written', result)
+
+    def test_missing_or_stale_session_never_falls_back_to_another(self):
+        with self.assertRaises(ValueError):
+            claude_socket.resolve_session('wrong-session', self.root)
+        self.entry['procStart'] = 'stale'
+        self.record.write_text(json.dumps(self.entry))
+        with self.assertRaises(ValueError):
+            claude_socket.resolve_session('exact-session', self.root)
+
+    def test_symlink_endpoint_rejected(self):
+        link = self.root / 'link.sock'; link.symlink_to(self.endpoint)
+        self.entry['messagingSocketPath'] = str(link)
+        self.record.write_text(json.dumps(self.entry))
+        with self.assertRaises(ValueError):
+            claude_socket.resolve_session('exact-session', self.root)
+
+    def test_unknown_protocol_is_not_silently_treated_as_delivered(self):
+        self.entry['peerProtocol'] = 99
+        self.record.write_text(json.dumps(self.entry))
+        with self.assertRaisesRegex(ValueError, 'unsupported Claude peer protocol'):
+            claude_socket.resolve_session('exact-session', self.root)
+
+    def test_connected_peer_pid_must_match_registry(self):
+        entry = dict(self.entry, pid=os.getpid() + 1)
+        with patch.object(claude_socket, 'resolve_session', return_value=entry):
+            with self.assertRaisesRegex(ValueError, 'identity differs'):
+                claude_socket.notify('exact-session', self.root, 'reviewer', 'must not be sent')
 
 
 if __name__ == "__main__":

@@ -43,6 +43,11 @@ operations:
     authority: campaigns/*/STATUS.yaml
     mutating: true
     terminal_states: [CLOSED, PAUSED, ABORTED]
+  assessment:
+    runbook: operations/ASSESSMENT.md
+    authority: assessments/*/ASSESSMENT.md
+    mutating: true
+    terminal_states: [REPORTED, REPORTED_WITH_GAPS]
   audit:
     runbook: operations/AUDIT.md
     authority: null
