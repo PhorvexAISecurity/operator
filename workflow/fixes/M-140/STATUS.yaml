@@ -1,7 +1,7 @@
 schema_version: 1
 protocol_version: 2
 delivery_version: 1
-revision: 30
+revision: 39
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -33,44 +33,57 @@ checks:
     result: PASS
     by: claude-m140
     artifact: evidence/head/05-preflight.json
-    sha256: eb8cdb02dd8e1c9d434e4ffd37b32d2f21190a346ea0b70742f133e63b54c634
-    source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
-    at: '2026-09-09T20:44:15+00:00'
+    sha256: adb0b61ea4c48f5638bb6e6bfac0d88ee7a6b2aa999bf5c9a7ce4d1100397809
+    source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+    at: '2026-09-09T20:50:33+00:00'
   implementation:
     result: PASS
     by: claude-m140
     artifact: 04-diff.patch
-    sha256: a292bb21a7646245efdc6a34efa767ab3ad008ca415408d150787019ff505272
-    source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
-    at: '2026-09-09T20:44:02+00:00'
+    sha256: 743d31fbec3ed5dbb7e99428ca3b3a4aaac7695a65ab034cdf113540ad09318b
+    source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+    at: '2026-09-09T20:50:33+00:00'
   l0:
     result: PASS
     by: claude-m140
     artifact: evidence/head/01-build-vet-m140-suite.txt
     sha256: 1b754872d55376ef7c174ec753489a9e992b981a25a56fd753235187e0385656
-    source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
-    at: '2026-09-09T20:44:02+00:00'
+    source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+    at: '2026-09-09T20:50:33+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 46e45470adbb623f6176f0ec767930051afbc3b9b3cd0e6138407fc6783091c6
   l1:
     result: PASS
     by: claude-m140
     artifact: evidence/head/02-full-suite.txt
     sha256: 1e242f9d013fba83a0668ce2d7b690117020677ae9f38c9238ed48a4f2ee54a3
-    source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
-    at: '2026-09-09T20:44:03+00:00'
+    source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+    at: '2026-09-09T20:50:33+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 46e45470adbb623f6176f0ec767930051afbc3b9b3cd0e6138407fc6783091c6
   l2:
     result: PASS
     by: claude-m140
-    artifact: evidence/head/03-reviewer-incident-green.txt
-    sha256: 3af70264ef129a26298be324338f6fd827f9a982c08b09fd8e7d7824f7c5ea5a
-    source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
-    at: '2026-09-09T20:44:03+00:00'
+    artifact: evidence/head/08-r1-counterexamples.txt
+    sha256: 01675931b7e3943cceedc832a0bf6d357e43f15b4b37a1b5cd88d35f4dd12d0b
+    source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+    at: '2026-09-09T20:50:33+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    - workflow/fixes/M-140/evidence/p3/r1
+    inputs_sha256: 9bd34b2ec204ae475e54e17d9e69ec62105d60c1a999a48ec6eae7d19bb203e2
   positive_control:
     result: PASS
     by: claude-m140
     artifact: evidence/head/06-positive-controls.txt
     sha256: 64e5e99519fd069d3fbbf66ed2e2517b084135e58a8c50809020fbbe08283eec
-    source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
-    at: '2026-09-09T20:44:03+00:00'
+    source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+    at: '2026-09-09T20:50:33+00:00'
   p3:
     result: FAIL
     by: codex-m140
@@ -83,7 +96,7 @@ issues:
 - M-140
 title: Policy-owned tenant state lifecycle
 profile: standard
-state: IMPLEMENTED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: human-owner
   proposer: codex-m140
@@ -110,7 +123,7 @@ blind_derivation:
 implementation:
   branch: t1/control-economics-m140-tenant-state-lifecycle
   base_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
-  head_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  head_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
   stacked_on: []
 pull_request:
   url: null
@@ -149,10 +162,10 @@ dependencies:
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
-    prior evidence.
-updated_at: '2026-09-09T20:44:15+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-09T20:50:34+00:00'
 configuration_history:
 - at: '2026-09-09T18:16:50+00:00'
   by: codex-m140
@@ -212,6 +225,16 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-09T20:44:30+00:00'
+  by: claude-m140
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-09T20:50:33+00:00'
+  by: claude-m140
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -258,6 +281,14 @@ transitions:
   to: IMPLEMENTED
   at: '2026-09-09T20:31:01+00:00'
   by: codex-m140
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-09T20:50:33+00:00'
+  by: claude-m140
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -370,11 +401,102 @@ check_history:
   sha256: dac693e974ff632be281dca92e88b9ebd093c624897e4828fdac3257aceed12c
   source_sha: 921b7b5dd5b4b8b1b3e917bfdda5a1a977b336f9
   at: '2026-09-09T20:42:26+00:00'
+- check: implementation
+  result: PASS
+  by: claude-m140
+  artifact: 04-diff.patch
+  sha256: a292bb21a7646245efdc6a34efa767ab3ad008ca415408d150787019ff505272
+  source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  at: '2026-09-09T20:44:02+00:00'
+- check: l0
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/01-build-vet-m140-suite.txt
+  sha256: 1b754872d55376ef7c174ec753489a9e992b981a25a56fd753235187e0385656
+  source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  at: '2026-09-09T20:44:02+00:00'
+- check: l1
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/02-full-suite.txt
+  sha256: 1e242f9d013fba83a0668ce2d7b690117020677ae9f38c9238ed48a4f2ee54a3
+  source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  at: '2026-09-09T20:44:03+00:00'
+- check: l2
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/03-reviewer-incident-green.txt
+  sha256: 3af70264ef129a26298be324338f6fd827f9a982c08b09fd8e7d7824f7c5ea5a
+  source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  at: '2026-09-09T20:44:03+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/06-positive-controls.txt
+  sha256: 64e5e99519fd069d3fbbf66ed2e2517b084135e58a8c50809020fbbe08283eec
+  source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  at: '2026-09-09T20:44:03+00:00'
+- check: preflight
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/05-preflight.json
+  sha256: eb8cdb02dd8e1c9d434e4ffd37b32d2f21190a346ea0b70742f133e63b54c634
+  source_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+  at: '2026-09-09T20:44:15+00:00'
+- check: preflight
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/05-preflight.json
+  sha256: 3f43b969b153ff0bc7c674cf4c5b95e7019a9d6933fc91e8ca3e3811d84f0c53
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:45:45+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-m140
+  artifact: evidence/head/r1-preflight-failed.json
+  sha256: 487e96cd4be64a8bf6c49670b8dc2300cb4fd46661358ae0120f7e11d18f21f3
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:49:27+00:00'
+- check: implementation
+  result: PASS
+  by: claude-m140
+  artifact: 04-diff.patch
+  sha256: 743d31fbec3ed5dbb7e99428ca3b3a4aaac7695a65ab034cdf113540ad09318b
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:45:44+00:00'
+- check: l0
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/01-build-vet-m140-suite.txt
+  sha256: 1b754872d55376ef7c174ec753489a9e992b981a25a56fd753235187e0385656
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:45:44+00:00'
+- check: l1
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/02-full-suite.txt
+  sha256: 1e242f9d013fba83a0668ce2d7b690117020677ae9f38c9238ed48a4f2ee54a3
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:45:44+00:00'
+- check: l2
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/03-reviewer-incident-green.txt
+  sha256: 3af70264ef129a26298be324338f6fd827f9a982c08b09fd8e7d7824f7c5ea5a
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:45:45+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-m140
+  artifact: evidence/head/06-positive-controls.txt
+  sha256: 64e5e99519fd069d3fbbf66ed2e2517b084135e58a8c50809020fbbe08283eec
+  source_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
+  at: '2026-09-09T20:45:45+00:00'
 fix_loop: lead_worker
 handoff:
-  id: M-140:19:review
-  from: codex-m140
-  to: claude-m140
-  role: implementer
-  kind: review
-  revision: 19
+  id: M-140:39:submit
+  from: claude-m140
+  to: codex-m140
+  role: skeptic
+  kind: submit
+  revision: 39

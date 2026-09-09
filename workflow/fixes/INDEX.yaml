@@ -181,9 +181,9 @@ fixes:
     issues:
     - M-140
     related_issues: []
-    state: IMPLEMENTED
+    state: OFFLINE_VERIFIED
     dependencies:
     - T0-C
     stacked_on: []
     branch: t1/control-economics-m140-tenant-state-lifecycle
-    head_sha: 7cd60f1261e87071686a1bec14ba3b7a22b6d3e7
+    head_sha: 88c0f12e1603aaf79af752a8cfd0308e6ac14cde
