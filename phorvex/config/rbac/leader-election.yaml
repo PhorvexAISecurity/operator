@@ -1,0 +1,25 @@
+# The v0.34 client-go LeaseLock uses Get/Create/Update only. Lease creation cannot
+# be restricted by resourceNames, so keep this grant in the operator namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: phorvex-leader-election
+  namespace: phorvex-system
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: phorvex-leader-election
+  namespace: phorvex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: phorvex-leader-election
+subjects:
+- kind: ServiceAccount
+  name: phorvex-controller-manager
+  namespace: phorvex-system

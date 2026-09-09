@@ -108,7 +108,8 @@ type Manager struct {
 	// monitored but never read by production scoring.
 	Calibration *calib.Runtime
 
-	Recorder record.EventRecorder
+	Recorder          record.EventRecorder
+	ActuationRecorder record.EventRecorder
 	// ActionsSupportedDebounce is the number of consecutive mismatching policy ticks
 	// required before status becomes False. <=0 uses the default.
 	ActionsSupportedDebounce int
@@ -249,9 +250,9 @@ func (m *Manager) Remove(key types.NamespacedName) {
 	}
 }
 
-// NeedLeaderElection keeps the mutating tick loop in controller-runtime's
-// leader-elected runnable group. Without this method every replica starts the
-// loop even when the manager itself has leader election enabled.
+// NeedLeaderElection explicitly documents the mutating tick loop's leader group.
+// controller-runtime v0.21.0 also puts ordinary runnables in this group by default.
+// Election must still be enabled on the enclosing manager.
 func (*Manager) NeedLeaderElection() bool { return true }
 
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
@@ -1236,6 +1237,8 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if score > 1 {
 			score = 1
 		}
+		// Capture immutable target identity before a handler can delete the Pod.
+		eventTarget := actuationEventTarget(v)
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
@@ -1250,12 +1253,22 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
 		}
+		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil {
+			// Retain partial native writes without promoting an error to success.
+			decisions[i].Handler = res.Handler
+			decisions[i].ObjectsTouched = res.ObjectsTouched
+			decisions[i].RollbackRef = res.RollbackRef
+			decisions[i].MutationKind = res.MutationKind
+
 			outcome := slo.OutcomeFailed
 			dispatchReason := "failed"
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				outcome = slo.OutcomeDeadlineExpired
 				dispatchReason = "deadline-expired"
+			}
+			if res.Note != "" {
+				dispatchReason += ": " + res.Note
 			}
 			stampDispatch(model.DispatchError, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)

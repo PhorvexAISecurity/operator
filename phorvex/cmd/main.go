@@ -133,7 +133,7 @@ func main() {
 	flag.StringVar(&pcieClassTableRaw, "pcie-class-table", os.Getenv("PHORVEX_PCIE_CLASS_TABLE"), "JSON map of DCGM modelName -> {gen,width} used as the PCIe capacity fallback when the exporter publishes no link gen/width (M-114). Merged over the shipped default {\"Tesla T4\":{\"gen\":3,\"width\":16}}.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address the health probe binds to.")
-	flag.BoolVar(&enableLeader, "leader-elect", false, "Enable leader election (single active controller).")
+	flag.BoolVar(&enableLeader, "leader-elect", true, "Enable leader election (single active controller). Set --leader-elect=false only for an explicitly isolated single-instance run.")
 	flag.BoolVar(&admissionWebhook, "admission-webhook", false, "Serve the PhorvexPolicy validating admission webhook.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "TLS port for the validating admission webhook.")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
@@ -277,6 +277,7 @@ func main() {
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")
+	rmgr.ActuationRecorder = mgr.GetEventRecorderFor("phorvex-actuation")
 	// T1-E: wire the SSAR capability checker so the gate's no-rbac leg is live. A
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
