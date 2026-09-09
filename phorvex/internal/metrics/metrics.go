@@ -262,10 +262,15 @@ func ResetKillSwitchStatus(namespace, policy string) {
 	killSwitchStatusDisagreement.DeleteLabelValues(namespace, policy)
 }
 
-// ResetOwner clears ONE owner's per-pod series (M-140). It is called before re-publishing
-// a tick and on removal. It is owner-scoped rather than tenant-scoped because two policies
-// sharing a display name would otherwise delete each other's gauges on every tick.
-func ResetOwner(tenant, namespace, policy, uid string) {
+// RefreshOwnerPodSeries clears one owner's PER-POD series before a tick republishes them,
+// so departed pods do not linger in the heatmap. It is owner-scoped rather than
+// tenant-scoped because two policies sharing a display name would otherwise delete each
+// other's gauges every tick.
+//
+// [M-140 R3.2] This is a per-tick REFRESH, not a retirement: it deliberately keeps the
+// owner's retained lambda sample and its legacy per-tenant series, so a tick that produces
+// no decisions cannot erase a real measurement that was observed earlier.
+func RefreshOwnerPodSeries(tenant, uid string) {
 	m := prometheus.Labels{"tenant": tenant, "uid": uid}
 	podRisk.DeletePartialMatch(m)
 	podCost.DeletePartialMatch(m)
@@ -274,13 +279,20 @@ func ResetOwner(tenant, namespace, policy, uid string) {
 	podExposure.DeletePartialMatch(m)
 	podPerDollar.DeletePartialMatch(m)
 	podProactiveRate.DeletePartialMatch(m)
+}
+
+// ResetOwner RETIRES an owner: it clears the per-pod series and also removes the per-policy
+// series, the retained sample and this owner's contribution to the legacy per-tenant series.
+// It belongs to lifecycle completion (removal or replacement), never to an ordinary tick.
+func ResetOwner(tenant, namespace, policy, uid string) {
+	RefreshOwnerPodSeries(tenant, uid)
 	policyLambda.DeleteLabelValues(tenant, namespace, policy, uid)
 	ownerSampleMu.Lock()
 	delete(ownerSamples, ownerSampleKey(tenant, namespace, policy, uid))
 	ownerSampleMu.Unlock()
-	// [M-140 R1.4] The legacy per-tenant series is derived from whichever owner published
-	// last. When an owner goes away its contribution must go with it, or the removed
-	// policy's lambda keeps being served under the display name.
+	// The legacy per-tenant series is derived from whichever owner published last. When an
+	// owner goes away its contribution must go with it, or the removed policy's lambda keeps
+	// being served under the display name.
 	tenantLambda.DeleteLabelValues(tenant)
 }
 
@@ -345,7 +357,7 @@ func RestoreUniqueOwnerSample(tenant, namespace, policy, uid string) bool {
 // PublishTick records one tenant's tick: re-publishes per-pod gauges, the rollups,
 // and the counters.
 func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decision, exposures map[string]map[string]float64, selected int, durSeconds float64, mode string, uniqueOwner bool) {
-	ResetOwner(tenant, namespace, policy, uid)
+	RefreshOwnerPodSeries(tenant, uid)
 	ticksTotal.WithLabelValues(tenant, policy).Inc()
 	tickDuration.WithLabelValues(tenant).Observe(durSeconds)
 	protectedPods.WithLabelValues(tenant).Set(float64(len(decisions)))

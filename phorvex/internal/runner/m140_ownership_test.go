@@ -616,3 +616,116 @@ func TestM140_EpochGuardRejectsStaleButNotUnregistered(t *testing.T) {
 		t.Fatal("a retired owner was treated as never-registered")
 	}
 }
+
+// R3.1 — a display-name change under an UNCHANGED UID retires stale labels only. It must not
+// bump the economic generation, or in-flight rotation feedback would be rejected and the
+// owner would silently stop learning — the reset-on-PATCH behaviour this fix forbids.
+func TestM140_RenameRetiresLabelsWithoutInvalidatingLearning(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	before := m140Policy("policy", "name-before", "uid-rename")
+	if err := m.Upsert(before); err != nil {
+		t.Fatal(err)
+	}
+	owner := ownerOfUID("uid-rename")
+	m140TrainOwner(e, owner, 4)
+	epoch := m.ownerEpoch(owner)
+
+	// An in-flight rotation emitted under the pre-rename identity.
+	view := m140View("crown")
+	view.Pod.OwnerKind, view.Pod.OwnerName = "ReplicaSet", "api-rs"
+	started := time.Unix(1_700_000_000, 0).UTC()
+	if !m.trackRotationWithFloor(owner, "name-before", view,
+		map[string]*model.WorkloadView{"ns/crown": view}, 1, started) {
+		t.Fatal("rotation was not tracked")
+	}
+	pending := m.pendingRotations[rotationObservationKey(owner, view)]
+
+	renamed := m140Policy("policy", "name-after", "uid-rename") // same UID, new display name
+	renamed.Generation = 2
+	if err := m.Upsert(renamed); err != nil {
+		t.Fatal(err)
+	}
+	m.DrainLifecycle()
+
+	if m.ownerEpoch(owner) != epoch {
+		t.Fatalf("rename bumped the economic generation: %d -> %d", epoch, m.ownerEpoch(owner))
+	}
+	if !m.ownerCurrent(pending.owner, pending.epoch) {
+		t.Fatal("rename invalidated an in-flight rotation's generation, dropping its feedback")
+	}
+	if got := m140Updates(t, e, owner); got != 4 {
+		t.Fatalf("rename destroyed learned state: RLS updates = %d, want 4", got)
+	}
+	if _, ok := e.BucketMetaFor(owner); !ok {
+		t.Fatal("rename dropped the creation record")
+	}
+	// A genuine replacement must still reject the old generation.
+	if err := m.Upsert(m140Policy("policy", "name-after", "uid-replacement")); err != nil {
+		t.Fatal(err)
+	}
+	m.DrainLifecycle()
+	if m.ownerCurrent(pending.owner, pending.epoch) {
+		t.Fatal("a real replacement failed to reject the predecessor's generation")
+	}
+}
+
+// R3.2 — a tick that produces no decisions refreshes per-pod series but must not erase a
+// real measurement observed earlier. Retirement is the only thing that removes a sample.
+func TestM140_ZeroDecisionTickRetainsKnownSample(t *testing.T) {
+	e := decision.NewCoverageEngine()
+	m := m140Manager(e)
+	p := m140Policy("policy", "m140-r3-retain", "uid-retain")
+	if err := m.Upsert(p); err != nil {
+		t.Fatal(err)
+	}
+	m.publishOwnership()
+	metrics.SetPolicyLambda(p.Spec.Tenant, p.Namespace, p.Name, string(p.UID), 0.3, true)
+
+	metrics.PublishTick(p.Spec.Tenant, p.Namespace, p.Name, string(p.UID), nil, nil, 0, 0.01, "dryRun", true)
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_lambda", p.Spec.Tenant); got != 0.3 {
+		t.Fatalf("a zero-decision tick erased a known sample: got %v want 0.3", got)
+	}
+
+	// Through a collision and back to uniqueness, with zero-decision ticks throughout.
+	second := m140Policy("policy-two", "m140-r3-retain", "uid-second")
+	if err := m.Upsert(second); err != nil {
+		t.Fatal(err)
+	}
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_lambda", p.Spec.Tenant); got != 0 {
+		t.Fatalf("legacy series survived a collision: %v", got)
+	}
+	metrics.PublishTick(p.Spec.Tenant, p.Namespace, p.Name, string(p.UID), nil, nil, 0, 0.01, "dryRun", false)
+	m.Remove(types.NamespacedName{Namespace: "ns", Name: "policy-two"})
+	m.DrainLifecycle()
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_lambda", p.Spec.Tenant); got != 0.3 {
+		t.Fatalf("survivor's retained sample was not restored after the collision cleared: %v", got)
+	}
+
+	// Retirement DOES remove the sample: a retired owner must never be resurrected.
+	m.Remove(types.NamespacedName{Namespace: "ns", Name: "policy"})
+	m.DrainLifecycle()
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_lambda", p.Spec.Tenant); got != 0 {
+		t.Fatalf("a retired owner's sample was resurrected: %v", got)
+	}
+}
+
+// Control: a name whose owner has never produced a sample stays absent. Nothing is invented.
+func TestM140_NeverSampledOwnerStaysAbsent(t *testing.T) {
+	m := m140Manager(decision.NewCoverageEngine())
+	p := m140Policy("policy", "m140-r3-never", "uid-never")
+	if err := m.Upsert(p); err != nil {
+		t.Fatal(err)
+	}
+	m.publishOwnership()
+	if got := m140Gauge(t, "phorvex_tenant_lambda", p.Spec.Tenant); got != 0 {
+		t.Fatalf("a never-sampled owner published a fabricated lambda: %v", got)
+	}
+	if got := m140Gauge(t, "phorvex_tenant_collisions", p.Spec.Tenant); got != 1 {
+		t.Fatalf("owner count = %v, want 1", got)
+	}
+}

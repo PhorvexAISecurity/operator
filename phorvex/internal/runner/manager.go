@@ -337,10 +337,18 @@ func (e *policyEntry) ownerKey() string {
 	return model.OwnerKey(model.OwnerKindUID, e.uid)
 }
 
-// enqueueLifecycleLocked appends an ownership event and invalidates the owner's epoch.
-// Callers hold m.mu. Nothing is pruned here: removal completes at the tick-loop drain.
+// enqueueLifecycleLocked appends an ownership event and, for events that actually change
+// ownership, invalidates the owner's epoch. Callers hold m.mu. Nothing is pruned here:
+// removal completes at the tick-loop drain.
 func (m *Manager) enqueueLifecycleLocked(ev lifecycleEvent) {
 	m.lifecycle = append(m.lifecycle, ev)
+	if ev.metricsOnly {
+		// [M-140 R3.1] A display-name change under an unchanged UID retires stale LABELS
+		// only. The economic identity is untouched, so bumping the generation here would
+		// invalidate that owner's in-flight rotation feedback and silently stop its
+		// learning — exactly the reset-on-PATCH behaviour this fix must not introduce.
+		return
+	}
 	// Bump rather than delete so a late producer carrying the old epoch is recognisably
 	// stale; the entry is dropped by the drain once cleanup completes, bounding the table.
 	if m.epochs == nil {
