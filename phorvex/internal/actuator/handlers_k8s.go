@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 )
 
 // getPod fetches the target pod; returns (nil,false,nil) if already gone (a NotFound is
@@ -42,33 +43,50 @@ func getPod(ctx context.Context, c client.Client, ns, name string) (*corev1.Pod,
 
 func objRef(kind, ns, name string) string { return fmt.Sprintf("%s/%s/%s", kind, ns, name) }
 
-// --- 1. rotate (= Phoenix Delete: kill + clean respawn) ---------------------------------
+// --- 1. rotate (native delete request; replacement unconfirmed) ---------------------------------
 
 type rotateHandler struct{}
 
 func (rotateHandler) Name() string { return string(model.ActionRotate) }
 
 func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil {
-		return HandlerResult{}, err
+	if ec.DryRun {
+		return HandlerResult{}, errDryRunGuard
 	}
-	if !ok {
-		return HandlerResult{Emitted: true, MutationKind: "forward-only", Note: "already gone (idempotent)"}, nil
+	refuse := func(reason string) (HandlerResult, error) {
+		return HandlerResult{Note: "Rotation not performed: " + reason}, nil
 	}
-	// UID precondition: a retry that lands on a respawned pod no-ops (UID mismatch).
-	uid := pod.UID
-	if err := ec.Client.Delete(ctx, pod, &client.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil {
+	if ec.Reader == nil {
+		return refuse("authoritative-reader-unavailable")
+	}
+	if req.TargetUID == "" {
+		return refuse("target-uid-unavailable")
+	}
+	pod := &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return refuse("target-already-gone")
+		}
+		return refuse("target-unavailable")
+	}
+	if string(pod.UID) != req.TargetUID {
+		return refuse("target-uid-mismatch")
+	}
+	verdict := ownership.Check(ctx, ec.Reader, pod)
+	if !verdict.Eligible {
+		return refuse(verdict.Reason)
+	}
+	uid, rv := pod.UID, pod.ResourceVersion
+	if rv == "" {
+		return refuse("target-version-unavailable")
+	}
+	if err := ec.Client.Delete(ctx, pod, &client.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}}); err != nil {
 		if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
-			return HandlerResult{Emitted: true, MutationKind: "forward-only", Note: "raced respawn (idempotent)"}, nil
+			return refuse("target-changed-before-delete")
 		}
 		return HandlerResult{}, fmt.Errorf("rotate delete %s/%s: %w", req.Namespace, req.Pod, err)
 	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "forward-only",
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "deleted; owner respawns clean (the respawn IS recovery)",
-	}, nil
+	return HandlerResult{Emitted: true, MutationKind: "forward-only", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "Pod deletion requested; replacement unconfirmed"}, nil
 }
 
 // --- 2. quarantine (= Phoenix Quarantine: deny-all NP + detach) — THE LEAD DEMO ----------

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -78,6 +79,7 @@ type pendingRotation struct {
 
 // Manager owns the tenant registry and the tick loop.
 type Manager struct {
+	OwnershipReader client.Reader // uncached, read-only owner evidence
 	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
 	BoundaryReader client.Reader
 	Client         client.Client
@@ -152,17 +154,18 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 	recon.Registry.SetDefault("ucw-recon")
 	identity := buildinfo.Current()
 	return &Manager{
-		Client:        c,
-		Clock:         exposure.NewClock(),
-		Intents:       exposure.NewIntents(),
-		Optimizer:     decision.NewCoverageEngine(), // P1 default brain
-		Audit:         audit.New(log, nil),
-		MetricsSource: src,
-		Actuator:      selectActuator(c, log), // P-ACTUATOR: native vs Phoenix adapter
-		KillSwitch:    &KillSwitch{Client: c},
-		BaseInterval:  10 * time.Second,
-		Log:           log.WithName("runner"),
-		Calibration:   calib.NewRuntime(calib.RuntimeConfig{}, log),
+		Client:          c,
+		OwnershipReader: c,
+		Clock:           exposure.NewClock(),
+		Intents:         exposure.NewIntents(),
+		Optimizer:       decision.NewCoverageEngine(), // P1 default brain
+		Audit:           audit.New(log, nil),
+		MetricsSource:   src,
+		Actuator:        selectActuator(c, log), // P-ACTUATOR: native vs Phoenix adapter
+		KillSwitch:      &KillSwitch{Client: c},
+		BaseInterval:    10 * time.Second,
+		Log:             log.WithName("runner"),
+		Calibration:     calib.NewRuntime(calib.RuntimeConfig{}, log),
 		// Retains a month, the longest SLO window anyone has proposed, so an entry
 		// can never be evicted while a ratio could still be computed from it. The
 		// ledger observes only: nothing reads it to gate a move yet.
@@ -378,7 +381,18 @@ func (m *Manager) tick(ctx context.Context) {
 		return
 	}
 
-	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue)
+	var ownerReader client.Reader
+	if m.Actuator != nil && m.Actuator.Name() == "native" {
+		ownerReader = m.OwnershipReader
+	}
+	snap, err := ingest.CollectSnapshotForRotationTargets(ctx, m.Client, now, genericAssetValue, ownerReader, func(p *corev1.Pod) bool {
+		for _, e := range due {
+			if p.Namespace == e.namespace && (e.selector == nil || e.selector.Matches(labels.Set(p.Labels))) {
+				return true
+			}
+		}
+		return false
+	})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		return
@@ -826,6 +840,7 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool, physicsByKey map[string]model.PhysicsWitness) {
 	start := time.Now()
 	pol := buildPolicy(e)
+	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
 	pol.GitSHA = m.GitSHA
@@ -1268,6 +1283,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			Tenant:    pol.Tenant,
 			Namespace: decisions[i].Namespace,
 			Pod:       decisions[i].Pod,
+			TargetUID: v.Pod.UID,
 			Action:    decisions[i].Action,
 			Reason:    decisions[i].Reason,
 			Score:     score,
@@ -1285,7 +1301,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			continue
 		}
 		if res.Emitted {
-			stampDispatch(model.DispatchEmitted, "")
+			stampDispatch(model.DispatchEmitted, res.Note)
 			decisions[i].Actuated = true
 			recordExistentialEffect(&decisions[i], true)
 			// M-23: stamp per-action emit intent on the SUCCESSFUL-emit path (a failed actuation
@@ -1314,7 +1330,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			}
 		} else {
-			stampDispatch(model.DispatchEmittedFalse, "")
+			stampDispatch(model.DispatchEmittedFalse, res.Note)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}

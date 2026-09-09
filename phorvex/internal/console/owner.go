@@ -89,7 +89,7 @@ func ownerWhy(action string, actuated, reversible, workPreserved, harm bool) str
 	case action == "quarantine" && workPreserved:
 		return "Attempted network isolation in place. Attacker removal, workload preservation and out-of-band gains are not confirmed by this record."
 	case action == "rotate":
-		return "Dispatched instance replacement to attempt eviction. Security effect is not independently confirmed by this record."
+		return "Dispatched a rotation request. Pod replacement and security effect are not confirmed by this record."
 	case action == "kv-reset":
 		return "Dispatched a cache reset to attempt removal of modeled session state. Security effect is not independently confirmed by this record."
 	case reversible:
@@ -146,12 +146,12 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 		Handler:         rec.Handler,
 		ObjectsTouched:  rec.ObjectsTouched,
 		Reversible:      reversible,
-		AttackPrevented: rec.Actuated && rec.Selected,
+		AttackPrevented: rec.Actuated && rec.Selected && rec.Action != "rotate",
 		WorkPreserved:   workPreserved,
 		HarmCaused:      harm,
 		SLOKept:         true, // Legacy feasibility assumption; not an independently measured outcome.
 		AttackStage:     coarseStage(rec.Stage),
-		Why:             ownerWhy(rec.Action, rec.Actuated, reversible, workPreserved, harm),
+		Why:             ownerRecordWhy(rec, reversible, workPreserved, harm),
 		BlindOutcome:    blindOutcome(rec.Action, rec.Actuated, workPreserved),
 	}
 }
@@ -197,4 +197,19 @@ func containsStr(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// Only fixed, reviewed native refusal reasons may enter the owner-safe narrative.
+func ownerRecordWhy(rec audit.Record, reversible, workPreserved, harm bool) string {
+	if rec.Action == "rotate" && !rec.Actuated && rec.DecisionTrace != nil {
+		switch rec.DecisionTrace.DispatchReason {
+		case "Rotation not performed: ownerless", "Rotation not performed: owner-unresolved", "Rotation not performed: owner-uid-mismatch", "Rotation not performed: owner-terminating", "Rotation not performed: owner-kind-unsupported", "Rotation not performed: owner-state-ineligible":
+			return "Rotation not performed: no verified replacement controller."
+		case "Rotation not performed: mirror-pod":
+			return "Rotation not performed: this is a mirror of a static Pod."
+		case "Rotation not performed: target-uid-mismatch", "Rotation not performed: target-changed-before-delete":
+			return "Rotation not performed: the target changed before deletion."
+		}
+	}
+	return ownerWhy(rec.Action, rec.Actuated, reversible, workPreserved, harm)
 }
