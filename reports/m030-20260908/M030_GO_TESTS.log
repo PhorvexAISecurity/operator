@@ -1,0 +1,41 @@
+ok  	github.com/phorvex/phorvex/api/v1alpha1	0.042s
+ok  	github.com/phorvex/phorvex/benchmarks/cost-validation/cmd/costprobe	0.107s
+?   	github.com/phorvex/phorvex/cmd	[no test files]
+?   	github.com/phorvex/phorvex/cmd/calib-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3deep	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3report	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p4b-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/redteam-rl	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	0.023s
+ok  	github.com/phorvex/phorvex/internal/actuator	0.392s
+ok  	github.com/phorvex/phorvex/internal/applier	0.124s
+ok  	github.com/phorvex/phorvex/internal/audit	2.249s
+ok  	github.com/phorvex/phorvex/internal/authz	0.050s
+ok  	github.com/phorvex/phorvex/internal/belief	0.020s
+ok  	github.com/phorvex/phorvex/internal/buildinfo	0.021s
+ok  	github.com/phorvex/phorvex/internal/calib	0.217s
+ok  	github.com/phorvex/phorvex/internal/capability	0.100s
+ok  	github.com/phorvex/phorvex/internal/console	5.548s
+ok  	github.com/phorvex/phorvex/internal/controller	0.316s
+ok  	github.com/phorvex/phorvex/internal/cost	0.051s
+ok  	github.com/phorvex/phorvex/internal/ctxprov	0.137s
+ok  	github.com/phorvex/phorvex/internal/decision	39.036s
+ok  	github.com/phorvex/phorvex/internal/epssfeed	0.149s
+ok  	github.com/phorvex/phorvex/internal/exposure	0.020s
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.049s
+ok  	github.com/phorvex/phorvex/internal/graph	0.040s
+ok  	github.com/phorvex/phorvex/internal/ingest	1.495s
+ok  	github.com/phorvex/phorvex/internal/killchain	0.113s
+ok  	github.com/phorvex/phorvex/internal/metrics	0.152s
+ok  	github.com/phorvex/phorvex/internal/model	0.028s
+ok  	github.com/phorvex/phorvex/internal/pendinggate	0.426s
+ok  	github.com/phorvex/phorvex/internal/physics	0.012s
+ok  	github.com/phorvex/phorvex/internal/platform	0.102s
+ok  	github.com/phorvex/phorvex/internal/recon	0.087s
+ok  	github.com/phorvex/phorvex/internal/redteam	19.365s
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/runner	0.174s
+ok  	github.com/phorvex/phorvex/internal/slo	0.014s
+ok  	github.com/phorvex/phorvex/internal/soak	0.012s

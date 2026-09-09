@@ -1,0 +1,41 @@
+ok  	github.com/phorvex/phorvex/api/v1alpha1	(cached)
+ok  	github.com/phorvex/phorvex/benchmarks/cost-validation/cmd/costprobe	(cached)
+?   	github.com/phorvex/phorvex/cmd	[no test files]
+?   	github.com/phorvex/phorvex/cmd/calib-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3deep	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3report	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p4b-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/redteam-rl	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	(cached)
+ok  	github.com/phorvex/phorvex/internal/actuator	(cached)
+ok  	github.com/phorvex/phorvex/internal/applier	(cached)
+ok  	github.com/phorvex/phorvex/internal/audit	(cached)
+ok  	github.com/phorvex/phorvex/internal/authz	(cached)
+ok  	github.com/phorvex/phorvex/internal/belief	(cached)
+ok  	github.com/phorvex/phorvex/internal/buildinfo	(cached)
+ok  	github.com/phorvex/phorvex/internal/calib	(cached)
+ok  	github.com/phorvex/phorvex/internal/capability	(cached)
+ok  	github.com/phorvex/phorvex/internal/console	2.974s
+ok  	github.com/phorvex/phorvex/internal/controller	0.190s
+ok  	github.com/phorvex/phorvex/internal/cost	(cached)
+ok  	github.com/phorvex/phorvex/internal/ctxprov	(cached)
+ok  	github.com/phorvex/phorvex/internal/decision	25.705s
+ok  	github.com/phorvex/phorvex/internal/epssfeed	(cached)
+ok  	github.com/phorvex/phorvex/internal/exposure	(cached)
+ok  	github.com/phorvex/phorvex/internal/feasibility	(cached)
+ok  	github.com/phorvex/phorvex/internal/graph	(cached)
+ok  	github.com/phorvex/phorvex/internal/ingest	(cached)
+ok  	github.com/phorvex/phorvex/internal/killchain	(cached)
+ok  	github.com/phorvex/phorvex/internal/metrics	(cached)
+ok  	github.com/phorvex/phorvex/internal/model	(cached)
+ok  	github.com/phorvex/phorvex/internal/pendinggate	0.171s
+ok  	github.com/phorvex/phorvex/internal/physics	0.013s
+ok  	github.com/phorvex/phorvex/internal/platform	(cached)
+ok  	github.com/phorvex/phorvex/internal/recon	0.072s
+ok  	github.com/phorvex/phorvex/internal/redteam	(cached)
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/runner	0.122s
+ok  	github.com/phorvex/phorvex/internal/slo	(cached)
+ok  	github.com/phorvex/phorvex/internal/soak	(cached)

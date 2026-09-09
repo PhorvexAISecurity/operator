@@ -269,6 +269,7 @@ func main() {
 	}
 
 	rmgr := runner.NewManager(mgr.GetClient(), ctrl.Log)
+	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")

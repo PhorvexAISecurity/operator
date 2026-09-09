@@ -1,0 +1,13 @@
+phorvex/internal/decision/coverage.go:1267:	fr := physics.FlowResidualFor(v.Pod.Namespace, v.Telemetry)
+phorvex/internal/decision/coverage.go:1268:	cs := physics.Components(v)
+phorvex/internal/decision/coverage.go:1269:	agg, aggPresent := physics.Aggregate(cs)
+phorvex/internal/ingest/prometheus.go:111:		// Residual() was dead code in every deployment.
+phorvex/internal/physics/littleslaw.go:97:// FlowResidualFor is the residual as the RECORD and the aggregate see it: the ruled
+phorvex/internal/physics/littleslaw.go:98:// computation for an activated class, honest absence for every other class. FlowResidual
+phorvex/internal/physics/littleslaw.go:100:func FlowResidualFor(class string, t model.Telemetry) FlowResult {
+phorvex/internal/physics/littleslaw.go:104:	return FlowResidual(t)
+phorvex/internal/physics/littleslaw.go:133:// FlowResidual computes the ruled residual (M_115_MATH_RULING.md Q2–Q7):
+phorvex/internal/physics/littleslaw.go:141:func FlowResidual(t model.Telemetry) FlowResult {
+phorvex/internal/physics/littleslaw.go:194:	fr := FlowResidualFor(view.Pod.Namespace, t)
+phorvex/internal/physics/littleslaw.go:252:func (littlesLaw) Residual(view *model.WorkloadView, _ model.Policy) float64 {
+phorvex/internal/physics/profile.go:31:	Residual(view *model.WorkloadView, pol model.Policy) float64

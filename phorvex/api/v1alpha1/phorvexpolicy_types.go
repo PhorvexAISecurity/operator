@@ -42,8 +42,16 @@ type PhorvexPolicy struct {
 	Status PhorvexPolicyStatus `json:"status,omitempty"`
 }
 
+// ExistentialSpec controls the narrowly scoped M99 availability exception.
+type ExistentialSpec struct {
+	// MayBreachSLO permits only SLO/availability exceptions for qualified M99 full containment.
+	// +kubebuilder:default=false
+	MayBreachSLO bool `json:"mayBreachSLO,omitempty"`
+}
+
 // PhorvexPolicySpec is the desired Phorvex behavior for one tenant's workloads.
 type PhorvexPolicySpec struct {
+	Existential ExistentialSpec `json:"existential,omitempty"`
 	// Tenant is the explicit tenant identity this policy governs. Empty defaults to
 	// the policy's own namespace (the common single-namespace-per-tenant case). When
 	// a vcluster projects a tenant, set Tenant to the vcluster/tenant id so exposure
@@ -51,6 +59,15 @@ type PhorvexPolicySpec struct {
 	// by raw namespace. PER-TENANT FROM LINE ONE — never a retrofit.
 	// +kubebuilder:validation:Optional
 	Tenant string `json:"tenant,omitempty"`
+
+	// Trust declares directional peer trust for the M-34 observational assessment.
+	// Until M-140 supplies canonical policy identity, entries are effective tenant keys.
+	// Missing or ambiguous membership never establishes trust.
+	Trust TrustSpec `json:"trust,omitempty"`
+
+	// Cover controls optional cover features. M-34 remains excluded from scoring
+	// even if enabled while its weight and execution prerequisites are unresolved.
+	Cover CoverSpec `json:"cover,omitempty"`
 
 	// Selector chooses the pods this policy protects (PRD: selector.matchLabels).
 	// Only pods in this policy's namespace (tenant) that match are considered.
@@ -486,4 +503,20 @@ type PhorvexPolicyList struct {
 
 func init() {
 	SchemeBuilder.Register(&PhorvexPolicy{}, &PhorvexPolicyList{})
+}
+
+// TrustSpec is directional: A listing B does not make A trusted by B.
+type TrustSpec struct {
+	// +optional
+	// +listType=set
+	PeerPolicies []string `json:"peerPolicies,omitempty"`
+}
+
+type CoverSpec struct {
+	WarmSwap WarmSwapCoverSpec `json:"warmSwap,omitempty"`
+}
+
+type WarmSwapCoverSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
 }
