@@ -308,6 +308,9 @@ jobs:
   # checks, config, trace fields — actually runs. The gate on the PR's own code is the
   # post-merge run in `deploy`, which executes after ArgoCD has rolled the new image out.
   e2e:
+    env:
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-e2e
+      E2E_RUN_DIR: runs/${{ github.run_id }}-${{ github.run_attempt }}-e2e
     # A forced release is not a test run: e2e-main covers it after the rollout.
     # Draft PRs get isolated e2e-contract checks, never attacks on shared workloads.
     if: |
@@ -345,15 +348,20 @@ jobs:
           PREFIX="pr-${{ github.event.pull_request.number || github.run_id }}"
           LABEL="PR #${{ github.event.pull_request.number || '—' }} · ${GITHUB_SHA::7} · ${{ github.actor }}"
           echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          mkdir -p "$E2E_RUN_DIR"
           # Do NOT fail the step here: the report still has to be published and the comment
           # posted when the run goes red. The verdict is re-raised at the end of the job.
           set +e
           python3 pipeline/e2e.py \
+            --out "$E2E_RUN_DIR" --run-id "$E2E_RUN_ID" --source-commit "$GITHUB_SHA" \
             --mode "$MODE" --target "$E2E_TARGET" \
             --telegram --baseline baseline.json \
             --run-label "$LABEL" \
-            --report-url "https://ci-report.phorvex.ai/$PREFIX/run-{stamp}.html"
-          echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
+            --report-url "https://ci-report.phorvex.ai/$PREFIX/run-{stamp}.html" 2>&1 | tee "$E2E_RUN_DIR/run.log"
+          STATUS=("${PIPESTATUS[@]}")
+          RC="${STATUS[0]}"
+          if [ "${STATUS[1]}" != "0" ] && [ "$RC" = "0" ]; then RC=2; fi
+          echo "verdict_rc=$RC" >> "$GITHUB_OUTPUT"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -363,17 +371,21 @@ jobs:
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
         working-directory: End-to-End
-        run: ./publish-report.sh runs "${{ steps.e2e.outputs.prefix }}"
+        run: ./publish-report.sh "$E2E_RUN_DIR" "${{ steps.e2e.outputs.prefix }}" "$E2E_RUN_ID"
 
       - name: Build the summary
         id: summary
-        if: always() && steps.e2e.outcome != 'skipped'
+        if: always()
         working-directory: End-to-End
         run: |
-          RUN_JSON="$(ls -1 runs/run-*.json | sort | tail -1)"
-          python3 summary.py "$RUN_JSON" \
-            --url "${{ steps.publish.outputs.url }}" --marker > comment.md
-          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          python3 summary.py "$E2E_RUN_DIR/run-$E2E_RUN_ID.json" \
+            --expect-run-id "$E2E_RUN_ID" --expect-source-commit "$GITHUB_SHA" \
+            --exit-code "${{ steps.e2e.outputs.verdict_rc }}" \
+            --url "${{ steps.publish.outputs.url }}" --marker > "comment-$E2E_RUN_ID.md"
+          RC=$?
+          cat "comment-$E2E_RUN_ID.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$RC"
 
       # One comment per PR, edited on each push. A new comment per push buries the
       # conversation and makes the newest result the hardest one to find. summary.py writes
@@ -394,7 +406,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          body-path: End-to-End/comment.md
+          body-path: End-to-End/comment-${{ env.E2E_RUN_ID }}.md
           edit-mode: replace
 
       - name: Keep the run artifacts
@@ -402,13 +414,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ steps.e2e.outputs.prefix }}
-          path: End-to-End/runs/
+          path: |
+            End-to-End/${{ env.E2E_RUN_DIR }}/
+            End-to-End/comment-${{ env.E2E_RUN_ID }}.md
           retention-days: 30
 
       - name: Re-raise the End-to-End verdict
         if: always()
         run: |
           RC="${{ steps.e2e.outputs.verdict_rc }}"
+          case "$RC" in 0|1|2) ;; *) RC=2 ;; esac
           if [ "$RC" != "0" ]; then
             echo "::error::End-to-End failed (exit $RC) — see ${{ steps.publish.outputs.url }}"
             exit "$RC"
@@ -645,6 +660,9 @@ jobs:
 
   # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
   e2e-main:
+    env:
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-e2e-main
+      E2E_RUN_DIR: runs/${{ github.run_id }}-${{ github.run_attempt }}-e2e-main
     # Runs after any real deploy, however it was triggered.
     if: |
       !cancelled() && needs.deploy.result == 'success'
@@ -680,13 +698,18 @@ jobs:
           V:                    ${{ needs.deploy.outputs.version }}
         working-directory: End-to-End
         run: |
+          mkdir -p "$E2E_RUN_DIR"
           set +e
           python3 pipeline/e2e.py \
+            --out "$E2E_RUN_DIR" --run-id "$E2E_RUN_ID" --source-commit "$GITHUB_SHA" \
             --mode attack --target "$E2E_TARGET" \
             --telegram --baseline baseline.json \
             --run-label "main · v$V · post-deploy" \
-            --report-url "https://ci-report.phorvex.ai/main/run-{stamp}.html"
-          echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
+            --report-url "https://ci-report.phorvex.ai/main/run-{stamp}.html" 2>&1 | tee "$E2E_RUN_DIR/run.log"
+          STATUS=("${PIPESTATUS[@]}")
+          RC="${STATUS[0]}"
+          if [ "${STATUS[1]}" != "0" ] && [ "$RC" = "0" ]; then RC=2; fi
+          echo "verdict_rc=$RC" >> "$GITHUB_OUTPUT"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -696,21 +719,31 @@ jobs:
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
         working-directory: End-to-End
-        run: ./publish-report.sh runs main
+        run: ./publish-report.sh "$E2E_RUN_DIR" main "$E2E_RUN_ID"
 
       - name: Summary
         if: always()
         working-directory: End-to-End
         run: |
-          RUN_JSON="$(ls -1 runs/run-*.json | sort | tail -1)"
-          python3 summary.py "$RUN_JSON" --url "${{ steps.publish.outputs.url }}" \
+          python3 summary.py "$E2E_RUN_DIR/run-$E2E_RUN_ID.json" \
+            --expect-run-id "$E2E_RUN_ID" --expect-source-commit "$GITHUB_SHA" \
+            --exit-code "${{ steps.e2e.outputs.verdict_rc }}" --url "${{ steps.publish.outputs.url }}" \
             --title "Phorvex End-to-End — v${{ needs.deploy.outputs.version }} (post-deploy)" \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the current attempt artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-main-${{ env.E2E_RUN_ID }}
+          path: End-to-End/${{ env.E2E_RUN_DIR }}/
+          retention-days: 30
 
       - name: Re-raise the End-to-End verdict
         if: always()
         run: |
           RC="${{ steps.e2e.outputs.verdict_rc }}"
+          case "$RC" in 0|1|2) ;; *) RC=2 ;; esac
           if [ "$RC" != "0" ]; then
             echo "::error::Post-deploy End-to-End FAILED for v${{ needs.deploy.outputs.version }} — ${{ steps.publish.outputs.url }}"
             exit "$RC"
