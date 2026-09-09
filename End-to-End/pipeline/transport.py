@@ -10,7 +10,9 @@ through an environment variable rather than argv, so it does not appear in `ps` 
 
 import json
 import os
+import selectors
 import shlex
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -53,12 +55,7 @@ class Transport:
     def describe(self):
         return "local shell" if self.kind == "local" else f"ssh {self.user}@{self.host}:{self.port}"
 
-    def run(self, command, timeout=60):
-        """Run a shell command on the system under test. Returns (rc, stdout, stderr).
-
-        Never raises on a non-zero exit — a failing probe is data the checks need, not a
-        crash. Only a transport-level failure (host unreachable) raises.
-        """
+    def _command(self, command):
         if self.kind == "local":
             argv, env = ["/bin/sh", "-c", command], None
         else:
@@ -71,6 +68,11 @@ class Transport:
                 "-p", str(self.port), f"{self.user}@{self.host}", command,
             ]
             env = dict(os.environ, SSHPASS=self._pw)
+        return argv, env
+
+    def run(self, command, timeout=60):
+        """Run a shell command; returns (rc, stdout, stderr), including probe failures."""
+        argv, env = self._command(command)
         try:
             p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
@@ -78,6 +80,61 @@ class Transport:
         except FileNotFoundError as e:
             raise TransportError(f"transport binary missing: {e}") from e
         return p.returncode, p.stdout, p.stderr
+
+    def capture_live(self, command, seconds, max_bytes, on_connected):
+        """Open SSE before firing; retain bytes while the bounded callback runs.
+
+        A post-fire reconnect can lose a fast reaction: the deployed console's
+        initial replay has a small byte window, not a guaranteed record count.
+        Wait for its actual heartbeat, then fire once and observe a full window.
+        """
+        argv, env = self._command(command)
+        output, errors = bytearray(), bytearray()
+        connected = False
+        deadline = time.monotonic() + self.connect_timeout + 15
+        p = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             start_new_session=True)
+        try:
+            with selectors.DefaultSelector() as selector:
+                selector.register(p.stdout, selectors.EVENT_READ, "stdout")
+                selector.register(p.stderr, selectors.EVENT_READ, "stderr")
+                while time.monotonic() < deadline:
+                    for key, _ in selector.select(min(0.5, max(0, deadline - time.monotonic()))):
+                        chunk = os.read(key.fileobj.fileno(), 65536)
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                            if key.data == "stdout":
+                                raise TransportError("audit stream closed before observation completed: "
+                                                     + errors.decode(errors="replace")[-500:])
+                            continue
+                        if key.data == "stderr":
+                            errors.extend(chunk)
+                            del errors[:-65536]
+                            continue
+                        output.extend(chunk)
+                        if len(output) >= max_bytes:
+                            raise TransportError("audit capture reached its byte cap before observation completed")
+                        if not connected and b": connected\n\n" in output:
+                            connected = True
+                            on_connected()  # exactly once; stdout pipe retains early decisions
+                            deadline = time.monotonic() + seconds
+                if not connected:
+                    raise TransportError("audit stream never acknowledged readiness; no signal fired")
+                return output.decode(errors="replace")
+        finally:
+            # Own process group only; also stops local shell pipeline children.
+            if p.poll() is None:
+                try:
+                    os.killpg(p.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    p.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(p.pid, signal.SIGKILL)
+                    p.wait(timeout=5)
+            p.stdout.close()
+            p.stderr.close()
 
 
 class Console:
@@ -172,26 +229,34 @@ class Console:
         except json.JSONDecodeError:
             return {"_raw": out}
 
-    def stream_decisions(self, seconds, max_bytes):
+    def stream_decisions(self, seconds, max_bytes, on_connected=None):
         """Capture the audit SSE stream for a bounded window.
 
         The stream replays the audit file and then tails it, so a short window still
         yields the recent decision history. Bounded on BOTH time and bytes: an operator
         under heavy churn must not be able to hang the pipeline or exhaust memory.
         """
+        # The callback may perform two bounded 30s detector calls (or one console
+        # POST). Keep the remote process bounded, but allow the observation window
+        # to begin AFTER the callback. capture_live terminates it at that deadline.
+        remote_seconds = seconds + 90 if on_connected else seconds
+        replay = "&tail=1" if on_connected else ""
         if self.mode == "kubectl-proxy":
             # `timeout` bounds the stream the way curl -m did; head -c caps the bytes.
             cmd = (
-                f"timeout {seconds} kubectl get --raw "
-                f"{shlex.quote(self.proxy + '/api/live?lens=' + self.lens)} | head -c {int(max_bytes)}"
+                f"timeout {remote_seconds} kubectl get --raw "
+                f"{shlex.quote(self.proxy + '/api/live?lens=' + self.lens + replay)} | head -c {int(max_bytes)}"
             )
         else:
             cmd = (
-                f"curl -sN -m {seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
-                f"{shlex.quote(self.base + '/api/live?lens=' + self.lens)} | head -c {int(max_bytes)}"
+                f"curl -sN -m {remote_seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
+                f"{shlex.quote(self.base + '/api/live?lens=' + self.lens + replay)} | head -c {int(max_bytes)}"
             )
         # curl/timeout exits non-zero on the bounded-window timeout, which is the normal path.
-        _, out, _ = self.t.run(cmd, timeout=seconds + 20)
+        if on_connected:
+            out = self.t.capture_live(cmd, seconds, max_bytes, on_connected)
+        else:
+            _, out, _ = self.t.run(cmd, timeout=seconds + 20)
         records, malformed = [], 0
         for line in out.splitlines():
             if not line.startswith("data: "):

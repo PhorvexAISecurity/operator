@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
@@ -28,11 +29,17 @@ import (
 // SecurityEvent stream. Built once per tick (NFR1: <1s for <=1000 pods) so per-tenant
 // processing is cheap.
 type Snapshot struct {
-	Pods       []model.Pod
-	PodByKey   map[string]*model.Pod
-	Graph      *graph.Graph
-	Events     []model.SecurityEventInfo
-	EventByPod map[string][]model.SecurityEventInfo
+	// M-34 observation substrate, separate from the numerical physics projection.
+	NamespaceLabels         map[string]map[string]string
+	Policies                []v1alpha1.PhorvexPolicy
+	PodInventoryComplete    bool
+	PolicyInventoryComplete bool
+	EventInventoryComplete  bool
+	Pods                    []model.Pod
+	PodByKey                map[string]*model.Pod
+	Graph                   *graph.Graph
+	Events                  []model.SecurityEventInfo
+	EventByPod              map[string][]model.SecurityEventInfo
 	// DryRunNamespaces are namespaces annotated phorvex.ai/dry-run=true|1|yes — a
 	// per-namespace actuation freeze independent of any policy's mode (FR8).
 	DryRunNamespaces map[string]bool
@@ -88,6 +95,21 @@ const gpuPrefix = "nvidia.com/"
 // CollectSnapshot reads pods, Services, NetworkPolicies, RBAC, namespaces and SecurityEvents
 // cluster-wide and projects them into a Snapshot. Read-only (least privilege).
 func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(p *model.Pod) float64, ownerReaders ...client.Reader) (*Snapshot, error) {
+	var reader client.Reader
+	if len(ownerReaders) > 0 {
+		reader = ownerReaders[0]
+	}
+	return collectSnapshot(ctx, c, now, assetValue, reader, nil)
+}
+
+// CollectSnapshotForRotationTargets limits owner API reads to this tick's protected
+// targets while retaining the full Pod inventory for graph and availability inputs.
+func CollectSnapshotForRotationTargets(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, reader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
+	return collectSnapshot(ctx, c, now, assetValue, reader, relevant)
+}
+
+func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, reader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
+	ownerReader := newSnapshotOwnerReader(reader)
 	var podList corev1.PodList
 	if err := c.List(ctx, &podList); err != nil {
 		return nil, err
@@ -117,11 +139,11 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	pods := make([]model.Pod, 0, len(podList.Items))
 	for i := range podList.Items {
 		p := projectPod(&podList.Items[i], now)
-		var ownerReader client.Reader
-		if len(ownerReaders) > 0 {
-			ownerReader = ownerReaders[0]
+		if relevant == nil || relevant(&podList.Items[i]) {
+			p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
+		} else {
+			p.RotationOwnership.Reason = "outside-rotation-targets"
 		}
-		p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
 		ownerKey := p.Namespace + "/" + p.OwnerKind + "/" + p.OwnerName
 		if p.OwnerName != "" {
 			oc := owners[ownerKey]
@@ -174,12 +196,14 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	g := graph.Build(gin)
 
 	snap := &Snapshot{
-		Pods:             pods,
-		PodByKey:         map[string]*model.Pod{},
-		Graph:            g,
-		EventByPod:       map[string][]model.SecurityEventInfo{},
-		DryRunNamespaces: dryRunNS,
-		Now:              now,
+		Pods:                 pods,
+		PodByKey:             map[string]*model.Pod{},
+		Graph:                g,
+		EventByPod:           map[string][]model.SecurityEventInfo{},
+		DryRunNamespaces:     dryRunNS,
+		Now:                  now,
+		NamespaceLabels:      nsLabels,
+		PodInventoryComplete: true,
 	}
 	for i := range snap.Pods {
 		snap.PodByKey[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name] = &snap.Pods[i]
@@ -188,8 +212,16 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	// SecurityEvent stream.
 	events, byPod, err := collectEvents(ctx, c, now)
 	if err == nil {
+		snap.EventInventoryComplete = true
 		snap.Events = events
 		snap.EventByPod = byPod
+	}
+
+	// Best effort: failure is UNKNOWN for M-34, not an empty policy inventory.
+	var policies v1alpha1.PhorvexPolicyList
+	if err := c.List(ctx, &policies); err == nil {
+		snap.Policies = policies.Items
+		snap.PolicyInventoryComplete = true
 	}
 
 	// P-PHYSICS additive scan: node capacity + live PodDisruptionBudgets. Best-effort

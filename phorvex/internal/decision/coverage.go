@@ -215,6 +215,12 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 			exp = d.Seconds()
 		}
 		assess := e.Killchain.Assess(v, pol, exp, floorSec)
+		// M-28: mirror the EVENT-ONLY evidence verdict onto the shared view so the
+		// proactive-cadence feasibility law can read it (a hard law only sees view/move/pol, never
+		// the Assessment). HasEventEvidence (not the broad HasEvidence) so a physics-pinned,
+		// event-less pod — the churn pod — is still capped. The view pointers are shared with the
+		// runner, so generator/shadow/emit-boundary all see the same stamp.
+		v.HasEventEvidence = assess.HasEventEvidence
 		ctxByKey[key] = assetCtx{sig: sig, assess: assess, exposure: exp}
 	}
 
@@ -239,7 +245,14 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 
 	tcost := e.costFor(pol.Tenant, pol.Lambda)
 	costCeiling := cost.EffectiveCostCeiling(pol)
+	mayRelax := map[string]bool{}
+	if pol.MayBreachSLO {
+		for _, v := range views {
+			mayRelax[v.Pod.Namespace+"/"+v.Pod.Name] = assessOutcomes(v, pol).Present
+		}
+	}
 	deps := actionset.Deps{
+		RetainSLO:   func(key string) bool { return mayRelax[key] },
 		Recon:       e.Recon,
 		FactContext: factCtx,
 		ECost:       tcost.ECost,
@@ -303,6 +316,10 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		}
 	}
 
+	existential := map[string]*model.ExistentialDecision{}
+	for _, v := range views {
+		existential[v.Pod.Namespace+"/"+v.Pod.Name] = assessOutcomes(v, pol)
+	}
 	candsByAsset := map[string][]int{}
 	for i := range set.Candidates {
 		candsByAsset[set.Candidates[i].Key] = append(candsByAsset[set.Candidates[i].Key], i)
@@ -381,39 +398,18 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	selectedMarginal := map[string]float64{}
 	selectedRound := map[string]int{}
 	evaluatedMarginal := map[string]float64{}
+	prioritySelections := []string{}
 	B := pol.MaxMovesPerTick
 	for round := 0; round < B; round++ {
 		lastRound = round + 1
-		bestIdx := -1
-		bestGain := 0.0
-		bestMarginal := 0.0
-		for i := range set.Candidates {
-			c := set.Candidates[i]
-			if selectedAsset[c.Key] {
-				continue
-			}
-			if !attackBackedKey[c.Key] {
-				continue // reactiveOnly: suppress proactive moves on un-attacked assets
-			}
-			marginal := 0.0
-			for _, k := range c.CoverKeys {
-				if !covered[k] {
-					marginal += set.FactWeights[k]
-				}
-			}
-			candidateKey := traceCandidateKey(c.Key, c.Action)
-			evaluatedMarginal[candidateKey] = marginal
-			gain := legacyMixedGain(marginal, prov(c.Key), lambda, c.ECost)
-			if gain > bestGain {
-				bestGain = gain
-				bestIdx = i
-				bestMarginal = marginal
-			}
-		}
-		if bestIdx < 0 || !strictPositiveGain(bestGain) {
+		bestIdx, bestMarginal, bestActive := chooseRound(set, existential, covered, selectedAsset, attackBackedKey, lambda, prov, evaluatedMarginal)
+		if bestIdx < 0 {
 			break
 		}
 		c := set.Candidates[bestIdx]
+		if bestActive {
+			prioritySelections = append(prioritySelections, traceCandidateKey(c.Key, c.Action))
+		}
 		selectedAsset[c.Key] = true
 		selectedAction[c.Key] = c.Action
 		selectedMarginal[c.Key] = bestMarginal
@@ -465,7 +461,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 					break
 				}
 			}
-		} else if len(idxs) > 0 && attackBackedKey[key] {
+		} else if len(idxs) > 0 && attackBackedKey[key] && !existential[key].Present {
 			// best standalone candidate, scored EXACTLY as the main path scores it
 			// (PHORVEXSEC-196 / M-110 site 3): coverage·prov − λ·cost through legacyMixedGain.
 			// The un-discounted form ranked a "considered" entry higher than selection ever would.
@@ -480,7 +476,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			}
 		}
 
-		feasible := len(idxs) > 0
+		feasible := len(idxs) > 0 && (!existential[key].Present || selectedAsset[key])
 		infeasibleWhy := ""
 		if !feasible {
 			infeasibleWhy = excludedWhy[key]
@@ -519,7 +515,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 				perDollar = cov / ecost
 			}
 			marginal = selectedMarginal[key]
-			if marginal == 0 {
+			if marginal == 0 && !selectedAsset[key] {
 				marginal = cov
 			}
 			attribution = attributionOf(*chosen, set.FactWeights, lambda)
@@ -582,6 +578,16 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			ProjectedNextStageSec: ac.assess.ProjectedNextStageSec,
 			AIClassified:          ac.assess.AIClassified,
 		}
+		finishExistential(existential[key], set, key, selected, B-len(selectedAsset), prioritySelections)
+		decision.Existential = existential[key]
+		for i := range decision.Existential.Candidates {
+			c := &decision.Existential.Candidates[i]
+			c.SLORelaxed = selected && c.Action == action && c.SLOExcluded
+		}
+		if existential[key].Present && !selected {
+			decision.InfeasibleWhy = "existential-uncontainable"
+			decision.Reason = "PHORVEXSEC-208 interim: uncontainable"
+		}
 		if pol.TraceEnabled {
 			// T0-C: the round whose marginal this asset's record carries — the
 			// selection round for the winner (its whole asset is skipped
@@ -595,6 +601,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov,
 				tcost, evaluatedMarginal, dualUpdate, coveredRound, evaluationRound)
 		}
+		decorateExistentialTrace(decision.Trace, decision.Existential)
 		decisions = append(decisions, decision)
 	}
 

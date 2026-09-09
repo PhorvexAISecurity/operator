@@ -273,6 +273,7 @@ func main() {
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
 	}
+	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval
 	rmgr.ActionsSupportedDebounce = supportDebounce
 	rmgr.Recorder = mgr.GetEventRecorderFor("phorvex-actions-supported")

@@ -1,0 +1,9 @@
+=== RUN   TestM115HistoricalPresentOnlyDenominator
+    m115_legacy_regression_test.go:13: one present magnitude=1: got 0.7749999999999999, want 1
+--- FAIL: TestM115HistoricalPresentOnlyDenominator (0.00s)
+=== RUN   TestM115HistoricalQueueUnitDependence
+    m115_legacy_regression_test.go:22: disabled count-minus-rate: per-second=0.2980769230769231 per-minute=0, want both 0
+--- FAIL: TestM115HistoricalQueueUnitDependence (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/physics	0.009s
+FAIL

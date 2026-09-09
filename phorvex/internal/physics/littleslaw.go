@@ -165,19 +165,23 @@ func FlowResidual(t model.Telemetry) FlowResult {
 		out.Reason = "non-finite-expected"
 		return out
 	}
+	if E == 0 && lam > 0 && W > 0 {
+		out.Reason = "underflow-expected"
+		return out
+	}
 	r := 0.0
 	if L+E > 0 {
-		r = (L - E) / (L + E)
+		if math.IsInf(L+E, 1) {
+			// M115-MEASUREMENT-v1 §6: finite operands can overflow their sum.
+			m := math.Max(L, E)
+			r = (L/m - E/m) / (L/m + E/m)
+		} else {
+			r = (L - E) / (L + E)
+		}
 	}
 	if !finite(r) {
 		out.Reason = "non-finite-residual"
 		return out
-	}
-	if r > 1 {
-		r = 1
-	}
-	if r < -1 {
-		r = -1
 	}
 	return FlowResult{Present: true, Basis: FlowBasisLittle, L: L, Lambda: lam, W: W, Expected: E,
 		Residual: r, Magnitude: math.Abs(r), Age: t.MeanSojournSec.Age}

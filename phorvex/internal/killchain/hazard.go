@@ -150,8 +150,18 @@ type Assessment struct {
 	// signature, or a poisoned adapter. It is the anti-decoy discriminator (PHVX-72): StageUrgency
 	// CANNOT serve that role, because a low/medium direct event and a compromised neighbour both
 	// leave the stage at Recon, giving them the SAME urgency as an asset with no evidence at all.
-	HasEvidence    bool
-	LateralUrgency float64 // [0,1] specifically the about-to-pivot-here pressure
+	HasEvidence bool
+	// HasEventEvidence is the STRICTER, event-only discriminator (M-28): TRUE only when a
+	// TRUSTED, RECENT (age-weighted) SecurityEvent bears on this pod — a targeting event
+	// (eventAlpha>0) or a compromised neighbour (lateralPressure>0). Unlike HasEvidence it
+	// EXCLUDES the physics/topology AI classification (aiClassified) and the SuspectAdapter
+	// detector flag, because those are true for a healthy busy GPU/model server with ZERO
+	// events (physics model-theft, LLM-jacking-via-GPU-util) — the exact false-alarm source of
+	// the M-28 churn. The proactive-cadence cap keys on THIS so a physics-pinned, event-less pod
+	// is still capped; HasEvidence stays the anti-decoy discriminator (M-110), which correctly
+	// wants the broader signal. Also age-weighted, so an EXPIRED event does not keep it true.
+	HasEventEvidence bool
+	LateralUrgency   float64 // [0,1] specifically the about-to-pivot-here pressure
 
 	// --- P-CONTEXT predictive-horizon: the MOVED-BEFORE-NEXT-STAGE measurable. ---
 	// PreemptMargin = P(stage has NOT transitioned to its successor by the time our move
@@ -419,6 +429,10 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	// severity); lateralPressure>0 covers a compromised neighbour; aiClassified covers an AI
 	// signature; SuspectAdapter covers a poisoned adapter.
 	hasEvidence := eventAlpha > 0 || lateralPressure > 0 || aiClassified || view.Pod.SuspectAdapter != ""
+	// M-28: the event-only, age-weighted subset — a trusted RECENT event on this pod or a
+	// compromised neighbour. Excludes aiClassified/SuspectAdapter (true for an event-less busy
+	// GPU/model server), so the cadence cap still fires on the physics-pinned churn pod.
+	hasEventEvidence := eventAlpha > 0 || lateralPressure > 0
 	// Lateral urgency rises with neighbor pressure and an imminent lateral transition.
 	latUrg := clamp01(math.Max(lateralPressure, hazard*boolf(next == StageLateral)))
 
@@ -495,6 +509,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 		},
 		StageUrgency:          stageUrg,
 		HasEvidence:           hasEvidence,
+		HasEventEvidence:      hasEventEvidence,
 		Leakage:               leakageOf(view.Physics),
 		LateralUrgency:        latUrg,
 		PreemptMargin:         preempt,

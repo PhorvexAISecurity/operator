@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -79,13 +80,14 @@ type pendingRotation struct {
 // Manager owns the tenant registry and the tick loop.
 type Manager struct {
 	OwnershipReader client.Reader // uncached, read-only owner evidence
-
-	Client        client.Client
-	Clock         *exposure.Clock
-	Intents       *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
-	Optimizer     decision.Optimizer
-	Audit         *audit.Logger
-	MetricsSource ingest.MetricsSource
+	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
+	BoundaryReader client.Reader
+	Client         client.Client
+	Clock          *exposure.Clock
+	Intents        *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
+	Optimizer      decision.Optimizer
+	Audit          *audit.Logger
+	MetricsSource  ingest.MetricsSource
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
 	PromURL  string
@@ -384,7 +386,14 @@ func (m *Manager) tick(ctx context.Context) {
 	if m.Actuator != nil && m.Actuator.Name() == "native" {
 		ownerReader = m.OwnershipReader
 	}
-	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue, ownerReader)
+	snap, err := ingest.CollectSnapshotForRotationTargets(ctx, m.Client, now, genericAssetValue, ownerReader, func(p *corev1.Pod) bool {
+		for _, e := range due {
+			if p.Namespace == e.namespace && (e.selector == nil || e.selector.Matches(labels.Set(p.Labels))) {
+				return true
+			}
+		}
+		return false
+	})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		return
@@ -871,11 +880,26 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		m.observeSourceHealth(e, err)
 	}
 
+	pol.DecisionAssets = map[string]string{}
+	for _, pod := range selPods {
+		pol.DecisionAssets[pod.Namespace+"/"+pod.Name] = pod.UID
+	}
+	for _, ev := range snap.Events {
+		if len(ev.Outcomes) > 0 {
+			pol.TrustBoundaryReason = "uncached-boundary-reader-unavailable"
+			if m.BoundaryReader != nil {
+				boundaryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				pol.TrustBoundaryReady, pol.TrustBoundaryReason, pol.TrustBoundarySince = ingest.CheckExistentialBoundary(boundaryCtx, m.BoundaryReader)
+				cancel()
+			}
+			break
+		}
+	}
 	keep := make(map[string]struct{}, len(selPods))
 	views := make([]*model.WorkloadView, 0, len(selPods))
 	for _, p := range selPods {
 		t := tele[p.Name]
-		// M-23: one fingerprint per CLOCKED exposure variable — pod identity, node, session,
+		// M-23: one fingerprint per CLOCKED exposure variable — pod identity, session,
 		// plus the per-action `*-epoch` markers (absent-skipped when a marker is missing). The
 		// [PHVX-67] session clock still resets when either KV flush bumps p.SessionEpoch.
 		m.Clock.Observe(exposure.Observation{
@@ -926,6 +950,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			NeighborCount:      snap.Graph.NeighborCount(p.Namespace, p.Name),
 			Neighbors:          neighbors,
 			Events:             events,
+			OutcomeEvents:      snap.Events,
 			ExposureByVariable: exp,
 			IntentByVariable:   intent,
 			Physics:            ph,
@@ -944,6 +969,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
 			r := capWit.Eligible(v, a, coverKeys)
 			if r == nil {
+				if m.Authz == nil && decision.HasQualifiedOutcome(v, pol) {
+					return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
+				}
 				return nil
 			}
 			return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
@@ -970,6 +998,17 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		metrics.RecordActionSetRejection(pol.Tenant, "cross-block-collision")
 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name())
+		rejected := decision.ExistentialRejectedDecisions(views, pol, err.Error(), snap.Now)
+		for _, d := range rejected {
+			m.Audit.Record(d)
+		}
+		inventory := outcomeInventory(snap.Events, pol)
+		if inventory != nil {
+			m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
+		}
+		if len(rejected) > 0 || inventory != nil {
+			m.updateExistentialStatus(ctx, e, rejected, inventory)
+		}
 		m.Clock.RetainTenant(pol.Tenant, keep)
 		m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
@@ -1040,11 +1079,13 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		actuated = m.actuate(ctx, e, pol, decisions, viewByKey)
 	}
 
+	assessmentInput := colocationInput(snap, e)
 	selected, infeasible := 0, 0
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
 		m.Audit.Record(decisions[i])
+		m.recordColocation(assessmentInput, decisions[i], pol)
 		if decisions[i].Selected {
 			selected++
 		}
@@ -1070,6 +1111,11 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		ce.RetainStageClock(pol.Tenant, keep)
 	}
+	inventory := outcomeInventory(snap.Events, pol)
+	if inventory != nil {
+		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
+	}
+	m.updateExistentialStatus(ctx, e, decisions, inventory)
 	m.updateStatus(ctx, e, len(views), selected, actuated, killEngaged, snap.Now, actionsSupport)
 
 	m.mu.Lock()
@@ -1208,7 +1254,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			stampDispatch(model.DispatchNotAttempted, "no-tick-view")
 			continue
 		}
-		if verdict := feasibility.Evaluate(v, model.Move{Action: decisions[i].Action}, pol); !verdict.Feasible {
+		if verdict := existentialEmitVerdict(decisions[i], v, pol); !verdict.Feasible {
 			m.Log.Error(nil, "EMIT-BOUNDARY INVARIANT VETO: refusing infeasible move at actuate boundary",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
 			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible: "+verdict.Reason)
@@ -1221,6 +1267,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		// Capture immutable target identity before a handler can delete the Pod.
 		eventTarget := actuationEventTarget(v)
 		actuationStarted := time.Now()
+		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
 			Tenant:    pol.Tenant,
 			Namespace: decisions[i].Namespace,
@@ -1246,6 +1293,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if res.Emitted {
 			stampDispatch(model.DispatchEmitted, res.Note)
 			decisions[i].Actuated = true
+			recordExistentialEffect(&decisions[i], true)
 			// M-23: stamp per-action emit intent on the SUCCESSFUL-emit path (a failed actuation
 			// takes the `continue` above and never reaches here, so it can't throttle its own
 			// retry). This closes the cross-tick burst hole — the next tick's guard reads this
@@ -1313,6 +1361,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		MinTokensPerSec:              s.SLO.MinTokensPerSec,
 		EventDriven:                  s.Triggers.EventDriven,
 		ReactiveOnly:                 s.Triggers.ReactiveOnly,
+		MayBreachSLO:                 s.Existential.MayBreachSLO,
 		KillChainSojournScaleSeconds: s.EffectiveSojournScaleSeconds(),
 		KillChainShape:               s.EffectiveKillChainShape(),
 		ExposurePressureCap:          s.EffectiveExposurePressureCap(),
