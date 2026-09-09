@@ -82,9 +82,6 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("native actuator: no handler for action %q (completeness violation)", req.Action)
 	}
 	hr, err := h.Enact(ctx, ec, req)
-	if err != nil {
-		return Result{}, err
-	}
 	return Result{
 		Actuator:       "native",
 		Note:           hr.Note,
@@ -93,7 +90,7 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		ObjectsTouched: hr.ObjectsTouched,
 		RollbackRef:    hr.RollbackRef,
 		MutationKind:   hr.MutationKind,
-	}, nil
+	}, err
 }
 
 // MissingHandlers returns the generatable actions (model.MutatingActions) that have NO

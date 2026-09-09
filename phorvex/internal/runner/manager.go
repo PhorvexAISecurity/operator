@@ -1275,11 +1275,20 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			Score:     score,
 		})
 		if err != nil {
+			// Retain partial native writes without promoting an error to success.
+			decisions[i].Handler = res.Handler
+			decisions[i].ObjectsTouched = res.ObjectsTouched
+			decisions[i].RollbackRef = res.RollbackRef
+			decisions[i].MutationKind = res.MutationKind
+
 			outcome := slo.OutcomeFailed
 			dispatchReason := "failed"
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				outcome = slo.OutcomeDeadlineExpired
 				dispatchReason = "deadline-expired"
+			}
+			if res.Note != "" {
+				dispatchReason += ": " + res.Note
 			}
 			stampDispatch(model.DispatchError, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)

@@ -18,8 +18,7 @@
  * networkpolicies               : quarantine deny-all + orphan GC (create/get/list/delete)
  * replicasets/statefulsets/daemonsets, jobs : quarantine reads the owning controller's selector to detach (get)
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update);
- *                                 quarantine lists Services to break their selector keys when no
- *                                 owner selector is readable (list)
+ *                                 quarantine independently checks all namespaced Service selectors (list)
  *
  * Identity-rotate deliberately receives no ServiceAccount/Secret permission: projected tokens
  * cannot be revoked by a pod-scoped action. EndpointSlices also remain denied.
