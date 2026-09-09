@@ -109,7 +109,7 @@ rules:
   verbs: ["get", "list", "delete", "update"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
-  verbs: ["create", "get", "delete"]
+  verbs: ["create", "get", "list", "delete"]
 - apiGroups: ["apps"]
   resources: ["replicasets", "statefulsets", "daemonsets", "deployments"]
   verbs: ["get"]
