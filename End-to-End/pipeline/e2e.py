@@ -141,7 +141,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     n.running(0)
     ctx.preflight["health"], ctx.preflight["version"] = console.wait_preflight()
     ctx.controller_pods = cluster.controller_pods(
-        cfg.get("operator_namespace", "phorvex-system"))
+        cfg.get("operator_namespace", "phorvex-system"), cfg.get("controller_deployments"))
     ctx.preflight["controllers"] = ctx.controller_pods
     ctx.writer_metrics = metrics.scrape()
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
@@ -173,13 +173,12 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     # A stage is only green here if preflight found a live system: an unreachable console or
     # a controller that is not Running makes every later stage meaningless, and the board
     # must say so at [0/6] rather than let it surface as an empty capture at [1/6].
-    sick = [p for p, m in ctx.controller_pods.items()
-            if m["phase"] != "Running" or m["restarts"] > ctx.max_restarts]
-    n.stage(0, "fail" if (sick or not ctx.preflight["version"].get("operator")) else "ok",
+    controller_health = checks_mod.p05(ctx)
+    n.stage(0, "fail" if (controller_health["status"] != checks_mod.PASS
+                          or not ctx.preflight["version"].get("operator")) else "ok",
             f"console {ctx.preflight['version'].get('console', '?')} · "
             f"operator {ctx.preflight['version'].get('operator', '?')} · "
-            f"{len(ctx.controller_pods)} controller"
-            + (f" · {len(sick)} unhealthy" if sick else ""))
+            + controller_health["summary"])
 
     # ── 1 · baseline capture ─────────────────────────────────────────────────
     secs = stream_override or cap["stream_seconds"]

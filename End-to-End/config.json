@@ -239,6 +239,7 @@
     }
   ],
   "operator_namespace": "phorvex-system",
+  "controller_deployments": ["phorvex-phorvex", "operator-controller-manager"],
   "audit_writer": {
     "_comment": [
       "The operator that WRITES the audit the console streams. Its kill-switch gauge is what",
