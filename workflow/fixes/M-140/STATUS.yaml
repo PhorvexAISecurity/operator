@@ -1,0 +1,209 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+revision: 17
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  red:
+    result: PASS
+    by: codex-m140
+    artifact: evidence/baseline/reviewer-reproduction.txt
+    sha256: 70099ee7a09b123ef4b0d71abd7ef92ec7fcbaeead0faeb012da994102adaa8e
+    source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+    at: '2026-09-09T18:29:47+00:00'
+  critique:
+    result: PASS
+    by: codex-m140
+    artifact: 02B-critique.md
+    sha256: 7dce44672088b33a6cc2c755f0aac0579838594e7174938126136d9dc3f83df0
+    source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+    at: '2026-09-09T18:51:12+00:00'
+  decision:
+    result: PASS
+    by: codex-m140
+    artifact: 03-decision.md
+    sha256: 26330731734f5c301ca51bd3d64d9541e0c280377773bfb388d01d487ba8e524
+    source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+    at: '2026-09-09T19:30:04+00:00'
+    contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+    approval_ref: IMPLEMENTATION_AUTHORIZATION.md
+fix_id: M-140
+issues:
+- M-140
+title: Policy-owned tenant state lifecycle
+profile: standard
+state: AGREED
+roles:
+  human_owner: human-owner
+  proposer: codex-m140
+  implementer: claude-m140
+  skeptic: codex-m140
+  live_verifier: codex-m140
+  coordinator: codex-m140
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: origin/main
+  code_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: sealed
+  by: codex-m140
+  source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  sha256: 1f9853a97a297d6b39a00b9fa158e1ec0b4f5cf1a1c12757429320e4a0c38e00
+  sealed_at: '2026-09-09T18:22:53+00:00'
+  amendment_approval_ref: null
+implementation:
+  branch: t1/control-economics-m140-tenant-state-lifecycle
+  base_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  - L4
+  live_required: true
+  soak_required: true
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies:
+- T0-C
+blockers: []
+residuals: []
+next_action:
+  owner: implementer
+  action: 'Claude: implement the approved 03-decision.md now, run the required tests
+    and submit the committed patch for Codex review. No further proposal round.'
+updated_at: '2026-09-09T19:30:11+00:00'
+configuration_history:
+- at: '2026-09-09T18:16:50+00:00'
+  by: codex-m140
+  fields:
+  - baseline
+  - dependencies
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-09T18:23:38+00:00'
+  by: codex-m140
+  fields:
+  - blockers
+  - dependencies
+  - next_action
+  approval_ref: null
+- at: '2026-09-09T18:24:51+00:00'
+  by: codex-m140
+  fields:
+  - blockers
+  - dependencies
+  - next_action
+  approval_ref: null
+- at: '2026-09-09T18:50:47+00:00'
+  by: codex-m140
+  fields:
+  - change_class
+  - next_action
+  approval_ref: null
+- at: '2026-09-09T19:04:32+00:00'
+  by: codex-m140
+  fields:
+  - fix_loop
+  - next_action
+  - roles
+  approval_ref: WORKFLOW_UPDATE.md
+- at: '2026-09-09T19:29:57+00:00'
+  by: codex-m140
+  fields:
+  - blockers
+  - next_action
+  approval_ref: IMPLEMENTATION_AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-09T18:22:43+00:00'
+  by: codex-m140
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: CRITIQUED
+  at: '2026-09-09T18:51:12+00:00'
+  by: codex-m140
+  artifact: 02B-critique.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: CRITIQUED
+  to: AGREED
+  at: '2026-09-09T19:30:11+00:00'
+  by: codex-m140
+  artifact: 03-decision.md
+  note: User instructed implementation to start after certificate clarification; startup
+    hold resolved, all verification requirements retained.
+  approval_ref: IMPLEMENTATION_AUTHORIZATION.md
+  forced: false
+check_history:
+- check: critique
+  result: FAIL
+  by: codex-m140
+  artifact: 02B-critique.md
+  sha256: fc43961084ea233bcf0e40d33b86b343dbccfa4cf9947a4928eed93728aecaef
+  source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  at: '2026-09-09T18:35:06+00:00'
+- check: critique
+  result: FAIL
+  by: codex-m140
+  artifact: 02B-critique.md
+  sha256: cf79ce9601e084219d8ac35cd5ad9d971f0672fd1c06dc14ef8cc3b2c928319e
+  source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  at: '2026-09-09T18:45:49+00:00'
+- check: decision
+  result: PASS
+  by: codex-m140
+  artifact: 03-decision.md
+  sha256: 5a05af9d0c36817ada51c9b60d0c848143f5dfc40d317a10cca901976505cb68
+  source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  at: '2026-09-09T18:51:13+00:00'
+  contract_sha256: 7d64ae59769ebdb59fa58cedebf1d05ee8f68459d53edf61aa3b5afc07e5512b
+- check: decision
+  result: PASS
+  by: codex-m140
+  artifact: 03-decision.md
+  sha256: fab6ed90e8287d72fdd30615774be09e8044357114b8f47545ea69c5b6eff74b
+  source_sha: aa5cfeffbe2348f2fea53bd5bacb5f350858df2d
+  at: '2026-09-09T19:04:32+00:00'
+  contract_sha256: 48976a5aeb1845a403a43aee60dc55f8894528cfcc92f2cbefdbc8520e50e593
+  approval_ref: WORKFLOW_UPDATE.md
+fix_loop: lead_worker
