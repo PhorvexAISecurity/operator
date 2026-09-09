@@ -207,6 +207,9 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	if recorded.Claim == nil || recorded.Claim.BrainImage != "record-image" || recorded.Claim.GitSHA != "record-sha" || !recorded.Claim.DetectorSetKnown {
 		t.Fatalf("missing runner claim: %+v", recorded.Claim)
 	}
+	if recorded.Representation == nil || recorded.Representation.CoverageShare.Share.Present || recorded.Representation.Snapshot.Scope.Version != "uid-1" {
+		t.Fatalf("missing or dishonest runner representation: %+v", recorded.Representation)
+	}
 	if recorded.Actuated {
 		t.Fatal("claim metadata bypassed kill-switch")
 	}

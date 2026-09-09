@@ -28,25 +28,26 @@ import (
 // platform + that it helped). NO EMR / scarcity / fact-weight / per-dollar / lambda /
 // hazard / pHold / attribution / raw-risk field appears, by design.
 type OwnerEvent struct {
-	Claim           model.ClaimScope `json:"claim"`
-	OutcomeEvidence string           `json:"outcomeEvidence"`
-	Tenant          string           `json:"tenant"`
-	Time            string           `json:"time,omitempty"` // RFC3339 decision timestamp (owner-safe: when, not score)
-	Namespace       string           `json:"namespace"`
-	Pod             string           `json:"pod"`
-	Action          string           `json:"action"`
-	Actuated        bool             `json:"actuated"`
-	DryRun          bool             `json:"dryRun"`
-	Handler         string           `json:"handler,omitempty"`
-	ObjectsTouched  []string         `json:"objectsTouched,omitempty"`
-	Reversible      bool             `json:"reversible"`      // mutationKind -> reversible|forward-only chip
-	AttackPrevented bool             `json:"attackPrevented"` // Deprecated: dispatch-derived, not confirmed prevention
-	WorkPreserved   bool             `json:"workPreserved"`   // Deprecated: action-derived, not measured preservation
-	HarmCaused      bool             `json:"harmCaused"`
-	SLOKept         bool             `json:"sloKept"`      // Deprecated: feasibility assumption, not measured SLO
-	AttackStage     string           `json:"attackStage"`  // COARSE plain-English label, not the raw enum
-	Why             string           `json:"why"`          // SERVER-AUTHORED, owner-safe outputs only
-	BlindOutcome    string           `json:"blindOutcome"` // r6 counterfactual OUTCOME, sanitized
+	Representation  OwnerRepresentation `json:"representation"`
+	Claim           model.ClaimScope    `json:"claim"`
+	OutcomeEvidence string              `json:"outcomeEvidence"`
+	Tenant          string              `json:"tenant"`
+	Time            string              `json:"time,omitempty"` // RFC3339 decision timestamp (owner-safe: when, not score)
+	Namespace       string              `json:"namespace"`
+	Pod             string              `json:"pod"`
+	Action          string              `json:"action"`
+	Actuated        bool                `json:"actuated"`
+	DryRun          bool                `json:"dryRun"`
+	Handler         string              `json:"handler,omitempty"`
+	ObjectsTouched  []string            `json:"objectsTouched,omitempty"`
+	Reversible      bool                `json:"reversible"`      // mutationKind -> reversible|forward-only chip
+	AttackPrevented bool                `json:"attackPrevented"` // Deprecated: dispatch-derived, not confirmed prevention
+	WorkPreserved   bool                `json:"workPreserved"`   // Deprecated: action-derived, not measured preservation
+	HarmCaused      bool                `json:"harmCaused"`
+	SLOKept         bool                `json:"sloKept"`      // Deprecated: feasibility assumption, not measured SLO
+	AttackStage     string              `json:"attackStage"`  // COARSE plain-English label, not the raw enum
+	Why             string              `json:"why"`          // SERVER-AUTHORED, owner-safe outputs only
+	BlindOutcome    string              `json:"blindOutcome"` // r6 counterfactual OUTCOME, sanitized
 }
 
 // coarseStage maps the internal kill-chain stage enum to a customer-facing label (never the
@@ -132,6 +133,7 @@ func ToOwnerEvent(rec audit.Record) OwnerEvent {
 		claim = model.NewClaimScope(rec.Claim.DetectorSet, rec.Claim.DetectorSetKnown, rec.Claim.BrainImage, rec.Claim.GitSHA)
 	}
 	return OwnerEvent{
+		Representation:  ownerRepresentation(rec),
 		Claim:           claim,
 		OutcomeEvidence: "dispatch-only",
 		Tenant:          rec.Tenant,
