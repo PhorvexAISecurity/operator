@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 26
+revision: 27
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -87,18 +87,27 @@ checks:
     - phorvex
     inputs_sha256: 9f16db212402768eb646af5038e3cf348d3e00db9b298850a3cbadb1bcb4e227
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 2a88775468117e68e5cf503b1af028cd27f6cdac8d3e9677b8595818519cd33e
-    source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
-    at: '2026-09-10T21:24:32+00:00'
+    sha256: aa575ae336a64c941f2a384a05e6d0585380af5fb79077bce55b258e1f5edc20
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:58:27+00:00'
+    incident_sha256: 692cd3fbef4f4325f44931134f63cdf4e9fbe4ec0152ef3cf06db3667151d745
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 692cd3fbef4f4325f44931134f63cdf4e9fbe4ec0152ef3cf06db3667151d745
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:58:27+00:00'
+    baseline_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
 fix_id: V3-M163
 issues:
 - M-163
 title: Keep shadow evaluation isolated from production state and metrics
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -143,7 +152,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -159,10 +168,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-10T21:56:10+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T21:58:30+00:00'
 configuration_history:
 - at: '2026-09-10T17:50:53+00:00'
   by: codex-lead
@@ -245,6 +254,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-10T21:56:09+00:00'
   by: claude-v3-m163
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T21:58:28+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T21:58:29+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -428,10 +453,17 @@ check_history:
   sha256: c872266a3303d77325fa81a253dcf6aba107cd39e4642c4c8fa22e31f4b59271
   source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
   at: '2026-09-10T21:54:51+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 2a88775468117e68e5cf503b1af028cd27f6cdac8d3e9677b8595818519cd33e
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:24:32+00:00'
 handoff:
-  id: V3-M163:26:submit
-  from: claude-v3-m163
+  id: V3-M163:27:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 26
+  role: coordinator
+  kind: review
+  revision: 27
