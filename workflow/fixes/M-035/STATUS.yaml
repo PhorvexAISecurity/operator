@@ -1,0 +1,209 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 8
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 146f0a0ff2947f86fc7f16df283dd0d50c791a30a402c971395157daed63bda0
+    source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+    at: '2026-09-10T04:35:01+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+  red:
+    result: PASS
+    by: codex-worker-228
+    artifact: evidence/worker/red.log
+    sha256: 9d5cc3e4aae468a95ad9b55b67f0f192cf4e837724bd7d3053eca9f2bff30b9a
+    source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+    at: '2026-09-10T04:38:02+00:00'
+  preflight:
+    result: PASS
+    by: codex-worker-228
+    artifact: evidence/worker/preflight
+    sha256: eec6c5eaa36054da34cb36dcb252d2b864916c11c637f317f688baabe7768666
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:51+00:00'
+  implementation:
+    result: PASS
+    by: codex-worker-228
+    artifact: 04-diff.patch
+    sha256: bf50d4bdff690a4f8031093799ade7975869e6445b6016c3ed58e78ea47af803
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:51+00:00'
+  l0:
+    result: PASS
+    by: codex-worker-228
+    artifact: evidence/worker/packages.log
+    sha256: c762fc7ae76b75d0540ce9c3893497079179b1a9f8771380353c7eb975f81ce5
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:51+00:00'
+  l1:
+    result: PASS
+    by: codex-worker-228
+    artifact: evidence/worker/green.log
+    sha256: 08f2c2259d84658a1512e2712d9ab96899e5413cc520bee0d3c11d5c14aeda92
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:51+00:00'
+  l2:
+    result: PASS
+    by: codex-worker-228
+    artifact: evidence/worker/green.log
+    sha256: 08f2c2259d84658a1512e2712d9ab96899e5413cc520bee0d3c11d5c14aeda92
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:52+00:00'
+  positive_control:
+    result: PASS
+    by: codex-worker-228
+    artifact: evidence/worker/green.log
+    sha256: 08f2c2259d84658a1512e2712d9ab96899e5413cc520bee0d3c11d5c14aeda92
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:52+00:00'
+fix_id: M-035
+issues:
+- M-035
+title: Withhold unsupported endpointPath cover (PHORVEXSEC-228)
+profile: standard
+state: OFFLINE_VERIFIED
+roles:
+  human_owner: Milad
+  proposer: codex-lead
+  implementer: codex-worker-228
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: parallel/knowledge-m035-withhold-endpoint-cover
+  base_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  head_sha: 148902e9d54729fb4c925959a49e93e010270cba
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Positive endpointPath cover and handler cutover/recovery remain outside this approved
+  withholding patch.
+next_action:
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-10T04:45:07+00:00'
+configuration_history:
+- at: '2026-09-10T04:33:27+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - residuals
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-10T04:34:42+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-10T04:44:50+00:00'
+  by: codex-worker-228
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T04:34:29+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T04:35:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T04:44:52+00:00'
+  by: codex-worker-228
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T04:44:58+00:00'
+  by: codex-worker-228
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 146f0a0ff2947f86fc7f16df283dd0d50c791a30a402c971395157daed63bda0
+  source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  at: '2026-09-10T04:34:32+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+handoff:
+  id: M-035:8:submit
+  from: codex-worker-228
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8
