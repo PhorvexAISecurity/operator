@@ -1,0 +1,226 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: console-lead
+    artifact: 03-decision.md
+    sha256: 0656fdd9501828c95cacf03992a7971908c088c117375dbb3fe1f84d69c766d2
+    source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+    at: '2026-09-10T04:16:08+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  red:
+    result: PASS
+    by: console-lead
+    artifact: evidence/red.txt
+    sha256: b98cbbabff788ed96f594ca4a13b99a9ad1ee4fa1aa366f6463c074ddb3aceef
+    source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+    at: '2026-09-10T04:19:06+00:00'
+  preflight:
+    result: PASS
+    by: console-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 1c53a7fdfebd5f876b5b01739fa7d856d95125e5bff32fa77d98266d3996c0fc
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:47:04+00:00'
+  implementation:
+    result: PASS
+    by: console-worker
+    artifact: 04-diff.patch
+    sha256: b11e98c6007c00e4c82098f54bce1b9ab65f3b89db176b1fa3e5d3b77583fbf7
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:47:04+00:00'
+  l0:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker-frontend.txt
+    sha256: 7e7c99ec5b651ee769f2b39d01757c4b2ba43d5fe1331e079fddb8bed0f8f4f5
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:47:04+00:00'
+  l1:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker-l1.txt
+    sha256: ae796eb8f837c4e27ee639e8097b56f0880315911cb233d63242b9af3239648b
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:47:04+00:00'
+  l2:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker-l2.txt
+    sha256: ecad0738f5767e2074165f2044bd60109484d77d1055745ca557621f66946b98
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:47:04+00:00'
+  positive_control:
+    result: PASS
+    by: console-worker
+    artifact: evidence/worker-l1.txt
+    sha256: ae796eb8f837c4e27ee639e8097b56f0880315911cb233d63242b9af3239648b
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:47:04+00:00'
+  incident:
+    result: PASS
+    by: console-lead
+    artifact: evidence/incident.md
+    sha256: 2a3605c9585073452cff64b6f2e06e4f0d7569983b967c9190ab91f28d450972
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:48:11+00:00'
+    baseline_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  p3:
+    result: PASS
+    by: console-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d52b77f64ff4ab0cc53dab652e9283390df47e216637e97ef4e0a885d222f320
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:48:11+00:00'
+    incident_sha256: 2a3605c9585073452cff64b6f2e06e4f0d7569983b967c9190ab91f28d450972
+fix_id: CONSOLE-LIVE-HISTORY
+issues: []
+title: Restore reliable console decision history and compact live cards
+profile: standard
+state: PR_READY
+roles:
+  human_owner: hamihoriyat
+  proposer: console-lead
+  implementer: console-worker
+  skeptic: console-lead
+  live_verifier: console-lead
+  coordinator: console-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/console-live-history
+  base_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T04:48:12+00:00'
+configuration_history:
+- at: '2026-09-10T04:16:08+00:00'
+  by: console-lead
+  fields:
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: user:2026-09-10 console history PR approval
+- at: '2026-09-10T04:40:40+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T04:42:51+00:00'
+  by: console-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T04:16:08+00:00'
+  by: console-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T04:16:09+00:00'
+  by: console-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T04:47:04+00:00'
+  by: console-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T04:47:05+00:00'
+  by: console-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T04:48:11+00:00'
+  by: console-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T04:48:12+00:00'
+  by: console-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: CONSOLE-LIVE-HISTORY:9:review
+  from: console-lead
+  to: console-lead
+  role: coordinator
+  kind: review
+  revision: 9
