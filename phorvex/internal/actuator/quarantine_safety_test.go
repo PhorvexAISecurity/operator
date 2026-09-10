@@ -115,7 +115,7 @@ func TestM038RollbackRefusesConcurrentChanges(t *testing.T) {
 		t.Fatal("overwrote concurrent edit")
 	}
 	var np networkingv1.NetworkPolicy
-	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "phorvex-quarantine-p"}, &np); err != nil {
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: quarantinePolicy(p).Name}, &np); err != nil {
 		t.Fatal("removed isolation on refusal")
 	}
 }

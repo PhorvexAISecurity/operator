@@ -12,8 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -38,7 +40,12 @@ func qtnClient(objs ...client.Object) client.Client {
 			obj.SetUID(types.UID("uid-" + obj.GetName()))
 		}
 	}
-	return fake.NewClientBuilder().WithScheme(qtnScheme()).WithObjects(objs...).Build()
+	return fake.NewClientBuilder().WithScheme(qtnScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+		if obj.GetUID() == "" {
+			obj.SetUID(uuid.NewUUID())
+		}
+		return c.Create(ctx, obj, opts...)
+	}}).Build()
 }
 
 func ownedPod(ns, name string, labels map[string]string, owner metav1.OwnerReference) *corev1.Pod {
@@ -97,7 +104,7 @@ func enactQuarantine(t *testing.T, c client.Client, ns, name string) (HandlerRes
 		t.Fatalf("ownerReferences not stripped: %+v", got.OwnerReferences)
 	}
 	var np networkingv1.NetworkPolicy
-	if err := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: "phorvex-quarantine-" + name}, &np); err != nil {
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: quarantinePolicy(&got).Name}, &np); err != nil {
 		t.Fatalf("deny-all NetworkPolicy missing: %v", err)
 	}
 	return res, &got
