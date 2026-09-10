@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 19
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -20,9 +20,9 @@ checks:
     result: PASS
     by: claude-v3-m152
     artifact: 04-diff.patch
-    sha256: ba391ed2d78a22f1d3f3548c8c983d288a10a3689cbda677beca7bffc3958331
-    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
-    at: '2026-09-10T17:49:42+00:00'
+    sha256: 581ceef90aa88cc24c5eba4499e556383ccc3fbc56cd8e1e18936aef5377969c
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:30:43+00:00'
   red:
     result: PASS
     by: claude-v3-m152
@@ -33,37 +33,60 @@ checks:
   l0:
     result: PASS
     by: claude-v3-m152
-    artifact: evidence/impl/head-l0-build-vet.log
-    sha256: 37198e19c23acf721a8a3532d006c9bad54b7c1ed9ce15f05b76c2dc9f96cd8c
-    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
-    at: '2026-09-10T17:49:49+00:00'
+    artifact: evidence/impl/head-fac41c3/l0-build-vet.log
+    sha256: 4c78c8d4bda1450dec7ded6f212ca3b5818f0f234ca936955ab137bc88514613
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:30:47+00:00'
   l1:
     result: PASS
     by: claude-v3-m152
-    artifact: evidence/impl/head-l1-focused-packages.log
-    sha256: 496864ef285fa913e3a77abeba55a828b0c7593e2c0feca1923bbfa0e9f7020a
-    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
-    at: '2026-09-10T17:49:52+00:00'
+    artifact: evidence/impl/head-fac41c3/l1-focused-packages.log
+    sha256: 3278f8fae2ceea970ad6b0bc477b47b958967d4e2aaf5349e80c8e2c9ccbf936
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:30:50+00:00'
   l2:
     result: PASS
     by: claude-v3-m152
-    artifact: evidence/impl/head-l2-full-suite.log
-    sha256: 68acc2bf98f336b534a24a7108b59fe7ed23022683d2fba0a0435d4be34c3515
-    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
-    at: '2026-09-10T17:49:55+00:00'
+    artifact: evidence/impl/head-fac41c3/l2-full-suite.log
+    sha256: f9ab96c6f587d07420fec11860bb17cbfa289157bb3c18610f43213b49b99cff
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:30:53+00:00'
   positive_control:
     result: PASS
     by: claude-v3-m152
-    artifact: evidence/impl/head-positive-controls.log
-    sha256: 349d6359d5eb5bc8c685660dd2e67d0a132f04af4ecf9d9794d49dcff0ed67b2
-    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
-    at: '2026-09-10T17:50:00+00:00'
+    artifact: evidence/impl/head-fac41c3/positive-controls.log
+    sha256: 86e152faa3a3be8ba4cdef184d77bfbe090ec39bd7e4465fc0a0808656c3ad2c
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:30:58+00:00'
+  preflight:
+    result: PASS
+    by: claude-v3-m152
+    artifact: evidence/impl/head-fac41c3/preflight.json
+    sha256: bfa2611928c033d961b1625a831a86cffa699477d0a856f95e0a2c5697ba01c8
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:32:01+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: df9c6dc76a46a89a765ca0bb2a2e0ad9d41b814e78b702f6f19611c4e12d881c
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:34:01+00:00'
+    baseline_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f778d2543268092f547f48b6e5d19d0716c0858342cf6358b11fcdf1f89895d6
+    source_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+    at: '2026-09-10T18:34:01+00:00'
+    incident_sha256: df9c6dc76a46a89a765ca0bb2a2e0ad9d41b814e78b702f6f19611c4e12d881c
 fix_id: V3-M152
 issues:
 - M-152
 title: Preserve measured VRAM presence through GPU adapters
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -87,7 +110,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m152-vram-presence
   base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-  head_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+  head_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
   stacked_on: []
 pull_request:
   url: null
@@ -108,7 +131,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -124,10 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement 03-decision.md, reproduce baseline, submit tested source for independent
-    review
-updated_at: '2026-09-10T17:50:00+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T18:34:03+00:00'
 configuration_history:
 - at: '2026-09-10T17:24:55+00:00'
   by: codex-lead
@@ -141,6 +164,11 @@ configuration_history:
   - verification
   approval_ref: AUTHORIZATION.md
 - at: '2026-09-10T17:43:06+00:00'
+  by: claude-v3-m152
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T18:29:21+00:00'
   by: claude-v3-m152
   fields:
   - implementation
@@ -162,3 +190,78 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T18:32:02+00:00'
+  by: claude-v3-m152
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T18:32:02+00:00'
+  by: claude-v3-m152
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T18:34:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T18:34:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: implementation
+  result: PASS
+  by: claude-v3-m152
+  artifact: 04-diff.patch
+  sha256: ba391ed2d78a22f1d3f3548c8c983d288a10a3689cbda677beca7bffc3958331
+  source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+  at: '2026-09-10T17:49:42+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m152
+  artifact: evidence/impl/head-l0-build-vet.log
+  sha256: 37198e19c23acf721a8a3532d006c9bad54b7c1ed9ce15f05b76c2dc9f96cd8c
+  source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+  at: '2026-09-10T17:49:49+00:00'
+- check: l1
+  result: PASS
+  by: claude-v3-m152
+  artifact: evidence/impl/head-l1-focused-packages.log
+  sha256: 496864ef285fa913e3a77abeba55a828b0c7593e2c0feca1923bbfa0e9f7020a
+  source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+  at: '2026-09-10T17:49:52+00:00'
+- check: l2
+  result: PASS
+  by: claude-v3-m152
+  artifact: evidence/impl/head-l2-full-suite.log
+  sha256: 68acc2bf98f336b534a24a7108b59fe7ed23022683d2fba0a0435d4be34c3515
+  source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+  at: '2026-09-10T17:49:55+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-v3-m152
+  artifact: evidence/impl/head-positive-controls.log
+  sha256: 349d6359d5eb5bc8c685660dd2e67d0a132f04af4ecf9d9794d49dcff0ed67b2
+  source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+  at: '2026-09-10T17:50:00+00:00'
+handoff:
+  id: V3-M152:19:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 19

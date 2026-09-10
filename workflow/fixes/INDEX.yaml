@@ -256,8 +256,8 @@ fixes:
     issues:
     - M-152
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/v3-m152-vram-presence
-    head_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+    head_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
