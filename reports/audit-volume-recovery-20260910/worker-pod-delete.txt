@@ -1,0 +1,10 @@
+Worker-authorized emergency cleanup execution; independent rollout verification belongs to root.
+User explicitly authorized removal of ONLY phorvex-system/audit-scan-k3-l3 without PVC/data deletion.
+Transport: authenticated existing SSH control socket; remote Python subprocess kubectl get then raw DELETE.
+All conditions freshly validated, UID/resourceVersion DeleteOptions enforced, no force/grace override or retry.
+Command exit: 0
+
+BEFORE {"at": "2026-09-10T11:03:32.819541+00:00", "checks": {"exact_node": true, "name_namespace": true, "never_restart": true, "no_extra_containers": true, "not_terminating": true, "readonly_audit_mount": true, "readonly_exact_claim": true, "scan_container": true, "single_container": true, "sleep_only": true, "sole_claim": true, "uid": true, "unowned": true}, "metadata": {"deletionTimestamp": null, "name": "audit-scan-k3-l3", "namespace": "phorvex-system", "ownerReferences": null, "resourceVersion": "60214902", "uid": "3bbd54c3-a94e-4e9c-b3e5-59630f9b58db"}, "phase": "Running", "spec": {"containers": [{"command": ["sleep", "172800"], "image": "python:3.11-slim", "name": "scan", "volumeMounts": [{"mountPath": "/audit", "name": "audit", "readOnly": true}]}], "nodeName": "ip-172-27-12-51.us-east-2.compute.internal", "restartPolicy": "Never", "terminationGracePeriodSeconds": 30, "volumes": [{"name": "audit", "persistentVolumeClaim": {"claimName": "phorvex-phorvex-audit", "readOnly": true}}]}}
+COMMAND ["kubectl", "delete", "--raw", "/api/v1/namespaces/phorvex-system/pods/audit-scan-k3-l3", "-f", "-", "--request-timeout=15s"]
+BODY {"apiVersion": "v1", "kind": "DeleteOptions", "preconditions": {"resourceVersion": "60214902", "uid": "3bbd54c3-a94e-4e9c-b3e5-59630f9b58db"}}
+RESULT {"exit_code": 0, "kind": "Pod", "metadata": {"deletionGracePeriodSeconds": 30, "deletionTimestamp": "2026-09-10T11:04:04Z", "name": "audit-scan-k3-l3", "namespace": "phorvex-system", "resourceVersion": "60272594", "uid": "3bbd54c3-a94e-4e9c-b3e5-59630f9b58db"}, "reason": null, "status": null}

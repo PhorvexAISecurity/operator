@@ -156,6 +156,11 @@ phorvex:
   audit:
     enabled: false
     path: /audit/live.jsonl
+    # Opt-in accidental-outage guard: reject other Pods mounting this release's
+    # RWO audit PVC. Requires Kubernetes >=1.30 and audit.persistence.enabled.
+    # This checks Deployment pod shape, not authenticated controller identity.
+    volumeGuard:
+      enabled: false
     # 0 = unbounded. The operator rotates the file itself (internal/audit/rotate.go).
     maxBytes: 268435456
     persistence:

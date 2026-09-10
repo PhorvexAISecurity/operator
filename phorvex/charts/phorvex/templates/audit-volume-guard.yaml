@@ -1,0 +1,82 @@
+{{- if .Values.phorvex.audit.volumeGuard.enabled }}
+{{- if not (and .Values.phorvex.audit.enabled .Values.phorvex.audit.persistence.enabled) }}
+{{- fail "phorvex.audit.volumeGuard requires audit.enabled=true and audit.persistence.enabled=true" }}
+{{- end }}
+{{- if not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version) }}
+{{- fail "phorvex.audit.volumeGuard requires Kubernetes >=1.30 for stable ValidatingAdmissionPolicy" }}
+{{- end }}
+{{- $name := include "phorvex.auditVolumeGuardName" . }}
+{{- $deployment := include "phorvex.fullname" . }}
+# Accidental-outage guard only. Labels/owner references can be forged by Pod
+# creators: this is NOT authenticated controller identity or an RBAC substitute.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: audit-volume-guard
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Exact
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+        scope: Namespaced
+  matchConditions:
+    - name: this-release-audit-pvc
+      expression: >-
+        request.namespace == {{ .Release.Namespace | toJson }}
+        && has(object.spec) && has(object.spec.volumes)
+        && object.spec.volumes.exists(v,
+          has(v.persistentVolumeClaim)
+          && v.persistentVolumeClaim.claimName == {{ printf "%s-audit" $deployment | toJson }})
+  validations:
+    - expression: >-
+        has(object.metadata) && has(object.metadata.ownerReferences)
+        && object.metadata.ownerReferences.exists(o,
+          has(o.controller) && o.controller == true
+          && has(o.apiVersion) && o.apiVersion == 'apps/v1'
+          && has(o.kind) && o.kind == 'ReplicaSet'
+          && has(o.uid) && size(o.uid) > 0
+          && has(o.name) && o.name.startsWith({{ printf "%s-" $deployment | toJson }})
+          && size(o.name) > {{ len (printf "%s-" $deployment) }})
+      reason: Forbidden
+      message: "audit PVC is reserved for this Deployment's ReplicaSet-shaped Pods; do not create a separate audit reader"
+    - expression: >-
+        has(object.spec.serviceAccountName)
+        && object.spec.serviceAccountName == {{ include "phorvex.serviceAccountName" . | toJson }}
+      reason: Forbidden
+      message: "audit PVC requires the release manager service account"
+    - expression: >-
+        has(object.metadata) && has(object.metadata.labels)
+        && 'app.kubernetes.io/name' in object.metadata.labels
+        && object.metadata.labels['app.kubernetes.io/name'] == {{ include "phorvex.name" . | toJson }}
+        && 'app.kubernetes.io/instance' in object.metadata.labels
+        && object.metadata.labels['app.kubernetes.io/instance'] == {{ .Release.Name | toJson }}
+      reason: Forbidden
+      message: "audit PVC requires the release application name and instance labels"
+    - expression: >-
+        has(object.spec.containers)
+        && object.spec.containers.exists(c, c.name == 'manager')
+      reason: Forbidden
+      message: "audit PVC is reserved for the manager Pod; inspect audit data via its existing console or a bounded artifact export"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: audit-volume-guard
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny"]
+{{- end }}

@@ -80,6 +80,8 @@ phorvex:
       enabled: true
       path: /audit/live.jsonl
       maxBytes: 268435456
+      volumeGuard:
+        enabled: true
       persistence:
         enabled: true
         storageClass: gp2-csi
@@ -149,6 +151,15 @@ phorvex:
     resources:
       limits: { cpu: 500m, memory: 256Mi }
       requests: { cpu: 10m, memory: 64Mi }
+    # Keep the shared RWO audit writer/console on the system pool. Tolerating
+    # CriticalAddonsOnly alone does not prevent placement onto database nodes.
+    nodeSelector:
+      node-type: system
+    tolerations:
+      - key: CriticalAddonsOnly
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
 
 dashboard:
   enabled: true
