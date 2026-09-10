@@ -227,4 +227,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: parallel/contract-m021-actuator-selection-repertoire
-    head_sha: null
+    head_sha: 7dc07cd6c1edce7dcb6d10b359b094c4b3a96671
