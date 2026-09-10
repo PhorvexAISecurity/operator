@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 28
+revision: 29
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -85,19 +85,28 @@ checks:
     - End-to-End
     inputs_sha256: e8f284715c8560f4fccb8349ec040250f76e3923e711599b13467d42179d48e1
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: d09c629d02073e9a1ff35f9ebcab1b0dd47ffc552eadee2fb0fa6588bcee9d8e
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:50:47+00:00'
+    sha256: bcfe44a3032deed689f8af6e5aeb9864fce2903143d9338568a86a98dbe0a8d1
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:18:38+00:00'
+    incident_sha256: 4ff1bb35e3afcac1a220414a4dccc3f3a0e0823bf4fa1351a48a77a538b5d3ed
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4ff1bb35e3afcac1a220414a4dccc3f3a0e0823bf4fa1351a48a77a538b5d3ed
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:18:38+00:00'
+    baseline_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
 fix_id: V3-E2E
 issues:
 - M-155
 - M-165
 title: Make end-to-end verification causal and observation-aware
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -142,7 +151,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -158,10 +167,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-10T22:16:40+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T22:18:41+00:00'
 configuration_history:
 - at: '2026-09-10T18:27:19+00:00'
   by: codex-lead
@@ -249,6 +258,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-10T22:16:39+00:00'
   by: claude-v3-e2e
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T22:18:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T22:18:40+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -482,10 +507,17 @@ check_history:
     a multi-line frame inside the bound is still accepted, every notice is still counted,
     a Ready pod created after the action still confirms a replacement, and a decision
     about the actual original target still confirms.'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: d09c629d02073e9a1ff35f9ebcab1b0dd47ffc552eadee2fb0fa6588bcee9d8e
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:50:47+00:00'
 handoff:
-  id: V3-E2E:28:submit
-  from: claude-v3-e2e
+  id: V3-E2E:29:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 28
+  role: coordinator
+  kind: review
+  revision: 29
