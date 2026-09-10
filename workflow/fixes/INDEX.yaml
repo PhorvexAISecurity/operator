@@ -197,3 +197,13 @@ fixes:
     stacked_on: []
     branch: fix/console-live-history
     head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+  DEPLOY-AUTOSYNC:
+    directory: fixes/DEPLOY-AUTOSYNC
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/deploy-autosync
+    head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
