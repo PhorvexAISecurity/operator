@@ -81,8 +81,9 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	urg := 0.5 + 0.5*stageUrg
 
 	// AI recon facts — emitted on GPU/served-model assets. Cover is granted per physical mechanism,
-	// not to the group as a whole: model-shard-replace invalidates its matching fact;
-	// endpointPath remains audit-only because route restitching does not prove locator invalidation;
+	// not to the group as a whole: modelFingerprint stays audit-only because model-shard-replace
+	// has no loaded-identity/effect witness. EndpointPath remains audit-only because route
+	// restitching does not prove locator invalidation;
 	// mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
 	// warm-swap and GPU co-location remain cover-free until anti-affinity proves relocation; and
 	// kv-migrate-invalidate maps to session state below. This keeps selectable cover narrower than
@@ -101,7 +102,6 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		if af.CoverByAction == nil {
 			af.CoverByAction = map[model.Action][]string{}
 		}
-		af.CoverByAction[model.ActionModelShardReplace] = append(af.CoverByAction[model.ActionModelShardReplace], mf.Key())
 		// M-035: retain endpointPath and its weight for audit, but withhold cover from every action.
 		// A route declaration or selector change does not prove the learned DNS/API locator is unusable.
 		// [PHVX-26a] The GPU cover, corrected. These two actions used to receive byte-identical

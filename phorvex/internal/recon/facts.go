@@ -50,13 +50,13 @@ const (
 	// inference workload.
 	//
 	// These no longer share one blanket status. Cover is action- and capability-specific:
-	// model-shard-replace carries its matching fact, endpointPath is audit-only, and GPU contention
+	// modelFingerprint and endpointPath are audit-only, while GPU contention
 	// is covered only for a MIG-capable pod and GPU co-location currently carries no grant.
 	// Anything genuinely cover-free must say so per-fact and be asserted in cover_test.
 	// Corrected under PHVX-76. ---
 
 	// FactModelFingerprint = served model identity/version the attacker fingerprinted
-	// (reset by model-shard-replace).
+	// (AUDIT-ONLY: model-shard-replace does not prove loaded identity changes or invalidation).
 	FactModelFingerprint = "modelFingerprint"
 	// FactEndpointPath = inference endpoint / API route the attacker mapped. AUDIT-ONLY:
 	// endpoint-rotate does not prove the learned locator is invalidated.

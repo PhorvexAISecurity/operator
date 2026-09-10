@@ -75,11 +75,11 @@ func TestNoFactIsDocumentedAuditOnlyWhileCarryingCover(t *testing.T) {
 }
 
 // TestAIFactCoverClaimsMatchCapabilities pins both directions after PHVX-26a narrowed the GPU
-// model. Model facts carry cover and MIG contention carries conditional cover. Endpoint paths
-// and GPU co-location stay audit-only without a guaranteed invalidation mechanism.
+// model. MIG contention carries conditional cover. Endpoint paths, modelFingerprint
+// and GPU co-location stay audit-only pending their respective effect evidence.
 func TestAIFactCoverClaimsMatchCapabilities(t *testing.T) {
 	covered := factsWithCover(t)
-	for _, kind := range []string{FactModelFingerprint, FactGPUContentionChannel} {
+	for _, kind := range []string{FactGPUContentionChannel} {
 		if !covered[kind] {
 			t.Errorf("fact %q should carry cover for this capable fixture; update the code and its "+
 				"claim together", kind)
@@ -90,6 +90,9 @@ func TestAIFactCoverClaimsMatchCapabilities(t *testing.T) {
 	}
 	if covered[FactGPUColocation] {
 		t.Errorf("fact %q must stay cover-free until an actuator guarantees relocation", FactGPUColocation)
+	}
+	if covered[FactModelFingerprint] {
+		t.Errorf("fact %q must stay cover-free without loaded-identity/effect evidence", FactModelFingerprint)
 	}
 }
 
