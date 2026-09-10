@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 21
+revision: 22
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -17,12 +17,12 @@ checks:
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   preflight:
-    result: FAIL
+    result: PASS
     by: claude-v3-m136
     artifact: evidence/preflight-r2.json
-    sha256: f2a255849761c104c36515ce0965748b2f05e316ba533ab6a6b3c4d2e492ad73
+    sha256: 323c2b95c0e781d5eaa75e77c87d0aed76159fa78c2a1fee5cd67e4c54922e80
     source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
-    at: '2026-09-10T21:20:30+00:00'
+    at: '2026-09-10T21:21:32+00:00'
   l1:
     result: PASS
     by: claude-v3-m136
@@ -141,7 +141,7 @@ next_action:
   owner: implementer
   action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
     prior evidence.
-updated_at: '2026-09-10T21:20:30+00:00'
+updated_at: '2026-09-10T21:21:32+00:00'
 configuration_history:
 - at: '2026-09-10T17:56:52+00:00'
   by: codex-lead
@@ -267,6 +267,13 @@ check_history:
   sha256: 48bf56fef3000cacdd191a4dc043844bb6d601efcdeaf77c24d3a646ee8bcb62
   source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
   at: '2026-09-10T21:02:42+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-v3-m136
+  artifact: evidence/preflight-r2.json
+  sha256: f2a255849761c104c36515ce0965748b2f05e316ba533ab6a6b3c4d2e492ad73
+  source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  at: '2026-09-10T21:20:30+00:00'
 handoff:
   id: V3-M136:13:review
   from: codex-lead
