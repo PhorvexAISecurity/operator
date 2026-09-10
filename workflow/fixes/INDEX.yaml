@@ -202,7 +202,7 @@ fixes:
     aliases: []
     issues: []
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/audit-volume-guard

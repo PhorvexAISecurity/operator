@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 11
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -84,11 +84,18 @@ checks:
     source_sha: 255a23a5dcc58c4ea3be0fb9b191edbb9c68a273
     at: '2026-09-10T11:31:35+00:00'
     incident_sha256: b5631d530b452de852ff76f0f54b6c36ea75cf756131afa3acf960268a0aa606
+  patch_equivalence:
+    result: PASS
+    by: audit-lead
+    artifact: evidence/patch-equivalence.md
+    sha256: ac3fa4b284475d007f111140df0a7c2d2bcf8ccf8cbdfe8ff9e5ff9b8824275e
+    source_sha: 255a23a5dcc58c4ea3be0fb9b191edbb9c68a273
+    at: '2026-09-10T11:34:45+00:00'
 fix_id: AUDIT-VOLUME-GUARD
 issues: []
 title: Prevent orphan audit readers from blocking RWO operator and console rollout
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: hamihoriyat
   proposer: audit-lead
@@ -115,8 +122,8 @@ implementation:
   head_sha: 255a23a5dcc58c4ea3be0fb9b191edbb9c68a273
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/168
+  reviewed_head: 2aa33978832ffdd8bbe91f361ae982eda9dbfa1a
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -147,12 +154,18 @@ synchronization:
   permanent_tests: pending
 dependencies: []
 blockers: []
-residuals: []
+residuals:
+- Underlying database-pool CNI IP allocation fault remains; system-pool placement
+  avoids it for this application but is not infrastructure remediation.
+- Single RWO-backed operator/console with Recreate retains planned restart downtime;
+  no HA claim.
+- Native guard checks accidental helper shape, not authenticated controller identity
+  against privileged forgery.
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T11:31:36+00:00'
+  owner: hamihoriyat
+  action: Review Draft PR168/remote checks and merge when authorized; post-merge GitOps
+    verification remains pending
+updated_at: '2026-09-10T11:34:45+00:00'
 configuration_history:
 - at: '2026-09-10T11:10:06+00:00'
   by: audit-lead
@@ -169,6 +182,13 @@ configuration_history:
   by: audit-worker
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-10T11:34:45+00:00'
+  by: audit-lead
+  fields:
+  - next_action
+  - pull_request
+  - residuals
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -218,6 +238,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T11:34:45+00:00'
+  by: audit-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision
