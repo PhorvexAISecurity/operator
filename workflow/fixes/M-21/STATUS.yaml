@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -24,12 +24,94 @@ checks:
     source_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
     at: '2026-09-10T14:24:23+00:00'
     baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  preflight:
+    result: PASS
+    by: claude-m021
+    artifact: evidence/preflight/receipt.json
+    sha256: f8224dfde1b1f8086fafff7df0d2a2af728a07abd2639a7362894d1c4e9e6cd6
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:33:09+00:00'
+  implementation:
+    result: PASS
+    by: claude-m021
+    artifact: 04-diff.patch
+    sha256: c4ece6a8c8e3d3aff708f6aa02d8b6dea3b657ecdfa71f4112d447dd1d5185ed
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:33:09+00:00'
+  red:
+    result: PASS
+    by: claude-m021
+    artifact: evidence/red.md
+    sha256: 9961fd9bbfba819991c8f3e05323282ca00ccb5aef1f35279e71a8bf705ebc24
+    source_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+    at: '2026-09-10T14:33:09+00:00'
+  l0:
+    result: PASS
+    by: claude-m021
+    artifact: evidence/head/05-full-suite.md
+    sha256: 48150ec7ee732dd902ece93d76bd3a76030c3b7f47e3ab9d51810ef8bda252c3
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:33:09+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 5e70e8283190e2b2f406450852fd0323cde7d0d340d96256bf92de9303168ddb
+  l1:
+    result: PASS
+    by: claude-m021
+    artifact: evidence/head/02-actuator-regressions.md
+    sha256: ce30abed4be5350179c0b8a00aa83a330c0ea89a8e48e900a54d8d6c50744482
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:33:09+00:00'
+    inputs:
+    - phorvex/charts/phorvex
+    - phorvex/docs/actuator-repertoire.md
+    - phorvex/internal/actuator
+    - phorvex/internal/model
+    inputs_sha256: f9d63d8f3933b4955c7e84b8b154144bb96ada2498ebed5420cb9646c72e3b7c
+  l2:
+    result: PASS
+    by: claude-m021
+    artifact: evidence/head/08-oneshot-cli-regressions.md
+    sha256: 430f5f1abc8bf096d64254ef171813118d7712716025855a30880f6072e4b3c1
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:33:09+00:00'
+    inputs:
+    - phorvex/cmd
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/model
+    - phorvex/internal/runner
+    inputs_sha256: ad56ac582e39d718843f97dba8d9c219ed6b9c8e2b48b2d394620e0e2203a783
+  positive_control:
+    result: PASS
+    by: claude-m021
+    artifact: evidence/head/06-r1-oneshot-replay.md
+    sha256: fea89da6a23400b66bb44cb773d7d917284065f3ab5c9ef19c8e5943a203b3f2
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:33:09+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a78c7ef2664a2d8e023a9f5a7e13e0206d66ea335044ccdb3ae3b2b8e4c76127
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:34:59+00:00'
+    baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 4674f9a47a419b618e114eb910e10ab5f870bfcd506be2c33c86864414d2eaec
+    source_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+    at: '2026-09-10T14:34:59+00:00'
+    incident_sha256: a78c7ef2664a2d8e023a9f5a7e13e0206d66ea335044ccdb3ae3b2b8e4c76127
 fix_id: M-21
 issues:
 - M-21
 title: Validate actuator selection and report actual backend support
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -74,13 +156,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -90,10 +172,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: 'Claude worker: retain the baseline reproduction, implement signed 03-decision.md,
-    run required preflight and submit-review to codex-lead; no further proposal gate.'
-updated_at: '2026-09-10T14:29:16+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T14:35:00+00:00'
 configuration_history:
 - at: '2026-09-10T12:58:22+00:00'
   by: codex-lead
@@ -127,6 +209,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-10T14:33:08+00:00'
+  by: claude-m021
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -144,6 +231,38 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T14:33:09+00:00'
+  by: claude-m021
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T14:33:10+00:00'
+  by: claude-m021
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T14:34:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T14:35:00+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: base_review
   result: PASS
@@ -153,3 +272,10 @@ check_history:
   source_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
   at: '2026-09-10T14:23:44+00:00'
   baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+handoff:
+  id: M-21:12:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 12
