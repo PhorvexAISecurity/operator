@@ -1,15 +1,14 @@
 "use client";
 import * as React from "react";
 import { ClaimScopeNote } from "@/components/claim-scope";
-import { api, Lens, liveStream, RunStatus } from "@/lib/api";
+import { api, Lens, LiveHistoryPage, RunStatus } from "@/lib/api";
 import { AttackResultsPanel } from "@/components/panels/attack-report";
 import { useOwnerTenant } from "@/lib/owner";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { PageHead, SectionLabel } from "./effectiveness";
-import { Pending } from "@/components/ui/more";
 import { cn } from "@/lib/utils";
-import { Radio, Activity, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2, BarChart3 } from "lucide-react";
+import { Radio, Lock, Trash2, ChevronDown, ShieldCheck, ShieldOff, Search, ChevronLeft, ChevronRight, ListFilter, Swords, Loader2, BarChart3 } from "lucide-react";
 
 // parseTs parses a UTC tsNow() string ("2026-06-28 14:30:00 UTC") to epoch ms.
 function parseTs(s?: string): number {
@@ -21,7 +20,6 @@ function parseTs(s?: string): number {
 interface AttackWindow { id: string; scenario: string; start: number; end: number; running: boolean }
 
 const PAGE_SIZE = 15;       // decisions per page
-const BUFFER_CAP = 400;     // how many recent decisions we keep client-side for paging/filtering
 
 // format the decision timestamp as a readable local date + time.
 function fmtTime(t?: string): { date: string; time: string } {
@@ -64,43 +62,24 @@ function attacksFor(type: string, armed: boolean): WlAttack[] {
 }
 
 export function LiveOpsPanel({ lens }: { lens: Lens }) {
-  const [events, setEvents] = React.useState<any[]>([]);
-  const [connected, setConnected] = React.useState(false);
   const [clearing, setClearing] = React.useState(false);
+  const [clearError, setClearError] = React.useState("");
   const [reloadKey, setReloadKey] = React.useState(0);
   const [actionFilter, setActionFilter] = React.useState("");  // "" = all actuator types
   const [query, setQuery] = React.useState("");                // pod / namespace text search
-  const [page, setPage] = React.useState(0);                   // 0-indexed page (0 = newest/live)
+  const [actuatedOnly, setActuatedOnly] = React.useState(false);
   const owner = lens === "owner";
   const { tenant, tenants, setTenant } = useOwnerTenant(lens);
   const sel = useSelectedTarget(); // SCOPE the live stream to the selected provider (EKS vs vCluster)
 
-  React.useEffect(() => {
-    // owner stream is tenant-scoped: wait for a tenant before opening the SSE.
-    if (owner && !tenant) { setEvents([]); setConnected(false); return; }
-    setEvents([]); setConnected(true);
-    // tail=80: the server replays only the last 80 decisions on connect (no "fast train" flood
-    // after hours of running), then tails live; we keep up to BUFFER_CAP client-side for paging.
-    const stop = liveStream(lens, (data) => setEvents((prev) => [data, ...prev].slice(0, BUFFER_CAP)), owner ? tenant : undefined, 80, sel.context);
-    return () => { stop(); setConnected(false); };
-  }, [lens, owner, tenant, reloadKey, sel.context]);
-
-  // clear the persisted decision audit, then reconnect the SSE so the server restarts fresh.
+  // This remains an explicit destructive action, scoped to the selected provider.
   async function clearDecisions() {
-    setClearing(true);
-    try { await api.clearLive(lens); } catch { /* ignore — best-effort */ }
-    setEvents([]); setPage(0);
-    setReloadKey((k) => k + 1); // forces the SSE to close + reopen with a fresh offset
-    setClearing(false);
+    if (!window.confirm("Clear the current audit file for this provider? Retained rotated history is not deleted.")) return;
+    setClearing(true); setClearError("");
+    try { await api.clearLive(lens, sel.context); setReloadKey((k) => k + 1); }
+    catch (e: any) { setClearError(String(e.message || e)); }
+    finally { setClearing(false); }
   }
-
-  const actuated = events.filter((e) => e.actuated || e.Actuated).length;
-  // distinct actuator types present in the buffer (for the filter dropdown).
-  const actions = React.useMemo(() => {
-    const s = new Set<string>();
-    for (const e of events) if (e.action) s.add(e.action);
-    return Array.from(s).sort();
-  }, [events]);
 
   // ATTACK ↔ DECISION TRACE: pull the attack runs, build their UTC time windows, and correlate each
   // live decision to the attack that was running at that instant — so you can SEE/SEARCH "this
@@ -130,23 +109,56 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
   }, [windows]);
   const traceWin = windows.find((w) => w.id === traceRun) || null;
 
-  // filter by actuator type + free-text + (optionally) the traced attack's time window.
-  const q = query.trim().toLowerCase();
-  const filtered = React.useMemo(() => events.filter((e) => {
-    if (actionFilter && e.action !== actionFilter) return false;
-    if (q && !`${e.namespace || ""}/${e.pod || ""} ${e.tenant || ""}`.toLowerCase().includes(q)) return false;
-    if (traceWin) {
-      const t = Date.parse(e.time || e.Time || "");
-      if (isNaN(t) || t < traceWin.start - 5000 || t > traceWin.end + 5000) return false;
-    }
-    return true;
-  }), [events, actionFilter, q, traceWin]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageSafe = Math.min(page, pageCount - 1);
-  const pageEvents = filtered.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
-  // reset to the first (live) page whenever the filter/search/lens changes.
-  React.useEffect(() => { setPage(0); }, [actionFilter, query, lens, tenant, traceRun]);
+  const filters = {
+    context: sel.context || "", tenant: owner ? tenant : "", action: actionFilter,
+    actuated: actuatedOnly ? "true" : "", q: query.trim(), limit: String(PAGE_SIZE),
+    from: traceWin ? new Date(traceWin.start - 5000).toISOString() : "",
+    to: traceWin && !traceWin.running ? new Date(traceWin.end + 5000).toISOString() : "",
+  };
+  const scopeKey = JSON.stringify([lens, filters, reloadKey]);
+  const [navigation, setNavigation] = React.useState<{ scope: string; cursors: string[] }>({ scope: "", cursors: [""] });
+  const cursors = navigation.scope === scopeKey ? navigation.cursors : [""];
+  const page = cursors.length - 1;
+  const cursor = cursors[page];
+  const requestKey = JSON.stringify([scopeKey, cursor]);
+  const [history, setHistory] = React.useState<{ key: string; data: LiveHistoryPage }>({ key: "", data: { events: [], partial: false, notice: "", projection: "", scannedBytes: 0 } });
+  const [failure, setFailure] = React.useState<{ key: string; message: string }>({ key: "", message: "" });
+  const [busyKey, setBusyKey] = React.useState("");
+  // Both response writes AND rendering are scope-keyed. A provider/tenant change
+  // cannot flash a previous scope's data, even before effect cleanup runs.
+  React.useEffect(() => {
+    if (owner && !tenant) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    const load = async () => {
+      setBusyKey(requestKey);
+      try {
+        const data = await api.liveHistory(lens, { ...filters, cursor }, controller.signal);
+        if (alive) { setHistory({ key: requestKey, data }); setFailure({ key: requestKey, message: "" }); }
+      } catch (e: any) { if (alive) setFailure({ key: requestKey, message: String(e.message || e) }); }
+      finally {
+        if (alive) {
+          setBusyKey("");
+          if (!cursor) timer = setTimeout(load, 5000);
+        }
+      }
+    };
+    load();
+    return () => { alive = false; controller.abort(); clearTimeout(timer); };
+    // requestKey contains every request parameter; polling never mutates history pages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
+  const result = history.key === requestKey ? history.data : null;
+  const error = failure.key === requestKey ? failure.message : "";
+  const events = result?.events || [];
+  const actuated = events.filter(({ event }) => event.actuated).length;
+  const loading = !result && !error && (!owner || !!tenant);
+  const refreshing = busyKey === requestKey;
+  const actions = Array.from(new Set(["noop", "rotate", "quarantine", "kv-reset", "adapter-rotate", ...events.map(({ event }) => event.action).filter(Boolean)])).sort();
+  const latest = () => { setNavigation({ scope: "", cursors: [""] }); setReloadKey((k) => k + 1); };
+  const newer = () => setNavigation({ scope: scopeKey, cursors: cursors.slice(0, -1) });
+  const older = () => { if (result?.nextCursor) setNavigation({ scope: scopeKey, cursors: [...cursors, result.nextCursor] }); };
 
   // LIVE vLLM ATTACK: fire a real attack on the live vLLM; the operator's actuator choice streams below.
   const [attacking, setAttacking] = React.useState("");
@@ -203,13 +215,13 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
 
   return (
     <div className="animate-fade-up space-y-6">
-      <PageHead title="Live Operations" sub="Phorvex deciding in real time — streamed from the decision audit. Investor/Operator see the full per-decision internals; the Customer-Owner stream is projected through the IP-wall (outcome only). Click any decision to see its date + full reasoning. Filter by actuator, search by pod, and page through the history." />
+      <PageHead title="Live Operations" sub="Search retained decision history by workload, action or actual actuation. Latest results refresh every 5 seconds; older pages stay paused. Expand a decision for reasoning and record-time claim provenance. Large decisionTrace payloads are omitted from this summary view." />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 rounded-md border border-border bg-panel/60 px-3 py-1.5 text-[12px]">
-          <Radio className={cn("h-3.5 w-3.5", connected ? "animate-pulse-soft text-success" : "text-muted-foreground")} />
-          <span className={connected ? "text-foreground" : "text-muted-foreground"}>{connected ? "Streaming /api/live (SSE)" : "Disconnected"}</span>
+          <Radio className={cn("h-3.5 w-3.5", !error && page === 0 ? "text-success" : "text-muted-foreground")} />
+          <span>{error ? "Refresh failed" : page > 0 ? "History paused" : refreshing ? "Refreshing latest…" : "Latest · refresh every 5s"}</span>
         </div>
-        <div className="text-[12px] text-muted-foreground">{events.length} buffered · {actuated} actuated</div>
+        <div className="text-[12px] text-muted-foreground">{events.length} on this page · {actuated} actuated</div>
         {owner && tenants.length > 0 && (
           <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             platform:
@@ -221,18 +233,19 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
         {owner && <div className="flex items-center gap-1.5 text-[11px] text-primary"><Lock className="h-3 w-3" /> IP-walled stream (outcome only)</div>}
         {!owner && (
           <Button variant="outline" size="sm" onClick={clearDecisions} disabled={clearing || events.length === 0} className="ml-auto gap-1.5">
-            <Trash2 className="h-3.5 w-3.5" /> {clearing ? "Clearing…" : "Clear decisions"}
+            <Trash2 className="h-3.5 w-3.5" /> {clearing ? "Clearing…" : "Clear current audit"}
           </Button>
         )}
       </div>
+      {clearError && <div role="alert" className="text-sm text-danger">Could not clear audit: {clearError}</div>}
 
       {/* LIVE WORKLOAD ATTACK — step 1: pick a workload; step 2: fire an attack meaningful for its type */}
       {!owner && (
-        <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/[0.05] p-3">
-          <div className="flex flex-wrap items-center gap-2 text-[12px] font-medium text-foreground">
+        <details className="space-y-3 rounded-lg border border-border bg-panel/50 p-3">
+          <summary className="cursor-pointer text-[12px] font-medium text-foreground">
             <Swords className="h-3.5 w-3.5 text-primary" /> Live attack
             <span className="text-[11px] font-normal text-muted-foreground">— pick a workload, fire a meaningful attack, watch Phorvex pick the actuator below</span>
-          </div>
+          </summary>
           <div className="flex flex-wrap items-center gap-2 text-[12px]">
             <span className="text-[11px] text-muted-foreground">1 · target workload:</span>
             <select value={selWl} onChange={(e) => { setSelWl(e.target.value); setAttackMsg(""); }} className="rounded border border-border bg-panel px-2 py-1 font-mono text-[11px] text-foreground">
@@ -292,11 +305,12 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
           {attackMsg && <div className="text-[11px] text-primary">{attackMsg}</div>}
           {/* measured outcome of the attacks you just fired — full detail + cost/uptime in the Report tab */}
           <div className="mt-1 border-t border-border/40 pt-2"><AttackResultsPanel lens={lens} compact /></div>
-        </div>
+        </details>
       )}
 
       {/* FILTER BAR — by actuator type + free-text pod/namespace search */}
       <div className="flex flex-wrap items-center gap-2">
+        <Button variant={actuatedOnly ? "primary" : "outline"} size="sm" aria-pressed={actuatedOnly} onClick={() => setActuatedOnly((v) => !v)}>Actuated only</Button>
         <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5 text-[12px]">
           <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-muted-foreground">actuator</span>
@@ -308,7 +322,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
         <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel/60 px-2 py-1.5">
           <Search className="h-3.5 w-3.5 text-muted-foreground" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="search pod / namespace / tenant…"
-            className="w-56 bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none" />
+            aria-label="Search decision history" className="w-44 max-w-full bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none" />
           {query && <button onClick={() => setQuery("")} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>}
         </div>
         {/* TRACE AN ATTACK — show only the decisions that fell inside a chosen attack's time window */}
@@ -334,52 +348,44 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
             </button>
           ))}
         </div>
-        <div className="ml-auto text-[12px] text-muted-foreground">{filtered.length} match{filtered.length === 1 ? "" : "es"}</div>
+        <div className="ml-auto text-[12px] text-muted-foreground">Server-filtered retained history</div>
       </div>
 
-      {events.length === 0 ? (
-        <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
-          <Activity className="h-5 w-5 animate-pulse-soft" />
-          No live decisions yet. Start the Phorvex operator with <span className="font-mono text-foreground/80">--audit-json</span> and apply a <span className="font-mono text-foreground/80">PhorvexPolicy</span> selecting some pods — decisions appear here as they happen.
-          <Pending stage="REAL-NOW" msg="The stream is connected; it replays the latest 80 decisions + tails new ones." />
-        </CardContent></Card>
-      ) : filtered.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-[13px] text-muted-foreground">No decisions match the current filter. <button onClick={() => { setActionFilter(""); setQuery(""); }} className="text-primary hover:underline">reset</button></CardContent></Card>
-      ) : (
-        <section className="space-y-3">
+      <section className="min-w-0 space-y-3" aria-label="Decision history">
+          {error && <div role="alert" className="rounded-md border border-danger/30 p-3 text-sm text-danger">Could not load history: {error}. {result && "Showing the last successful response; it may be stale."} <button onClick={latest} className="underline">Refresh latest</button></div>}
           {traceWin && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning/[0.05] px-3 py-2 text-[12px] text-warning">
               <Swords className="h-3.5 w-3.5" />
-              <span>Tracing decisions during attack <span className="font-mono text-foreground">{traceWin.scenario}</span> — {new Date(traceWin.start).toLocaleTimeString()} → {traceWin.running ? "now (running)" : new Date(traceWin.end).toLocaleTimeString()} · <span className="font-medium">{filtered.length} decisions in this window</span></span>
+              <span>Tracing decisions during attack <span className="font-mono text-foreground">{traceWin.scenario}</span> — {new Date(traceWin.start).toLocaleTimeString()} → {traceWin.running ? "now (running)" : new Date(traceWin.end).toLocaleTimeString()}</span>
               <button onClick={() => setTraceRun("")} className="text-muted-foreground hover:text-foreground">clear</button>
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <SectionLabel>Decision stream {owner ? "(owner projection)" : "(full internals)"}{pageSafe === 0 ? <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-normal text-success"><span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> live</span> : <span className="ml-2 text-[10px] font-normal text-muted-foreground">history · page {pageSafe + 1}</span>}</SectionLabel>
-            <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SectionLabel>Decision history {owner ? "(owner projection)" : "(summary)"}</SectionLabel>
+            <Pagination page={page} hasOlder={!!result?.nextCursor} onNewer={newer} onOlder={older} onLatest={latest} />
           </div>
+          {loading ? <div role="status" className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading retained history…</div> : !error && events.length === 0 && <div className="rounded-md border border-border p-6 text-sm text-muted-foreground">{owner && !tenant ? "Select a platform tenant to view history." : result?.nextCursor ? "No matches in this scanned portion. Search older to continue through retained history." : result?.partial ? "No readable matches found. Some records could not be read; see the notice below." : "No decisions match in the retained audit history."}</div>}
           <div className="space-y-2">
-            {pageEvents.map((e, i) => owner ? <OwnerCard key={`${pageSafe}-${i}`} e={e} /> : <DecisionCard key={`${pageSafe}-${i}`} e={e} attack={attackOf(e.time || e.Time)} />)}
+            {events.map(({ id, event: e }) => owner ? <OwnerCard key={`${scopeKey}:${id}`} e={e} /> : <DecisionCard key={`${scopeKey}:${id}`} e={e} attack={attackOf(e.time || e.Time)} />)}
           </div>
-          {pageCount > 1 && (
-            <div className="flex justify-center pt-1"><Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} /></div>
-          )}
+          {result && <div role="status" className={cn("text-[11px] leading-relaxed", result.partial ? "text-warning" : "text-muted-foreground")}>{result.notice}</div>}
+          {!!result?.nextCursor && <div className="flex justify-center pt-1"><Pagination page={page} hasOlder onNewer={newer} onOlder={older} onLatest={latest} /></div>}
         </section>
-      )}
     </div>
   );
 }
 
 // Pagination — Prev / page-of / Next. Page 0 is the newest (live) page.
-function Pagination({ page, pageCount, onPage }: { page: number; pageCount: number; onPage: (p: number) => void }) {
+function Pagination({ page, hasOlder, onNewer, onOlder, onLatest }: { page: number; hasOlder: boolean; onNewer: () => void; onOlder: () => void; onLatest: () => void }) {
   return (
     <div className="flex items-center gap-1.5 text-[12px]">
-      <Button variant="outline" size="sm" className="h-7 px-2" disabled={page <= 0} onClick={() => onPage(Math.max(0, page - 1))} aria-label="newer">
+      {page > 0 && <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onLatest}>Latest</Button>}
+      <Button variant="outline" size="sm" className="h-7 px-2" disabled={page <= 0} onClick={onNewer} aria-label="newer">
         <ChevronLeft className="h-3.5 w-3.5" />
       </Button>
-      <span className="tabular text-muted-foreground">{page + 1} / {pageCount}</span>
-      <Button variant="outline" size="sm" className="h-7 px-2" disabled={page >= pageCount - 1} onClick={() => onPage(Math.min(pageCount - 1, page + 1))} aria-label="older">
-        <ChevronRight className="h-3.5 w-3.5" />
+      <span className="tabular text-muted-foreground">Page {page + 1}</span>
+      <Button variant="outline" size="sm" className="h-7 px-2" disabled={!hasOlder} onClick={onOlder} aria-label="Search older">
+        Search older <ChevronRight className="h-3.5 w-3.5" />
       </Button>
     </div>
   );
@@ -393,7 +399,7 @@ function CostCompare({ e }: { e: any }) {
   const phorvexCost = typeof e.cost === "number" ? e.cost : null;
   const blindCost = typeof e.blindCost === "number" ? e.blindCost : null;
   if (phorvexCost === null && blindCost === null) return null;
-  const acted = e.selected || e.actuated;
+  const acted = e.actuated;
   const savings = phorvexCost !== null && blindCost !== null ? blindCost - phorvexCost : null;
   const f = (n: number | null) => (n === null ? "—" : n.toFixed(4));
   return (
@@ -406,7 +412,7 @@ function CostCompare({ e }: { e: any }) {
           <div className="mt-1 font-mono text-[12px] text-foreground/90">{e.action || "noop"}</div>
           <div className="mt-1 text-[18px] font-semibold tabular text-foreground">{f(phorvexCost)}</div>
           <div className="text-[10px] text-muted-foreground">
-            {acted ? <>acts only when net-positive{typeof e.net === "number" ? <> · net +{e.net.toFixed(2)}</> : null}</> : "skipped — not worth the disruption this cycle"}
+            {acted ? "actuation dispatched; cost is modeled" : e.selected ? "selected, not actuated; cost is modeled" : "not actuated; modeled decision cost"}
           </div>
         </div>
         {/* Blind timer — fixed cadence, no value targeting */}
@@ -421,8 +427,8 @@ function CostCompare({ e }: { e: any }) {
         <div className={cn("mt-1.5 rounded-md border px-2.5 py-1.5 text-[11px]",
           savings > 0.0001 ? "border-success/30 bg-success/[0.05] text-success" : "border-border bg-elevated/30 text-muted-foreground")}>
           {savings > 0.0001
-            ? <>This cycle Phorvex paid <span className="font-mono">{f(phorvexCost)}</span> vs the blind timer’s <span className="font-mono">{f(blindCost)}</span> — <span className="font-medium">saved {savings.toFixed(4)}</span> by not blindly rotating.</>
-            : <>Both act this cycle (cost <span className="font-mono">{f(phorvexCost)}</span> vs <span className="font-mono">{f(blindCost)}</span>) — but Phorvex’s is value-justified{typeof e.net === "number" ? <> (net +{e.net.toFixed(2)})</> : null}, the blind timer’s is not.</>}
+            ? <>Modeled cost difference: <span className="font-mono">{savings.toFixed(4)}</span> versus the blind timer. This is not measured financial savings.</>
+            : <>Modeled Phorvex cost <span className="font-mono">{f(phorvexCost)}</span> versus blind timer <span className="font-mono">{f(blindCost)}</span>; actual outcomes require separate evidence.</>}
         </div>
       )}
     </div>
@@ -447,31 +453,31 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
   const num = (v: any, d = 2) => (typeof v === "number" ? v.toFixed(d) : null);
 
   return (
-    <Card className={cn("transition-colors", acted && "border-primary/20 bg-primary/[0.03]")}>
-      <button onClick={() => setOpen((o) => !o)} className="w-full text-left">
-        <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1.5 p-3 text-[12px]">
+    <Card className={cn("min-w-0 shadow-none backdrop-blur-none transition-colors", acted && "border-primary/25")}>
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full min-w-0 text-left">
+        <CardContent className="min-w-0 space-y-2 p-3 text-[12px]">
+          <div className="flex min-w-0 items-start gap-2">
           <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-          <span className="font-mono text-[13px] text-foreground">{e.namespace}/{e.pod}</span>
+          <span data-decision-workload className="min-w-0 flex-1 break-words font-mono text-[12px] text-foreground">{e.namespace}/{e.pod}</span>
+          {time && <span className="shrink-0 text-[11px] text-muted-foreground" title={date}>{time}</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 pl-5">
           <Badge variant={e.action === "noop" ? "neutral" : "accent"}>{e.action}</Badge>
           {sel && <Badge variant="real">selected</Badge>}
-          {acted && <Badge variant="accent">actuated{e.handler ? ` · ${e.handler}` : ""}</Badge>}
-          {e.dryRun && !acted && <Badge variant="pending">dry-run</Badge>}
-          {e.stage && <span className="text-muted-foreground">stage <span className="text-foreground/80">{e.stage}</span></span>}
-          {e.aiClassified && <Badge variant="modeled">AI</Badge>}
+          {acted && <Badge variant="accent">actuated · dispatched</Badge>}
+          {!acted && !sel && <Badge variant="neutral">not actuated</Badge>}
+          {e.dryRun && <Badge variant="pending">dry-run{acted ? " flag" : ""}</Badge>}
           {attack && <span className="inline-flex items-center gap-1 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning" title={`a live decision made while attack '${attack.scenario}' was running`}><Swords className="h-3 w-3" /> during {attack.scenario}</span>}
-          {time && <span className="text-[11px] text-muted-foreground/70">{time}</span>}
-          <span className="ml-auto flex items-center gap-3 tabular text-muted-foreground">
-            {typeof e.risk === "number" && <span>risk {e.risk.toFixed(2)}</span>}
-            {typeof e.lambda === "number" && e.lambda > 0 && <span>λ {e.lambda.toFixed(2)}</span>}
-            {typeof e.perDollar === "number" && e.perDollar > 0 && <span>per-$ {e.perDollar.toFixed(2)}</span>}
-            {typeof e.preemptMargin === "number" && e.preemptMargin > 0 && <span className="text-primary">preempt {(e.preemptMargin * 100).toFixed(0)}%</span>}
-          </span>
+          </div>
         </CardContent>
       </button>
 
-      <div className="px-3 pb-2"><ClaimScopeNote claim={e.claim} /></div>
+      <div className="px-3 pb-2 text-[10px] text-muted-foreground">Detector-visible scope · security effect unconfirmed · expand for provenance</div>
       {open && (
         <CardContent className="space-y-3 border-t border-border/50 p-3 pt-3 text-[12px]">
+          <ClaimScopeNote claim={e.claim} />
+          {e.handler && <div className="break-all text-muted-foreground">Handler: {e.handler}</div>}
+          {e.aiClassified && <Badge variant="modeled">AI classified</Badge>}
           {(date || time) && (
             <div className="text-[11px] text-muted-foreground">Decided <span className="text-foreground/80">{date}</span> at <span className="text-foreground/80">{time}</span>{e.node ? <> · node <span className="font-mono text-foreground/70">{e.node}</span></> : null}{e.engine ? <> · brain <span className="font-mono text-foreground/70">{e.engine}</span></> : null}</div>
           )}
@@ -530,6 +536,7 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
               {num(e.exposure) != null && <Metric label="exposure" value={num(e.exposure)} />}
               {num(e.threatPosture) != null && <Metric label="threat posture" value={num(e.threatPosture)} />}
               {num(e.lambda) != null && e.lambda > 0 && <Metric label="λ (cost weight)" value={num(e.lambda)} />}
+              {num(e.preemptMargin) != null && e.preemptMargin > 0 && <Metric label="preempt margin" value={`${(e.preemptMargin * 100).toFixed(0)}%`} />}
               {num(e.pHold) != null && e.pHold > 0 && <Metric label="p(hold)" value={num(e.pHold)} />}
               {e.phase && <Metric label="phase" value={e.phase} />}
               {e.stage && <Metric label="kill-chain" value={`${e.stage}${e.nextStage ? ` → ${e.nextStage}` : ""}`} />}
@@ -549,21 +556,25 @@ function OwnerCard({ e }: { e: any }) {
   const [open, setOpen] = React.useState(false);
   const { date, time } = fmtTime(e.time || e.Time);
   return (
-    <Card>
-      <button onClick={() => setOpen((o) => !o)} className="w-full text-left">
-        <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1.5 p-3 text-[12px]">
+    <Card className="min-w-0 shadow-none backdrop-blur-none">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full min-w-0 text-left">
+        <CardContent className="min-w-0 space-y-2 p-3 text-[12px]">
+          <div className="flex min-w-0 items-start gap-2">
           <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-          <span className="font-mono text-[13px] text-foreground">{e.namespace}/{e.pod}</span>
+          <span data-decision-workload className="min-w-0 flex-1 break-words font-mono text-[12px] text-foreground">{e.namespace}/{e.pod}</span>
+          {time && <span className="shrink-0 text-[11px] text-muted-foreground" title={date}>{time}</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 pl-5">
           <Badge variant="accent">{e.action}</Badge>
-          {e.reversible && <Badge variant="real">reversible</Badge>}
-          <span className="text-muted-foreground">{e.attackStage}</span>
-          {time && <span className="text-[11px] text-muted-foreground/70">{time}</span>}
-          <span className="ml-auto max-w-md truncate text-foreground/80">{e.why}</span>
+          <Badge variant={e.actuated ? "accent" : "neutral"}>{e.actuated ? "actuated · dispatched" : "not actuated"}</Badge>
+          {e.dryRun && <Badge variant="pending">dry-run{e.actuated ? " flag" : ""}</Badge>}
+          </div>
         </CardContent>
       </button>
-      <div className="px-3 pb-2"><ClaimScopeNote claim={e.claim} /></div>
+      <div className="px-3 pb-2 text-[10px] text-muted-foreground">Detector-visible scope · security effect unconfirmed · expand for provenance</div>
       {open && (
         <CardContent className="space-y-2 border-t border-border/50 p-3 pt-3 text-[12px]">
+          <ClaimScopeNote claim={e.claim} />
           {(date || time) && <div className="text-[11px] text-muted-foreground">Decided <span className="text-foreground/80">{date}</span> at <span className="text-foreground/80">{time}</span></div>}
           {e.why && (
             <div>

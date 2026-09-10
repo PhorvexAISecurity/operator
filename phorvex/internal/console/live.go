@@ -13,7 +13,6 @@ package console
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -61,11 +60,16 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 
 	// SCOPED per provider: ?context=<kubeconfig-context> selects which operator's audit to stream
 	// (EKS vs vCluster), so the dashboard shows ONLY the selected provider's decisions.
-	path := s.cfg.auditPathForContext(r.URL.Query().Get("context"))
-	if path == "" {
-		path = s.newestAudit()
-	}
+	path := s.liveAuditPath(r)
 	ownerTenant := r.URL.Query().Get("tenant") // [P4c F4] owner stream is tenant-scoped
+	visible := func(rec audit.Record) bool {
+		return rec.Kind == "phorvex.decision" && (lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated)))
+	}
+	notice := func(message string) {
+		b, _ := json.Marshal(map[string]string{"message": message})
+		_, _ = w.Write([]byte("event: notice\ndata: " + string(b) + "\n\n"))
+		flusher.Flush()
+	}
 	emit := func(rec audit.Record) {
 		if rec.Kind != "phorvex.decision" {
 			return
@@ -105,13 +109,44 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 			tail = n
 		}
 	}
-	offset := tailReplay(path, tail, emit) // emits the last N decisions, returns the EOF offset
+	if tail > 1000 {
+		tail = 1000
+		notice("Replay is limited to 1000 records; use /api/live/history for older decisions.")
+	}
+	var previous os.FileInfo
+	var offset int64
+	var anchor string
+	skipping := false
+	if f, e := openAuditFile(path); e == nil {
+		previous, _ = f.Stat()
+		if tail <= 0 {
+			offset, anchor = streamAuditFile(f, 0, &skipping, emit, notice)
+		} else {
+			offset, anchor = replayAuditFile(f, tail, visible, emit, notice)
+		}
+		f.Close()
+	}
 
 	ctx := r.Context()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
-		offset = streamNew(path, offset, emit)
+		if f, e := openAuditFile(path); e == nil {
+			st, _ := f.Stat()
+			current, e := auditAnchor(f, offset)
+			if previous != nil && (st == nil || !os.SameFile(previous, st) || e != nil || current != anchor) {
+				offset = 0
+				skipping = false
+				previous = st
+				notice("Audit replaced or truncated; following the current file. Retained history is available at /api/live/history.")
+			}
+			// Identity, offset reads and anchor all belong to this SAME handle.
+			// A writer may rename the path during emit/Flush without blessing a
+			// different generation's prefix as already consumed.
+			offset, anchor = streamAuditFile(f, offset, &skipping, emit, notice)
+			previous = st
+			f.Close()
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -125,54 +160,77 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 // file (not the whole thing) — on a multi-hundred-MB audit this is the difference between an
 // instant page load and a multi-second flood. n<=0 replays everything (opt-in, slow path).
 func tailReplay(path string, n int, emit func(audit.Record)) int64 {
+	return replayAudit(path, n, func(rec audit.Record) bool { return rec.Kind == "phorvex.decision" }, emit, func(string) {})
+}
+
+func replayAudit(path string, n int, visible func(audit.Record) bool, emit func(audit.Record), notice func(string)) int64 {
 	if path == "" {
 		return 0
 	}
-	f, err := os.Open(path)
+	f, err := openAuditFile(path)
 	if err != nil {
 		return 0
 	}
 	defer f.Close()
+	offset, _ := replayAuditFile(f, n, visible, emit, notice)
+	return offset
+}
+
+func replayAuditFile(f *os.File, n int, visible func(audit.Record) bool, emit func(audit.Record), notice func(string)) (int64, string) {
 	st, err := f.Stat()
 	if err != nil {
-		return 0
+		return 0, ""
 	}
 	size := st.Size()
 	if n <= 0 {
-		return streamNew(path, 0, emit) // opt-in: replay the entire audit
+		skipping := false
+		return streamAuditFile(f, 0, &skipping, emit, notice)
 	}
-	// read a tail window large enough to hold ~n records (records are ~1-2KB; budget 4KB each + margin).
-	chunk := int64(n)*4096 + 65536
-	if chunk > size {
-		chunk = size
+	rd := reverseAuditReader{f: f, pos: size}
+	// Only newline-committed records are replayed. Leave an incomplete final
+	// record for the forward tailer once the producer finishes its write.
+	complete := size
+	for complete > 0 {
+		b, e := rd.byteBefore()
+		if e != nil {
+			notice("Audit replay read failed.")
+			return 0, ""
+		}
+		if b == '\n' {
+			complete = rd.pos + 1
+			break
+		}
+		complete = rd.pos
+		if rd.read >= historyScanBytes {
+			notice("Incomplete audit suffix exceeds scan budget; history is partial.")
+			return 0, ""
+		}
 	}
-	buf := make([]byte, chunk)
-	start := size - chunk
-	if _, err := f.ReadAt(buf, start); err != nil && err != io.EOF {
-		return size
-	}
-	lines := bytes.Split(buf, []byte("\n"))
-	if start > 0 && len(lines) > 0 {
-		lines = lines[1:] // we started mid-file: the first line is partial — drop it
-	}
+	rd.pos = complete
 	var recs []audit.Record
-	for _, ln := range lines {
-		ln = bytes.TrimSpace(ln)
-		if len(ln) == 0 {
-			continue
+	for rd.pos > 0 && len(recs) < n && rd.read < 32<<20 {
+		ln, _, large, e := rd.next(32 << 20)
+		if e != nil {
+			notice("Audit replay changed while reading.")
+			break
+		}
+		if large {
+			notice("Audit record exceeds 1 MiB and was omitted from replay.")
 		}
 		var rec audit.Record
-		if json.Unmarshal(ln, &rec) == nil && rec.Kind == "phorvex.decision" {
+		if json.Unmarshal(ln, &rec) == nil && visible(rec) {
 			recs = append(recs, rec)
 		}
 	}
-	if len(recs) > n {
-		recs = recs[len(recs)-n:]
+	if rd.pos > 0 && len(recs) < n {
+		notice("Replay scan budget reached; use /api/live/history to continue older records.")
 	}
-	for i := range recs {
+	// Capture the bytes before Flush can race an in-place truncation/rewrite.
+	anchor, _ := auditAnchor(f, complete)
+	for i := len(recs) - 1; i >= 0; i-- {
 		emit(recs[i])
 	}
-	return size
+	return complete, anchor
 }
 
 // liveClear truncates the live decision-audit JSONL (operator-only). The SSE replays this
@@ -201,27 +259,74 @@ func (s *Server) liveClear(w http.ResponseWriter, r *http.Request) {
 
 // streamNew reads any records appended past offset and returns the new offset.
 func streamNew(path string, offset int64, emit func(audit.Record)) int64 {
+	skipping := false
+	return streamAudit(path, offset, &skipping, emit, func(string) {})
+}
+
+func streamAudit(path string, offset int64, skipping *bool, emit func(audit.Record), notice func(string)) int64 {
 	if path == "" {
 		return offset
 	}
-	f, err := os.Open(path)
+	f, err := openAuditFile(path)
 	if err != nil {
 		return offset
 	}
 	defer f.Close()
-	if _, err := f.Seek(offset, 0); err != nil {
-		return offset
+	n, _ := streamAuditFile(f, offset, skipping, emit, notice)
+	return n
+}
+
+func streamAuditFile(f *os.File, offset int64, skipping *bool, emit func(audit.Record), notice func(string)) (int64, string) {
+	if st, e := f.Stat(); e == nil && st.Size() < offset {
+		offset = 0
+		*skipping = false
 	}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
+	if _, err := f.Seek(offset, 0); err != nil {
+		return offset, ""
+	}
+	rd := bufio.NewReaderSize(io.LimitReader(f, historyScanBytes), 65536)
+	committed := offset
+	committedAnchor, _ := auditAnchor(f, committed)
 	var read int64
-	for sc.Scan() {
-		line := sc.Bytes()
-		read += int64(len(line)) + 1
-		var rec audit.Record
-		if json.Unmarshal(line, &rec) == nil {
-			emit(rec)
+	var line []byte
+	for {
+		part, e := rd.ReadSlice('\n')
+		read += int64(len(part))
+		if !*skipping {
+			if len(line)+len(part) > liveRecordBytes {
+				*skipping = true
+				line = nil
+				notice("Audit record exceeds 1 MiB and was omitted from the stream.")
+			} else {
+				line = append(line, part...)
+			}
+		}
+		if e == nil {
+			committed = offset + read
+			committedAnchor, _ = auditAnchor(f, committed)
+			if !*skipping {
+				var rec audit.Record
+				if json.Unmarshal(line, &rec) == nil {
+					emit(rec)
+					if current, e := auditAnchor(f, committed); e != nil || current != committedAnchor {
+						return committed, committedAnchor
+					}
+				}
+			}
+			line = nil
+			*skipping = false
+		} else if e != bufio.ErrBufferFull {
+			if *skipping {
+				committed = offset + read
+				committedAnchor, _ = auditAnchor(f, committed)
+			}
+			if e != io.EOF {
+				notice("Audit stream read failed.")
+			}
+			if read >= historyScanBytes {
+				notice("Stream scan budget reached; continuing on the next tick.")
+			}
+			return committed, committedAnchor
 		}
 	}
-	return offset + read
 }
