@@ -15,7 +15,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -243,7 +242,15 @@ type lifecycleEvent struct {
 }
 
 // NewManager constructs a Manager with sane defaults for any nil collaborators.
-func NewManager(c client.Client, log logr.Logger) *Manager {
+//
+// [M-21] It returns an error when PHORVEX_ACTUATOR names no backend. That error MUST be
+// propagated: it is the only thing standing between an unrecognized explicit selector and
+// a process that starts reconciling on a backend nobody chose. Callers must not discard it.
+func NewManager(c client.Client, log logr.Logger) (*Manager, error) {
+	act, err := selectActuator(c, log)
+	if err != nil {
+		return nil, err
+	}
 	src, _ := ingest.SourceRegistry.Default()
 	// P-PHYSICS (UCW): make the discovered-physics recon-EMR profile the engine default
 	// (byte-identical to standard-recon at nil-data; lifts only under measured dispersion).
@@ -257,7 +264,7 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		Optimizer:       decision.NewCoverageEngine(), // P1 default brain
 		Audit:           audit.New(log, nil),
 		MetricsSource:   src,
-		Actuator:        selectActuator(c, log), // P-ACTUATOR: native vs Phoenix adapter
+		Actuator:        act, // P-ACTUATOR: the ONE resolved backend (dispatch + support share it)
 		KillSwitch:      &KillSwitch{Client: c},
 		BaseInterval:    10 * time.Second,
 		Log:             log.WithName("runner"),
@@ -272,25 +279,48 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		policies:             map[string]*policyEntry{},
 
 		ActionsSupportedDebounce: DefaultActionsSupportedDebounceTicks,
+	}, nil
+}
+
+// backendPurpose is the operator-facing one-liner logged for the resolved backend, so
+// EVERY valid branch — including the default — is observable. Before M-21 only the two
+// explicit non-default branches logged anything, so the single most common configuration
+// (the Phoenix default) resolved in silence and a typo resolved the same silent way.
+func backendPurpose(b actuator.Backend) string {
+	switch b {
+	case actuator.BackendNative:
+		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
+	case actuator.BackendHybrid:
+		return "Phoenix for rotate/quarantine, native for the AI-native moves"
+	default:
+		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
 	}
 }
 
-// selectActuator picks Phorvex's hands: the native actuator (its own client-go hands,
-// PHORVEX_ACTUATOR=native) or the Phoenix adapter (default — drives UNMODIFIED Phoenix via
-// SecurityEvent/AMTD CRs). Both satisfy the Actuator interface; the brain is unchanged.
-func selectActuator(c client.Client, log logr.Logger) actuator.Actuator {
-	switch os.Getenv("PHORVEX_ACTUATOR") {
-	case "native":
-		log.WithName("runner").Info("actuator=native (Phorvex own hands; direct client-go enactment, no Phoenix CRDs)")
-		return actuator.NewNativeActuator(c)
-	case "hybrid":
-		// Phoenix enacts rotate/quarantine (keeps the nats AMTD-CR mechanism); the native
-		// actuator enacts the AI-native moves (kv-reset, adapter-rotate, …) Phoenix can't.
-		log.WithName("runner").Info("actuator=hybrid (Phoenix for rotate/quarantine, native for AI-native moves)")
-		return actuator.NewHybridActuator(c)
-	default:
-		return actuator.NewPhoenixActuator(c)
+// selectActuator resolves PHORVEX_ACTUATOR ONCE and constructs the selected hands. [M-21]
+//
+// It returns an error instead of falling back, which is the whole point: an explicit value
+// that names no backend used to be indistinguishable from an omitted one, so a typo
+// silently ran the default Phoenix adapter — and the operator was told nothing. Omission
+// still selects the documented default; only an explicit, unrecognized value fails.
+//
+// The caller must propagate the error before any controller starts or anything is
+// mutated. The ONE resolved instance is then shared by the dispatcher and the support
+// check, so the two can never answer for different backends.
+func selectActuator(c client.Client, log logr.Logger) (actuator.Actuator, error) {
+	res, err := actuator.ResolveBackendFromEnv()
+	if err != nil {
+		return nil, err
 	}
+	act, err := actuator.New(res.Backend, c)
+	if err != nil {
+		return nil, err
+	}
+	log.WithName("runner").Info("actuator backend resolved",
+		"actuator", string(res.Backend),
+		"source", res.Origin(),
+		"purpose", backendPurpose(res.Backend))
+	return act, nil
 }
 
 // Upsert adds or updates a tenant policy in the registry.

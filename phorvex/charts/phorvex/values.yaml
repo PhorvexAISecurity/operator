@@ -83,10 +83,18 @@ phorvex:
   # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
   # and its leader-election lease). Empty => the operator's own POD_NAMESPACE.
   operatorNamespace: ""
-  # Actuator backend: hybrid drives Phoenix CRs AND the direct kubectl path; the operator's
-  # own default is used when this is empty. Surfaced here because the difference is visible
-  # in the audit (A01–A04 assert on what actually touched the cluster), so it must be part
-  # of desired state rather than a hand-patched env var.
+  # Actuator backend. Accepted values are exactly: phoenix, native, hybrid.
+  #   phoenix - drives UNMODIFIED Phoenix through SecurityEvent/AMTD CRs
+  #   native  - Phorvex's own client-go hands (no Phoenix CRDs)
+  #   hybrid  - Phoenix for rotate/quarantine, native for the AI-native moves
+  # EMPTY (the default here) renders NO PHORVEX_ACTUATOR env var at all, so the operator
+  # binary applies its own documented default, phoenix. That is the only way to get the
+  # default: any NON-empty value is matched EXACTLY by the binary — no trimming, no case
+  # folding — and anything else (a typo, padding, "Native") fails startup with the accepted
+  # set rather than silently falling back to phoenix (M-21). Surfaced here because the
+  # difference is visible in the audit (A01–A04 assert on what actually touched the
+  # cluster), so it must be part of desired state rather than a hand-patched env var.
+  # The per-action repertoire of each backend is published in phorvex/docs/actuator-repertoire.md.
   actuator: ""
   # Managed tenant namespaces where the native/hybrid actuator may perform routine
   # namespaced mutations. Empty by default: the chart adds no workload-write privilege.

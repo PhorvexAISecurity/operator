@@ -270,7 +270,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	rmgr := runner.NewManager(mgr.GetClient(), ctrl.Log)
+	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
+	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
+	// reconciling — let alone mutating — on a backend it silently substituted.
+	rmgr, err := runner.NewManager(mgr.GetClient(), ctrl.Log)
+	if err != nil {
+		setupLog.Error(err, "invalid actuator configuration; refusing to start")
+		os.Exit(1)
+	}
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
@@ -597,7 +604,13 @@ func runScan(namespace, promURL, kubeContext string) error {
 	}
 
 	if namespace != "" {
-		rmgr := runner.NewManager(c, ctrl.Log)
+		// [M-21] Same fail-fast on the one-shot path: a scan reports what the CONFIGURED
+		// backend would do, so an unresolvable selector must stop it rather than have it
+		// silently report the default backend's answers.
+		rmgr, mErr := runner.NewManager(c, ctrl.Log)
+		if mErr != nil {
+			return mErr
+		}
 		if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 			n.SetBoundaryReader(c)
 		}
@@ -692,7 +705,10 @@ func runAblation(namespace, selector string, budget, nseeds int) error {
 	if err != nil {
 		return err
 	}
-	rmgr := runner.NewManager(c, ctrl.Log)
+	rmgr, err := runner.NewManager(c, ctrl.Log)
+	if err != nil {
+		return err
+	}
 	if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		n.SetBoundaryReader(c)
 	}
