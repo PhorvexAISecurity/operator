@@ -1,0 +1,81 @@
+{
+  "captured_at": "2026-09-08T19:28:02.641615+00:00",
+  "principal": "system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+  "results": [
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "get",
+        "validatingadmissionpolicies.admissionregistration.k8s.io/phorvex-codeexec-ephemeral",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": "Warning: resource 'validatingadmissionpolicies' is not namespace scoped in group 'admissionregistration.k8s.io'\n\n"
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "get",
+        "validatingadmissionpolicybindings.admissionregistration.k8s.io/phorvex-codeexec-ephemeral",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": "Warning: resource 'validatingadmissionpolicybindings' is not namespace scoped in group 'admissionregistration.k8s.io'\n\n"
+    }
+  ],
+  "api_discovery": [
+    {
+      "name": "validatingadmissionpolicies",
+      "singularName": "validatingadmissionpolicy",
+      "namespaced": false,
+      "kind": "ValidatingAdmissionPolicy",
+      "verbs": [
+        "create",
+        "delete",
+        "deletecollection",
+        "get",
+        "list",
+        "patch",
+        "update",
+        "watch"
+      ],
+      "categories": [
+        "api-extensions"
+      ],
+      "storageVersionHash": "6OxvlMmQ6is="
+    },
+    {
+      "name": "validatingadmissionpolicybindings",
+      "singularName": "validatingadmissionpolicybinding",
+      "namespaced": false,
+      "kind": "ValidatingAdmissionPolicyBinding",
+      "verbs": [
+        "create",
+        "delete",
+        "deletecollection",
+        "get",
+        "list",
+        "patch",
+        "update",
+        "watch"
+      ],
+      "categories": [
+        "api-extensions"
+      ],
+      "storageVersionHash": "v9715VZqakg="
+    }
+  ],
+  "meaning": "Read-only exact-resourceName authorization and API discovery."
+}

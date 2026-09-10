@@ -1,0 +1,84 @@
+{
+  "head": "bfe559b92a46fc5015c62e63111dfb6aaa011bfa",
+  "previous_reviewed_head": "9eb14271625620aef6b6184386764e29f0d71ea3",
+  "only_changed_file": "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+  "archive_sha256": "97d990c03e565129f89478ebd1065cd8b71fa44a13995f6d6974cacbf06a3374",
+  "members": [
+    {
+      "path": "Chart.yaml",
+      "sha256": "7039757b155edf25e75254e7a68ab312684e96dcd1d19db865237cc5cf8e8100",
+      "comparison": "parsed YAML equality"
+    },
+    {
+      "path": "values.yaml",
+      "sha256": "576c530b82b1d0f06ad250fba555a8377235a623e894f6e838140bb0d6bf9410",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/NOTES.txt",
+      "sha256": "8cf0d4c47cd1e3cf72b4709f28b43a224a75e25853d07d8c7a9be5a95afd003b",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/_helpers.tpl",
+      "sha256": "826076c0fae8196fe950ea563f077d2a2d7ed0dd5948cb1a9259479332b8b64c",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/admission-webhook.yaml",
+      "sha256": "abef8e469ee35203eec1fc1054548028ce7abcb05850a2b5ce352ffc9ae49677",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/audit-pvc.yaml",
+      "sha256": "8a55048f998b17dd462111c1f6972598daa8957db268ccbe510d514b221f4f8c",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/codeexec-admission.yaml",
+      "sha256": "79b7d3c8c1f35c3a5bb2faf6ac02cc0b5939c450d510f83d95fb7849adbea3a2",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/deployment.yaml",
+      "sha256": "98dfdd14123de16f385e0d217dcdc8d24bb216714ddce343505fd9618ccaf487",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/e2e-detector.yaml",
+      "sha256": "4795c379afa12d2135ec0e19facf0b75508982c7b6d14773fd72cb6858eb8631",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/epss-configmap.yaml",
+      "sha256": "b7b061fb7e4c213db5290e7b4f58259b4580940e3f2b3eb617fcaf1d05df2b47",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/epss-feed.yaml",
+      "sha256": "237602bce6752ff3029731d53faf83d6958f2f04bfa1114b3c88e2059c5a43eb",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/prometheusrule.yaml",
+      "sha256": "b4b4fc1e4bbff48fb3bc3a16d986c1faa9f57cf984ea3a8ac88733f47b45ff8e",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "templates/rbac.yaml",
+      "sha256": "5b967d06b14cd20fde63b7bbf1d2b234b40b99e2e8389333182fa82663d168d2",
+      "comparison": "byte equality"
+    },
+    {
+      "path": ".helmignore",
+      "sha256": "c71c600ac2917645412479b0b86d3e9b27165a4942a365776ce0e3484a649c66",
+      "comparison": "byte equality"
+    },
+    {
+      "path": "crds/phorvex.ai_phorvexpolicies.yaml",
+      "sha256": "ef479673d96c9f090ed49b3864ed44dbf2149e47dacb6b538c78a9adb2abdff1",
+      "comparison": "byte equality"
+    }
+  ],
+  "all_members_equal_source": true
+}

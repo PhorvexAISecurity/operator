@@ -1,0 +1,40 @@
+path	included	reason
+phorvex	yes	the operator + console Go module: every internal package, cmd/* binary and the CRD contract
+dashboard-web	yes	the shipped Next.js product surface; lib/api.ts calls the console /api and opens SSE streams
+deploy	yes	runtime composition: console.Dockerfile assembles SPA + console + phorvex CLI + harness + kubectl; Helm/EKS values configure the deployed operator
+build	yes	phoenix-extended is the vendored Phoenix module phorvex/go.mod replaces; test-harness builds the harness binary the console execs
+End-to-End	no	CI verification pipeline that RUNS the product; it observes the system and is not part of the runtime it observes
+repos	no	unmodified third-party clones and zips (falco/kubearmor/phoenix/prometheus/time-based-trigger upstreams); build/ holds the -extended forks actually compiled against
+pipecat-voice	no	a separate voice-agent project used as an ATTACK TARGET; it is workload, not Phorvex
+brain-signal-lineage	no	analysis artifact about the brain, not code the brain runs
+products	no	saved marketing collateral (HTML/PDF), no runtime role
+papers	no	reference literature
+reports	no	generated report output
+PX_Reports_V1	no	generated report output
+validation	no	raw captured evidence from runs, not source
+tools	no	developer tooling (pr-review) outside the product image
+.github	yes	ci.yml builds and publishes the console image whose composition this anatomy models; the release path for an included surface
+.dockerignore	yes	decides what enters the console image build context; console.Dockerfile reasons about it explicitly (the console-audit.jsonl COPY glob)
+.gitignore	no	source-control hygiene, no runtime or build-composition effect
+.claude	no	agent configuration for this audit, not part of the product
+start-dashboard.ps1	no	local developer convenience launcher; not present in the shipped image, which uses the Dockerfile ENTRYPOINT
+start-dashboard.cmd	no	local developer convenience launcher; see start-dashboard.ps1
+PHORVEX_PRD.md	no	requirements prose
+PHORVEX_V1_MVP.md	no	requirements prose
+CODE-REPORT.md	no	generated analysis prose
+COMPARISON.md	no	analysis prose
+DEPLOY-AWS-COREWEAVE.md	no	deployment runbook prose; the executable deployment surface is deploy/
+DEPLOY-EKS.md	no	deployment runbook prose; the executable deployment surface is deploy/
+PROJECT-LOG.md	no	project journal
+architecture.md	no	architecture prose — a claim ABOUT the system, which this anatomy exists to derive independently
+decisions.md	no	decision journal
+gap-spec.md	no	specification prose
+spec-map.md	no	specification prose
+validation.md	no	validation prose
+build/phoenix-extended	yes	COMPILED IN: phorvex/go.mod:79 replaces github.com/r6security/phoenix with it, so its API/types are in both images; modelled as phoenix.module, distinct from ext.phoenix (the separately running controller)
+build/test-harness	yes	PACKAGED: its own Go module, built into the console image as harness.exe and exec'd by the console; modelled only at that binary/exec boundary, not its internal test architecture
+build/falco-integrator-extended	no	audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+build/kubearmor-integrator-extended	no	audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+build/prometheus-integrator-extended	no	audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+build/time-based-trigger-extended	no	audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+build/logs	no	captured run logs, not source or packaged artifact

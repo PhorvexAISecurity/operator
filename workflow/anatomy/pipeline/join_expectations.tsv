@@ -1,0 +1,33 @@
+id	must_not_contain	note
+M-2	adapter-rotate	CRD enum drift belongs to the API contract, not an AI handler
+M-9	adapter-rotate	Phoenix request-ack belongs to the Phoenix write / readback seam
+M-23	adapter-rotate	the clock defect is not an adapter operation
+M-94	kv-reset	trust boundary is not a kv-reset operation
+M-10	kv-reset	silent non-emit is not a kv-reset operation
+M-12	kv-reset	missing metric is not a kv-reset operation
+M-108	kv-reset	61 constants is not a kv-reset operation
+M-139	kv-reset	per-dollar coverage is not a kv-reset operation
+M-47	handlers_k8s.go:30	the defect is the Delete, not the shared getPod
+M-54	handlers_k8s.go:30	grace period is the Delete
+M-60	rotate Get	identity/route-rotate, matched via a substring of rotate
+M-123	rotate Get	documentation drift
+M-124	rotate Get	no per-pod opt-out
+M-1	endpoint-rotate	shipped RBAC belongs to deploy
+M-3	cost.p1	matched on the word objective
+M-8	ingest	matched on the word cluster
+M-85	feasibility	body says feasibility HAS recover; the dispatch does not
+M-70	ext.mig_agent	matched on the word never
+M-84	ext.mig_agent	the defect is that WireRemoteNodeExec does not validate its config; that lives on actuator.native. The MIG boundary is M-79
+M-23	kv-migrate-invalidate	anti-over-rotation clock
+M-139	request-drain	economic thesis / coverage per dollar
+M-123	route-rotate	documentation drift
+M-124	rotate Delete	no per-pod opt-out
+M-10	kv-reset	silent non-emit is an ABSENCE
+M-15	redteam	"English ""Coverage"" is not a Go symbol; want decision.coverage"
+M-88	bin.phorvex_cli	"""phorvex"" is the product name, not the CLI node"
+M-93	ZZ_model_exact	plaintext model control plane -> ext.vllm, not the vocabulary node
+M-140	ZZ_model_exact	tag CONTROL->ECONOMICS -> cost.p1
+M-101	ZZ_model_exact	per-dollar cost model -> cost.p1
+M-115	ZZ_model_exact	Little's-law flow model -> physics/ingest
+M-65	model-shard-replace Create	rewarmShadow has several callers; one action Create is first-match
+M-64	slo.ledger	epoch write after a landed kv-reset, not the ledger

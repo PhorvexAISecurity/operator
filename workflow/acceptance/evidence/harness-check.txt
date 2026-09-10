@@ -1,0 +1,21 @@
+........................................
+----------------------------------------------------------------------
+Ran 40 tests in 6.516s
+
+OK
+fix index: PASS
+issues render: PASS
+doctor: 0 error(s), 13 warning(s)
+WARN: T0-C: legacy record lacks verify.sh
+WARN: T1-B: legacy record lacks verify.sh
+WARN: T1-C: legacy record lacks verify.sh
+WARN: M-25: legacy record lacks verify.sh
+WARN: T1-D: legacy record lacks verify.sh
+WARN: T1-E: legacy record lacks verify.sh
+WARN: T1-M020: legacy record lacks verify.sh
+WARN: T1-M023: legacy record lacks verify.sh
+WARN: T1-M160: legacy record lacks verify.sh
+WARN: T1-M028: legacy record lacks verify.sh
+WARN: origin/main advanced to 102da1a880ac; sync-main is required
+WARN: 126 historical anatomy join(s) need semantic review
+WARN: anatomy is stale relative to the observed deployed source; release sync required

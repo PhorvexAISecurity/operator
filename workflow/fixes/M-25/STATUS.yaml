@@ -1,0 +1,74 @@
+schema_version: 1
+fix_id: M-25
+issues:
+- M-25
+related_issues: []
+title: Merge kill-chain stage by maximum consequence
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/belief-m025-max-consequence-stage-merge
+  base_sha: 62d6f48
+  head_sha: ddea288
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/113
+  reviewed_head: ddea288
+  merge_sha: '4522076'
+  checks: legacy-see-evidence
+  patch_equivalence: PASS
+deployment:
+  image: phorvex:0.4.84
+  digest: null
+  git_sha: '4522076'
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: No action; run permanent tests on affected releases.
+migration:
+  source: /home/mehrdad/operator/fixes/M-25
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: true
+  legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+updated_at: '2026-09-06T22:26:59+00:00'
+revision: 0

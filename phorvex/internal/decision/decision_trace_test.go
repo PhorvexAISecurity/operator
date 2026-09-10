@@ -303,7 +303,7 @@ func TestDecisionTraceProductionDualUpdateMatchesPersistedState(t *testing.T) {
 			t.Fatalf("per-asset trace disagrees on tick update: %+v", decision.Trace)
 		}
 	}
-	if got := engine.costFor(policy.Tenant).Dual.Lambda(); got != update.LambdaAfter {
+	if got := engine.costFor(policy.Owner()).Dual.Lambda(); got != update.LambdaAfter {
 		t.Fatalf("audit/runtime transition drift: runtime=%g update=%+v", got, update)
 	}
 }

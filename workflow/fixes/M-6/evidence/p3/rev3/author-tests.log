@@ -1,0 +1,4 @@
+ok  	github.com/phorvex/phorvex/internal/codeexec	1.015s
+ok  	github.com/phorvex/phorvex/internal/runner	0.121s
+ok  	github.com/phorvex/phorvex/internal/capability	0.053s
+ok  	github.com/phorvex/phorvex/internal/actuator	0.151s

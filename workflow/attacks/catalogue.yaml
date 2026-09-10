@@ -1,0 +1,2231 @@
+schema_version: 1
+provenance:
+  report_sha256: c50357e90e75b5217431c55312a5adb93fda624562bc7fa49834dc8186fc4801
+  note: Imported historical rows, with G2/G3 redirects and explicit limits. No live results are promoted
+    to current truth.
+redirects:
+  G2:
+  - B4
+  G3:
+  - B3
+  - K4
+suites:
+  dev-smoke:
+  - P-HEALTH
+  actuator-regression:
+  - GP4
+  - GP10
+  - GP9
+  - S2
+  - K1
+  - B3
+  - A1
+  - B1
+  - B2
+  - B4
+  - B5
+  - K4
+  - G1
+  - P-FORENSICS
+  brain-regression:
+  - P-CHOICE
+  - P-RBAC
+  - P-FAILURE
+  - P-COOLDOWN
+  - P-TELEMETRY
+  - M6
+  - R3
+  defense-regression:
+  - A1
+  - B1
+cases:
+- id: GP1
+  aliases:
+  - R1
+  title: Interactive RCE foothold → dwell
+  kind: integration
+  actuators: &id001
+  - rotate
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/rotate.md
+  permission: attack
+  requires: &id002
+  - controlled_target
+  - rotation_policy
+  - replacement_capacity
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T1, T4, T5
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP2
+  aliases: []
+  title: In-pod persistence (webshell/implant)
+  kind: integration
+  actuators: *id001
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/rotate.md
+  permission: attack
+  requires: *id002
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T1, T8
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP3
+  aliases: []
+  title: Fileless / in-memory implant
+  kind: integration
+  actuators: *id001
+  readiness: guided
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/rotate.md
+  permission: attack
+  requires: *id002
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T8
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP4
+  aliases: []
+  title: Detected compromise → targeted eviction
+  kind: integration
+  actuators: *id001
+  readiness: guided
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/rotate.md
+  permission: attack
+  requires: *id002
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T4
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP5
+  aliases: []
+  title: Cryptomining / resource hijack
+  kind: integration
+  actuators: *id001
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/rotate.md
+  permission: attack
+  requires: *id002
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T5, T8
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V12
+  aliases: []
+  title: litellm SQLi→SSTI RCE (foothold)
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T27 (blocked-at-auth)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V17
+  aliases: []
+  title: Supply-chain poisoned dep → startup RCE
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T43 (rotate can't cure)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP10
+  aliases:
+  - Q2
+  title: Foothold on a stateful store
+  kind: integration
+  actuators: &id003
+  - quarantine
+  readiness: guided
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/containment.md
+  permission: attack
+  requires: &id004
+  - controlled_target
+  - quarantine_policy
+  - network_enforcement
+  - state_safety
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟡 T6 · ⚙️ T35 (prediction falsified)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V13
+  aliases: []
+  title: Chroma `trust_remote_code` RCE
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T25 (not landable as deployed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V14
+  aliases: []
+  title: One-packet unauth mongod crash
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T26 (patched live)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: Q1
+  aliases: []
+  title: Injection → SSRF pivot / lateral
+  kind: integration
+  actuators: *id003
+  readiness: guided
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/containment.md
+  permission: attack
+  requires: *id004
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T41 (rotate answered — prediction corrected)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP6
+  aliases: []
+  title: Lateral movement
+  kind: integration
+  actuators: *id003
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/containment.md
+  permission: attack
+  requires: *id004
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🔴 T30 (silent w/o detector)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP7
+  aliases: []
+  title: C2 beacon
+  kind: integration
+  actuators: *id001
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/rotate.md
+  permission: attack
+  requires: *id002
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T31
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP8
+  aliases: []
+  title: Interactive recon / env mapping
+  kind: integration
+  actuators: *id003
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/containment.md
+  permission: attack
+  requires: *id004
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: bounded
+  claims:
+  - actuator
+  historical:
+    summary: 🔴 T30 (silent w/o detector)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: K1
+  aliases: []
+  title: APC crafted-prefix poisoning
+  kind: integration
+  actuators: &id005
+  - kv-reset
+  readiness: guided
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/cache.md
+  permission: attack
+  requires: &id006
+  - controlled_target
+  - cache_probe
+  - kv_reset_route
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T12 · 🟢 T20 (VC-grade, 7B)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: K2
+  aliases: []
+  title: 'K1 control: rotate left feasible'
+  kind: integration
+  actuators: *id005
+  readiness: guided
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/cache.md
+  permission: attack
+  requires: *id006
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: ⚙️ T18/T19
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: K3
+  aliases: []
+  title: Block-hash collision
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 4
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⬜ not run
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: K4
+  aliases: []
+  title: Disaggregated-KV poisoning
+  kind: integration
+  actuators:
+  - kv-migrate-invalidate
+  readiness: guided
+  realism:
+    score: 5
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/kv-transfer.md
+  permission: attack
+  requires:
+  - controlled_target
+  - disaggregated_serving
+  - cross_worker_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: '🟢 T49 (full E2E: local invalidate real, hit-rate 0.50→0.00; cross-worker code-deferred)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: A1
+  aliases: []
+  title: Poisoned LoRA from untrusted fine-tune
+  kind: attack
+  actuators: &id007
+  - adapter-rotate
+  readiness: guided
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/adapter.md
+  permission: attack
+  requires: &id008
+  - controlled_target
+  - lora_control
+  - adapter_detector
+  - benign_serving_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - detection
+  - decision
+  - dispatch
+  - effect
+  - attacker_goal
+  - service_health
+  - cleanup
+  signal: detector
+  expected_defense: mitigated
+  claims:
+  - defense
+  historical:
+    summary: 🟢 T22 (full E2E)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: A2
+  aliases: []
+  title: Dependency-confusion LoRA substitution
+  kind: attack
+  actuators: *id007
+  readiness: guided
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/adapter.md
+  permission: attack
+  requires: *id008
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - detection
+  - decision
+  - dispatch
+  - effect
+  - attacker_goal
+  - service_health
+  - cleanup
+  signal: detector
+  expected_defense: mitigated
+  claims:
+  - defense
+  historical:
+    summary: 🟢 T36 (full E2E)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: B1
+  aliases: []
+  title: Guardrail bypass (jailbreaks)
+  kind: attack
+  actuators:
+  - guardrail-rotate
+  readiness: guided
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/guardrail.md
+  permission: attack
+  requires:
+  - controlled_target
+  - guardrail_variants
+  - guardrail_detector
+  - benign_serving_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - detection
+  - decision
+  - dispatch
+  - effect
+  - attacker_goal
+  - service_health
+  - cleanup
+  signal: detector
+  expected_defense: mitigated
+  claims:
+  - defense
+  historical:
+    summary: 🟢 T45 (full E2E — tier built)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: B2
+  aliases:
+  - V11
+  - V21
+  title: Denial-of-wallet flood
+  kind: integration
+  actuators:
+  - request-drain
+  readiness: guided
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/drain.md
+  permission: attack
+  requires:
+  - controlled_target
+  - drain_route
+  - bounded_load
+  - engine_work_metrics
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: '🟢 T47 (full E2E: 12/12 in-flight aborted, pod untouched)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: B3
+  aliases: []
+  title: Inference-endpoint pinning
+  kind: integration
+  actuators:
+  - endpoint-rotate
+  readiness: guided
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/routes.md
+  permission: attack
+  requires: &id010
+  - controlled_target
+  - route_contract
+  - attacker_replay_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: 🟢 T17 (full K8s effect)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: B4
+  aliases:
+  - G2
+  title: Weight tamper / extraction
+  kind: integration
+  actuators:
+  - model-shard-replace
+  readiness: guided
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/cutover.md
+  permission: attack
+  requires: &id009
+  - controlled_target
+  - same_model_warm_pool
+  - drain_route
+  - service_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: '🟢 T48 (full E2E: 4s swap to shard shadow, svc continuity)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: B5
+  aliases: []
+  title: GPU co-tenant eviction
+  kind: integration
+  actuators:
+  - warm-swap
+  readiness: guided
+  realism:
+    score: 6
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/cutover.md
+  permission: attack
+  requires: *id009
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: '🟢 T46 (full E2E: 4s swap, zero cold-load, real drain, serving never stopped)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: GP9
+  aliases:
+  - S1
+  title: Stolen SA-token reuse
+  kind: integration
+  actuators:
+  - identity-rotate
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/identity.md
+  permission: attack
+  requires:
+  - controlled_target
+  - identity_policy
+  - credential_replay_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: ⚙️🔴 T10
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: S2
+  aliases: []
+  title: Endpoint-pinned external recon
+  kind: integration
+  actuators:
+  - route-rotate
+  readiness: guided
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/routes.md
+  permission: attack
+  requires: *id010
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: ⚙️🔴 T11
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: G1
+  aliases: []
+  title: Cross-tenant GPU side-channel
+  kind: integration
+  actuators:
+  - mig-rebind
+  readiness: guided
+  realism:
+    score: 4
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/mig.md
+  permission: attack
+  requires:
+  - controlled_target
+  - mig_hardware
+  - mig_transport
+  - isolation_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: ⬜ not run
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V1
+  aliases: []
+  title: /ws pipeline hijack (forged Twilio frame)
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T29 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V2
+  aliases: []
+  title: Forged callSid → operator hang-up
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T42 (surface probed; live hang-up needs a call)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V16
+  aliases: []
+  title: Twilio-webhook credential disclosure
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T42 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V23
+  aliases: []
+  title: Starlette multipart DoS
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T28 (bounded as deployed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V25
+  aliases: []
+  title: Livekit pickle RCE
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 6
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T28 (N/A — not installed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V26
+  aliases: []
+  title: h11 request smuggling
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T28 (rejected live)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V3
+  aliases:
+  - N1
+  title: RAG poisoning → indirect injection → confused-deputy refund
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T7
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V4
+  aliases: []
+  title: litellm pre-auth SQLi key-dump
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T27 (blocked-at-auth)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V5
+  aliases: []
+  title: litellm api_base SSRF → IMDS
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T27 (chain blocked)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V6
+  aliases: []
+  title: MongoBleed heap disclosure
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T26 (patched live)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V7
+  aliases:
+  - N2
+  title: Plaintext transcript exfil (no-auth Mongo)
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T3
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V15
+  aliases: []
+  title: litellm data-plane implant
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⚙️ T27 (chain blocked)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V18
+  aliases: []
+  title: Forged callSid → transcript forgery
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T23 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V19
+  aliases: []
+  title: Cross-tenant Chroma authz gap → KB exfil
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T24 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V10
+  aliases:
+  - R2
+  title: Steal & reuse API keys / SA token
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T2
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V8
+  aliases:
+  - N3
+  title: Live spoken prompt injection
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: '🟡 T40 (semantic: persona accepted, disclosure refused)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V9
+  aliases: []
+  title: KB exfil over the phone
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: '⚙️ T40 (semantic half: model refused)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V20
+  aliases: []
+  title: Deepfake/voice-clone → password reset
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⬜ not run (needs human)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V24
+  aliases: []
+  title: Injection-driven unbounded internal querying
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: '⚙️ T40 (semantic half: model refused)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V28
+  aliases: []
+  title: Barge-in / interruption injection
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 6
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⬜ not run
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V29
+  aliases: []
+  title: Agent-config / hidden-context recon
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T40 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V30
+  aliases: []
+  title: RAG credential harvesting
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: '⚙️ T40 (semantic half: model refused)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V31
+  aliases: []
+  title: Caller-ID / ANI spoofing
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⬜ not run (needs telephony)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: V32
+  aliases: []
+  title: Weaponized trusted bot (manipulation)
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: ⬜ not run
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: M6
+  aliases: []
+  title: Forged detector → rotate healthy pods
+  kind: integration
+  actuators: &id011
+  - rotate
+  - quarantine
+  readiness: guided
+  realism:
+    score: 7
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/defender.md
+  permission: attack
+  requires: &id012
+  - controlled_target
+  - signal_trust_probe
+  - benign_serving_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: 🔴 T13 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: R3
+  aliases:
+  - V22
+  title: Rotation weaponized into availability drain
+  kind: integration
+  actuators: *id011
+  readiness: guided
+  realism:
+    score: 5
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/defender.md
+  permission: attack
+  requires: *id012
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical:
+    summary: '🔴 T44 (bounded: landed, absorbed at N=2)'
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: Q3
+  aliases: []
+  title: Foothold on single-replica stateful store
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🟡 T34 (gap proven live)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: M1
+  aliases: []
+  title: MCP tool-description poisoning
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T32 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: M2
+  aliases: []
+  title: MCP tool-response injection
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 9
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T32 (landed)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: M3
+  aliases: []
+  title: Rogue / compromised MCP pod
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T33 (blind → gated)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: M4
+  aliases: []
+  title: Cross-call caller-memory contamination
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T38 (write door + auto-load path)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: M5
+  aliases: []
+  title: Console / control-plane compromise
+  kind: attack
+  actuators: []
+  readiness: historical
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: reference/PHORVEX_ATTACK_REPORT.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/boundary.md
+  permission: attack
+  requires:
+  - controlled_target
+  - applicable_attack_surface
+  - independent_attack_oracle
+  required_stages:
+  - fixture
+  - positive_control
+  - attack
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: unmitigated
+  claims:
+  - boundary
+  historical:
+    summary: 🔴 T37 (exposure verified)
+    source: reference/ATTACKS_OUTCOMES.md
+  limits: Historical results apply only to their recorded build/topology; review the bounded procedure
+    before execution.
+- id: P-HEALTH
+  aliases: []
+  title: Read-only deployment and coverage baseline
+  kind: probe
+  actuators: []
+  readiness: automated
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/health.md
+  permission: read-only
+  requires:
+  - cluster_read
+  - operator_ready
+  required_stages:
+  - fixture
+  - effect
+  signal: none
+  expected_defense: not_evaluated
+  claims:
+  - baseline
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+- id: P-CHOICE
+  aliases: []
+  title: Competing feasible actions under one fixed policy
+  kind: probe
+  actuators: []
+  readiness: guided
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/brain.md
+  permission: controlled-mutation
+  requires:
+  - controlled_target
+  - candidate_trace
+  - multiple_feasible_actions
+  - benign_serving_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - brain
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+- id: P-FAILURE
+  aliases: []
+  title: Failed or acknowledged-without-effect actuation
+  kind: probe
+  actuators: []
+  readiness: guided
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/brain.md
+  permission: controlled-mutation
+  requires:
+  - controlled_target
+  - fault_fixture
+  - candidate_trace
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  - brain
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+- id: P-COOLDOWN
+  aliases: []
+  title: Fresh pods, repeated signals and cooldown boundaries
+  kind: probe
+  actuators: []
+  readiness: guided
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/brain.md
+  permission: controlled-mutation
+  requires:
+  - controlled_target
+  - candidate_trace
+  - clock_observation
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - brain
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+- id: P-TELEMETRY
+  aliases: []
+  title: Missing, stale and contradictory observations
+  kind: probe
+  actuators: []
+  readiness: guided
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/brain.md
+  permission: controlled-mutation
+  requires:
+  - controlled_target
+  - telemetry_fixture
+  - candidate_trace
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - brain
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+- id: P-FORENSICS
+  aliases: []
+  title: Debugger and custom injection contracts
+  kind: probe
+  actuators:
+  - debugger
+  - custom-inject
+  readiness: guided
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/forensics.md
+  permission: controlled-mutation
+  requires:
+  - controlled_target
+  - ephemeral_container_support
+  - forensic_sink
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+- id: P-RBAC
+  aliases: []
+  title: Backend-correct capability and permission gates
+  kind: probe
+  actuators:
+  - rotate
+  - quarantine
+  readiness: guided
+  realism:
+    score: null
+    status: not-applicable
+    source: null
+    note: Deliberate engineering control, not an attack prevalence claim.
+  procedure: procedures/brain.md
+  permission: controlled-mutation
+  requires:
+  - controlled_target
+  - candidate_trace
+  - backend_permission_probe
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - brain
+  - actuator
+  historical: null
+  limits: Probe passes establish only its declared contract; they do not establish attack mitigation.

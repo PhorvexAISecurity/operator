@@ -18,9 +18,9 @@ func counterValue(t *testing.T, tenant, policy string) float64 {
 // PHORVEXSEC-205 / M-145: two policies sharing one tenant name must not collapse into one
 // phorvex_ticks_total series.
 func TestTicksTotalCarriesPolicyLabel(t *testing.T) {
-	PublishTick("voice", "voice-defense", nil, nil, 0, 0.01, "dryRun")
-	PublishTick("voice", "voice-defense", nil, nil, 0, 0.01, "dryRun")
-	PublishTick("voice", "voice-canary", nil, nil, 0, 0.01, "dryRun")
+	PublishTick("voice", "ns", "voice-defense", "uid-defense", nil, nil, 0, 0.01, "dryRun", false)
+	PublishTick("voice", "ns", "voice-defense", "uid-defense", nil, nil, 0, 0.01, "dryRun", false)
+	PublishTick("voice", "ns", "voice-canary", "uid-canary", nil, nil, 0, 0.01, "dryRun", false)
 	if got := counterValue(t, "voice", "voice-defense"); got != 2 {
 		t.Fatalf("voice/voice-defense ticks = %v, want 2", got)
 	}

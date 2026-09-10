@@ -1,0 +1,28 @@
+# Copy into the fix/campaign round evidence directory; fill from observed facts.
+case: A1
+result: PASS # PASS | FAIL | BLOCKED | NOT_APPLICABLE | NOT_RUN
+defense_outcome: mitigated # mitigated | bounded | unmitigated | not_evaluated
+signal_source: detector # detector | synthetic | none
+pins:
+  image: null
+  digest: null
+  source_sha: null
+started_at: null
+ended_at: null
+requests_sent: null # Required for executed mutating cases; must stay within plan limits.
+stages:
+  fixture: PASS
+  positive_control: PASS
+  attack: PASS
+  detection: PASS
+  decision: PASS
+  dispatch: PASS
+  effect: PASS
+  attacker_goal: PASS
+  service_health: PASS
+  cleanup: PASS
+reason: null
+findings: [] # Existing intake IDs, not new M-numbers.
+artifacts:
+  - path: raw-observation.txt # Relative to this observation file.
+    command: null # Exact reproduction command; never include credentials.

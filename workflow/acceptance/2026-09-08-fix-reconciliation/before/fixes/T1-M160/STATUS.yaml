@@ -1,0 +1,76 @@
+schema_version: 1
+fix_id: T1-M160
+issues:
+- M-160
+related_issues:
+- T1-E
+title: Routing-aware RBAC and no-rbac status gaps
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/contract-choice-m160-routing-aware-rbac
+  base_sha: 102da1a
+  head_sha: 281abce
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/130
+  reviewed_head: 3f0903f
+  merge_sha: c081616
+  checks: passed-merged-2026-09-07
+  patch_equivalence: PASS
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.96
+  digest: null
+  git_sha: a13b83af3b2d
+  rolled_out_at: '2026-09-07T21:50:14Z'
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: none
+  action: 'CLOSED 2026-09-07: deployed in v0.4.96 (21:50Z), L3 PASS — all 5 criteria
+    met (evidence/l3/verdict.md). T1-E criterion-6 failure resolved.'
+migration:
+  source: /home/mehrdad/operator/fixes/T1-M160
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: false
+  legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+updated_at: '2026-09-07T22:25:00+00:00'
+revision: 0

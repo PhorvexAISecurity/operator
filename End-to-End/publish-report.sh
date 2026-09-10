@@ -6,7 +6,7 @@
 # pipeline already drives the cluster through. So the report travels: runner --scp--> jump
 # host --kubectl cp--> the ci-reports nginx pod's PVC.
 #
-#   ./publish-report.sh <runs-dir> <prefix>
+#   ./publish-report.sh <runs-dir> <prefix> <run-id>
 #     runs-dir  directory holding run-<stamp>.html / .json (End-to-End/runs)
 #     prefix    destination path segment, e.g. "pr-42" or "main"
 #
@@ -15,8 +15,26 @@
 
 set -euo pipefail
 
-RUNS_DIR="${1:?usage: publish-report.sh <runs-dir> <prefix>}"
-PREFIX="${2:?usage: publish-report.sh <runs-dir> <prefix>}"
+RUNS_DIR="${1:?usage: publish-report.sh <runs-dir> <prefix> <run-id>}"
+PREFIX="${2:?usage: publish-report.sh <runs-dir> <prefix> <run-id>}"
+STAMP="${3:?an exact run-id is required; latest-report discovery is not safe}"
+if [[ ! "$STAMP" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$ ]]; then
+  echo "invalid run-id" >&2
+  exit 2
+fi
+REPORT="$RUNS_DIR/run-$STAMP.html"
+JSON="$RUNS_DIR/run-$STAMP.json"
+if [[ ! -s "$REPORT" || ! -s "$JSON" ]]; then
+  echo "current attempt has no complete HTML/JSON report pair" >&2
+  exit 1
+fi
+python3 - "$JSON" "$STAMP" <<'PY'
+import json, os, sys
+with open(sys.argv[1]) as stream:
+    doc = json.load(stream)
+if doc.get('runId') != sys.argv[2] or (os.getenv('GITHUB_SHA') and doc.get('sourceCommit') != os.environ['GITHUB_SHA']):
+    sys.exit('refusing to publish a report from a different attempt/source')
+PY
 
 HOST="${PHORVEX_SSH_HOST:?PHORVEX_SSH_HOST not set}"
 USER_="${PHORVEX_SSH_USER:?PHORVEX_SSH_USER not set}"
@@ -39,14 +57,6 @@ SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLeve
           -o ConnectTimeout=15)
 ssh_() { sshpass -e ssh "${SSH_OPTS[@]}" "$USER_@$HOST" "$@"; }
 scp_() { sshpass -e scp "${SSH_OPTS[@]}" "$@"; }
-
-REPORT="$(ls -1 "$RUNS_DIR"/run-*.html 2>/dev/null | sort | tail -1 || true)"
-if [[ -z "$REPORT" ]]; then
-  echo "no run-*.html in $RUNS_DIR — the pipeline produced no report" >&2
-  exit 1
-fi
-STAMP="$(basename "$REPORT" .html)"; STAMP="${STAMP#run-}"
-JSON="$RUNS_DIR/run-$STAMP.json"
 
 echo "publishing $STAMP → $BASE_URL/$PREFIX/"
 

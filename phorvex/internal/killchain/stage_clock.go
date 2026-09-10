@@ -42,16 +42,16 @@ func NewStageClock() *StageClock {
 
 // Observe folds this tick's (slot, uid, stage, exposureSec) and returns time-in-stage seconds.
 // exposureSec is the identity clock (monotonic within a UID epoch, resets to ~0 on a new UID).
-// The slot key is tenant\x00namespace\x00name — identical shape to exposure.Clock, so the runner
+// The slot key is owner\x00namespace\x00name — identical shape to exposure.Clock, so the runner
 // prunes both with the same keep set.
-func (c *StageClock) Observe(tenant, namespace, name, uid string, stage Stage, exposureSec float64) float64 {
+func (c *StageClock) Observe(owner, namespace, name, uid string, stage Stage, exposureSec float64) float64 {
 	if c == nil {
 		return exposureSec // no tracker => today's behaviour (dwell == identity age)
 	}
 	if exposureSec < 0 {
 		exposureSec = 0
 	}
-	key := tenant + "\x00" + namespace + "\x00" + name
+	key := owner + "\x00" + namespace + "\x00" + name
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	prev, ok := c.state[key]
@@ -73,13 +73,13 @@ func (c *StageClock) Observe(tenant, namespace, name, uid string, stage Stage, e
 	}
 }
 
-// RetainTenant prunes only THIS tenant's slots not in keep — same signature and semantics as
-// exposure.Clock.RetainTenant, so the runner passes the identical (tenant, keep) it already builds.
-func (c *StageClock) RetainTenant(tenant string, keep map[string]struct{}) int {
+// RetainOwner prunes only THIS owner's slots not in keep — same signature and semantics as
+// exposure.Clock.RetainOwner, so the runner passes the identical (owner, keep) it already builds.
+func (c *StageClock) RetainOwner(owner string, keep map[string]struct{}) int {
 	if c == nil {
 		return 0
 	}
-	prefix := tenant + "\x00"
+	prefix := owner + "\x00"
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	pruned := 0

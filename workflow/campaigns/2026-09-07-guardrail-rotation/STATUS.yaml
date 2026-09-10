@@ -1,0 +1,83 @@
+schema_version: 2
+campaign_id: 2026-09-07-guardrail-rotation
+profile: workflow-v2
+question: Do canary-extraction attacks bypass the deployed guardrail, and does the
+  existing Phorvex configuration react with guardrail rotation?
+state: PAUSED
+owner: human-owner
+approval_ref: user:2026-09-07:run-guardrail-rotate-attack
+created_at: '2026-09-07T19:59:38+00:00'
+updated_at: '2026-09-07T20:08:46+00:00'
+scope:
+  environment: phorvex-dev-eks
+  source_release: 0.4.95
+  included_fixes: []
+  duration_ceiling: 20m campaign; <=300s probe window
+  cost_ceiling: 10 sequential inference requests; max_tokens=96 each; existing dev
+    vllm only; no infrastructure changes
+  permission: attack
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.95
+  digest: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:e69abb524801cdc76fb8c603085c0243ff1ba8db9722e14a04571fc237c46e61
+  embedded_git_sha: 743a9d46b840543916cbb3d7e044b4bc4518f29c
+safety:
+  stop_conditions:
+  - Stop on failed benign control, build or policy drift, unexpected workload mutation,
+    or elapsed probe budget
+  phase_approval_ref: user:2026-09-07:run-guardrail-rotate-attack
+  unresolved: []
+  cleanup: PASS
+positive_control: PASS
+rounds:
+- id: round-1
+  state: COMPLETE
+findings: []
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: codex-guardrail-runner
+  independent_reviewer: null
+  coordinator: codex-guardrail-runner
+next_action:
+  owner: human-owner
+  action: Review completed static guardrail results; reconcile enabled action and
+    trusted bypass-detection path before an adaptive B1 retry
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-09-07T20:00:57+00:00'
+  by: codex-guardrail-runner
+  artifact: rounds/round-1/evidence/run-procedure.md
+  approval_ref: user:2026-09-07:run-guardrail-rotate-attack
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: APPROVED
+  to: BASELINED
+  at: '2026-09-07T20:02:42+00:00'
+  by: codex-guardrail-runner
+  artifact: rounds/round-1/evidence/benign-control.jsonl
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-07T20:02:43+00:00'
+  by: codex-guardrail-runner
+  artifact: rounds/round-1/evidence/run-procedure.md
+  approval_ref: null
+  phase_approval_ref: user:2026-09-07:run-guardrail-rotate-attack
+  note: null
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-09-07T20:08:46+00:00'
+  by: codex-guardrail-runner
+  artifact: REPORT.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false

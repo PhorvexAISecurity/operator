@@ -29,6 +29,7 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/calib"
+	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/controller"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
@@ -282,11 +284,35 @@ func main() {
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
 	// unpermitted action: the actuation itself still fails closed on real RBAC).
-	if cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie()); csErr == nil {
+	cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	if csErr == nil {
 		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
 	} else {
 		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
 	}
+	// M-6: the code-exec admission-capability verifier. It is ALWAYS wired (never nil at
+	// runtime), starts UNAVAILABLE (fail-closed until the first successful verification), and
+	// re-verifies every poll interval via GET-by-resourceName + SSAR (no watch). Registered as
+	// a manager Runnable so its lifecycle tracks the operator process. If the clientset could
+	// not be built, the verifier reads through an always-fail reader and stays unavailable, so
+	// debugger/custom-inject are fail-closed out of BOTH the offer set and the dispatch path.
+	var ceReader codeexec.PolicyReader
+	if csErr == nil {
+		ceReader = codeexec.NewK8sReader(cs)
+	} else {
+		ceReader = codeexec.NewUnavailableReader("cluster clientset unavailable at boot")
+	}
+	codeExecVerifier := codeexec.New(ceReader, codeexec.Config{})
+	rmgr.CodeExec = codeExecVerifier
+	if addErr := mgr.Add(ctrlmanager.RunnableFunc(func(ctx context.Context) error {
+		codeExecVerifier.Run(ctx)
+		return nil
+	})); addErr != nil {
+		setupLog.Error(addErr, "cannot register M-6 code-exec admission verifier loop; verifier stays unavailable (fail-closed)")
+	}
+	setupLog.Info("M-6 code-exec admission verifier wired (fail-closed until first successful verification)",
+		"policy", codeexec.PolicyName, "version", codeexec.PolicyVersion,
+		"deadline", codeexec.DefaultDeadline, "ttl", codeexec.DefaultTTL, "poll", codeexec.DefaultPoll)
 	if calibrationShadow {
 		rmgr.Calibration = calib.NewRuntime(calib.RuntimeConfig{
 			RefreshInterval: calibrationRefresh, SampleInterval: calibrationSample,
@@ -325,6 +351,11 @@ func main() {
 		if ferr != nil {
 			setupLog.Error(ferr, "cannot open audit-json; continuing with logger-only audit")
 		} else {
+			defer func() {
+				if err := f.Close(); err != nil {
+					setupLog.Error(err, "audit close failed")
+				}
+			}()
 			rmgr.Audit = audit.New(ctrl.Log, f)
 			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
 		}

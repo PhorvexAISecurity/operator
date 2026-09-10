@@ -712,3 +712,52 @@ type AttributionTerm struct {
 	Source       string  `json:"source"`
 	Contribution float64 `json:"contribution"`
 }
+
+// --- M-140 owner identity -------------------------------------------------
+//
+// One policy UID owns one economic unit. The display Tenant remains the
+// user-facing name (authorization, routing, telemetry labels); it no longer
+// keys learned state, because two policies in different namespaces may declare
+// the same spec.tenant and would otherwise share one lambda dual, one RLS model
+// and one belief prior.
+//
+// Keys are a DISJOINT (kind, value) encoding so an offline fixture whose tenant
+// string happens to equal a real policy UID can never share a bucket with it.
+const (
+	// OwnerKindUID is the production identity: the PhorvexPolicy's UID.
+	OwnerKindUID = "uid"
+	// OwnerKindName is the fallback for the explicit offline/legacy producers
+	// (ablation, benchmark simulation, calib-soak) that build a model.Policy
+	// directly and have no API object. Production Upsert rejects an absent UID.
+	OwnerKindName = "name"
+)
+
+// OwnerKey builds the disjoint owner identity. The separator cannot appear in a
+// Kubernetes UID or a tenant name, so the two key spaces never intersect.
+func OwnerKey(kind, value string) string { return kind + "\x00" + value }
+
+// Owner is the identity that owns this policy's learned state.
+func (p Policy) Owner() string {
+	if p.PolicyUID != "" {
+		return OwnerKey(OwnerKindUID, p.PolicyUID)
+	}
+	return OwnerKey(OwnerKindName, p.Tenant)
+}
+
+// OwnerKind reports which identity space Owner() used, for decision records.
+func (p Policy) OwnerKind() string {
+	if p.PolicyUID != "" {
+		return OwnerKindUID
+	}
+	return OwnerKindName
+}
+
+// OwnerKindOf reports the identity space an owner key was built in.
+func OwnerKindOf(owner string) string {
+	for i := 0; i < len(owner); i++ {
+		if owner[i] == 0 {
+			return owner[:i]
+		}
+	}
+	return ""
+}

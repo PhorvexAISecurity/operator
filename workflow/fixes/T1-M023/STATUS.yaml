@@ -1,0 +1,96 @@
+schema_version: 1
+fix_id: T1-M023
+issues:
+- M-23
+related_issues: []
+title: Per-action exposure clocks
+profile: legacy-migrated
+state: DEPLOYED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+  reviewed_code_sha: 4cad00fb9e8f104d32dd0c6a10d9234c8e03f657
+  code_sha: 0bc6890acf0c3e3df937ad3bb45b1d99efc9b45a
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/clock-choice-m023-per-action-exposure-clocks
+  base_sha: 0bc6890acf0c3e3df937ad3bb45b1d99efc9b45a
+  head_sha: d206caa75cdda476bda0f4967dc141ff35eb2866
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/123
+  reviewed_head: 13258e31bcb222bb85f5eff37d62952b1e9c77a8
+  merge_sha: 809d80cbfd394dba496e1ad2064d412f2c195ae4
+  checks: passed-merged-2026-09-07
+  patch_equivalence: PASS
+deployment:
+  image: phorvex:0.4.95
+  digest: sha256:e69abb524801cdc76fb8c603085c0243ff1ba8db9722e14a04571fc237c46e61
+  git_sha: 743a9d46b840543916cbb3d7e044b4bc4518f29c
+  reported_first_release_started_at: '2026-09-07T15:52:36Z'
+  rolled_out_at: '2026-09-07T16:54:04Z'
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: NON_DISCRIMINATING
+  l4: NOT_REQUIRED
+  positive_control: NON_DISCRIMINATING
+  live_required: true
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers:
+- A discriminating same-pod/action spacing and post-window re-emission control has
+  not been recorded.
+residuals:
+- M28 corpus found a rotate missed by the old watcher; one emission does not prove
+  same-pod/action cadence. Check watcher coverage before reuse.
+next_action:
+  owner: live_verifier
+  action: Confirm observer coverage and run an approved discriminating M23 window;
+    require spacing plus post-window re-emission. Existing watch report is NON_DISCRIMINATING.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-M023
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: false
+  legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+  last_reconciled_at: '2026-09-08T18:00:39+00:00'
+  last_reconciliation: acceptance/2026-09-08-fix-reconciliation/REPORT.md
+  closure_basis: Imported legacy outcome where CLOSED; not a new full-contract verification
+    certificate.
+updated_at: '2026-09-08T18:00:39+00:00'
+revision: 1
+reconciliation_history:
+- at: '2026-09-08T18:00:39+00:00'
+  by: codex-m006
+  authority: user:2026-09-08-bring-workflow-fixes-up-to-date
+  kind: external-legacy-evidence-import
+  previous_state: PR_READY
+  report: RECONCILIATION.md
+  note: Imports recorded external outcomes; no current-protocol signatures or missing
+    tests fabricated.

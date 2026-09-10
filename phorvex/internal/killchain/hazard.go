@@ -398,7 +398,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 
 	// T1-B: the Weibull dwell family reads time-IN-STAGE, not the pod identity clock. On a
 	// non-transitioning pod dwellSec == exposureSec (byte-identical); it restarts on a stage change.
-	dwellSec := m.StageClock.Observe(pol.Tenant, view.Pod.Namespace, view.Pod.Name, view.Pod.UID, stage, exposureSec)
+	dwellSec := m.StageClock.Observe(pol.Owner(), view.Pod.Namespace, view.Pod.Name, view.Pod.UID, stage, exposureSec)
 
 	// --- predictive belief horizon: hazard of imminent next-stage transition ---
 	scale := m.SojournScale[stage]
@@ -448,7 +448,7 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	// betaMean does. cap is INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. T_exp is the
 	// policy proactive floor today; T1-B substitutes its dedicated constant without changing
 	// this formula.
-	betaMean := m.Memory.PHoldUCBWithEvidence(pol.Tenant, eventAlpha, m.ConfidenceK)
+	betaMean := m.Memory.PHoldUCBWithEvidence(pol.Owner(), eventAlpha, m.ConfidenceK)
 	cap := pol.ExposurePressureCap
 	if cap <= 0 || cap >= 1 {
 		cap = DefaultExposurePressureCap

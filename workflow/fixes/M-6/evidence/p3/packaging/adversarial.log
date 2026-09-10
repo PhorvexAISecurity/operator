@@ -1,0 +1,34 @@
+=== RUN   TestReviewerRejectsEnforcementDrift
+=== RUN   TestReviewerRejectsEnforcementDrift/CEL-replaced-by-true
+=== RUN   TestReviewerRejectsEnforcementDrift/all-new-containers-hidden
+=== RUN   TestReviewerRejectsEnforcementDrift/policy-match-condition-false
+=== RUN   TestReviewerRejectsEnforcementDrift/wrong-resource-api-group
+=== RUN   TestReviewerRejectsEnforcementDrift/binding-excludes-subresource
+=== RUN   TestReviewerRejectsEnforcementDrift/binding-namespace-expression-excludes-target
+=== RUN   TestReviewerRejectsEnforcementDrift/binding-object-selector-excludes-target
+--- PASS: TestReviewerRejectsEnforcementDrift (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/CEL-replaced-by-true (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/all-new-containers-hidden (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/policy-match-condition-false (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/wrong-resource-api-group (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/binding-excludes-subresource (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/binding-namespace-expression-excludes-target (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/binding-object-selector-excludes-target (0.00s)
+=== RUN   TestReviewerProductionManifestPositiveControl
+--- PASS: TestReviewerProductionManifestPositiveControl (0.00s)
+=== RUN   TestReviewerFinalCheckRejectsNamespaceRemovedSinceSnapshot
+--- PASS: TestReviewerFinalCheckRejectsNamespaceRemovedSinceSnapshot (0.00s)
+=== RUN   TestReviewerRejectsClusterOnlyScope
+--- PASS: TestReviewerRejectsClusterOnlyScope (0.00s)
+=== RUN   TestReviewerInvalidationDuringFinalScopeReadStopsSubmit
+--- PASS: TestReviewerInvalidationDuringFinalScopeReadStopsSubmit (0.00s)
+=== RUN   TestReviewerAllowsActualAPIDefaultedContract
+=== RUN   TestReviewerAllowsActualAPIDefaultedContract/policy
+=== RUN   TestReviewerAllowsActualAPIDefaultedContract/binding
+--- PASS: TestReviewerAllowsActualAPIDefaultedContract (0.00s)
+    --- PASS: TestReviewerAllowsActualAPIDefaultedContract/policy (0.00s)
+    --- PASS: TestReviewerAllowsActualAPIDefaultedContract/binding (0.00s)
+=== RUN   TestReviewerNamespaceReadFailureInvalidates
+--- PASS: TestReviewerNamespaceReadFailureInvalidates (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/codeexec	0.021s

@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-09-08T19:01:17.365869+00:00",
+  "registry": "registry-1.docker.io",
+  "repository": "library/busybox",
+  "tag": "1.36",
+  "index_digest": "sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662",
+  "platform": {
+    "architecture": "amd64",
+    "os": "linux"
+  },
+  "manifest_digest": "sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f",
+  "config_digest": "sha256:b116e155074440ffd9e449559433feb4cd2341eb3554b1da1c638c976e56451d",
+  "config": {
+    "config": {
+      "Cmd": [
+        "sh"
+      ],
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      ]
+    },
+    "created": "2023-05-18T22:34:17Z",
+    "history": [
+      {
+        "created": "2023-05-18T22:34:17Z",
+        "created_by": "BusyBox 1.36.1 (glibc), Debian 13"
+      }
+    ],
+    "rootfs": {
+      "type": "layers",
+      "diff_ids": [
+        "sha256:97e4ece8f8a4d01b66df2c55c1f1e8a2860597b54dffbbc0df2f9942062cb34d"
+      ]
+    },
+    "architecture": "amd64",
+    "os": "linux"
+  },
+  "method": "Read-only Docker Registry v2 token, manifest index, linux/amd64 manifest and configuration blob; SHA256 verified for manifest/config. Token not retained.",
+  "limitations": [
+    "Tag is mutable; digest is point-in-time.",
+    "Image metadata inspection is not a runnable/efficacy test.",
+    "No image layers downloaded or executed."
+  ]
+}

@@ -109,46 +109,7 @@ jobs:
             -f deploy/helm/phorvex-stack/values-eks.yaml --include-crds > /dev/null
 
       - name: Vendored subchart matches its source
-        run: |
-          # ArgoCD renders the chart from the vendored charts/*.tgz, NOT from
-          # phorvex/charts/phorvex — so a subchart edit that is never re-packaged is
-          # invisible until it silently fails to deploy.
-          #
-          # This compares EXTRACTED CONTENTS, not the .tgz bytes: `helm package` stamps
-          # gzip metadata at build time, so the archive is not byte-reproducible and a
-          # byte comparison would fail on every single run.
-          V=$(grep -E '^version:' phorvex/charts/phorvex/Chart.yaml | awk '{print $2}')
-          TGZ="deploy/helm/phorvex-stack/charts/phorvex-$V.tgz"
-          if [ ! -f "$TGZ" ]; then
-            echo "::error::$TGZ is missing — phorvex/charts/phorvex is at version $V."
-            echo "::error::Run: helm dependency update deploy/helm/phorvex-stack (and bump the dependency in Chart.yaml)"
-            exit 1
-          fi
-          # Self-hosted runners retain /tmp between jobs. Never merge an archive
-          # into a shared directory: deleted templates from older runs survive.
-          VENDORED_DIR=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/phorvex-vendored.XXXXXX")
-          trap 'rm -rf -- "$VENDORED_DIR"' EXIT
-          tar xzf "$TGZ" -C "$VENDORED_DIR"
-          # templates/, values.yaml and crds/ are archived verbatim, so they diff directly.
-          # Chart.yaml does NOT: `helm package` reorders its keys and reflows the folded
-          # description, so it is compared as parsed data instead of as text.
-          if ! diff -r --exclude=.helmignore --exclude=Chart.yaml \
-                 phorvex/charts/phorvex "$VENDORED_DIR/phorvex"; then
-            echo "::error::the vendored subchart differs from phorvex/charts/phorvex."
-            echo "::error::Run: helm dependency update deploy/helm/phorvex-stack && git add deploy/helm/phorvex-stack"
-            exit 1
-          fi
-          python3 - "$VENDORED_DIR/phorvex/Chart.yaml" <<'PY'
-          import sys, yaml
-          a = yaml.safe_load(open("phorvex/charts/phorvex/Chart.yaml"))
-          b = yaml.safe_load(open(sys.argv[1]))
-          drift = {k: (a.get(k), b.get(k)) for k in set(a) | set(b) if a.get(k) != b.get(k)}
-          if drift:
-              for k, (x, y) in drift.items():
-                  print(f"::error::Chart.yaml {k}: source={x!r} vendored={y!r}")
-              sys.exit("vendored Chart.yaml is stale — helm dependency update")
-          print("  Chart.yaml matches")
-          PY
+        run: bash tools/check-vendored-chart.sh
 
       - name: Vendored subchart check regressions
         run: python3 tools/test_chart_sync.py
@@ -157,6 +118,11 @@ jobs:
         run: |
           python3 tools/test_e2e_detector_chart.py
           python3 -m unittest discover -s End-to-End/pipeline -p 'test_*.py'
+
+      - name: ArgoCD deployment policy and waiter regressions
+        run: |
+          bash -n deploy/argocd/wait-for-rollout.sh
+          python3 tools/test_deploy_autosync.py
 
   # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
@@ -347,6 +313,9 @@ jobs:
   # checks, config, trace fields — actually runs. The gate on the PR's own code is the
   # post-merge run in `deploy`, which executes after ArgoCD has rolled the new image out.
   e2e:
+    env:
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-e2e
+      E2E_RUN_DIR: runs/${{ github.run_id }}-${{ github.run_attempt }}-e2e
     # A forced release is not a test run: e2e-main covers it after the rollout.
     # Draft PRs get isolated e2e-contract checks, never attacks on shared workloads.
     if: |
@@ -384,15 +353,20 @@ jobs:
           PREFIX="pr-${{ github.event.pull_request.number || github.run_id }}"
           LABEL="PR #${{ github.event.pull_request.number || '—' }} · ${GITHUB_SHA::7} · ${{ github.actor }}"
           echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          mkdir -p "$E2E_RUN_DIR"
           # Do NOT fail the step here: the report still has to be published and the comment
           # posted when the run goes red. The verdict is re-raised at the end of the job.
           set +e
           python3 pipeline/e2e.py \
+            --out "$E2E_RUN_DIR" --run-id "$E2E_RUN_ID" --source-commit "$GITHUB_SHA" \
             --mode "$MODE" --target "$E2E_TARGET" \
             --telegram --baseline baseline.json \
             --run-label "$LABEL" \
-            --report-url "https://ci-report.phorvex.ai/$PREFIX/run-{stamp}.html"
-          echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
+            --report-url "https://ci-report.phorvex.ai/$PREFIX/run-{stamp}.html" 2>&1 | tee "$E2E_RUN_DIR/run.log"
+          STATUS=("${PIPESTATUS[@]}")
+          RC="${STATUS[0]}"
+          if [ "${STATUS[1]}" != "0" ] && [ "$RC" = "0" ]; then RC=2; fi
+          echo "verdict_rc=$RC" >> "$GITHUB_OUTPUT"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -402,17 +376,21 @@ jobs:
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
         working-directory: End-to-End
-        run: ./publish-report.sh runs "${{ steps.e2e.outputs.prefix }}"
+        run: ./publish-report.sh "$E2E_RUN_DIR" "${{ steps.e2e.outputs.prefix }}" "$E2E_RUN_ID"
 
       - name: Build the summary
         id: summary
-        if: always() && steps.e2e.outcome != 'skipped'
+        if: always()
         working-directory: End-to-End
         run: |
-          RUN_JSON="$(ls -1 runs/run-*.json | sort | tail -1)"
-          python3 summary.py "$RUN_JSON" \
-            --url "${{ steps.publish.outputs.url }}" --marker > comment.md
-          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          python3 summary.py "$E2E_RUN_DIR/run-$E2E_RUN_ID.json" \
+            --expect-run-id "$E2E_RUN_ID" --expect-source-commit "$GITHUB_SHA" \
+            --exit-code "${{ steps.e2e.outputs.verdict_rc }}" \
+            --url "${{ steps.publish.outputs.url }}" --marker > "comment-$E2E_RUN_ID.md"
+          RC=$?
+          cat "comment-$E2E_RUN_ID.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$RC"
 
       # One comment per PR, edited on each push. A new comment per push buries the
       # conversation and makes the newest result the hardest one to find. summary.py writes
@@ -433,7 +411,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          body-path: End-to-End/comment.md
+          body-path: End-to-End/comment-${{ env.E2E_RUN_ID }}.md
           edit-mode: replace
 
       - name: Keep the run artifacts
@@ -441,13 +419,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ steps.e2e.outputs.prefix }}
-          path: End-to-End/runs/
+          path: |
+            End-to-End/${{ env.E2E_RUN_DIR }}/
+            End-to-End/comment-${{ env.E2E_RUN_ID }}.md
           retention-days: 30
 
       - name: Re-raise the End-to-End verdict
         if: always()
         run: |
           RC="${{ steps.e2e.outputs.verdict_rc }}"
+          case "$RC" in 0|1|2) ;; *) RC=2 ;; esac
           if [ "$RC" != "0" ]; then
             echo "::error::End-to-End failed (exit $RC) — see ${{ steps.publish.outputs.url }}"
             exit "$RC"
@@ -661,29 +642,24 @@ jobs:
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
-          # The phorvex-stack Application runs with automated sync, so ArgoCD picks the
-          # commit up on its own reconciliation (~3 min). Rather than sleeping blindly,
-          # poll for the DEPLOYED image to become the version just released: the deploy is
-          # not done until the pods run it, and the E2E that follows would otherwise pass
-          # or fail on the previous build.
+          # Validate before interpolating this tag into the remote shell command.
+          [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+            echo "::error::Invalid release image tag"
+            exit 1
+          }
+          # The real read-only waiter diagnoses disabled auto-sync immediately and
+          # requires the exact released image plus rollout readiness. It never resumes
+          # an intentionally paused application or initiates a sync itself.
           sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR "$USER_@$HOST" "V=$V bash -s" <<'EOS'
-          set -e
-          for i in $(seq 1 60); do
-            IMG=$(kubectl -n phorvex-system get deploy phorvex-phorvex \
-                  -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
-            echo "[$i/60] deployed image: $IMG"
-            case "$IMG" in
-              *:"$V") kubectl -n phorvex-system rollout status deploy/phorvex-phorvex --timeout=180s; exit 0 ;;
-            esac
-            sleep 15
-          done
-          echo "ArgoCD did not roll out v$V within 15 minutes" >&2
-          exit 1
-          EOS
+            -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V bash -s" \
+            < deploy/argocd/wait-for-rollout.sh
 
   # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
   e2e-main:
+    env:
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-e2e-main
+      E2E_RUN_DIR: runs/${{ github.run_id }}-${{ github.run_attempt }}-e2e-main
     # Runs after any real deploy, however it was triggered.
     if: |
       !cancelled() && needs.deploy.result == 'success'
@@ -719,13 +695,18 @@ jobs:
           V:                    ${{ needs.deploy.outputs.version }}
         working-directory: End-to-End
         run: |
+          mkdir -p "$E2E_RUN_DIR"
           set +e
           python3 pipeline/e2e.py \
+            --out "$E2E_RUN_DIR" --run-id "$E2E_RUN_ID" --source-commit "$GITHUB_SHA" \
             --mode attack --target "$E2E_TARGET" \
             --telegram --baseline baseline.json \
             --run-label "main · v$V · post-deploy" \
-            --report-url "https://ci-report.phorvex.ai/main/run-{stamp}.html"
-          echo "verdict_rc=$?" >> "$GITHUB_OUTPUT"
+            --report-url "https://ci-report.phorvex.ai/main/run-{stamp}.html" 2>&1 | tee "$E2E_RUN_DIR/run.log"
+          STATUS=("${PIPESTATUS[@]}")
+          RC="${STATUS[0]}"
+          if [ "${STATUS[1]}" != "0" ] && [ "$RC" = "0" ]; then RC=2; fi
+          echo "verdict_rc=$RC" >> "$GITHUB_OUTPUT"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -735,21 +716,31 @@ jobs:
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
         working-directory: End-to-End
-        run: ./publish-report.sh runs main
+        run: ./publish-report.sh "$E2E_RUN_DIR" main "$E2E_RUN_ID"
 
       - name: Summary
         if: always()
         working-directory: End-to-End
         run: |
-          RUN_JSON="$(ls -1 runs/run-*.json | sort | tail -1)"
-          python3 summary.py "$RUN_JSON" --url "${{ steps.publish.outputs.url }}" \
+          python3 summary.py "$E2E_RUN_DIR/run-$E2E_RUN_ID.json" \
+            --expect-run-id "$E2E_RUN_ID" --expect-source-commit "$GITHUB_SHA" \
+            --exit-code "${{ steps.e2e.outputs.verdict_rc }}" --url "${{ steps.publish.outputs.url }}" \
             --title "Phorvex End-to-End — v${{ needs.deploy.outputs.version }} (post-deploy)" \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the current attempt artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-main-${{ env.E2E_RUN_ID }}
+          path: End-to-End/${{ env.E2E_RUN_DIR }}/
+          retention-days: 30
 
       - name: Re-raise the End-to-End verdict
         if: always()
         run: |
           RC="${{ steps.e2e.outputs.verdict_rc }}"
+          case "$RC" in 0|1|2) ;; *) RC=2 ;; esac
           if [ "$RC" != "0" ]; then
             echo "::error::Post-deploy End-to-End FAILED for v${{ needs.deploy.outputs.version }} — ${{ steps.publish.outputs.url }}"
             exit "$RC"

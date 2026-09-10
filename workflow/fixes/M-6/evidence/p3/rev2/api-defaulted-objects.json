@@ -1,0 +1,135 @@
+[
+  {
+    "apiVersion": "admissionregistration.k8s.io/v1",
+    "kind": "ValidatingAdmissionPolicy",
+    "metadata": {
+      "annotations": {
+        "phorvex.ai/policy-version": "m6-1"
+      },
+      "creationTimestamp": "2026-09-08T21:47:38Z",
+      "generation": 1,
+      "labels": {
+        "app.kubernetes.io/part-of": "phorvex",
+        "phorvex.ai/policy": "codeexec-ephemeral"
+      },
+      "name": "phorvex-codeexec-ephemeral",
+      "uid": "d9f7a119-fbbf-4821-b0b4-ee5f9d001a1d"
+    },
+    "spec": {
+      "failurePolicy": "Fail",
+      "matchConstraints": {
+        "matchPolicy": "Equivalent",
+        "namespaceSelector": {},
+        "objectSelector": {},
+        "resourceRules": [
+          {
+            "apiGroups": [
+              ""
+            ],
+            "apiVersions": [
+              "v1"
+            ],
+            "operations": [
+              "UPDATE"
+            ],
+            "resources": [
+              "pods/ephemeralcontainers"
+            ],
+            "scope": "*"
+          }
+        ]
+      },
+      "validations": [
+        {
+          "expression": "size(variables.newContainers) == 0 || request.userInfo.username == variables.managerSA",
+          "messageExpression": "\"code-exec/identity: only the Phorvex manager service account may add an ephemeral container in a managed namespace (got '\" + request.userInfo.username + \"')\"",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec, ec.name in ['phorvex-debugger', 'phorvex-custom'])",
+          "message": "code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec, has(ec.image) && ec.image == variables.approvedImage)",
+          "message": "code-exec/image: ephemeral container image must be the pinned busybox digest",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec, has(ec.securityContext)\n  && ec.securityContext.privileged == false\n  && ec.securityContext.allowPrivilegeEscalation == false\n  && ec.securityContext.runAsNonRoot == true\n  && ec.securityContext.runAsUser == 65534\n  && ec.securityContext.runAsGroup == 65534\n  && ec.securityContext.readOnlyRootFilesystem == true)",
+          "message": "code-exec/securityContext: require privileged=false, allowPrivilegeEscalation=false, runAsNonRoot=true, runAsUser=runAsGroup=65534, readOnlyRootFilesystem=true",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.capabilities)\n  && ec.securityContext.capabilities.drop == ['ALL']\n  && (!has(ec.securityContext.capabilities.add) || size(ec.securityContext.capabilities.add) == 0))",
+          "message": "code-exec/capabilities: require capabilities.drop=[ALL] and no capabilities.add",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec, has(ec.securityContext) && has(ec.securityContext.seccompProfile)\n  && ec.securityContext.seccompProfile.type == 'RuntimeDefault')",
+          "message": "code-exec/seccomp: require seccompProfile.type=RuntimeDefault",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec, !has(ec.securityContext)\n  || (!has(ec.securityContext.appArmorProfile)\n      && !has(ec.securityContext.seLinuxOptions)\n      && !has(ec.securityContext.windowsOptions)\n      && !has(ec.securityContext.procMount)))",
+          "message": "code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec,\n  (!has(ec.tty) || ec.tty == false)\n  && (!has(ec.stdin) || ec.stdin == false)\n  && !has(ec.targetContainerName)\n  && (!has(ec.env) || size(ec.env) == 0)\n  && (!has(ec.envFrom) || size(ec.envFrom) == 0)\n  && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)\n  && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))",
+          "message": "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted",
+          "reason": "Forbidden"
+        },
+        {
+          "expression": "variables.newContainers.all(ec,\n  ec.name == 'phorvex-debugger'\n    ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))\n    : (ec.name == 'phorvex-custom'\n        ? (has(ec.command) && ec.command == ['sh', '-c']\n           && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])\n        : true))",
+          "message": "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args",
+          "reason": "Forbidden"
+        }
+      ],
+      "variables": [
+        {
+          "expression": "'system:serviceaccount:phorvex-system:phorvex-phorvex-manager'",
+          "name": "managerSA"
+        },
+        {
+          "expression": "'busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f'",
+          "name": "approvedImage"
+        },
+        {
+          "expression": "has(object.spec.ephemeralContainers)\n  ? object.spec.ephemeralContainers.filter(ec,\n      !(has(oldObject.spec.ephemeralContainers)\n        && oldObject.spec.ephemeralContainers.exists(o, o.name == ec.name)))\n  : []",
+          "name": "newContainers"
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "admissionregistration.k8s.io/v1",
+    "kind": "ValidatingAdmissionPolicyBinding",
+    "metadata": {
+      "creationTimestamp": "2026-09-08T21:47:38Z",
+      "generation": 1,
+      "labels": {
+        "app.kubernetes.io/part-of": "phorvex",
+        "phorvex.ai/policy": "codeexec-ephemeral"
+      },
+      "name": "phorvex-codeexec-ephemeral",
+      "uid": "4aa70bc6-ab26-441f-98ca-0922c8bb2240"
+    },
+    "spec": {
+      "matchResources": {
+        "matchPolicy": "Equivalent",
+        "namespaceSelector": {
+          "matchLabels": {
+            "phorvex.ai/codeexec-managed": "true"
+          }
+        },
+        "objectSelector": {}
+      },
+      "policyName": "phorvex-codeexec-ephemeral",
+      "validationActions": [
+        "Deny"
+      ]
+    }
+  }
+]

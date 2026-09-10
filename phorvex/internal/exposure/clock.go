@@ -25,7 +25,7 @@ import (
 // fingerprint is any stable string that changes exactly when the variable changes
 // (UID for pod identity, node name for placement, image digest for image, ...).
 type Observation struct {
-	Tenant       string
+	Owner        string
 	Namespace    string
 	Pod          string
 	StartedAt    time.Time
@@ -48,8 +48,11 @@ func NewClock() *Clock {
 	return &Clock{state: make(map[string]map[string]entry)}
 }
 
-func slotKey(tenant, ns, pod string) string {
-	return tenant + "\x00" + ns + "\x00" + pod
+// slotKey is owner-scoped (M-140): the first segment is the disjoint owner key,
+// not the display tenant name, so removing one policy cannot delete a different
+// policy's slots merely because the two share a spec.tenant.
+func slotKey(owner, ns, pod string) string {
+	return owner + "\x00" + ns + "\x00" + pod
 }
 
 // Observe records the current fingerprints for a slot at time now. A variable seen
@@ -59,7 +62,7 @@ func (c *Clock) Observe(o Observation, now time.Time) {
 	if o.Pod == "" {
 		return
 	}
-	key := slotKey(o.Tenant, o.Namespace, o.Pod)
+	key := slotKey(o.Owner, o.Namespace, o.Pod)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	vars := c.state[key]
@@ -83,8 +86,8 @@ func (c *Clock) Observe(o Observation, now time.Time) {
 }
 
 // Since returns the time-since-last-change per tracked variable for a slot.
-func (c *Clock) Since(tenant, ns, pod string, now time.Time) map[string]time.Duration {
-	key := slotKey(tenant, ns, pod)
+func (c *Clock) Since(owner, ns, pod string, now time.Time) map[string]time.Duration {
+	key := slotKey(owner, ns, pod)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	vars := c.state[key]
@@ -100,8 +103,8 @@ func (c *Clock) Since(tenant, ns, pod string, now time.Time) map[string]time.Dur
 }
 
 // Forget drops a slot's clocks (call on pod deletion to bound memory).
-func (c *Clock) Forget(tenant, ns, pod string) {
-	key := slotKey(tenant, ns, pod)
+func (c *Clock) Forget(owner, ns, pod string) {
+	key := slotKey(owner, ns, pod)
 	c.mu.Lock()
 	delete(c.state, key)
 	c.mu.Unlock()
@@ -123,13 +126,14 @@ func (c *Clock) Retain(keep map[string]struct{}) int {
 }
 
 // SlotKey exposes the canonical slot key so callers can build the Retain keep-set.
-func SlotKey(tenant, ns, pod string) string { return slotKey(tenant, ns, pod) }
+func SlotKey(owner, ns, pod string) string { return slotKey(owner, ns, pod) }
 
-// RetainTenant prunes only THIS tenant's slots that are not in keep (a set of full
-// slot keys). Used each tick so a tenant's departed pods are GC'd without disturbing
-// other tenants whose policies did not tick this round. Returns the count dropped.
-func (c *Clock) RetainTenant(tenant string, keep map[string]struct{}) int {
-	prefix := tenant + "\x00"
+// RetainOwner prunes only THIS owner's slots that are not in keep (a set of full
+// slot keys). Used each tick so an owner's departed pods are GC'd without disturbing
+// other owners whose policies did not tick this round, and on lifecycle removal with
+// an empty keep set. Returns the count dropped.
+func (c *Clock) RetainOwner(owner string, keep map[string]struct{}) int {
+	prefix := owner + "\x00"
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	dropped := 0

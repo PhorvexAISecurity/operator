@@ -1,0 +1,48 @@
+schema_version: 2
+campaign_id: null
+profile: workflow-v2
+question: null
+state: DRAFT
+owner: human-owner
+approval_ref: null
+created_at: null
+updated_at: null
+
+scope:
+  environment: null
+  source_release: null
+  included_fixes: []
+  duration_ceiling: null
+  cost_ceiling: null
+  permission: read-only
+
+pins:
+  image: null
+  digest: null
+  embedded_git_sha: null
+
+safety:
+  stop_conditions: []
+  phase_approval_ref: null
+  unresolved: []
+  cleanup: pending
+
+positive_control: pending
+rounds:
+  - id: round-1
+    state: PLANNED
+findings: []
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+
+roles:
+  campaign_lead: null
+  independent_reviewer: null
+  coordinator: null
+
+next_action:
+  owner: campaign-lead
+  action: Complete hypotheses and safety pre-registration.
+transitions: []

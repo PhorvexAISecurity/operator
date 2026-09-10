@@ -1,0 +1,37 @@
+M-6 L0-L2 reproduction commands (round 3 — after P3 rev2 findings)
+==================================================================
+Base: 5a0fd3fa6f00ae93da442d84ac2b651b6a2573f9  (reviewed integration base; base_review signed)
+Head: 9eb14271625620aef6b6184386764e29f0d71ea3  (parallel/contract-m006-code-exec-admission)
+Worktree: /home/mehrdad/operator-m006/phorvex   (Go module github.com/phorvex/phorvex)
+Toolchain: go1.26.1 ; cel-go v0.23.2 (direct test dep) ; helm v3.16.2 (HELM_BIN)
+
+# L0 build + vet
+go build ./...
+go vet ./internal/codeexec/ ./internal/capability/ ./internal/runner/ ./internal/actuator/ ./cmd/...
+
+# L0-L2 GREEN at head -> green-head.log
+export HELM_BIN=<path to helm v3.16.2>
+go test -v ./internal/codeexec/          # verifier content-compare, TTL, epoch, live-scope FinalCheck,
+                                         # CEL semantic allow/deny (cel-go), Helm render enabled/disabled,
+                                         # trusted-contract/config/chart agreement
+go test ./internal/capability/ -run 'CodeExec|Eligible_'
+go test ./internal/runner/ -run 'M99CannotBypass|M99NoRBACPathPreserved|CodeExecPreSubmit'
+go test ./internal/actuator/ -run 'CodeExec|Debugger|CustomInject'
+go test ./internal/... ./cmd/...         # full-module regression incl. M99 coexistence: exit 0
+
+# Actual Helm renders (raw evidence): helm-render-enabled.yaml / helm-render-disabled.yaml
+helm template codeexec charts/phorvex --set phorvex.codeExecAdmission.enabled=true
+helm template codeexec charts/phorvex --set phorvex.codeExecAdmission.enabled=false
+
+# RED (executed, non-vacuity) for the P3 rev1 findings:
+#  red-demo-content.log  : verifier full-spec compare disabled -> the 14 enforcement-drift cases are
+#                          ACCEPTED (unsafe) -> TestEnforcementContentDriftRejected FAILS. Restored.
+#  red-demo-gate.log     : gate code-exec leg disabled -> exclusion test FAILS (round 1). Restored.
+#  red-demo-handler.log  : handler image reverted to mutable busybox:1.36 -> profile tests FAIL. Restored.
+#  red-baseline-source.md: literal baseline 5a0fd3f source (the original pre-M6 insecure state).
+# Reviewer's own executed RED at the PRIOR head 8da845a is workflow/fixes/M-6/evidence/p3/rev1/adversarial.log
+# (seven enforcement-drift + stale-scope bypasses). Those cases are now rejected — reproduced in
+# internal/codeexec/verifier_test.go TestEnforcementContentDriftRejected + the FinalCheck live-scope test.
+
+# Diff
+git diff --binary 5a0fd3f 9eb14271625620aef6b6184386764e29f0d71ea3   # -> 04-diff.patch

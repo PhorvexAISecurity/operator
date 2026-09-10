@@ -1,0 +1,8 @@
+# RED demo B (baseline mutable image tag) — command: go test ./internal/actuator/ -run 'Debugger|CustomInject'
+--- FAIL: TestDebuggerEmitsOptionAEmptyCommand (0.00s)
+    handlers_codeexec_test.go:76: image = "busybox:1.36", want pinned digest "busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
+--- FAIL: TestCustomInjectEmitsSplitCommandArgs (0.00s)
+    handlers_codeexec_test.go:91: image = "busybox:1.36", want pinned digest "busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/actuator	0.014s
+FAIL

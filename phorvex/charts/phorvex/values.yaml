@@ -94,6 +94,17 @@ phorvex:
   # ReplicaSets and Services. Service access is exactly get/update so route-rotate and
   # endpoint-rotate can restitch selectors; Secrets and EndpointSlices remain denied.
   actuatorNamespaces: []
+  # M-6 code-exec admission protection. OFF by default: enabling it renders the installer-owned
+  # ValidatingAdmissionPolicy + Binding (phorvex-codeexec-ephemeral) that DENIES any
+  # pods/ephemeralcontainers UPDATE in a managed namespace unless it exactly matches the approved
+  # profile, plus the minimal resourceName-scoped `get` the operator's runtime verifier needs to
+  # confirm the policy is in force before offering/dispatching debugger/custom-inject. This grants
+  # NO injection permission (the ephemeralcontainers write Role stays unbound — a separate,
+  # human-gated step) and labels no namespace: an admin opts a namespace in with
+  # `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`. Deny-only, so it is safe to enable
+  # ahead of any execution grant, and required to be verified BEFORE one.
+  codeExecAdmission:
+    enabled: false
   # EPSS exploit-probability cache. The operator reads it from a file so a scored CVE feed
   # can be refreshed without a rebuild; the file arrives as a ConfigMap.
   epss:

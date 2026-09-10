@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evidence-manifest.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifacts"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "schema_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "fix_id"
+      ]
+    },
+    {
+      "properties": {
+        "schema_version": {
+          "const": 2
+        }
+      },
+      "required": [
+        "subject"
+      ]
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "fix_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "fix",
+            "intake",
+            "issue",
+            "release",
+            "campaign",
+            "assessment"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "path",
+          "bytes",
+          "sha256",
+          "producer",
+          "created_at",
+          "evidence_class",
+          "retention"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "producer": {
+            "type": "string",
+            "minLength": 1
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_class": {
+            "enum": [
+              "RED",
+              "INCIDENT",
+              "L0",
+              "L1",
+              "L2",
+              "P3",
+              "L3",
+              "L4",
+              "CONTROL",
+              "INTAKE",
+              "SYNC",
+              "CAMPAIGN",
+              "CLEANUP",
+              "DESIGN",
+              "IMPLEMENTATION",
+              "FINAL",
+              "EQUIVALENCE",
+              "ATTACK",
+              "PREFLIGHT"
+            ]
+          },
+          "retention": {
+            "enum": [
+              "git",
+              "artifact-store",
+              "local-original"
+            ]
+          },
+          "positive_control_for": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sensitivity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "migration": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

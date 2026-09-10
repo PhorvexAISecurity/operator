@@ -1,0 +1,29 @@
+T1-M023 — M-23 per-action exposure clocks (CLOCK→CHOICE, MAJOR/P0)
+base: origin/main @ db04b5d (T1-D #114 + T1-E #115 BOTH merged; release tag pending)
+branch (impl, not yet created): t1/clock-choice-m023-per-action-exposure-clocks
+
+STATE: ✅ K3 P3 PASS (bus 368) — "ship it". Branch @ 13258e3 (rebased on v0.4.87, patch identical). READY FOR USER: open PR → merge → release → deploy → K3 L3.
+06-verdict written. 3 non-blocking OBS recorded in PR body (OBS-1 quarantine observed-clock native-only = Phoenix path intent-only live, follow-up; OBS-2 route-key revert-reset; OBS-3 Mark skew).
+NOT DEPLOYED: M-023 not merged/released; live cluster still v0.4.85 (values-eks). Also T1-E not live (v0.4.85 predates T1-E's v0.4.86) — T1-E L3 needs deploy bump ≥v0.4.86.
+worktree: /home/mehrdad/operator-m023 (isolated; main checkout has an untouched deploy tag-bump in values-eks.yaml). 14 files +584/-57. Full suite green except pre-existing recon/M-157.
+PR compare: https://github.com/PhorvexSecurity/operator/pull/new/t1/clock-choice-m023-per-action-exposure-clocks (body = PR_BODY.draft.md)
+
+flow: baseline✓ → forks converged w/K3 (A1 drain stamp + :1222 intent; bus 360/361)✓ → 01-proposal✓ → 02-critique (K3 §A blind + §B, CHANGES-REQUESTED bus 363)✓ → 01 REVISED (bus 364)✓ → K3 P3-light ACCEPTED (bus 365)✓ → 03-decision✓ → IMPLEMENT✓ → RED✓ (evidence/RED_gate.txt) → PUSH✓ → [K3 full-P3 on diff, bus 366] → PR merge → deploy → K3 L3.
+final anchors on db04b5d: intent hook manager.go:1231, fingerprints :865+, Actuate :1200.
+NOTE metric phorvex_feasibility_vetoes_total DEFERRED (no clean site w/o touching decision/actionset). same-tick edge OUT of scope.
+
+converged design:
+- 3 legs: map(exposureVarFor total,no default) + observe(wire 6 pod-alive *-epoch markers into Observation.Fingerprints @manager.go:865-871, absent-skip) + reset(handlers).
+- TWO handler stamps (A1+D2): drain-epoch (handlers_ai_p4set.go:267) + quarantine-epoch (handlers_k8s.go:148), each same Update as existing label flip, rollback-UNTOUCHED.
+- fail-OPEN on !ok (D1 — fail-closed deadlocks first actuation; wiring-gap caught by compile-time completeness test via single-source ClockedExposureVariables). INVERTS ticket P-FAIL-CLOSED — deviation recorded + flagged to boss.
+- freshness = minDur(observedSince, IntentSince) (D3).
+- MarkIntent/IntentSince per (pod,var); hook @manager.go:1222 (successful emit).
+- DoD cross-tick; same-tick (overlapping policy entries) OUT of scope (flagged follow-up).
+- VarIdentity (not VarSaToken, D4). new vars: VarRouteKey/VarIdentity/VarAdapterEpoch/VarDrainEpoch/VarGuardrailEpoch; VarNetworkIdentity clocked via quarantine-epoch.
+- record via existing Verdict.Reason→feasibility branch (NO T1-E dep). metric phorvex_feasibility_vetoes_total{law,action}.
+- LiveExposureVariables (types.go:191) stale (omits VarSession) → reconcile == ClockedExposureVariables (list-honesty only).
+
+⏳ T1-E L3: SIGNALED to K3 (bus 367) now that M-023 PR is ready. BUT T1-E merged (#115, db04b5d) NOT yet deployed — latest tag still v0.4.85. K3 runs L3 once T1-E release is cut + rolled out (K3 bus 365). Criteria: per-pod capability exclusions visible in corpus, not-installable empty @17/17, rbac-unknown zero-absent-errors, SSAR rate bounded, ActionsSupported flip only on smeared fixture.
+also open: M-20 count-while-green T1-E-followup (now unblocked — T1-E merged); M-156 (Unknown/Draining RLS mispricing, Math-gated); M-159 (CI never runs go test — HIGH, filed by K3 bus 359).
+
+roles: claude=Proposer+impl · K3=Skeptic(§A blind + §B + P3-light)+L3. next bus # 365.

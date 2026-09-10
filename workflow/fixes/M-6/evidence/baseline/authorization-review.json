@@ -1,0 +1,145 @@
+{
+  "at": "2026-09-08T18:19:52.112839+00:00",
+  "principal": "system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+  "meaning": "Authorization review only; no target resource mutated; does not prove admission outcome.",
+  "results": [
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "update",
+        "pods",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated",
+        "-n",
+        "vllm",
+        "--subresource=ephemeralcontainers"
+      ],
+      "exit_code": 0,
+      "answer": "yes",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "patch",
+        "pods",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated",
+        "-n",
+        "litellm",
+        "--subresource=ephemeralcontainers"
+      ],
+      "exit_code": 0,
+      "answer": "yes",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "update",
+        "pods",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated",
+        "-n",
+        "vllm"
+      ],
+      "exit_code": 0,
+      "answer": "yes",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "patch",
+        "namespaces",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": "Warning: resource 'namespaces' is not namespace scoped"
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "update",
+        "namespaces",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": "Warning: resource 'namespaces' is not namespace scoped"
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "update",
+        "validatingadmissionpolicies.admissionregistration.k8s.io",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": "Warning: resource 'validatingadmissionpolicies' is not namespace scoped in group 'admissionregistration.k8s.io'"
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "create",
+        "clusterrolebindings.rbac.authorization.k8s.io",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": "Warning: resource 'clusterrolebindings' is not namespace scoped in group 'rbac.authorization.k8s.io'"
+    },
+    {
+      "command": [
+        "kubectl",
+        "auth",
+        "can-i",
+        "update",
+        "rolebindings.rbac.authorization.k8s.io",
+        "--as=system:serviceaccount:phorvex-system:phorvex-phorvex-manager",
+        "--as-group=system:serviceaccounts",
+        "--as-group=system:serviceaccounts:phorvex-system",
+        "--as-group=system:authenticated",
+        "-n",
+        "vllm"
+      ],
+      "exit_code": 1,
+      "answer": "no",
+      "stderr": ""
+    }
+  ]
+}

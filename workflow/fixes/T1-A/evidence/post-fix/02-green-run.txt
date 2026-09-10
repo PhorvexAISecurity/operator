@@ -1,0 +1,62 @@
+=== RUN   TestAIStageClassification
+--- PASS: TestAIStageClassification (0.00s)
+=== RUN   TestLeakageGate_LoadedIdleIsNotTheft
+--- PASS: TestLeakageGate_LoadedIdleIsNotTheft (0.00s)
+=== RUN   TestLeakageGate_ExtractionLoadIsTheft_PositiveControl
+--- PASS: TestLeakageGate_ExtractionLoadIsTheft_PositiveControl (0.00s)
+=== RUN   TestLeakageGate_ThresholdIsStrict
+--- PASS: TestLeakageGate_ThresholdIsStrict (0.00s)
+=== RUN   TestLeakageGate_AllocationCarriesNoWeight
+--- PASS: TestLeakageGate_AllocationCarriesNoWeight (0.00s)
+=== RUN   TestLeakageRecord_MatchesGateInput
+=== RUN   TestLeakageRecord_MatchesGateInput/measured_activity,_VRAM_ignored
+=== RUN   TestLeakageRecord_MatchesGateInput/honest-absent_SM_reads_as_0,_not_as_VRAM
+=== RUN   TestLeakageRecord_MatchesGateInput/saturated_VRAM_adds_nothing_at_any_weight
+--- PASS: TestLeakageRecord_MatchesGateInput (0.00s)
+    --- PASS: TestLeakageRecord_MatchesGateInput/measured_activity,_VRAM_ignored (0.00s)
+    --- PASS: TestLeakageRecord_MatchesGateInput/honest-absent_SM_reads_as_0,_not_as_VRAM (0.00s)
+    --- PASS: TestLeakageRecord_MatchesGateInput/saturated_VRAM_adds_nothing_at_any_weight (0.00s)
+=== RUN   TestLeakageRecord_GenericChainUnchanged
+--- PASS: TestLeakageRecord_GenericChainUnchanged (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/killchain	0.008s
+=== RUN   TestDecisionTraceCandidateCompletenessSelectionAndMissingTelemetry
+--- PASS: TestDecisionTraceCandidateCompletenessSelectionAndMissingTelemetry (0.00s)
+=== RUN   TestDecisionTraceNoopAndCurrentExclusionAreHonest
+--- PASS: TestDecisionTraceNoopAndCurrentExclusionAreHonest (0.00s)
+=== RUN   TestDecisionTraceDoesNotMutateInputSnapshot
+--- PASS: TestDecisionTraceDoesNotMutateInputSnapshot (0.00s)
+=== RUN   TestDecisionTraceIsStableAcrossPodAndMapReordering
+--- PASS: TestDecisionTraceIsStableAcrossPodAndMapReordering (0.00s)
+=== RUN   TestDecisionTraceFactsCandidatesAndCoverKeysSerializeInStableOrder
+--- PASS: TestDecisionTraceFactsCandidatesAndCoverKeysSerializeInStableOrder (0.00s)
+=== RUN   TestDecisionTraceSeparatesLambdaRolesAndReconstructsCost
+--- PASS: TestDecisionTraceSeparatesLambdaRolesAndReconstructsCost (0.00s)
+=== RUN   TestDecisionTraceProductionDualUpdateMatchesPersistedState
+--- PASS: TestDecisionTraceProductionDualUpdateMatchesPersistedState (0.00s)
+=== RUN   TestDecisionTraceRecordsLeakageWithHonestAbsence
+--- PASS: TestDecisionTraceRecordsLeakageWithHonestAbsence (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/decision	0.024s
+=== RUN   TestDecisionTraceV2RoundTripAndCanonicalOrdering
+--- PASS: TestDecisionTraceV2RoundTripAndCanonicalOrdering (0.00s)
+=== RUN   TestDecisionTraceV2RequiresSchemaAndBuildIdentity
+--- PASS: TestDecisionTraceV2RequiresSchemaAndBuildIdentity (0.00s)
+=== RUN   TestDecisionTraceV2SelectionIntegrityAndGainReconstruction
+--- PASS: TestDecisionTraceV2SelectionIntegrityAndGainReconstruction (0.00s)
+=== RUN   TestDecisionTraceV2NoopIntegrity
+--- PASS: TestDecisionTraceV2NoopIntegrity (0.00s)
+=== RUN   TestDecisionTraceV2RedactsBearerTokensAndCredentialHeaders
+--- PASS: TestDecisionTraceV2RedactsBearerTokensAndCredentialHeaders (0.00s)
+=== RUN   TestDecisionTraceV2RejectsCostControllerDriftAndNonFiniteValues
+--- PASS: TestDecisionTraceV2RejectsCostControllerDriftAndNonFiniteValues (0.00s)
+=== RUN   TestDecisionTraceV2ReadsAndRestoresPreT0BRollbackRecord
+--- PASS: TestDecisionTraceV2ReadsAndRestoresPreT0BRollbackRecord (0.00s)
+=== RUN   TestDecisionTraceV2NewRecordRetainsRollbackAliases
+--- PASS: TestDecisionTraceV2NewRecordRetainsRollbackAliases (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/model	0.007s
+=== RUN   TestAuditRecordCarriesVersionedDecisionTrace
+--- PASS: TestAuditRecordCarriesVersionedDecisionTrace (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/audit	0.005s

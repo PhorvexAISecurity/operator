@@ -1,0 +1,8 @@
+{
+  "source": "M79 read-only audit sample retained at fixes/T1-M079/evidence/baseline/decision-sample.jsonl",
+  "source_sha256": "580e3ac259bf42f987e854875d59a486a3b6481698edcc053d5f688896407c16",
+  "sample_time": "2026-09-08T17:36:48.550441501Z",
+  "embedded_git_sha": "c8c708145f2f425f0cee86d214671076ae1afcc0",
+  "current_pod_image_matches_sample": true,
+  "note": "Embedded source from earlier same-build observation; re-check before live verification."
+}

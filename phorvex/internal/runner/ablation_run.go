@@ -77,6 +77,9 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 	platformName, physByKey := platform.Derive(snap)
 	infected := buildInfectedSet(snap)
 	clock := exposure.NewClock()
+	// [M-140] The offline ablation has no API object, so it uses the name-kind owner
+	// fallback — the same key ablationPolicy(namespace, ...).Owner() produces.
+	owner := model.OwnerKey(model.OwnerKindName, namespace)
 	var views []*model.WorkloadView
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
@@ -87,10 +90,10 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 			continue
 		}
 		clock.Observe(exposure.Observation{
-			Tenant: namespace, Namespace: p.Namespace, Pod: p.Name, StartedAt: p.StartedAt,
+			Owner: owner, Namespace: p.Namespace, Pod: p.Name, StartedAt: p.StartedAt,
 			Fingerprints: map[string]string{model.VarPodIdentity: p.UID},
 		}, now)
-		exp := clock.Since(namespace, p.Namespace, p.Name, now)
+		exp := clock.Since(owner, p.Namespace, p.Name, now)
 
 		nbKeys := snap.Graph.Neighbors(p.Namespace, p.Name)
 		neighbors := make([]model.NeighborRef, 0, len(nbKeys))

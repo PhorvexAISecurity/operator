@@ -1,0 +1,6 @@
+ M phorvex/internal/decision/coverage.go
+ M phorvex/internal/killchain/hazard.go
+ M phorvex/internal/model/decision_trace.go
+?? phorvex/internal/decision/leakage_trace_test.go
+?? phorvex/internal/killchain/leakage_gate_test.go
+?? phorvex/internal/killchain/leakage_record_test.go

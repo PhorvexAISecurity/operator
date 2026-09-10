@@ -1,0 +1,160 @@
+..FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: stale revision; read brief again
+.FAIL: stale/missing revision; read brief again (current revision 1)
+..FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+..FAIL: P3 requires independent incident evidence: checks.incident: needs PASS evidence or an explicit NOT_REQUIRED ruling
+..FAIL: check must be signed by reviewer
+FAIL: independent review cannot be signed by an author
+FAIL: waiver needs an eligible level, approval reference and rationale
+.....FAIL: only the assigned skeptic may seal
+FAIL: stale/missing revision; read brief again
+....
+----------------------------------------------------------------------
+Ran 18 tests in 6.856s
+
+OK
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> HELD
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> DESIGNING
+sealed FIX-TEST: aae8137d78c681584d2767ad287bf14e18f3b215cf40fb0d6d63240a50b9fd46
+FIX-TEST: critique=PASS; revision=4
+FIX-TEST: DESIGNING -> CRITIQUED
+FIX-TEST: decision=PASS; revision=6
+FIX-TEST: CRITIQUED -> AGREED
+FIX-TEST: configured; revision=8
+FIX-TEST: implementation=PASS; revision=9
+FIX-TEST: AGREED -> IMPLEMENTED
+FIX-TEST: red=PASS; revision=11
+FIX-TEST: l0=PASS; revision=12
+FIX-TEST: l1=PASS; revision=13
+FIX-TEST: l2=PASS; revision=14
+FIX-TEST: positive_control=PASS; revision=15
+FIX-TEST: IMPLEMENTED -> OFFLINE_VERIFIED
+FIX-TEST: incident=PASS; revision=17
+FIX-TEST: p3=PASS; revision=18
+FIX-TEST: OFFLINE_VERIFIED -> DIFF_REVIEW_PASSED
+FIX-TEST: DIFF_REVIEW_PASSED -> PR_READY
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: incident=PASS; revision=14
+FIX-TEST: p3=PASS; revision=15
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+sealed FIX-TEST: 247458c95b7e481af4c58572e493ed5f11fc927045ae6756b39ecd17e531efe0
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: implementation=PASS; revision=3
+FIX-TEST: red=PASS; revision=4
+FIX-TEST: l0=PASS; revision=5
+FIX-TEST: l1=PASS; revision=6
+FIX-TEST: l2=PASS; revision=7
+FIX-TEST: positive_control=PASS; revision=8
+FIX-TEST: incident=PASS; revision=9
+FIX-TEST: p3=PASS; revision=10
+FIX-TEST: l3=PASS; revision=11
+FIX-TEST: l4=NOT_REQUIRED; revision=12
+FIX-TEST: final=PASS; revision=13

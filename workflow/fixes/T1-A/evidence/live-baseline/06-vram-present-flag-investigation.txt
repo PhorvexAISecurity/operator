@@ -1,0 +1,54 @@
+# 06 — Why the trace shows `vramFraction present:false` even though DCGM VRAM data flows
+
+**This file corrects an earlier in-flight hypothesis (that the brain points at the wrong Prometheus).
+It does not: the monitoring Prometheus has all 18 DCGM series with correct labels, and the brain's
+exact witness query returns data (see 02). The defect is a dropped present-flag at the adapter seam.**
+
+## The chain (all code at base 016361c)
+
+1. `ingest.PopulateGPUWitness` (`internal/ingest/prometheus.go:336-388`) — called every tick
+   (`internal/runner/manager.go:332-334`, error return discarded there). Sets
+   `w.VRAMPresent = true` (`prometheus.go:373`) on the `snap.GPUWitness` entry when both FB_USED and
+   FB_FREE answered. Both answer today (see 02).
+2. `platform.stampGPU` (`internal/platform/adapters.go:19-29`) merges `snap.GPUWitness` into the
+   derived per-pod witness. It copies `GPUPresent`, `VRAMFraction`, `SMOccupancy`, `SMSource`,
+   `LinkBandwidth`, `LinkSource` — **and never copies `VRAMPresent`**:
+
+       w := out[key]
+       w.GPUPresent = true
+       w.VRAMFraction = gw.VRAMFraction
+       w.SMOccupancy  = gw.SMOccupancy
+       ...            // no w.VRAMPresent = gw.VRAMPresent
+
+   `genericK8s.Derive` leaves `VRAMPresent` at its zero value (`platform.go:183-184`).
+3. The trace reads the flag, not the float: `coverage.go:673`
+   `VRAMFraction: traceOptional(v.Physics.VRAMPresent, v.Physics.VRAMFraction)` — so the record
+   shows `{present: false, value: 0}` (cleanOptional zeroes the value) **regardless of whether the
+   float was stamped**.
+
+`VRAMPresent` has exactly one writer (`prometheus.go:373`) and one reader (`coverage.go:673`);
+nothing else consumes it (grep, whole module, 2026-09-02).
+
+## Why this matters for T1-A
+
+- The **gate** reads the raw float (`hazard.go:246`: `leakage := ph.SMOccupancy + ph.VRAMFraction`),
+  so the gate can be armed by VRAM while the trace says the input does not exist. On this fleet the
+  gate is dark today *only* because `ModelRarity = 1.0` (see 03/04) — not because VRAM is necessarily
+  unstamped. The trace cannot distinguish those two states.
+- The proposal's L3 expectation "VRAMFraction present=true ~0.99" (bus 257 fact 3) is confounded by
+  this defect: post-fix records will show `vramFraction present:false` even with the DCGM feed healthy.
+- SM presence works differently (keyed on `SMSource != ""`, `coverage.go:672`) and `SMSource` *is*
+  copied by stampGPU — so only the VRAM flag is dropped.
+
+## Filed
+
+**M-152** (register, TIER ∥, `SENSING`): stampGPU drops `VRAMPresent`; the trace's VRAM field is
+permanently dark at the adapter seam. One-line fix (`w.VRAMPresent = gw.VRAMPresent`), but filed
+separately from T1-A per one-issue-per-cycle — T1-A's own record fields must not replicate this
+(see 02-critique §B.2).
+
+## Brain args checked (for the record)
+
+    kubectl -n phorvex-system get deploy phorvex-phorvex -o json  (manager container)
+    --prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
+    --gpu-envelope-max=0.2925

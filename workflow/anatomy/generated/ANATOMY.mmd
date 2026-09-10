@@ -1,0 +1,183 @@
+flowchart LR
+  subgraph Bootstrap["Bootstrap"]
+    api_v1alpha1[Policy API / CRD contract]
+    cmd_calib_soak[/Calibration soak binary/]
+    cmd_console[/Console binary/]
+    cmd_main[Operator binary]
+    cmd_p3deep[/P3 deep-analysis binary/]
+    cmd_p3report[/P3 report binary/]
+    cmd_p4b_soak[/P4B soak binary/]
+    cmd_pendingcheck[/Pending-check binary/]
+    cmd_redteam[/Red-team RL binary/]
+    controller[Controller reconcile]
+    deploy[Deployment / install contract]
+  end
+  subgraph Orchestration["Orchestration"]
+    runner[Tick orchestrator]
+  end
+  subgraph Sensing["Sensing"]
+    graph_n[Cluster graph]
+    ingest[Cluster snapshot]
+    platform[Platform physics witness]
+  end
+  subgraph Assembly["Assembly"]
+    ctxprov[Context provider]
+    exposure[Exposure clocks]
+    killchain[Kill-chain stage]
+    recon[Recon facts]
+  end
+  subgraph Pricing["Pricing"]
+    calib[Shadow calibration]
+    cost_p1[Objective price]
+    cost_rls[Online bound]
+    cost_surface[Cost surface interface + registry]
+  end
+  subgraph Choice["Choice"]
+    actionset[Candidate set]
+    decision_bench[Benchmark solvers]
+    decision_coverage[P1 CoverageEngine]
+    decision_p0[P0 legacy engine]
+    feasibility[Feasibility gates]
+  end
+  subgraph Actuation["Actuation"]
+    actuator_native[Native actuator]
+    actuator_phoenix[Phoenix adapter]
+    actuator_router[Capability router]
+  end
+  subgraph Observation["Observation"]
+    slo_contract[Static disruption contracts]
+    slo_ledger[Disruption ledger]
+  end
+  subgraph Record["Record"]
+    audit[Decision audit]
+    metrics[Prometheus metrics]
+  end
+  subgraph Foundation["Foundation"]
+    model[Domain vocabulary]
+    phoenix_module[vendored Phoenix module compiled API/types]
+    registry[Plugin registry]
+  end
+  subgraph Console["Console"]
+    console[/Console surface/]
+  end
+  subgraph Product["Product"]
+    dashboard[/Dashboard SPA Next.js/]
+  end
+  subgraph Delivery["Delivery"]
+    bin_go_toolchain[Go toolchain REQUIRED, NOT IN THE IMAGE]
+    bin_redteam_rl[redteam-rl binary REQUIRED, NOT IN THE IMAGE]
+    bin_trivy[Trivy scanner injected at deploy time]
+    ci_release[/CI build and publish/]
+    image_console[/Console image composition/]
+    image_operator[Operator image composition]
+    vol_trivy_bin[shared /tools volume trivy-bin]
+  end
+  subgraph Tools["Tools"]
+    epssfeed[/EPSS feed/]
+    pendinggate[/CI source scan/]
+    redteam[/Red-team harness/]
+    soak[/Runtime trend analysis/]
+  end
+  subgraph External["External"]
+    ext_first_epss([FIRST EPSS API])
+    ext_guardrail([Guardrail controller])
+    ext_k8s([Kubernetes API server])
+    ext_kv_local([vLLM local KV-cache invalidation])
+    ext_mig_agent([MIG node-agent DECLARED, NEVER WIRED])
+    ext_phoenix([Phoenix / R6 AMTD controller])
+    ext_prometheus([Prometheus])
+    ext_vllm([vLLM serving API])
+    image_trivy([aquasec/trivy scanner image])
+  end
+  cmd_main --> controller
+  cmd_main --> runner
+  controller --> runner
+  api_v1alpha1 --> controller
+  deploy --> api_v1alpha1
+  runner --> ingest
+  runner --> platform
+  runner --> calib
+  runner --> exposure
+  runner --> decision_coverage
+  decision_coverage --> actionset
+  decision_coverage --> recon
+  decision_coverage --> killchain
+  decision_coverage --> ctxprov
+  decision_coverage --> cost_p1
+  decision_coverage --> metrics
+  cost_p1 --> cost_rls
+  runner --> actuator_router
+  runner --> slo_ledger
+  runner --> slo_contract
+  runner --> cost_rls
+  runner --> metrics
+  console -.-> decision_bench
+  actionset --> feasibility
+  actionset --> cost_p1
+  runner --> actuator_phoenix
+  runner --> actuator_native
+  actuator_router --> actuator_phoenix
+  actuator_router --> actuator_native
+  runner --> audit
+  epssfeed -.-> platform
+  ingest --> graph_n
+  runner --> feasibility
+  decision_p0 --> feasibility
+  runner --> decision_p0
+  cmd_main --> decision_coverage
+  cmd_main --> decision_p0
+  console -.-> decision_coverage
+  actuator_native --> actionset
+  console -.-> actuator_native
+  console -.-> actionset
+  redteam -.-> cost_p1
+  actuator_native --> metrics
+  runner --> recon
+  runner -.-> killchain
+  cmd_p4b_soak -.-> soak
+  cmd_main --> ingest
+  cmd_console -.-> console
+  cmd_redteam -.-> redteam
+  cmd_main -.-> actuator_native
+  cmd_main --> platform
+  cmd_pendingcheck -.-> pendinggate
+  cmd_main --> audit
+  cmd_calib_soak -.-> calib
+  cmd_main --> calib
+  cmd_main -.-> epssfeed
+  cmd_calib_soak -.-> platform
+  cmd_calib_soak -.-> runner
+  runner -.-> decision_bench
+  cmd_main --> cost_rls
+  cmd_main -.-> actuator_phoenix
+  decision_p0 --> cost_surface
+  cost_p1 --> cost_surface
+  decision_p0 --> ctxprov
+  decision_bench -.-> recon
+  dashboard -.-> console
+  image_console -.-> dashboard
+  image_console -.-> console
+  ci_release -.-> image_console
+  console -.-> image_console
+  image_console -.-> ext_k8s
+  actuator_phoenix ==> ext_k8s
+  ingest ==> ext_prometheus
+  console -.-> bin_redteam_rl
+  console -.-> bin_go_toolchain
+  image_operator --> cmd_main
+  epssfeed -.-> bin_trivy
+  image_trivy --> vol_trivy_bin
+  vol_trivy_bin --> epssfeed
+  actuator_phoenix --> phoenix_module
+  ext_k8s ==> ext_phoenix
+  actuator_native ==> ext_vllm
+  actuator_native ==> ext_guardrail
+  actuator_native ==> ext_kv_local
+  actuator_native ==> ext_k8s
+  ext_k8s -.-> ext_mig_agent
+  epssfeed -.-> ext_first_epss
+  ext_phoenix ==> ext_k8s
+  classDef unwired stroke-dasharray: 4 3;
+  classDef gap stroke-width:3px;
+  class bin_redteam_rl,bin_go_toolchain,ext_mig_agent unwired;
+  class actuator_native,actuator_phoenix,bin_go_toolchain,bin_redteam_rl,console,decision_coverage,ext_k8s,ext_kv_local,ext_mig_agent,runner,slo_ledger gap;

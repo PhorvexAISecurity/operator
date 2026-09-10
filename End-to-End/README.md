@@ -69,9 +69,44 @@ endpoint, waits for the operator to react, then posts the clear — it changes a
 cluster, so it always requires an explicit `--target` and always prints what it is about
 to do.
 
-Output lands in `runs/`: `run-<ts>.json` (everything) and `run-<ts>.html` +
-`latest.html` (the dashboard). Exit code is `1` only when a `critical` or `major` check
-fails.
+Output lands in `runs/`: `run-<unique-id>.json` and `run-<unique-id>.html` plus
+`latest.html` for local browsing. CI uses an isolated run/attempt/job directory and
+passes exact IDs/paths between steps; it never discovers the latest file with a glob.
+`--run-id` and `--source-commit` bind evidence to the harness revision (not the
+deployed application's version). Without a source pin or `GITHUB_SHA`, local provenance
+is explicitly `unknown`.
+
+Exit `1` means a new critical/major check failure under the configured baseline;
+exit `2` means the run aborted (including transport, cleanup or report errors).
+Aborts are never baselinable. Their bounded JSON/HTML reports retain the primary
+error, any cleanup failures, and the owned injection identity when available.
+Unexecuted checks remain skipped; already evaluated checks keep their results.
+An acknowledged delete request is not proof of completed asynchronous deletion.
+
+CI always builds a current-attempt summary even if publication fails. Missing,
+corrupt or wrong-attempt reports produce an explicit fallback, not an old success.
+If local storage is unavailable, consult that attempt's job log; a forced process
+termination or runner loss can prevent report creation and cooperative cleanup.
+No automatic attack retry is performed.
+
+To publish manually, supply the exact ID:
+`./publish-report.sh <runs-dir> <prefix> <run-id>`.
+
+### Controller health
+
+`controller_deployments` is the nonempty list of expected Deployment names in
+`operator_namespace`. The shipped names match the Phorvex stack and prefixed
+Phoenix manager; configure the list when using another release name or topology.
+Discovery requires read access to Deployments, ReplicaSets and Pods and follows
+their `controller: true` owner UIDs. It does not infer controllers from Pod names,
+labels, or merely sharing the namespace. Unrelated helpers and Jobs are ignored.
+
+Both the preflight board and P05 use the same verdict: every expected Deployment
+must have owned Pods, and observed controller Pods must be Running, Ready and
+within the configured restart limit (including secondary and init containers).
+Missing deployments/pods and unreadable or malformed inventories stay explicitly
+non-green. This is a snapshot health check, not a Deployment rollout-completion
+or desired-replica-count guarantee.
 
 ### Targets
 
@@ -206,7 +241,7 @@ The load-bearing ones:
 | `F03` | no rotate on a stateful pod — **verified with kubectl**, not the record | `stateful-integrity` in reality, not in claim |
 | `A01` `A04` | actuated ⟹ selected ∧ feasible ∧ ¬dryRun | the authorisation chain |
 | `A03` | the cluster confirms the change | pod UID, AMTD ownership, or the workload's own log |
-| `P05` | no controller is crash-looping | a dead operator still lets the dashboard look alive, because a second one keeps writing the audit |
+| `P05` | expected controllers are present, Running and Ready, within restart limits | follows configured Deployment ownership; namespace helpers cannot satisfy or fail controller health |
 | `A06` | absence of actuation matches the writer's real state | "selected but never actuated" has two very different causes — a deliberate kill switch, or a broken actuator. Read from the operator's own `phorvex_kill_switch_engaged` gauge rather than inferred from an absence |
 | `A07` | the dashboard's source identifies itself | a kill-switched mirror whose records don't say so is indistinguishable from a broken actuator |
 

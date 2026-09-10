@@ -1,0 +1,14 @@
+# chart-sync — vendored phorvex-0.1.4.tgz matches phorvex/charts/phorvex (head bfe559b)
+Tue Sep  8 22:29:21 UTC 2026
+# CI check .github/workflows/ci.yml chart-sync: diff -r extracted tgz vs source + Chart.yaml parse + tools/test_chart_sync.py
+
+$ diff -r --exclude=.helmignore --exclude=Chart.yaml phorvex/charts/phorvex <extracted>/phorvex
+(clean — no differences)
+
+codeexec-admission.yaml present in vendored: 1
+
+$ python3 tools/test_chart_sync.py
+----------------------------------------------------------------------
+Ran 8 tests in 0.208s
+
+OK

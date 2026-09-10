@@ -1,0 +1,2 @@
+seam	attaches_to	contract_evidence	negative_evidence	status
+shadow-to-production-scoring	calib -> cost.p1	"internal/calib/runtime.go:34 — ""learned values never enter production scoring""; the separation is stated by the package itself"	internal/cost/p1cost.go:260 — the production price reads c.RLS.Predict and never a calib scale; no source states that calibrated scales SHOULD close the loop, so this is a deliberate boundary and not a gap	NOT-A-GAP-pending-evidence
