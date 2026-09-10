@@ -260,4 +260,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/v3-m161-measurement-validity
-    head_sha: null
+    head_sha: 87cce83e14ae0b96db960540f98316ca167085b8
