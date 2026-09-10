@@ -607,11 +607,12 @@ type Policy struct {
 type Decision struct {
 	Existential *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
-	Claim     *ClaimScope
-	Tenant    string
-	Namespace string
-	Pod       string
-	Node      string
+	Representation *Representation `json:",omitempty"`
+	Claim          *ClaimScope
+	Tenant         string
+	Namespace      string
+	Pod            string
+	Node           string
 	// CoverageValue is the recon-fact weight at stake under the P1 coverage engine.
 	// It never carries the deprecated P0 engine's threat-weighted risk.
 	CoverageValue float64

@@ -1068,6 +1068,19 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		}
 	}
 
+	// M100: freeze the reporting source BEFORE actuation; no later resnapshot or
+	// shared map/slice can rewrite the evidence used for this claim.
+	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
+	representationInventory := outcomeInventory(snap.Events, pol)
+	representationInputs := make([]model.RepresentationSnapshot, len(decisions))
+	versions := make(map[string]string, len(views))
+	for _, v := range views {
+		versions[v.Pod.Namespace+"/"+v.Pod.Name] = v.Pod.UID
+	}
+	for i, d := range decisions {
+		representationInputs[i] = representationSnapshotV1(d, pol, versions[d.Namespace+"/"+d.Pod], reportClaim, representationInventory)
+	}
+
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
 	actuated := 0
@@ -1084,6 +1097,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
+		appendRepresentation(&decisions[i], representationInputs[i])
 		m.Audit.Record(decisions[i])
 		m.recordColocation(assessmentInput, decisions[i], pol)
 		if decisions[i].Selected {
