@@ -23,3 +23,6 @@ workflow/assessments/20260910-readiness/evidence/run-1789076685233119136/diff.lo
 
 # Preserve exact combined workflow test output, including terminal spacing.
 workflow/assessments/20260910-readiness/evidence/tier1-composition/workflow-eight-package-r5.log -whitespace
+
+workflow/assessments/20260910-readiness/evidence/run-1789081493917758977/diff.log -whitespace
+workflow/assessments/20260910-readiness/evidence/run-1789081493917758977/workflow.log -whitespace
