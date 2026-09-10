@@ -1627,6 +1627,19 @@ func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadV
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) int {
+	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
+	// early exit. This must precede both the EnsurePolicy guard below (which returns
+	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
+	// Placing it later left two ways for a reused decision to carry a PREVIOUS tick's
+	// SecurityEvent name/UID into a record for a tick that never attempted an emission:
+	// a failed policy setup, and a decision that is no longer selected. Both are
+	// serialized as evidence — audit.Logger.Record calls writeRecord unconditionally,
+	// and OnlySelected gates only the structured log line, not the JSONL — so a stale
+	// identifier would point an investigator at the wrong object. Only a result actually
+	// returned by Actuate in THIS call may repopulate it.
+	for i := range decisions {
+		decisions[i].Phoenix = nil
+	}
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
@@ -1649,11 +1662,6 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if !decisions[i].Selected {
 			continue
 		}
-		// [M-18] A move that never reaches Actuate must never carry an emission payload.
-		// Every guard below `continue`s, so clearing here — at the point an attempt
-		// begins — guarantees a not-attempted record shows honest absence even if the
-		// decision struct was reused from an earlier attempt.
-		decisions[i].Phoenix = nil
 		// T0-C: every guard below stamps the dispatch outcome on the trace before
 		// the audit write, so a selected-but-refused move never reads as unselected.
 		stampDispatch := func(outcome, reason string) {

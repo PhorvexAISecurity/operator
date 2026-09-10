@@ -510,3 +510,139 @@ func TestM018AMTDNamespaceIsNotGuessedWithoutAnAMTD(t *testing.T) {
 		t.Errorf("the event identity that WAS supplied got lost: %+v", *ds[0].Phoenix)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// R1-1 (codex-lead independent review): stale Phoenix evidence must not survive
+// a PRE-DISPATCH exit. Both arms below start from GENUINE prior metadata
+// produced by the real Phoenix actuator, then re-enter actuate on a path that
+// never attempts an emission. A retained identifier would be a forensic
+// falsehood: the later record would point at an earlier tick's SecurityEvent.
+// ---------------------------------------------------------------------------
+
+// m018EnsureFailActuator fails policy setup, so actuate returns before any attempt.
+type m018EnsureFailActuator struct{ err error }
+
+func (f *m018EnsureFailActuator) Name() string { return "m018-ensure-fail" }
+func (f *m018EnsureFailActuator) EnsurePolicy(context.Context, actuator.TenantTarget) error {
+	return f.err
+}
+func (f *m018EnsureFailActuator) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
+	panic("EnsurePolicy failed; Actuate must not be reached")
+}
+func (f *m018EnsureFailActuator) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+
+// m018SeedRealPayload runs one genuine Phoenix emission and returns the decision
+// carrying the real event identity it produced.
+func m018SeedRealPayload(t *testing.T) []model.Decision {
+	t.Helper()
+	api := &m018RecordingAPI{}
+	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
+	ds := m018SelectedDecision("ns", "p1")
+	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+		t.Fatalf("seeding emission actuated %d, want 1", n)
+	}
+	if ds[0].Phoenix == nil || ds[0].Phoenix.EventUID == "" {
+		t.Fatal("seed produced no real payload; the fixture would not be discriminating")
+	}
+	return ds
+}
+
+// ARM (a): EnsurePolicy fails. actuate returns before the per-decision loop, so a
+// reused decision must still be stripped of the previous tick's event identity.
+func TestM018EnsurePolicyFailureClearsStalePhoenixEvidence(t *testing.T) {
+	ds := m018SeedRealPayload(t)
+	stale := *ds[0].Phoenix
+
+	var buf bytes.Buffer
+	m := &Manager{
+		Actuator: &m018EnsureFailActuator{err: errors.New("rbac denied")},
+		Log:      logr.Discard(), Audit: audit.New(logr.Discard(), &buf),
+	}
+	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+		t.Fatalf("actuated %d under EnsurePolicy failure, want 0", n)
+	}
+
+	if ds[0].Phoenix != nil {
+		t.Fatalf("STALE EVIDENCE: a tick that never attempted an emission kept event %q (uid %q)",
+			stale.EventName, stale.EventUID)
+	}
+	// The record an investigator reads must not carry it either.
+	raw := m018RecordJSON(t, m, &buf, ds[0])
+	if _, present := raw["phoenix"]; present {
+		t.Fatalf("audit record for a not-attempted tick carries %v", raw["phoenix"])
+	}
+	// Outcome semantics unchanged by the clear.
+	if got := ds[0].Trace.DispatchOutcome; got != model.DispatchNotAttempted {
+		t.Errorf("dispatch outcome = %q, want %q", got, model.DispatchNotAttempted)
+	}
+	if got := ds[0].Trace.DispatchReason; got != "ensure-policy-failed" {
+		t.Errorf("dispatch reason = %q, want ensure-policy-failed", got)
+	}
+}
+
+// ARM (b): the decision is no longer selected. Audit.Record still serializes it —
+// writeRecord runs unconditionally and OnlySelected gates only the structured log
+// line — so a retained payload would reach the saved record.
+func TestM018UnselectedDecisionClearsStalePhoenixEvidence(t *testing.T) {
+	ds := m018SeedRealPayload(t)
+	stale := *ds[0].Phoenix
+	ds[0].Selected = false
+
+	api := &m018RecordingAPI{}
+	var buf bytes.Buffer
+	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard(),
+		Audit: audit.New(logr.Discard(), &buf)}
+	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+		t.Fatalf("actuated %d for an unselected decision, want 0", n)
+	}
+	if ds[0].Phoenix != nil {
+		t.Fatalf("STALE EVIDENCE: unselected decision kept event %q (uid %q)",
+			stale.EventName, stale.EventUID)
+	}
+	raw := m018RecordJSON(t, m, &buf, ds[0])
+	if _, present := raw["phoenix"]; present {
+		t.Fatalf("audit record for an unselected decision carries %v", raw["phoenix"])
+	}
+	if raw["selected"] == true {
+		t.Error("fixture broken: decision should be unselected")
+	}
+}
+
+// CONTROL: the clear must not be indiscriminate. A successful Phoenix emission in the
+// SAME call still records its identity, and a native result still maps its own fields.
+func TestM018ClearDoesNotSuppressGenuineEvidence(t *testing.T) {
+	// Phoenix control: a real emission after a reused decision still gets its payload.
+	ds := m018SeedRealPayload(t)
+	first := *ds[0].Phoenix
+	api := &m018RecordingAPI{}
+	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
+	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+		t.Fatalf("re-actuation actuated %d, want 1", n)
+	}
+	if ds[0].Phoenix == nil {
+		t.Fatal("the clear suppressed a genuine new emission")
+	}
+	if ds[0].Phoenix.EventUID == first.EventUID {
+		t.Fatalf("re-actuation reused the previous event identity %q", first.EventUID)
+	}
+
+	// Native control: native forensic fields are unaffected by the Phoenix clear.
+	native := &m018PartialActuator{res: actuator.Result{
+		Handler: "kv-reset", ObjectsTouched: []string{"secret/ns/creds"},
+		RollbackRef: "rb-1", MutationKind: "reversible", Emitted: true,
+	}}
+	nd := m018SelectedDecision("ns", "p2")
+	mn := &Manager{Actuator: native, Log: logr.Discard()}
+	if n := mn.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), nd, m018TickView("ns", "p2")); n != 1 {
+		t.Fatalf("native actuation actuated %d, want 1", n)
+	}
+	if nd[0].Handler != "kv-reset" || nd[0].MutationKind != "reversible" ||
+		nd[0].RollbackRef != "rb-1" || len(nd[0].ObjectsTouched) != 1 {
+		t.Fatalf("native forensic mapping changed: %+v", nd[0])
+	}
+	if nd[0].Phoenix != nil {
+		t.Fatalf("native result produced a phoenix payload: %+v", *nd[0].Phoenix)
+	}
+}
