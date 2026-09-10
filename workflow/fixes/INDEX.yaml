@@ -250,3 +250,14 @@ fixes:
     stacked_on: []
     branch: fix/audit-volume-guard
     head_sha: 255a23a5dcc58c4ea3be0fb9b191edbb9c68a273
+  V3-M161:
+    directory: fixes/V3-M161
+    aliases: []
+    issues:
+    - M-161
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m161-measurement-validity
+    head_sha: null
