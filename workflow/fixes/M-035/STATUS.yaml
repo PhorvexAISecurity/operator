@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,12 +81,19 @@ checks:
     source_sha: 148902e9d54729fb4c925959a49e93e010270cba
     at: '2026-09-10T04:46:00+00:00'
     incident_sha256: 2cfb9e3371e012ff88258bb462ac270cfa3fda39123384a4107e14d4f5593986
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/patch-equivalence.md
+    sha256: c6a572e0947b63704a402f194b3c5e4c66f1d9d43be0484b69b4432eff29b4fb
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:48:21+00:00'
 fix_id: M-035
 issues:
 - M-035
 title: Withhold unsupported endpointPath cover (PHORVEXSEC-228)
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: Milad
   proposer: codex-lead
@@ -150,9 +157,9 @@ residuals:
   withholding patch.
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T04:47:12+00:00'
+  action: PR163 delivered for Hami review; await separately authorized merge and live
+    verification
+updated_at: '2026-09-10T04:48:22+00:00'
 configuration_history:
 - at: '2026-09-10T04:33:27+00:00'
   by: codex-lead
@@ -227,6 +234,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T04:48:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision

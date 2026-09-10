@@ -193,7 +193,7 @@ fixes:
     issues:
     - M-035
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: parallel/knowledge-m035-withhold-endpoint-cover
