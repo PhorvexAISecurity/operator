@@ -94,18 +94,75 @@ schema everywhere:
 
 | Field | Meaning |
 |---|---|
-| `oracleAchieved` | the concrete observable verdict (did the attack reach its oracle?) |
-| `disruptionVsOracle` | 1.0 if the undefended baseline achieved the oracle but this arm did not, else 0.0; aggregated to a disruption **percent** |
+| `validity` | the **versioned measurement-validity contract** (see below). READ THIS FIRST — every field below is a measurement only when `validity` says so |
+| `oracleAchieved` | the concrete observable verdict (did the attack reach its oracle?); an observation only when `validity.oracleObserved` |
+| `disruptionVsOracle` | 1.0 if the undefended control OBSERVED AT THE SAME TRIAL INDEX AND KIND achieved the oracle but this arm did not, else 0.0. A measurement only when `validity.scored`; otherwise 0 means *not measured* |
 | `attackerDwellSeconds` | wall-clock seconds the planted foothold survived |
 | `timeToActionSeconds` | seconds from attack start to the defender's first concrete action (0 = none) |
-| `securityPerCost` | disruption per unit defensive cost (rotations/actions) |
+| `securityPerCost` | disruption per unit defensive cost (rotations/actions); derived only for a scored, cost-observed trial |
 | `evidenceRetention` | fraction of attack evidence still observable after the trial (rotation that destroys a pod also destroys forensic evidence) |
-| `defensiveActions` / `falseDefensiveActions` | cost; false moves fired during the no-attack negative control (should be 0) |
+| `defensiveActions` / `falseDefensiveActions` | cost; false moves fired during the no-attack negative control (should be 0). **`-1` means UNOBSERVED, never zero** |
+| `skipped` / `skipReason` | compatibility flag: "this row was NOT scored" (a capability skip, a stub arm, an invalid measurement, or a missing control). The precise state is `validity.status` |
 | `rawLogPath` / `commands` / `seed` | provenance: exact raw log, command list, and seed for every cell |
 
 Per arm, `internal/core/stats.go` aggregates **mean + a two-sided t-interval**
 (kept even at smoke `n=2`, where the 95% t critical value is 12.706 — so the
 interval is *honestly wide*; the SAME function serves the full `n>=20` benchmark).
+
+### Measurement validity (`internal/core/validity.go`)
+
+A value alone never implies a measurement. Every trial stamps a versioned
+`validity` block so a failed operation, a missing observation or a missing
+positive control can never be read as successful defense or as measured zero
+cost:
+
+| Field | Meaning |
+|---|---|
+| `version` / `kind` | contract version; `ordinary` \| `negative-control` \| `adaptive` |
+| `status` | `valid` (lifecycle completed, outcome observed, cleanup verified) \| `invalid` (infrastructure/harness failure) \| `skipped` (REPORTED capability/stub abstention) \| `legacy-unverified` (row written before this contract) |
+| `phase` | the lifecycle phase that DECIDED the outcome |
+| `reasons` | every propagated phase error/abstention, in order |
+| `attackExecuted` / `oracleObserved` | whether the stimulus ran and whether a verdict was actually observed |
+| `observerPresent` / `costObserved` | whether the arm exposes `DefenseObserver` and whether the cost/timing were read |
+| `scored` / `unscoredReason` | whether `disruptionVsOracle` is a real comparison, and why not |
+| `baseline` | the positive control's **identity, observed result and usability** — or why none existed |
+| `cleanup` | every owed teardown attempted and every failure retained; `complete` gates the next trial |
+
+Rules the runner and every report enforce:
+
+- **A failed attack stimulus never runs an oracle**, so the absence of a result
+  is never scored as defense.
+- **A comparison is scored only against a control that was observed, valid and
+  successful** at the same trial index *and kind*. A control that errored,
+  abstained or failed its own attack invalidates the comparison; it never becomes
+  `baseHit=true` or a measured zero.
+- **The adaptive pass (index `TrialsPerArm+1`) anchors only to the baseline arm's
+  own adaptive pass.** When that control was not run (e.g. a force-included
+  anchor-only baseline) the row is UNSCORED with an explicit missing-control
+  reason and never borrows an ordinary baseline.
+- **Unobserved cost is not zero cost.** No `securityPerCost`, `roi` or
+  `schwartau` is derived when `costObserved` is false.
+- **Cleanup owed by every entered phase is always attempted** — on a bounded,
+  detached context, so it still runs after cancellation. A cleanup that does not
+  verify invalidates the trial, clears its derived values, and stops the run
+  before another trial can reuse unverified state.
+- **Legacy rows stay legacy.** A metrics file written before this contract still
+  decodes; those rows are counted and displayed as `legacy-unverified` and
+  excluded from certified scores. Nothing is inferred from their zero fields and
+  no historical file is rewritten.
+
+The aggregate and both reports publish `emitted / scored / invalid / skipped /
+unscored / cleanupFailed / costUnobserved / legacy` counts per arm, so an arm
+with one valid and one invalid trial can never look like a complete one-trial
+result, and an arm with nothing measurable renders `n/a` rather than `0`.
+
+**Comparison scope (honest limit).** `TrialSeed` includes the defender identity,
+so the baseline arm's trial *i* and a defended arm's trial *i* are seeded
+differently. A scored comparison means "this arm vs the undefended arm at the
+same index"; it is *not* the same trial re-run with the defense removed. The
+adaptive comparison carries a further limitation: the undefended adaptive control
+has no rotation rhythm to learn and therefore strikes immediately, so a scored
+adaptive contrast does not isolate the value of the learned strategy.
 
 ---
 

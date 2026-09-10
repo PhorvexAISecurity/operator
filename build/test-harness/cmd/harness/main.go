@@ -131,15 +131,24 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	var mw *core.MetricWriter
 	if resume {
 		// ACCUMULATE into the same out-dir: preload prior batches' rows + append.
-		prior, lerr := report.ReadMetricsJSONL(metricsPath)
+		// The read is STRICT: a file that cannot be fully parsed is never appended
+		// to, and prior rows written before the measurement-validity contract are
+		// reported as legacy/unverified rather than silently re-scored.
+		read, lerr := report.ReadMetricsFile(metricsPath)
 		if lerr != nil && !os.IsNotExist(lerr) {
 			return fmt.Errorf("resume: read prior metrics %s: %w", metricsPath, lerr)
 		}
+		if n := len(read.Undecodable); n > 0 {
+			return fmt.Errorf("resume: %s has %d undecodable line(s) (first at line %d: %s); refusing to append to a file that cannot be fully read",
+				metricsPath, n, read.Undecodable[0].Line, read.Undecodable[0].Error)
+		}
+		prior := read.Metrics
 		mw, err = core.NewMetricWriterResume(metricsPath, prior)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("RESUME: preloaded %d prior metric rows from %s; appending this batch (masterSeed=%d)\n", len(prior), metricsPath, cfg.MasterSeed)
+		fmt.Printf("RESUME: preloaded %d prior metric rows from %s (%d LEGACY/UNVERIFIED, excluded from certified scores); appending this batch (masterSeed=%d)\n",
+			len(prior), metricsPath, read.Legacy, cfg.MasterSeed)
 	} else {
 		mw, err = core.NewMetricWriter(metricsPath)
 		if err != nil {
@@ -196,9 +205,14 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	runner := core.NewRunner(opts, factory, mw, func(line string) { fmt.Println(line) })
 	fmt.Printf("\nRunning matrix: %d scenarios x %d defenders x %d trials/arm (seed=%d)\n", len(selScenarios(opts)), len(selDefenders(opts)), cfg.TrialsPerArm, cfg.MasterSeed)
-	metrics, err := runner.Run(ctx)
-	if err != nil {
-		return err
+	metrics, runErr := runner.Run(ctx)
+	outcome := runner.Outcome()
+	if runErr != nil {
+		// The run stopped early (e.g. unverified cleanup, or a metric write
+		// failure). The rows produced before the stop are real evidence, so the
+		// reports are still written — labelled INCOMPLETE — and the command then
+		// exits non-zero. Nothing here claims a complete matrix.
+		fmt.Fprintf(os.Stderr, "RUN INCOMPLETE: %v\n", runErr)
 	}
 
 	// 7) Final teardown: remove the sandbox namespace + all owned objects.
@@ -209,7 +223,7 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 
 	// 8) Reports + provenance.
 	reproduce := fmt.Sprintf("go run ./cmd/harness -config <config.yaml>   # masterSeed=%d + the fixed per-trial seeds reproduce this run exactly", cfg.MasterSeed)
-	repPath, err := report.WriteReport(outDir, metrics, opts.CILevel, capNotes)
+	repPath, err := report.WriteReportRun(outDir, metrics, opts.CILevel, capNotes, &outcome)
 	if err != nil {
 		return err
 	}
@@ -229,8 +243,13 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		fmt.Fprintf(os.Stderr, "WARN: dollars report: %v\n", derr)
 	}
 
-	fmt.Printf("\nDone. %d metric records.\n  metrics:    %s\n  report:     %s\n  provenance: %s\n  mitre:      %s\n  dollars:    %s\n", len(metrics), metricsPath, repPath, provPath, mitrePath, dollarsPath)
-	return nil
+	state := "COMPLETE"
+	if !outcome.Complete {
+		state = "INCOMPLETE"
+	}
+	fmt.Printf("\nDone (%s: planned %d / executed %d / written %d). %d metric records.\n  metrics:    %s\n  report:     %s\n  provenance: %s\n  mitre:      %s\n  dollars:    %s\n",
+		state, outcome.PlannedTrials, outcome.ExecutedTrials, outcome.WrittenTrials, len(metrics), metricsPath, repPath, provPath, mitrePath, dollarsPath)
+	return runErr
 }
 
 // dollarInputsFromConfig assembles the DollarInputs from the live config $ knobs
@@ -259,9 +278,17 @@ func dollarInputsFromConfig(cfg config.TargetConfig) report.DollarInputs {
 // extended schema, and writes report-dollars.md next to it. ZERO cluster access,
 // ZERO re-execution — so the 1980-row Pass-A matrix becomes comparable to Pass B.
 func dollarsOnly(metricsFile string) error {
-	metrics, err := report.ReadMetricsJSONL(metricsFile)
+	// Read TOLERANTLY here: this is a reporting view over a historical file, so an
+	// undecodable line is disclosed as a known unknown rather than discarding the
+	// rows that did decode. Legacy rows (written before the measurement-validity
+	// contract) are counted and excluded from certified scores, never rewritten.
+	read, err := report.ReadMetricsFile(metricsFile)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", metricsFile, err)
+	}
+	metrics := read.Metrics
+	for _, bad := range read.Undecodable {
+		fmt.Fprintf(os.Stderr, "WARN: %s line %d could not be decoded and is EXCLUDED: %s\n", metricsFile, bad.Line, bad.Error)
 	}
 	// Use clearly-labeled DEFAULTS for the $ knobs (a config blob may not be at
 	// hand for a historical metrics file) and the known per-arm rotation intervals.
@@ -282,7 +309,8 @@ func dollarsOnly(metricsFile string) error {
 	if werr != nil {
 		return werr
 	}
-	fmt.Printf("Pass-A-with-dollars view written: %s (%d metric rows, no re-run)\n", path, len(metrics))
+	fmt.Printf("Pass-A-with-dollars view written: %s (%d metric rows decoded, %d LEGACY/UNVERIFIED and excluded from certified scores, %d undecodable line(s); no re-run)\n",
+		path, len(metrics), read.Legacy, len(read.Undecodable))
 	return nil
 }
 

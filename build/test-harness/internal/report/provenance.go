@@ -9,7 +9,10 @@ import (
 )
 
 // ProvenanceEntry ties one reported result to the EXACT commands + raw log + seed
-// that produced it, so every table cell is reproducible from the fixed seed.
+// that produced it, so every table cell is reproducible from the fixed seed. It
+// also carries the measurement-validity verdict for the row, so a provenance
+// consumer can tell a measured comparison from a failed, abstained, unanchored
+// or legacy/unverified one without re-reading metrics.jsonl.
 type ProvenanceEntry struct {
 	Scenario        string   `json:"scenario"`
 	Defender        string   `json:"defender"`
@@ -21,6 +24,21 @@ type ProvenanceEntry struct {
 	Disruption      float64  `json:"disruptionVsOracle"`
 	ObservedState   string   `json:"observedState"`
 	NegativeControl bool     `json:"negativeControl"`
+
+	// TrialKind / Status / Scored describe HOW MUCH of this row is a measurement.
+	// Disruption is only a measurement when Scored is true.
+	TrialKind core.TrialKind         `json:"trialKind"`
+	Status    core.MeasurementStatus `json:"measurementStatus"`
+	Scored    bool                   `json:"scored"`
+	// OracleObserved says whether OracleAchieved is an observation at all.
+	OracleObserved bool `json:"oracleObserved"`
+	// ControlDefender / ControlUsable identify the positive control this row was
+	// anchored to; UnscoredReason explains an unscored row.
+	ControlDefender string `json:"controlDefender,omitempty"`
+	ControlUsable   bool   `json:"controlUsable"`
+	UnscoredReason  string `json:"unscoredReason,omitempty"`
+	// CleanupComplete is false when owed cleanup did not verify.
+	CleanupComplete bool `json:"cleanupComplete"`
 }
 
 // ProvenanceMap is the whole map plus the run-level reproduction recipe.
@@ -46,6 +64,7 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 		HowToReproduce: reproduceCmd,
 	}
 	for _, m := range metrics {
+		v := m.MeasurementState()
 		pm.Entries = append(pm.Entries, ProvenanceEntry{
 			Scenario:        m.Scenario,
 			Defender:        m.Defender,
@@ -57,6 +76,14 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 			Disruption:      m.DisruptionVsOracle,
 			ObservedState:   m.ObservedState,
 			NegativeControl: m.NegativeControl,
+			TrialKind:       m.Kind(),
+			Status:          v.Status,
+			Scored:          v.Scored,
+			OracleObserved:  v.OracleObserved,
+			ControlDefender: v.Baseline.Defender,
+			ControlUsable:   v.Baseline.Usable,
+			UnscoredReason:  v.UnscoredReason,
+			CleanupComplete: v.Cleanup.Complete,
 		})
 	}
 	return pm
