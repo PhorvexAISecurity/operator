@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 19
+revision: 25
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -20,45 +20,44 @@ checks:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/red_controls_baseline.txt
-    sha256: aa8e40923f403fecad054b4350720d3d8f290236c5874449ab93c3120cf8fe0b
+    sha256: c25e5919cab46a1aa631f2d8ef2229fa203d8846dcc69bb6e4f83f8f80051bff
     source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-    at: '2026-09-10T21:45:41+00:00'
-    rationale: 'Baseline 418cf200 (git archive, read-only extract): 21 RED, 0 GREEN,
+    at: '2026-09-10T22:09:38+00:00'
+    rationale: 'Baseline 418cf200 (git archive, read-only extract): 23 RED, 0 GREEN,
       0 UNKNOWN - every defect in 03-decision.md and every defect found by lead prechecks
-      R1 and R2 reproduces against the real producers. Head: 0 RED, 21 GREEN, 8 of
-      8 positive controls hold (evidence/red_controls_head.txt).'
+      R1/R2 and review R3 reproduces against the real producers. Head: 0 RED, 23 GREEN,
+      10 of 10 positive controls hold (evidence/red_controls_head.txt). evidence/discrimination_mutations.txt
+      shows the checks stop reporting FIXED when each installed guard is removed.'
   l0:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/l0_pipeline_tests.txt
-    sha256: a8c824f20291ac4932d09aefe6e44f906317f8754bd55e73c5bf54dce74d3e35
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:48:34+00:00'
-    inputs:
-    - End-to-End
-    inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+    sha256: 04586c29099c9d2d6028ad67d7f9c062b8b7c658747377aae9597b64da7dd53f
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:09:43+00:00'
+    rationale: 232 tests over the real functions with local subprocess SSE streams
+      and a kubectl-shaped fake transport; 44 at baseline. Every repair has a paired
+      control proving the honest answer is still reachable.
   l1:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/l1_tools_tests.txt
-    sha256: a48b949b0041396c65562f84b71d572d687bd0517befb5633f34a7b71a2a2c80
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:48:34+00:00'
-    inputs:
-    - End-to-End/config.json
-    - phorvex/charts
-    - tools
-    inputs_sha256: d112944a63747ff687dfbab4b99cba9de72665f9347c7df11da3f1829e78f9d5
+    sha256: 9279d48ba45a0d1dff75b96099fcecff25595f382f0a1ed1af50ef7ce1be32fe
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:09:47+00:00'
+    rationale: The second of the two commands in .github/workflows/e2e-contract.yml;
+      38 tests pass. helm was supplied on PATH through a local Python wrapper because
+      this sandbox denies env-assignment command prefixes.
   l2:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/l2_behavioral_comparison.txt
-    sha256: 16ba51746419ef00fcd7502f715c2339fc31b3fb6d4e75acddf9fa0e039e0805
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:48:34+00:00'
-    inputs:
-    - End-to-End
-    inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+    sha256: cfc930483594970e22d7d3f1bc17c7208fb924e2d138a5309345c6e20dd3f487
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:09:52+00:00'
+    rationale: '33 cases through identical real producers at both trees: 29 changed
+      behaviour, 4 unchanged. The unchanged four are the controls that already behaved
+      correctly at base and must not move. No case regressed.'
   preflight:
     result: PASS
     by: claude-v3-e2e
@@ -77,12 +76,16 @@ checks:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/red_controls_head.txt
-    sha256: 43bd7f09ba74977f638565cb4b22f72481dab93b5b050abbeb5f94e30fa91380
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:48:34+00:00'
-    inputs:
-    - End-to-End
-    inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+    sha256: 30d343f55d45d3df235427d073aed76002583ea63b56c6cb1e6cca7064101b3d
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:09:58+00:00'
+    rationale: '10 of 10 positive controls hold at head: a top-level NaN still fails
+      PH02, a Running and Ready target still passes P04, a broken net identity still
+      fails B01, a decision bound to the injected event and target passes A05, a clean
+      decision window is still complete, an unterminated oversized frame still overflows,
+      a multi-line frame inside the bound is still accepted, every notice is still
+      counted, a Ready pod created after the action still confirms a replacement,
+      and a decision about the actual original target still confirms.'
   p3:
     result: FAIL
     by: codex-lead
@@ -120,7 +123,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-e2e-verification
   base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-  head_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  head_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
   stacked_on: []
 pull_request:
   url: null
@@ -160,7 +163,7 @@ next_action:
   owner: implementer
   action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
     prior evidence.
-updated_at: '2026-09-10T21:50:47+00:00'
+updated_at: '2026-09-10T22:09:58+00:00'
 configuration_history:
 - at: '2026-09-10T18:27:19+00:00'
   by: codex-lead
@@ -189,6 +192,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-10T21:48:33+00:00'
+  by: claude-v3-e2e
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T22:09:10+00:00'
   by: claude-v3-e2e
   fields:
   - implementation
@@ -332,6 +340,59 @@ check_history:
     and Ready target still passes P04, a Ready pod created after the action still
     confirms a replacement, and a decision about the actual original target still
     confirms. No case regressed.'
+- check: red
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/red_controls_baseline.txt
+  sha256: aa8e40923f403fecad054b4350720d3d8f290236c5874449ab93c3120cf8fe0b
+  source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  at: '2026-09-10T21:45:41+00:00'
+  rationale: 'Baseline 418cf200 (git archive, read-only extract): 21 RED, 0 GREEN,
+    0 UNKNOWN - every defect in 03-decision.md and every defect found by lead prechecks
+    R1 and R2 reproduces against the real producers. Head: 0 RED, 21 GREEN, 8 of 8
+    positive controls hold (evidence/red_controls_head.txt).'
+- check: l0
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/l0_pipeline_tests.txt
+  sha256: a8c824f20291ac4932d09aefe6e44f906317f8754bd55e73c5bf54dce74d3e35
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:48:34+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+- check: l1
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/l1_tools_tests.txt
+  sha256: a48b949b0041396c65562f84b71d572d687bd0517befb5633f34a7b71a2a2c80
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:48:34+00:00'
+  inputs:
+  - End-to-End/config.json
+  - phorvex/charts
+  - tools
+  inputs_sha256: d112944a63747ff687dfbab4b99cba9de72665f9347c7df11da3f1829e78f9d5
+- check: l2
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/l2_behavioral_comparison.txt
+  sha256: 16ba51746419ef00fcd7502f715c2339fc31b3fb6d4e75acddf9fa0e039e0805
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:48:34+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+- check: positive_control
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/red_controls_head.txt
+  sha256: 43bd7f09ba74977f638565cb4b22f72481dab93b5b050abbeb5f94e30fa91380
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:48:34+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
 handoff:
   id: V3-E2E:19:review
   from: codex-lead
