@@ -256,8 +256,8 @@ fixes:
     issues:
     - M-94
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m094-stamp-outage
-    head_sha: null
+    head_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5

@@ -194,7 +194,7 @@ Severity: HIGH (SLA) · Tier: 1 · Fixes: T1-M028
 
 ### M-94 · The SecurityEvent trust boundary is a self-declared string · **OPEN** · `BELIEF`
 
-Severity: HIGH · Tier: 1 · Fixes: none
+Severity: HIGH · Tier: 1 · Fixes: V3-M094
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.k8s
