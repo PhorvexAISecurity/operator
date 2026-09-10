@@ -102,16 +102,30 @@ class CaptureScope:
 
 
 class CaptureLimits:
-    """Explicit resource bounds. All three are recorded next to the counters they bound."""
+    """Explicit resource bounds. Every one is recorded next to the counters it bounds.
 
-    def __init__(self, max_total_bytes, max_records, max_frame_bytes=1 << 20):
+    `max_frame_bytes` bounds a whole SSE frame — every field line it is assembled from,
+    not each line on its own. SSE lets one JSON payload span any number of `data:` lines,
+    so a per-line bound is not a bound at all: three 60-byte lines hold 180 bytes.
+
+    `max_retained_notices` and `max_notice_bytes` bound the memory the retained source
+    notices occupy. They never bound the COUNTERS: every notice is counted and any notice
+    still marks the window incomplete, whether or not its text was kept.
+    """
+
+    def __init__(self, max_total_bytes, max_records, max_frame_bytes=1 << 20,
+                 max_retained_notices=50, max_notice_bytes=300):
         self.max_total_bytes = int(max_total_bytes)
         self.max_records = int(max_records)
         self.max_frame_bytes = int(max_frame_bytes)
+        self.max_retained_notices = int(max_retained_notices)
+        self.max_notice_bytes = int(max_notice_bytes)
 
     def to_json(self):
         return {"maxTotalBytes": self.max_total_bytes, "maxRecords": self.max_records,
-                "maxFrameBytes": self.max_frame_bytes}
+                "maxFrameBytes": self.max_frame_bytes,
+                "maxRetainedNotices": self.max_retained_notices,
+                "maxNoticeBytes": self.max_notice_bytes}
 
 
 class CaptureResult:
@@ -154,9 +168,12 @@ class StreamCapture:
         self._overflow = None
         self._event = DEFAULT_EVENT
         self._data = []
+        # Wire bytes of the frame currently being assembled, across all its field lines.
+        self._frame_bytes = 0
         self.counters = {"bytes": 0, "lines": 0, "dataFrames": 0, "heartbeats": 0,
                          "accepted": 0, "filtered": 0, "malformed": 0,
-                         "incompleteFrames": 0, "other": 0, "notices": 0}
+                         "incompleteFrames": 0, "other": 0, "notices": 0,
+                         "noticesRetained": 0, "noticesDropped": 0}
         self.malformed_samples = []
         self.incomplete_samples = []
         # Source notices are kept whole and separately. They are the only evidence that the
@@ -183,36 +200,41 @@ class StreamCapture:
                 break
             line = bytes(self._buffer[:index])
             del self._buffer[:index + 1]
-            # The bound is on a frame's line, whether or not it ever terminated: a
-            # 2 MiB line that arrives with its newline attached costs exactly as much
-            # memory as one that does not.
-            self._guard_frame_size(len(line))
-            self._line(line)
-        # A frame still accumulating counts against the same bound, so an unterminated
-        # line cannot grow without limit between newlines either.
+            self._line(line, wire_bytes=index + 1)
+        # The frame under construction plus the partial line still in the buffer is what
+        # this parser is holding right now, so that is what the bound applies to. Neither
+        # a 2 MiB line without a newline nor a thousand small ones can grow past it.
         self._guard_frame_size(len(self._buffer))
 
-    def _guard_frame_size(self, size):
+    def _guard_frame_size(self, pending=0):
+        """Bound the WHOLE frame being assembled, wherever the newlines happen to fall."""
+        size = self._frame_bytes + pending
         if size > self.limits.max_frame_bytes:
             raise self._overflowed(
-                "frame", f"a single audit frame of {size} bytes exceeded the "
-                         f"{self.limits.max_frame_bytes}-byte frame cap")
+                "frame", f"an audit frame of {size} bytes exceeded the "
+                         f"{self.limits.max_frame_bytes}-byte frame cap "
+                         f"({len(self._data)} data line(s) accumulated)")
 
     def _overflowed(self, limit, message):
         self._overflow = message
         return CaptureOverflow(limit, message, self.counters, self.records)
 
-    def _line(self, raw):
+    def _line(self, raw, wire_bytes=0):
         text = raw.decode("utf-8", errors="replace").rstrip("\r")
         if not text.strip():
             self._dispatch()                       # a blank line ends the frame
             return
         self.counters["lines"] += 1
         if text.startswith(COMMENT_PREFIX):
+            # A comment is not part of any frame, so it costs nothing to accumulate.
             self.counters["heartbeats"] += 1
             if text[1:].strip() == HEARTBEAT:
                 self.connected = True
             return
+        # From here the line belongs to the frame under construction and is charged to it.
+        # `event:` counts too: it is held until the blank line just like the data lines.
+        self._frame_bytes += wire_bytes or (len(raw) + 1)
+        self._guard_frame_size()
         if text.startswith(EVENT_PREFIX):
             self._event = text[len(EVENT_PREFIX):].strip() or DEFAULT_EVENT
             return
@@ -224,7 +246,7 @@ class StreamCapture:
     def _dispatch(self):
         """Emit the accumulated frame, if there is one, and reset the frame fields."""
         event, data = self._event, self._data
-        self._event, self._data = DEFAULT_EVENT, []
+        self._event, self._data, self._frame_bytes = DEFAULT_EVENT, [], 0
         if not data:
             return
         payload = "\n".join(data)
@@ -257,15 +279,25 @@ class StreamCapture:
         self.counters["accepted"] += 1
 
     def _notice(self, payload):
-        """The console telling us the source moved, or that records did not reach us."""
+        """The console telling us the source moved, or that records did not reach us.
+
+        Counting and retention are deliberately separate. A stream that emits a notice per
+        tick must not be able to grow this list without limit, but the count and the
+        incompleteness verdict must survive intact — dropping the TEXT of the fiftieth
+        notice loses a sample, while dropping the FACT would lose the hole in the window.
+        """
         self.counters["notices"] += 1
         try:
             message = json.loads(payload).get("message", payload)
         except (json.JSONDecodeError, AttributeError):
             message = payload
-        message = str(message)[:300]
+        message = str(message)[:self.limits.max_notice_bytes]
         reason = notice_reason(message)
-        self.notices.append({"reason": reason, "message": message})
+        if len(self.notices) < self.limits.max_retained_notices:
+            self.notices.append({"reason": reason, "message": message})
+            self.counters["noticesRetained"] += 1
+        else:
+            self.counters["noticesDropped"] += 1
         if self.continuity_lost is None:
             self.continuity_lost = f"{reason}: {message}"
 
@@ -288,7 +320,7 @@ class StreamCapture:
             self.incomplete_samples.append(sample)
             complete = False
             reason = reason or "the stream stopped in the middle of a frame"
-        self._data, self._event = [], DEFAULT_EVENT
+        self._data, self._event, self._frame_bytes = [], DEFAULT_EVENT, 0
         if self.continuity_lost:
             # The source rotated, was truncated, dropped a record or cut its own history.
             # Nothing here proves gap-free continuity across that, so the window is not a

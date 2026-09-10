@@ -342,6 +342,84 @@ class FrameCapTests(unittest.TestCase):
         self.assertIsNone(overflow)
         self.assertEqual(stream.finish().counters["accepted"], 1)
 
+    def test_the_bound_is_on_the_whole_frame_not_on_each_line(self):
+        """SSE lets one payload span any number of data: lines.
+
+        Three 30-byte lines hold 90 bytes, so a per-line bound is not a bound. The frame
+        below is valid JSON and every line of it is under the cap.
+        """
+        wire = (b'data: {"namespace":"voice",\n'
+                b'data: "one":"' + b"x" * 30 + b'",\n'
+                b'data: "two":"' + b"y" * 30 + b'"}\n\n')
+        overflow, stream = self.feed(wire)
+        self.assertIsNotNone(overflow)
+        self.assertEqual(overflow.limit, "frame")
+        self.assertIn("data line(s) accumulated", str(overflow))
+        self.assertEqual(stream.records, [])
+
+    def test_a_multi_line_frame_inside_the_bound_is_still_accepted(self):
+        # The control for the case above: same shape, under the cap, still parsed.
+        overflow, stream = self.feed(b'data: {"namespace":\ndata: "voice"}\n\n')
+        self.assertIsNone(overflow)
+        self.assertEqual(stream.finish().counters["accepted"], 1)
+
+    def test_an_event_line_is_charged_to_its_frame(self):
+        wire = b'event: notice\ndata: {"message":"' + b"z" * 60 + b'"}\n\n'
+        overflow, _ = self.feed(wire)
+        self.assertIsNotNone(overflow)
+
+    def test_the_bound_holds_across_arbitrary_chunk_boundaries(self):
+        from capture import CaptureOverflow
+        wire = (b'data: {"namespace":"voice",\n'
+                b'data: "one":"' + b"x" * 30 + b'",\n'
+                b'data: "two":"' + b"y" * 30 + b'"}\n\n')
+        stream = StreamCapture(limits(total=100000, records=10, frame=64),
+                               CaptureScope(["voice"]))
+        with self.assertRaises(CaptureOverflow):
+            for i in range(0, len(wire), 3):
+                stream.feed(wire[i:i + 3])
+
+    def test_the_frame_budget_resets_between_frames(self):
+        # Many small frames in a row must not accumulate against one another's bound.
+        overflow, stream = self.feed(b''.join(
+            b'data: {"namespace":"voice","n":%d}\n\n' % i for i in range(8)))
+        self.assertIsNone(overflow)
+        self.assertEqual(stream.finish().counters["accepted"], 8)
+
+
+class NoticeRetentionTests(unittest.TestCase):
+    """Retained notice text is bounded; the count and the verdict are not."""
+
+    def flood(self, count, retained=5, notice_bytes=40):
+        stream = StreamCapture(
+            CaptureLimits(max_total_bytes=10_000_000, max_records=100,
+                          max_frame_bytes=1 << 20, max_retained_notices=retained,
+                          max_notice_bytes=notice_bytes))
+        stream.feed(F.sse([F.record()], notices=[F.ROTATION_NOTICE] * count))
+        return stream.finish()
+
+    def test_the_count_survives_even_when_the_text_is_dropped(self):
+        got = self.flood(40, retained=5)
+        self.assertEqual(got.counters["notices"], 40)
+        self.assertEqual(got.counters["noticesRetained"], 5)
+        self.assertEqual(got.counters["noticesDropped"], 35)
+        self.assertEqual(len(got.counters["sourceNotices"]), 5)
+
+    def test_a_dropped_notice_still_makes_the_window_incomplete(self):
+        got = self.flood(40, retained=1)
+        self.assertFalse(got.complete)
+        self.assertIn("source-rotated", got.reason)
+
+    def test_a_long_notice_message_is_truncated_to_its_declared_bound(self):
+        got = self.flood(1, notice_bytes=20)
+        self.assertLessEqual(len(got.counters["sourceNotices"][0]["message"]), 20)
+        self.assertEqual(got.limits.to_json()["maxNoticeBytes"], 20)
+
+    def test_the_bounds_are_recorded_beside_the_counters(self):
+        got = self.flood(3)
+        self.assertEqual(got.to_json()["limits"]["maxRetainedNotices"], 5)
+        self.assertEqual(got.to_json()["counters"]["notices"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()
