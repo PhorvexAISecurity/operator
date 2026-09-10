@@ -289,11 +289,13 @@ func ToRecord(d model.Decision) Record {
 
 // phoenixRecord deep-copies the decision's Phoenix payload into the record (M-18).
 //
-// The audit logger serializes asynchronously with respect to the tick that produced the
-// decision, so the record must OWN its copy: sharing the pointer would let a later tick
-// mutating or clearing decision.Phoenix change what an in-flight record serializes.
-// PhoenixForensics is all-scalar, so copying the value is a complete deep copy — there
-// is no reference field to alias. nil stays nil: absence is preserved, not materialized.
+// The record must OWN its copy. Sharing the pointer would let any later write to
+// decision.Phoenix — the next tick's clear, or a reused decision being re-mapped — change
+// what an already-built Record reports. That is a lifetime property, not a threading one:
+// Logger.Record calls ToRecord and writeRecord synchronously today, and the copy holds
+// regardless of whether that stays true. PhoenixForensics is all-scalar, so copying the
+// value is a complete deep copy — there is no reference field left aliased. nil stays nil:
+// absence is preserved, never materialized into empty strings.
 func phoenixRecord(p *model.PhoenixForensics) *model.PhoenixForensics {
 	if p == nil {
 		return nil
