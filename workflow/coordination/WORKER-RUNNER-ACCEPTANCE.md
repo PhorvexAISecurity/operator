@@ -34,7 +34,7 @@ queueing another job. No merge, DevOps action or live mutation is authorized her
 
 No co-author or AI attribution is permitted in commit messages.
 
-## Post-acceptance defect and correction, 2026-09-11
+## Post-acceptance defect and correction, 2026-09-10
 
 The acceptance above stands as recorded; this section adds a limitation found in
 live campaign use and its fix. Nothing earlier is withdrawn.
@@ -82,3 +82,28 @@ job was modified; the lead's `resolve` of the affected job stands, so that recor
 keeps its failed reason and freed slot while `M161` continues. The service must
 be restarted by the lead to pick up this code. No push, merge, deployment or
 self-approval; this correction is submitted for independent review.
+
+### Independent lead review of 62df1bb
+
+Codex lead, 2026-09-10: accepted the legitimate string-message denial repair
+for local campaign operation. Replayed the actual private M152 stream through
+`summarize`: zero problems, matching session, 192 turns, 33 denial records,
+Opus 5 turn model. Independently ran all 90 runner tests under Python 3.11:
+PASS. The first direct process-group-leader invocation was killed by an existing
+test cleanup fixture that records its own PID; running unittest as a child of
+a waiting Python driver completed. This is a test-isolation limitation to
+repair before publishing the runner PR, not a product execution failure.
+
+The helper model listed under modelUsage is retained visibly; it does not mean
+the requested implementation turn model was replaced. No historical job result
+was rewritten. Restarting the local supervisor is authorized campaign tooling.
+Additional malformed final shapes and fixture cleanup ownership remain review
+follow-ups before the PR; this acceptance does not claim universal shape safety.
+
+### Independent lead acceptance of fecc213
+
+2026-09-10: all216 workflow tests independently pass under pinned Python3.11, including103 runner cases and the ordinary/process-group-leader cleanup controls. Actual summarize probes retain clean success, reject boolean turn metadata and malformed denial entries, and distinguish the exact synthetic quota sentinel from a real model substitution while keeping quota failures failed. Evidence: lead-runner-r4-tests.log and lead-runner-r4-repaired.json. Original failure probes are preserved.
+
+The source delta keeps one session per worker, bounded permissions, no model fallback, current high default and explicit legacy max support. Test cleanup signals only owned fixture children, never simulated runtime PIDs or the test process group. Unknown event shapes remain conservative failures; no universal shape guarantee or deployment authority is implied.
+
+The lead accepts this source for the local campaign supervisor. With the independent bootstrap job completed, supervisor concurrency may be4 within the existing total4 external-worker cap. Before any future bootstrap job, free/reduce a supervisor slot. Restart uses KillMode=process and the runner's between-pass shutdown; existing wrappers/sessions are adopted rather than relaunched. Historical job receipts are not rewritten. Branch publication is authorized; merge and shared-cluster deployment are not performed.

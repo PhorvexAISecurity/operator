@@ -1,3 +1,6 @@
 
 # Retained patches are evidence; preserve context-line whitespace verbatim.
 workflow/**/*.patch -whitespace
+
+# Retain exact independent test output, including negative-control diagnostics.
+workflow/coordination/lead-runner-r4-tests.log -whitespace

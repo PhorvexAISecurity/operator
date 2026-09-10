@@ -1,5 +1,12 @@
 # User-directed model settings
 
+Latest update, 2026-09-10 19:45 UTC: use `claude-opus-5` with **high**
+reasoning for every future launch/resume. This supersedes the maximum-effort
+instruction below, retained as history. The lead has updated all registrations
+and queued jobs through the CLI. R4 changes the campaign default and
+current usage documentation to high; keep explicit max supported and historical
+receipts unchanged. Do not alter authentication or use a fallback model.
+
 New instruction from the user, 2026-09-10: Claude agents must use Claude Opus 5
 with maximum reasoning. Before acceptance, add persisted validated `--effort`
 registration/configuration and pass it on every launch/resume. Defaults for this
