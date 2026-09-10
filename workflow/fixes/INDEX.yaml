@@ -208,3 +208,23 @@ fixes:
     stacked_on: []
     branch: parallel/actuation-m048-policy-identity
     head_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+  CONSOLE-LIVE-HISTORY:
+    directory: fixes/CONSOLE-LIVE-HISTORY
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/console-live-history
+    head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+  AUDIT-VOLUME-GUARD:
+    directory: fixes/AUDIT-VOLUME-GUARD
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/audit-volume-guard
+    head_sha: 255a23a5dcc58c4ea3be0fb9b191edbb9c68a273

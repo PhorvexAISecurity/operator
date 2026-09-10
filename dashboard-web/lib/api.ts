@@ -34,10 +34,10 @@ export interface Suite { Name: string; Desc: string }
 // For `next dev`, set NEXT_PUBLIC_API_BASE=http://localhost:8090 (CORS is allowed).
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
-async function get<T>(path: string, lens: Lens): Promise<T> {
+async function get<T>(path: string, lens: Lens, signal?: AbortSignal): Promise<T> {
   let r: Response;
   try {
-    r = await fetch(API_BASE + path, { headers: { "X-Phorvex-Lens": lens }, cache: "no-store" });
+    r = await fetch(API_BASE + path, { headers: { "X-Phorvex-Lens": lens }, cache: "no-store", signal });
   } catch {
     throw new Error("BACKEND_UNREACHABLE");
   }
@@ -113,6 +113,8 @@ export const applyFixApi = {
 };
 
 export const api = {
+  liveHistory: (lens: Lens, filters: Record<string, string>, signal?: AbortSignal) =>
+    get<LiveHistoryPage>(`/api/live/history?${new URLSearchParams(filters)}`, lens, signal),
   health: (lens: Lens = "operator") => get<any>("/api/health", lens),
   effectiveness: (lens: Lens) => get<{ stats: Stat[] }>("/api/effectiveness", lens),
   frontier: (lens: Lens) => get<{ rows: FrontierRow[] }>("/api/frontier", lens),
@@ -195,7 +197,7 @@ export const api = {
   redteamGates: (lens: Lens) => get<{ gates: RTGate[]; allPass: boolean; ranAt: string }>("/api/redteam/gates", lens),
   redteamCampaigns: (lens: Lens) => get<{ campaigns: RTCampaign[] }>("/api/redteam/campaigns", lens),
   // clearLive empties the live decision-audit the SSE replays (operator-only write).
-  clearLive: (lens: Lens) => post<{ cleared: boolean; note?: string }>("/api/live/clear", {}, lens),
+  clearLive: (lens: Lens, context = "") => post<{ cleared: boolean; note?: string }>(`/api/live/clear?${new URLSearchParams({ context })}`, {}, lens),
 };
 export interface RTFinding { id: string; title: string; product: string; category: string; source: string; reasoning: string; cycle: string; fix: string; fixFile: string; status?: string; applyNote?: string }
 export interface RTGate { label: string; pass: boolean; out: string }
@@ -338,6 +340,15 @@ export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
 export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }
+
+export interface LiveHistoryPage {
+  events: { id: string; event: any }[];
+  nextCursor?: string;
+  partial: boolean;
+  notice: string;
+  projection: string;
+  scannedBytes: number;
+}
 
 // liveStream opens the SSE decision stream (per-lens projected server-side). Returns a
 // cleanup fn. Each message is the per-lens payload (full Record for investor/operator;

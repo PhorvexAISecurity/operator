@@ -37,6 +37,9 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...', runs['go-unit'])
         self.assertEqual(jobs['go-unit']['env']['KUBECONFIG'], '/dev/null')
         self.assertEqual(jobs['go-unit']['env']['USE_EXISTING_CLUSTER'], 'false')
+        self.assertTrue(any(s.get('uses') == 'azure/setup-helm@v4'
+                            and s.get('with', {}).get('version') == 'v3.16.4'
+                            for s in jobs['go-unit']['steps']))
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])
 
