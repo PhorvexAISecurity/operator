@@ -2,11 +2,11 @@ schema_version: 1
 intake_id: RPT-20260910-200300-policy-cadence
 kind: OBSERVATION
 title: Observed decision cadence exceeds configured policy interval
-state: VERIFYING
+state: FILED
 reporter: codex-lead
 approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
 created_at: '2026-09-10T20:02:37+00:00'
-updated_at: '2026-09-10T20:03:20+00:00'
+updated_at: '2026-09-10T21:16:24+00:00'
 pins:
   source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
   source_release: null
@@ -15,27 +15,130 @@ pins:
   deployed_git_sha: dbf5fa4321b35651e8142cb2c13d4f28f8c6dcca
   environment: Read-only dev observation plus local real producer replay; no mutation
 verification:
-  result: pending
+  result: PASS
   artifact: VERIFICATION.md
-  positive_control: pending
+  positive_control: PASS
 dedup:
-  status: pending
-  candidates: []
-  determination: null
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 18
+    overlap:
+    - any
+    - cadence
+    - canonical
+    - claim
+    - decision
+    - defect
+    - evidence
+    - exceeds
+    - first
+    - not
+    - observation
+    - observed
+    - policies
+    - policy
+    - retained
+    - separate
+    - sustained
+    - tick
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-146
+    score: 16
+    overlap:
+    - any
+    - claim
+    - decision
+    - defect
+    - evidence
+    - here
+    - inputs
+    - not
+    - observations
+    - producer
+    - raw
+    - record
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-140
+    score: 15
+    overlap:
+    - any
+    - behavior
+    - decisions
+    - defect
+    - evidence
+    - first
+    - not
+    - observation
+    - policies
+    - policy
+    - raw
+    - tick
+    - whether
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-167
+    score: 15
+    overlap:
+    - actual
+    - artifacts
+    - claim
+    - configuration
+    - decision
+    - evidence
+    - mutation
+    - not
+    - policy
+    - required
+    - separate
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+  - issue_id: M-142
+    score: 14
+    overlap:
+    - any
+    - boundary
+    - decision
+    - evidence
+    - first
+    - here
+    - interval
+    - not
+    - observed
+    - record
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-155
+    score: 13
+    overlap:
+    - any
+    - decision
+    - evidence
+    - not
+    - observed
+    - skips
+    - tick
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  determination: NEW
   issue_id: null
   artifact: DEDUP.md
   human_ruling_ref: null
 promotion:
-  issue_id: null
+  issue_id: M-174
   fix_id: null
-  approval_ref: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
 roles:
   human_owner: human-owner
   investigator: codex-lead
   coordinator: codex-lead
 next_action:
-  owner: codex-lead
-  action: Obtain independent source/live evidence and dedup challenge before classification
+  owner: coordinator
+  action: Continue in canonical issue M-174.
 transitions:
 - from: REPORTED
   to: TRIAGED
@@ -55,4 +158,28 @@ transitions:
     pending.
   approval_ref: null
   forced: false
-revision: 2
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T21:16:23+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T21:16:23+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T21:16:24+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-174.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

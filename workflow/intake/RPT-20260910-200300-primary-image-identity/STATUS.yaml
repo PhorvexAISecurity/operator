@@ -2,11 +2,11 @@ schema_version: 1
 intake_id: RPT-20260910-200300-primary-image-identity
 kind: BUG
 title: Primary running image projection selects a sidecar by status order
-state: VERIFYING
+state: FILED
 reporter: codex-lead
 approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
 created_at: '2026-09-10T20:02:36+00:00'
-updated_at: '2026-09-10T20:03:19+00:00'
+updated_at: '2026-09-10T21:16:22+00:00'
 pins:
   source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
   source_release: null
@@ -15,27 +15,128 @@ pins:
   deployed_git_sha: dbf5fa4321b35651e8142cb2c13d4f28f8c6dcca
   environment: Read-only dev observation plus local real producer replay; no mutation
 verification:
-  result: pending
+  result: PASS
   artifact: VERIFICATION.md
-  positive_control: pending
+  positive_control: PASS
 dedup:
-  status: pending
-  candidates: []
-  determination: null
+  status: reviewed
+  candidates:
+  - issue_id: M-141
+    score: 17
+    overlap:
+    - cache
+    - epss
+    - evidence
+    - exact
+    - image
+    - live
+    - miss
+    - not
+    - running
+    - shows
+    - vllm
+    title: EPSS cache drifts stale against running digests — the highest-value entry
+      silently matches nothing
+  - issue_id: M-31
+    score: 16
+    overlap:
+    - cache
+    - epss
+    - image
+    - imageid
+    - live
+    - miss
+    - raw
+    - running
+    - status
+    - vllm
+    title: '`ImageRarity` (and the EPSS cache) keyed on un-normalized imageID'
+  - issue_id: M-146
+    score: 16
+    overlap:
+    - any
+    - but
+    - claim
+    - evidence
+    - here
+    - inputs
+    - live
+    - not
+    - raw
+    - record
+    - status
+    - wrong
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-142
+    score: 15
+    overlap:
+    - any
+    - control
+    - evidence
+    - first
+    - here
+    - hypothetical
+    - ingest
+    - live
+    - not
+    - observed
+    - real
+    - record
+    - vllm
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-2
+    score: 14
+    overlap:
+    - any
+    - but
+    - contract
+    - evidence
+    - first
+    - invariant
+    - live
+    - not
+    - observed
+    - order
+    - passes
+    - spec
+    - status
+    - vllm
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-136
+    score: 14
+    overlap:
+    - any
+    - but
+    - container
+    - control
+    - evidence
+    - live
+    - logs
+    - mutation
+    - not
+    - real
+    - status
+    - vllm
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  determination: NEW
   issue_id: null
   artifact: DEDUP.md
   human_ruling_ref: null
 promotion:
-  issue_id: null
+  issue_id: M-173
   fix_id: null
-  approval_ref: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
 roles:
   human_owner: human-owner
   investigator: codex-lead
   coordinator: codex-lead
 next_action:
-  owner: codex-lead
-  action: Obtain independent source/live evidence and dedup challenge before classification
+  owner: coordinator
+  action: Continue in canonical issue M-173.
 transitions:
 - from: REPORTED
   to: TRIAGED
@@ -55,4 +156,28 @@ transitions:
     pending.
   approval_ref: null
   forced: false
-revision: 2
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T21:16:21+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T21:16:21+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T21:16:22+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-173.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

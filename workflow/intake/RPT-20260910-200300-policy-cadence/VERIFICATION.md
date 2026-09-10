@@ -22,3 +22,9 @@ resolution. Evaluate configuration guidance and intended TickInterval semantics.
 Do not infer CPU saturation, exact production latency, or high-load guarantees.
 No live mutation. Independent contract review and comparison with M5/M128/M137
 are pending before classifying a new BUG or choosing a configuration remedy.
+
+## Independent review completed
+
+Independent R3 section2.3 observes the live CRD description: TickInterval is the decision cadence. Empty defaults to20s in code. Live base interval10s cannot honor configured5s. Lead real Start/tick/CollectSnapshot/PodMetrics replay gives10,13,19 observations over2.1s for200ms,100ms,20ms bases against100ms policy. This is a contract/implementation discrepancy, not a general throughput or real-time SLA claim.
+
+Lead accepted this bounded finding; see ../../assessments/20260910-readiness/fresh-integration/LEAD-REVIEW-R3.md and sealed r3/REPORT-R3.md with SHA256SUMS-R3. Positive control PASS. The source/deployment pins in STATUS.yaml are unchanged.

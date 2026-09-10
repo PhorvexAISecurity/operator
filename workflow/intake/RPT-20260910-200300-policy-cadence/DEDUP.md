@@ -1,8 +1,5 @@
-# Dedup and contract review — unresolved classification
+# Reviewed root-cause comparison
 
-M5 historical cadence/enablement, M128 policy fairness under a shared deadline,
-and M137 unmeasured scale envelope are comparison candidates. Global tick
-quantization and a precise interval comparison are mechanically distinct from
-slow-policy starvation, but may be documented scheduling behavior. Independent
-review must decide whether this is a product contract defect, configuration
-constraint or observation only. No issue ID allocated and no forced NEW ruling.
+M-5 concerns scheduler enablement/lifecycle, M-128 shared-deadline fairness, and M-137 scale-envelope measurement. This claim is per-policy interval expressibility/quantization and equal-boundary skips even under the bounded local replay. The live CRD names TickInterval decision cadence without the actual global interval constraint. Distinct contract defect; NEW.
+
+Lead codex-lead and independent claude-audit-integration R3 agree. No ambiguous root remains; no human ruling is being fabricated. Current source and live evidence, not stale issue status, determine this result.

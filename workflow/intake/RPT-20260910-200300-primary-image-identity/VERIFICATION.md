@@ -26,3 +26,9 @@ claim the deployed cache score or a specific vulnerability/attack outcome.
 Local fake clients only, no live mutation or cleanup requirement beyond ending
 read-only observation. Independent review and root-cause dedup pending; no
 canonical issue or repair is authorized by this intake state alone.
+
+## Independent review completed
+
+Independent R3 section2.2 confirms real CollectSnapshot -> Derive -> EPSS discriminator: aligned/exact hits, aligned/stale falls back, observed ordering misses under both caches. Scope includes sidecar-first status permutations; primary-only versus all-container modeling remains separate.
+
+Lead accepted this bounded finding; see ../../assessments/20260910-readiness/fresh-integration/LEAD-REVIEW-R3.md and sealed r3/REPORT-R3.md with SHA256SUMS-R3. Positive control PASS. The source/deployment pins in STATUS.yaml are unchanged.
