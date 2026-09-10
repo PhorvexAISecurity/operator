@@ -197,3 +197,15 @@ fixes:
     stacked_on: []
     branch: fix/deploy-autosync
     head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+  M-048:
+    directory: fixes/M-048
+    aliases: []
+    issues:
+    - M-48
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on:
+    - https://github.com/PhorvexSecurity/operator/pull/150
+    branch: parallel/actuation-m048-policy-identity
+    head_sha: 2543473928f14cf3cd14eff971684565a25b08f9

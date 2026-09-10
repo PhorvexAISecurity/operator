@@ -1,0 +1,338 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: milad-lead
+    artifact: 03-decision.md
+    sha256: a1e5bc16823c8194b7a072f785c1b382cad987ea85a6607a90d90ebfb4d33024
+    source_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+    at: '2026-09-10T11:07:03+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: operations/AUTONOMY.md
+    rationale: Concrete required namespaced update companion; no scanner or crossnamespace
+      grant and no deployment
+  red:
+    result: PASS
+    by: milad-lead
+    artifact: evidence/lead-baseline.txt
+    sha256: 4b7a906ea57b6390a90dee42bc48d6a5782d11af86d4ac6706a351609a85f519
+    source_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+    at: '2026-09-10T10:40:10+00:00'
+  preflight:
+    result: PASS
+    by: m048-worker
+    artifact: evidence/rbac-companion/preflight/receipt.json
+    sha256: 5b706dc9771bdf40cd1b7989fbb34c11a72a9446ab474cca2f7df2b599c7130b
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:18:00+00:00'
+  implementation:
+    result: PASS
+    by: m048-worker
+    artifact: 04-diff.patch
+    sha256: b5998b47e3fcf8617c9d51bf21eedbb2445cce5836ffe5e2f8cf27c3b550c4f6
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:18:00+00:00'
+  l0:
+    result: PASS
+    by: m048-worker
+    artifact: evidence/rbac-companion/preflight/run-1789038828143416022/go-phorvex.log
+    sha256: ec3656c84197879991fa0955d4d2271a0827df7655e9b5d98e653949b2266dc7
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:18:00+00:00'
+  l1:
+    result: PASS
+    by: m048-worker
+    artifact: evidence/rbac-companion/l1.txt
+    sha256: 2c9f843a2ea604361ba41ddc0b8393c38faab187aff4b3fdda789b4dfb23d81a
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:18:00+00:00'
+  l2:
+    result: PASS
+    by: m048-worker
+    artifact: evidence/rbac-companion/l1.txt
+    sha256: 2c9f843a2ea604361ba41ddc0b8393c38faab187aff4b3fdda789b4dfb23d81a
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:18:00+00:00'
+  positive_control:
+    result: PASS
+    by: m048-worker
+    artifact: evidence/rbac-companion/l1.txt
+    sha256: 2c9f843a2ea604361ba41ddc0b8393c38faab187aff4b3fdda789b4dfb23d81a
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:18:00+00:00'
+  p3:
+    result: PASS
+    by: milad-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 96c67e1a122b5cae2f5e6cdedf5ba4d23677e1b4b248be6ee0c3866d72a2f042
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:19:36+00:00'
+    incident_sha256: 565be6d9e3812720b1f5324a1f3aaca8b5fc327f817526bc0fc8c014a725a3a4
+  incident:
+    result: PASS
+    by: milad-lead
+    artifact: evidence/incident.md
+    sha256: 565be6d9e3812720b1f5324a1f3aaca8b5fc327f817526bc0fc8c014a725a3a4
+    source_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+    at: '2026-09-10T11:19:36+00:00'
+    baseline_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+fix_id: M-048
+issues:
+- M-48
+title: UID-bound quarantine policy reconciliation
+profile: standard
+state: PR_READY
+roles:
+  human_owner: Milad
+  proposer: milad-lead
+  implementer: m048-worker
+  skeptic: milad-lead
+  live_verifier: milad-lead
+  coordinator: milad-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: integration/merged-stack-to-main
+  code_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: parallel/actuation-m048-policy-identity
+  base_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+  head_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+  stacked_on:
+  - https://github.com/PhorvexSecurity/operator/pull/150
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T11:19:43+00:00'
+configuration_history:
+- at: '2026-09-10T10:38:42+00:00'
+  by: milad-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - title
+  approval_ref: null
+- at: '2026-09-10T10:39:17+00:00'
+  by: milad-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-10T10:39:35+00:00'
+  by: milad-lead
+  fields:
+  - verification
+  approval_ref: null
+- at: '2026-09-10T11:05:25+00:00'
+  by: m048-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T11:17:59+00:00'
+  by: m048-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T10:39:03+00:00'
+  by: milad-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T10:40:06+00:00'
+  by: milad-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T11:05:26+00:00'
+  by: m048-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T11:05:30+00:00'
+  by: m048-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-10T11:07:36+00:00'
+  by: milad-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T11:18:01+00:00'
+  by: m048-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T11:19:38+00:00'
+  by: milad-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T11:19:40+00:00'
+  by: milad-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: milad-lead
+  artifact: 03-decision.md
+  sha256: e38a0ab9525854fe6870acf1acbc8017974b1ed6556054864b574ef4150e7efd
+  source_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+  at: '2026-09-10T10:39:06+00:00'
+  contract_sha256: 23156f984707c19cca4a8e2102df2173de485e8a2bd294cd1c7e4553442ab181
+- check: decision
+  result: PASS
+  by: milad-lead
+  artifact: 03-decision.md
+  sha256: e38a0ab9525854fe6870acf1acbc8017974b1ed6556054864b574ef4150e7efd
+  source_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+  at: '2026-09-10T10:40:06+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: 'Delegated lead administrative correction before AGREED: require L3 per
+    Plane249, no weakened guarantee or human signature claimed'
+- check: decision
+  result: PASS
+  by: milad-lead
+  artifact: 03-decision.md
+  sha256: 252869f26ba9c85825a570721709b20b04c946a4ae9d6a5c7c885d90bcaf85ba
+  source_sha: 4510b6adec6dbc3cca8105ee104c391aadcb536e
+  at: '2026-09-10T10:54:28+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: operations/AUTONOMY.md
+  rationale: In-scope lead clarification required by Plane249 same-name/newUID case;
+    legacy object remains untouched, no weakened guarantee
+- check: preflight
+  result: PASS
+  by: m048-worker
+  artifact: evidence/preflight/receipt.json
+  sha256: 77392f8cf853ba20ceaaae8736f818af98d9d0f78ecf5aa7ba3f7bb4dbdf6084
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:05:26+00:00'
+- check: implementation
+  result: PASS
+  by: m048-worker
+  artifact: 04-diff.patch
+  sha256: 051d133a4a395a1efb3c073a741dc2e9a3f7d73c2b126ee9e374c21a58b606d9
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:05:26+00:00'
+- check: l0
+  result: PASS
+  by: m048-worker
+  artifact: evidence/preflight/run-1789038200910616445/go-phorvex.log
+  sha256: 11d62ef1dee8f9ab4ca5bf234f94c9dff08f020e3d346d413bdfe32162ede70f
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:05:26+00:00'
+- check: l1
+  result: PASS
+  by: m048-worker
+  artifact: evidence/worker-l1.txt
+  sha256: c598e7e4c333f86c961722dacc5ddf789ed5341939703950db04344d247fc8b5
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:05:26+00:00'
+- check: l2
+  result: PASS
+  by: m048-worker
+  artifact: evidence/worker-l2.txt
+  sha256: 5dd79c8ea380a2969da8fda6a838a88f69ef1e0036f6a35979d29e24d44ac79f
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:05:26+00:00'
+- check: positive_control
+  result: PASS
+  by: m048-worker
+  artifact: evidence/worker-l1.txt
+  sha256: c598e7e4c333f86c961722dacc5ddf789ed5341939703950db04344d247fc8b5
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:05:26+00:00'
+- check: p3
+  result: FAIL
+  by: milad-lead
+  artifact: evidence/p3/verdict.md
+  sha256: f0c4b1bd53f19a64d2ab50813dce0aebb4c5550108f984915385c2473c6bb565
+  source_sha: 4ce47bb23804f8238bcc58687f88db16d6164408
+  at: '2026-09-10T11:07:36+00:00'
+handoff:
+  id: M-048:14:review
+  from: milad-lead
+  to: milad-lead
+  role: coordinator
+  kind: review
+  revision: 14
