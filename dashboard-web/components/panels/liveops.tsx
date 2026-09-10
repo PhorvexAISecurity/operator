@@ -243,7 +243,7 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
       {!owner && (
         <details className="space-y-3 rounded-lg border border-border bg-panel/50 p-3">
           <summary className="cursor-pointer text-[12px] font-medium text-foreground">
-            <Swords className="h-3.5 w-3.5 text-primary" /> Live attack
+            <Swords className="mr-1.5 inline-block h-3.5 w-3.5 align-text-bottom text-primary" /> Live attack
             <span className="text-[11px] font-normal text-muted-foreground">— pick a workload, fire a meaningful attack, watch Phorvex pick the actuator below</span>
           </summary>
           <div className="flex flex-wrap items-center gap-2 text-[12px]">
