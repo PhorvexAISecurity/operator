@@ -241,13 +241,25 @@ type lifecycleEvent struct {
 	newTenant string
 }
 
-// NewManager constructs a Manager with sane defaults for any nil collaborators.
+// NewManager constructs a Manager, resolving PHORVEX_ACTUATOR itself.
 //
-// [M-21] It returns an error when PHORVEX_ACTUATOR names no backend. That error MUST be
+// [M-21] It returns an error when the selector names no backend. That error MUST be
 // propagated: it is the only thing standing between an unrecognized explicit selector and
 // a process that starts reconciling on a backend nobody chose. Callers must not discard it.
+//
+// A process with SEVERAL entrypoints should resolve once at its own entrypoint and use
+// NewManagerWithBackend instead, so one invocation cannot read the environment twice.
 func NewManager(c client.Client, log logr.Logger) (*Manager, error) {
-	act, err := selectActuator(c, log)
+	res, err := actuator.ResolveBackendFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return NewManagerWithBackend(c, log, res)
+}
+
+// NewManagerWithBackend constructs a Manager on an already-resolved backend. [M-21]
+func NewManagerWithBackend(c client.Client, log logr.Logger, res actuator.BackendResolution) (*Manager, error) {
+	act, err := buildActuator(c, log, res)
 	if err != nil {
 		return nil, err
 	}
@@ -297,26 +309,22 @@ func backendPurpose(b actuator.Backend) string {
 	}
 }
 
-// selectActuator resolves PHORVEX_ACTUATOR ONCE and constructs the selected hands. [M-21]
+// buildActuator constructs the hands for an ALREADY-RESOLVED backend and logs the
+// effective choice with its source, so every valid branch — including the default — is
+// observable. [M-21]
 //
-// It returns an error instead of falling back, which is the whole point: an explicit value
-// that names no backend used to be indistinguishable from an omitted one, so a typo
-// silently ran the default Phoenix adapter — and the operator was told nothing. Omission
-// still selects the documented default; only an explicit, unrecognized value fails.
-//
-// The caller must propagate the error before any controller starts or anything is
-// mutated. The ONE resolved instance is then shared by the dispatcher and the support
-// check, so the two can never answer for different backends.
-func selectActuator(c client.Client, log logr.Logger) (actuator.Actuator, error) {
-	res, err := actuator.ResolveBackendFromEnv()
-	if err != nil {
-		return nil, err
-	}
+// It takes the resolution rather than reading the environment so that a process resolves
+// PHORVEX_ACTUATOR exactly ONCE, at its entrypoint, before any code path can act. Reading
+// it again here would reintroduce the possibility of two answers in one process.
+func buildActuator(c client.Client, log logr.Logger, res actuator.BackendResolution) (actuator.Actuator, error) {
 	act, err := actuator.New(res.Backend, c)
 	if err != nil {
 		return nil, err
 	}
-	log.WithName("runner").Info("actuator backend resolved",
+	// The entrypoint reports the CONFIGURATION (what was asked for and by whom); this
+	// reports the CONSTRUCTION (what was actually wired, and what it does). Distinct facts,
+	// so a caller that never passes through cmd/main.go still observes the effective hands.
+	log.WithName("runner").Info("actuator constructed",
 		"actuator", string(res.Backend),
 		"source", res.Origin(),
 		"purpose", backendPurpose(res.Backend))
