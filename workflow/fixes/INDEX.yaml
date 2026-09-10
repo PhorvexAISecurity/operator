@@ -256,7 +256,7 @@ fixes:
     issues:
     - M-136
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: IMPLEMENTED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m136-console-auth
