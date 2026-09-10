@@ -115,7 +115,52 @@ func codeExecAwareEligibility(
 	hasQualified func(*model.WorkloadView) bool,
 	v *model.WorkloadView, a model.Action, coverKeys []string,
 ) *actionset.Eligibility {
-	r := capWit.Eligible(v, a, coverKeys)
+	return eligibilityFrom(capWit.Eligible(v, a, coverKeys), authzNil, hasQualified, v)
+}
+
+// codeExecAwareEligibilityObserved is the READ-ONLY counterpart the counterfactual arm gets
+// (M-163). It runs the SAME gate with the SAME precedence — the M99 no-rbac fallback still
+// applies only when the full gate returns eligible — but its RBAC leg answers from
+// authorization already reviewed instead of issuing a SelfSubjectAccessReview. A shadow can
+// therefore neither spend apiserver budget nor cache an authorization answer that the next
+// REAL gate would then read instead of re-reviewing.
+func codeExecAwareEligibilityObserved(
+	capWit capability.Witness,
+	authzNil bool,
+	hasQualified func(*model.WorkloadView) bool,
+	v *model.WorkloadView, a model.Action, coverKeys []string,
+) *actionset.Eligibility {
+	return eligibilityFrom(capWit.EligibleObserved(v, a, coverKeys), authzNil, hasQualified, v)
+}
+
+// wireCapabilityGates installs BOTH T1-E collaborators on the engine from one per-tick
+// witness (M-163). They are set together, in one place, because the engine's contract is that
+// a reviewing gate without its observation-only twin makes the counterfactual comparison
+// unavailable: wiring only the first would silently disable the shadow arm, and wiring only
+// the second would disable production's real RBAC check. Extracted from the tick so the
+// pairing is unit-tested against the exact code the runtime runs.
+func wireCapabilityGates(
+	ce *decision.CoverageEngine,
+	capWit capability.Witness,
+	authzNil bool,
+	hasQualified func(*model.WorkloadView) bool,
+) {
+	ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
+		return codeExecAwareEligibility(capWit, authzNil, hasQualified, v, a, coverKeys)
+	}
+	ce.ShadowCapability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
+		return codeExecAwareEligibilityObserved(capWit, authzNil, hasQualified, v, a, coverKeys)
+	}
+}
+
+// eligibilityFrom adapts one capability.Reason and applies the M99 fallback. Shared by both
+// modes so the precedence invariant cannot drift between them.
+func eligibilityFrom(
+	r *capability.Reason,
+	authzNil bool,
+	hasQualified func(*model.WorkloadView) bool,
+	v *model.WorkloadView,
+) *actionset.Eligibility {
 	if r == nil {
 		if authzNil && hasQualified(v) {
 			return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
@@ -1374,11 +1419,8 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		WithCodeExec(m.CodeExec, snap.NamespaceLabels)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		authzNil := m.Authz == nil
-		ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
-			return codeExecAwareEligibility(capWit, authzNil,
-				func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) }, v, a, coverKeys)
-		}
+		wireCapabilityGates(ce, capWit, m.Authz == nil,
+			func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
 	}
 
 	var shadowDecisions []model.Decision

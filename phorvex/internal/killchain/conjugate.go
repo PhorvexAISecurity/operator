@@ -68,21 +68,28 @@ func NewConjugateMemory() *ConjugateMemory {
 	}
 }
 
+// seedState computes the prior a not-yet-seen tenant starts from, WITHOUT storing it.
+// [P-VCLUSTER O3] DEFAULT: seed from the fixed default base-rate (no cross-tenant inheritance).
+// At nil-data the fleet equals the defaults, so this is byte-identical to the prior behavior;
+// the hierarchical fleet seed is used ONLY when crossTenantPrior is opted in for a trusted group.
+// Callers hold m.mu.
+func (m *ConjugateMemory) seedState() tenantState {
+	mass := m.defAlpha + m.defBeta
+	gMean := m.defAlpha / mass
+	if m.crossTenantPrior && m.gAlpha+m.gBeta > 0 {
+		gMean = m.gAlpha / (m.gAlpha + m.gBeta)
+	}
+	return tenantState{alpha: gMean * mass, beta: (1 - gMean) * mass}
+}
+
 // get lazily seeds a new tenant from the FLEET base-rate (hierarchical prior) at the
 // default mass, instead of the fixed constant. At nil-data the fleet equals the
 // defaults, so a new tenant is byte-identical to the pre-P-CONTEXT behavior.
 func (m *ConjugateMemory) get(tenant string) *tenantState {
 	s := m.tenants[tenant]
 	if s == nil {
-		mass := m.defAlpha + m.defBeta
-		// [P-VCLUSTER O3] DEFAULT: seed from the fixed default base-rate (no cross-tenant inheritance).
-		// At nil-data the fleet equals the defaults, so this is byte-identical to the prior behavior;
-		// the hierarchical fleet seed is used ONLY when crossTenantPrior is opted in for a trusted group.
-		gMean := m.defAlpha / mass
-		if m.crossTenantPrior && m.gAlpha+m.gBeta > 0 {
-			gMean = m.gAlpha / (m.gAlpha + m.gBeta)
-		}
-		s = &tenantState{alpha: gMean * mass, beta: (1 - gMean) * mass}
+		seeded := m.seedState()
+		s = &seeded
 		m.tenants[tenant] = s
 	}
 	return s
@@ -94,6 +101,45 @@ func (m *ConjugateMemory) Prior(tenant string) (float64, float64) {
 	defer m.mu.Unlock()
 	s := m.get(tenant)
 	return s.alpha, s.beta
+}
+
+// PriorPeek returns the SAME (alpha, beta) Prior would return, but never allocates a
+// tenant entry (M-163). A counterfactual reader must not be the event that brings an
+// owner's learned belief into existence: a tenant this memory has already learned about
+// is read exactly as-is, and an unseen one reports the seed it WOULD get without taking
+// it, so the first real production assessment still performs that seeding itself.
+func (m *ConjugateMemory) PriorPeek(tenant string) (float64, float64) {
+	if m == nil {
+		return 0, 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if s := m.tenants[tenant]; s != nil {
+		return s.alpha, s.beta
+	}
+	seeded := m.seedState()
+	return seeded.alpha, seeded.beta
+}
+
+// priorFor selects the committing or read-only prior read for an evaluation mode.
+func (m *ConjugateMemory) priorFor(tenant string, mode EvalMode) (float64, float64) {
+	if mode.Commits() {
+		return m.Prior(tenant)
+	}
+	return m.PriorPeek(tenant)
+}
+
+// Tracked reports whether this memory already holds learned state for an owner. It is the
+// observability seam for the M-163 isolation assertion (a shadow pass must not create one)
+// and for lifecycle checks; it allocates nothing.
+func (m *ConjugateMemory) Tracked(tenant string) bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.tenants[tenant]
+	return ok
 }
 
 // Observe accumulates evidence: heldEvidence > 0 adds to alpha (foothold tended to
@@ -134,7 +180,13 @@ func (m *ConjugateMemory) Observe(tenant string, heldEvidence float64) {
 
 // PriorMean is the tenant's prior P(hold) before per-asset evidence.
 func (m *ConjugateMemory) PriorMean(tenant string) float64 {
-	a, b := m.Prior(tenant)
+	return m.PriorMeanMode(tenant, EvalProduction)
+}
+
+// PriorMeanMode is PriorMean for an explicit evaluation mode: a shadow read reports the
+// identical number without seeding an unseen tenant (M-163).
+func (m *ConjugateMemory) PriorMeanMode(tenant string, mode EvalMode) float64 {
+	a, b := m.priorFor(tenant, mode)
 	if a+b <= 0 {
 		return 0
 	}
@@ -158,7 +210,14 @@ func (m *ConjugateMemory) PHoldWithEvidence(tenant string, eventAlpha float64) f
 // upper bound -> act sooner under uncertainty. k=0 returns the plain mean exactly
 // (byte-identical), so the confidence channel is an opt-in Model-flagged knob.
 func (m *ConjugateMemory) PHoldUCBWithEvidence(tenant string, eventAlpha, k float64) float64 {
-	a, b := m.Prior(tenant)
+	return m.PHoldUCBWithEvidenceMode(tenant, eventAlpha, k, EvalProduction)
+}
+
+// PHoldUCBWithEvidenceMode is PHoldUCBWithEvidence for an explicit evaluation mode. The
+// arithmetic is shared, so a shadow assessment reads the SAME learned prior and returns the
+// same posterior; only the lazy seeding of an unseen tenant is withheld (M-163).
+func (m *ConjugateMemory) PHoldUCBWithEvidenceMode(tenant string, eventAlpha, k float64, mode EvalMode) float64 {
+	a, b := m.priorFor(tenant, mode)
 	a += eventAlpha
 	mass := a + b
 	if mass <= 0 {
