@@ -257,7 +257,7 @@ fixes:
     - M-155
     - M-165
     related_issues: []
-    state: IMPLEMENTED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-e2e-verification

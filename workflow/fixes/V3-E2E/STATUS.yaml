@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 27
+revision: 28
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -34,64 +34,56 @@ checks:
     artifact: evidence/l0_pipeline_tests.txt
     sha256: 04586c29099c9d2d6028ad67d7f9c062b8b7c658747377aae9597b64da7dd53f
     source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
-    at: '2026-09-10T22:09:43+00:00'
-    rationale: 232 tests over the real functions with local subprocess SSE streams
-      and a kubectl-shaped fake transport; 44 at baseline. Every repair has a paired
-      control proving the honest answer is still reachable.
+    at: '2026-09-10T22:16:39+00:00'
+    inputs:
+    - End-to-End
+    inputs_sha256: e8f284715c8560f4fccb8349ec040250f76e3923e711599b13467d42179d48e1
   l1:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/l1_tools_tests.txt
     sha256: 9279d48ba45a0d1dff75b96099fcecff25595f382f0a1ed1af50ef7ce1be32fe
     source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
-    at: '2026-09-10T22:09:47+00:00'
-    rationale: The second of the two commands in .github/workflows/e2e-contract.yml;
-      38 tests pass. helm was supplied on PATH through a local Python wrapper because
-      this sandbox denies env-assignment command prefixes.
+    at: '2026-09-10T22:16:39+00:00'
+    inputs:
+    - End-to-End/config.json
+    - phorvex/charts
+    - tools
+    inputs_sha256: d112944a63747ff687dfbab4b99cba9de72665f9347c7df11da3f1829e78f9d5
   l2:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/l2_behavioral_comparison.txt
     sha256: cfc930483594970e22d7d3f1bc17c7208fb924e2d138a5309345c6e20dd3f487
     source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
-    at: '2026-09-10T22:09:52+00:00'
-    rationale: '33 cases through identical real producers at both trees: 29 changed
-      behaviour, 4 unchanged. The unchanged four are the controls that already behaved
-      correctly at base and must not move. No case regressed.'
+    at: '2026-09-10T22:16:39+00:00'
+    inputs:
+    - End-to-End
+    inputs_sha256: e8f284715c8560f4fccb8349ec040250f76e3923e711599b13467d42179d48e1
   preflight:
-    result: UNAVAILABLE
+    result: PASS
     by: claude-v3-e2e
     artifact: evidence/preflight/receipt.json
-    sha256: 676b7c0f466fae1c6652ac26d4830ba47619cc53c74bd7b3be42a2ad008ceb65
+    sha256: 010e9381dd1908ec6a6a42215fef3f738569d7a6dc799c16306cbef9a5e65d0f
     source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
-    at: '2026-09-10T22:15:31+00:00'
-    rationale: The PASS attested at revision 18 was for source f0edebe and does not
-      apply to this source; the current receipt is not a pass. Recorded as UNAVAILABLE
-      pending a fresh run at f3d9bff rather than left standing as a stale PASS.
+    at: '2026-09-10T22:16:39+00:00'
   implementation:
     result: PASS
     by: claude-v3-e2e
     artifact: 04-diff.patch
     sha256: 0ffdc0f1a3b0ba2099d0c8f573b750c672bbff8ac4db7a325748f85f234e71cb
     source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
-    at: '2026-09-10T22:12:38+00:00'
-    rationale: The implementation diff at the pinned head. End-to-End/ product scope
-      plus the fix records; no product source, CI workflow, chart, deployment configuration
-      or baseline.json change.
+    at: '2026-09-10T22:16:39+00:00'
   positive_control:
     result: PASS
     by: claude-v3-e2e
     artifact: evidence/red_controls_head.txt
     sha256: 30d343f55d45d3df235427d073aed76002583ea63b56c6cb1e6cca7064101b3d
     source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
-    at: '2026-09-10T22:09:58+00:00'
-    rationale: '10 of 10 positive controls hold at head: a top-level NaN still fails
-      PH02, a Running and Ready target still passes P04, a broken net identity still
-      fails B01, a decision bound to the injected event and target passes A05, a clean
-      decision window is still complete, an unterminated oversized frame still overflows,
-      a multi-line frame inside the bound is still accepted, every notice is still
-      counted, a Ready pod created after the action still confirms a replacement,
-      and a decision about the actual original target still confirms.'
+    at: '2026-09-10T22:16:39+00:00'
+    inputs:
+    - End-to-End
+    inputs_sha256: e8f284715c8560f4fccb8349ec040250f76e3923e711599b13467d42179d48e1
   p3:
     result: FAIL
     by: codex-lead
@@ -105,7 +97,7 @@ issues:
 - M-165
 title: Make end-to-end verification causal and observation-aware
 profile: standard
-state: IMPLEMENTED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -166,10 +158,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
-    prior evidence.
-updated_at: '2026-09-10T22:15:31+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-10T22:16:40+00:00'
 configuration_history:
 - at: '2026-09-10T18:27:19+00:00'
   by: codex-lead
@@ -203,6 +195,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-10T22:09:10+00:00'
+  by: claude-v3-e2e
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T22:16:38+00:00'
   by: claude-v3-e2e
   fields:
   - implementation
@@ -244,6 +241,14 @@ transitions:
   to: IMPLEMENTED
   at: '2026-09-10T21:50:47+00:00'
   by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T22:16:39+00:00'
+  by: claude-v3-e2e
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -413,10 +418,74 @@ check_history:
   sha256: 0c639f83706d74dac626c38423708c60bed51139af78bdbfa44ea161b6aa6dbe
   source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
   at: '2026-09-10T21:48:34+00:00'
+- check: preflight
+  result: UNAVAILABLE
+  by: claude-v3-e2e
+  artifact: evidence/preflight/receipt.json
+  sha256: 676b7c0f466fae1c6652ac26d4830ba47619cc53c74bd7b3be42a2ad008ceb65
+  source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+  at: '2026-09-10T22:15:31+00:00'
+  rationale: The PASS attested at revision 18 was for source f0edebe and does not
+    apply to this source; the current receipt is not a pass. Recorded as UNAVAILABLE
+    pending a fresh run at f3d9bff rather than left standing as a stale PASS.
+- check: implementation
+  result: PASS
+  by: claude-v3-e2e
+  artifact: 04-diff.patch
+  sha256: 0ffdc0f1a3b0ba2099d0c8f573b750c672bbff8ac4db7a325748f85f234e71cb
+  source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+  at: '2026-09-10T22:12:38+00:00'
+  rationale: The implementation diff at the pinned head. End-to-End/ product scope
+    plus the fix records; no product source, CI workflow, chart, deployment configuration
+    or baseline.json change.
+- check: l0
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/l0_pipeline_tests.txt
+  sha256: 04586c29099c9d2d6028ad67d7f9c062b8b7c658747377aae9597b64da7dd53f
+  source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+  at: '2026-09-10T22:09:43+00:00'
+  rationale: 232 tests over the real functions with local subprocess SSE streams and
+    a kubectl-shaped fake transport; 44 at baseline. Every repair has a paired control
+    proving the honest answer is still reachable.
+- check: l1
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/l1_tools_tests.txt
+  sha256: 9279d48ba45a0d1dff75b96099fcecff25595f382f0a1ed1af50ef7ce1be32fe
+  source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+  at: '2026-09-10T22:09:47+00:00'
+  rationale: The second of the two commands in .github/workflows/e2e-contract.yml;
+    38 tests pass. helm was supplied on PATH through a local Python wrapper because
+    this sandbox denies env-assignment command prefixes.
+- check: l2
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/l2_behavioral_comparison.txt
+  sha256: cfc930483594970e22d7d3f1bc17c7208fb924e2d138a5309345c6e20dd3f487
+  source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+  at: '2026-09-10T22:09:52+00:00'
+  rationale: '33 cases through identical real producers at both trees: 29 changed
+    behaviour, 4 unchanged. The unchanged four are the controls that already behaved
+    correctly at base and must not move. No case regressed.'
+- check: positive_control
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/red_controls_head.txt
+  sha256: 30d343f55d45d3df235427d073aed76002583ea63b56c6cb1e6cca7064101b3d
+  source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+  at: '2026-09-10T22:09:58+00:00'
+  rationale: '10 of 10 positive controls hold at head: a top-level NaN still fails
+    PH02, a Running and Ready target still passes P04, a broken net identity still
+    fails B01, a decision bound to the injected event and target passes A05, a clean
+    decision window is still complete, an unterminated oversized frame still overflows,
+    a multi-line frame inside the bound is still accepted, every notice is still counted,
+    a Ready pod created after the action still confirms a replacement, and a decision
+    about the actual original target still confirms.'
 handoff:
-  id: V3-E2E:19:review
-  from: codex-lead
-  to: claude-v3-e2e
-  role: implementer
-  kind: review
-  revision: 19
+  id: V3-E2E:28:submit
+  from: claude-v3-e2e
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 28
