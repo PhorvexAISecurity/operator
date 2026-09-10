@@ -119,6 +119,11 @@ jobs:
           python3 tools/test_e2e_detector_chart.py
           python3 -m unittest discover -s End-to-End/pipeline -p 'test_*.py'
 
+      - name: ArgoCD deployment policy and waiter regressions
+        run: |
+          bash -n deploy/argocd/wait-for-rollout.sh
+          python3 tools/test_deploy_autosync.py
+
   # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
     needs: [changes, chart-sync]
@@ -637,26 +642,18 @@ jobs:
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
-          # The phorvex-stack Application runs with automated sync, so ArgoCD picks the
-          # commit up on its own reconciliation (~3 min). Rather than sleeping blindly,
-          # poll for the DEPLOYED image to become the version just released: the deploy is
-          # not done until the pods run it, and the E2E that follows would otherwise pass
-          # or fail on the previous build.
+          # Validate before interpolating this tag into the remote shell command.
+          [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+            echo "::error::Invalid release image tag"
+            exit 1
+          }
+          # The real read-only waiter diagnoses disabled auto-sync immediately and
+          # requires the exact released image plus rollout readiness. It never resumes
+          # an intentionally paused application or initiates a sync itself.
           sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR "$USER_@$HOST" "V=$V bash -s" <<'EOS'
-          set -e
-          for i in $(seq 1 60); do
-            IMG=$(kubectl -n phorvex-system get deploy phorvex-phorvex \
-                  -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
-            echo "[$i/60] deployed image: $IMG"
-            case "$IMG" in
-              *:"$V") kubectl -n phorvex-system rollout status deploy/phorvex-phorvex --timeout=180s; exit 0 ;;
-            esac
-            sleep 15
-          done
-          echo "ArgoCD did not roll out v$V within 15 minutes" >&2
-          exit 1
-          EOS
+            -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V bash -s" \
+            < deploy/argocd/wait-for-rollout.sh
 
   # ── 8. Post-deploy End-to-End — the real gate on merged code ──────────────
   e2e-main:

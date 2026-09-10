@@ -198,3 +198,13 @@ fixes:
     stacked_on: []
     branch: parallel/knowledge-m035-withhold-endpoint-cover
     head_sha: 148902e9d54729fb4c925959a49e93e010270cba
+  DEPLOY-AUTOSYNC:
+    directory: fixes/DEPLOY-AUTOSYNC
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/deploy-autosync
+    head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd

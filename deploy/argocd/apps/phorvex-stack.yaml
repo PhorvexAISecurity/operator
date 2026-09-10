@@ -30,6 +30,8 @@ spec:
     namespace: phorvex-system
   syncPolicy:
     automated:
+      # Pin this explicitly so an accidental UI pause is visible as GitOps drift.
+      enabled: true
       # prune stays FALSE for this app. The namespace holds resources this chart never
       # created — the hand-applied console ingress, the Phoenix CRs the operator writes at
       # runtime — and a prune would delete them the first time ArgoCD reconciles.

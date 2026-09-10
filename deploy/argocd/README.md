@@ -19,6 +19,41 @@ has a commit that explains it, and a rollback is `git revert` — not a scramble
 shell history. The image is *re-tagged*, never rebuilt, so the artifact that ships is
 byte-identical to the one CI tested.
 
+## Diagnosing a deployment that waits on an old image
+
+`Wait for ArgoCD to roll it out` is read-only: it runs
+`deploy/argocd/wait-for-rollout.sh` on the jump host (Bash, kubectl and Python 3
+required). It polls the manager image up to 60 times, 15 seconds apart, then waits
+up to 180 seconds for rollout readiness. API reads have a 10-second request timeout;
+API/SSH latency is additional. It requires the exact released tag, not a newer one.
+The console shares that Deployment, so rollout readiness also requires its readiness
+probe. This is not a functional or security-effect test.
+
+When the image is old, `automated.enabled: false` or an absent automated policy
+fails immediately with a configuration diagnosis. Missing/unreadable Applications,
+bad responses and unreadable Deployments also fail explicitly. ArgoCD treats an
+empty automated policy or an omitted/null `enabled` field as enabled. An already
+matching image may pass readiness while auto-sync is paused; the output says so.
+No branch of the waiter changes the cluster or silently resumes a deliberate pause.
+
+For recovery, inspect the exact Application source revision, sync operation/errors,
+pending rendered diff, Deployment events and image tags first. `Healthy` only
+describes the running resources; `Healthy/OutOfSync` can still be an old release.
+After deployment authorization and diff review, explicitly resume this application's
+automated policy or sync the reviewed revision. Preserve `prune: false`, existing
+sync options and the audit PVC. The manifest pins `enabled: true`; verify any parent
+app actually reconciles that manifest rather than assuming it enforces live state.
+Re-running a completed release can create another version and invoke live E2E;
+it is not a substitute for fixing sync policy.
+
+An intentional pause must account for the parent app's desired state: record a
+reviewed Git change to `enabled: false` (or use the approved maintenance procedure),
+not just a UI toggle that a parent may undo. CI will not override the pause. For an
+unhealthy rollout, pause further application syncs, retain audit data, and restore
+the previously reviewed compatible Git values/images through the approved rollback
+procedure; do not use prune/force/replace to make the status green. Verify readiness,
+service endpoints, console health/version and admission TLS after recovery.
+
 ## Layout
 
 ```
