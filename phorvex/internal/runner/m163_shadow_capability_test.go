@@ -17,6 +17,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/decision"
@@ -34,9 +35,38 @@ func (s *m163CountingSAR) Create(_ context.Context, sar *authorizationv1.SelfSub
 	return sar, nil
 }
 
+// m163SupportedBackend is an EXPLICIT support double: a backend that implements every
+// action for every target.
+//
+// The capability gate is cheapest-first and the RBAC leg is LAST, so an earlier leg that
+// excludes the action makes these tests assert nothing about authorization. M-21 makes an
+// ABSENT backend fail closed for every action — a nil actuator has no hands, so it cannot
+// establish support — which would exclude rotate one leg too early. Wiring a real support
+// double keeps the whole witness/cache chain intact and leaves the deciding leg where these
+// tests need it. No gate is weakened: the backend answers only "could this backend enact this
+// action", and the RBAC leg still runs afterwards and still decides.
+//
+// It is deliberately NOT named after the M-21 double in this package: both must be able to
+// exist side by side in the composed tree. The actuator.Actuator interface is identical
+// before and after M-21, so this compiles and behaves the same on either source.
+type m163SupportedBackend struct{}
+
+func (m163SupportedBackend) Name() string { return "m163-supported-backend" }
+
+func (m163SupportedBackend) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
+
+func (m163SupportedBackend) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
+	return actuator.Result{}, nil
+}
+
+func (m163SupportedBackend) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+
 func m163AuthzWitness(sar authz.SSARClient) capability.Witness {
 	az := authz.NewCheckerWithClient(sar, time.Hour)
-	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, az, nil)
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
+		nil, az, m163SupportedBackend{})
 }
 
 func m163RotateView() *model.WorkloadView {
@@ -45,9 +75,31 @@ func m163RotateView() *model.WorkloadView {
 
 func noQualified(*model.WorkloadView) bool { return false }
 
+// m163RequireRotateReachesRBAC fails loudly if any leg BEFORE authorization decides rotate on
+// this witness, so a gate change cannot quietly turn the tests below into assertions about
+// some other leg. The witness under test carries a live SSAR checker, so the probe uses an
+// equivalent witness with NO checker: a verdict there means an earlier leg is deciding.
+func m163RequireRotateReachesRBAC(t *testing.T) {
+	t.Helper()
+	if verbs := actuator.RequiredVerbs(model.ActionRotate); len(verbs) == 0 {
+		t.Fatal("fixture stale: rotate declares no required verbs, so the RBAC leg cannot fire")
+	}
+	w := capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
+		nil, nil, m163SupportedBackend{})
+	v := m163RotateView()
+	if ok, why := w.Capable(v, model.ActionRotate); !ok {
+		t.Fatalf("fixture stale: the capability leg excludes rotate (%q), so the RBAC leg is unreachable", why)
+	}
+	if r := w.Eligible(v, model.ActionRotate, []string{"cover-key"}); r != nil {
+		t.Fatalf("fixture stale: rotate is excluded before the RBAC leg (kind=%q detail=%q); "+
+			"these tests would assert nothing about authorization", r.Kind, r.Detail)
+	}
+}
+
 // The observation-only closure must never reach the apiserver, and must not resolve absent
 // evidence into an allow: it reports the existing RBAC-unknown fail-open instead.
 func TestM163_ObservedEligibilityIssuesNoReview(t *testing.T) {
+	m163RequireRotateReachesRBAC(t)
 	sar := &m163CountingSAR{allowed: true}
 	wit := m163AuthzWitness(sar)
 
@@ -85,6 +137,7 @@ func TestM163_ObservedEligibilityIssuesNoReview(t *testing.T) {
 // A cached DENY is measured evidence and still excludes on the observation-only path, with
 // the same attribution class the record carries on the real path.
 func TestM163_ObservedEligibilityStillHonoursACachedDeny(t *testing.T) {
+	m163RequireRotateReachesRBAC(t)
 	sar := &m163CountingSAR{allowed: false}
 	wit := m163AuthzWitness(sar)
 
@@ -130,6 +183,7 @@ func TestM163_ObservedEligibilityKeepsTheLocalLegsAndM99Precedence(t *testing.T)
 // disable the shadow arm; wiring only the observing one would disable production's real RBAC
 // check. This exercises the exact function the tick calls.
 func TestM163_TickWiresBothCapabilityGates(t *testing.T) {
+	m163RequireRotateReachesRBAC(t)
 	sar := &m163CountingSAR{allowed: true}
 	wit := m163AuthzWitness(sar)
 	ce := decision.NewCoverageEngine()
@@ -160,6 +214,7 @@ func TestM163_TickWiresBothCapabilityGates(t *testing.T) {
 // Both modes must agree wherever authorization is not the deciding leg, so the shadow's
 // comparison stays meaningful rather than silently diverging on local state.
 func TestM163_ObservedAndReviewingAgreeOnTheLocalLegs(t *testing.T) {
+	m163RequireRotateReachesRBAC(t)
 	sar := &m163CountingSAR{allowed: true}
 	wit := m163AuthzWitness(sar)
 	v := m163RotateView()

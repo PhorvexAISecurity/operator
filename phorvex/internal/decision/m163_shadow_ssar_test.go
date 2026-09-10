@@ -28,6 +28,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/capability"
+	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -56,11 +57,47 @@ func m163AuthzPolicy() model.Policy {
 	return pol
 }
 
+// m163SupportedBackend is an EXPLICIT support double: a backend that implements every
+// action for every target.
+//
+// It is not decoration. The capability gate is cheapest-first and the RBAC leg is LAST, so
+// every earlier leg must be satisfied or the candidate never reaches the authorization
+// predicate these tests exist to exercise. M-21 makes an ABSENT backend fail closed for every
+// action (a nil actuator can enact nothing, so it cannot establish support), which would
+// exclude rotate one leg too early and leave these tests asserting nothing about
+// authorization at all. Wiring a real support double keeps the whole witness/cache/engine
+// chain intact and moves the deciding leg back to where it belongs. It does not weaken any
+// gate: the backend answers only "could this backend enact this action", and the RBAC leg
+// still runs afterwards and still decides.
+//
+// The actuator.Actuator interface is identical before and after M-21, so this double
+// compiles and behaves the same on the individual and the composed source.
+type m163SupportedBackend struct{}
+
+func (m163SupportedBackend) Name() string { return "m163-supported-backend" }
+
+func (m163SupportedBackend) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
+
+func (m163SupportedBackend) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
+	return actuator.Result{}, nil
+}
+
+func (m163SupportedBackend) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+
+// m163Witness builds the per-tick witness these tests share: real index, real SSAR checker,
+// and the explicit support double above.
+func m163Witness(az *authz.Checker) capability.Witness {
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
+		nil, az, m163SupportedBackend{})
+}
+
 // m163WireGate composes the engine's two gate collaborators from ONE real per-tick witness,
 // exactly as the runtime tick does: the reviewing gate for production, the observation-only
 // gate for the counterfactual.
 func m163WireGate(e *CoverageEngine, az *authz.Checker) {
-	w := capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, az, nil)
+	w := m163Witness(az)
 	adapt := func(r *capability.Reason) *actionset.Eligibility {
 		if r == nil {
 			return nil
@@ -75,11 +112,46 @@ func m163WireGate(e *CoverageEngine, az *authz.Checker) {
 	}
 }
 
-// The fixture only means something if rotate actually requires RBAC verbs.
-func TestM163_RotateReachesTheAuthorizationLeg(t *testing.T) {
+// m163RequireRotateReachesRBAC fails loudly if rotate is stopped by any leg BEFORE the RBAC
+// one, so a gate change can never quietly turn the authorization tests below into vacuous
+// no-candidate assertions. It is the fixture-relevance guard for this whole file.
+func m163RequireRotateReachesRBAC(t *testing.T, snap *ingest.Snapshot) {
+	t.Helper()
 	if verbs := actuator.RequiredVerbs(model.ActionRotate); len(verbs) == 0 {
 		t.Fatal("fixture stale: rotate declares no required verbs, so the RBAC leg cannot fire")
 	}
+	view := m163Views(t, snap)[0]
+	// No SSAR checker: every leg EXCEPT authorization runs. A verdict here means an earlier
+	// leg is deciding, and the authorization predicate is unreachable.
+	w := m163Witness(nil)
+	if ok, why := w.Capable(view, model.ActionRotate); !ok {
+		t.Fatalf("fixture stale: the capability leg excludes rotate (%q), so the RBAC leg is unreachable", why)
+	}
+	if r := w.Eligible(view, model.ActionRotate, []string{"cover-key"}); r != nil {
+		t.Fatalf("fixture stale: rotate is excluded before the RBAC leg (kind=%q detail=%q); "+
+			"these tests would assert nothing about authorization", r.Kind, r.Detail)
+	}
+}
+
+// m163RotateStatus returns the decision trace's row for rotate. The row carries the
+// STRUCTURAL exclusion kind, which is how a test attributes an outcome to a specific gate
+// leg rather than to a reason string.
+func m163RotateStatus(t *testing.T, d model.Decision) (model.DecisionActionStatusV3, bool) {
+	t.Helper()
+	if d.Trace == nil {
+		t.Fatal("fixture: trace disabled, so no gate can be attributed")
+	}
+	for _, status := range d.Trace.ActionStatus {
+		if status.Action == string(model.ActionRotate) {
+			return status, true
+		}
+	}
+	return model.DecisionActionStatusV3{}, false
+}
+
+// The fixture only means something if rotate actually reaches the authorization leg.
+func TestM163_RotateReachesTheAuthorizationLeg(t *testing.T) {
+	m163RequireRotateReachesRBAC(t, m163Snapshot(t))
 }
 
 // The incident, at the runtime boundary. A shadow must issue no review and cache nothing, so
@@ -98,6 +170,8 @@ func TestM163_ShadowDoesNotCacheAuthorizationForTheProductionGate(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			snap := m163Snapshot(t)
 			pol := m163AuthzPolicy()
+			pol.TraceEnabled = true
+			m163RequireRotateReachesRBAC(t, snap)
 
 			// External authorization ALLOWS while the shadow runs...
 			sar := &m163SSAR{allowed: true}
@@ -128,6 +202,21 @@ func TestM163_ShadowDoesNotCacheAuthorizationForTheProductionGate(t *testing.T) 
 			if sar.calls != 1 {
 				t.Fatalf("production issued %d reviews, want exactly the 1 it needs", sar.calls)
 			}
+			// Attribution: the outcome must be the AUTHORIZATION leg's, not an earlier gate's.
+			// Without this, a change that excludes rotate for some other reason would satisfy
+			// the deny cases above while proving nothing about the cache.
+			status, ok := m163RotateStatus(t, d)
+			if !ok {
+				t.Fatalf("rotate is absent from the decision trace, so no gate can be attributed: %+v", d.Trace.ActionStatus)
+			}
+			if tc.productionAllow {
+				if status.ExclusionKind == capability.ReasonNoRBAC {
+					t.Fatalf("an allowed rotate was excluded by the RBAC leg: %+v", status)
+				}
+			} else if status.ExclusionKind != capability.ReasonNoRBAC {
+				t.Fatalf("the denied rotate was excluded by %q, not by the RBAC leg; the fixture "+
+					"is no longer exercising the authorization predicate: %+v", status.ExclusionKind, status)
+			}
 		})
 	}
 }
@@ -137,6 +226,8 @@ func TestM163_ShadowDoesNotCacheAuthorizationForTheProductionGate(t *testing.T) 
 func TestM163_ShadowsDoNotChangeTheAuthorizedProductionDecision(t *testing.T) {
 	snap := m163Snapshot(t)
 	pol := m163AuthzPolicy()
+	pol.TraceEnabled = true
+	m163RequireRotateReachesRBAC(t, snap)
 
 	run := func(shadows int) []model.Decision {
 		sar := &m163SSAR{allowed: true}
@@ -153,6 +244,12 @@ func TestM163_ShadowsDoNotChangeTheAuthorizedProductionDecision(t *testing.T) {
 	}
 
 	control := run(0)
+	// The control must be a REVOKED-authorization outcome attributed to the RBAC leg, or the
+	// comparison below would hold trivially for any number of shadows.
+	if status, ok := m163RotateStatus(t, control[0]); !ok || status.ExclusionKind != capability.ReasonNoRBAC {
+		t.Fatalf("the no-shadow control was not decided by the RBAC leg (found=%v %+v); "+
+			"the comparison would prove nothing about authorization", ok, status)
+	}
 	for _, n := range []int{1, 3, 7} {
 		if got := run(n); got[0].Selected != control[0].Selected || got[0].Action != control[0].Action ||
 			got[0].InfeasibleWhy != control[0].InfeasibleWhy {
@@ -169,18 +266,21 @@ func TestM163_ShadowVerdictAcrossCacheStates(t *testing.T) {
 	snap := m163Snapshot(t)
 	pol := m163AuthzPolicy()
 	pol.TraceEnabled = true
+	m163RequireRotateReachesRBAC(t, snap)
 
 	rbacUnknownInTrace := func(t *testing.T, d model.Decision) bool {
 		t.Helper()
-		if d.Trace == nil {
-			t.Fatal("fixture: trace disabled")
+		status, ok := m163RotateStatus(t, d)
+		if !ok {
+			t.Fatalf("rotate is absent from the decision trace: %+v", d.Trace.ActionStatus)
 		}
-		for _, status := range d.Trace.ActionStatus {
-			if status.Action == string(model.ActionRotate) {
-				return status.RBACUnknown
-			}
+		// An exclusion by any EARLIER leg means the authorization predicate never ran, so the
+		// RBAC-unknown flag below would be meaningless rather than merely false.
+		if status.ExclusionKind != "" && status.ExclusionKind != capability.ReasonNoRBAC &&
+			status.ExclusionKind != model.ExclusionNone && status.ExclusionKind != model.ExclusionSelection {
+			t.Fatalf("rotate was decided by %q before the RBAC leg: %+v", status.ExclusionKind, status)
 		}
-		return false
+		return status.RBACUnknown
 	}
 
 	t.Run("absent-evidence-is-unknown-not-an-invented-allow", func(t *testing.T) {
@@ -290,6 +390,8 @@ func TestM163_ShadowVerdictAcrossCacheStates(t *testing.T) {
 func TestM163_ShadowWithoutAReadOnlyGateIsUnavailableNotUngated(t *testing.T) {
 	snap := m163Snapshot(t)
 	pol := m163AuthzPolicy()
+	pol.TraceEnabled = true
+	m163RequireRotateReachesRBAC(t, snap)
 
 	sar := &m163SSAR{allowed: true}
 	az := authz.NewCheckerWithClient(sar, time.Hour)
@@ -306,8 +408,13 @@ func TestM163_ShadowWithoutAReadOnlyGateIsUnavailableNotUngated(t *testing.T) {
 
 	// Production is unaffected and still reviews for itself.
 	sar.allowed = false
-	if d := m163Decide(t, e, snap, pol); d[0].Selected {
+	d := m163Decide(t, e, snap, pol)
+	if d[0].Selected {
 		t.Fatalf("production was affected by the unavailable shadow: %+v", d[0])
+	}
+	if status, ok := m163RotateStatus(t, d[0]); !ok || status.ExclusionKind != capability.ReasonNoRBAC {
+		t.Fatalf("production's exclusion was not the RBAC leg's (found=%v %+v); the fixture is "+
+			"no longer reaching the authorization predicate", ok, status)
 	}
 	if sar.calls != 1 {
 		t.Fatalf("production issued %d reviews, want 1", sar.calls)
