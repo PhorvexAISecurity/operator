@@ -1,0 +1,14 @@
+=== RUN   TestReadinessFalcoAcknowledgesFailedEventDelivery
+=== RUN   TestReadinessFalcoAcknowledgesFailedEventDelivery/api-rejected
+2026/09/10 16:15:51 Creating secevent with name falco-fixture-pod-1788998400
+2026/09/10 16:15:51 Error: fixture admission denied
+    readiness_delivery_errors_test.go:51: API rejected=true; real create requests=1; webhook reports HTTP 200
+=== RUN   TestReadinessFalcoAcknowledgesFailedEventDelivery/delivered-control
+2026/09/10 16:15:51 Creating secevent with name falco-fixture-pod-1788998400
+2026/09/10 16:15:51 secevent was successfully created
+    readiness_delivery_errors_test.go:51: API rejected=false; real create requests=1; webhook reports HTTP 200
+--- PASS: TestReadinessFalcoAcknowledgesFailedEventDelivery (0.00s)
+    --- PASS: TestReadinessFalcoAcknowledgesFailedEventDelivery/api-rejected (0.00s)
+    --- PASS: TestReadinessFalcoAcknowledgesFailedEventDelivery/delivered-control (0.00s)
+PASS
+ok  	github.com/r6security/falco-integrator/cmd	0.020s

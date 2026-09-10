@@ -1,0 +1,139 @@
+schema_version: 1
+intake_id: RPT-20260910-173400-shadow-isolation
+kind: BUG
+title: Shadow optimization mutates production stage clocks and exclusion counters
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T17:34:45+00:00'
+updated_at: '2026-09-10T17:35:34+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline real source producers and controlled local interfaces; no live
+    mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-25
+    score: 13
+    overlap:
+    - behavior
+    - evidence
+    - not
+    - raw
+    - real
+    - separate
+    - stage
+    title: The AI stage classifier overrides — and can downgrade — real detector evidence
+  - issue_id: M-144
+    score: 13
+    overlap:
+    - also
+    - any
+    - cadence
+    - claim
+    - evidence
+    - exclusion
+    - first
+    - not
+    - observation
+    - observed
+    - production
+    - retained
+    - separate
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-146
+    score: 13
+    overlap:
+    - any
+    - claim
+    - default
+    - evidence
+    - here
+    - inputs
+    - not
+    - raw
+    - record
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-136
+    score: 12
+    overlap:
+    - any
+    - default
+    - evidence
+    - logs
+    - mutation
+    - not
+    - pods
+    - production
+    - real
+    - stage
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-163
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-163.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T17:34:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T17:34:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T17:34:45+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T17:34:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T17:35:34+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-163.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

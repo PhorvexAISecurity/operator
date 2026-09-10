@@ -7,3 +7,32 @@ intakes:
     state: DUPLICATE
     issue_id: null
     aliases: []
+  RPT-20260910-173400-credential-provenance:
+    directory: intake/RPT-20260910-173400-credential-provenance
+    kind: BUG
+    title: Credential-theft oracle replaces the captured credential with a new unbound
+      token
+    state: FILED
+    issue_id: M-162
+    aliases: []
+  RPT-20260910-173400-detector-delivery:
+    directory: intake/RPT-20260910-173400-detector-delivery
+    kind: BUG
+    title: Detector webhooks acknowledge SecurityEvent creation failures as HTTP success
+    state: FILED
+    issue_id: M-164
+    aliases: []
+  RPT-20260910-173400-measurement-validity:
+    directory: intake/RPT-20260910-173400-measurement-validity
+    kind: BUG
+    title: Benchmark errors and unobserved baselines are scored as successful defense
+    state: FILED
+    issue_id: M-161
+    aliases: []
+  RPT-20260910-173400-shadow-isolation:
+    directory: intake/RPT-20260910-173400-shadow-isolation
+    kind: BUG
+    title: Shadow optimization mutates production stage clocks and exclusion counters
+    state: FILED
+    issue_id: M-163
+    aliases: []
