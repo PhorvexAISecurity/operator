@@ -130,6 +130,26 @@ the reason recorded per job. A broken job record fails that job and never stops
 the supervisor. Records keep requested and actual model, timestamps, turns,
 permission denials, stderr tail and the log path.
 
+Stream fields are treated as untrusted shapes: the same key can hold a string or
+an object depending on the event, so every nested read is typed. A wrong type in
+an assistant `message`, a model id, or the final event's `permission_denials`,
+`modelUsage`, `num_turns` or `usage` is recorded as a problem and fails the job
+visibly — it never crashes reconciliation and never passes as a clean run.
+
+**Denied tool calls are an execution outcome, not an execution failure.** The CLI
+reports a denial three ways and all three are kept, each labelled by `source`:
+a `system` event with `subtype=permission_denied` (whose `message` is a plain
+string, with `tool_name`, `tool_use_id` and `decision_reason*`), an errored
+`tool_result` block, and an entry in the final event's `permission_denials`.
+Nothing is discarded as a duplicate, since each is separate evidence. Such a run
+is `state: done` with `execution_verdict: "succeeded with denials"` and a
+`denial_count`; that says the invocation completed and reported honestly, and
+says nothing about whether the implementation is acceptable — review stays with
+the lead. `models_observed` holds the ids the turns reported and drives
+`model_mismatch`; `model_usage_ids` separately lists everything the final event
+billed, which normally includes an auxiliary helper model beside the assigned
+one and is not by itself a substitution.
+
 ## Recovery, cancellation and timeouts
 
 The wrapper records both its own and the Claude CLI's PID and start time in

@@ -558,18 +558,51 @@ def read_events(path: Path) -> tuple[list[dict], int, int]:
     return events, malformed, non_object
 
 
+def as_dict(value) -> dict:
+    """Stream fields are untrusted: the same key can hold a string or an object."""
+    return value if isinstance(value, dict) else {}
+
+
+def as_list(value) -> list:
+    return value if isinstance(value, list) else []
+
+
+def as_text(value) -> str | None:
+    return value if isinstance(value, str) else None
+
+
 def collect_denials(events: list[dict]) -> list[dict]:
+    """Every denial the CLI reported, from all three shapes it uses.
+
+    `system`/`permission_denied` carries a plain string `message`, so no field
+    may be assumed to be an object. Nothing is dropped: a denial reported both
+    as a system event and in the final `permission_denials` array appears once
+    per source, since each is separate evidence.
+    """
     denials = []
     for event in events:
-        if event.get("type") == "result":
-            for denial in event.get("permission_denials") or []:
-                if isinstance(denial, dict):
-                    denials.append({"tool": denial.get("tool_name"), "source": "result"})
-        for block in (event.get("message") or {}).get("content") or []:
-            if not isinstance(block, dict) or block.get("type") != "tool_result":
+        kind, subtype = event.get("type"), event.get("subtype")
+        if kind == "system" and subtype == "permission_denied":
+            note = as_text(event.get("decision_reason")) or as_text(event.get("message")) or ""
+            denials.append({"tool": as_text(event.get("tool_name")),
+                            "tool_use_id": as_text(event.get("tool_use_id")),
+                            "source": "system",
+                            "reason_type": as_text(event.get("decision_reason_type")),
+                            "detail": note[:200] or None})
+        if kind == "result":
+            for denial in as_list(event.get("permission_denials")):
+                entry = as_dict(denial)
+                denials.append({"tool": as_text(entry.get("tool_name")),
+                                "tool_use_id": as_text(entry.get("tool_use_id")),
+                                "source": "result"})
+        for block in as_list(as_dict(event.get("message")).get("content")):
+            entry = as_dict(block)
+            if entry.get("type") != "tool_result" or not entry.get("is_error"):
                 continue
-            if block.get("is_error") and DENIAL_PATTERN.search(json.dumps(block.get("content"))):
-                denials.append({"tool": block.get("tool_use_id"), "source": "tool_result"})
+            if DENIAL_PATTERN.search(json.dumps(entry.get("content"), default=str)):
+                denials.append({"tool": as_text(entry.get("tool_name")),
+                                "tool_use_id": as_text(entry.get("tool_use_id")),
+                                "source": "tool_result"})
     return denials
 
 
@@ -579,15 +612,26 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
     inits = [event for event in events
              if event.get("type") == "system" and event.get("subtype") == "init"]
     results = [event for event in events if event.get("type") == "result"]
+    problems: list[str] = []
     model = None
     observed: list[str] = []
-    for event in events:
-        model = ((event.get("message") or {}).get("model") if event.get("type") == "assistant"
-                 else event.get("model")) or model
+    for position, event in enumerate(events, 1):
+        if event.get("type") == "assistant":
+            message = event.get("message")
+            if message is not None and not isinstance(message, dict):
+                problems.append(f"assistant event {position} has a "
+                                f"{type(message).__name__} message, not an object")
+            reported = as_dict(message).get("model")
+        else:
+            reported = event.get("model")
+        if reported is not None and not isinstance(reported, str):
+            problems.append(f"event {position} reports a non-string model id "
+                            f"({type(reported).__name__})")
+            reported = None
         # Every model id the CLI reported, so a substitution cannot hide.
+        model = reported or model
         if model and model not in observed:
             observed.append(model)
-    problems: list[str] = []
     substituted = [name for name in observed
                    if requested_model and not same_model_family(requested_model, name)]
     if substituted:
@@ -614,6 +658,17 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
         text = final.get("result")
         if not isinstance(text, str) or not text.strip():
             problems.append("final result text is missing or empty")
+        # Final metadata is untrusted too: a wrong shape is reported, never
+        # crashed on and never quietly accepted as a clean run.
+        for field, kind in (("permission_denials", list), ("modelUsage", dict),
+                            ("num_turns", int), ("usage", dict)):
+            value = final.get(field)
+            if value is not None and not isinstance(value, kind):
+                problems.append(f"final {field} is a {type(value).__name__}, "
+                                f"not a {kind.__name__}")
+    # Auxiliary models the CLI billed (helper models appear here); reported, but
+    # only the turn's own model ids decide a substitution.
+    usage_ids = sorted(name for name in as_dict(final.get("modelUsage")) if isinstance(name, str))
     return {
         "init_session": inits[0].get("session_id") if len(inits) == 1 else None,
         "result_session": final.get("session_id"),
@@ -621,6 +676,7 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
         "init_count": len(inits),
         "model": model,
         "models_observed": observed,
+        "model_usage_ids": usage_ids,
         "model_mismatch": bool(substituted),
         "is_error": final.get("is_error") if results else None,
         "result_subtype": final.get("subtype") if results else None,
@@ -851,6 +907,7 @@ def finalize(state: dict, job: dict, directory: Path, receipt: dict) -> None:
     if receipt.get("cli_survived") or survivors:
         reasons.append("Claude CLI process may still be running: "
                        + "; ".join(survivors or ["wrapper reported a surviving CLI"]))
+    denials = summary["denials"]
     job.update(
         state="failed" if reasons else "done",
         reason="; ".join(reasons) or None,
@@ -859,20 +916,26 @@ def finalize(state: dict, job: dict, directory: Path, receipt: dict) -> None:
         timed_out=receipt.get("timed_out"),
         started_at=receipt.get("started_at"),
         finished_at=receipt.get("finished_at") or utc(),
+        # Execution outcome only. Denied calls are a normal, reportable result of
+        # a scoped permission surface, not an execution failure and not review.
+        execution_verdict=("failed" if reasons else
+                           "succeeded with denials" if denials else "succeeded"),
+        denial_count=len(denials),
         model_reported=summary["model"],
         models_observed=summary["models_observed"],
+        model_usage_ids=summary["model_usage_ids"],
         model_mismatch=summary["model_mismatch"],
         is_error=summary["is_error"],
         result_subtype=summary["result_subtype"],
         result_chars=summary["result_chars"],
         num_turns=summary["num_turns"],
         session_match=summary["session_match"],
-        denials=summary["denials"],
+        denials=denials,
         malformed_stream_lines=malformed,
         non_object_stream_lines=non_object,
         error_text=summary["error_text"],
         stderr_tail=tail(directory / "stderr.log"),
-        submitted="for independent review; denials, if any, stay visible",
+        submitted="for independent review; execution outcome only, denials stay visible",
     )
     note_session_evidence(state, job, directory)
 
@@ -962,7 +1025,8 @@ def notice_body(state: dict, identifier: str, job: dict, worker: dict) -> str:
         f"Requested {job.get('model_requested')} at effort {job.get('effort_requested')}; "
         f"observed {job.get('models_observed') or 'none'}"
         f"{' -- MODEL MISMATCH' if job.get('model_mismatch') else ''}.",
-        f"Exit status: {job.get('exit_status')}. Denials recorded: {len(job.get('denials') or [])}.",
+        f"Exit status: {job.get('exit_status')}. Execution verdict: "
+        f"{job.get('execution_verdict')}. Denials recorded: {len(job.get('denials') or [])}.",
         f"Unresolved owned process: {bool(job.get('unresolved'))}.",
         f"Authoritative record: {SCRIPT} status --worker {job['worker']}",
         "Submitted for independent lead review, with any denials visible. Not an approval.",
@@ -1095,8 +1159,9 @@ def public_job(job: dict) -> dict:
     fields = ("job_id", "worker", "key", "state", "reason", "created_at", "requested_at_utc",
               "started_at", "finished_at", "resumed", "attempts", "exit_status", "timed_out",
               "is_error", "result_subtype", "result_chars", "num_turns", "session_match",
-              "model_requested", "model_reported", "models_observed", "model_mismatch",
-              "effort_requested", "permission_mode", "denials",
+              "model_requested", "model_reported", "models_observed", "model_usage_ids",
+              "model_mismatch", "effort_requested", "permission_mode", "execution_verdict",
+              "denial_count", "denials",
               "malformed_stream_lines", "non_object_stream_lines", "error_text", "stderr_tail",
               "scope", "timeout_seconds", "prompt_sha256", "prompt_bytes", "needs_lead_decision",
               "unresolved", "resolved_at", "resolution", "submitted", "notice", "pid", "cli_pid")
@@ -1137,9 +1202,11 @@ def cmd_status(args: argparse.Namespace) -> int:
         "held_slots": len(blocking),
         "unresolved_jobs": sorted(job["job_id"] for job in state["jobs"].values()
                                   if job.get("unresolved")),
-        "note": "Runner state records execution only. Review, approval and live verification "
-                "stay with the lead and the workflow records. Unresolved jobs hold their "
-                "worker and a concurrency slot until `resolve` clears them.",
+        "note": "Runner state records execution only: `execution_verdict` never means the "
+                "implementation was reviewed or accepted, and denied tool calls are a "
+                "reportable execution outcome, not a failure. Review, approval and live "
+                "verification stay with the lead and the workflow records. Unresolved jobs "
+                "hold their worker and a concurrency slot until `resolve` clears them.",
         "workers": workers, "jobs": jobs,
     }, indent=2))
     return 0

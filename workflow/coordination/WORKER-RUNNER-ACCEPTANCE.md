@@ -33,3 +33,52 @@ until this workflow change is merged. A deployment barrier cannot be bypassed by
 queueing another job. No merge, DevOps action or live mutation is authorized here.
 
 No co-author or AI attribution is permitted in commit messages.
+
+## Post-acceptance defect and correction, 2026-09-11
+
+The acceptance above stands as recorded; this section adds a limitation found in
+live campaign use and its fix. Nothing earlier is withdrawn.
+
+Discovered limitation: the accepted runner mishandled a legitimate CLI event
+shape. `system` / `subtype=permission_denied` carries `message` as a plain
+**string**, while denial collection read `message` as an object for every event.
+Job `claude-v3-m152:implementation-r1` exited `0` with matching init/result
+sessions, `is_error: false`, `subtype: success`, Opus 5 on every turn, a
+3,853-character final result and no surviving process — a successful, honestly
+reported run — yet reconciliation raised
+`AttributeError: 'str' object has no attribute 'get'`. The R1 per-job exception
+guard then recorded it as `failed (reconcile error: ...)`. The recorded
+implementation was never lost, but its execution status was wrong, and any run
+that hits a denial would have been misreported the same way.
+
+Correction (this commit): every nested stream read is typed; denials are
+collected from all three shapes the CLI uses (`system` event, errored
+`tool_result`, final `permission_denials`) with each occurrence kept and labelled
+by source; assistant `message`, model ids and final `permission_denials`,
+`modelUsage`, `num_turns` and `usage` are type-validated, so a malformed shape is
+reported rather than crashing or passing as success. A completed run with denials
+is now `done` with `execution_verdict: "succeeded with denials"` and a
+`denial_count`, explicitly an execution verdict and not implementation
+acceptance. `model_usage_ids` records every model the final event billed
+(auxiliary helper models included) while `models_observed` keeps the turn model
+ids that decide `model_mismatch`. All original session, model, single-init,
+single-result and conservative malformed-result rules are unchanged.
+
+Evidence: replaying the affected job's private stream through the accepted
+commit still raises the `AttributeError`; through the fix it yields zero
+problems, `session_match` true, `subtype: success`, 192 turns, turn model
+`claude-opus-5` only, `model_usage_ids` including a Haiku helper, and 33 denial
+records (11 each from the system, `tool_result` and result sources). The raw
+stream stays private in the Git common directory; a sanitized fixture with the
+same event shapes is committed at
+`workflow/tools/tests/fixtures/claude-stream-permission-denied.jsonl`.
+
+Runner suite 90 tests and full workflow suite 203 tests pass on both the pinned
+Python 3.11 toolchain and the default interpreter; `sync-index --check` PASS and
+`doctor` reports 0 errors with the 17 pre-existing historical warnings.
+
+Not done here and left to the lead: no live runner state, service unit or queued
+job was modified; the lead's `resolve` of the affected job stands, so that record
+keeps its failed reason and freed slot while `M161` continues. The service must
+be restarted by the lead to pick up this code. No push, merge, deployment or
+self-approval; this correction is submitted for independent review.

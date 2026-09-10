@@ -20,6 +20,8 @@ import workers
 
 DEFAULT_RUNTIME = workers.RUNTIME
 TERMINAL = workers.TERMINAL_STATES
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+DENIED_STREAM = FIXTURES / "claude-stream-permission-denied.jsonl"
 
 FAKE_CLAUDE = r'''#!/usr/bin/env python3
 """Stands in for the Claude CLI: records its argv and emits stream-json events."""
@@ -49,6 +51,14 @@ def emit(event):
 if mode == "auth_error":
     sys.stderr.write("Invalid API key - please run /login\n")
     sys.exit(1)
+
+if mode == "replay":
+    # Real recorded event shapes, sanitized; only the session id is substituted.
+    for line in open(os.environ["FAKE_CLAUDE_REPLAY"]):
+        if line.strip():
+            sys.stdout.write(line.replace("SESSION", session))
+    sys.stdout.flush()
+    sys.exit(0)
 
 if mode == "descendant":
     # A same-group child that ignores SIGTERM, like a real tool subprocess.
@@ -131,8 +141,10 @@ class RunnerTestCase(unittest.TestCase):
         self.log = root / "fake-claude.log"
         os.environ["FAKE_CLAUDE_LOG"] = str(self.log)
         os.environ["FAKE_CLAUDE_MODE"] = "ok"
+        os.environ["FAKE_CLAUDE_REPLAY"] = str(DENIED_STREAM)
         self.addCleanup(os.environ.pop, "FAKE_CLAUDE_LOG", None)
         self.addCleanup(os.environ.pop, "FAKE_CLAUDE_MODE", None)
+        self.addCleanup(os.environ.pop, "FAKE_CLAUDE_REPLAY", None)
         self.addCleanup(self.kill_survivors)
         self.prompt = root / "prompt.md"
         self.prompt.write_text("Implement the approved plan and report honestly.\n")
@@ -569,10 +581,13 @@ class OutcomeTests(RunnerTestCase):
     def test_tool_denials_stay_visible_in_the_record(self):
         job = self.outcome("denied")
         self.assertEqual(job["state"], "done")
-        tools = {denial["tool"] for denial in job["denials"]}
-        self.assertIn("Bash", tools)
-        self.assertIn("toolu_1", tools)
-        self.assertIn("denials, if any, stay visible", job["submitted"])
+        self.assertEqual(job["execution_verdict"], "succeeded with denials")
+        self.assertEqual({denial["tool"] for denial in job["denials"]}, {"Bash", None})
+        self.assertEqual({denial["tool_use_id"] for denial in job["denials"]}, {"toolu_1"})
+        self.assertEqual({denial["source"] for denial in job["denials"]},
+                         {"result", "tool_result"})
+        self.assertEqual(job["denial_count"], 2)
+        self.assertIn("denials stay visible", job["submitted"])
         self.assertIn("Bash", self.status("--worker", "w1"))
 
     def test_authentication_failure_is_reported_with_stderr_evidence(self):
@@ -612,6 +627,152 @@ class OutcomeTests(RunnerTestCase):
         self.assertEqual(state["jobs"]["w1:broken"]["state"], "failed")
         self.assertIn("reconcile error", state["jobs"]["w1:broken"]["reason"])
         self.assertTrue(state["jobs"]["w1:broken"]["unresolved"])
+
+
+SESSION = "11111111-2222-4333-8444-555555555555"
+INIT = {"type": "system", "subtype": "init", "session_id": SESSION, "model": "claude-opus-5"}
+ASSISTANT = {"type": "assistant", "session_id": SESSION,
+             "message": {"role": "assistant", "model": "claude-opus-5",
+                         "content": [{"type": "text", "text": "done"}]}}
+RESULT = {"type": "result", "subtype": "success", "session_id": SESSION, "is_error": False,
+          "result": "implemented and reporting one denial", "num_turns": 3}
+DENIED_SYSTEM = {"type": "system", "subtype": "permission_denied", "session_id": SESSION,
+                 "tool_name": "Bash", "tool_use_id": "toolu_1",
+                 "decision_reason": "no interactive host is attached",
+                 "decision_reason_type": "asyncAgent",
+                 "message": "Permission for this tool use was denied. It requires approval."}
+
+
+class StreamShapeTests(RunnerTestCase):
+    """Real CLI streams put strings where objects were assumed; none may crash."""
+
+    def summary(self, events, requested="claude-opus-5"):
+        return workers.summarize(events, SESSION, requested_model=requested)
+
+    def test_recorded_denial_stream_is_execution_success_with_visible_denials(self):
+        self.register()
+        self.enqueue()
+        job = self.settle("w1:j1", mode="replay")["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "done", job.get("reason"))
+        self.assertIsNone(job["reason"])
+        self.assertEqual(job["execution_verdict"], "succeeded with denials")
+        self.assertEqual(job["denial_count"], 3)
+        self.assertEqual(
+            sorted((d["source"], d["tool"], d["tool_use_id"]) for d in job["denials"]),
+            [("result", "Bash", "toolu_synthetic_bash"),
+             ("system", "Bash", "toolu_synthetic_bash"),
+             ("tool_result", None, "toolu_synthetic_bash")],
+            "each reported denial stays visible; none is discarded as a duplicate")
+        self.assertEqual(job["models_observed"], ["claude-opus-5"])
+        self.assertFalse(job["model_mismatch"])
+        self.assertIn("claude-haiku-4-5-20251001", job["model_usage_ids"])
+        self.assertEqual(job["num_turns"], 4)
+        self.assertTrue(job["session_match"])
+        self.assertEqual(job["exit_status"], 0)
+        report = self.status()
+        self.assertIn("succeeded with denials", report)
+        self.assertIn("asyncAgent", report)
+        self.assertIn("never means the implementation was reviewed", report)
+
+    def test_fixture_still_carries_the_shapes_it_protects(self):
+        events, malformed, non_object = workers.read_events(DENIED_STREAM)
+        self.assertEqual((malformed, non_object), (0, 0))
+        denials = [event for event in events if event.get("subtype") == "permission_denied"]
+        self.assertEqual(len(denials), 1)
+        self.assertIsInstance(denials[0]["message"], str,
+                              "the regression is a STRING message on a system event")
+        subtypes = {event.get("subtype") for event in events if event.get("type") == "system"}
+        self.assertLessEqual({"init", "thinking_tokens", "vcs_state_changed", "task_started",
+                              "task_notification", "permission_denied"}, subtypes)
+        final = [event for event in events if event.get("type") == "result"][-1]
+        self.assertIsInstance(final["permission_denials"], list)
+        self.assertNotIn("model", final, "the real final event carries modelUsage, not model")
+
+    def test_string_and_dynamic_system_messages_never_crash_collection(self):
+        events = [DENIED_SYSTEM,
+                  {"type": "system", "subtype": "status", "message": "dynamic status text"},
+                  {"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 5},
+                  {"type": "system", "subtype": "vcs_state_changed", "branch": "main"},
+                  {"type": "assistant", "message": "unexpectedly a string"},
+                  {"type": "user", "message": ["also wrong"]},
+                  {"type": "stream_event", "message": None}]
+        denials = workers.collect_denials(events)
+        self.assertEqual([denial["source"] for denial in denials], ["system"])
+        self.assertEqual(denials[0]["tool"], "Bash")
+        self.assertEqual(denials[0]["reason_type"], "asyncAgent")
+        self.assertEqual(denials[0]["detail"], "no interactive host is attached")
+
+    def test_minimal_denied_sequence_classifies_as_success(self):
+        summary = self.summary([INIT, DENIED_SYSTEM, ASSISTANT, RESULT])
+        self.assertEqual(summary["problems"], [])
+        self.assertTrue(summary["session_match"])
+        self.assertEqual([denial["tool"] for denial in summary["denials"]], ["Bash"])
+        self.assertEqual(summary["models_observed"], ["claude-opus-5"])
+
+    def test_assistant_message_of_the_wrong_type_is_reported_not_crashed(self):
+        for message in ("a string", ["a list"], 7):
+            with self.subTest(message=message):
+                summary = self.summary([INIT, {"type": "assistant", "message": message}, RESULT])
+                self.assertTrue(any("not an object" in problem
+                                    for problem in summary["problems"]), summary["problems"])
+                self.assertEqual(summary["models_observed"], ["claude-opus-5"])
+
+    def test_non_string_model_ids_are_reported_and_never_accepted(self):
+        events = [dict(INIT, model=5),
+                  {"type": "assistant", "session_id": SESSION,
+                   "message": {"model": {"id": "claude-opus-5"}, "content": []}},
+                  RESULT]
+        summary = self.summary(events)
+        self.assertEqual(len([p for p in summary["problems"] if "non-string model id" in p]), 2)
+        self.assertEqual(summary["models_observed"], [])
+        self.assertIsNone(summary["model"])
+        self.assertFalse(summary["model_mismatch"])
+
+    def test_malformed_final_metadata_and_denial_arrays_are_reported(self):
+        final = dict(RESULT, permission_denials="denied", modelUsage="none",
+                     num_turns="four", usage=[])
+        summary = self.summary([INIT, ASSISTANT, final])
+        for field in ("permission_denials", "modelUsage", "num_turns", "usage"):
+            self.assertTrue(any(f"final {field} is a" in problem
+                                for problem in summary["problems"]), summary["problems"])
+        self.assertEqual(summary["denials"], [], "a non-list denial array yields no entries")
+        self.assertEqual(summary["model_usage_ids"], [])
+        entries = workers.collect_denials([{"type": "result",
+                                            "permission_denials": ["oops", {"tool_name": "Bash"}]}])
+        self.assertEqual([entry["tool"] for entry in entries], [None, "Bash"],
+                         "a malformed item is still counted, never silently dropped")
+
+    def test_denied_tool_content_shapes_are_all_recognised(self):
+        block = {"type": "tool_result", "tool_use_id": "t1", "is_error": True}
+        for content in ("Permission for this tool use was denied.",
+                        [{"type": "text", "text": "permission denied for Bash"}],
+                        {"text": "the user doesn't want to proceed"}):
+            with self.subTest(content=type(content).__name__):
+                events = [{"type": "user", "message": {"content": [dict(block, content=content)]}}]
+                self.assertEqual([d["source"] for d in workers.collect_denials(events)],
+                                 ["tool_result"])
+        allowed = [{"type": "user", "message": {"content": [
+            dict(block, is_error=False, content="Permission for this tool use was denied.")]}}]
+        self.assertEqual(workers.collect_denials(allowed), [],
+                         "a successful tool result is not a denial")
+
+    def test_no_valid_final_result_is_never_success(self):
+        without = self.summary([INIT, DENIED_SYSTEM, ASSISTANT])
+        self.assertTrue(any("found 0" in problem for problem in without["problems"]))
+        self.assertFalse(without["session_match"])
+        bare = self.summary([INIT, ASSISTANT, {"type": "result", "session_id": SESSION}])
+        self.assertTrue(any("not an explicit false" in p for p in bare["problems"]))
+        self.assertTrue(any("not a success subtype" in p for p in bare["problems"]))
+        self.assertTrue(any("result text is missing" in p for p in bare["problems"]))
+
+    def test_original_session_and_model_checks_still_apply(self):
+        other = dict(RESULT, session_id="another-session")
+        self.assertTrue(any("result session id does not match" in p
+                            for p in self.summary([INIT, ASSISTANT, other])["problems"]))
+        swapped = dict(ASSISTANT, message={"model": "claude-sonnet-5", "content": []})
+        problems = self.summary([INIT, swapped, RESULT])["problems"]
+        self.assertTrue(any("model mismatch" in problem for problem in problems), problems)
+        self.assertTrue(self.summary([INIT, ASSISTANT, RESULT, RESULT])["problems"])
 
 
 class RecoveryTests(RunnerTestCase):

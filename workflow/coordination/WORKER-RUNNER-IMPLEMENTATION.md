@@ -1,28 +1,67 @@
 # Implementation report: supervised Claude implementation workers
 
 Implementer: claude-worker-runner. Owner/reviewer: codex-lead. Branch
-`workflow/claude-workers` in `/home/mehrdad/operator-workers`. **Nothing
-committed or pushed**; no real worker was launched, no worktree, permission
-setting, credential, live session, cluster or deployment was touched, and no
-subagent was used.
+`workflow/claude-workers` in `/home/mehrdad/operator-workers`. No real worker was
+launched by the implementer, and no worktree, permission setting, credential,
+live runner state, service unit, cluster or deployment was touched; no subagent
+was used. Passes 1–3 were reviewed and accepted as commit `60d4565`; pass 4 is a
+post-acceptance maintenance fix, committed on this branch and **not** pushed,
+merged or self-approved.
 
 - Pass 1: initial implementation of `WORKER-RUNNER-PLAN.md`.
 - Pass 2: all eight corrections in `WORKER-RUNNER-REVIEW-R1.md`, plus the
   user-directed `WORKER-RUNNER-MODEL-POLICY.md`.
-- Pass 3 (this report): all five corrections in `WORKER-RUNNER-REVIEW-R2.md`,
-  with the model policy re-confirmed and extended. R1 behaviour and tests are
-  preserved; every review note and the earlier records are retained unchanged.
+- Pass 3: all five corrections in `WORKER-RUNNER-REVIEW-R2.md`, with the model
+  policy re-confirmed and extended.
+- Pass 4 (this report): live-use defect — a legitimate `system`
+  `permission_denied` event whose `message` is a **string** crashed denial
+  collection and misreported a successful job as failed. Fixed with typed stream
+  reads, three-source denial capture and an explicit execution verdict. Earlier
+  behaviour, tests and recorded evidence are preserved; see the post-acceptance
+  section of `WORKER-RUNNER-ACCEPTANCE.md`.
 
 ## Changed paths
 
 | Path | Change |
 | --- | --- |
-| `workflow/coordination/workers.py` | new, 1439 lines: register / enqueue / run / status / result / stop / resolve plus the `_child` wrapper |
-| `workflow/tools/tests/test_workers.py` | new, 1290 lines, **80 tests** driving a fake Claude executable and real process-group fixtures |
-| `workflow/coordination/WORKERS.md` | new 253-line runbook: layout and umask rules, model/effort policy, commands, invocation flags, outcome rules, group-aware recovery/cancellation/timeout, service, notices, lead smoke test, stopping point |
+| `workflow/coordination/workers.py` | 1506 lines: register / enqueue / run / status / result / stop / resolve plus the `_child` wrapper |
+| `workflow/tools/tests/test_workers.py` | 1451 lines, **90 tests** driving a fake Claude executable, real process-group fixtures and a recorded-shape stream replay |
+| `workflow/tools/tests/fixtures/claude-stream-permission-denied.jsonl` | pass 4: sanitized replay of the real event shapes, with a README explaining what is synthetic |
+| `workflow/coordination/WORKERS.md` | 273-line runbook: layout and umask rules, model/effort policy, commands, invocation flags, outcome and denial rules, group-aware recovery/cancellation/timeout, service, notices, lead smoke test, stopping point |
+| `workflow/coordination/WORKER-RUNNER-ACCEPTANCE.md` | pass 4: post-acceptance defect and correction appended; earlier acceptance evidence untouched |
 | `workflow/coordination/BUS.md` | four-line pointer to `WORKERS.md` in the runner-handoff section |
 | `workflow/tools/tests/test_operations.py` | R1 item 8: per-test temp path replaces the shared `/tmp` report fixture |
 | `workflow/tools/tests/test_bus.py` | R2 item 5 (same class): the Claude-socket fixture makes its registry file and socket private explicitly |
+
+## Pass 4: typed stream reads and denial capture
+
+`system` / `subtype=permission_denied` carries `message` as a plain string;
+`collect_denials` read `message` as an object for every event, so a successful
+run raised `AttributeError: 'str' object has no attribute 'get'` inside
+`reconcile`, and the R1 per-job guard recorded the job as `failed`. Now:
+
+- `as_dict` / `as_list` / `as_text` guard every nested read.
+- Denials are collected from all three shapes the CLI uses — the `system` event
+  (with `tool_name`, `tool_use_id`, `decision_reason_type` and a truncated
+  reason), errored `tool_result` blocks (string, list or dict content), and the
+  final `permission_denials` array (malformed items included) — each labelled by
+  `source`, with nothing dropped as a duplicate.
+- Assistant `message` of the wrong type, non-string model ids, and a final event
+  whose `permission_denials`, `modelUsage`, `num_turns` or `usage` has the wrong
+  type are recorded as problems: visible failure, never a crash, never a false
+  success. All original session/model/single-init/single-result and conservative
+  malformed-result rules are unchanged.
+- A completed run with denials is `done` with `execution_verdict:
+  "succeeded with denials"` plus `denial_count`; `status` states that an
+  execution verdict is not implementation review.
+- `model_usage_ids` reports every model the final event billed (auxiliary helper
+  models included) while `models_observed` keeps the turn model ids that decide
+  `model_mismatch`.
+
+Verified against the affected job's private stream (read-only, nothing copied):
+the accepted commit still raises the `AttributeError`; the fix yields zero
+problems, `session_match` true, `subtype: success`, 192 turns, turn model
+`claude-opus-5` only, and 33 denial records (11 each from the three sources).
 
 ## R2 corrections, item by item
 
@@ -171,7 +210,14 @@ session's service umask is `0077`, and the host's ordinary interactive umask is
 | `python3 -m unittest -b tools.tests.test_workers` | **80 OK** (~27 s) | **80 OK** (~27 s) |
 | `python3 -m unittest discover -b -s tools/tests -p 'test_*.py'` | **193 OK** | **193 OK** |
 
-- Focused runner tests also pass under the standard `0022` umask (80 OK).
+Pass 4 re-ran the suites on both interpreters after the fix (session umask):
+
+| Run | Python 3.11.16 (pinned toolchain) | default `python3` |
+| --- | --- | --- |
+| `-m unittest -b tools.tests.test_workers` | **90 OK** (~26 s) | **90 OK** (~27 s) |
+| `-m unittest discover -b -s tools/tests -p 'test_*.py'` | **203 OK** (~55 s) | **203 OK** (~52 s) |
+
+- Focused runner tests also pass under the standard `0022` umask (80 OK at pass 3).
 - `python3 -m compileall -q .`; `tools/workflow.py sync-index --check` (PASS);
   `render-issues --check` (PASS); `doctor` — 0 errors, 17 pre-existing
   historical warnings.
@@ -202,20 +248,31 @@ constraints; binary discovery; duration validation; status before registration;
 privacy of prompts and session ids; notice
 role/root/send-once/backoff/lock-freedom/missing-bus.
 
+Pass 4 adds ten stream-shape tests: the sanitized recorded stream replayed
+end-to-end (success, three denial sources, `model_usage_ids`, session match), a
+fixture-drift guard, string and dynamic `system` messages, the minimal
+init/denial/assistant/result success sequence, assistant messages of the wrong
+type, non-string model ids, malformed final metadata and denial arrays, denied
+`tool_result` content as string/list/dict (and a successful tool result that is
+not a denial), no-valid-final variants, and re-assertion of the original
+session/model/duplicate-result checks.
+
 Earlier correction retained: in pass 1 I claimed the `/tmp` fixture test "fails
 identically in isolation"; that isolated run had actually failed to import. The
 full-suite `PermissionError` and its cause were as reported.
 
 ## Residual limits
 
-- Still **no real Claude CLI invocation** (none was permitted). All execution
-  evidence comes from the fake binary and real non-Claude process fixtures. The
-  flag set (`--permission-prompts none`, `--setting-sources ""`,
-  `--strict-mcp-config`, `--mcp-config`, `--settings`, `--tools`, `--effort`,
-  `manual` mode) follows the review's validated bootstrap and the policy note but
-  is **unverified against the installed CLI here**; a rejected flag fails the job
-  visibly with the CLI's stderr in `stderr_tail`. Run the bounded smoke test in
-  `WORKERS.md`.
+- **No real Claude CLI invocation by the implementer** (none was permitted in any
+  pass). Execution evidence comes from the fake binary, real non-Claude process
+  fixtures, and — new in pass 4 — a read-only replay of one real recorded stream
+  produced by the lead's own runs. The invocation flag set was validated by the
+  lead's real smoke test at acceptance, not here.
+- The pass-4 fix is verified against **one** real stream. Other event shapes the
+  CLI can emit (for example a denial reported only through a shape not seen in
+  that run) remain unproven; the typed accessors make an unknown shape a visible
+  problem rather than a crash, which is the best guarantee available without more
+  recorded runs.
 - `--effort` value names (`low|medium|high|max`) are enforced locally but
   unverified against the CLI; a mismatch fails loudly rather than silently
   running at a lower effort.
@@ -231,16 +288,22 @@ full-suite `PermissionError` and its cause were as reported.
   rather than signalled, so it needs a lead decision.
 - Notices are at-least-once; a crash between the bus write and the receipt
   update can duplicate one notice. No exactly-once claim.
-- Denial detection reads `result.permission_denials` plus a phrase match on
-  errored `tool_result` blocks; a CLI wording change could miss one in the
-  summary. `stdout.jsonl` stays authoritative.
+- Denial detection reads the `system` `permission_denied` event and
+  `result.permission_denials` structurally, but errored `tool_result` blocks are
+  still matched by phrase; a CLI wording change could miss that third copy while
+  the two structural sources still report it. `stdout.jsonl` stays authoritative.
+- The same denial is counted once per source, so `denial_count` is a count of
+  denial *records*, not of distinct denied calls; correlate by `tool_use_id`.
 - Unresolved jobs are deliberately sticky: they block their worker and a slot
   until `resolve`, and re-running one needs a new idempotency key. That is the
   lead's decision, not the runner's.
 - `stop`/`resolve` hold the state lock while waiting up to ~5 s for a child
   record or terminating a group, which can briefly delay a concurrent `status`.
-- The file grew to 1439 lines for this behaviour, well above the "modest" size of
+- The file grew to 1506 lines for this behaviour, well above the "modest" size of
   pass 1; it is organized in labeled sections of single-purpose functions.
+- `execution_verdict` and `denial_count` appear only on jobs finalized after this
+  fix; jobs recorded earlier keep their old fields, and the affected job keeps
+  the failed reason the lead already resolved.
 - Group enumeration scans `/proc` when a group probe says the group is non-empty:
   at most two scans per active job per supervisor pass (~ms each at a 2 s
   interval), which is fine here but is not free.
