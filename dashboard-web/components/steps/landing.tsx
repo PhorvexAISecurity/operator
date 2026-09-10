@@ -75,12 +75,7 @@ export function Landing({ lens, signals, go, onDemo }: { lens: Lens; signals: Jo
       <section>
         <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Recorded activity {lens === "owner" ? "· your activity" : "· live from the evidence"}</div>
         {lens === "owner" ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <ProofTile label="Protective actions" value={rollup ? String(rollup.actions) : "—"} />
-            <ProofTile label="Selected actions dispatched" value={rollup ? String(rollup.attacksPrevented) : "—"} tone="success" />
-            <ProofTile label="Isolation attempts" value={rollup ? String(rollup.workPreserved) : "—"} tone="success" />
-            <ProofTile label="Effect confirmation" value="Unavailable" />
-          </div>
+          <OwnerLandingSummary rollup={rollup} />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             {hero.map((s) => <ProofTile key={s.key} label={s.label} value={`${s.value}${s.unit === "%" ? "%" : s.unit === "" ? "" : " " + s.unit}`} tone="primary" />)}
@@ -104,4 +99,15 @@ function ProofTile({ label, value, tone = "primary" }: { label: string; value: s
       <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
     </CardContent></Card>
   );
+}
+
+export function OwnerLandingSummary({ rollup }: { rollup: OwnerRollup | null }) {
+ return (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <ProofTile label="Protective actions" value={rollup ? String(rollup.actions) : "—"} />
+            <ProofTile label="Selected actions dispatched" value={rollup?.dispatched == null ? "—" : String(rollup.dispatched)} tone="success" />
+            <ProofTile label="Isolation attempts" value={rollup?.isolationAttempts == null ? "—" : String(rollup.isolationAttempts)} tone="success" />
+            <ProofTile label="Effect confirmation" value="Unavailable" />
+          </div>
+ );
 }

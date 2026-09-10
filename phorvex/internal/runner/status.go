@@ -6,6 +6,7 @@ package runner
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -45,7 +46,7 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 	if len(actionStatuses) > 0 {
 		actions = actionStatuses[0]
 	}
-	enactedInWindow := m.recordEmits(e.key.String(), actuated, now, e.spec.EffectiveAntiOverRotationWindow())
+	enactedInWindow, historyComplete := m.emissionWindow(e, actuated, now)
 	var updated v1alpha1.PhorvexPolicy
 	emitUnsupportedEvent := false
 	lastOperation := "read"
@@ -56,6 +57,10 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 			return err
 		}
 
+		if string(p.UID) != e.uid {
+			return nil
+		}
+		before := p.Status.DeepCopy()
 		// Publish the disagreement before attempting the transition. A successful write clears it;
 		// any exhausted read/update failure below asserts it so the alert survives the failure.
 		metrics.SetKillSwitchStatusDisagreement(
@@ -66,6 +71,7 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		p.Status.SelectedPods = protected
 		p.Status.MovesThisWindow = enactedInWindow
 		p.Status.Actuated = enactedInWindow > 0
+		setEmissionHistoryCondition(&p, enactedInWindow, historyComplete)
 		p.Status.DecisionsTotal += int64(moves)
 		p.Status.LastTickTime = metav1.Time{Time: now}
 		if moves > 0 {
@@ -134,6 +140,10 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 			ObservedGeneration: p.Generation,
 		})
 
+		if reflect.DeepEqual(*before, p.Status) {
+			updated = p
+			return nil
+		}
 		lastOperation = "update"
 		if err := m.Client.Status().Update(ctx, &p); err != nil {
 			return err

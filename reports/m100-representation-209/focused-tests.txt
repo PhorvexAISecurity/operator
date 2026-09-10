@@ -1,0 +1,137 @@
+=== RUN   TestT01T02UnboundKindsAndInsufficientLossEvidence
+--- PASS: TestT01T02UnboundKindsAndInsufficientLossEvidence (0.01s)
+=== RUN   TestT03T06MixedRXLPartition
+--- PASS: TestT03T06MixedRXLPartition (0.01s)
+=== RUN   TestT04T05T16HistoricalLossRetention
+--- PASS: TestT04T05T16HistoricalLossRetention (0.01s)
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/missing
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/negative
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/nan
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/inf
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/inventory
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/classification
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/weights-snapshot
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/covers-snapshot
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/cover-unavailable
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/legacy-metadata
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/empty
+=== RUN   TestT07T10PartialFunctionAndInvalidReplay/zero
+--- PASS: TestT07T10PartialFunctionAndInvalidReplay (0.06s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/missing (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/negative (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/nan (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/inf (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/inventory (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/classification (0.01s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/weights-snapshot (0.01s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/covers-snapshot (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/cover-unavailable (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/legacy-metadata (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/empty (0.00s)
+    --- PASS: TestT07T10PartialFunctionAndInvalidReplay/zero (0.00s)
+=== RUN   TestT08ActionabilityDoesNotShrinkDenominator
+--- PASS: TestT08ActionabilityDoesNotShrinkDenominator (0.00s)
+=== RUN   TestT09UnionDedupAndTenantScope
+--- PASS: TestT09UnionDedupAndTenantScope (0.00s)
+=== RUN   TestT11T14Weighted100IsNotContainment
+--- PASS: TestT11T14Weighted100IsNotContainment (0.00s)
+=== RUN   TestT12RelevantGapAndEmptyTrust
+--- PASS: TestT12RelevantGapAndEmptyTrust (0.00s)
+=== RUN   TestT16ImmutableInputs
+--- PASS: TestT16ImmutableInputs (0.00s)
+=== RUN   TestMalformedRetainedHistoryIsPartial
+--- PASS: TestMalformedRetainedHistoryIsPartial (0.02s)
+=== RUN   TestAmbiguousBindingAndCandidateBasis
+--- PASS: TestAmbiguousBindingAndCandidateBasis (0.00s)
+=== RUN   TestReviewPropertyFilterCannotHideOriginalKeyAmbiguity
+--- PASS: TestReviewPropertyFilterCannotHideOriginalKeyAmbiguity (0.01s)
+=== RUN   TestReviewIncompleteClassificationAndBroadGapReachVersions
+--- PASS: TestReviewIncompleteClassificationAndBroadGapReachVersions (0.01s)
+=== RUN   TestReviewPropertyScopedLossSummary
+--- PASS: TestReviewPropertyScopedLossSummary (0.01s)
+=== RUN   TestReviewCredentialWeightKeysDroppedWithoutMerge
+--- PASS: TestReviewCredentialWeightKeysDroppedWithoutMerge (0.01s)
+=== RUN   TestM100ConformanceSamples
+--- PASS: TestM100ConformanceSamples (0.03s)
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/tenant-kind
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/tenant-entry
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/asset-kind
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/asset-entry
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/version-kind
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/version-entry
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/property-kind
+=== RUN   TestReviewDisjointGapsDoNotChangeRequestedSummary/property-entry
+--- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary (0.04s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/tenant-kind (0.00s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/tenant-entry (0.00s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/asset-kind (0.00s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/asset-entry (0.00s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/version-kind (0.00s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/version-entry (0.00s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/property-kind (0.01s)
+    --- PASS: TestReviewDisjointGapsDoNotChangeRequestedSummary/property-entry (0.00s)
+=== RUN   TestReviewUnrelatedAmbiguousKeyDoesNotInvalidateScopedShare
+--- PASS: TestReviewUnrelatedAmbiguousKeyDoesNotInvalidateScopedShare (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/representation	0.250s
+=== RUN   TestClaimScopeEvidenceBoundaries
+=== RUN   TestClaimScopeEvidenceBoundaries/historical
+=== RUN   TestClaimScopeEvidenceBoundaries/no_trusted_detector
+=== RUN   TestClaimScopeEvidenceBoundaries/configured_is_not_measured_recall
+--- PASS: TestClaimScopeEvidenceBoundaries (0.00s)
+    --- PASS: TestClaimScopeEvidenceBoundaries/historical (0.00s)
+    --- PASS: TestClaimScopeEvidenceBoundaries/no_trusted_detector (0.00s)
+    --- PASS: TestClaimScopeEvidenceBoundaries/configured_is_not_measured_recall (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/model	0.008s
+=== RUN   TestClaimRecordDoesNotChangeDecisionAndPreservesRecordTime
+--- PASS: TestClaimRecordDoesNotChangeDecisionAndPreservesRecordTime (0.00s)
+=== RUN   TestHistoricalRecordNeverGetsTodaysDetectorSet
+--- PASS: TestHistoricalRecordNeverGetsTodaysDetectorSet (0.00s)
+=== RUN   TestM100HistoricalAbsentAndReadOnlyProjection
+--- PASS: TestM100HistoricalAbsentAndReadOnlyProjection (0.00s)
+=== RUN   TestM100AuditRepresentationDoesNotAlias
+--- PASS: TestM100AuditRepresentationDoesNotAlias (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/audit	0.016s
+=== RUN   TestKillSwitchFalseIsSerialised
+--- PASS: TestKillSwitchFalseIsSerialised (0.00s)
+=== RUN   TestKillSwitchTrueStillSerialises
+--- PASS: TestKillSwitchTrueStillSerialises (0.00s)
+=== RUN   TestKillSwitchEngageDisengageSuppressesAndResumesActuation
+--- PASS: TestKillSwitchEngageDisengageSuppressesAndResumesActuation (0.03s)
+=== RUN   TestKillSwitchStatusDisagreementSurvivesFailedTransition
+--- PASS: TestKillSwitchStatusDisagreementSurvivesFailedTransition (0.00s)
+=== RUN   TestKillSwitchFailsClosedOnReadError
+--- PASS: TestKillSwitchFailsClosedOnReadError (0.00s)
+=== RUN   TestM100SourceAdapterFrozenUnboundOutcomesAndDispatch
+--- PASS: TestM100SourceAdapterFrozenUnboundOutcomesAndDispatch (0.00s)
+=== RUN   TestT15M100OptimizerLegacyIdentity
+=== RUN   TestT15M100OptimizerLegacyIdentity/nats
+    representation_test.go:76: nats: 2 optimizer decisions, 2 selected; 3 reporting states x 2 trust configurations
+=== RUN   TestT15M100OptimizerLegacyIdentity/mixed-fleet
+    representation_test.go:76: mixed-fleet: 2 optimizer decisions, 2 selected; 3 reporting states x 2 trust configurations
+=== RUN   TestT15M100OptimizerLegacyIdentity/ai-gpu
+    representation_test.go:76: ai-gpu: 2 optimizer decisions, 2 selected; 3 reporting states x 2 trust configurations
+--- PASS: TestT15M100OptimizerLegacyIdentity (0.30s)
+    --- PASS: TestT15M100OptimizerLegacyIdentity/nats (0.11s)
+    --- PASS: TestT15M100OptimizerLegacyIdentity/mixed-fleet (0.10s)
+    --- PASS: TestT15M100OptimizerLegacyIdentity/ai-gpu (0.09s)
+=== RUN   TestReviewDispatchSnapshotReplaysActualReport
+--- PASS: TestReviewDispatchSnapshotReplaysActualReport (0.00s)
+=== RUN   TestM100RunnerConformanceSample
+--- PASS: TestM100RunnerConformanceSample (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/runner	0.415s
+=== RUN   TestOwnerHistoricalClaimUnknown
+--- PASS: TestOwnerHistoricalClaimUnknown (0.00s)
+=== RUN   TestOwnerViewLeaksZeroIP
+--- PASS: TestOwnerViewLeaksZeroIP (0.00s)
+=== RUN   TestM100OwnerWhitelistAndVersionedUnknownPrecedence
+--- PASS: TestM100OwnerWhitelistAndVersionedUnknownPrecedence (0.00s)
+=== RUN   TestReviewOwnerPropertyScopedLossFromClassifier
+--- PASS: TestReviewOwnerPropertyScopedLossFromClassifier (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/console	0.066s

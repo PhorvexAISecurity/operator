@@ -1,0 +1,9 @@
+$ python3 tools/check-claim-language.py
+M100 claim-language gate passed (95 current product source files)
+
+$ python3 tools/test_claim_language.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+OK

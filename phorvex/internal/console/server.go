@@ -468,7 +468,14 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		events = append(events, ToOwnerEvent(rec)) // <- the ONLY owner projection
 	}
 	prevented, preserved, sloKept := 0, 0, 0
+	dispatched, isolationAttempts := 0, 0
 	for _, e := range events {
+		if e.OutcomeEvidence == "emitted-unconfirmed" {
+			dispatched++
+			if e.Action == "quarantine" {
+				isolationAttempts++
+			}
+		}
 		if e.AttackPrevented {
 			prevented++
 		}
@@ -482,7 +489,7 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"events": events,
 		"empty":  len(events) == 0,
-		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept},
+		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept, "dispatched": dispatched, "isolationAttempts": isolationAttempts},
 		"note":   "kind-scale demo data; live real-cluster streaming is tracked by PHORVEXSEC-151. Tenant scoping is by request param (demo-trust) until real authn/RBAC lands under PHORVEXSEC-152.",
 	})
 }
