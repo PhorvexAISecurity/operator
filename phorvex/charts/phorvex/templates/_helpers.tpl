@@ -16,3 +16,9 @@ app.kubernetes.io/part-of: phorvex
 {{- define "phorvex.serviceAccountName" -}}
 {{ include "phorvex.fullname" . }}-manager
 {{- end -}}
+
+{{/* Cluster-scoped guard names include namespace plus a hash of untruncated scope. */}}
+{{- define "phorvex.auditVolumeGuardName" -}}
+{{- $scope := printf "%s/%s" .Release.Namespace (include "phorvex.fullname" .) -}}
+{{- printf "%s-%s-audit-pvc-%s" (.Release.Namespace | trunc 16 | trimSuffix "-") (include "phorvex.fullname" . | trunc 24 | trimSuffix "-") ($scope | sha256sum | trunc 10) -}}
+{{- end -}}

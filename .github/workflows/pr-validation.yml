@@ -57,6 +57,10 @@ jobs:
           cache-dependency-path: |
             phorvex/go.sum
             build/phoenix-extended/go.sum
+      # auditguard tests evaluate CEL from actual Helm renders, never a mocked verdict.
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
       - name: Phorvex unit tests (not live E2E or envtest)
         run: go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...
 
