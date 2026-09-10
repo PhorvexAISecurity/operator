@@ -187,3 +187,14 @@ fixes:
     stacked_on: []
     branch: t1/control-economics-m140-tenant-state-lifecycle
     head_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
+  M-037:
+    directory: fixes/M-037
+    aliases: []
+    issues:
+    - M-037
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: parallel/knowledge-m037-withhold-fingerprint-cover
+    head_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
