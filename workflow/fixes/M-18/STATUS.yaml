@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-10T13:07:55+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: claude-m018
+    artifact: evidence/baseline/01-incident-reproduction-FAIL.txt
+    sha256: f2ca1eac490a9a3a3cb13aacef62aaa2fb8bbf3ad32eca033fd2cedeb34842cb
+    source_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+    at: '2026-09-10T14:16:46+00:00'
 fix_id: M-18
 issues:
 - M-18
@@ -85,7 +92,7 @@ next_action:
   owner: implementer
   action: 'Claude worker: retain the baseline reproduction, implement signed 03-decision.md,
     run required preflight and submit-review to codex-lead; no further proposal gate.'
-updated_at: '2026-09-10T13:07:55+00:00'
+updated_at: '2026-09-10T14:16:46+00:00'
 configuration_history:
 - at: '2026-09-10T12:58:21+00:00'
   by: codex-lead
