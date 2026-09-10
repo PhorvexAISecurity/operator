@@ -69,6 +69,20 @@ type RunOutcome struct {
 	// with whatever it eventually returned. Their trials stay unresolved: a late
 	// return is not evidence the state was clean when the run needed it to be.
 	LateCleanups []LateCleanup `json:"lateCleanups,omitempty"`
+	// FinalTeardown records the RUN-LEVEL teardown the caller performs after the
+	// matrix. It is part of the run's result: a matrix whose trials all passed
+	// but whose final teardown left the cluster dirty has NOT completed cleanly,
+	// and must not exit successfully.
+	FinalTeardown *FinalTeardown `json:"finalTeardown,omitempty"`
+}
+
+// FinalTeardown is the outcome of the run-level cleanup performed after the
+// matrix finishes.
+type FinalTeardown struct {
+	Attempted bool `json:"attempted"`
+	// Verified is true only when the teardown ran AND reported no problem.
+	Verified bool   `json:"verified"`
+	Error    string `json:"error,omitempty"`
 }
 
 // Runner executes the generic scenario x defender x trial matrix.
@@ -121,6 +135,32 @@ func (r *Runner) mirror(format string, args ...any) {
 	if r.onMirror != nil {
 		r.onMirror(fmt.Sprintf(format, args...))
 	}
+}
+
+// RecordFinalTeardown records the RUN-LEVEL cleanup the caller performs after
+// Run returns, and folds it into the run's verdict.
+//
+// A final teardown that does not verify leaves the cluster dirty for the NEXT
+// run, so it raises a barrier and makes the run INCOMPLETE — a warning on stderr
+// followed by a successful exit would report a clean run that did not happen.
+// Passing a nil error records a verified teardown.
+func (r *Runner) RecordFinalTeardown(err error) {
+	r.lateMu.Lock()
+	ft := &FinalTeardown{Attempted: true, Verified: err == nil}
+	if err != nil {
+		ft.Error = err.Error()
+	}
+	r.outcome.FinalTeardown = ft
+	r.lateMu.Unlock()
+	if err == nil {
+		return
+	}
+	reason := "final teardown did not verify: " + err.Error()
+	r.lateMu.Lock()
+	r.outcome.Barriers = append(r.outcome.Barriers, reason)
+	r.lateMu.Unlock()
+	r.outcome.Complete = false
+	r.mirror("FINAL TEARDOWN NOT VERIFIED: %s", err)
 }
 
 // anchorKey identifies a positive-control observation by trial index AND trial
@@ -321,17 +361,22 @@ func (r *Runner) runAndRecord(ctx context.Context, s trialSpec) error {
 	}
 
 	// Unverified cleanup: no later trial may reuse potentially contaminated
-	// state. This covers steps that FAILED and steps that are UNRESOLVED — a
-	// call that outlived its bound may still be mutating the namespace, so it is
-	// at least as disqualifying as one that returned an error.
+	// state. This covers steps that FAILED, steps that are UNRESOLVED — a call
+	// that outlived its bound may still be mutating the namespace, so it is at
+	// least as disqualifying as one that returned an error — and steps that were
+	// deliberately NOT ATTEMPTED because an unresolved predecessor still holds
+	// the same Env.
 	if !v.Cleanup.Complete {
 		var steps string
 		for _, f := range v.Cleanup.Unfinished() {
-			if f.Unresolved {
+			switch {
+			case f.Blocked:
+				steps += fmt.Sprintf("; %s: NOT ATTEMPTED (a prior step still holds this Env)", f.Step)
+			case f.Unresolved:
 				steps += fmt.Sprintf("; %s: UNRESOLVED after %.1fs (may still be running)", f.Step, f.Seconds)
-				continue
+			default:
+				steps += "; " + f.Step + ": " + f.Error
 			}
-			steps += "; " + f.Step + ": " + f.Error
 		}
 		reason := fmt.Sprintf("cleanup did not verify for %s/%s trial %d%s",
 			m.Scenario, m.Defender, m.Trial, steps)
@@ -423,12 +468,12 @@ func (r *Runner) newTrialRun(s trialSpec) *trialRun {
 	env, closeEnv, err := r.factory(smeta.Name, dmeta.Name, s.trial, seed, rawLog)
 	t.env, t.closeEnv = env, closeEnv
 	if err != nil {
-		v.fail(PhaseEnvFactory, "env factory failed: "+err.Error())
+		v.Fail(PhaseEnvFactory, "env factory failed: "+err.Error())
 		t.env = nil
 		return t
 	}
 	if env == nil {
-		v.fail(PhaseEnvFactory, "env factory returned no environment")
+		v.Fail(PhaseEnvFactory, "env factory returned no environment")
 		return t
 	}
 	r.mirror("=== scenario=%s defender=%s trial=%d seed=%d kind=%s ===", smeta.Name, dmeta.Name, s.trial, seed, s.kind)
@@ -444,45 +489,45 @@ func (t *trialRun) execute(ctx context.Context) {
 	smeta, dmeta := sc.Metadata(), d.Metadata()
 
 	// Capability gate — a REPORTED abstention, never a failure.
-	v.enter(PhaseCapabilityGate)
+	v.Enter(PhaseCapabilityGate)
 	if miss := env.Caps.Missing(smeta.CapabilityRequirements); len(miss) > 0 {
 		reason := fmt.Sprintf("cluster lacks required capabilities %v", miss)
 		env.Log.Logf("SKIP: %s", reason)
-		v.skip(PhaseCapabilityGate, reason)
+		v.Skip(PhaseCapabilityGate, reason)
 		return
 	}
 
 	// ---- Defender Setup (+ registered-stub abstention) ----
-	v.enter(PhaseDefenderSetup)
+	v.Enter(PhaseDefenderSetup)
 	t.owedDefenderTeardown = true
 	if err := d.Setup(ctx, env); err != nil {
 		env.Log.Logf("defender Setup error: %v", err)
-		v.fail(PhaseDefenderSetup, "defender setup failed: "+err.Error())
+		v.Fail(PhaseDefenderSetup, "defender setup failed: "+err.Error())
 		return
 	}
 	if skip, reason := defenderSkip(d); skip {
 		env.Log.Logf("defender %s is a registered stub: %s", dmeta.Name, reason)
-		v.skip(PhaseDefenderSetup, reason)
+		v.Skip(PhaseDefenderSetup, reason)
 		return
 	}
 
 	// ---- Scenario Setup ----
-	v.enter(PhaseScenarioSetup)
+	v.Enter(PhaseScenarioSetup)
 	t.owedScenarioTeardown = true
 	if err := sc.Setup(ctx, env); err != nil {
 		env.Log.Logf("scenario Setup error: %v", err)
-		v.fail(PhaseScenarioSetup, "scenario setup failed: "+err.Error())
+		v.Fail(PhaseScenarioSetup, "scenario setup failed: "+err.Error())
 		return
 	}
 
 	// ---- Defender Start ----
 	// A defense that failed to start was NOT under test: neither a disruption nor
 	// an absence of one is attributable, so the measurement is invalid.
-	v.enter(PhaseDefenderStart)
+	v.Enter(PhaseDefenderStart)
 	t.owedDefenderStop = true
 	if err := d.Start(ctx, env); err != nil {
 		env.Log.Logf("defender Start error: %v", err)
-		v.fail(PhaseDefenderStart, "defender start failed: "+err.Error())
+		v.Fail(PhaseDefenderStart, "defender start failed: "+err.Error())
 		return
 	}
 
@@ -492,7 +537,7 @@ func (t *trialRun) execute(ctx context.Context) {
 	}
 
 	// ---- Execute attack (or the deliberate no-op for the negative control) ----
-	v.enter(PhaseAttackExecute)
+	v.Enter(PhaseAttackExecute)
 	attackUsable := false
 	if t.spec.kind == TrialNegativeControl {
 		env.Log.Logf("NEGATIVE CONTROL: skipping attack Execute (no-op) — measuring false defensive moves")
@@ -507,10 +552,10 @@ func (t *trialRun) execute(ctx context.Context) {
 			// The stimulus never landed. Running an oracle now would measure the
 			// absence of an attack, not the presence of a defense.
 			env.Log.Logf("scenario Execute error: %v", err)
-			v.fail(PhaseAttackExecute, "attack stimulus failed: "+err.Error())
+			v.Fail(PhaseAttackExecute, "attack stimulus failed: "+err.Error())
 		case ar.Skipped:
 			env.Log.Logf("scenario reported skip: %s", ar.SkipReason)
-			v.skip(PhaseAttackExecute, ar.SkipReason)
+			v.Skip(PhaseAttackExecute, ar.SkipReason)
 		default:
 			v.AttackExecuted = true
 			attackUsable = true
@@ -519,7 +564,7 @@ func (t *trialRun) execute(ctx context.Context) {
 
 	// ---- Oracle (only when an attack actually ran) ----
 	if attackUsable {
-		v.enter(PhaseOracle)
+		v.Enter(PhaseOracle)
 		if t.spec.kind == TrialNegativeControl {
 			t.or = OracleResult{Achieved: false, ObservedState: "negative control (no attack performed)"}
 			v.OracleObserved = true
@@ -529,10 +574,10 @@ func (t *trialRun) execute(ctx context.Context) {
 			switch {
 			case err != nil:
 				env.Log.Logf("oracle error: %v", err)
-				v.fail(PhaseOracle, "oracle failed: "+err.Error())
+				v.Fail(PhaseOracle, "oracle failed: "+err.Error())
 			case or.Skipped:
 				env.Log.Logf("oracle reported skip: %s", or.SkipReason)
-				v.skip(PhaseOracle, or.SkipReason)
+				v.Skip(PhaseOracle, or.SkipReason)
 			default:
 				v.OracleObserved = true
 			}
@@ -543,7 +588,7 @@ func (t *trialRun) execute(ctx context.Context) {
 	// ---- Read defensive actions (cost + time-to-action + adaptive learning) ----
 	// This is an independent raw observation, so it is taken even when the attack
 	// or oracle failed; an absent or failing observer yields UNOBSERVED cost.
-	v.enter(PhaseObserver)
+	v.Enter(PhaseObserver)
 	t.readDefensiveActions(ctx)
 }
 
@@ -562,19 +607,19 @@ func (t *trialRun) readDefensiveActions(ctx context.Context) {
 	obs, ok := t.spec.defender.(DefenseObserver)
 	if !ok {
 		t.v.ObserverPresent = false
-		t.v.note(PhaseObserver, "defender exposes no DefenseObserver: defensive cost and timing are UNOBSERVED, not zero")
+		t.v.Note(PhaseObserver, "defender exposes no DefenseObserver: defensive cost and timing are UNOBSERVED, not zero")
 		return
 	}
 	t.v.ObserverPresent = true
 	c, at, err := obs.DefensiveActions(ctx, t.env)
 	if err != nil {
 		t.env.Log.Logf("defensive-actions read error: %v", err)
-		t.v.note(PhaseObserver, "defense-observer read failed: "+err.Error()+" (cost and timing UNOBSERVED)")
+		t.v.Note(PhaseObserver, "defense-observer read failed: "+err.Error()+" (cost and timing UNOBSERVED)")
 		return
 	}
 	if problem := validateObservation(c, at); problem != "" {
 		t.env.Log.Logf("defensive-actions read is not a usable observation: %s", problem)
-		t.v.note(PhaseObserver, "defense-observer returned an unusable observation: "+problem+" (cost and timing UNOBSERVED)")
+		t.v.Note(PhaseObserver, "defense-observer returned an unusable observation: "+problem+" (cost and timing UNOBSERVED)")
 		return
 	}
 	t.v.CostObserved = true
@@ -625,23 +670,51 @@ func (r *Runner) cleanupParent(ctx context.Context) context.Context {
 // the step is recorded UNRESOLVED, the run is stopped, and the still-running
 // call is retained (see Runner.PendingCleanup) rather than abandoned. A late
 // return does NOT retroactively make the trial clean.
+// The owed steps run in reverse-entry order, and they are NOT independent: every
+// one of them touches the SAME Env — its logger, its client, its namespace and
+// the objects the previous step is deleting. `env.Close` in particular closes
+// the trial logger that the scenario and defender teardowns write to.
+//
+// So once a step is UNRESOLVED — still running past its bound — the remaining
+// steps are NOT started. Running them anyway would race an unresolved callback
+// over shared state and, worse, would let the harness claim each later phase
+// "ran" when it merely raced. They are recorded BLOCKED with the step that
+// blocked them, which is honest and is just as disqualifying for reuse.
 func (t *trialRun) cleanup(ctx context.Context) {
 	parent := t.r.cleanupParent(ctx)
 
+	type owed struct {
+		name string
+		fn   func(context.Context) error
+	}
+	var steps []owed
 	if t.owedScenarioTeardown {
-		t.cleanupStep(parent, "scenario.Teardown", func(c context.Context) error { return t.spec.scenario.Teardown(c, t.env) })
+		steps = append(steps, owed{"scenario.Teardown", func(c context.Context) error { return t.spec.scenario.Teardown(c, t.env) }})
 	}
 	if t.owedDefenderStop {
-		t.cleanupStep(parent, "defender.Stop", func(c context.Context) error { return t.spec.defender.Stop(c, t.env) })
+		steps = append(steps, owed{"defender.Stop", func(c context.Context) error { return t.spec.defender.Stop(c, t.env) }})
 	}
 	if t.owedDefenderTeardown {
-		t.cleanupStep(parent, "defender.Teardown", func(c context.Context) error { return t.spec.defender.Teardown(c, t.env) })
+		steps = append(steps, owed{"defender.Teardown", func(c context.Context) error { return t.spec.defender.Teardown(c, t.env) }})
 	}
 	if t.closeEnv != nil {
 		// env.Close is a context-free callback owned by the cmd wiring. It is
 		// bounded here the only way it can be: by waiting on it, not by trusting
-		// it to observe a deadline it never receives.
-		t.cleanupStep(parent, "env.Close", func(context.Context) error { return t.closeEnv() })
+		// it to observe a deadline it never receives. It is also the step that
+		// invalidates the logger the earlier steps use, so it must never start
+		// while one of them is still running.
+		steps = append(steps, owed{"env.Close", func(context.Context) error { return t.closeEnv() }})
+	}
+
+	blockedBy := ""
+	for _, s := range steps {
+		if blockedBy != "" {
+			t.blockedStep(s.name, blockedBy)
+			continue
+		}
+		if unresolved := t.cleanupStep(parent, s.name, s.fn); unresolved {
+			blockedBy = s.name
+		}
 	}
 
 	unfinished := t.v.Cleanup.Unfinished()
@@ -656,10 +729,37 @@ func (t *trialRun) cleanup(ctx context.Context) {
 	// (see Env.CleanupOwned); an error from any of them lands above.
 	t.v.Cleanup.Verified = t.v.Cleanup.Complete
 	if !t.v.Cleanup.Complete {
-		t.v.fail(PhaseCleanup, fmt.Sprintf(
-			"%d owed cleanup step(s) did not finish cleanly (%d failed, %d unresolved past the %s per-step bound); trial state is unverified",
-			len(unfinished), len(t.v.Cleanup.Failures()), len(unfinished)-len(t.v.Cleanup.Failures()), t.r.opts.CleanupTimeout))
+		failed, unresolvedN, blocked := 0, 0, 0
+		for _, s := range unfinished {
+			switch {
+			case s.Blocked:
+				blocked++
+			case s.Unresolved:
+				unresolvedN++
+			default:
+				failed++
+			}
+		}
+		t.v.Fail(PhaseCleanup, fmt.Sprintf(
+			"%d owed cleanup step(s) did not finish cleanly (%d failed, %d unresolved past the %s per-step bound, %d not attempted because a prior step still holds this Env); trial state is unverified",
+			len(unfinished), failed, unresolvedN, t.r.opts.CleanupTimeout, blocked))
 	}
+}
+
+// blockedStep records an owed step that was deliberately NOT attempted because a
+// previous step is still running against the same Env.
+func (t *trialRun) blockedStep(name, blockedBy string) {
+	if t.env != nil {
+		t.env.Log.Logf("%s NOT ATTEMPTED: %s is still running and holds this Env", name, blockedBy)
+	}
+	t.r.mirror("CLEANUP BLOCKED %s/%s trial %d: %s not attempted because %s is still running and shares this Env",
+		t.m.Scenario, t.m.Defender, t.m.Trial, name, blockedBy)
+	t.v.Cleanup.Attempted = append(t.v.Cleanup.Attempted, CleanupStep{
+		Step:    name,
+		Blocked: true,
+		Error:   "",
+	})
+	t.v.Note(PhaseCleanup, fmt.Sprintf("%s was not attempted: %s outlived its bound and still holds this Env, logger and namespace", name, blockedBy))
 }
 
 // cleanupStep runs one owed cleanup call under its OWN wall-clock bound.
@@ -671,7 +771,10 @@ func (t *trialRun) cleanup(ctx context.Context) {
 // keeps ownership of the still-running call: the run stops, the caller can drain
 // it with Runner.WaitForPendingCleanup, and its late result is retained in the
 // run outcome instead of being silently discarded.
-func (t *trialRun) cleanupStep(parent context.Context, name string, fn func(context.Context) error) {
+//
+// It returns true when the step is UNRESOLVED, so the caller can stop starting
+// further steps that share this trial's Env.
+func (t *trialRun) cleanupStep(parent context.Context, name string, fn func(context.Context) error) bool {
 	step := CleanupStep{Step: name}
 	started := time.Now()
 	cctx, cancel := context.WithTimeout(parent, t.r.opts.CleanupTimeout)
@@ -710,6 +813,7 @@ func (t *trialRun) cleanupStep(parent context.Context, name string, fn func(cont
 		t.r.retainLateCleanup(t.m, name, started, done)
 	}
 	t.v.Cleanup.Attempted = append(t.v.Cleanup.Attempted, step)
+	return step.Unresolved
 }
 
 // LateCleanup records a cleanup call that outlived its bound, together with the
@@ -814,7 +918,7 @@ func (t *trialRun) finalize() Metric {
 	case v.Status != MeasurementValid:
 		// Not a measurement: leave every scoring field at zero and say why.
 		m.Skipped = true
-		m.SkipReason = v.summary()
+		m.SkipReason = v.Summary()
 		v.Scored = false
 		v.UnscoredReason = m.SkipReason
 	case t.spec.kind == TrialNegativeControl:
@@ -851,7 +955,7 @@ func (t *trialRun) finalize() Metric {
 			m.EvidenceRetention = evidenceRetention(t.actCount, t.or)
 			t.deriveEconomics()
 		} else {
-			v.note(PhaseComplete, "defensive cost UNOBSERVED: securityPerCost, evidenceRetention, ROI and Schwartau are not derivable")
+			v.Note(PhaseComplete, "defensive cost UNOBSERVED: securityPerCost, evidenceRetention, ROI and Schwartau are not derivable")
 		}
 		t.env.Log.Logf("trial result: oracleAchieved=%v disruption=%.2f dwell=%.1fs timeToAction=%.1fs actions=%d",
 			m.OracleAchieved, m.DisruptionVsOracle, m.AttackerDwellSeconds, m.TimeToActionSeconds, m.DefensiveActions)

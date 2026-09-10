@@ -92,7 +92,7 @@ func TestRenderMarkdownContainsControls(t *testing.T) {
 func TestProvenanceMapsCellsToCommands(t *testing.T) {
 	m := anchored("s1", "d-full", 0, false, 1, 1)
 	m.Seed, m.RawLogPath, m.Commands = 99, "out/raw/x.log", []string{"kubectl get pods"}
-	pm := BuildProvenance([]core.Metric{m}, 1337, 2, "kind-amtd-test", "sandbox", "out/metrics.jsonl", "reproduce-cmd")
+	pm := BuildProvenance([]core.Metric{m}, 1337, 2, "kind-amtd-test", "sandbox", "out/metrics.jsonl", "reproduce-cmd", nil)
 	if pm.MasterSeed != 1337 || len(pm.Entries) != 1 {
 		t.Fatalf("provenance map malformed: %+v", pm)
 	}
@@ -110,7 +110,7 @@ func TestProvenanceMapsCellsToCommands(t *testing.T) {
 // disruption as a measurement.
 func TestProvenanceMarksUnmeasuredCells(t *testing.T) {
 	m := notMeasuredRow("s1", "d-broken", 0, core.MeasurementInvalid, "oracle transport unavailable")
-	pm := BuildProvenance([]core.Metric{m}, 1, 1, "ctx", "ns", "out/metrics.jsonl", "cmd")
+	pm := BuildProvenance([]core.Metric{m}, 1, 1, "ctx", "ns", "out/metrics.jsonl", "cmd", nil)
 	e := pm.Entries[0]
 	if e.Scored || e.OracleObserved || e.Status != core.MeasurementInvalid || e.UnscoredReason == "" {
 		t.Fatalf("provenance presented an invalid row as a measurement: %+v", e)

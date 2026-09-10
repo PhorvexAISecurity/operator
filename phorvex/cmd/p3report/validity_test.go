@@ -9,38 +9,94 @@ package main
 // control.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/phorvex/metricvalidity"
 )
 
-const (
-	// undefendedRow is the observed positive control (attack lands undefended).
-	undefendedRow = `{"scenario":"s1","defender":"d-nomtd","trial":0,"oracleAchieved":true,` +
-		`"disruptionVsOracle":0,"defensiveActions":0,"falseDefensiveActions":-1,"securityPerCost":0,` +
-		`"observedState":"[survival=20s]","validity":{"version":1,"kind":"ordinary","status":"valid",` +
-		`"oracleObserved":true,"costObserved":true,"scored":true,"baseline":{"required":true,` +
-		`"defender":"d-nomtd","observed":true,"valid":true,"oracleAchieved":true,"usable":true,"isSelf":true},` +
-		`"cleanup":{"complete":true}}}`
-	// defendedRow is a genuine, fully observed disruption.
-	defendedRow = `{"scenario":"s1","defender":"d-phorvex","trial":0,"oracleAchieved":false,` +
-		`"disruptionVsOracle":1,"defensiveActions":2,"falseDefensiveActions":-1,"securityPerCost":0.5,` +
-		`"observedState":"[survival=3s]","validity":{"version":1,"kind":"ordinary","status":"valid",` +
-		`"oracleObserved":true,"costObserved":true,"scored":true,"baseline":{"required":true,` +
-		`"defender":"d-nomtd","observed":true,"valid":true,"oracleAchieved":true,"usable":true},` +
-		`"cleanup":{"complete":true}}}`
-	// cleanNegControl is a MEASURED zero false defensive moves.
-	cleanNegControl = `{"scenario":"s1","defender":"d-phorvex","trial":1,"negativeControl":true,` +
-		`"falseDefensiveActions":0,"defensiveActions":0,"validity":{"version":1,"kind":"negative-control",` +
-		`"status":"valid","oracleObserved":true,"costObserved":true,"scored":false,"baseline":{},` +
-		`"cleanup":{"complete":true}}}`
-	// unobservedNegControl never measured its false moves.
-	unobservedNegControl = `{"scenario":"s1","defender":"d-phorvex","trial":2,"negativeControl":true,` +
-		`"falseDefensiveActions":-1,"defensiveActions":-1,"validity":{"version":1,"kind":"negative-control",` +
-		`"status":"valid","oracleObserved":true,"costObserved":false,"scored":false,"baseline":{},` +
-		`"cleanup":{"complete":true}}}`
-)
+// fixtureRow builds a metrics.jsonl line from the CONTRACT'S OWN TYPES rather
+// than hand-written JSON. A hand-written block silently omits whatever fields
+// the contract has started checking, making the fixture more permissive than the
+// producer — see corpus_parity_test.go, which runs real producer output through
+// this same reader.
+type fixtureRow struct {
+	Scenario              string                   `json:"scenario"`
+	Defender              string                   `json:"defender"`
+	Trial                 int                      `json:"trial"`
+	OracleAchieved        bool                     `json:"oracleAchieved"`
+	DisruptionVsOracle    float64                  `json:"disruptionVsOracle"`
+	AttackerDwellSeconds  float64                  `json:"attackerDwellSeconds"`
+	SecurityPerCost       float64                  `json:"securityPerCost"`
+	DefensiveActions      int                      `json:"defensiveActions"`
+	FalseDefensiveActions int                      `json:"falseDefensiveActions"`
+	TimeToActionSeconds   float64                  `json:"timeToActionSeconds"`
+	NegativeControl       bool                     `json:"negativeControl,omitempty"`
+	ObservedState         string                   `json:"observedState,omitempty"`
+	Validity              *metricvalidity.Validity `json:"validity,omitempty"`
+}
+
+func (f fixtureRow) line(t *testing.T) string {
+	t.Helper()
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// ordinaryFixture is what Runner.Run writes for a genuine, fully anchored,
+// cost-observed comparison on one arm.
+func ordinaryFixture(defender string, trial int, disruption float64, achieved bool, actions int, state string) fixtureRow {
+	return fixtureRow{
+		Scenario: "s1", Defender: defender, Trial: trial, OracleAchieved: achieved,
+		DisruptionVsOracle: disruption, SecurityPerCost: disruption, DefensiveActions: actions,
+		FalseDefensiveActions: -1, TimeToActionSeconds: 1, ObservedState: state,
+		Validity: &metricvalidity.Validity{
+			Version: metricvalidity.Version, Kind: metricvalidity.TrialOrdinary,
+			Status: metricvalidity.StatusValid, Phase: metricvalidity.PhaseComplete,
+			AttackExecuted: true, OracleObserved: true, ObserverPresent: true, CostObserved: true,
+			Scored: true,
+			Baseline: metricvalidity.BaselineRef{Required: true, Defender: "d-nomtd",
+				Kind: metricvalidity.TrialOrdinary, Trial: trial, IsSelf: defender == "d-nomtd",
+				Observed: true, Valid: true, OracleAchieved: true, Usable: true},
+			Cleanup: metricvalidity.CleanupRecord{Complete: true, Verified: true},
+		},
+	}
+}
+
+// negControlFixture is what Runner.Run writes for a no-attack negative control.
+func negControlFixture(trial, falseMoves int, costObserved bool) fixtureRow {
+	f := fixtureRow{
+		Scenario: "s1", Defender: "d-phorvex", Trial: trial, NegativeControl: true,
+		FalseDefensiveActions: -1, DefensiveActions: -1,
+		Validity: &metricvalidity.Validity{
+			Version: metricvalidity.Version, Kind: metricvalidity.TrialNegativeControl,
+			Status: metricvalidity.StatusValid, Phase: metricvalidity.PhaseComplete,
+			AttackExecuted: true, OracleObserved: true, ObserverPresent: true,
+			CostObserved: costObserved,
+			Cleanup:      metricvalidity.CleanupRecord{Complete: true, Verified: true},
+		},
+	}
+	if costObserved {
+		f.FalseDefensiveActions, f.DefensiveActions = falseMoves, falseMoves
+	}
+	return f
+}
+
+// The observed positive control (attack lands undefended), a genuine fully
+// observed disruption, a MEASURED clean control and an UNOBSERVED one.
+func undefendedLine(t *testing.T) string {
+	return ordinaryFixture("d-nomtd", 0, 0, true, 0, "[survival=20s]").line(t)
+}
+func defendedLine(t *testing.T) string {
+	return ordinaryFixture("d-phorvex", 0, 1, false, 2, "[survival=3s]").line(t)
+}
+func cleanNegControlLine(t *testing.T) string      { return negControlFixture(1, 0, true).line(t) }
+func unobservedNegControlLine(t *testing.T) string { return negControlFixture(2, 0, false).line(t) }
 
 func renderLines(t *testing.T, lines ...string) string {
 	t.Helper()
@@ -65,7 +121,7 @@ func renderLines(t *testing.T, lines ...string) string {
 // POSITIVE CONTROL: an observed contrast with a MEASURED clean negative control
 // still reports its numbers and passes its control checks.
 func TestP3ReportValidObservedContrastIsPublished(t *testing.T) {
-	md := renderLines(t, undefendedRow, defendedRow, cleanNegControl)
+	md := renderLines(t, undefendedLine(t), defendedLine(t), cleanNegControlLine(t))
 	for _, want := range []string{
 		"max falseDefensiveActions = **0**",
 		"1/1 observed control trial(s)",
@@ -83,7 +139,7 @@ func TestP3ReportValidObservedContrastIsPublished(t *testing.T) {
 
 // A partially observed negative control must never be rendered as a pass.
 func TestP3ReportPartialNegativeControlIsNotAPass(t *testing.T) {
-	md := renderLines(t, undefendedRow, defendedRow, cleanNegControl, unobservedNegControl)
+	md := renderLines(t, undefendedLine(t), defendedLine(t), cleanNegControlLine(t), unobservedNegControlLine(t))
 	if !strings.Contains(md, "Negative control: PARTIAL (1 of 2 control trials observed)") {
 		t.Errorf("partial control not disclosed:\n%s", md)
 	}
@@ -97,7 +153,7 @@ func TestP3ReportPartialNegativeControlIsNotAPass(t *testing.T) {
 
 // A negative control that was never observed is unknown, not zero.
 func TestP3ReportUnobservedNegativeControlIsNotZero(t *testing.T) {
-	md := renderLines(t, undefendedRow, defendedRow, unobservedNegControl)
+	md := renderLines(t, undefendedLine(t), defendedLine(t), unobservedNegControlLine(t))
 	if !strings.Contains(md, "Negative control: UNOBSERVED (0 of 1 control trials measured)") {
 		t.Errorf("unobserved control not disclosed:\n%s", md)
 	}
@@ -108,13 +164,11 @@ func TestP3ReportUnobservedNegativeControlIsNotZero(t *testing.T) {
 
 // An UNOBSERVED cost never enters the cost or efficiency means.
 func TestP3ReportUnknownCostIsExcludedFromCostMeans(t *testing.T) {
-	unknownCost := strings.NewReplacer(
-		`"defensiveActions":2`, `"defensiveActions":-1`,
-		`"costObserved":true`, `"costObserved":false`,
-		`"securityPerCost":0.5`, `"securityPerCost":0`,
-	).Replace(defendedRow)
+	unknown := ordinaryFixture("d-phorvex", 0, 1, false, -1, "[survival=3s]")
+	unknown.SecurityPerCost = 0
+	unknown.Validity.CostObserved = false
 	path := filepath.Join(t.TempDir(), "metrics.jsonl")
-	if err := os.WriteFile(path, []byte(undefendedRow+"\n"+unknownCost+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(undefendedLine(t)+"\n"+unknown.line(t)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := readMetrics(path)
@@ -141,9 +195,10 @@ func TestP3ReportUnknownCostIsExcludedFromCostMeans(t *testing.T) {
 
 // Rows the contract refuses are excluded from the published numbers and counted.
 func TestP3ReportRefusedRowsAreExcludedAndDisclosed(t *testing.T) {
-	broken := strings.Replace(defendedRow, `"status":"valid"`, `"status":"invalid"`, 1)
+	broken := ordinaryFixture("d-phorvex", 0, 1, false, 2, "[survival=3s]")
+	broken.Validity.Status = metricvalidity.StatusInvalid
 	path := filepath.Join(t.TempDir(), "metrics.jsonl")
-	if err := os.WriteFile(path, []byte(undefendedRow+"\n"+broken+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(undefendedLine(t)+"\n"+broken.line(t)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := readMetrics(path)
@@ -162,15 +217,45 @@ func TestP3ReportRefusedRowsAreExcludedAndDisclosed(t *testing.T) {
 
 // Legacy rows stay readable but the report says plainly that they are not
 // certified measurements.
-func TestP3ReportLegacyRowsAreDisclosedAsUncertified(t *testing.T) {
+// A legacy corpus stays readable and COUNTED, but none of it is blended into a
+// certified mean, and a report with nothing certified says UNAVAILABLE rather
+// than publishing zeros.
+func TestP3ReportLegacyRowsAreCountedButExcludedFromCertifiedMeans(t *testing.T) {
 	legacyUndefended := `{"scenario":"s1","defender":"d-nomtd","trial":0,"oracleAchieved":true,"disruptionVsOracle":0,"defensiveActions":0,"falseDefensiveActions":-1,"observedState":"[survival=20s]"}`
 	legacyDefended := `{"scenario":"s1","defender":"d-phorvex","trial":0,"oracleAchieved":false,"disruptionVsOracle":1,"defensiveActions":2,"falseDefensiveActions":-1,"observedState":"[survival=3s]"}`
-	md := renderLines(t, legacyUndefended, legacyDefended)
+
+	path := filepath.Join(t.TempDir(), "metrics.jsonl")
+	if err := os.WriteFile(path, []byte(legacyUndefended+"\n"+legacyDefended+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := readMetrics(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by, _, _ := aggregate(rows)
+	for _, arm := range []string{"d-nomtd", "d-phorvex"} {
+		a := by["s1"][arm]
+		if a == nil {
+			continue
+		}
+		if len(a.disruption) != 0 || len(a.actions) != 0 || len(a.secPerCost) != 0 {
+			t.Errorf("legacy rows contaminated %s's certified means: disruption=%v actions=%v secPerCost=%v",
+				arm, a.disruption, a.actions, a.secPerCost)
+		}
+		if a.census.legacy == 0 {
+			t.Errorf("%s: legacy rows were dropped instead of counted: %+v", arm, a.census)
+		}
+	}
+
+	md := render(rows, "SMOKE", 1.0, path)
 	if !strings.Contains(md, "2 LEGACY/UNVERIFIED") {
 		t.Errorf("legacy rows not counted:\n%s", md)
 	}
-	if !strings.Contains(md, "NOT certified measurements") {
-		t.Errorf("legacy rows not disclosed as uncertified:\n%s", md)
+	if !strings.Contains(md, "EXCLUDED from every certified mean") {
+		t.Errorf("legacy exclusion not disclosed:\n%s", md)
+	}
+	if !strings.Contains(md, "UNAVAILABLE — NO CERTIFIED OBSERVATIONS") {
+		t.Errorf("an all-legacy corpus must report UNAVAILABLE, not zeros:\n%s", md)
 	}
 	if !strings.Contains(md, "Negative control: NOT RUN") {
 		t.Errorf("absent control not disclosed:\n%s", md)

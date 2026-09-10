@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/phorvex/metricvalidity"
 )
 
 type Metric struct {
@@ -34,75 +36,55 @@ type Metric struct {
 	Skipped              bool    `json:"skipped"`
 	ObservedState        string  `json:"observedState"`
 	MeanRotationInterval float64 `json:"meanRotationIntervalSeconds"`
-	// Validity is the harness measurement-validity contract; nil for rows
-	// written before it existed (LEGACY/UNVERIFIED).
-	Validity *metricValidity `json:"validity"`
+	// FalseDefensiveActions / TimeToActionSeconds / AttackerDwellSeconds are
+	// decoded because the shared contract corroborates the validity claim
+	// against them.
+	FalseDefensiveActions int     `json:"falseDefensiveActions"`
+	TimeToActionSeconds   float64 `json:"timeToActionSeconds"`
+	AttackerDwellSeconds  float64 `json:"attackerDwellSeconds"`
+	// Validity is the SHARED harness measurement-validity contract, decoded
+	// whole; nil for rows written before it existed (LEGACY/UNVERIFIED).
+	//
+	// This is the real type, not a local mirror: a mirror omitted the very
+	// fields the producer checks and certified rows the harness refuses.
+	Validity *metricvalidity.Validity `json:"validity"`
 }
 
-// metricValidity mirrors the harness contract (internal/core/validity.go). This
-// reader CONSUMES it: a row's own `scored` flag is never trusted alone, so a
-// hand-edited or newer-format file cannot make this view certify something the
-// harness would refuse.
-type metricValidity struct {
-	Version        int    `json:"version"`
-	Kind           string `json:"kind"`
-	Status         string `json:"status"`
-	OracleObserved bool   `json:"oracleObserved"`
-	CostObserved   bool   `json:"costObserved"`
-	Scored         bool   `json:"scored"`
-	UnscoredReason string `json:"unscoredReason"`
-	Baseline       struct {
-		Usable bool `json:"usable"`
-	} `json:"baseline"`
-	Cleanup struct {
-		Complete   bool `json:"complete"`
-		Unresolved bool `json:"unresolved"`
-	} `json:"cleanup"`
+// verdict is THE validated interpretation, identical to the one the harness and
+// every other reader apply, corroborated against this row's own numbers.
+func (m Metric) verdict() metricvalidity.Verdict {
+	return metricvalidity.Evaluate(m.Validity, metricvalidity.Observations{
+		Trial:                 m.Trial,
+		Disruption:            m.DisruptionVsOracle,
+		DefensiveActions:      m.DefensiveActions,
+		FalseDefensiveActions: m.FalseDefensiveActions,
+		TimeToActionSeconds:   m.TimeToActionSeconds,
+		AttackerDwellSeconds:  m.AttackerDwellSeconds,
+	})
 }
 
-const validityVersion = 1
-
+// legacy reports a row written before the validity contract.
 func (m Metric) legacy() bool { return m.Validity == nil }
 
-func (m Metric) scorable() bool {
-	v := m.Validity
-	if v == nil {
-		return false
-	}
-	return v.Version == validityVersion && v.Status == "valid" && v.Kind == "ordinary" &&
-		v.Scored && v.OracleObserved && v.Baseline.Usable &&
-		v.Cleanup.Complete && !v.Cleanup.Unresolved
-}
+// scorable reports whether this row's comparison may enter a score.
+func (m Metric) scorable() bool { return m.verdict().Scorable }
 
-// excluded reports a row the contract explicitly refuses. Legacy rows predate
-// the contract, so they are disclosed rather than refused.
-func (m Metric) excluded() bool { return !m.legacy() && !m.scorable() }
+// excluded reports a row that must not reach a CERTIFIED aggregate: every row
+// the contract refuses AND every legacy row. Legacy rows predate the contract
+// and carry no evidence that they measured anything, so they are counted and
+// disclosed but never blended into a current score.
+func (m Metric) excluded() bool { return !m.scorable() }
 
 // costUsable reports whether DefensiveActions is an observation. `-1` is the
 // harness's UNOBSERVED sentinel and must never be averaged as a cost.
-func (m Metric) costUsable() bool {
-	if m.DefensiveActions < 0 {
-		return false
-	}
-	if v := m.Validity; v != nil {
-		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
-	}
-	return true
-}
+func (m Metric) costUsable() bool { return m.verdict().CostUsable }
 
 // negControlUsable reports whether this negative-control row establishes a
 // MEASURED false-move result. A negative control is never "scorable" (it has no
-// disruption comparison), so scorability is the wrong question for it: what
-// matters is that its cost was actually observed on an interpretable, valid row.
-func (m Metric) negControlUsable() bool {
-	if m.DefensiveActions < 0 {
-		return false
-	}
-	if v := m.Validity; v != nil {
-		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
-	}
-	return false // legacy: never verified, so it cannot establish a clean arm
-}
+// disruption comparison), so scorability is the wrong question for it: the
+// shared contract asks instead whether its cost was observed on an
+// interpretable, valid, cleanup-sound row.
+func (m Metric) negControlUsable() bool { return m.verdict().NegControlUsable }
 
 var markerRe = regexp.MustCompile(`\[([a-z0-9-]+)=([^\]]*)\]`)
 
@@ -221,13 +203,17 @@ func render(rows []Metric, src string) string {
 		if n, ok := trialsN[aggKey{m.Scenario, m.Defender}]; ok && m.Trial > n {
 			continue // adaptive row
 		}
+		// Legacy rows are COUNTED and disclosed, then excluded like any other
+		// uncertified row: a pre-contract row is readable history, never a
+		// current measurement.
+		if m.legacy() {
+			legacyRows++
+			continue
+		}
 		// A row the validity contract refuses never reaches a published number.
 		if m.excluded() {
 			excludedRows++
 			continue
-		}
-		if m.legacy() {
-			legacyRows++
 		}
 		defsSeen[m.Defender] = true
 		scsSeen[m.Scenario] = true
@@ -263,8 +249,12 @@ func render(rows []Metric, src string) string {
 	default:
 		negState = "observed"
 	}
-	w("> **Measurement validity:** %d attack row(s) REFUSED by the harness validity contract and excluded; %d LEGACY/UNVERIFIED row(s) (written before the contract — counted, never certified); %d row(s) with an UNOBSERVED defensive cost excluded from every cost mean. Negative controls: %s (%d of %d observed) — an unobserved or partial control does NOT establish an absence of false defensive moves.",
+	w("> **Measurement validity:** %d attack row(s) REFUSED by the harness validity contract and excluded; %d LEGACY/UNVERIFIED row(s) (written before the contract — counted and readable, EXCLUDED from every certified mean, never blended into a current score); %d row(s) with an UNOBSERVED defensive cost excluded from every cost mean. Negative controls: %s (%d of %d observed) — an unobserved or partial control does NOT establish an absence of false defensive moves.",
 		excludedRows, legacyRows, costUnobserved, negState, negUsable, negTotal)
+	if legacyRows > 0 && len(scsSeen) == 0 {
+		w(">")
+		w("> **NO CERTIFIED OBSERVATIONS REMAIN.** Every attack row in this corpus predates the measurement-validity contract or was refused by it, so the tables below have no measured data. Re-run the benchmark on a current harness to certify these numbers. This is UNAVAILABLE, not zero.")
+	}
 	w("")
 	w("> **HONEST VERDICT: STRONGLY EVIDENCES the structural claim; does NOT fully prove it.**")
 	w("> The harm / learnability / dilution / prediction-presence legs are T-INVARIANT (proven);")

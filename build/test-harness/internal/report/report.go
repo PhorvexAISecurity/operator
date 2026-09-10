@@ -213,22 +213,27 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 			}
 			a := touch(m)
 			a.negTotal++
-			switch {
-			case val.Legacy:
+			// NegControlUsable is the SHARED contract's verdict. It already
+			// requires an interpretable, valid, CLEANUP-SOUND row with an
+			// observed cost and a non-sentinel count — so a retained cleanup
+			// failure can no longer certify a clean control merely because a
+			// negative control is never "scored".
+			if !val.NegControlUsable {
 				a.negUnusable++
-				a.validity.addReason("negative control is a legacy/unverified row: its false-move count is not evidence of a measurement")
-			case !val.CostUsable || v.Status != core.MeasurementValid || val.Unverified:
-				a.negUnusable++
-				a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
-				a.validity.addReason(val.Reasons()...)
-			case m.FalseDefensiveActions < 0:
-				a.negUnusable++
-				a.validity.addReason("negative control reports the UNOBSERVED sentinel for false defensive moves")
-			default:
-				a.negUsable++
-				if m.FalseDefensiveActions > a.negFalseMax {
-					a.negFalseMax = m.FalseDefensiveActions
+				switch {
+				case val.Legacy:
+					a.validity.addReason("negative control is a legacy/unverified row: its false-move count is not evidence of a measurement")
+				case !v.Cleanup.Sound():
+					a.validity.addReason("negative control did not verify its cleanup: a dirty trial cannot establish a clean arm")
+				default:
+					a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
 				}
+				a.validity.addReason(val.Reasons()...)
+				continue
+			}
+			a.negUsable++
+			if m.FalseDefensiveActions > a.negFalseMax {
+				a.negFalseMax = m.FalseDefensiveActions
 			}
 			continue
 		}

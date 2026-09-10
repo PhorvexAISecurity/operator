@@ -396,13 +396,16 @@ func TestR1ActualCleanupOwnedPropagatesEveryAPIFailure(t *testing.T) {
 	})
 	t.Run("residue-survives-the-delete", func(t *testing.T) {
 		env := newTestEnv("sandbox", "sandbox")
-		// A pod that the API accepts a delete for but never removes: exactly the
-		// finalizer/background-deletion case where an accepted delete is not
-		// proof of absence.
+		// A pod that the API accepts a delete for but NEVER removes: the
+		// finalizer case, where an accepted delete is not proof of absence. The
+		// budget is explicit and short — the real caller always supplies one, and
+		// the point is that waiting it out does not turn residue into absence.
 		env.Kube.(*fake.Clientset).PrependReactor("list", "pods", func(ktest.Action) (bool, runtime.Object, error) {
 			return true, stuckPodList(), nil
 		})
-		err := env.CleanupOwned(context.Background(), false)
+		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		defer cancel()
+		err := env.CleanupOwned(ctx, false)
 		if err == nil {
 			t.Fatalf("cleanup declared reusable state while an owned pod was still present")
 		}

@@ -225,15 +225,20 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		// hypothesis verdict can disclose a partial or failed control.
 		if rowKind == core.TrialNegativeControl {
 			a.negTotal++
-			switch {
-			case val.Legacy, !val.CostUsable, val.Unverified, v.Status != core.MeasurementValid, m.FalseDefensiveActions < 0:
+			// The SHARED contract's verdict, identical to the main report's:
+			// interpretable, valid, cleanup-sound, cost observed, no sentinel.
+			if !val.NegControlUsable {
 				a.negUnusable++
-				a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
-			default:
-				a.negUsable++
-				if m.FalseDefensiveActions > a.negFalseMax {
-					a.negFalseMax = m.FalseDefensiveActions
+				if !v.Cleanup.Sound() {
+					a.validity.addReason("negative control did not verify its cleanup: a dirty trial cannot establish a clean arm")
+				} else {
+					a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
 				}
+				continue
+			}
+			a.negUsable++
+			if m.FalseDefensiveActions > a.negFalseMax {
+				a.negFalseMax = m.FalseDefensiveActions
 			}
 			continue
 		}

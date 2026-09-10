@@ -240,25 +240,28 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		outcome = runner.Outcome()
 		fmt.Fprintf(os.Stderr, "WARN: %d cleanup call(s) outlived their bound; their trials remain UNRESOLVED:\n", late)
 		for _, l := range outcome.LateCleanups {
-			fmt.Fprintf(os.Stderr, "  %s/%s trial %d %s returned after %.1fs (err=%q)\n",
+			// Report truthfully: a call that has NOT returned is still running and
+			// still owns its resources. Printing "returned" for it would claim the
+			// opposite of what is known.
+			if !l.Returned {
+				fmt.Fprintf(os.Stderr, "  %s/%s trial %d %s STILL RUNNING after %.1fs (has not returned; its resources are still owned)\n",
+					l.Scenario, l.Defender, l.Trial, l.Step, l.Seconds)
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "  %s/%s trial %d %s returned late after %.1fs (err=%q)\n",
 				l.Scenario, l.Defender, l.Trial, l.Step, l.Seconds, l.Error)
 		}
 	}
 
 	// 7) Final teardown: remove the sandbox namespace + all owned objects. Its
-	// failures are reported, never swallowed: an incomplete final teardown leaves
-	// the cluster dirty for the NEXT run.
-	if env, closer, ferr := factory("final", "teardown", -1, 0, filepath.Join(outDir, "raw", "final_teardown.log")); ferr == nil {
-		fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
-		if err := env.CleanupOwned(fctx, true); err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: final teardown did not verify: %v\n", err)
-		}
-		fcancel()
-		if err := closer(); err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: final teardown closer did not verify: %v\n", err)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "WARN: final teardown could not build an environment: %v\n", ferr)
+	// failures are part of the RUN RESULT, not a warning: an unverified final
+	// teardown leaves the cluster dirty for the NEXT run, so it makes this run
+	// INCOMPLETE, lands in the provenance and exits non-zero.
+	finalErr := finalTeardown(ctx, factory, outDir)
+	runner.RecordFinalTeardown(finalErr)
+	outcome = runner.Outcome()
+	if finalErr != nil {
+		fmt.Fprintf(os.Stderr, "FINAL TEARDOWN NOT VERIFIED: %v\n", finalErr)
 	}
 
 	// 8) Reports + provenance.
@@ -267,7 +270,7 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if err != nil {
 		return err
 	}
-	pm := report.BuildProvenance(metrics, cfg.MasterSeed, cfg.TrialsPerArm, cfg.Context, cfg.Namespace, metricsPath, reproduce)
+	pm := report.BuildProvenance(metrics, cfg.MasterSeed, cfg.TrialsPerArm, cfg.Context, cfg.Namespace, metricsPath, reproduce, &outcome)
 	provPath, err := report.WriteProvenance(outDir, pm)
 	if err != nil {
 		return err
@@ -289,7 +292,27 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	fmt.Printf("\nDone (%s: planned %d / executed %d / written %d). %d metric records.\n  metrics:    %s\n  report:     %s\n  provenance: %s\n  mitre:      %s\n  dollars:    %s\n",
 		state, outcome.PlannedTrials, outcome.ExecutedTrials, outcome.WrittenTrials, len(metrics), metricsPath, repPath, provPath, mitrePath, dollarsPath)
-	return runErr
+	// Both failures matter and neither masks the other.
+	return errors.Join(runErr, finalErr)
+}
+
+// finalTeardown removes the sandbox namespace and every owned object after the
+// matrix, and returns whether that VERIFIED. Every link of the real chain —
+// building the environment, the cleanup helper and the closer — is a failure
+// worth returning, because any of them leaves state the next run would inherit.
+func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) error {
+	env, closer, ferr := factory("final", "teardown", -1, 0, filepath.Join(outDir, "raw", "final_teardown.log"))
+	if ferr != nil {
+		return fmt.Errorf("final teardown could not build an environment: %w", ferr)
+	}
+	fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
+	defer fcancel()
+	cleanupErr := env.CleanupOwned(fctx, true)
+	var closeErr error
+	if closer != nil {
+		closeErr = closer()
+	}
+	return errors.Join(cleanupErr, closeErr)
 }
 
 // dollarInputsFromConfig assembles the DollarInputs from the live config $ knobs

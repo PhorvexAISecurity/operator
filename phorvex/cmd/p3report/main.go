@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/phorvex/metricvalidity"
 )
 
 type Metric struct {
@@ -51,84 +53,53 @@ type Metric struct {
 		SchwartauPositive bool `json:"schwartauPositive"`
 		DetectionAbsent   bool `json:"detectionAbsent"`
 	} `json:"schwartau"`
-	// Validity is the harness measurement-validity contract. It is nil for rows
-	// written before the contract existed (LEGACY/UNVERIFIED).
-	Validity *metricValidity `json:"validity"`
+	// TimeToActionSeconds is decoded because the shared contract corroborates a
+	// claimed cost observation against it.
+	TimeToActionSeconds float64 `json:"timeToActionSeconds"`
+	// Validity is the SHARED harness measurement-validity contract, decoded
+	// whole. It is nil for rows written before the contract existed
+	// (LEGACY/UNVERIFIED).
+	//
+	// This is the real type, not a local mirror: a mirror omitted the very
+	// fields the producer checks and certified rows the harness refuses.
+	Validity *metricvalidity.Validity `json:"validity"`
 }
 
-// metricValidity mirrors the harness contract (internal/core/validity.go). This
-// reader CONSUMES it; it does not reinterpret it. A row's own `scored` flag is
-// never trusted on its own — the same corroboration the harness performs is
-// repeated here, so a hand-edited or newer-format file cannot make this report
-// certify something the harness would refuse.
-type metricValidity struct {
-	Version        int    `json:"version"`
-	Kind           string `json:"kind"`
-	Status         string `json:"status"`
-	OracleObserved bool   `json:"oracleObserved"`
-	CostObserved   bool   `json:"costObserved"`
-	Scored         bool   `json:"scored"`
-	UnscoredReason string `json:"unscoredReason"`
-	Baseline       struct {
-		Usable bool `json:"usable"`
-	} `json:"baseline"`
-	Cleanup struct {
-		Complete   bool `json:"complete"`
-		Unresolved bool `json:"unresolved"`
-	} `json:"cleanup"`
+// verdict is THE validated interpretation, identical to the one the harness and
+// every other reader apply, corroborated against this row's own numbers.
+func (m Metric) verdict() metricvalidity.Verdict {
+	return metricvalidity.Evaluate(m.Validity, metricvalidity.Observations{
+		Trial:                 m.Trial,
+		Disruption:            m.DisruptionVsOracle,
+		DefensiveActions:      m.DefensiveActions,
+		FalseDefensiveActions: m.FalseDefensiveActions,
+		TimeToActionSeconds:   m.TimeToActionSeconds,
+		AttackerDwellSeconds:  m.AttackerDwellSeconds,
+	})
 }
-
-// validityVersion is the contract version this reader understands. A row
-// stamped with anything else is UNVERIFIED here, exactly as in the harness.
-const validityVersion = 1
 
 // legacy reports a row written before the validity contract: it makes no claim
-// either way. Such rows are counted and DISCLOSED as unverified rather than
-// silently certified.
+// either way. Such rows are counted and DISCLOSED rather than certified.
 func (m Metric) legacy() bool { return m.Validity == nil }
 
 // scorable reports whether this row's disruption comparison may enter a score.
-// A legacy row is not certifiable, but it is also not refutable, so the caller
-// decides (see excluded); an explicit contract row must corroborate every claim.
-func (m Metric) scorable() bool {
-	v := m.Validity
-	if v == nil {
-		return false
-	}
-	return v.Version == validityVersion && v.Status == "valid" && v.Kind == "ordinary" &&
-		v.Scored && v.OracleObserved && v.Baseline.Usable &&
-		v.Cleanup.Complete && !v.Cleanup.Unresolved
-}
+func (m Metric) scorable() bool { return m.verdict().Scorable }
 
-// excluded reports a row the contract explicitly refuses. Legacy rows are NOT
-// excluded (they predate the contract and are disclosed instead); a row that
-// carries a validity block and fails it is.
-func (m Metric) excluded() bool { return !m.legacy() && !m.scorable() }
+// excluded reports a row that must not reach a CERTIFIED aggregate: every row
+// the contract refuses AND every legacy row. A pre-contract row carries no
+// evidence that it measured anything, so blending it into a current score or
+// efficiency mean would launder unverified history into a fresh measurement.
+// Legacy rows stay readable and counted; they are simply not certified.
+func (m Metric) excluded() bool { return !m.scorable() }
 
 // costUsable reports whether DefensiveActions/SecurityPerCost/ROI on this row
 // are observations. `-1` is the harness's UNOBSERVED sentinel and must never be
 // averaged as a cost or turned into a favorable ratio.
-func (m Metric) costUsable() bool {
-	if m.DefensiveActions < 0 {
-		return false
-	}
-	if v := m.Validity; v != nil {
-		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
-	}
-	return true // legacy: no claim recorded, disclosed as unverified
-}
+func (m Metric) costUsable() bool { return m.verdict().CostUsable }
 
 // negControlUsable reports whether this negative-control row establishes a
 // MEASURED false-move count. An unobserved or refused control does not.
-func (m Metric) negControlUsable() bool {
-	if m.FalseDefensiveActions < 0 {
-		return false
-	}
-	if v := m.Validity; v != nil {
-		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
-	}
-	return false // legacy: never verified, so it cannot establish a clean arm
-}
+func (m Metric) negControlUsable() bool { return m.verdict().NegControlUsable }
 
 // validityCensus is the run-wide accounting this report discloses so a reader
 // can see how much of the corpus was actually certified.
@@ -320,21 +291,25 @@ func aggregate(rows []Metric) (map[string]map[string]*armAgg, []string, []string
 		}
 		// A row the validity contract refuses never reaches a published number.
 		a.census.total++
+		// Legacy rows are COUNTED and disclosed, then excluded like any other
+		// uncertified row. A pre-contract row records no evidence that it
+		// measured anything; blending it into a current score or efficiency mean
+		// would launder unverified history into a fresh measurement.
 		if m.legacy() {
 			a.census.legacy++
+			a.census.note("legacy/unverified row (written before the measurement-validity contract): readable history, excluded from every certified mean")
+			continue
 		}
 		if m.excluded() {
 			a.census.excluded++
 			reason := "row refused by the measurement-validity contract"
-			if m.Validity != nil && m.Validity.UnscoredReason != "" {
-				reason = m.Validity.UnscoredReason
+			if r := m.verdict().UnscoredReason(); r != "" {
+				reason = r
 			}
 			a.census.note(reason)
 			continue
 		}
-		if m.scorable() {
-			a.census.scored++
-		}
+		a.census.scored++
 		mk := parseMarkers(m.ObservedState)
 		if haveN && m.Trial == n+1 {
 			a.hasAdaptive = true
@@ -483,11 +458,15 @@ func render(rows []Metric, phase string, recon float64, src string) string {
 
 	// Measurement validity: how much of this corpus was actually certified.
 	w("## Measurement validity")
-	w("- Attack rows: **%d** total — %d certified by the validity contract, %d REFUSED, %d LEGACY/UNVERIFIED (written before the contract; counted, never certified).",
+	w("- Attack rows: **%d** total — %d certified by the validity contract, %d REFUSED, %d LEGACY/UNVERIFIED (written before the contract; counted and readable, EXCLUDED from every certified mean).",
 		run.total, run.scored, run.excluded, run.legacy)
 	w("- Negative-control trials: **%s** (%d of %d observed).", run.negState(), run.negUsable, run.negTotal)
 	if run.legacy > 0 {
-		w("- Legacy rows carry no validity evidence, so the numbers below that rest on them are NOT certified measurements. Re-run the benchmark on a current harness to certify them.")
+		w("- Legacy rows carry no validity evidence, so they are NOT blended into any score or efficiency mean below. Re-run the benchmark on a current harness to certify them.")
+	}
+	if run.scored == 0 {
+		w("")
+		w("> **UNAVAILABLE — NO CERTIFIED OBSERVATIONS.** Every attack row in this corpus predates the measurement-validity contract or was refused by it, so the tables below have no measured data behind them. This is unavailable, NOT zero and NOT a measured result.")
 	}
 	for _, r := range run.reasons {
 		w("- Excluded: %s", r)

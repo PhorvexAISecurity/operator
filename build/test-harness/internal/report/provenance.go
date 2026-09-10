@@ -37,9 +37,11 @@ type ProvenanceEntry struct {
 	ControlDefender string `json:"controlDefender,omitempty"`
 	ControlUsable   bool   `json:"controlUsable"`
 	UnscoredReason  string `json:"unscoredReason,omitempty"`
-	// CleanupComplete is false when owed cleanup did not verify;
-	// CleanupUnresolved is true when a cleanup call outlived its bound and may
-	// still be running.
+	// CleanupComplete is the VALIDATED soundness of the owed cleanup, not the
+	// row's own `complete` flag: a row can claim complete while retaining a
+	// failed, unresolved or blocked step, and provenance must not repeat that
+	// claim. CleanupUnresolved is true when a cleanup call outlived its bound
+	// and may still be running.
 	CleanupComplete   bool `json:"cleanupComplete"`
 	CleanupUnresolved bool `json:"cleanupUnresolved,omitempty"`
 	// Unverified is true when this build could not interpret the row's validity
@@ -69,10 +71,14 @@ type ProvenanceMap struct {
 	Entries      []ProvenanceEntry `json:"entries"`
 	// HowToReproduce is the exact command to re-run the identical benchmark.
 	HowToReproduce string `json:"howToReproduce"`
+	// Run carries the run's own verdict — completeness, barriers, retained late
+	// cleanups and the FINAL TEARDOWN result — so provenance records whether the
+	// cluster was left verified, not only what each cell measured.
+	Run *core.RunOutcome `json:"run,omitempty"`
 }
 
 // BuildProvenance constructs the provenance map from the metric stream.
-func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, kubeContext, namespace, metricsFile, reproduceCmd string) ProvenanceMap {
+func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, kubeContext, namespace, metricsFile, reproduceCmd string, run *core.RunOutcome) ProvenanceMap {
 	pm := ProvenanceMap{
 		MasterSeed:     masterSeed,
 		TrialsPerArm:   trialsPerArm,
@@ -80,6 +86,7 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 		Namespace:      namespace,
 		MetricsFile:    metricsFile,
 		HowToReproduce: reproduceCmd,
+		Run:            run,
 	}
 	for _, m := range metrics {
 		// The provenance entry carries the VALIDATED verdict, not the row's own
@@ -104,7 +111,7 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 			ControlDefender:   v.Baseline.Defender,
 			ControlUsable:     v.Baseline.Usable && val.Scorable,
 			UnscoredReason:    unscoredReason(val),
-			CleanupComplete:   v.Cleanup.Complete,
+			CleanupComplete:   v.Cleanup.Sound(),
 			CleanupUnresolved: v.Cleanup.Unresolved,
 			Unverified:        val.Unverified,
 		})

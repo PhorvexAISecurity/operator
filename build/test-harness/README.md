@@ -154,23 +154,60 @@ Rules the runner and every report enforce:
   outlives its bound is recorded `unresolved`: it may still be running, so the
   runner keeps ownership of it (`Runner.WaitForPendingCleanup`,
   `RunOutcome.LateCleanups`) instead of abandoning it, and a late success never
-  retroactively marks the already-reported trial clean.
-- **Deletion accepted is not absence observed.** `Env.CleanupOwned` aggregates
-  every API failure across every kind and then VERIFIES the owned objects are
-  gone; residue — including objects held by a finalizer — is an error, so no
-  later trial reuses a namespace whose previous contents are still there.
+  retroactively marks the already-reported trial clean. The CLI reports whether
+  such a call has actually `Returned`; a call still running is never printed as
+  returned.
+- **Unsafe cleanup phases never overlap.** Every owed step touches the same Env —
+  its logger, its client, its namespace — and `env.Close` frees the logger the
+  earlier steps write through. So once a step is unresolved, the remaining steps
+  are NOT started: they are recorded `blocked` with the step that blocked them.
+  That is honest and just as disqualifying for reuse, whereas starting them would
+  race a live callback and then claim each phase "ran".
+- **Deletion accepted is not absence observed — and asynchronous deletion is not
+  residue.** `Env.CleanupOwned` aggregates every API failure across every kind,
+  then POLLS within its budget until the owned objects are actually gone. Ordinary
+  background deletion completes and verifies; only what is still there when the
+  budget expires is a problem, reported with its terminating/finalizer state. With
+  `deleteNamespace=true` the namespace's own disappearance is verified the same
+  way.
+- **The final teardown is part of the run result.** A run whose matrix passed but
+  whose final teardown did not verify is INCOMPLETE: it raises a barrier, lands in
+  `provenance.json` and exits non-zero, because it leaves the cluster dirty for
+  the next run.
 - **Legacy rows stay legacy.** A metrics file written before this contract still
   decodes; those rows are counted and displayed as `legacy-unverified` and
   excluded from certified scores. Nothing is inferred from their zero fields and
   no historical file is rewritten.
 
+### One contract, one implementation
+
+The rules live in `build/metricvalidity`, a dependency-free module that the
+harness and the Phorvex reporters/console both import. It is deliberately not
+owned by either side: the shipped product must not depend on the test harness,
+and a one-file contract should not drag a module graph behind it.
+
+That structure exists because the alternative was tried and failed. When each
+reader mirrored the wire format by hand, the mirrors quietly omitted the fields
+the producer had begun checking — the baseline evidence, the retained cleanup
+steps — and certified rows the harness itself refuses. There is now nothing to
+keep in sync.
+
+A shared implementation still leaves one gap: a reader can route through the
+right rules and yet reach the wrong answer by failing to DECODE a field those
+rules depend on. So `metricvalidity` also embeds a PARITY CORPUS — real rows
+produced by `Runner.Run`, plus single-field counterexamples derived from one of
+them — and every reader has a test that runs the corpus through its own struct
+and its own predicates and compares against the contract's verdict. Regenerate it
+with `M161_REGEN_CORPUS=1 go test ./internal/report -run TestSharedParityCorpus`.
+
 ### A decoded validity block is a CLAIM, not a verdict
 
 A metrics file is an untrusted input: it may come from a newer or older harness,
-or have been edited or truncated. `Metric.Validated()` is the ONE place those
-claims are checked — against this build's supported contract and against each
-other — and it is what `IsScored`, `CostObserved`, `Kind`, every aggregator,
-every reader and the provenance map use. Nothing consults `scored` directly.
+or have been edited or truncated. `metricvalidity.Evaluate` (reached as
+`Metric.Validated()` inside the harness) is the ONE place those claims are
+checked — against this build's supported contract and against each other — and it
+is what `IsScored`, `CostObserved`, `Kind`, every aggregator, every reader and the
+provenance map use. Nothing consults `scored` directly.
 
 A row is refused, and reported as `unverified`, when its `version`, `kind` or
 `status` is not one this build understands, or when it claims `scored` while its
@@ -180,6 +217,13 @@ trial is a negative control, or `disruptionVsOracle` is outside `[0,1]`. A claim
 `costObserved` is refused against a `-1` action count or a non-finite time. A row
 whose evidence contradicts itself contributes nothing at all — but it never
 disappears: it is counted and its rejections are rendered.
+
+**Cleanup and control evidence are checked on EVERY row, not only scored ones.** A
+negative control is never "scored" — that is normal for the kind — so putting
+those checks inside the scored-only path let a trial with a retained cleanup
+failure certify a clean arm. A dirty trial is dirty whatever its kind, and a
+control marked usable whose own evidence denies it is a corrupt row whatever its
+kind.
 
 The aggregate and both reports publish `emitted / scored / invalid / skipped /
 unscored / unverified / cleanupFailed / costUnobserved / legacy` counts per arm
@@ -195,10 +239,16 @@ a usable subset cannot establish a clean arm, so `partial` renders
 caveat that no verdict establishes an absence of false defensive moves.
 
 The downstream product readers (`phorvex/cmd/p3report`, `phorvex/cmd/p3deep`,
-`phorvex/internal/console`) consume this same contract: they repeat the
-corroboration rather than trusting `scored`, exclude refused rows, never average
-a `-1` cost, and disclose legacy/partial-control corpora instead of publishing
-them as measurements.
+`phorvex/internal/console`) import the same contract rather than reimplementing
+it: they exclude refused rows, never average a `-1` cost, and disclose
+partial-control corpora instead of publishing them as measurements.
+
+**Legacy rows are excluded from certified means everywhere**, including those
+product readers. A pre-contract row records no evidence that it measured
+anything, so blending it into a current score or efficiency mean would launder
+unverified history into a fresh measurement. Such rows stay readable and are
+counted openly; a corpus with nothing certified left renders UNAVAILABLE, which
+is not zero and not a measured result.
 
 **Comparison scope (honest limit).** `TrialSeed` includes the defender identity,
 so the baseline arm's trial *i* and a defended arm's trial *i* are seeded

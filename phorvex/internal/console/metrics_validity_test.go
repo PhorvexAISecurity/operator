@@ -8,17 +8,82 @@ package console
 // publish. A valid observed contrast is kept as the positive control.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/phorvex/metricvalidity"
 )
 
-// validRow is a metrics.jsonl line the harness would certify.
-const validRow = `{"scenario":"s1","defender":"d-phorvex","trial":0,"oracleAchieved":false,` +
-	`"disruptionVsOracle":1,"defensiveActions":2,"falseDefensiveActions":-1,"timeToActionSeconds":1,` +
-	`"validity":{"version":1,"kind":"ordinary","status":"valid","oracleObserved":true,"costObserved":true,` +
-	`"scored":true,"baseline":{"required":true,"defender":"d-nomtd","observed":true,"valid":true,` +
-	`"oracleAchieved":true,"usable":true},"cleanup":{"complete":true}}}`
+// fixtureRow is a metrics.jsonl line built from the CONTRACT'S OWN TYPES rather
+// than hand-written JSON. A hand-written block silently omits whatever fields
+// the contract has started checking, which makes the fixture more permissive
+// than the producer and the test worthless. See also the corpus parity tests,
+// which run real producer output through this same reader.
+type fixtureRow struct {
+	Scenario              string                   `json:"scenario"`
+	Defender              string                   `json:"defender"`
+	Trial                 int                      `json:"trial"`
+	OracleAchieved        bool                     `json:"oracleAchieved"`
+	DisruptionVsOracle    float64                  `json:"disruptionVsOracle"`
+	DefensiveActions      int                      `json:"defensiveActions"`
+	FalseDefensiveActions int                      `json:"falseDefensiveActions"`
+	TimeToActionSeconds   float64                  `json:"timeToActionSeconds"`
+	NegativeControl       bool                     `json:"negativeControl,omitempty"`
+	ObservedState         string                   `json:"observedState,omitempty"`
+	Validity              *metricvalidity.Validity `json:"validity,omitempty"`
+}
+
+func (f fixtureRow) line(t *testing.T) string {
+	t.Helper()
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// certifiedRow is what Runner.Run writes for a genuine, fully anchored,
+// cost-observed comparison.
+func certifiedRow(scenario, defender string, trial int) fixtureRow {
+	return fixtureRow{
+		Scenario: scenario, Defender: defender, Trial: trial,
+		DisruptionVsOracle: 1, DefensiveActions: 2, FalseDefensiveActions: -1, TimeToActionSeconds: 1,
+		Validity: &metricvalidity.Validity{
+			Version: metricvalidity.Version, Kind: metricvalidity.TrialOrdinary,
+			Status: metricvalidity.StatusValid, Phase: metricvalidity.PhaseComplete,
+			AttackExecuted: true, OracleObserved: true, ObserverPresent: true, CostObserved: true,
+			Scored: true,
+			Baseline: metricvalidity.BaselineRef{Required: true, Defender: "d-nomtd",
+				Kind: metricvalidity.TrialOrdinary, Trial: trial,
+				Observed: true, Valid: true, OracleAchieved: true, Usable: true},
+			Cleanup: metricvalidity.CleanupRecord{Complete: true, Verified: true},
+		},
+	}
+}
+
+// negControlFixture is what Runner.Run writes for a no-attack negative control.
+func negControlFixture(scenario, defender string, trial, falseMoves int, costObserved bool) fixtureRow {
+	f := fixtureRow{
+		Scenario: scenario, Defender: defender, Trial: trial, NegativeControl: true,
+		FalseDefensiveActions: -1, DefensiveActions: -1,
+		Validity: &metricvalidity.Validity{
+			Version: metricvalidity.Version, Kind: metricvalidity.TrialNegativeControl,
+			Status: metricvalidity.StatusValid, Phase: metricvalidity.PhaseComplete,
+			AttackExecuted: true, OracleObserved: true, ObserverPresent: true,
+			CostObserved: costObserved,
+			Cleanup:      metricvalidity.CleanupRecord{Complete: true, Verified: true},
+		},
+	}
+	if costObserved {
+		f.FalseDefensiveActions, f.DefensiveActions = falseMoves, falseMoves
+	}
+	return f
+}
+
+// validRow is the certified positive control as a metrics.jsonl line.
+func validRowLine(t *testing.T) string { return certifiedRow("s1", "d-phorvex", 0).line(t) }
 
 func writeMetrics(t *testing.T, lines ...string) []metricRow {
 	t.Helper()
@@ -39,7 +104,7 @@ func writeMetrics(t *testing.T, lines ...string) []metricRow {
 
 // POSITIVE CONTROL: a genuine certified row is published normally.
 func TestConsoleValidRowIsPublished(t *testing.T) {
-	rows := writeMetrics(t, validRow)
+	rows := writeMetrics(t, validRowLine(t))
 	if len(rows) != 1 {
 		t.Fatalf("decoded %d rows, want 1", len(rows))
 	}
@@ -60,21 +125,33 @@ func TestConsoleValidRowIsPublished(t *testing.T) {
 // Rows the contract refuses must not reach a panel.
 func TestConsoleRefusedRowsAreExcluded(t *testing.T) {
 	cases := []struct {
-		name string
-		line string
+		name   string
+		mutate func(*metricvalidity.Validity)
 	}{
-		{"future-version", replaceOnce(validRow, `"version":1`, `"version":999`)},
-		{"unknown-status", replaceOnce(validRow, `"status":"valid"`, `"status":"unrecognized"`)},
-		{"invalid-status", replaceOnce(validRow, `"status":"valid"`, `"status":"invalid"`)},
-		{"oracle-not-observed", replaceOnce(validRow, `"oracleObserved":true`, `"oracleObserved":false`)},
-		{"control-not-usable", replaceOnce(validRow, `"usable":true`, `"usable":false`)},
-		{"cleanup-incomplete", replaceOnce(validRow, `"cleanup":{"complete":true}`, `"cleanup":{"complete":false}`)},
-		{"cleanup-unresolved", replaceOnce(validRow, `"cleanup":{"complete":true}`, `"cleanup":{"complete":false,"unresolved":true}`)},
-		{"not-scored", replaceOnce(validRow, `"scored":true`, `"scored":false`)},
+		{"future-version", func(v *metricvalidity.Validity) { v.Version = metricvalidity.Version + 1 }},
+		{"unknown-status", func(v *metricvalidity.Validity) { v.Status = "unrecognized" }},
+		{"invalid-status", func(v *metricvalidity.Validity) { v.Status = metricvalidity.StatusInvalid }},
+		{"oracle-not-observed", func(v *metricvalidity.Validity) { v.OracleObserved = false }},
+		{"control-not-usable", func(v *metricvalidity.Validity) { v.Baseline.Usable = false }},
+		{"cleanup-incomplete", func(v *metricvalidity.Validity) { v.Cleanup.Complete = false }},
+		{"cleanup-unresolved", func(v *metricvalidity.Validity) {
+			v.Cleanup.Complete, v.Cleanup.Unresolved = false, true
+		}},
+		{"retained-cleanup-failure", func(v *metricvalidity.Validity) {
+			v.Cleanup.Attempted = []metricvalidity.CleanupStep{{Step: "env.Close", Error: "forbidden"}}
+		}},
+		{"not-scored", func(v *metricvalidity.Validity) { v.Scored = false }},
+		{"baseline-kind-mismatch", func(v *metricvalidity.Validity) { v.Baseline.Kind = metricvalidity.TrialAdaptive }},
+		{"baseline-trial-mismatch", func(v *metricvalidity.Validity) { v.Baseline.Trial = 99 }},
+		{"oracle-without-attack", func(v *metricvalidity.Validity) { v.AttackExecuted = false }},
+		{"cost-without-observer", func(v *metricvalidity.Validity) { v.ObserverPresent = false }},
+		{"valid-at-non-terminal-phase", func(v *metricvalidity.Validity) { v.Phase = metricvalidity.PhaseScenarioSetup }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rows := writeMetrics(t, tc.line)
+			row := certifiedRow("s1", "d-phorvex", 0)
+			tc.mutate(row.Validity)
+			rows := writeMetrics(t, row.line(t))
 			if len(rows) != 1 {
 				t.Fatalf("the row must still DECODE (it is disclosed, not dropped on read)")
 			}
@@ -90,9 +167,10 @@ func TestConsoleRefusedRowsAreExcluded(t *testing.T) {
 
 // An UNOBSERVED cost is never a zero cost.
 func TestConsoleUnknownCostNeverBecomesZeroCost(t *testing.T) {
-	line := replaceOnce(replaceOnce(validRow, `"defensiveActions":2`, `"defensiveActions":-1`),
-		`"costObserved":true`, `"costObserved":false`)
-	rows := writeMetrics(t, line)
+	row := certifiedRow("s1", "d-phorvex", 0)
+	row.DefensiveActions = -1
+	row.Validity.CostObserved = false
+	rows := writeMetrics(t, row.line(t))
 	m := rows[0]
 	if m.costUsable() {
 		t.Fatalf("an unobserved cost was accepted as an observation")
@@ -108,9 +186,16 @@ func TestConsoleUnknownCostNeverBecomesZeroCost(t *testing.T) {
 }
 
 // A legacy row (no validity block) stays readable but is never certified.
-func TestConsoleLegacyRowIsReadableButNotCertified(t *testing.T) {
+// A legacy row stays READABLE and identifiable, but it never contaminates a
+// certified aggregate: it carries no evidence that it measured anything, so
+// blending it into a current score or efficiency mean would launder unverified
+// history into a fresh measurement.
+func TestConsoleLegacyRowIsReadableButExcludedFromCertifiedAggregates(t *testing.T) {
 	legacy := `{"scenario":"s1","defender":"d-phorvex","trial":0,"oracleAchieved":false,"disruptionVsOracle":1,"defensiveActions":2}`
 	rows := writeMetrics(t, legacy)
+	if len(rows) != 1 {
+		t.Fatalf("a legacy row must still DECODE and stay readable, got %d rows", len(rows))
+	}
 	m := rows[0]
 	if !m.legacy() {
 		t.Fatalf("a pre-contract row was not classified as legacy")
@@ -118,22 +203,31 @@ func TestConsoleLegacyRowIsReadableButNotCertified(t *testing.T) {
 	if m.scorable() {
 		t.Fatalf("a legacy row was certified")
 	}
-	if m.excluded() {
-		t.Fatalf("a legacy row must remain readable (disclosed), not dropped")
+	if !m.excluded() {
+		t.Fatalf("a legacy row must be excluded from certified aggregates")
+	}
+	if m.costUsable() {
+		t.Fatalf("a legacy row's cost was treated as an observation")
+	}
+	if kept := fixedTrials(rows, "s1", "d-phorvex"); len(kept) != 0 {
+		t.Fatalf("a legacy row entered the published trial aggregate: %+v", kept)
+	}
+	// UNAVAILABLE, not zero: nothing certified remains for this arm.
+	if c := negControlCensus(rows, "s1", "d-phorvex"); c.State != "not-run" || c.MaxFalseMoves != -1 {
+		t.Fatalf("legacy corpus reported a control result: %+v", c)
 	}
 }
 
 // Negative controls: partial and unobserved sets never establish a clean arm.
 func TestConsoleNegativeControlCensus(t *testing.T) {
-	negObserved := `{"scenario":"s1","defender":"d-phorvex","trial":1,"negativeControl":true,` +
-		`"falseDefensiveActions":0,"defensiveActions":0,` +
-		`"validity":{"version":1,"kind":"negative-control","status":"valid","oracleObserved":true,` +
-		`"costObserved":true,"scored":false,"baseline":{},"cleanup":{"complete":true}}}`
-	negUnobserved := `{"scenario":"s1","defender":"d-phorvex","trial":2,"negativeControl":true,` +
-		`"falseDefensiveActions":-1,"defensiveActions":-1,` +
-		`"validity":{"version":1,"kind":"negative-control","status":"valid","oracleObserved":true,` +
-		`"costObserved":false,"scored":false,"baseline":{},"cleanup":{"complete":true}}}`
+	negObserved := negControlFixture("s1", "d-phorvex", 1, 0, true).line(t)
+	negUnobserved := negControlFixture("s1", "d-phorvex", 2, 0, false).line(t)
+	// A dirty control cannot establish a clean arm even though it is never scored.
+	dirty := negControlFixture("s1", "d-phorvex", 4, 0, true)
+	dirty.Validity.Cleanup.Attempted = []metricvalidity.CleanupStep{{Step: "env.Close", Error: "forbidden"}}
+	negDirty := dirty.line(t)
 	negLegacy := `{"scenario":"s1","defender":"d-phorvex","trial":3,"negativeControl":true,"falseDefensiveActions":0}`
+	validRow := validRowLine(t)
 
 	cases := []struct {
 		name      string
@@ -142,6 +236,7 @@ func TestConsoleNegativeControlCensus(t *testing.T) {
 		wantMax   int
 	}{
 		{"not-run", []string{validRow}, "not-run", -1},
+		{"dirty-control", []string{validRow, negDirty}, "unobserved", -1},
 		{"observed", []string{validRow, negObserved}, "observed", 0},
 		{"partial", []string{validRow, negObserved, negUnobserved}, "partial", -1},
 		{"unobserved", []string{validRow, negUnobserved}, "unobserved", -1},
@@ -160,21 +255,4 @@ func TestConsoleNegativeControlCensus(t *testing.T) {
 			}
 		})
 	}
-}
-
-func replaceOnce(s, old, new string) string {
-	i := indexOf(s, old)
-	if i < 0 {
-		panic("fixture does not contain " + old)
-	}
-	return s[:i] + new + s[i+len(old):]
-}
-
-func indexOf(haystack, needle string) int {
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		if haystack[i:i+len(needle)] == needle {
-			return i
-		}
-	}
-	return -1
 }
