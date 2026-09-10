@@ -58,3 +58,4 @@ rules:
   - delete
   - get
   - list
+  - update

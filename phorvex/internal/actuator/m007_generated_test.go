@@ -28,7 +28,7 @@ func m007Expected(codeexec bool) map[string]bool {
 		add("apps", r, "get")
 	}
 	add("batch", "jobs", "get")
-	add("networking.k8s.io", "networkpolicies", "get", "list", "create", "delete")
+	add("networking.k8s.io", "networkpolicies", "get", "list", "create", "delete", "update")
 	if codeexec {
 		add("", "pods/ephemeralcontainers", "update")
 	}

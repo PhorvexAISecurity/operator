@@ -15,7 +15,7 @@
  *
  * pods                          : rotate (get/delete), quarantine/identity/route/kv/endpoint (get/update), warm-swap (list/update/delete)
  * pods/ephemeralcontainers      : debugger / custom-inject / inject-carrier kv-reset (update)
- * networkpolicies               : quarantine deny-all + orphan GC (create/get/list/delete)
+ * networkpolicies               : quarantine create/reconcile + migration/cleanup (create/get/list/delete/update)
  * replicasets/statefulsets/daemonsets, jobs : quarantine reads the owning controller's selector to detach (get)
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update);
  *                                 quarantine independently checks all namespaced Service selectors (list)
@@ -28,7 +28,7 @@ package actuator
 
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update
-// +kubebuilder:rbac:namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;delete
+// +kubebuilder:rbac:namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;delete;update
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=apps,resources=replicasets;statefulsets;daemonsets;deployments,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=batch,resources=jobs,verbs=get
