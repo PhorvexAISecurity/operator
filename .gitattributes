@@ -17,3 +17,6 @@ workflow/assessments/20260910-readiness/reconciliation/actuation-r1/CURRENT-M001
 workflow/assessments/20260910-readiness/reconciliation/actuation-r1/parts/header.md -whitespace
 workflow/assessments/20260910-readiness/reconciliation/actuation-r2-reviewed/CURRENT-M081-M120.md -whitespace
 workflow/assessments/20260910-readiness/reconciliation/actuation-r2-reviewed/parts2/header2.md -whitespace
+
+# Raw preflight output, including retained failure diagnostics.
+workflow/assessments/20260910-readiness/evidence/run-1789076685233119136/diff.log -whitespace
