@@ -1,0 +1,47 @@
+package runner
+
+import (
+ "context"
+ "testing"
+ "github.com/go-logr/logr"
+ "github.com/phorvex/phorvex/internal/actuator"
+ "github.com/phorvex/phorvex/internal/model"
+)
+
+type independentMergeCapture struct {
+ dispatchFakeActuator
+ request actuator.Request
+}
+func (f *independentMergeCapture) Actuate(_ context.Context, r actuator.Request) (actuator.Result,error) {
+ f.calls++; f.request=r
+ return actuator.Result{Emitted:true},nil
+}
+func TestIndependentConflictCoverageAndAdmissionCompose(t *testing.T) {
+ for _,action:=range []model.Action{model.ActionDebugger,model.ActionCustomInject} {
+  for _,mode:=range []string{"unwired","refused","verified"} {
+   t.Run(string(action)+"/"+mode,func(t *testing.T){
+    fa:=&independentMergeCapture{}
+    m:=&Manager{Actuator:fa,Log:logr.Discard()}
+    check:=&fakeAdmissionFinal{ok:mode=="verified",reason:"unverified"}
+    if mode!="unwired" {m.CodeExec=check}
+    ds:=tracedSelectedDecision();ds[0].Action=action;ds[0].Engine="p1-coverage";ds[0].CoverageValue=8.125
+    views:=map[string]*model.WorkloadView{"ns/p1":{Pod:model.Pod{Namespace:"ns",Name:"p1",DesiredReplicas:3,ReadyReplicas:3,Ready:true}}}
+    pol:=model.Policy{Tenant:"t",EnabledActions:map[model.Action]bool{action:true}}
+    n:=m.actuate(context.Background(),&policyEntry{namespace:"ns"},pol,ds,views)
+    if mode!="verified" {
+     if n!=0||fa.calls!=0||ds[0].Actuated {t.Fatalf("unverified dispatch n=%d calls=%d decision=%+v",n,fa.calls,ds[0])}
+     return
+    }
+    if n!=1||fa.calls!=1||check.sawNS!="ns" {t.Fatalf("verified control did not dispatch exactly once: n=%d calls=%d ns=%s",n,fa.calls,check.sawNS)}
+    if fa.request.CoverageValue==nil||*fa.request.CoverageValue!=8.125||fa.request.Score!=-1 {t.Fatalf("lost raw coverage or restored anomaly alias: %+v",fa.request)}
+   })
+  }
+ }
+ t.Run("p0-score-control",func(t *testing.T){
+  fa:=&independentMergeCapture{};m:=&Manager{Actuator:fa,Log:logr.Discard()}
+  ds:=tracedSelectedDecision();ds[0].Engine="p0-greedy";ds[0].ThreatRisk=2;ds[0].CoverageValue=8.125
+  views:=map[string]*model.WorkloadView{"ns/p1":{Pod:model.Pod{Namespace:"ns",Name:"p1",DesiredReplicas:3,ReadyReplicas:3,Ready:true}}}
+  m.actuate(context.Background(),&policyEntry{namespace:"ns"},model.Policy{Tenant:"t"},ds,views)
+  if fa.calls!=1||fa.request.Score!=1||fa.request.CoverageValue!=nil {t.Fatalf("genuine P0 contract changed: calls=%d request=%+v",fa.calls,fa.request)}
+ })
+}
