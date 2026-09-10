@@ -13,11 +13,13 @@ import yaml
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml"
-STEP = next(
+COMMAND = next(
     step["run"]
     for step in yaml.safe_load(WORKFLOW.read_text())["jobs"]["chart-sync"]["steps"]
     if step.get("name") == "Vendored subchart matches its source"
 )
+assert COMMAND == "bash tools/check-vendored-chart.sh"
+STEP = (WORKFLOW.parents[2] / "tools/check-vendored-chart.sh").read_text()
 
 
 class ChartSyncTest(unittest.TestCase):

@@ -1,0 +1,3 @@
+# base fb52e6c branch t1/sensing-separate-residency-activity 2026-09-02T12:56:50Z
+# tree state: hazard.go UNMODIFIED
+# go version go1.27.1 linux/amd64

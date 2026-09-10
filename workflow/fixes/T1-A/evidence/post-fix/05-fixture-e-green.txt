@@ -1,0 +1,24 @@
+=== RUN   TestAIStageClassification
+--- PASS: TestAIStageClassification (0.00s)
+=== RUN   TestLeakageGate_LoadedIdleIsNotTheft
+--- PASS: TestLeakageGate_LoadedIdleIsNotTheft (0.00s)
+=== RUN   TestLeakageGate_ExtractionLoadIsTheft_PositiveControl
+--- PASS: TestLeakageGate_ExtractionLoadIsTheft_PositiveControl (0.00s)
+=== RUN   TestLeakageGate_ThresholdIsStrict
+--- PASS: TestLeakageGate_ThresholdIsStrict (0.00s)
+=== RUN   TestLeakageGate_AllocationCarriesNoWeight
+--- PASS: TestLeakageGate_AllocationCarriesNoWeight (0.00s)
+=== RUN   TestLeakageGate_LivePersistEventOnTwoModelFleet_DeclaredDowngrade
+--- PASS: TestLeakageGate_LivePersistEventOnTwoModelFleet_DeclaredDowngrade (0.00s)
+=== RUN   TestLeakageRecord_MatchesGateInput
+=== RUN   TestLeakageRecord_MatchesGateInput/measured_activity,_VRAM_ignored
+=== RUN   TestLeakageRecord_MatchesGateInput/honest-absent_SM_reads_as_0,_not_as_VRAM
+=== RUN   TestLeakageRecord_MatchesGateInput/saturated_VRAM_adds_nothing_at_any_weight
+--- PASS: TestLeakageRecord_MatchesGateInput (0.00s)
+    --- PASS: TestLeakageRecord_MatchesGateInput/measured_activity,_VRAM_ignored (0.00s)
+    --- PASS: TestLeakageRecord_MatchesGateInput/honest-absent_SM_reads_as_0,_not_as_VRAM (0.00s)
+    --- PASS: TestLeakageRecord_MatchesGateInput/saturated_VRAM_adds_nothing_at_any_weight (0.00s)
+=== RUN   TestLeakageRecord_GenericChainUnchanged
+--- PASS: TestLeakageRecord_GenericChainUnchanged (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/killchain	0.009s

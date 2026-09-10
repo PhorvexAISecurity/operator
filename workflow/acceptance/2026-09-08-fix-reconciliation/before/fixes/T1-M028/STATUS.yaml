@@ -1,0 +1,78 @@
+schema_version: 1
+fix_id: T1-M028
+issues:
+- M-28
+related_issues:
+- M-23
+- M-25
+- M-26
+title: Proactive cadence cap
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+blind_derivation:
+  status: sealed
+  artifact: 02-critique-sectionA.sealed.md
+  sha256: 17ea34049794ce2d6ffd489bbe830fe8952d122c7e95b0cb184728142478a145
+  sealed_at: '2026-09-07T21:40:41Z'
+  note: Sealed-blind §A under the current protocol; §B in 02-critique.md.
+implementation:
+  branch: t1/belief-m028-proactive-cadence-cap
+  base_sha: a13b83a
+  head_sha: aaf01e0
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/131
+  reviewed_head: aaf01e0
+  merge_sha: 847e840
+  checks: passed-merged-2026-09-08
+  patch_equivalence: PASS
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.97
+  digest: null
+  git_sha: c8c708145f2f
+  rolled_out_at: '2026-09-08T14:20:59Z'
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: fleet-masked-live-non-discriminating-covered-in-tree
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies:
+- T1-M023
+blockers:
+- Resume only after the M-023/M-020/M-160 chain is merged and deployed
+residuals: []
+next_action:
+  owner: human-owner
+  action: Human releases the hold after dependencies are deployed.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-M028
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: false
+  legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+updated_at: '2026-09-06T22:26:59+00:00'
+revision: 0

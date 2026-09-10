@@ -1,0 +1,905 @@
+diff --git a/phorvex/internal/actionset/generator_test.go b/phorvex/internal/actionset/generator_test.go
+index 15f7a57..6289b15 100644
+--- a/phorvex/internal/actionset/generator_test.go
++++ b/phorvex/internal/actionset/generator_test.go
+@@ -34,7 +34,8 @@ func baseView(name string) *model.WorkloadView {
+ 		Phase:       model.PhaseWarm,
+ 		BlastRadius: 0.5,
+ 		ExposureByVariable: map[string]time.Duration{
+-			model.VarPodIdentity: 2 * time.Hour, // past the anti-over-rotation window
++			model.VarPodIdentity:     2 * time.Hour, // past the anti-over-rotation window (rotate's clock)
++			model.VarNetworkIdentity: 2 * time.Hour, // quarantine's M-23 per-action clock, likewise past window
+ 		},
+ 	}
+ }
+@@ -102,7 +103,8 @@ func TestDynamicActionSetChangesWithState(t *testing.T) {
+ 
+ 	// 3. Freshly-moved pod (exposure < anti-over-rotation window) => BOTH removed.
+ 	fresh := baseView("fresh")
+-	fresh.ExposureByVariable[model.VarPodIdentity] = 30 * time.Second
++	fresh.ExposureByVariable[model.VarPodIdentity] = 30 * time.Second     // freshly rotated
++	fresh.ExposureByVariable[model.VarNetworkIdentity] = 30 * time.Second // and freshly quarantined (M-23 per-action clock)
+ 	freshSet := actionsFor(d.Generate([]*model.WorkloadView{fresh}, pol), "ns/fresh")
+ 	if len(freshSet) != 0 {
+ 		t.Errorf("freshly-moved pod must have an EMPTY action set (anti-over-rotation), got %v", freshSet)
+diff --git a/phorvex/internal/actuator/handlers_ai_p4set.go b/phorvex/internal/actuator/handlers_ai_p4set.go
+index 86e9c25..c96b1fb 100644
+--- a/phorvex/internal/actuator/handlers_ai_p4set.go
++++ b/phorvex/internal/actuator/handlers_ai_p4set.go
+@@ -45,6 +45,7 @@ const (
+ 	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"    // comma-list of P/D peer endpoints
+ 	annoKVEpoch          = "phorvex.ai/kv-migrate-epoch"
+ 	labelServing         = "phorvex.ai/serving"        // K8s readiness-drain target label
++	labelDrainEpoch      = "phorvex.ai/drain-epoch"    // M-23 A1: event-valued clock for VarDrainEpoch
+ 	labelParallelGroup   = "phorvex.ai/parallel-group" // TP/PP group id (a consistency unit)
+ 	labelRank            = "phorvex.ai/rank"           // rank within the parallel group
+ 	annoParallelSize     = "phorvex.ai/parallel-size"  // number of ranks in the group
+@@ -265,6 +266,11 @@ func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
+ 	pod.Labels = ensureMap(pod.Labels)
+ 	prevServing := pod.Labels[labelServing]
+ 	pod.Labels[labelServing] = "drained"
++	// M-23 A1: stamp an event-valued drain epoch in the SAME Update as the serving flip. The
++	// serving label is boolean and reverts on rollback/failure-restore, so it can't clock
++	// repeated drains; ResourceVersion differs each actuation. The failure-restore below and
++	// Rollback leave this epoch UNTOUCHED (it records drain EVENTS, not admission state).
++	pod.Labels[labelDrainEpoch] = pod.ResourceVersion
+ 	if err := ec.Client.Update(ctx, pod); err != nil {
+ 		return HandlerResult{}, fmt.Errorf("request-drain stop-admit %s/%s: %w", req.Namespace, req.Pod, err)
+ 	}
+diff --git a/phorvex/internal/actuator/handlers_ai_p4set_test.go b/phorvex/internal/actuator/handlers_ai_p4set_test.go
+index 554ac0a..d5e9667 100644
+--- a/phorvex/internal/actuator/handlers_ai_p4set_test.go
++++ b/phorvex/internal/actuator/handlers_ai_p4set_test.go
+@@ -151,6 +151,34 @@ func TestRequestDrainStopsAdmitsThenAborts(t *testing.T) {
+ 	}
+ }
+ 
++// TestRequestDrainStampsDrainEpochRollbackUntouched (M-23 A1): request-drain writes an
++// event-valued drain-epoch in the SAME Update as the serving flip (the serving label is boolean and
++// reverts, so it can't clock repeated drains); Rollback re-admits WITHOUT touching the epoch.
++func TestRequestDrainStampsDrainEpochRollbackUntouched(t *testing.T) {
++	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
++	c := fakeC(pod)
++	if _, err := (requestDrainHandler{}).Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drained: 1}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain}); err != nil {
++		t.Fatalf("drain: %v", err)
++	}
++	var p corev1.Pod
++	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
++	stamped := p.Labels[labelDrainEpoch]
++	if stamped == "" {
++		t.Fatalf("drain-epoch not stamped in the drain Update: %v", p.Labels)
++	}
++	// Rollback re-admits and must leave the drain-epoch untouched (it records drain EVENTS).
++	if err := (requestDrainHandler{}).Rollback(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "infer"}, ""); err != nil {
++		t.Fatalf("rollback: %v", err)
++	}
++	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
++	if p.Labels[labelServing] != "true" {
++		t.Errorf("rollback must re-admit (serving=true), got %q", p.Labels[labelServing])
++	}
++	if p.Labels[labelDrainEpoch] != stamped {
++		t.Errorf("rollback changed drain-epoch %q -> %q; it must leave the event clock untouched", stamped, p.Labels[labelDrainEpoch])
++	}
++}
++
+ func TestRequestDrainReachableFailRestoresAdmits(t *testing.T) {
+ 	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
+ 	c := fakeC(pod)
+diff --git a/phorvex/internal/actuator/handlers_k8s.go b/phorvex/internal/actuator/handlers_k8s.go
+index d27be6e..917aedf 100644
+--- a/phorvex/internal/actuator/handlers_k8s.go
++++ b/phorvex/internal/actuator/handlers_k8s.go
+@@ -86,8 +86,9 @@ type quarantineHandler struct{}
+ func (quarantineHandler) Name() string { return string(model.ActionQuarantine) }
+ 
+ const (
+-	quarantineLabel    = "phorvex.ai/quarantined"
+-	quarantineSnapAnno = "phorvex.ai/quarantine-snapshot"
++	quarantineLabel      = "phorvex.ai/quarantined"
++	quarantineSnapAnno   = "phorvex.ai/quarantine-snapshot"
++	quarantineEpochLabel = "phorvex.ai/quarantine-epoch" // M-23 D2: event-valued clock for VarNetworkIdentity
+ )
+ 
+ type qtnSnapshot struct {
+@@ -146,6 +147,12 @@ func (h quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
+ 	}
+ 	brk.apply(pod.Labels)
+ 	pod.Labels[quarantineLabel] = qid
++	// M-23 D2: an event-valued epoch clock for VarNetworkIdentity. quarantineLabel is the pod
++	// UID (state-valued: identical on every quarantine of the same pod, so it never resets), so
++	// a re-quarantine could not be throttled. ResourceVersion differs each actuation. Stamped in
++	// this same Update; NOT re-stamped on rollback — the snapshot-restore (taken above, before
++	// this line) strips it, which correctly fail-OPENs the next quarantine after a re-admit.
++	pod.Labels[quarantineEpochLabel] = pod.ResourceVersion
+ 	pod.OwnerReferences = nil // detach from the controller owner
+ 	if err := ec.Client.Update(ctx, pod); err != nil {
+ 		return HandlerResult{}, fmt.Errorf("quarantine detach %s/%s: %w", req.Namespace, req.Pod, err)
+diff --git a/phorvex/internal/actuator/quarantine_detach_test.go b/phorvex/internal/actuator/quarantine_detach_test.go
+index e25a354..441998e 100644
+--- a/phorvex/internal/actuator/quarantine_detach_test.go
++++ b/phorvex/internal/actuator/quarantine_detach_test.go
+@@ -45,6 +45,24 @@ func ownedPod(ns, name string, labels map[string]string, owner metav1.OwnerRefer
+ 	return pod
+ }
+ 
++// TestQuarantineStampsEventValuedEpoch (M-23 D2): quarantine writes an event-valued
++// quarantine-epoch (= ResourceVersion) distinct from the state-valued quarantineLabel (= pod UID).
++// Without it, a re-quarantine of the same pod writes the SAME UID and the anti-over-rotation clock
++// never resets, so the guard could not throttle repeated quarantines.
++func TestQuarantineStampsEventValuedEpoch(t *testing.T) {
++	pod := aiPod("ns", "victim", map[string]string{"app": "x"})
++	pod.UID = types.UID("uid-victim")
++	c := qtnClient(pod)
++	_, got := enactQuarantine(t, c, "ns", "victim")
++	epoch := got.Labels[quarantineEpochLabel]
++	if epoch == "" {
++		t.Fatalf("quarantine-epoch not stamped: %v", got.Labels)
++	}
++	if epoch == got.Labels[quarantineLabel] {
++		t.Fatalf("quarantine-epoch %q equals the state-valued UID label — it must be the event-valued ResourceVersion so a re-quarantine resets the clock", epoch)
++	}
++}
++
+ func ctrlRef(apiVersion, kind, name string) metav1.OwnerReference {
+ 	yes := true
+ 	return metav1.OwnerReference{APIVersion: apiVersion, Kind: kind, Name: name, UID: types.UID("uid-" + name), Controller: &yes}
+diff --git a/phorvex/internal/decision/coverage_test.go b/phorvex/internal/decision/coverage_test.go
+index 94ed62d..901ebdb 100644
+--- a/phorvex/internal/decision/coverage_test.go
++++ b/phorvex/internal/decision/coverage_test.go
+@@ -47,16 +47,29 @@ func covPolicy(b int) model.Policy {
+ 	}
+ }
+ 
++// allVarsAt clocks every M-23 live exposure variable at the same duration, so a fixture pod is
++// gated the same for any enabled action (before M-23 every action shared the podIdentity clock).
++func allVarsAt(d time.Duration) map[string]time.Duration {
++	m := make(map[string]time.Duration, len(model.LiveExposureVariables))
++	for _, v := range model.LiveExposureVariables {
++		m[v] = d
++	}
++	return m
++}
++
+ func covView(name string, secrets bool, exposure time.Duration, stateful bool) *model.WorkloadView {
+ 	v := &model.WorkloadView{
+ 		Pod: model.Pod{
+ 			Namespace: "ns", Name: name, UID: "u-" + name,
+ 			DesiredReplicas: 3, ReadyReplicas: 3, Ready: true, Stateful: stateful,
+ 		},
+-		Phase:              model.PhaseWarm,
+-		BlastRadius:        0.6,
+-		Neighbors:          []model.NeighborRef{{Key: "ns/crown", Value: 5.0}},
+-		ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: exposure},
++		Phase:       model.PhaseWarm,
++		BlastRadius: 0.6,
++		Neighbors:   []model.NeighborRef{{Key: "ns/crown", Value: 5.0}},
++		// M-23: every action now reads its OWN per-action exposure clock, not a shared
++		// podIdentity default. Clock every live variable at `exposure` so a fixture pod is gated
++		// identically whatever action a test enables (pre-M-23 all read podIdentity=exposure).
++		ExposureByVariable: allVarsAt(exposure),
+ 	}
+ 	if secrets {
+ 		v.Pod.MountedSecrets = []string{"creds"}
+diff --git a/phorvex/internal/exposure/intent.go b/phorvex/internal/exposure/intent.go
+new file mode 100644
+index 0000000..b806446
+--- /dev/null
++++ b/phorvex/internal/exposure/intent.go
+@@ -0,0 +1,91 @@
++/*
++ * Phorvex — synchronous per-action actuation intent (M-23).
++ */
++
++package exposure
++
++import (
++	"sync"
++	"time"
++)
++
++// Intents records, per (slot, variable), the wall-clock time an action was EMITTED —
++// stamped synchronously at the emit boundary, before the next observed snapshot moves
++// the exposure Clock. It closes the cross-tick burst hole M-23 targets: between a
++// successful actuation and the tick that first observes the resulting `*-epoch` marker,
++// the observed clock still reads "long ago", so a second emit of the same (pod, action)
++// would pass the anti-over-rotation guard. The guard takes min(observed-since,
++// intent-since) — the most recent of the two — so intent throttles that gap.
++//
++// Keyed by the same slotKey as Clock, and GC'd the same way (RetainTenant each tick).
++type Intents struct {
++	mu sync.Mutex
++	at map[string]map[string]time.Time // slotKey -> variable -> marked-at
++}
++
++// NewIntents returns an empty intent store.
++func NewIntents() *Intents { return &Intents{at: make(map[string]map[string]time.Time)} }
++
++// Mark records that `variable` was actuated on this slot at `now`. Called once per
++// emitted move, on the SUCCESSFUL-emit path (a failed actuation must not throttle its
++// retry). A later Mark overwrites — only the most recent emission matters.
++func (i *Intents) Mark(tenant, ns, pod, variable string, now time.Time) {
++	if i == nil || pod == "" || variable == "" {
++		return
++	}
++	key := slotKey(tenant, ns, pod)
++	i.mu.Lock()
++	defer i.mu.Unlock()
++	vars := i.at[key]
++	if vars == nil {
++		vars = make(map[string]time.Time)
++		i.at[key] = vars
++	}
++	vars[variable] = now
++}
++
++// Since returns time-since-emission per variable for a slot (empty if none). A negative
++// interval (clock skew) is clamped to 0, matching Clock.Since.
++func (i *Intents) Since(tenant, ns, pod string, now time.Time) map[string]time.Duration {
++	if i == nil {
++		return nil
++	}
++	key := slotKey(tenant, ns, pod)
++	i.mu.Lock()
++	defer i.mu.Unlock()
++	vars := i.at[key]
++	if len(vars) == 0 {
++		return nil
++	}
++	out := make(map[string]time.Duration, len(vars))
++	for v, ts := range vars {
++		d := now.Sub(ts)
++		if d < 0 {
++			d = 0
++		}
++		out[v] = d
++	}
++	return out
++}
++
++// RetainTenant prunes this tenant's intent slots not in keep (a set of full slot keys),
++// mirroring Clock.RetainTenant so a departed pod's intent is dropped with its clock.
++// Returns the count dropped.
++func (i *Intents) RetainTenant(tenant string, keep map[string]struct{}) int {
++	if i == nil {
++		return 0
++	}
++	prefix := tenant + "\x00"
++	i.mu.Lock()
++	defer i.mu.Unlock()
++	dropped := 0
++	for k := range i.at {
++		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
++			if _, ok := keep[k]; !ok {
++				delete(i.at, k)
++				dropped++
++			}
++		}
++	}
++	return dropped
++}
+diff --git a/phorvex/internal/exposure/intent_test.go b/phorvex/internal/exposure/intent_test.go
+new file mode 100644
+index 0000000..30455ee
+--- /dev/null
++++ b/phorvex/internal/exposure/intent_test.go
+@@ -0,0 +1,64 @@
++package exposure
++
++import (
++	"testing"
++	"time"
++)
++
++func TestIntentsMarkAndSince(t *testing.T) {
++	now := time.Now()
++	i := NewIntents()
++	i.Mark("t", "ns", "p", "guardrailEpoch", now.Add(-20*time.Second))
++
++	since := i.Since("t", "ns", "p", now)
++	if got, ok := since["guardrailEpoch"]; !ok || got < 19*time.Second || got > 21*time.Second {
++		t.Fatalf("intent since = %v (ok=%v), want ~20s", got, ok)
++	}
++	// Untouched slot / variable is absent (so Check fail-opens on it).
++	if len(i.Since("t", "ns", "other", now)) != 0 {
++		t.Error("a slot with no intent must return no durations")
++	}
++	if _, ok := i.Since("t", "ns", "p", now)["drainEpoch"]; ok {
++		t.Error("an unmarked variable must be absent")
++	}
++}
++
++func TestIntentsMarkOverwritesAndClampsSkew(t *testing.T) {
++	now := time.Now()
++	i := NewIntents()
++	i.Mark("t", "ns", "p", "v", now.Add(-5*time.Minute))
++	i.Mark("t", "ns", "p", "v", now.Add(-10*time.Second)) // most recent emission wins
++	if got := i.Since("t", "ns", "p", now)["v"]; got > 11*time.Second {
++		t.Fatalf("Mark must overwrite with the most recent emission; since=%v", got)
++	}
++	// A future mark (clock skew) clamps to 0, never negative.
++	i.Mark("t", "ns", "p", "v", now.Add(time.Minute))
++	if got := i.Since("t", "ns", "p", now)["v"]; got < 0 {
++		t.Fatalf("negative since not clamped: %v", got)
++	}
++	// Empty pod / variable is a no-op.
++	i.Mark("t", "ns", "", "v", now)
++	i.Mark("t", "ns", "p", "", now)
++}
++
++func TestIntentsRetainTenant(t *testing.T) {
++	now := time.Now()
++	i := NewIntents()
++	i.Mark("t", "ns", "keep", "v", now)
++	i.Mark("t", "ns", "drop", "v", now)
++	i.Mark("other", "ns", "p", "v", now) // different tenant, must be untouched
++
++	keep := map[string]struct{}{SlotKey("t", "ns", "keep"): {}}
++	if dropped := i.RetainTenant("t", keep); dropped != 1 {
++		t.Fatalf("RetainTenant dropped %d, want 1 (the 'drop' pod)", dropped)
++	}
++	if len(i.Since("t", "ns", "drop", now)) != 0 {
++		t.Error("dropped pod's intent should be gone")
++	}
++	if len(i.Since("t", "ns", "keep", now)) == 0 {
++		t.Error("kept pod's intent should survive")
++	}
++	if len(i.Since("other", "ns", "p", now)) == 0 {
++		t.Error("another tenant's intent must not be touched by RetainTenant('t')")
++	}
++}
+diff --git a/phorvex/internal/feasibility/anti_over_rotation_test.go b/phorvex/internal/feasibility/anti_over_rotation_test.go
+new file mode 100644
+index 0000000..b5ef995
+--- /dev/null
++++ b/phorvex/internal/feasibility/anti_over_rotation_test.go
+@@ -0,0 +1,155 @@
++package feasibility
++
++import (
++	"testing"
++	"time"
++
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++// M-23 — per-action exposure clocks. These pin the three legs and the D1–D3 decisions:
++// a TOTAL exposureVarFor over a clocked variable set (completeness), each pod-alive action
++// throttled against its OWN clock, the emit-intent burst guard (min over observed+intent),
++// and fail-OPEN on an absent clock (never-actuated pod is not deadlocked).
++
++func liveVarSet() map[string]bool {
++	s := map[string]bool{}
++	for _, v := range model.LiveExposureVariables {
++		s[v] = true
++	}
++	return s
++}
++
++// viewClocks builds a view with arbitrary observed and intent clocks.
++func viewClocks(observed, intent map[string]time.Duration) *model.WorkloadView {
++	return &model.WorkloadView{
++		Pod:                model.Pod{Namespace: "ns", Name: "p", UID: "u1"},
++		ExposureByVariable: observed,
++		IntentByVariable:   intent,
++	}
++}
++
++// TestExposureVarForCompleteness is the M-23 wiring tripwire (D1): because the runtime Check
++// fail-OPENs an unclocked variable, the fail-CLOSED guarantee lives here — every generatable
++// action MUST map to a variable that is actually clocked (∈ LiveExposureVariables). A new
++// MutatingActions member with no exposure decision, or a typo'd variable, fails the build.
++func TestExposureVarForCompleteness(t *testing.T) {
++	live := liveVarSet()
++	for _, a := range model.MutatingActions {
++		v := ExposureVarFor(a)
++		if v == "" {
++			t.Errorf("action %q has no exposure variable (add an ExposureVarFor arm; pod-replacing => VarPodIdentity)", a)
++			continue
++		}
++		if !live[v] {
++			t.Errorf("action %q maps to %q which is NOT clocked (not in model.LiveExposureVariables) — a mapped-but-unclocked variable fail-OPENs forever", a, v)
++		}
++	}
++}
++
++// TestExposureFingerprintsCoversClockedVars closes the loop: a fully-marked pod emits EXACTLY
++// LiveExposureVariables (so every mapped variable can actually be observed), and an unmarked pod
++// absent-skips the per-action epochs (leaving only the always-present identity/node/session).
++func TestExposureFingerprintsCoversClockedVars(t *testing.T) {
++	full := model.Pod{
++		UID: "u1", Node: "n1", SessionEpoch: "s",
++		QuarantineEpoch: "1", RouteKeyEpoch: "2", IdentityEpoch: "3",
++		AdapterEpoch: "4", DrainEpoch: "5", GuardrailEpoch: "6",
++	}
++	fp := model.ExposureFingerprints(full)
++	live := liveVarSet()
++	if len(fp) != len(live) {
++		t.Fatalf("fully-marked pod emitted %d fingerprints, want %d (== LiveExposureVariables)", len(fp), len(live))
++	}
++	for v := range fp {
++		if !live[v] {
++			t.Errorf("ExposureFingerprints emitted %q which is not in LiveExposureVariables", v)
++		}
++	}
++	// Absent-skip: a never-actuated pod carries only the always-present three.
++	bare := model.ExposureFingerprints(model.Pod{UID: "u1", Node: "n1", SessionEpoch: "s"})
++	if len(bare) != 3 {
++		t.Fatalf("unmarked pod emitted %d fingerprints, want 3 (podIdentity/nodePlacement/session); absent epochs must be skipped, not seeded", len(bare))
++	}
++}
++
++// TestPerActionClockThrottles proves each pod-alive action reads the clock its OWN handler resets:
++// 20s after that variable moved it is vetoed; 16m after, feasible. On the OLD code (default ->
++// podIdentity) every one of these read podIdentity and passed — this is ticket test (a)'s RED.
++func TestPerActionClockThrottles(t *testing.T) {
++	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
++	for _, a := range []model.Action{
++		model.ActionQuarantine, model.ActionEndpointRotate, model.ActionRouteRotate,
++		model.ActionIdentityRotate, model.ActionAdapterRotate, model.ActionRequestDrain,
++		model.ActionGuardrailRotate,
++	} {
++		v := ExposureVarFor(a)
++		// podIdentity is ancient (the bug's clock); only the action's own variable is fresh.
++		inWindow := viewClocks(map[string]time.Duration{model.VarPodIdentity: 10 * time.Hour, v: 20 * time.Second}, nil)
++		if got := (antiOverRotation{}).Check(inWindow, model.Move{Action: a}, pol); got.Feasible {
++			t.Errorf("%q 20s after its %q clock reset was allowed (old bug: read podIdentity=10h)", a, v)
++		}
++		elapsed := viewClocks(map[string]time.Duration{model.VarPodIdentity: 10 * time.Hour, v: 16 * time.Minute}, nil)
++		if got := (antiOverRotation{}).Check(elapsed, model.Move{Action: a}, pol); !got.Feasible {
++			t.Errorf("%q 16m after its %q clock reset must be allowed: %s", a, v, got.Reason)
++		}
++	}
++}
++
++// TestPodAliveActionReadsOwnClockNotPodIdentity is the sharpest statement of the M-23 bug and its
++// fix (ticket test a): a pod alive for 10h but guardrail-rotated 20s ago must be BLOCKED. The old
++// code read podIdentity (10h > window) and allowed it — the re-fire-every-tick defect. The view
++// hardcodes both clocks (it does NOT key off ExposureVarFor), so reverting the guardrail mapping
++// back to podIdentity flips this test red.
++func TestPodAliveActionReadsOwnClockNotPodIdentity(t *testing.T) {
++	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
++	view := viewClocks(map[string]time.Duration{
++		model.VarPodIdentity:    10 * time.Hour,   // pod itself is ancient
++		model.VarGuardrailEpoch: 20 * time.Second, // but guardrail was rotated 20s ago
++	}, nil)
++	if got := (antiOverRotation{}).Check(view, model.Move{Action: model.ActionGuardrailRotate}, pol); got.Feasible {
++		t.Fatalf("guardrail-rotate 20s after its own epoch was allowed — the guard read podIdentity (10h), the M-23 bug")
++	}
++}
++
++// TestIntentClosesBurstHole is ticket test (c) + the D3 sign guard: the observed clock is stale
++// (the *-epoch marker hasn't been re-observed yet) but an emit intent was stamped 20s ago, so the
++// second emit is vetoed. With the D3 regression (max instead of min) the stale 10h would win and
++// the burst would slip through — this test catches that.
++func TestIntentClosesBurstHole(t *testing.T) {
++	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
++	a := model.ActionGuardrailRotate
++	v := ExposureVarFor(a)
++	view := viewClocks(
++		map[string]time.Duration{v: 10 * time.Hour},   // observed: not yet caught up
++		map[string]time.Duration{v: 20 * time.Second}, // intent: emitted 20s ago
++	)
++	if got := (antiOverRotation{}).Check(view, model.Move{Action: a}, pol); got.Feasible {
++		t.Fatalf("a second %q 20s after emission (intent) was allowed — the cross-tick burst hole is open (or max/min is inverted)", a)
++	}
++	// After the window, both observed and intent are old -> feasible again.
++	elapsed := viewClocks(
++		map[string]time.Duration{v: 10 * time.Hour},
++		map[string]time.Duration{v: 16 * time.Minute},
++	)
++	if got := (antiOverRotation{}).Check(elapsed, model.Move{Action: a}, pol); !got.Feasible {
++		t.Fatalf("%q 16m after emission must be allowed: %s", a, got.Reason)
++	}
++}
++
++// TestFailOpenBootstrap is the D1 guard: a never-actuated pod has no clock for the action's
++// variable (its *-epoch marker doesn't exist yet). Fail-CLOSED would deadlock the FIRST actuation
++// (which is what writes the marker); the guard must fail-OPEN.
++func TestFailOpenBootstrap(t *testing.T) {
++	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
++	// Only podIdentity is clocked; the governed actions' own variables are absent.
++	view := viewClocks(map[string]time.Duration{model.VarPodIdentity: 10 * time.Hour}, nil)
++	for _, a := range []model.Action{
++		model.ActionQuarantine, model.ActionEndpointRotate, model.ActionIdentityRotate,
++		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate,
++	} {
++		if got := (antiOverRotation{}).Check(view, model.Move{Action: a}, pol); !got.Feasible {
++			t.Errorf("first %q on a never-actuated pod was DEADLOCKED (%s); it must fail-open so the actuation that creates the marker can run", a, got.Reason)
++		}
++	}
++}
+diff --git a/phorvex/internal/feasibility/defaults.go b/phorvex/internal/feasibility/defaults.go
+index 334c1ca..1ae7879 100644
+--- a/phorvex/internal/feasibility/defaults.go
++++ b/phorvex/internal/feasibility/defaults.go
+@@ -6,6 +6,7 @@ package feasibility
+ 
+ import (
+ 	"fmt"
++	"time"
+ 
+ 	"github.com/phorvex/phorvex/internal/model"
+ )
+@@ -85,32 +86,56 @@ type antiOverRotation struct{}
+ 
+ func (antiOverRotation) Name() string { return "anti-over-rotation" }
+ 
+-// exposureVarFor maps an action to the exposure clock it actually resets.
++// ExposureVarFor maps an action to the exposure clock it actually resets. It is TOTAL
++// over model.MutatingActions with NO catch-all podIdentity default (M-23) — every
++// generatable action is cased explicitly, so a NEW action forces an exposure decision
++// instead of silently inheriting the podIdentity clock it never resets. The
++// TestExposureVarForCompleteness invariant fails the build if a MutatingActions member
++// is unmapped or maps outside model.LiveExposureVariables (the clocked set).
+ //
+-// [PHVX-67] The guard used to read podIdentity for EVERY action. That is only correct for actions
+-// that replace the pod. kv-reset flushes the KV cache and leaves the pod alive, so podIdentity never
+-// changes, its clock only grows, and `since < window` was never true — the budget could not fire.
+-//
+-// Measured on the live cluster before this fix: one vllm pod took 2360 kv-resets in 10h21m, a median
+-// of 20s apart against a 15m budget. Every flush costs ~0.534s of re-encode, so roughly 3.4% of wall
+-// time was spent redoing work, and the user saw a first-token stall each time.
+-//
+-// An action with no clock of its own falls back to podIdentity, which is the conservative direction:
+-// a shared clock over-restricts rather than under-restricts.
+-func exposureVarFor(a model.Action) string {
++// [PHVX-67 history] The guard used to read podIdentity for EVERY action. That is only correct for
++// actions that REPLACE the pod (rotate/warm-swap/mig-rebind/model-shard-replace → new UID). A
++// pod-alive action leaves podIdentity untouched, its clock only grows, and `since < window` is never
++// true — so the one per-action brake never engaged. Each action now reads the `phorvex.ai/*-epoch`
++// marker its own handler writes. debugger/custom-inject attach an ephemeral container and write no
++// durable marker, so they keep the podIdentity clock (a conservative shared clock; they are not
++// repeat-rotations). "" (noop/disable/unknown) = ungoverned → the guard fail-OPENs.
++func ExposureVarFor(a model.Action) string {
+ 	switch a {
++	case model.ActionRotate, model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
++		model.ActionDebugger, model.ActionCustomInject:
++		return model.VarPodIdentity
+ 	case model.ActionKVReset, model.ActionKVMigrateInvalidate:
+ 		return model.VarSession
++	case model.ActionQuarantine:
++		return model.VarNetworkIdentity
++	case model.ActionEndpointRotate, model.ActionRouteRotate:
++		return model.VarRouteKey
++	case model.ActionIdentityRotate:
++		return model.VarIdentity
++	case model.ActionAdapterRotate:
++		return model.VarAdapterEpoch
++	case model.ActionRequestDrain:
++		return model.VarDrainEpoch
++	case model.ActionGuardrailRotate:
++		return model.VarGuardrailEpoch
+ 	default:
+-		return model.VarPodIdentity
++		return ""
+ 	}
+ }
+ 
+ func (antiOverRotation) Check(view *model.WorkloadView, move model.Move, pol model.Policy) Verdict {
+-	v := exposureVarFor(move.Action)
+-	since, ok := view.ExposureByVariable[v]
++	v := ExposureVarFor(move.Action)
++	// Most-recent reset across the observed clock and the pending emit intent (M-23):
++	// min over "since" durations == max over reset TIMESTAMPS. Either may be absent.
++	since, ok := mostRecentSince(view, v)
+ 	if !ok {
+-		return feasible // no clock yet (first observation): allow
++		// FAIL-OPEN (M-23 D1): the pod has no clock for this variable yet. Markers are
++		// written BY actuation, so a never-actuated pod has none; fail-CLOSED here would
++		// deadlock the very first actuation (the one that creates the marker). A
++		// mapped-but-unclocked VARIABLE is a wiring bug — caught at build time by
++		// TestExposureVarForCompleteness, not by a runtime veto.
++		return feasible
+ 	}
+ 	if since < pol.AntiOverRotationWindow {
+ 		return Verdict{Feasible: false, Reason: fmt.Sprintf(
+@@ -120,6 +145,26 @@ func (antiOverRotation) Check(view *model.WorkloadView, move model.Move, pol mod
+ 	return feasible
+ }
+ 
++// mostRecentSince returns the smaller of the observed and intent "since" durations for
++// v — the more recent of the two resets — and whether EITHER was present.
++func mostRecentSince(view *model.WorkloadView, v string) (time.Duration, bool) {
++	obs, obsOK := view.ExposureByVariable[v]
++	intent, intOK := view.IntentByVariable[v]
++	switch {
++	case obsOK && intOK:
++		if intent < obs {
++			return intent, true
++		}
++		return obs, true
++	case obsOK:
++		return obs, true
++	case intOK:
++		return intent, true
++	default:
++		return 0, false
++	}
++}
++
+ // statefulIntegrity refuses to ROTATE (Delete) a stateful pod — destroying a
+ // long-running job / single-writer state. The PRD's lead demo: R6 blindly Deletes a
+ // critical stateful pod and destroys the work; Phorvex instead QUARANTINES (contain,
+diff --git a/phorvex/internal/feasibility/kv_reset_budget_test.go b/phorvex/internal/feasibility/kv_reset_budget_test.go
+index 7b39151..0bd3b72 100644
+--- a/phorvex/internal/feasibility/kv_reset_budget_test.go
++++ b/phorvex/internal/feasibility/kv_reset_budget_test.go
+@@ -53,25 +53,35 @@ func TestKVResetAllowedOnceTheBudgetElapses(t *testing.T) {
+ 	}
+ }
+ 
+-// TestRotateStillUsesPodIdentity guards the actions the old behaviour was correct for. A rotate
+-// replaces the pod, so podIdentity IS its clock — reading the session clock for it would let a
+-// freshly-rotated pod be rotated again.
++// TestRotateStillUsesPodIdentity guards the actions that REPLACE the pod — podIdentity IS their
++// clock, so a freshly-rotated pod cannot be rotated again inside the window. (M-23 moved quarantine
++// off podIdentity onto its own VarNetworkIdentity clock — see TestPerActionClockThrottles.)
+ func TestRotateStillUsesPodIdentity(t *testing.T) {
+ 	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
+ 	// Pod replaced 20s ago; session flushed long ago.
+ 	v := viewWithClocks(20*time.Second, 10*time.Hour)
+-	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine, model.ActionWarmSwap} {
++	for _, a := range []model.Action{
++		model.ActionRotate, model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
++	} {
+ 		if (antiOverRotation{}).Check(v, model.Move{Action: a}, pol).Feasible {
+ 			t.Errorf("%q 20s after the pod was replaced must be blocked — it reads podIdentity", a)
+ 		}
+ 	}
+ }
+ 
+-// TestUnknownActionFallsBackConservatively pins the default. A new action with no mapping must fall
+-// back to podIdentity, which over-restricts rather than under-restricts.
+-func TestUnknownActionFallsBackConservatively(t *testing.T) {
+-	if got := exposureVarFor(model.Action("some-future-action")); got != model.VarPodIdentity {
+-		t.Fatalf("unmapped action fell back to %q; it must default to %q so a missing mapping "+
+-			"cannot silently remove a budget", got, model.VarPodIdentity)
++// TestUnmappedActionIsUngovernedFailOpen pins the M-23 default: an action with NO exposure mapping
++// returns "" (ungoverned) and the guard fail-OPENs — the old podIdentity fallback is gone (it hid
++// pod-alive actions behind a clock they never reset). A missing mapping for a REAL generatable
++// action is a build-time failure of TestExposureVarForCompleteness, not a silent runtime pass.
++func TestUnmappedActionIsUngovernedFailOpen(t *testing.T) {
++	if got := ExposureVarFor(model.Action("some-future-action")); got != "" {
++		t.Fatalf("unmapped action mapped to %q; M-23 wants \"\" (ungoverned, fail-open) so a stale "+
++			"podIdentity clock can't silently un-throttle a pod-alive action", got)
++	}
++	// And an ungoverned action on a pod with clocks is feasible (fail-open).
++	v := viewWithClocks(20*time.Second, 20*time.Second)
++	pol := model.Policy{AntiOverRotationWindow: 15 * time.Minute}
++	if got := (antiOverRotation{}).Check(v, model.Move{Action: model.Action("some-future-action")}, pol); !got.Feasible {
++		t.Fatalf("an ungoverned action must be feasible (fail-open), got veto: %s", got.Reason)
+ 	}
+ }
+diff --git a/phorvex/internal/ingest/kube.go b/phorvex/internal/ingest/kube.go
+index 1c71781..6eb37df 100644
+--- a/phorvex/internal/ingest/kube.go
++++ b/phorvex/internal/ingest/kube.go
+@@ -313,6 +313,17 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
+ 	out.ModelID = p.Annotations["phorvex.ai/model-id"]
+ 	// Session epoch: either flush bumps it, and either resets the session exposure clock (PHVX-67).
+ 	out.SessionEpoch = p.Annotations["phorvex.ai/kv-reset-epoch"] + "|" + p.Annotations["phorvex.ai/kv-migrate-epoch"]
++	// M-23 per-action exposure epochs: the `phorvex.ai/*-epoch` labels the pod-alive rotation
++	// handlers stamp (= pod.ResourceVersion at actuation). "" when the marker is absent (never
++	// actuated, or stripped by a rollback) — ExposureFingerprints absent-skips those so the
++	// variable stays unclocked and the guard fail-OPENs the first actuation. VarRouteKey reads
++	// the `route-key` label both endpoint-rotate and route-rotate re-key.
++	out.QuarantineEpoch = p.Labels["phorvex.ai/quarantine-epoch"]
++	out.RouteKeyEpoch = p.Labels["phorvex.ai/route-key"]
++	out.IdentityEpoch = p.Labels["phorvex.ai/identity-epoch"]
++	out.AdapterEpoch = p.Labels["phorvex.ai/adapter-epoch"]
++	out.DrainEpoch = p.Labels["phorvex.ai/drain-epoch"]
++	out.GuardrailEpoch = p.Labels["phorvex.ai/guardrail-epoch"]
+ 	out.EndpointPath = p.Annotations["phorvex.ai/endpoint"]
+ 	out.RouteService = p.Annotations["phorvex.ai/route-service"]
+ 	out.ParallelSize, _ = strconv.Atoi(p.Annotations["phorvex.ai/parallel-size"])
+diff --git a/phorvex/internal/model/types.go b/phorvex/internal/model/types.go
+index 191fcf6..ddc154b 100644
+--- a/phorvex/internal/model/types.go
++++ b/phorvex/internal/model/types.go
+@@ -180,18 +180,69 @@ const (
+ 	VarEnv = "env"
+ 	// VarGPUBinding = the GPU/MIG binding (DECLARED; Phase 2/3 GPU rebind).
+ 	VarGPUBinding = "gpuBinding"
+-	// VarNetworkIdentity = service/IP/label identity (DECLARED; Phase 2).
++	// VarNetworkIdentity = service/IP/label identity; clocked from the quarantine epoch (M-23).
+ 	VarNetworkIdentity = "networkIdentity"
+-	// VarSession = KV-cache / agent session state (DECLARED; AI path).
++	// VarSession = KV-cache / agent session state; clocked from kv-reset|kv-migrate epochs.
+ 	VarSession = "session"
++	// M-23 per-action exposure variables — each clocked from the `phorvex.ai/*-epoch`
++	// marker its own handler writes (= pod.ResourceVersion at actuation), so the
++	// anti-over-rotation guard reads a clock the action actually resets.
++	// VarRouteKey = serving route key (endpoint-rotate / route-rotate re-key it).
++	VarRouteKey = "routeKey"
++	// VarIdentity = identity-rotate epoch (relabel only; the SA token is unchanged, so this
++	// is NOT "saToken").
++	VarIdentity = "identity"
++	// VarAdapterEpoch = adapter-rotate epoch.
++	VarAdapterEpoch = "adapterEpoch"
++	// VarDrainEpoch = request-drain epoch (M-23 A1 — a dedicated stamp; the serving toggle
++	// is boolean and reverts on rollback, so it cannot clock repeated drains).
++	VarDrainEpoch = "drainEpoch"
++	// VarGuardrailEpoch = guardrail-rotate epoch.
++	VarGuardrailEpoch = "guardrailEpoch"
+ )
+ 
+-// LiveExposureVariables are the dimensions Phorvex P0 actually clocks from the K8s
+-// API. The DeclaredExposureVariables extend this set in later phases.
+-var LiveExposureVariables = []string{VarPodIdentity, VarNodePlacement}
++// LiveExposureVariables is the SINGLE SOURCE OF TRUTH for the exposure dimensions
++// Phorvex actually clocks — the M-23 completeness invariant enumerates it to prove
++// every exposureVarFor target is a clocked variable (a mapped-but-unclocked variable
++// is a wiring bug caught at build time, so the runtime Check can safely fail-OPEN on an
++// absent clock). ExposureFingerprints emits exactly these keys for a fully-marked pod.
++var LiveExposureVariables = []string{
++	VarPodIdentity, VarNodePlacement, VarSession,
++	VarNetworkIdentity, VarRouteKey, VarIdentity, VarAdapterEpoch, VarDrainEpoch, VarGuardrailEpoch,
++}
+ 
+-// DeclaredExposureVariables are scaffolded but not yet clocked from live signals.
+-var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding, VarNetworkIdentity, VarSession}
++// DeclaredExposureVariables are scaffolded dimensions not yet clocked from live signals.
++var DeclaredExposureVariables = []string{VarImage, VarEnv, VarGPUBinding}
++
++// ExposureFingerprints builds the per-variable fingerprint sample the exposure Clock
++// observes for a pod (M-23). Pod identity, node placement and session are always
++// present (their sources are always populated). The per-action epoch variables are
++// ABSENT-SKIPPED: an empty epoch (never actuated, or its marker stripped by a rollback)
++// is OMITTED rather than seeded with an empty string — seeding "" would make a later
++// rollback that strips the marker look like a fingerprint CHANGE and spuriously reset
++// the clock. An omitted variable stays `!ok` in ExposureByVariable, so the guard
++// fail-OPENs its first actuation (which writes the marker). The emitted key set for a
++// fully-marked pod is exactly LiveExposureVariables (asserted by the completeness test).
++func ExposureFingerprints(p Pod) map[string]string {
++	fp := map[string]string{
++		VarPodIdentity:   p.UID,
++		VarNodePlacement: p.Node,
++		VarSession:       p.SessionEpoch,
++	}
++	for v, epoch := range map[string]string{
++		VarNetworkIdentity: p.QuarantineEpoch,
++		VarRouteKey:        p.RouteKeyEpoch,
++		VarIdentity:        p.IdentityEpoch,
++		VarAdapterEpoch:    p.AdapterEpoch,
++		VarDrainEpoch:      p.DrainEpoch,
++		VarGuardrailEpoch:  p.GuardrailEpoch,
++	} {
++		if epoch != "" {
++			fp[v] = epoch
++		}
++	}
++	return fp
++}
+ 
+ // Telemetry is the per-pod live signal vector ingested from Prometheus. Present is
+ // false when no metrics backend answered (Phorvex then degrades to K8s-only signals
+@@ -263,7 +314,18 @@ type Pod struct {
+ 	// model.VarSession — WITHOUT it, a session-affecting action has no exposure clock of its own
+ 	// and falls through to podIdentity, which it never changes (PHVX-67).
+ 	SessionEpoch string
+-	Stateful     bool // owned by a StatefulSet or mounts a PVC / Job
++	// M-23 per-action exposure epochs — the `phorvex.ai/*-epoch` markers the pod-alive
++	// rotation handlers write (= pod.ResourceVersion at actuation). "" = never actuated /
++	// marker absent, in which case ExposureFingerprints skips it (the variable stays
++	// unclocked and the guard fail-OPENs the first actuation). Each clocks the matching
++	// model.Var* dimension.
++	QuarantineEpoch string // phorvex.ai/quarantine-epoch  -> VarNetworkIdentity (M-23 D2 stamp)
++	RouteKeyEpoch   string // phorvex.ai/route-key         -> VarRouteKey (endpoint- & route-rotate re-key)
++	IdentityEpoch   string // phorvex.ai/identity-epoch    -> VarIdentity
++	AdapterEpoch    string // phorvex.ai/adapter-epoch     -> VarAdapterEpoch
++	DrainEpoch      string // phorvex.ai/drain-epoch       -> VarDrainEpoch (M-23 A1 stamp)
++	GuardrailEpoch  string // phorvex.ai/guardrail-epoch   -> VarGuardrailEpoch
++	Stateful        bool   // owned by a StatefulSet or mounts a PVC / Job
+ 
+ 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
+ 	// scanner. Neutral under the existing engine when absent. ---
+@@ -414,8 +476,13 @@ type WorkloadView struct {
+ 	NeighborCount      int
+ 	Neighbors          []NeighborRef // reachable neighbors with their values (P1 lateral facts)
+ 	Events             []SecurityEventInfo
+-	ExposureByVariable map[string]time.Duration // per-variable time-since-last-change
+-	Physics            PhysicsWitness           // DISCOVERED physics (UCW); honest-absent = neutral
++	ExposureByVariable map[string]time.Duration // per-variable time-since-last-change (observed)
++	// IntentByVariable is the per-variable time-since-EMISSION intent (M-23): a move
++	// stamped at emission (before the next observed snapshot) so the anti-over-rotation
++	// guard throttles a cross-tick burst in the window between actuation and the clock
++	// catching up. Absent => no pending intent for that variable.
++	IntentByVariable map[string]time.Duration
++	Physics          PhysicsWitness // DISCOVERED physics (UCW); honest-absent = neutral
+ 
+ 	// InfectionFrontier (P-CONTEXT live-beta Tier-1) is a [1, 1+kappa] AssetValue lift
+ 	// when this pod touches a KNOWN-INFECTED graph neighbor (a neighbor with an exploit+
+diff --git a/phorvex/internal/runner/manager.go b/phorvex/internal/runner/manager.go
+index 7225ce6..15faac9 100644
+--- a/phorvex/internal/runner/manager.go
++++ b/phorvex/internal/runner/manager.go
+@@ -80,6 +80,7 @@ type pendingRotation struct {
+ type Manager struct {
+ 	Client        client.Client
+ 	Clock         *exposure.Clock
++	Intents       *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
+ 	Optimizer     decision.Optimizer
+ 	Audit         *audit.Logger
+ 	MetricsSource ingest.MetricsSource
+@@ -141,6 +142,7 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
+ 	return &Manager{
+ 		Client:        c,
+ 		Clock:         exposure.NewClock(),
++		Intents:       exposure.NewIntents(),
+ 		Optimizer:     decision.NewCoverageEngine(), // P1 default brain
+ 		Audit:         audit.New(log, nil),
+ 		MetricsSource: src,
+@@ -856,23 +858,21 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 	views := make([]*model.WorkloadView, 0, len(selPods))
+ 	for _, p := range selPods {
+ 		t := tele[p.Name]
++		// M-23: one fingerprint per CLOCKED exposure variable — pod identity, node, session,
++		// plus the per-action `*-epoch` markers (absent-skipped when a marker is missing). The
++		// [PHVX-67] session clock still resets when either KV flush bumps p.SessionEpoch.
+ 		m.Clock.Observe(exposure.Observation{
+-			Tenant:    pol.Tenant,
+-			Namespace: p.Namespace,
+-			Pod:       p.Name,
+-			StartedAt: p.StartedAt,
+-			Fingerprints: map[string]string{
+-				model.VarPodIdentity:   p.UID,
+-				model.VarNodePlacement: p.Node,
+-				// [PHVX-67] The session clock. kv-reset leaves the pod alive, so podIdentity never
+-				// moves and the anti-over-rotation guard could never fire for it — measured on the
+-				// live cluster as a 20s median interval against a 15m budget, 2360 times in 10h on
+-				// one pod.
+-				model.VarSession: p.SessionEpoch,
+-			},
++			Tenant:       pol.Tenant,
++			Namespace:    p.Namespace,
++			Pod:          p.Name,
++			StartedAt:    p.StartedAt,
++			Fingerprints: model.ExposureFingerprints(*p),
+ 		}, snap.Now)
+ 		keep[exposure.SlotKey(pol.Tenant, p.Namespace, p.Name)] = struct{}{}
+ 		exp := m.Clock.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
++		// Per-action emit intent (M-23): the most recent EMISSION per variable, stamped at the
++		// emit boundary before the observed epoch catches up. The guard takes min(exp, intent).
++		intent := m.Intents.Since(pol.Tenant, p.Namespace, p.Name, snap.Now)
+ 
+ 		events := append([]model.SecurityEventInfo{}, snap.EventByPod[p.Namespace+"/"+p.Name]...)
+ 		nbKeys := snap.Graph.Neighbors(p.Namespace, p.Name)
+@@ -910,6 +910,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 			Neighbors:          neighbors,
+ 			Events:             events,
+ 			ExposureByVariable: exp,
++			IntentByVariable:   intent,
+ 			Physics:            ph,
+ 			InfectionFrontier:  infectionFrontier(nbKeys, infected),
+ 		})
+@@ -953,6 +954,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
+ 			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name())
+ 		m.Clock.RetainTenant(pol.Tenant, keep)
++		m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
+ 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+ 			ce.RetainStageClock(pol.Tenant, keep)
+ 		}
+@@ -1045,6 +1047,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
+ 	metrics.PublishTick(pol.Tenant, pol.PolicyName, decisions, exposuresForMetrics, selected, dur.Seconds(), pol.Mode)
+ 	m.Audit.TickSummary(pol.Tenant, len(decisions), selected, infeasible, dur, pol.Mode, killEngaged)
+ 	m.Clock.RetainTenant(pol.Tenant, keep)
++	m.Intents.RetainTenant(pol.Tenant, keep) // M-23: GC emit intent with the exposure clock
+ 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+ 		ce.RetainStageClock(pol.Tenant, keep)
+ 	}
+@@ -1220,6 +1223,13 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
+ 		if res.Emitted {
+ 			stampDispatch(model.DispatchEmitted, "")
+ 			decisions[i].Actuated = true
++			// M-23: stamp per-action emit intent on the SUCCESSFUL-emit path (a failed actuation
++			// takes the `continue` above and never reaches here, so it can't throttle its own
++			// retry). This closes the cross-tick burst hole — the next tick's guard reads this
++			// intent via min(observed-since, intent-since) before the observed `*-epoch` clock
++			// catches up. "" (an ungoverned action) is a no-op inside Mark.
++			m.Intents.Mark(pol.Tenant, decisions[i].Namespace, decisions[i].Pod,
++				feasibility.ExposureVarFor(decisions[i].Action), time.Now())
+ 			// Carry the native actuator's forensic fields into the audit (empty for Phoenix).
+ 			decisions[i].Handler = res.Handler
+ 			decisions[i].ObjectsTouched = res.ObjectsTouched

@@ -1,0 +1,66 @@
+schema_version: 2
+campaign_id: 2026-09-07-quarantine-brain
+profile: workflow-v2
+question: Does a controlled stateful foothold cause the deployed brain to choose quarantine,
+  and does isolation take effect?
+state: PAUSED
+owner: human-owner
+approval_ref: user:2026-09-07:test-one-attack-observe-brain-quarantine
+created_at: '2026-09-07T19:36:15+00:00'
+updated_at: '2026-09-07T19:47:05+00:00'
+scope:
+  environment: phorvex-dev-eks
+  source_release: 0.4.95
+  included_fixes: []
+  duration_ceiling: 45m total; attack observation <=5m; cleanup mandatory
+  cost_ceiling: existing CPU nodes only; no GPU/PVC/load-balancer/new nodes; <=4 tiny
+    pods
+  permission: attack
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.95
+  digest: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:e69abb524801cdc76fb8c603085c0243ff1ba8db9722e14a04571fc237c46e61
+  embedded_git_sha: 743a9d46b840543916cbb3d7e044b4bc4518f29c
+safety:
+  stop_conditions:
+  - Stop on operator rollout, unexpected cross-namespace action, loss of benign control,
+    or resource growth beyond 4 fixture pods
+  phase_approval_ref: null
+  unresolved: []
+  cleanup: PASS
+positive_control: pending
+rounds:
+- id: round-1
+  state: PLANNED
+findings:
+- RPT-20260907-194500-quarantine-enforcement
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: codex-quarantine-runner
+  independent_reviewer: null
+  coordinator: codex-quarantine-runner
+next_action:
+  owner: human-owner
+  action: Resolve M-50 enforcement and provide a scoped trusted foothold detector
+    path before replacing the plan and retrying the brain test
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-09-07T19:40:06+00:00'
+  by: codex-quarantine-runner
+  artifact: rounds/round-1/evidence/run-procedure.md
+  approval_ref: user:2026-09-07:test-one-attack-observe-brain-quarantine
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: APPROVED
+  to: PAUSED
+  at: '2026-09-07T19:47:05+00:00'
+  by: codex-quarantine-runner
+  artifact: rounds/round-1/evidence/blocked-report.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false

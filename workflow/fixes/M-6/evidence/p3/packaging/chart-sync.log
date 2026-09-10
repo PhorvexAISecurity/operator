@@ -1,0 +1,40 @@
+
+STEP Modeled claim language
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+OK
+M100 claim-language gate passed (93 current product source files)
+EXIT 0
+
+STEP Vendored CRD matches config/crd/bases
+EXIT 0
+
+STEP Chart renders
+EXIT 0
+
+STEP Vendored subchart matches its source
+  Chart.yaml matches
+EXIT 0
+
+STEP Vendored subchart check regressions
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.195s
+
+OK
+EXIT 0
+
+STEP E2E fixture and identity regressions
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.510s
+
+OK
+.............................
+----------------------------------------------------------------------
+Ran 29 tests in 0.451s
+
+OK
+EXIT 0

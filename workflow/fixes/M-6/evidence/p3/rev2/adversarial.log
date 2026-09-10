@@ -1,0 +1,42 @@
+=== RUN   TestReviewerRejectsEnforcementDrift
+=== RUN   TestReviewerRejectsEnforcementDrift/CEL-replaced-by-true
+=== RUN   TestReviewerRejectsEnforcementDrift/all-new-containers-hidden
+=== RUN   TestReviewerRejectsEnforcementDrift/policy-match-condition-false
+=== RUN   TestReviewerRejectsEnforcementDrift/wrong-resource-api-group
+=== RUN   TestReviewerRejectsEnforcementDrift/binding-excludes-subresource
+=== RUN   TestReviewerRejectsEnforcementDrift/binding-namespace-expression-excludes-target
+=== RUN   TestReviewerRejectsEnforcementDrift/binding-object-selector-excludes-target
+--- PASS: TestReviewerRejectsEnforcementDrift (0.01s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/CEL-replaced-by-true (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/all-new-containers-hidden (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/policy-match-condition-false (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/wrong-resource-api-group (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/binding-excludes-subresource (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/binding-namespace-expression-excludes-target (0.00s)
+    --- PASS: TestReviewerRejectsEnforcementDrift/binding-object-selector-excludes-target (0.00s)
+=== RUN   TestReviewerProductionManifestPositiveControl
+--- PASS: TestReviewerProductionManifestPositiveControl (0.00s)
+=== RUN   TestReviewerFinalCheckRejectsNamespaceRemovedSinceSnapshot
+--- PASS: TestReviewerFinalCheckRejectsNamespaceRemovedSinceSnapshot (0.00s)
+=== RUN   TestReviewerRejectsClusterOnlyScope
+    reviewer_adversarial_test.go:103: Cluster-only scope cannot protect namespaced pods: Verify=<nil> Available=true reason=""
+--- FAIL: TestReviewerRejectsClusterOnlyScope (0.00s)
+=== RUN   TestReviewerInvalidationDuringFinalScopeReadStopsSubmit
+    reviewer_adversarial_test.go:117: FinalCheck authorized despite observed invalidation: ok=true reason="" globalAvailable=false detail="concurrent poll observed policy removed during final namespace read"
+--- FAIL: TestReviewerInvalidationDuringFinalScopeReadStopsSubmit (0.00s)
+=== RUN   TestReviewerAllowsActualAPIDefaultedContract
+=== RUN   TestReviewerAllowsActualAPIDefaultedContract/policy
+    reviewer_adversarial_test.go:130: valid server-defaulted policy rejected: policy enforcement content does not match the trusted contract (validations/variables/matchConstraints/matchConditions)
+=== RUN   TestReviewerAllowsActualAPIDefaultedContract/binding
+    reviewer_adversarial_test.go:131: valid server-defaulted binding rejected: binding enforcement content does not match the trusted contract (validationActions/matchResources/selectors/exclusions)
+=== NAME  TestReviewerAllowsActualAPIDefaultedContract
+    reviewer_adversarial_test.go:133: actual server-defaulted install cannot become available: policy invalid: policy enforcement content does not match the trusted contract (validations/variables/matchConstraints/matchConditions)
+--- FAIL: TestReviewerAllowsActualAPIDefaultedContract (0.00s)
+    --- FAIL: TestReviewerAllowsActualAPIDefaultedContract/policy (0.00s)
+    --- FAIL: TestReviewerAllowsActualAPIDefaultedContract/binding (0.00s)
+=== RUN   TestReviewerNamespaceReadFailureInvalidates
+    reviewer_adversarial_test.go:144: partial read failure did not invalidate: FinalCheck=false Available=true detail="verified" epochBefore=0 epochAfter=0
+--- FAIL: TestReviewerNamespaceReadFailureInvalidates (0.00s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/codeexec	0.024s
+FAIL

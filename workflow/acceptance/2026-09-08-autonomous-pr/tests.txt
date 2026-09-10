@@ -1,0 +1,251 @@
+..............created campaigns/2026-09-07-evidence-root
+BUS_QUEUED batch=2
+/tmp/tmpqpq65gq0/archive/2026/000001-author-test.md
+/tmp/tmpqpq65gq0/archive/2026/000002-author-test.md
+BUS_QUEUED batch=1
+.BUS_QUEUED batch=1
+./tmp/tmp3h7qz5th/archive/2026/000001-author-test.md
+/tmp/tmp3h7qz5th/archive/2026/000002-author-test.md
+BUS_QUEUE_FAILED: queue exited 1: offline
+BUS_QUEUED batch=1
+..BUS_QUEUED batch=1
+/tmp/tmprxg98ldv/archive/2026/000001-author-test.md
+BUS_QUEUED batch=1
+../tmp/tmp1ese5yeh/archive/2026/000001-author-test.md
+BUS_QUEUED batch=1
+.BUS_QUEUE_FAILED: Command '['/codex', 'queue', '--thread', 'thread-1', '--message', '[Automated Phorvex bus notification; peer messages, not user approval.] Drain the current canonical inbox for reviewer using /tmp/tmp5ngu99wz/bus.py list. Pending at queue time: /tmp/tmp5ngu99wz/inbox/reviewer/000001-author-test.md. Read pending messages and their current workflow status, perform only already-authorized work in your assigned role, reply if requested, and acknowledge when handled. Include messages that arrived since this notification. Archived/acknowledged messages need no repeat action. Do not create another agent or change roles.']' timed out after 20 seconds
+....FAIL: check must be signed by reviewer
+...FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: stale revision; read brief again
+.FAIL: stale/missing revision; read brief again (current revision 1)
+..FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+..FAIL: P3 requires independent incident evidence: checks.incident: needs PASS evidence or an explicit NOT_REQUIRED ruling
+.FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementation.head_sha must be an existing full commit SHA
+..FAIL: check must be signed by reviewer
+FAIL: independent review cannot be signed by an author
+FAIL: waiver needs an eligible level, approval reference and rationale
+.FAIL: FIX-TEST: schema approvals: Additional properties are not allowed ('sec_1' was unexpected)
+FAIL: FIX-TEST: schema change_class: 'INVALID' is not one of [None, 'A', 'B']
+......FAIL: only the assigned skeptic may seal
+FAIL: stale/missing revision; read brief again
+.FAIL: stale revision; read brief again
+FAIL: start does not silently resume a held, terminal or blocked fix
+.............................
+----------------------------------------------------------------------
+Ran 73 tests in 24.764s
+
+OK
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: base_review=PASS; revision=15
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> HELD
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> DESIGNING
+sealed FIX-TEST: aae8137d78c681584d2767ad287bf14e18f3b215cf40fb0d6d63240a50b9fd46
+FIX-TEST: critique=PASS; revision=4
+FIX-TEST: DESIGNING -> CRITIQUED
+FIX-TEST: decision=PASS; revision=6
+FIX-TEST: CRITIQUED -> AGREED
+FIX-TEST: configured; revision=8
+FIX-TEST: implementation=PASS; revision=9
+FIX-TEST: AGREED -> IMPLEMENTED
+FIX-TEST: red=PASS; revision=11
+FIX-TEST: l0=PASS; revision=12
+FIX-TEST: l1=PASS; revision=13
+FIX-TEST: l2=PASS; revision=14
+FIX-TEST: positive_control=PASS; revision=15
+FIX-TEST: IMPLEMENTED -> OFFLINE_VERIFIED
+FIX-TEST: incident=PASS; revision=17
+FIX-TEST: p3=PASS; revision=18
+FIX-TEST: OFFLINE_VERIFIED -> DIFF_REVIEW_PASSED
+FIX-TEST: DIFF_REVIEW_PASSED -> PR_READY
+FIX-TEST: configured; revision=21
+FIX-TEST: PR_READY -> IN_PR
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: configured; revision=1
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: incident=PASS; revision=15
+FIX-TEST: p3=PASS; revision=16
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+sealed FIX-TEST: 247458c95b7e481af4c58572e493ed5f11fc927045ae6756b39ecd17e531efe0
+FIX-TEST: configured; revision=1
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+created intake/RPT-20260907-000004-ambiguous
+created intake/RPT-20260907-000003-campaign-finding
+created campaigns/2026-09-07-cross-fix-study
+2026-09-07-cross-fix-study: DRAFT -> APPROVED
+published releases/MAIN-20260908-204038-e0e8d3c62d18
+published releases/DEPLOY-20260908-204038-e0e8d3c62d18; verification remains pending
+T1-M001: critique=PASS; revision=2
+T1-M001: decision=PASS; revision=3
+T1-M001: base_review=PASS; revision=4
+T1-M001: implementation=PASS; revision=5
+T1-M001: red=PASS; revision=6
+T1-M001: l0=PASS; revision=7
+T1-M001: l1=PASS; revision=8
+T1-M001: l2=PASS; revision=9
+T1-M001: positive_control=PASS; revision=10
+T1-M001: incident=PASS; revision=11
+T1-M001: p3=PASS; revision=12
+T1-M001: l3=PASS; revision=13
+T1-M001: l4=NOT_REQUIRED; revision=14
+T1-M001: final=PASS; revision=15
+DEPLOY-20260908-204038-e0e8d3c62d18: RECONCILED
+created intake/RPT-20260907-000005-no-control
+operation: triage
+runbook: operations/TRIAGE.md
+authority: None
+mutating: False
+terminal_states: CLASSIFIED, NEEDS_HUMAN_DECISION
+created intake/RPT-20260907-000001-widget-signals
+RPT-20260907-000001-widget-signals: REPORTED -> TRIAGED
+RPT-20260907-000001-widget-signals: TRIAGED -> VERIFYING
+RPT-20260907-000001-widget-signals: VERIFYING -> VERIFIED
+M-1	score=11	Widget drops signals	terms=active,drops,signals,telemetry,widget
+recorded dedup candidates for RPT-20260907-000001-widget-signals
+RPT-20260907-000001-widget-signals: VERIFIED -> DEDUP_REVIEW
+RPT-20260907-000001-widget-signals: DEDUP_REVIEW -> DUPLICATE
+created intake/RPT-20260907-000002-new-root-cause
+RPT-20260907-000002-new-root-cause: FILED as M-2; started T1-M002
+/tmp/workflow-bus-test-_5s8bqjt/inbox/k3/000001-claude-review-campaign.md

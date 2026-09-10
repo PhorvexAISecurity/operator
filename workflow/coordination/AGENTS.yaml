@@ -1,0 +1,84 @@
+schema_version: 1
+
+agents:
+  - id: human-owner
+    kind: human
+    active: true
+    capabilities:
+      scope_authority: true
+      merge_authority: true
+      deployment_authority: true
+      destructive_test_authority: true
+      canonical_issue_authority: true
+      ambiguous_dedup_authority: true
+      campaign_authority: true
+
+  - id: claude
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: true
+      go_toolchain: true
+      github: limited
+      cluster_read: false
+      cluster_write: false
+      deployment_authority: false
+      intake_investigation: true
+      independent_review: true
+      release_reconciliation: true
+
+  - id: k3
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: true
+      go_toolchain: false
+      github: limited
+      cluster_read: true
+      cluster_write: human_gated
+      deployment_authority: false
+      intake_investigation: true
+      independent_review: true
+      release_reconciliation: true
+      campaign_execution: human_gated
+
+  - id: codex-m079
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: true
+      go_toolchain: true
+      cluster_read: true
+      deployment_authority: false
+      independent_review: false
+      release_reconciliation: true
+
+  - id: codex-m006
+    kind: agent
+    active: true
+    capabilities:
+      code_read: true
+      code_write: false
+      go_toolchain: true
+      cluster_read: true
+      cluster_write: human_gated
+      independent_review: true
+      security_review: true
+      operational_review: true
+      deployment_authority: false
+      release_reconciliation: true
+
+  - id: mostafa
+    kind: human
+    active: true
+    capabilities:
+      security_contract_authority: true
+      scope_authority: true
+
+notes:
+  - Capabilities are re-verified at intake; this file is not a permanent entitlement.
+  - A replacement agent receives a new ID and explicit capabilities.
+  - Role assignment lives in each fix, intake, release, or campaign STATUS.yaml, not here.

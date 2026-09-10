@@ -1,0 +1,66 @@
+schema_version: 1
+workflow_version: 2
+
+code_repository:
+  default_path: ..
+  remote: https://github.com/PhorvexSecurity/operator.git
+  canonical_branch: main
+
+canonical:
+  agent_bootstrap: AGENTS.md
+  human_overview: README.md
+  request_router: OPERATIONS.md
+  operations_policy: operations/POLICY.yaml
+  protocol: WORKFLOW.md
+  stage_runbooks: stages
+  fix_contracts: tools/gates.py
+  assessments: assessments
+  intake: intake
+  issue_entries: issues/entries
+  issue_register: issues/MASTER_ISSUES.md
+  issue_joins: issues/joins.yaml
+  anatomy: anatomy/ANATOMY.md
+  anatomy_pin: anatomy/PIN.yaml
+  fixes: fixes
+  fix_index: fixes/INDEX.yaml
+  current_release: releases/CURRENT.yaml
+  attack_catalogue: attacks/catalogue.yaml
+  attack_runbook: attacks/README.md
+  campaigns: campaigns
+  coordination: coordination
+  schemas: schemas
+  verification_levels: verification/LEVELS.md
+  acceptance_scenarios: acceptance/SCENARIOS.md
+  held_integration: acceptance/HELD_INTEGRATION.md
+
+operations:
+  fix: operations/FIX.md
+  intake: operations/INTAKE.md
+  issue: operations/ISSUE.md
+  sync: operations/SYNC.md
+  campaign: operations/CAMPAIGN.md
+  assessment: operations/ASSESSMENT.md
+  audit: operations/AUDIT.md
+  triage: operations/TRIAGE.md
+
+generated_files:
+  - issues/MASTER_ISSUES.md
+  - anatomy/ANATOMY.md
+  - anatomy/generated/ANATOMY.mmd
+  - anatomy/generated/ANATOMY.svg
+
+rules:
+  generated_files_are_read_only: true
+  bus_is_not_authoritative: true
+  destructive_live_actions_require_human_approval: true
+  deployment_requires_human_approval: true
+  final_verdict_requires_independent_reviewer: true
+  full_campaign_requires_explicit_human_request: true
+  ambiguous_dedup_requires_human_ruling: true
+  source_main_and_observed_deployment_are_separate: true
+  unknown_requests_are_read_only: true
+
+legacy_sources:
+  copied_from: /home/mehrdad/operator
+  migration_mode: additive_copy
+  originals_must_not_be_removed: true

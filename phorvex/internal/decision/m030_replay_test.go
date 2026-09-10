@@ -41,7 +41,7 @@ func TestM030ReplayOnlyRemovesNodePlacement(t *testing.T) {
 			t.Fatal("nodePlacement is still clocked")
 		}
 		observe := func(c *exposure.Clock, fingerprints map[string]string) map[string]time.Duration {
-			c.Observe(exposure.Observation{Tenant: "ns", Namespace: p.Namespace, Pod: p.Name, StartedAt: p.StartedAt, Fingerprints: fingerprints}, now)
+			c.Observe(exposure.Observation{Owner: "ns", Namespace: p.Namespace, Pod: p.Name, StartedAt: p.StartedAt, Fingerprints: fingerprints}, now)
 			return c.Since("ns", p.Namespace, p.Name, now)
 		}
 		current := observe(newClock, fp)

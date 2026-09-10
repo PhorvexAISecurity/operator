@@ -21,7 +21,6 @@ import os
 import re
 import sys
 import time
-from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -35,6 +34,7 @@ from report import render                        # noqa: E402
 from trace import trace_of                       # noqa: E402
 from transport import Cluster, Console, Metrics, Transport, TransportError  # noqa: E402
 from detector import DetectorSignal             # noqa: E402
+from run_output import Cleanup, RunOutput, error_text  # noqa: E402
 
 ROOT = HERE.parent
 
@@ -117,31 +117,68 @@ def read_policy(cluster, namespace):
 
 
 def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, run_label=None,
-        report_url=None, baseline=None):
-    with ExitStack() as cleanup:
-        return _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
-                    report_url, baseline, cleanup)
+        report_url=None, baseline=None, output=None):
+    output = output or RunOutput(out_dir, mode, target_name, label=run_label)
+    cleanup = Cleanup()
+    try:
+        with cleanup:
+            doc, rc = _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
+                           report_url, baseline, cleanup, output)
+    except (Exception, KeyboardInterrupt, SystemExit) as error:
+        doc, rc = output.abort(error, cleanup.errors), 2
+    try:
+        doc['exitCode'] = rc
+        doc = output.write(doc, render)
+    except Exception as error:
+        # CI's summary has a separate missing-artifact fallback. Never turn a disk
+        # or renderer failure into success or replace the primary abort diagnostic.
+        log('report write failed: ' + error_text(error))
+        if doc.get('abort'):
+            log('primary error: ' + doc['abort']['error'])
+            doc['abort']['reportErrors'] = [error_text(error)]
+        else:
+            output.stage = 'report writing'
+            doc = output.abort(error, cleanup.errors)
+        if notifier:
+            notifier.stage(6, 'fail', 'report write failed; see this attempt job log')
+        return doc, 2
+    if doc.get('status') == 'aborted':
+        log(f"E2E ABORTED [{doc['abort']['stage']}]: {doc['abort']['error']}")
+        for error in doc['abort']['cleanupErrors']:
+            log('cleanup unresolved: ' + error)
+        if notifier:
+            notifier.stage(6, 'fail', 'run aborted; see current attempt artifacts')
+        return doc, 2
+    if notifier:
+        notifier.stage(6, 'ok', f'run-{output.run_id}.html')
+        notifier.finish(doc['verdict'], doc['tally'],
+                        report_url.replace('{stamp}', output.run_id) if report_url else None,
+                        failures=[r['id'] for r in doc['checks'] if r['status'] == 'fail'],
+                        extra=(["already known: " + ', '.join(doc['baselined'])] if doc['baselined'] else [])
+                        + (["stale baseline (delete): " + ', '.join(doc['staleBaseline'])] if doc['staleBaseline'] else []))
+    return doc, rc
 
 
 def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
-         report_url, baseline, cleanup):
+         report_url, baseline, cleanup, output):
     ctx = Ctx(cfg)
     t = Transport(cfg["transport"])
     console = Console(t, cfg["console"])
     cluster = Cluster(t)
     metrics = Metrics(t, cfg.get("audit_writer"))
     cap = cfg["capture"]
-    started = datetime.now(timezone.utc)
+    started = output.started
     n = notifier or Notifier(enabled=False)
     log(f"● transport: {t.describe()}   mode: {mode}")
     n.start(mode, target_name, t.describe(), ctx_lines=[run_label] if run_label else [])
 
     # ── 0 · preflight ────────────────────────────────────────────────────────
     log("\n[0/6] preflight")
+    output.stage = 'preflight'
     n.running(0)
     ctx.preflight["health"], ctx.preflight["version"] = console.wait_preflight()
     ctx.controller_pods = cluster.controller_pods(
-        cfg.get("operator_namespace", "phorvex-system"))
+        cfg.get("operator_namespace", "phorvex-system"), cfg.get("controller_deployments"))
     ctx.preflight["controllers"] = ctx.controller_pods
     ctx.writer_metrics = metrics.scrape()
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
@@ -173,16 +210,16 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     # A stage is only green here if preflight found a live system: an unreachable console or
     # a controller that is not Running makes every later stage meaningless, and the board
     # must say so at [0/6] rather than let it surface as an empty capture at [1/6].
-    sick = [p for p, m in ctx.controller_pods.items()
-            if m["phase"] != "Running" or m["restarts"] > ctx.max_restarts]
-    n.stage(0, "fail" if (sick or not ctx.preflight["version"].get("operator")) else "ok",
+    controller_health = checks_mod.p05(ctx)
+    n.stage(0, "fail" if (controller_health["status"] != checks_mod.PASS
+                          or not ctx.preflight["version"].get("operator")) else "ok",
             f"console {ctx.preflight['version'].get('console', '?')} · "
             f"operator {ctx.preflight['version'].get('operator', '?')} · "
-            f"{len(ctx.controller_pods)} controller"
-            + (f" · {len(sick)} unhealthy" if sick else ""))
+            + controller_health["summary"])
 
     # ── 1 · baseline capture ─────────────────────────────────────────────────
     secs = stream_override or cap["stream_seconds"]
+    output.stage = 'baseline capture'
     log(f"\n[1/6] baseline capture ({secs}s of the decision stream)")
     n.running(1, f"{secs}s")
     pre, malformed = console.stream_decisions(secs, cap["max_bytes"])
@@ -202,21 +239,42 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     attack_started_at = None
     legacy_clear = None
     if mode == "attack":
+        output.stage = 'injection / live capture'
         if not ctx.target:
             raise SystemExit("attack mode requires --target")
         a = ctx.target["attack"]
         n.running(2, ctx.target["name"])
         if ctx.target.get("detector"):
             detector = DetectorSignal(t, ctx.target)
-            cleanup.callback(detector.clear)
+            output.injection = {'kind': 'SecurityEvent', 'name': detector.name,
+                                'identity': detector.identity, 'targetNamespace': detector.namespace,
+                                'createAttempted': False, 'createResponseValidated': False,
+                                'cleanup': 'not-needed'}
+
+            def clear_detector():
+                needed = detector.attempted
+                try:
+                    detector.clear()
+                except Exception:
+                    output.injection['cleanup'] = 'failed'
+                    raise
+                output.injection['cleanup'] = 'delete-request-acknowledged' if needed else 'not-needed'
+
+            cleanup.callback(clear_detector)
 
         def fire_when_stream_ready():
             nonlocal attack_response, attack_started_at, legacy_clear
             attack_started_at = time.time()
             if detector:
                 log(f"\n[2/6] firing authenticated E2E signal as {detector.identity}")
-                attack_response = detector.fire()
+                try:
+                    attack_response = detector.fire()
+                    output.injection['createResponseValidated'] = True
+                finally:
+                    output.injection['createAttempted'] = detector.attempted
             else:
+                output.injection = {'kind': 'console-signal', 'targetNamespace': ctx.target['namespace'],
+                                    'createAttempted': True, 'cleanup': 'not-configured'}
                 log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
                 # Also clear legacy console signals on exceptions after POST.
                 if ctx.target.get("clear"):
@@ -226,8 +284,12 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
                     def clear_once():
                         nonlocal cleared
                         if not cleared:
+                            output.injection['cleanup'] = 'failed'
                             result = console.post_json(cl["path"], cl["body"])
+                            if not isinstance(result, dict) or result.get('ok') is not True:
+                                raise TransportError('console cleanup did not acknowledge success')
                             cleared = True
+                            output.injection['cleanup'] = 'clear-response-acknowledged'
                             return result
 
                     legacy_clear = clear_once
@@ -252,6 +314,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
 
     # ── 3 · post capture ─────────────────────────────────────────────────────
     win = cap["post_attack_seconds"] if mode == "attack" else 0
+    output.stage = 'post-attack capture'
     if win:
         log(f"\n[3/6] post-attack capture ({win}s)")
         n.running(3, f"{win}s")
@@ -274,6 +337,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
 
     # ── 4 · ground truth ─────────────────────────────────────────────────────
     log("\n[4/6] independent verification against the cluster")
+    output.stage = 'ground truth'
     acted = [r for r in ctx.records if r.get("actuated")]
     if acted:
         n.running(4, f"{len(acted)} actions")
@@ -297,6 +361,8 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     log("\n[5/6] running the checks")
     n.running(5)
     results = []
+    output.stage = 'checks'
+    output.results = results
     for c in checks_mod.registry():
         try:
             r = c["fn"](ctx)
@@ -335,15 +401,11 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
 
     # ── 6 · clear + report ───────────────────────────────────────────────────
     n.running(6)
-    if detector:
-        log(f"\n[6/6] clearing dedicated E2E event {detector.name}")
-        detector.clear()
-    elif ctx.attack_fired and ctx.target.get("clear"):
-        cl = ctx.target["clear"]
-        log(f"\n[6/6] clearing the attack signal → POST {cl['path']} {json.dumps(cl['body'])}")
-        log(str(legacy_clear())[:250], 1)
-    else:
-        log("\n[6/6] clear — not needed")
+    output.stage = 'cleanup'
+    cleanup.close()
+    if cleanup.errors:
+        raise TransportError('attack cleanup failed; see cleanupErrors')
+    log("\n[6/6] registered cleanup complete")
 
     traces = [trace_of(r) for r in ctx.records]
 
@@ -365,6 +427,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         "preflight": ctx.preflight,
         "attackResponse": attack_response,
         "attackStartedAtEpoch": attack_started_at,
+        "injection": output.injection,
         "policy": {"maxMovesPerTick": ctx.max_moves_per_tick,
                    "mode": ctx.policy_mode, "dryRun": ctx.policy_dryrun},
         "baselinePods": ctx.baseline_pods,
@@ -377,15 +440,9 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         "traces": traces,
     }
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = started.strftime("%Y%m%dT%H%M%SZ")
+    output.stage = 'report'
+    stamp = output.run_id
     run_doc["runId"] = stamp
-    jpath = out_dir / f"run-{stamp}.json"
-    hpath = out_dir / f"run-{stamp}.html"
-    jpath.write_text(json.dumps(run_doc, ensure_ascii=False, indent=2), encoding="utf-8")
-    hpath.write_text(render(run_doc), encoding="utf-8")
-    (out_dir / "latest.html").write_text(render(run_doc), encoding="utf-8")
-    n.stage(6, "ok", hpath.name)
 
     log(f"\n══ verdict: {verdict}  "
         f"(✔{tally['pass']}  ✘{tally['fail']}  !{tally['warn']}  –{tally['skip']})")
@@ -393,19 +450,6 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         log(f"   {len(baselined)} known failures: {', '.join(baselined)}")
     if new_failures:
         log(f"   {len(new_failures)} new failures: {', '.join(new_failures)}")
-    log(f"   {jpath}")
-    log(f"   {hpath}")
-
-    # CI passes a URL template so the channel links the published report, not a path on a
-    # runner that is about to be destroyed.
-    url = report_url.replace("{stamp}", stamp) if report_url else None
-    extra = []
-    if baselined:
-        extra.append(f"already known: {', '.join(baselined)}")
-    if stale:
-        extra.append(f"stale baseline (delete): {', '.join(stale)}")
-    n.finish(verdict, tally, url,
-             failures=[r["id"] for r in results if r["status"] == "fail"], extra=extra)
 
     # Exit non-zero only for a hard failure nobody has accounted for. With no baseline
     # loaded this is exactly the old behaviour: every hard failure is a new one.
@@ -418,6 +462,8 @@ def main():
     ap.add_argument("--mode", choices=["observe", "attack"], default="observe")
     ap.add_argument("--target", default=None)
     ap.add_argument("--out", default=str(ROOT / "runs"))
+    ap.add_argument("--run-id", default=None, help="unique attempt ID (CI run/attempt/job)")
+    ap.add_argument("--source-commit", default=None, help="full harness source commit, not deployed version")
     ap.add_argument("--stream-seconds", type=int, default=None)
     ap.add_argument("--list-targets", action="store_true")
     ap.add_argument("--telegram", action="store_true",
@@ -434,38 +480,39 @@ def main():
                          "so CI gates on NEW regressions rather than on absolute state.")
     a = ap.parse_args()
 
-    cfg = json.loads(Path(a.config).read_text(encoding="utf-8"))
     if a.list_targets:
+        cfg = json.loads(Path(a.config).read_text(encoding="utf-8"))
         for tg in cfg["targets"]:
             print(f"{tg['name']:20s} ns={tg['namespace']:18s} kind={tg['kind']}")
         return 0
     if a.mode == "attack" and not a.target:
         ap.error("--mode attack requires --target (list them with --list-targets)")
 
-    baseline = None
-    if a.baseline:
-        # A missing or malformed baseline is fatal rather than ignored: silently falling
-        # back to "no known failures" would turn a typo in a CI path into a red build that
-        # looks like a real regression.
-        baseline = json.loads(Path(a.baseline).read_text(encoding="utf-8"))
-        n_known = len((baseline.get("checks") or {}))
-        log(f"● baseline: {a.baseline} ({n_known} known checks)")
-
     n = Notifier(enabled=a.telegram, log=lambda m: log(m, 1))
     if a.telegram and not n.enabled:
         log("warning: --telegram was passed but TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are unset "
             "— notifications are off")
     try:
+        output = RunOutput(a.out, a.mode, a.target, a.run_id, a.source_commit, a.run_label)
+    except ValueError as error:
+        ap.error(str(error))
+    try:
+        cfg = json.loads(Path(a.config).read_text(encoding="utf-8"))
+        baseline = None
+        if a.baseline:
+            # Baseline/config errors are fatal and reported, never ignored.
+            baseline = json.loads(Path(a.baseline).read_text(encoding="utf-8"))
+            log(f"● baseline: {a.baseline} ({len(baseline.get('checks') or {})} known checks)")
         _, rc = run(cfg, a.mode, a.target, Path(a.out), a.stream_seconds,
                     notifier=n, run_label=a.run_label, report_url=a.report_url,
-                    baseline=baseline)
+                    baseline=baseline, output=output)
         return rc
-    except TransportError as e:
-        log(f"transport error: {e}")
-        # A transport failure kills the run before any stage reports, so the board would
-        # sit on "pending" forever. Say what happened instead of leaving it hanging.
-        n.alert(f"❌ <b>Phorvex E2E</b> — transport error\n<code>{e}</code>"
-                + (f"\n{a.run_label}" if a.run_label else ""))
+    except Exception as error:
+        log('E2E initialization aborted: ' + error_text(error))
+        try:
+            output.write(output.abort(error), render)
+        except Exception as write_error:
+            log('report write failed: ' + error_text(write_error))
         return 2
 
 

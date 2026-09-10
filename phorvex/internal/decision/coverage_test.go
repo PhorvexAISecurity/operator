@@ -30,6 +30,12 @@ func TestNaNCostReportsDistinctUnactionableCategory(t *testing.T) {
 	}
 }
 
+// ownerName builds the M-140 owner key for a fixture tenant. Test policies carry no
+// PolicyUID, so they use the name-kind fallback — the same key model.Policy.Owner()
+// returns for them. Probes that reach into the engine must use it, or they create a
+// second, empty bucket instead of reading the one the policy actually priced from.
+func ownerName(tenant string) string { return model.OwnerKey(model.OwnerKindName, tenant) }
+
 func covPolicy(b int) model.Policy {
 	return model.Policy{
 		Tenant:                 "t",
@@ -113,7 +119,7 @@ func TestCoverageUsesPolicyLambdaAsPerTenantDualSeed(t *testing.T) {
 	if len(set.Candidates) == 0 {
 		t.Fatal("lambda seed test produced no candidates")
 	}
-	if got := e.costFor(polA.Tenant).Dual.Lambda(); got != 0.2 {
+	if got := e.costFor(polA.Owner()).Dual.Lambda(); got != 0.2 {
 		t.Fatalf("tenant A dual seed = %v, want policy lambda 0.2", got)
 	}
 
@@ -129,7 +135,7 @@ func TestCoverageUsesPolicyLambdaAsPerTenantDualSeed(t *testing.T) {
 	// reconcile with a different value must not erase already-learned tenant state.
 	polA.Lambda = 1.7
 	e.AssembleSet([]*model.WorkloadView{view}, polA)
-	if got := e.costFor(polA.Tenant).Dual.Lambda(); got != 0.2 {
+	if got := e.costFor(polA.Owner()).Dual.Lambda(); got != 0.2 {
 		t.Fatalf("existing tenant runtime lambda was reset by policy reconcile: got %v, want 0.2", got)
 	}
 }
@@ -209,7 +215,7 @@ func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
 	views := []*model.WorkloadView{covView("a", true, 2*time.Hour, false)}
 	pol := covPolicy(1)
 	beforeLambda := e.Cost.Dual.Lambda()
-	beforePrior := e.Killchain.Memory.PriorMean(pol.Tenant)
+	beforePrior := e.Killchain.Memory.PriorMean(pol.Owner())
 
 	shadow, err := e.DecideShadowChecked(views, pol)
 	if err != nil || countSelected(shadow) != 1 {
@@ -218,12 +224,12 @@ func TestShadowDecisionDoesNotAdvanceProductionLearning(t *testing.T) {
 	if got := e.Cost.Dual.Lambda(); got != beforeLambda {
 		t.Fatalf("shadow advanced dual state: %v -> %v", beforeLambda, got)
 	}
-	if got := e.Killchain.Memory.PriorMean(pol.Tenant); got != beforePrior {
+	if got := e.Killchain.Memory.PriorMean(pol.Owner()); got != beforePrior {
 		t.Fatalf("shadow advanced kill-chain memory: %v -> %v", beforePrior, got)
 	}
 
 	e.Decide(views, pol)
-	if got := e.Killchain.Memory.PriorMean(pol.Tenant); got == beforePrior {
+	if got := e.Killchain.Memory.PriorMean(pol.Owner()); got == beforePrior {
 		t.Fatal("control production decision did not advance learning; isolation test is vacuous")
 	}
 }

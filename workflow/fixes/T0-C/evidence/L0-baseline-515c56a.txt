@@ -1,0 +1,13 @@
+# L0 baseline at 515c56a (2026-09-03T16:42:27Z); tree clean on phorvex/: 0 changes
+go version go1.27.1 linux/amd64
+--- go build ./...
+BUILD-OK
+--- go vet (touched pkgs)
+VET-OK
+--- go test (touched pkgs)
+ok  	github.com/phorvex/phorvex/internal/decision	11.097s
+ok  	github.com/phorvex/phorvex/internal/model	0.007s
+ok  	github.com/phorvex/phorvex/internal/audit	0.600s
+ok  	github.com/phorvex/phorvex/internal/actionset	0.004s
+ok  	github.com/phorvex/phorvex/internal/cost	0.004s
+ok  	github.com/phorvex/phorvex/internal/runner	0.040s

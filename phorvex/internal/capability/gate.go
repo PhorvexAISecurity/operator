@@ -24,6 +24,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -34,7 +35,20 @@ const (
 	ReasonNoCover        = "no-cover"
 	ReasonCapability     = "capability-unsupported"
 	ReasonNoRBAC         = "no-rbac"
+	// ReasonCodeExec excludes an ephemeral-container injection (debugger/custom-inject) whose
+	// API-server admission deny-policy is not currently VERIFIED to be in force for the target
+	// namespace (M-6). RBAC-allowed ≠ admission-verified: this is a distinct, attributable
+	// class so a code-exec exclusion never masquerades as a generic capability miss.
+	ReasonCodeExec = codeexec.ReasonUnverified
 )
+
+// AdmissionVerifier is the O(1) cached code-exec admission-capability oracle (M-6). Available
+// answers whether the deny-policy is verified in force AND covers the target namespace (from
+// its labels). It is satisfied by *codeexec.Verifier; nil ⇒ the code-exec leg is skipped
+// (e.g. in unit fixtures that do not wire it), never a silent pass at runtime.
+type AdmissionVerifier interface {
+	Available(nsLabels map[string]string) (ok bool, reason string)
+}
 
 // Pod capability-witness label/role keys (extracted from the pre-T1-E runner).
 const (
@@ -143,11 +157,30 @@ type Witness struct {
 	notInstall model.InstallSet
 	az         *authz.Checker
 	act        actuator.Actuator
+	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
+	// per-namespace label sets (already GET-derived observation substrate) so the scope
+	// check is O(1) and needs no per-candidate network read.
+	codeExec AdmissionVerifier
+	nsLabels map[string]map[string]string
 }
 
 // BuildWitness assembles the per-tick witness.
 func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az *authz.Checker, act actuator.Actuator) Witness {
 	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act}
+}
+
+// WithCodeExec returns a copy of the witness with the M-6 code-exec admission leg wired.
+// Kept separate from BuildWitness so existing callers/fixtures are untouched (a nil verifier
+// simply skips the leg — the runtime path always wires a real one).
+func (w Witness) WithCodeExec(cev AdmissionVerifier, nsLabels map[string]map[string]string) Witness {
+	w.codeExec = cev
+	w.nsLabels = nsLabels
+	return w
+}
+
+// isCodeExecAction reports the two in-pod code-execution (ephemeral-container) injections.
+func isCodeExecAction(a model.Action) bool {
+	return a == model.ActionDebugger || a == model.ActionCustomInject
 }
 
 // Eligible runs the full cheapest-first gate for one (asset, action). nil = eligible.
@@ -160,6 +193,15 @@ func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys 
 	}
 	if ok, why := w.Capable(v, action); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
+	}
+	// M-6 code-exec admission leg: a debugger/custom-inject move is offered ONLY if the
+	// API-server deny-policy is verified in force for THIS namespace. Local + cached (no
+	// network on the gate path), so it precedes the SSAR. Fail-closed: an unwired verifier
+	// at runtime is a boot error, not a silent pass (the runtime always sets one).
+	if isCodeExecAction(action) && w.codeExec != nil {
+		if ok, why := w.codeExec.Available(w.nsLabels[v.Pod.Namespace]); !ok {
+			return &Reason{Excluded: true, Kind: ReasonCodeExec, Detail: why}
+		}
 	}
 	// RBAC is LAST: only a candidate that passed the free local checks reaches an SSAR.
 	if w.az != nil {

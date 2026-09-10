@@ -1,0 +1,112 @@
+from	to	kind	runtime_role	engine_scope	deployment_mode	anchor	crossing_status
+cmd.main	controller	wires	production	BOTH	all	cmd/main.go:281 — PhorvexPolicyReconciler{…}.SetupWithManager(mgr)	-
+cmd.main	runner	wires	production	BOTH	all	cmd/main.go:235 — runner.NewManager	-
+controller	runner.policies	reconcile	production	BOTH	all	internal/controller/phorvexpolicy_controller.go:53 + internal/controller/phorvexpolicy_controller.go:42 — r.Manager.Upsert / r.Manager.Remove	-
+api.v1alpha1	controller	schema	production	BOTH	all	internal/controller/phorvexpolicy_controller.go:39 — PhorvexPolicy type	-
+deploy	api.v1alpha1	installs	infrastructure	NONE	all	config/crd/kustomization.yaml:4 — generated CRD inclusion	-
+runner.tick	ingest	calls	production	BOTH	all	internal/runner/manager.go:304 — ingest.CollectSnapshot in tick	-
+runner.tick	platform	calls	production	BOTH	all	internal/runner/manager.go:324 — platform.Derive(snap) manager.go	-
+runner.tick	runner.feedback	calls-before-decide	production	BOTH	all	internal/runner/manager.go:320 observeReadyRotations(snap)	-
+runner.tick	calib	calls	shadow	BOTH	all	internal/runner/manager.go:326 — Calibration.ObserveSnapshot when calibrationDue	-
+runner.assembly	exposure	reads	production	BOTH	all	internal/runner/manager.go:783 + internal/runner/manager.go:799 — Clock.Observe / Clock.Since	-
+runner.assembly	decision.coverage	calls	production	P1	all	internal/runner/manager.go:852 + cmd/main.go:254 — decideTick(m.Optimizer, …) dispatched to the CoverageEngine wired here	-
+decision.coverage	actionset	calls	production	P1	all	internal/decision/coverage.go:228 + internal/decision/coverage.go:217 (wiring) — deps.Generate / actionset.Deps	-
+decision.coverage	recon	wires (no call)	production	P1	all	internal/decision/coverage.go:218 (WIRING ONLY) — Recon passed into actionset.Deps; coverage.go itself makes no recon call	-
+decision.coverage	killchain	calls	production	P1	all	internal/decision/coverage.go:192 — e.Killchain.Assess(v, pol, exp, floorSec)	-
+decision.coverage	ctxprov	calls	production	P1	all	internal/decision/coverage.go:186 — e.Context.Context(v, pol)	-
+decision.coverage	cost.p1	calls	production	P1	all	internal/decision/coverage.go:223 + internal/decision/coverage.go:438 — tcost.Evaluation / e.Cost.ECost	-
+decision.coverage	metrics	emits	production	P1	all	internal/decision/coverage.go:263 — coverage.go 1 ref	-
+cost.p1	cost.rls	reads-bound	production	P1	all	internal/cost/p1cost.go:260 + internal/cost/p1cost.go:180 — c.RLS.Predict / c.RLS.Primed	-
+decision.p0	belief	calls	production	P0	all	internal/decision/engine.go:132 — bel = e.Belief.Belief(v, pol)	-
+decision.p0	physics	calls	production	P0	all	internal/decision/engine.go:124 — residual = e.Physics.Residual(v, pol)	-
+decision.p0	cost.switching	calls	production	P0	all	internal/decision/engine.go:151 sole caller	-
+runner.emit	actuator.router	calls	production	BOTH	optional-hybrid	internal/runner/manager.go:1061 — post-decision emit boundary	-
+actuator.native	actuator.native.handlers	dispatch	production	BOTH	optional-native	internal/actuator/native.go:82 — 16 HandlerRegistry registrations	-
+runner.feedback	slo.ledger	writes	observe-only	BOTH	all	internal/runner/manager.go:1074 + internal/runner/manager.go:1089 — m.recordActionOutcome(...)	-
+runner.feedback	slo.contract	reads	observe-only	BOTH	all	internal/runner/manager.go:453 — bound := selectionBound(action)	-
+runner.feedback	cost.rls	observes	production	P1	all	internal/runner/manager.go:599 — observer.ObserveRotation(p.tenant, &p.view, measuredFlow)	-
+runner.tick	metrics	writes	production	BOTH	all	internal/runner/manager.go:271 — gauges per tenant	-
+console.server	console.applyfix	routes	tool	NONE	all	internal/console/server.go:34 — 5 /api/apply-fix/* routes	-
+console.applyfix	applier	would-call	tool	NONE	all	cmd/console/main.go:84 injects nil	-
+console.bench	decision.bench	calls	tool	NONE	all	internal/console/benchmark_sim.go:210 — decision.NewCoverageEngine().Ablate(views, pol, seeds)	-
+actionset	feasibility	calls	production	P1	all	internal/actionset/generator.go:190 — feasibility.Evaluate(v, move, pol)	-
+actionset	cost.p1	calls	production	P1	all	internal/actionset/generator.go:199 — internal/actionset/generator.go:201 ECost/CHi	-
+runner.emit	actuator.phoenix	selects (default)	production	BOTH	default	internal/runner/manager.go:153 default -> NewPhoenixActuator	-
+runner.emit	actuator.native	selects (PHORVEX_ACTUATOR=native)	production	BOTH	optional-native	internal/runner/manager.go:146	-
+runner.emit	actuator.router	selects (PHORVEX_ACTUATOR=hybrid)	production	BOTH	optional-hybrid	internal/runner/manager.go:1061 — internal/runner/manager.go:151	-
+actuator.router	actuator.phoenix	routes rotate/quarantine	production	BOTH	optional-hybrid	"internal/actuator/hybrid.go:60 — hybrid.go RuleTypeFor(action)!="""""	-
+actuator.router	actuator.native	routes AI-native moves	production	BOTH	optional-hybrid	internal/actuator/hybrid.go:63 — hybrid.go else-branch	-
+runner.tick	audit	writes	production	BOTH	all	internal/runner/manager.go:909 — audit.Logger on the per-tenant path; runs in dry-run and kill-switched modes where emit never fires	-
+epssfeed	platform	file handoff	tool	NONE	all	internal/platform/platform.go:151 — writes the EPSS cache read by platform.LoadEPSSFromFile	-
+ingest	graph	calls	production	BOTH	all	internal/ingest/kube.go:168 + internal/ingest/kube.go:146 — graph.Build / graph.ResolveRBAC	-
+runner.emit	feasibility	re-checks at the emit boundary	production	BOTH	all	internal/runner/manager.go:1051 feasibility.Evaluate	-
+decision.p0	feasibility	calls	production	P0	all	internal/decision/engine.go:154 feasibility.Evaluate	-
+runner.tick	runner.assembly	per-tenant loop	production	BOTH	all	internal/runner/manager.go:332 — m.processTenantWithPhysics(ctx, snap, e, killEngaged, physicsByKey)	-
+runner.assembly	runner.emit	conditional on a selected move	production	BOTH	all	internal/runner/manager.go:1061	-
+runner.feedback	calib	ObserveRotation	shadow	BOTH	all	internal/runner/manager.go:388 Calibration.ObserveRotation	-
+runner.killswitch	runner.tick	gates the tick	production	BOTH	all	internal/runner/manager.go:270 KillSwitch.Engaged	-
+runner.assembly	decision.p0	calls	production	P0	all	internal/runner/manager.go:852 + cmd/main.go:251 — same decideTick dispatch when the p0 engine is wired	-
+cmd.main	decision.coverage	wires (default engine)	production	P1	all	cmd/main.go:254 — rmgr.Optimizer = decision.NewCoverageEngine()	-
+cmd.main	decision.p0	wires (engine=p0)	production	P0	all	cmd/main.go:251 — rmgr.Optimizer = decision.NewEngine()	-
+console.bench	decision.coverage	instantiates the PRODUCTION engine	tool	P1	all	internal/console/benchmark_sim.go:196 + internal/console/benchmark_sim.go:209 — decision.NewCoverageEngine().Decide	-
+console.applyfix	decision.coverage	runs the production engine to preview a policy edit	tool	P1	all	internal/console/applyfix_gate.go:55 + internal/console/applyfix_gate.go:69 — decision.NewCoverageEngine()	-
+actuator.native	actionset	completeness invariant	production	BOTH	optional-native|optional-hybrid	internal/actuator/handler.go:103 + internal/actuator/handler.go:115 — actionset.GeneratableActions()	-
+console.live	actuator.native	handler introspection	tool	NONE	all	internal/console/computed.go:58 + internal/console/computed.go:61 — actuator.MissingHandlers / OrphanHandlers	-
+console.live	actionset	generatable-action introspection	tool	NONE	all	internal/console/computed.go:54 — actionset.GeneratableActions()	-
+redteam	cost.p1	instantiates the dual solver	tool	NONE	all	internal/redteam/pomdp.go:75 — cost.NewDualSolver()	-
+actuator.native.handlers	metrics	records drain outcome	production	BOTH	optional-native|optional-hybrid	internal/actuator/handlers_ai_p4set.go:279 — metrics.RecordRequestDrainAborted(...)	-
+runner	recon	startup validation	production	BOTH	all	internal/runner/manager.go:208 — recon.ValidateRegistryCoverKeys() at Manager construction, not per tick	-
+runner	killchain	ablation-mode construction	benchmark	BOTH	all	internal/runner/ablation_run.go:41 — killchain.NewModel() in the one-shot ablation path only	-
+runner.feedback	metrics	records rotation outcome	production	BOTH	all	internal/runner/manager.go:627 + internal/runner/manager.go:523 — metrics.ObserveRotationOutcome	-
+runner.assembly	metrics	publishes per-tick metrics	production	BOTH	all	internal/runner/manager.go:928 + internal/runner/manager.go:854 — metrics.PublishTick / RecordActionSetRejection	-
+runner.assembly	ingest	reads pod phase	production	BOTH	all	internal/runner/manager.go:825 — ingest.PhaseOf(*p, t)	-
+runner.shadow_validation	feasibility	evaluates the gate on shadow decisions	observe-only	BOTH	all	internal/runner/manager.go:998 — feasibility.Evaluate inside shadowSafetyViolations	-
+cmd.p4b_soak	soak	fits the trend model	tool	NONE	all	cmd/p4b-soak/main.go:152 — heap := soak.FitOLS(xs, col(func(s sample) float64 { return	-
+cmd.main	ingest	wires the snapshot source	production	BOTH	all	cmd/main.go:262 — rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)	-
+cmd.console	console	constructs the server	tool	NONE	all	cmd/console/main.go:43 — cfg := console.DefaultConfig(root)	-
+cmd.redteam	redteam	constructs env and agent	tool	NONE	all	cmd/redteam-rl/main.go:66 — env := redteam.NewEnv(kind, rng)	-
+cmd.main	actuator.native	constructs the native actuator (native-demo one-shot mode)	tool	NONE	all	cmd/nativedemo.go:38 — actuator.NewNativeActuator, defined in internal/actuator/native.go:41	-
+cmd.main	platform	loads the EPSS cache	production	BOTH	all	cmd/main.go:185 — if err := platform.LoadEPSSFromFile(epssCachePath); err != n	-
+cmd.pendingcheck	pendinggate	runs the source scan	tool	NONE	all	cmd/pendingcheck/main.go:24 — hits, err := pendinggate.Scan(*root)	-
+cmd.main	audit	constructs / calls	production	BOTH	all	cmd/main.go:272 — f, ferr := audit.NewRotatingWriter(auditJSON, auditMaxBytes,	-
+cmd.calib_soak	calib	runs the shadow calibrator	tool	NONE	all	cmd/calib-soak/main.go:144 — runtimeShadow := calib.NewRuntime(calib.RuntimeConfig{	-
+cmd.main	calib	runs the shadow calibrator	shadow	BOTH	all	cmd/main.go:240 — rmgr.Calibration = calib.NewRuntime(calib.RuntimeConfig{	-
+cmd.main	epssfeed	constructs / calls	tool	NONE	all	cmd/main.go:337 — result, err := epssfeed.Run(ctrl.SetupSignalHandler(), epssf	-
+cmd.calib_soak	platform	loads the EPSS cache	tool	NONE	all	cmd/calib-soak/main.go:127 — if err := platform.LoadEPSSFromFile(epssCache); err != nil {	-
+cmd.calib_soak	runner	constructs the manager	tool	NONE	all	cmd/calib-soak/main.go:150 — manager := runner.NewManager(readOnlyClient, log)	-
+runner	decision.bench	ablation one-shot	benchmark	BOTH	all	internal/runner/ablation_run.go:147 — decision.AblateScarcity	-
+cmd.main	cost.rls	configures the GPU envelope	production	P1	all	cmd/main.go:161 — cost.ConfigureGPUEnvelopeMax	-
+cmd.main	actuator.phoenix	constructs the Phoenix actuator (integration-emit one-shot mode)	tool	NONE	all	cmd/main.go:384 — actuator.NewPhoenixActuator inside runIntegrationEmit; the PRODUCTION construction is internal/runner/manager.go:153	-
+runner.assembly	runner.shadow_validation	invokes	observe-only	BOTH	all	internal/runner/manager.go:866 — shadowSafetyViolations(shadowDecisions, views, pol)	-
+decision.p0	cost.surface	resolves the cost model	production	P0	all	internal/decision/engine.go:81 — cost.Registry.Default()	-
+cost.p1	cost.surface	implements	production	P1	all	internal/cost/p1cost.go:299 — P1Cost.Switching implements CostModel	-
+decision.p0	ctxprov	resolves and calls the context provider	production	P0	all	internal/decision/engine.go:128 + internal/decision/engine.go:87 — e.Context.Context(v, pol) / ctxprov.Registry.Default()	-
+decision.bench	recon	resolves a recon profile by name	benchmark	NONE	all	internal/decision/ablation.go:45 — recon.Registry.Get(name)	-
+dashboard.api	console.server	HTTP reads the console API	tool	NONE	all	"dashboard-web/lib/api.ts:35 — fetch(API_BASE + path, { headers: { ""X-Phorvex-Lens"": lens } })"	-
+dashboard.api	console.live	SSE stream	tool	NONE	all	dashboard-web/lib/api.ts:341 — new EventSource(`${API_BASE}/api/live?lens=...`)	-
+image.console	dashboard	bakes the static SPA export	tool	NONE	all	deploy/docker/console.Dockerfile:121 — COPY --from=web /web/out /app/web	-
+image.console	console	bakes the console binary as ENTRYPOINT	tool	NONE	all	deploy/docker/console.Dockerfile:120 — COPY --from=gobuild /console /app/console	-
+ci.release	image.console	builds and publishes the image	tool	NONE	all	.github/workflows/ci.yml:245 — file: deploy/docker/console.Dockerfile	-
+console.live	bin.phorvex_cli	execs the operator binary for --scan	tool	NONE	all	internal/console/subsystems.go:27 — exec.CommandContext(ctx, bin, args...) with cfg.PhorvexBin	-
+console.bench	bin.harness	execs the harness to enumerate the catalogue	tool	NONE	all	"internal/console/evidence.go:58 — exec.CommandContext(ctx, c.HarnessBin, ""-config"", cfg, ""-list"")"	-
+console.attack	bin.kubectl	execs kubectl to apply a SecurityEvent CR	tool	NONE	all	"internal/console/workload_attack.go:68 — s.cfg.execText(timeout, ""kubectl"", ...)"	-
+bin.kubectl	ext.k8s	applies the CR through the API server	tool	NONE	all	internal/console/workload_attack.go:68 — kubectl -n <ns> apply	implemented
+actuator.phoenix	ext.k8s	writes the SecurityEvent	production	BOTH	default|optional-hybrid	internal/actuator/phoenix.go:140 — p.Client.Create(ctx, se)	implemented
+ingest	ext.prometheus	queries telemetry	production	BOTH	all	internal/ingest/prometheus.go:204 — resp, err := p.Client.Do(req) against /api/v1/query	implemented
+console.attack	bin.redteam_rl	execs the RL trainer binary	tool	NONE	all	"internal/console/redteam.go:367 — exec.CommandContext(ctx, bin, ""--iters"", ""24"", ...) with bin from rtBinary() at :60"	-
+console.attack	bin.go_toolchain	execs `go test` for the policy suite	tool	NONE	all	"internal/console/redteam.go:322 — exec.CommandContext(ctx, ""go"", args...)"	-
+console.runs	bin.harness	execs the harness to run a scenario	tool	NONE	all	"internal/console/runs.go:443 — exec.CommandContext(ctx, rm.cfg.HarnessBin, ""-config"", ...)"	-
+image.operator	cmd.main	bakes the operator binary as ENTRYPOINT	production	NONE	all	deploy/docker/operator.Dockerfile:44 — COPY --from=builder /manager .	-
+epssfeed	bin.trivy	execs the Trivy scanner per image	tool	NONE	all	internal/epssfeed/sync.go:408 — exec.CommandContext(scanCtx, s.Path, args...)	-
+image.trivy	vol.trivy_bin	initContainer copies the binary into the shared volume	production	NONE	all	"charts/phorvex/templates/epss-feed.yaml:121 — args: [""cp /usr/local/bin/trivy /tools/trivy""]"	implemented
+vol.trivy_bin	epssfeed	mounted read-only and passed as --epss-feed-trivy	production	NONE	all	charts/phorvex/templates/epss-feed.yaml:163 — mountPath /tools readOnly, with --epss-feed-trivy at :143	-
+actuator.phoenix	phoenix.module	compiles against the vendored Phoenix API types	production	BOTH	default|optional-hybrid	"internal/actuator/phoenix.go:15 — amtdv1beta1 ""github.com/r6security/phoenix/api/v1beta1"", redirected to this local fork by go.mod:79"	-
+ext.k8s	ext.phoenix	Phoenix reconciles the CRs Phorvex wrote	external	NONE	all	build/phoenix-extended/internal/controller/adaptivemovingtargetdefense_controller.go:231 — For(&amtdv1beta1.AdaptiveMovingTargetDefense{}); SecurityEvent watched at build/phoenix-extended/internal/controller/securityevent_controller.go:513	implemented
+actuator.native.handlers	ext.vllm	serving-API calls	production	BOTH	optional-native|optional-hybrid	internal/actuator/gpu_stack.go:133 — http.NewRequestWithContext(ctx, method, url, nil) in httpVLLM.do	implemented
+actuator.native.handlers	ext.guardrail	guardrail variant rotation	production	BOTH	optional-native|optional-hybrid	internal/actuator/gpu_stack_p4set.go:157 — g.v.postJSON(ctx, ep.base()+ep.guardPath, ...)	implemented
+actuator.native.handlers	ext.kv_local	local KV cache invalidation	production	BOTH	optional-native|optional-hybrid	internal/actuator/gpu_stack_p4set.go:183 — k.v.postJSON(ctx, ep.base()+ep.kvInvPath, ...)	implemented
+actuator.native.handlers	ext.k8s	MIG node-agent exec goes through the API server	production	BOTH	optional-native|optional-hybrid	"internal/actuator/gpu_stack_p4set.go:247 — r.c.List(ctx, &pods, client.MatchingLabels{r.label: ""true""}) resolves the MIG node-agent pod through the API server"	implemented
+ext.k8s	ext.mig_agent	DECLARED remotecommand exec into the node-agent (never wired)	external	NONE	all	internal/actuator/nodeexec.go:73 — func WireRemoteNodeExec(cfg RemoteExecConfig) { pkgNodeExec = newRemoteNodeExec(cfg) } has ZERO callers, so the exec at internal/actuator/gpu_stack_p4set.go:241 is unreachable	declared-unwired
+epssfeed	ext.first_epss	resolves CVEs through the FIRST EPSS API	tool	NONE	all	internal/epssfeed/sync.go:486 — http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)	implemented
+actuator.phoenix	ext.k8s	maintains the AMTD strategy CR	production	BOTH	default|optional-hybrid	internal/actuator/phoenix.go:93 — p.Client.Create(ctx, &amtd); updated at internal/actuator/phoenix.go:105	implemented
+ext.phoenix	ext.k8s	Phoenix mutates the workload it reconciled	external	NONE	all	build/phoenix-extended/internal/controller/securityevent_controller.go:259 — podErr := r.Client.Delete(ctx, pod); the quarantine branch creates a NetworkPolicy at build/phoenix-extended/internal/controller/securityevent_controller.go:346	implemented

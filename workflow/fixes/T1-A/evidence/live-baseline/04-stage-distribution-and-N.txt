@@ -1,0 +1,32 @@
+# 04 — Baseline N for the band (bus 257 fact 2), 2026-09-02 ~13:15–13:30 UTC
+
+Method: reader pod `audit-scan-k3` (python:3.11-slim) on the brain node
+(`ip-172-27-12-42.us-east-2.compute.internal`) mounting PVC `phorvex-phorvex-audit` at /audit.
+Files: live.jsonl (active, post-rotation 12:56 UTC) + live.jsonl.1/.2/.3/.4 (268MB each).
+
+## Stage distribution — all `phorvex.decision` records, live.jsonl.1 + live.jsonl (≈11:44→13:20 UTC)
+
+    'recon':   6138
+    'exploit':    1
+    model-theft:  0      <- N = 0
+
+**N = 0 empirically** (not only by construction). The proposal's §4 band "zero-event model-theft:
+N → 0" is vacuous on this fleet — as the proposal itself anticipated (§3 consequence). The gate is
+dark today because ModelRarity = 1.0 (single ModelID fleet; see 03), and was dark in every captured
+window today:
+
+## vllm-namespace records — (vramPresent, smPresent, modelRarity, coResidency, stage, action, selected)
+
+    live.jsonl.4  07:26→08:37 UTC: 269 records  (False, False, 1, 2, 'recon', 'noop', False) -> 269
+    live.jsonl.3  08:37→09:52 UTC: 274 records  (False, False, 1, 2, 'recon', 'noop', False) -> 274
+    live.jsonl.2  09:52→11:43 UTC: 285 records  (False, False, 1, 2, 'recon', 'noop', False) -> 285
+    live.jsonl.1+.0 11:44→13:20 UTC: 365 records (False, False, 1, 2, 'recon', 'noop', False) -> 365
+
+Uniform across ~6 hours spanning the 0.4.67 → 0.4.72 upgrade (upgrade ≈13:00 UTC; live.jsonl.1 is
+pre-upgrade). No selections on the vllm pod at all in this window — the endpoint-rotate churn observed
+at 0.4.50 is not currently reproducing (consistent with the gate being dark + `phorvex.ai/serving:
+drained` label on the pod; the churn's selection-layer causes are M-144/M-23/M-27 territory, not T1-A).
+
+## One exploit-stage record
+
+The single non-recon record in the window: stage=exploit ×1 (not GPU-related; available on request).

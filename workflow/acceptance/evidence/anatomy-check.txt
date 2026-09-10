@@ -1,0 +1,345 @@
+GEN derive
+package           LOC files testLOC  out  in  imports
+console         10044    42     916    5   0  actionset actuator audit decision model
+actuator         2826    16    1815    4   3  actionset metrics model registry
+calib            2178    10    1626    2   1  ingest model
+runner           1870     5    1533   14   1  actuator audit calib cost decision exposure feasibility inge
+decision         1755     6    3669   10   2  actionset belief cost ctxprov feasibility killchain metrics 
+ingest           1129     4     393    4   3  actuator graph model registry
+redteam          1065     6     216    1   0  cost
+cost              984     7     890    2   3  model registry
+slo               812     3     556    1   1  model
+epssfeed          797     2     492    1   0  platform
+platform          683     5     716    3   2  ingest model registry
+recon             609     4     925    2   3  model registry
+killchain         579     2     229    1   2  model
+graph             500     2     100    0   1  
+model             450     1       0    0  19  
+audit             438     3     415    1   2  model
+feasibility       415     5     127    2   3  model registry
+metrics           306     1      51    1   3  model
+actionset         267     1     390    3   3  feasibility model recon
+pendinggate       227     1     153    0   0  
+ctxprov           204     2     165    2   1  model registry
+exposure          152     1      62    0   1  
+physics           145     2       0    2   1  model registry
+applier           126     1     120    1   0  model
+controller        117     1     118    1   0  runner
+registry          111     1       0    0   9  
+soak              111     1      28    0   0  
+belief            107     2       0    2   1  model registry
+
+=== fan-in ranking (how many packages depend on this one) ===
+  model          in=19  actionset actuator applier audit belief calib console cost ctxprov decision feasibility ingest killchain metrics physics platform recon runner slo
+  registry       in= 9  actuator belief cost ctxprov feasibility ingest physics platform recon
+  actionset      in= 3  actuator console decision
+  actuator       in= 3  console ingest runner
+  cost           in= 3  decision redteam runner
+  feasibility    in= 3  actionset decision runner
+  ingest         in= 3  calib platform runner
+  metrics        in= 3  actuator decision runner
+  recon          in= 3  actionset decision runner
+  audit          in= 2  console runner
+
+total packages: 28 total LOC: 29007
+
+=== second census (whole tree, by zone) ===
+package        internal  cmd api  test  tagged   status
+console               0    1   0     0       0   cmd-attached
+controller            0    1   0     0       0   cmd-attached
+epssfeed              0    1   0     0       0   cmd-attached
+pendinggate           0    1   0     0       0   cmd-attached
+redteam               0    1   0     0       0   cmd-attached
+soak                  0    1   0     0       0   cmd-attached
+applier               0    0   0     0       0   unreferenced
+
+all census assertions passed
+GEN gen_handlers
+registered handlers: 16  generatable: 15  declared-only: 1
+  actuator.native.rotate                       internal/actuator/handlers_k8s.go:45       production/optional-native|optional-hybrid
+  actuator.native.quarantine                   internal/actuator/handlers_k8s.go:80       production/optional-native|optional-hybrid
+  actuator.native.debugger                     internal/actuator/handlers_k8s.go:200      production/optional-native|optional-hybrid
+  actuator.native.custom-inject                internal/actuator/handlers_k8s.go:210      production/optional-native|optional-hybrid
+  actuator.native.disable                      internal/actuator/handlers_k8s.go:253      unwired/none
+  actuator.native.identity-rotate              internal/actuator/handlers_k8s.go:271      production/optional-native|optional-hybrid
+  actuator.native.route-rotate                 internal/actuator/handlers_k8s.go:309      production/optional-native|optional-hybrid
+  actuator.native.warm-swap                    internal/actuator/handlers_ai.go:204       production/optional-native|optional-hybrid
+  actuator.native.mig-rebind                   internal/actuator/handlers_ai.go:212       production/optional-native|optional-hybrid
+  actuator.native.kv-reset                     internal/actuator/handlers_ai.go:275       production/optional-native|optional-hybrid
+  actuator.native.endpoint-rotate              internal/actuator/handlers_ai.go:319       production/optional-native|optional-hybrid
+  actuator.native.model-shard-replace          internal/actuator/handlers_ai.go:368       production/optional-native|optional-hybrid
+  actuator.native.adapter-rotate               internal/actuator/handlers_ai_p4set.go:156 production/optional-native|optional-hybrid
+  actuator.native.request-drain                internal/actuator/handlers_ai_p4set.go:257 production/optional-native|optional-hybrid
+  actuator.native.guardrail-rotate             internal/actuator/handlers_ai_p4set.go:306 production/optional-native|optional-hybrid
+  actuator.native.kv-migrate-invalidate        internal/actuator/handlers_ai_p4set.go:385 production/optional-native|optional-hybrid
+GEN gen_call_inventory
+action                  k8s call sites  control-plane call sites      status
+rotate                  2                                             NO_UNRESOLVED_REGEX_CALLS
+quarantine              4                                             NO_UNRESOLVED_REGEX_CALLS
+debugger                2                                             NO_UNRESOLVED_REGEX_CALLS
+custom-inject           2                                             NO_UNRESOLVED_REGEX_CALLS
+identity-rotate         2                                             NO_UNRESOLVED_REGEX_CALLS
+route-rotate            6                                             NO_UNRESOLVED_REGEX_CALLS
+warm-swap               7               DrainRequests ModelReady      NO_UNRESOLVED_REGEX_CALLS
+mig-rebind              3               Available DrainRequests Repar NO_UNRESOLVED_REGEX_CALLS
+kv-reset                2               ResetPrefixCache              NO_UNRESOLVED_REGEX_CALLS
+endpoint-rotate         4                                             NO_UNRESOLVED_REGEX_CALLS
+model-shard-replace     10              DrainRequests ModelReady      NO_UNRESOLVED_REGEX_CALLS
+adapter-rotate          2               LoadAdapter UnloadAdapter     NO_UNRESOLVED_REGEX_CALLS
+request-drain           3               DrainRequests                 NO_UNRESOLVED_REGEX_CALLS
+guardrail-rotate        2               ApplyVariant                  NO_UNRESOLVED_REGEX_CALLS
+kv-migrate-invalidate   2               InvalidateLocal MigrateRemote NO_UNRESOLVED_REGEX_CALLS
+
+status NO_UNRESOLVED_REGEX_CALLS means only that every `foo(ctx…)` call resolved to a
+local function; it is NOT a proof of an exhaustive Go call graph.
+
+INCOMPLETE: none
+GEN gen_operations
+operation rows: 114   actions covered: 18   UNKNOWN targets: 0
+
+action                phase                     op                        anchor
+quarantine            Enact                     NetworkPolicy.Create      internal/actuator/handlers_k8s.go:122
+quarantine            Enact                     Pod.Update                internal/actuator/handlers_k8s.go:138
+quarantine            Rollback                  Pod.Update                internal/actuator/handlers_k8s.go:165
+quarantine            Rollback                  NetworkPolicy.Delete      internal/actuator/handlers_k8s.go:169
+quarantine            Enact -> rsSelectorKeys() ReplicaSet.Get            internal/actuator/handlers_k8s.go:184
+quarantine            Enact -> getPod()         Pod.Get                   internal/actuator/handlers_k8s.go:30
+quarantine            Rollback -> getPod()      Pod.Get                   internal/actuator/handlers_k8s.go:30
+quarantine            Actuate                   phoenix.routes-to         internal/actuator/hybrid.go:61
+quarantine            Actuate                   SecurityEvent.Create      internal/actuator/phoenix.go:140
+rotate                Enact -> getPod()         Pod.Get                   internal/actuator/handlers_k8s.go:30
+rotate                Enact                     Pod.Delete                internal/actuator/handlers_k8s.go:57
+rotate                Actuate                   phoenix.routes-to         internal/actuator/hybrid.go:61
+rotate                Actuate                   SecurityEvent.Create      internal/actuator/phoenix.go:140
+GEN build_effect_matrix
+action                  success kind    ctl-plane                     credits?  security goal
+rotate                  forward-only    none                          N/A       PARTIAL
+quarantine              reversible      none                          N/A       NONE
+debugger                irreversible    none                          N/A       NONE
+custom-inject           irreversible    none                          N/A       NONE
+identity-rotate         reversible      none                          N/A       NONE
+route-rotate            reversible      none                          N/A       NONE
+warm-swap               swap            DrainRequests ModelReady      N/A       NONE
+mig-rebind              swap            Available DrainRequests Repar MIXED     PROTOCOL_ACKNOWLEDGED
+kv-reset                forward-only    ResetPrefixCache              NO        PROTOCOL_ACKNOWLEDGED
+endpoint-rotate         reversible      none                          N/A       NONE
+model-shard-replace     swap            DrainRequests ModelReady      N/A       NONE
+adapter-rotate          reversible      LoadAdapter UnloadAdapter     NO        PROTOCOL_ACKNOWLEDGED
+request-drain           reversible      DrainRequests                 YES       PARTIAL
+guardrail-rotate        reversible      ApplyVariant                  NO        PROTOCOL_ACKNOWLEDGED
+kv-migrate-invalidate   forward-only    InvalidateLocal MigrateRemote SPLIT     PARTIAL
+
+security-goal: NONE 8 · PROTOCOL_ACKNOWLEDGED 4 · PARTIAL 3
+columns marked _GEN are generated; _CURATED are read from source by hand with anchors
+GEN build_operation_matrix
+operation rows: 114   columns: 23   settled: 114/114 (22 unreached = done by n/a, 92 curated)   awaiting curation: 0
+SCOPE: native Enact + native Rollback + Phoenix; hybrid as ROUTE ROWS; disable as one declared-only row
+surfaces: hybrid 17  native-enact 74  native-rollback 18  phoenix 5
+Phoenix-supported actions (the DEFAULT mode): quarantine rotate — every other action returns "unsupported action" at phoenix.go:114
+crossing status (is the destination wired): declared-unwired 2  implemented 112
+shipped reachability (does this call site run): guarded-unreached 4  reachable 92  tool-only 18
+targets: - 1  actuator.native 14  actuator.phoenix 3  ext.guardrail 3  ext.k8s 79  ext.kv_local 2  ext.mig_agent 2  ext.vllm 10
+AUDIT repo_census
+NOTE CENSUS_OPTIONAL_ABSENT  excluded untracked surface 'pipecat-voice' is not present
+NOTE CENSUS_OPTIONAL_ABSENT  excluded untracked surface 'brain-signal-lineage' is not present
+tracked top-level paths: 30   included: 8   excluded: 31
+
+INCLUDED — the anatomy must cover these:
+  .dockerignore          decides what enters the console image build context; console.Dockerfile reasons about it explicitly (the console-audit.jsonl COPY glob)
+  .github                ci.yml builds and publishes the console image whose composition this anatomy models; the release path for an included surface
+  build                  phoenix-extended is the vendored Phoenix module phorvex/go.mod replaces; test-harness builds the harness binary the console execs
+  build/phoenix-extended COMPILED IN: phorvex/go.mod:79 replaces github.com/r6security/phoenix with it, so its API/types are in both images; modelled as phoenix.module, distinct from ext.phoenix (the separately running controller)
+  build/test-harness     PACKAGED: its own Go module, built into the console image as harness.exe and exec'd by the console; modelled only at that binary/exec boundary, not its internal test architecture
+  dashboard-web          the shipped Next.js product surface; lib/api.ts calls the console /api and opens SSE streams
+  deploy                 runtime composition: console.Dockerfile assembles SPA + console + phorvex CLI + harness + kubectl; Helm/EKS values configure the deployed operator
+  phorvex                the operator + console Go module: every internal package, cmd/* binary and the CRD contract
+
+EXCLUDED — with the reason each is out of scope:
+  .claude                agent configuration for this audit, not part of the product
+  .gitignore             source-control hygiene, no runtime or build-composition effect
+  CODE-REPORT.md         generated analysis prose
+  COMPARISON.md          analysis prose
+  DEPLOY-AWS-COREWEAVE.md deployment runbook prose; the executable deployment surface is deploy/
+  DEPLOY-EKS.md          deployment runbook prose; the executable deployment surface is deploy/
+  End-to-End             CI verification pipeline that RUNS the product; it observes the system and is not part of the runtime it observes
+  PHORVEX_PRD.md         requirements prose
+  PHORVEX_V1_MVP.md      requirements prose
+  PROJECT-LOG.md         project journal
+  PX_Reports_V1          generated report output
+  architecture.md        architecture prose — a claim ABOUT the system, which this anatomy exists to derive independently
+  brain-signal-lineage   analysis artifact about the brain, not code the brain runs
+  build/falco-integrator-extended audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+  build/kubearmor-integrator-extended audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+  build/logs             captured run logs, not source or packaged artifact
+  build/prometheus-integrator-extended audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+  build/time-based-trigger-extended audit-only copy: zero references from phorvex/go.mod, charts, deploy or CI
+  decisions.md           decision journal
+  gap-spec.md            specification prose
+  papers                 reference literature
+  pipecat-voice          a separate voice-agent project used as an ATTACK TARGET; it is workload, not Phorvex
+  products               saved marketing collateral (HTML/PDF), no runtime role
+  reports                generated report output
+  repos                  unmodified third-party clones and zips (falco/kubearmor/phoenix/prometheus/time-based-trigger upstreams); build/ holds the -extended forks actually compiled against
+  spec-map.md            specification prose
+  start-dashboard.cmd    local developer convenience launcher; see start-dashboard.ps1
+  start-dashboard.ps1    local developer convenience launcher; not present in the shipped image, which uses the Dockerfile ENTRYPOINT
+  tools                  developer tooling (pr-review) outside the product image
+  validation             raw captured evidence from runs, not source
+  validation.md          validation prose
+RESULT repo_census PASS  every tracked top-level path is classified with a written reason
+AUDIT validate
+nodes 99 (60 top-level, 39 children, 16 handlers)
+relations 111   seams 8   boundaries 1   symbol-scoped children 22
+RESULT validate PASS  every shape, vocabulary, ownership and semantic invariant holds
+AUDIT audit_anchors
+anchors audited: 255   fingerprints pinned at fb52e6c976df   source now at fb52e6c976df
+RESULT audit_anchors PASS  every anchor points at code and still reads exactly as verified
+AUDIT audit_completeness
+relations drawn: 111
+SCANNED:   internal/*/*.go (non-test), direct package-qualified exported calls `pkg.Symbol(`,
+           attributed to symbol-scoped children by enclosing function, string literals stripped.
+SCANNED also: `pkg.ExportedVar.Method(` (e.g. ctxprov.Registry.Default()).
+EXCLUDED:  cmd/* entrypoints · INTERFACE DISPATCH through a struct field (e.g. e.Context.Context(v,pol)
+           where e.Context is a ctxprov.ContextProvider — the package name never appears) ·
+           file/IPC handoffs ·
+           init() side effects · external boundaries (Kubernetes, Prometheus, Phoenix, serving
+           stack) · the `model` and `registry` foundations (drawn outside call order).
+A green result means only: no UNDRAWN edge of the SCANNED class. It is not a proof of
+completeness over the EXCLUDED classes.
+RESULT audit_completeness PASS  no undrawn edges of the scanned class; every calling function is attributed
+AUDIT audit_entrypoints
+cmd/* entrypoint completeness — 0 call sites unattributed
+RESULT audit_entrypoints PASS  every cmd/* -> internal call is represented
+AUDIT audit_delivery
+binaries: 6   provisioned by image: 3   injected at deploy time: 1   recorded gaps: 2
+an image-only check would call the injected ones absent; that is the mistake this prevents
+RESULT audit_delivery PASS  every exec'd binary is provisioned by a verified mechanism or is a recorded gap
+AUDIT audit_exec_boundaries
+exec call sites scanned: 8   binaries modelled: 6
+availability of each binary is decided by audit_delivery.py, not by the image alone
+RESULT audit_exec_boundaries PASS  every exec target resolves to a drawn node, and every drawn binary is installed or a recorded gap
+AUDIT audit_surfaces
+crossing classes: 12 implemented, 1 declared-unwired, 0 absent-stub
+surface probes: 15 (8 external boundaries, 4 composition/release, 2 product surface)
+RESULT audit_surfaces PASS  every non-Go surface fact still holds and its relation is drawn
+AUDIT audit_reachability
+roots: P1 cmd/main.go:254 · P0 cmd/main.go:251 · actuator modes at manager.go:142-155
+branch roots: 6 branches detected in cmd/main.go
+declarative contracts (consumed, never called): api.v1alpha1 deploy
+per-root graphs: 17 roots (6 cmd.main branches + 7 tool binaries + 4 delivery)
+   ci.release                 reaches  52
+   cmd.calib_soak             reaches  59
+   cmd.console                reaches  49
+   cmd.main[ablation]         reaches   2
+   cmd.main[epss-feed]        reaches   5
+   cmd.main[integration-emit] reaches   7
+   cmd.main[native-demo]      reaches  31
+   cmd.main[scan]             reaches   2
+   cmd.main[steady]           reaches  60
+   cmd.p3deep                 reaches   0
+   cmd.p3report               reaches   0
+   cmd.p4b_soak               reaches   1
+   cmd.pendingcheck           reaches   1
+   cmd.redteam                reaches   4
+   image.console              reaches  51
+   image.operator             reaches  64
+   image.trivy                reaches   5
+common tick path 50   P1-reach 10   P0-reach 7   non-decision edges excluded 6
+
+DOCUMENTED DIVERGENCES — 3 (label differs from reachability, with a stated reason):
+   cost.p1              labelled P1    derived BOTH 
+      reachable from the common path only through actionset (registry completeness check at internal/actuator/handler.go:103), never a decision-path read. i
+   cost.rls             labelled P1    derived BOTH 
+      reached only via cost.p1; internal/decision/engine.go has no RLS reference.
+   actionset            labelled P1    derived BOTH 
+      reachable from the common path only via internal/actuator/handler.go:103 actionset.GeneratableActions(), a registry completeness check — not a decisio
+RESULT audit_reachability PASS  every engine, role and mode label agrees with graph, source and branch derivation
+AUDIT audit_operations
+operation rows 114   curated 114   awaiting curation 0
+mutating operations: 46   reads: 68
+RESULT audit_operations PASS  every operation resolves to real source and no curation outruns a generated row
+AUDIT audit_curation_accuracy
+curated rows: 114
+"readback NONE" claims re-derived from source: 36
+NOT mechanically checkable, and therefore NOT proven here: the security-goal reasoning,
+the availability tokens, and every note. Those need a reader.
+RESULT audit_curation_accuracy PASS  every mechanically checkable curated claim holds against source
+MUTATION mutation_test
+mutation                          tool                    expected diagnostic           outcome
+duplicate relation key            validate.py             REL_DUPLICATE_KEY             CAUGHT
+relation endpoint missing         validate.py             REL_ENDPOINT_MISSING          CAUGHT
+relation anchor is prose          validate.py             REL_ANCHOR_NONCANONICAL       CAUGHT
+relation anchor line past EOF     validate.py             REL_ANCHOR_LINE_PAST_EOF      CAUGHT
+relation scope not in vocab       validate.py             REL_ENGINE_BAD                CAUGHT
+P0 wiring edge deleted            validate.py             SEM_ENGINE_WIRING             CAUGHT
+ingest->graph mis-scoped          validate.py             SEM_INGEST_GRAPH              CAUGHT
+node parent does not exist        validate.py             NODE_PARENT_MISSING           CAUGHT
+package assigned to no node       validate.py             PKG_UNASSIGNED                CAUGHT
+handler missing hybrid mode       validate.py             SEM_HANDLER_MODES             CAUGHT
+symbol-scoped child no line       validate.py             NODE_SYMBOL_CHILD_NO_LINE     CAUGHT
+handler row deleted               validate.py             CRD_VOCAB_EXTRA               CAUGHT
+seam evidence is prose            validate.py             SEAM_EVIDENCE_PROSE           CAUGHT
+boundary evidence is prose        validate.py             SEAM_EVIDENCE_PROSE           CAUGHT
+matrix column removed             validate.py             MATRIX_COLUMN_MISSING         CAUGHT
+sibling masks missing edge        audit_completeness.py   COMPLETENESS_EDGE_MISSING     CAUGHT
+cmd/* entrypoint edge deleted     audit_entrypoints.py    ENTRY_EDGE_MISSING            CAUGHT
+native symbol edge -> router      audit_entrypoints.py    ENTRY_EDGE_WRONG_TARGET       CAUGHT
+envelope symbol -> cost.p1        audit_entrypoints.py    ENTRY_EDGE_WRONG_TARGET       CAUGHT
+scope divergence unjustified      audit_reachability.py   NODE_ENGINE_UNJUSTIFIED       CAUGHT
+P0->ctxprov edge deleted          audit_reachability.py   SOURCE_EDGE_MISSING           CAUGHT
+relation engine scope wrong       audit_reachability.py   REL_ENGINE_CONTRADICTS        CAUGHT
+relation engine scope overbroad   audit_reachability.py   REL_ENGINE_OVERBROAD          CAUGHT
+claimed mode unreachable          audit_reachability.py   MODE_MISMATCH                 CAUGHT
+wrong but reachable mode          audit_reachability.py   REL_MODE_CONTRADICTS          CAUGHT
+tool edge pollutes common         audit_reachability.py   BRANCH_ROLE_CONTRADICTS       CAUGHT
+one-shot branch role wrong        audit_reachability.py   BRANCH_ROLE_CONTRADICTS       CAUGHT
+production edge to unwired        audit_reachability.py   REL_ROLE_CONTRADICTS          CAUGHT
+anchor drifted off its line       audit_anchors.py        ANCHOR_DRIFTED                CAUGHT
+seam quote off by one line        audit_anchors.py        SEAM_QUOTE_NOT_AT_LINE        CAUGHT
+dashboard -> console edge gone    audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+image composition edge gone       audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+external boundary edge gone       audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+exec boundary edge gone           audit_exec_boundaries.pyEXEC_EDGE_MISSING             CAUGHT
+binary gap seam removed           audit_delivery.py       DELIVERY_UNPROVISIONED        CAUGHT
+tool root reaches nothing         audit_reachability.py   ROOT_REACHES_NOTHING          CAUGHT
+node reachable from no root       audit_reachability.py   NODE_NO_ROOT                  CAUGHT
+repo surface unclassified         repo_census.py          CENSUS_UNCLASSIFIED           CAUGHT
+deploy injection edge gone        audit_delivery.py       DELIVERY_EDGE_MISSING         CAUGHT
+verified gap recorded as gap      audit_delivery.py       DELIVERY_FALSE_GAP            CAUGHT
+go.mod replace edge gone          audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+k8s -> phoenix link gone          audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+guardrail boundary gone           audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+MIG exec boundary gone            audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+FIRST EPSS boundary gone          audit_surfaces.py       SURFACE_EDGE_MISSING          CAUGHT
+unwired claimed implemented       audit_surfaces.py       CROSSING_UNRECORDED           CAUGHT
+negative-space seam removed       audit_surfaces.py       CROSSING_UNRECORDED           CAUGHT
+go.mod anchor drifted             audit_anchors.py        ANCHOR_DRIFTED                CAUGHT
+operation anchor wrong line       audit_operations.py     OP_ANCHOR_BAD                 CAUGHT
+curated cell unanchored           audit_operations.py     OP_CURATION_UNANCHORED        CAUGHT
+curation without an operation     audit_operations.py     OP_CURATION_ORPHAN            CAUGHT
+unwired op claimed implemented    audit_operations.py     OP_STATUS_CONTRADICTS         CAUGHT
+effect claimed on unreached op    audit_operations.py     OP_EFFECT_ON_UNREACHED        CAUGHT
+unreached with no guard named     audit_operations.py     OP_UNREACHED_UNEXPLAINED      CAUGHT
+reach condition is a statement    audit_operations.py     OP_REACH_NOT_A_CONDITION      CAUGHT
+unreached left in backlog         audit_operations.py     OP_UNREACHED_IN_BACKLOG       CAUGHT
+unreached by a WIRED guard        audit_operations.py     OP_UNREACHED_NOT_DERIVED      CAUGHT
+reachable row claims not-run      audit_operations.py     OP_REACHED_CLAIMS_NA          CAUGHT
+compensation claims success       audit_operations.py     OP_COMPENSATION_LEDGER        CAUGHT
+discarded error claims ack        audit_operations.py     OP_DISCARDED_ERROR_ACK        CAUGHT
+route stamped on native row       audit_operations.py     OP_SURFACE_MISMATCH           CAUGHT
+phoenix claims the effect         audit_operations.py     OP_PHOENIX_CONFIRMS           CAUGHT
+create-if-absent as undo          audit_operations.py     OP_COMPENSATION_NOT_UNDO      CAUGHT
+curated cell cites a comment      audit_curation_accuracy.pyCURATION_CITATION_NOT_CODE    CAUGHT
+tool-only claimed production      audit_operations.py     OP_UNREACHED_NOT_DERIVED      CAUGHT
+
+harness self-test: a tool that raises NameError is reported CRASH
+
+65/65 mutations caught by their own diagnostic
+every invariant is falsifiable, and falsifiable for the stated reason
+anatomy pipeline: 11/11 audits PASS
+ANATOMY.mmd · 60 nodes in 15 lanes · 88 edges · pin fb52e6c976df
+dashed = tool/unwired · thick = crossing into a system Phorvex does not own · bold border = carries a seam
+svg 1180x3134, 60 top-level + 39 descendants written, 109 relations drawn, 8 absent markers
+emitted /tmp/phorvex-anatomy-vn56brrq/workflow/anatomy/ANATOMY.md  (1456 lines, 103155 bytes)
+anatomy suite: PASS at fb52e6c976dfcfe603413e8cbd26a559b2b679d6
+generated drift: none

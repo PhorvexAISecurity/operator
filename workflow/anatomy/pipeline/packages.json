@@ -1,0 +1,399 @@
+{
+ "actionset": {
+  "files": 1,
+  "loc": 267,
+  "test_files": 3,
+  "test_loc": 390,
+  "imports": [
+   "feasibility",
+   "model",
+   "recon"
+  ],
+  "imported_by": [
+   "actuator",
+   "console",
+   "decision"
+  ]
+ },
+ "actuator": {
+  "files": 16,
+  "loc": 2826,
+  "test_files": 13,
+  "test_loc": 1815,
+  "imports": [
+   "actionset",
+   "metrics",
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "console",
+   "ingest",
+   "runner"
+  ]
+ },
+ "applier": {
+  "files": 1,
+  "loc": 126,
+  "test_files": 1,
+  "test_loc": 120,
+  "imports": [
+   "model"
+  ],
+  "imported_by": []
+ },
+ "audit": {
+  "files": 3,
+  "loc": 438,
+  "test_files": 4,
+  "test_loc": 415,
+  "imports": [
+   "model"
+  ],
+  "imported_by": [
+   "console",
+   "runner"
+  ]
+ },
+ "belief": {
+  "files": 2,
+  "loc": 107,
+  "test_files": 0,
+  "test_loc": 0,
+  "imports": [
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "decision"
+  ]
+ },
+ "calib": {
+  "files": 10,
+  "loc": 2178,
+  "test_files": 9,
+  "test_loc": 1626,
+  "imports": [
+   "ingest",
+   "model"
+  ],
+  "imported_by": [
+   "runner"
+  ]
+ },
+ "console": {
+  "files": 42,
+  "loc": 10044,
+  "test_files": 13,
+  "test_loc": 916,
+  "imports": [
+   "actionset",
+   "actuator",
+   "audit",
+   "decision",
+   "model"
+  ],
+  "imported_by": []
+ },
+ "controller": {
+  "files": 1,
+  "loc": 117,
+  "test_files": 1,
+  "test_loc": 118,
+  "imports": [
+   "runner"
+  ],
+  "imported_by": []
+ },
+ "cost": {
+  "files": 7,
+  "loc": 984,
+  "test_files": 5,
+  "test_loc": 890,
+  "imports": [
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "decision",
+   "redteam",
+   "runner"
+  ]
+ },
+ "ctxprov": {
+  "files": 2,
+  "loc": 204,
+  "test_files": 1,
+  "test_loc": 165,
+  "imports": [
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "decision"
+  ]
+ },
+ "decision": {
+  "files": 6,
+  "loc": 1755,
+  "test_files": 30,
+  "test_loc": 3669,
+  "imports": [
+   "actionset",
+   "belief",
+   "cost",
+   "ctxprov",
+   "feasibility",
+   "killchain",
+   "metrics",
+   "model",
+   "physics",
+   "recon"
+  ],
+  "imported_by": [
+   "console",
+   "runner"
+  ]
+ },
+ "epssfeed": {
+  "files": 2,
+  "loc": 797,
+  "test_files": 2,
+  "test_loc": 492,
+  "imports": [
+   "platform"
+  ],
+  "imported_by": []
+ },
+ "exposure": {
+  "files": 1,
+  "loc": 152,
+  "test_files": 1,
+  "test_loc": 62,
+  "imports": [],
+  "imported_by": [
+   "runner"
+  ]
+ },
+ "feasibility": {
+  "files": 5,
+  "loc": 415,
+  "test_files": 2,
+  "test_loc": 127,
+  "imports": [
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "actionset",
+   "decision",
+   "runner"
+  ]
+ },
+ "graph": {
+  "files": 2,
+  "loc": 500,
+  "test_files": 1,
+  "test_loc": 100,
+  "imports": [],
+  "imported_by": [
+   "ingest"
+  ]
+ },
+ "ingest": {
+  "files": 4,
+  "loc": 1129,
+  "test_files": 4,
+  "test_loc": 393,
+  "imports": [
+   "actuator",
+   "graph",
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "calib",
+   "platform",
+   "runner"
+  ]
+ },
+ "killchain": {
+  "files": 2,
+  "loc": 579,
+  "test_files": 2,
+  "test_loc": 229,
+  "imports": [
+   "model"
+  ],
+  "imported_by": [
+   "decision",
+   "runner"
+  ]
+ },
+ "metrics": {
+  "files": 1,
+  "loc": 306,
+  "test_files": 1,
+  "test_loc": 51,
+  "imports": [
+   "model"
+  ],
+  "imported_by": [
+   "actuator",
+   "decision",
+   "runner"
+  ]
+ },
+ "model": {
+  "files": 1,
+  "loc": 450,
+  "test_files": 0,
+  "test_loc": 0,
+  "imports": [],
+  "imported_by": [
+   "actionset",
+   "actuator",
+   "applier",
+   "audit",
+   "belief",
+   "calib",
+   "console",
+   "cost",
+   "ctxprov",
+   "decision",
+   "feasibility",
+   "ingest",
+   "killchain",
+   "metrics",
+   "physics",
+   "platform",
+   "recon",
+   "runner",
+   "slo"
+  ]
+ },
+ "pendinggate": {
+  "files": 1,
+  "loc": 227,
+  "test_files": 1,
+  "test_loc": 153,
+  "imports": [],
+  "imported_by": []
+ },
+ "physics": {
+  "files": 2,
+  "loc": 145,
+  "test_files": 0,
+  "test_loc": 0,
+  "imports": [
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "decision"
+  ]
+ },
+ "platform": {
+  "files": 5,
+  "loc": 683,
+  "test_files": 7,
+  "test_loc": 716,
+  "imports": [
+   "ingest",
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "epssfeed",
+   "runner"
+  ]
+ },
+ "recon": {
+  "files": 4,
+  "loc": 609,
+  "test_files": 7,
+  "test_loc": 925,
+  "imports": [
+   "model",
+   "registry"
+  ],
+  "imported_by": [
+   "actionset",
+   "decision",
+   "runner"
+  ]
+ },
+ "redteam": {
+  "files": 6,
+  "loc": 1065,
+  "test_files": 2,
+  "test_loc": 216,
+  "imports": [
+   "cost"
+  ],
+  "imported_by": []
+ },
+ "registry": {
+  "files": 1,
+  "loc": 111,
+  "test_files": 0,
+  "test_loc": 0,
+  "imports": [],
+  "imported_by": [
+   "actuator",
+   "belief",
+   "cost",
+   "ctxprov",
+   "feasibility",
+   "ingest",
+   "physics",
+   "platform",
+   "recon"
+  ]
+ },
+ "runner": {
+  "files": 5,
+  "loc": 1870,
+  "test_files": 8,
+  "test_loc": 1533,
+  "imports": [
+   "actuator",
+   "audit",
+   "calib",
+   "cost",
+   "decision",
+   "exposure",
+   "feasibility",
+   "ingest",
+   "killchain",
+   "metrics",
+   "model",
+   "platform",
+   "recon",
+   "slo"
+  ],
+  "imported_by": [
+   "controller"
+  ]
+ },
+ "slo": {
+  "files": 3,
+  "loc": 812,
+  "test_files": 3,
+  "test_loc": 556,
+  "imports": [
+   "model"
+  ],
+  "imported_by": [
+   "runner"
+  ]
+ },
+ "soak": {
+  "files": 1,
+  "loc": 111,
+  "test_files": 1,
+  "test_loc": 28,
+  "imports": [],
+  "imported_by": []
+ }
+}

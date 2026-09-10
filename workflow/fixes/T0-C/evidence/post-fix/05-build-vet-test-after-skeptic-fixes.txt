@@ -1,0 +1,60 @@
+# after Skeptic fixes (panic guard, mandatory v3 fields, measured-only sloHeadroom, gofmt) 2026-09-03T18:13:27Z
+BUILD-OK
+--- vet (touched pkgs)
+VET-OK
+--- test whole suite
+ok  	github.com/phorvex/phorvex/api/v1alpha1	(cached)
+ok  	github.com/phorvex/phorvex/benchmarks/cost-validation/cmd/costprobe	(cached)
+?   	github.com/phorvex/phorvex/cmd	[no test files]
+?   	github.com/phorvex/phorvex/cmd/calib-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3deep	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p3report	[no test files]
+?   	github.com/phorvex/phorvex/cmd/p4b-soak	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/redteam-rl	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	(cached)
+ok  	github.com/phorvex/phorvex/internal/actuator	(cached)
+ok  	github.com/phorvex/phorvex/internal/applier	(cached)
+ok  	github.com/phorvex/phorvex/internal/audit	1.914s
+?   	github.com/phorvex/phorvex/internal/belief	[no test files]
+ok  	github.com/phorvex/phorvex/internal/buildinfo	(cached)
+ok  	github.com/phorvex/phorvex/internal/calib	(cached)
+ok  	github.com/phorvex/phorvex/internal/console	1.430s
+ok  	github.com/phorvex/phorvex/internal/controller	(cached)
+ok  	github.com/phorvex/phorvex/internal/cost	(cached)
+ok  	github.com/phorvex/phorvex/internal/ctxprov	(cached)
+ok  	github.com/phorvex/phorvex/internal/decision	11.049s
+ok  	github.com/phorvex/phorvex/internal/epssfeed	(cached)
+ok  	github.com/phorvex/phorvex/internal/exposure	(cached)
+ok  	github.com/phorvex/phorvex/internal/feasibility	(cached)
+ok  	github.com/phorvex/phorvex/internal/graph	(cached)
+ok  	github.com/phorvex/phorvex/internal/ingest	(cached)
+ok  	github.com/phorvex/phorvex/internal/killchain	(cached)
+ok  	github.com/phorvex/phorvex/internal/metrics	(cached)
+ok  	github.com/phorvex/phorvex/internal/model	0.005s
+ok  	github.com/phorvex/phorvex/internal/pendinggate	8.445s
+?   	github.com/phorvex/phorvex/internal/physics	[no test files]
+ok  	github.com/phorvex/phorvex/internal/platform	(cached)
+ok  	github.com/phorvex/phorvex/internal/recon	4.410s
+ok  	github.com/phorvex/phorvex/internal/redteam	(cached)
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/runner	0.180s
+ok  	github.com/phorvex/phorvex/internal/slo	(cached)
+ok  	github.com/phorvex/phorvex/internal/soak	(cached)
+test-exit=0
+--- negative test verbose
+=== RUN   TestDecisionTraceV3ValidateRejectsMalformed
+=== RUN   TestDecisionTraceV3ValidateRejectsMalformed/unknown_selected_action
+=== RUN   TestDecisionTraceV3ValidateRejectsMalformed/empty_costModelVersion
+=== RUN   TestDecisionTraceV3ValidateRejectsMalformed/zero_costCeiling
+=== RUN   TestDecisionTraceV3ValidateRejectsMalformed/truncated_actionStatus
+=== RUN   TestDecisionTraceV3ValidateRejectsMalformed/missing_dispatchOutcome
+--- PASS: TestDecisionTraceV3ValidateRejectsMalformed (0.01s)
+    --- PASS: TestDecisionTraceV3ValidateRejectsMalformed/unknown_selected_action (0.00s)
+    --- PASS: TestDecisionTraceV3ValidateRejectsMalformed/empty_costModelVersion (0.00s)
+    --- PASS: TestDecisionTraceV3ValidateRejectsMalformed/zero_costCeiling (0.00s)
+    --- PASS: TestDecisionTraceV3ValidateRejectsMalformed/truncated_actionStatus (0.00s)
+    --- PASS: TestDecisionTraceV3ValidateRejectsMalformed/missing_dispatchOutcome (0.00s)
+ok  	github.com/phorvex/phorvex/internal/decision	0.031s
+DONE

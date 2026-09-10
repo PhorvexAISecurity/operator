@@ -1,0 +1,27 @@
+schema_version: 1
+fix_id: T1-M023
+migration:
+  content_rewritten: false
+  hash_algorithm: sha256
+  created_at_caveat: Copied file mtimes are provenance hints, not trusted event time.
+artifacts:
+- id: legacy-001
+  path: evidence/RED_gate.txt
+  bytes: 1417
+  sha256: a844def2f38b34a5ee067e4861187f3cbed07ec1b601f4c5d62d4a7b0a8806a3
+  producer: legacy-fix-cycle
+  created_at: '2026-09-06T14:13:43+00:00'
+  created_at_source: filesystem-mtime
+  evidence_class: RED
+  retention: git
+  sensitivity: null
+- id: legacy-002
+  path: evidence/p3/verdict.md
+  bytes: 1382
+  sha256: a4ce121d9e19954785e6c20e1260bee1d9945855328543fc3c2bf422296d6014
+  producer: legacy-fix-cycle
+  created_at: '2026-09-06T15:04:21+00:00'
+  created_at_source: filesystem-mtime
+  evidence_class: P3
+  retention: git
+  sensitivity: null

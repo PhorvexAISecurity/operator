@@ -1,0 +1,33 @@
+# 03 — Fleet shape (bus 257 fact 5), 2026-09-02 ~13:15 UTC
+
+Command:
+
+    kubectl get pods -A -o json | python3 -c '
+      import json,sys,collections
+      pods=json.load(sys.stdin)["items"]
+      ids=collections.Counter(); bynode=collections.defaultdict(set)
+      for p in pods:
+          ns=p["metadata"]["namespace"]; node=p["spec"].get("nodeName","")
+          if node: bynode[node].add(ns)
+          mid=p["metadata"].get("annotations",{}).get("phorvex.ai/model-id","")
+          if mid: ids[mid]+=1
+      print("model-id counts:", dict(ids))
+      ...'
+
+Output:
+
+    model-id counts: {'Qwen2.5-7B-Instruct-AWQ': 1}
+    vllm node ip-172-27-12-137.us-east-2.compute.internal namespaces:
+      ['amazon-network-flow-monitor', 'gpu-telemetry', 'kube-system', 'litellm', 'monitoring', 'vllm']
+
+The single annotated pod is the vllm pod itself (`vllm-77997646c9-nhzv4`, created 2026-08-31T17:36:39Z,
+`phorvex.ai/model-id: Qwen2.5-7B-Instruct-AWQ`, `nvidia.com/gpu: 1` limit).
+
+**Derived (code at 016361c):**
+- `modelFreq={Qwen:1}, tot=1` → `rarity(1,1)`: n<2 → **ModelRarity = 1.0** (honest-neutral).
+  Empirically confirmed in the decision trace: `modelRarity: {present: true, value: 1}` (see 04/05).
+- 6 namespaces on the GPU node → `CoResidency = 1 + clamp01(5/CoResidencyCap=4)` = **2.0 (saturated)**.
+  Empirically confirmed in the trace: `coResidency: value 2` (see 04).
+- ⇒ Post-fix, pods on this fleet do NOT land at gpu-side-channel (ModelRarity 1.0 fails `> 1`);
+  they exit the AI GPU stages entirely. The ≥2-ModelID topology the proposal's §4 band discusses
+  does not exist on this cluster today.

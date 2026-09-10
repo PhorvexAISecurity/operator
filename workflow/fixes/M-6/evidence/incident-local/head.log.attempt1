@@ -1,0 +1,26 @@
+=== RUN   TestReviewerRealAPIIncident
+    reviewer_incident_test.go:45: ISOLATED API v1.36.2; service-account admission disabled by envtest; no nodes/runtime, all ephemeral submissions dryRun=All
+=== RUN   TestReviewerRealAPIIncident/OriginalProducerProfile
+    reviewer_incident_test.go:73: unprotected debugger API accepted payload={"name":"phorvex-debugger","image":"busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f","resources":{},"securityContext":{"capabilities":{"drop":["ALL"]},"privileged":false,"runAsUser":65534,"runAsGroup":65534,"runAsNonRoot":true,"readOnlyRootFilesystem":true,"allowPrivilegeEscalation":false,"seccompProfile":{"type":"RuntimeDefault"}}}
+    reviewer_incident_test.go:73: unprotected custom-inject API accepted payload={"name":"phorvex-custom","image":"busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f","command":["sh","-c"],"args":["echo phorvex-custom-action; sleep 1"],"resources":{},"securityContext":{"capabilities":{"drop":["ALL"]},"privileged":false,"runAsUser":65534,"runAsGroup":65534,"runAsNonRoot":true,"readOnlyRootFilesystem":true,"allowPrivilegeEscalation":false,"seccompProfile":{"type":"RuntimeDefault"}}}
+=== NAME  TestReviewerRealAPIIncident
+    reviewer_incident_test.go:99: enforcement active: actual subresource denied by code-exec/image
+=== RUN   TestReviewerRealAPIIncident/ProtectedRealProducers
+    reviewer_incident_test.go:106: hardened real producer debugger allowed by real API
+    reviewer_incident_test.go:106: hardened real producer custom-inject allowed by real API
+=== RUN   TestReviewerRealAPIIncident/AdmissionControls
+    reviewer_incident_test.go:120: image -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/image: ephemeral container image must be the pinned busybox digest
+    reviewer_incident_test.go:120: name -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/name: ephemeral container name must be exactly phorvex-debugger or phorvex-custom
+    reviewer_incident_test.go:120: privileged denial not attributable to expected VAP rule: Pod "victim" is invalid: spec.ephemeralContainers[0].securityContext: Invalid value: {"Capabilities":{"Add":null,"Drop":["ALL"]},"Privileged":true,"SELinuxOptions":null,"WindowsOptions":null,"RunAsUser":65534,"RunAsGroup":65534,"RunAsNonRoot":true,"ReadOnlyRootFilesystem":true,"AllowPrivilegeEscalation":false,"ProcMount":null,"SeccompProfile":{"Type":"RuntimeDefault","LocalhostProfile":null},"AppArmorProfile":null}: cannot set `allowPrivilegeEscalation` to false and `privileged` to true
+    reviewer_incident_test.go:120: apparmor -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/securityContext-extra: appArmorProfile/seLinuxOptions/windowsOptions/procMount are not permitted (securityContext must equal the approved allow-set)
+    reviewer_incident_test.go:120: command -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args
+    reviewer_incident_test.go:120: stdin -> pods "victim" is forbidden: ValidatingAdmissionPolicy 'phorvex-codeexec-ephemeral' with binding 'phorvex-codeexec-ephemeral' denied request: code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted
+=== NAME  TestReviewerRealAPIIncident
+    reviewer_incident_test.go:131: all ephemeral submissions remained non-persistent; test server v1.36.2 destroyed on return
+--- FAIL: TestReviewerRealAPIIncident (4.90s)
+    --- PASS: TestReviewerRealAPIIncident/OriginalProducerProfile (0.02s)
+    --- PASS: TestReviewerRealAPIIncident/ProtectedRealProducers (0.01s)
+    --- FAIL: TestReviewerRealAPIIncident/AdmissionControls (0.05s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/actuator	4.976s
+FAIL

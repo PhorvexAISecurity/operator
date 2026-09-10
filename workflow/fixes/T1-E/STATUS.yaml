@@ -1,0 +1,100 @@
+schema_version: 1
+fix_id: T1-E
+issues:
+- M-20
+- M-79
+related_issues:
+- M-158
+- M-160
+title: Capability-aware candidate generation
+profile: legacy-migrated
+state: CLOSED
+roles:
+  human_owner: mehrdad
+  proposer: claude
+  implementer: claude
+  skeptic: k3
+  live_verifier: k3
+  coordinator: k3
+baseline:
+  legacy_status: STATUS
+  code_sha: 5fe1c8ee0e529179905a1ca5a1161d221a1053d7
+blind_derivation:
+  status: legacy-complete
+  artifact: 02-critique.md
+  sha256: null
+  sealed_at: null
+  note: Completed under the legacy combined §A/§B protocol; missing seal metadata
+    is not fabricated.
+implementation:
+  branch: t1/choice-capability-gate
+  base_sha: 5fe1c8ee0e529179905a1ca5a1161d221a1053d7
+  head_sha: 3b9bf5a14464d00e928f6fbba954ce03320ca878
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/115
+  reviewed_head: 678ca191ba5149da58b1a46ebed50ef27513a75b
+  merge_sha: db04b5d5ddffa839ff03d564311b93a7d6b98c5f
+  checks: legacy-see-evidence
+  patch_equivalence: legacy-see-evidence
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.96
+  digest: null
+  git_sha: a13b83af3b2d1a43f1365d90dc59b06fbf176459
+  rolled_out_at: '2026-09-07T21:50:14Z'
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  p3: PASS
+  l0: legacy-see-evidence
+  l1: legacy-see-evidence
+  l2: legacy-see-evidence
+  l3: PASS
+  l4: NOT_REQUIRED
+  positive_control: legacy-see-evidence
+  live_required: true
+  l3_scope: Original criteria 1-5 plus M160 re-L3 resolution of criterion 6; imported
+    legacy completion, not a new whole-fleet rerun.
+  l3_evidence:
+  - evidence/L3-verdict.md
+  - evidence/re-L3-M160-verdict.md
+synchronization:
+  issue_entries: imported-and-linked
+  master_register: generated-and-validated
+  anatomy_release: legacy-gap-stale-at-fb52e6c
+  permanent_tests: missing-legacy-gap
+dependencies: []
+blockers: []
+residuals:
+- M158 installed-enum discovery remains deferred.
+- This gate-cycle completion does not close M79 Path A wiring; T1-M079 remains HELD.
+next_action:
+  owner: coordinator
+  action: M160 resolved the recorded T1-E reopen. Keep M79 wiring and M158 discovery
+    as separate follow-ups; do not resume the obsolete M160 blocker.
+migration:
+  source: /home/mehrdad/operator/fixes/T1-E
+  original_untouched: true
+  historical_gaps_not_fabricated: true
+  legacy_closure_precedes_workflow_v1: false
+  legacy_blind_deriver: null
+  protocol_adoption: Historical evidence retained; new transitions require current
+    checks.
+  last_reconciled_at: '2026-09-08T18:00:39+00:00'
+  last_reconciliation: acceptance/2026-09-08-fix-reconciliation/REPORT.md
+  closure_basis: Imported legacy outcome where CLOSED; not a new full-contract verification
+    certificate.
+updated_at: '2026-09-08T18:00:39+00:00'
+revision: 1
+reconciliation_history:
+- at: '2026-09-08T18:00:39+00:00'
+  by: codex-m006
+  authority: user:2026-09-08-bring-workflow-fixes-up-to-date
+  kind: external-legacy-evidence-import
+  previous_state: REOPENED
+  report: RECONCILIATION.md
+  note: Imports recorded external outcomes; no current-protocol signatures or missing
+    tests fabricated.
