@@ -1649,6 +1649,11 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		if !decisions[i].Selected {
 			continue
 		}
+		// [M-18] A move that never reaches Actuate must never carry an emission payload.
+		// Every guard below `continue`s, so clearing here — at the point an attempt
+		// begins — guarantees a not-attempted record shows honest absence even if the
+		// decision struct was reused from an earlier attempt.
+		decisions[i].Phoenix = nil
 		// T0-C: every guard below stamps the dispatch outcome on the trace before
 		// the audit write, so a selected-but-refused move never reads as unselected.
 		stampDispatch := func(outcome, reason string) {
@@ -1732,6 +1737,16 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			CoverageValue: coverageValue,
 			TargetUID:     v.Pod.UID,
 		})
+		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch.
+		// The native fields below are copied only inside `if res.Emitted`, and the error
+		// path `continue`s before them, so a result that carried real identifiers
+		// alongside an error used to lose them entirely. Mapping here keeps the facts the
+		// adapter actually supplied while leaving the failure outcome exactly as it was.
+		// Assigning unconditionally also CLEARS any payload from a previous attempt on a
+		// reused decision, so a refused or retried move can never inherit a stale
+		// reference. phoenixForensics allocates per decision and returns nil when nothing
+		// was supplied — absence stays absent rather than becoming empty strings.
+		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
 		if err != nil {
 			outcome := slo.OutcomeFailed
 			dispatchReason := "failed"
@@ -1784,6 +1799,33 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		}
 	}
 	return actuated
+}
+
+// phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision
+// payload (M-18). EXPLICIT FIELD MAPPING ONLY — never a struct dump, so a field added to
+// actuator.Result later cannot silently widen the public audit record.
+//
+// namespace is the namespace of the request this result answers. The AMTD is namespaced
+// and EnsurePolicy maintains it for exactly that namespace/tenant pair, so the namespace
+// is attached only when an AMTD name actually exists; it is never guessed, and no AMTD
+// UID is invented (the adapter does not read one back). Returns nil when the adapter
+// supplied nothing at all, so a record shows honest absence instead of empty strings.
+func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForensics {
+	p := model.PhoenixForensics{
+		AMTDName:        res.AMTDName,
+		EventName:       res.EventName,
+		EventUID:        res.EventUID,
+		RuleType:        res.RuleType,
+		RuleThreatLevel: res.RuleThreatLevel,
+		RuleSource:      res.RuleSource,
+	}
+	if p.AMTDName != "" {
+		p.AMTDNamespace = namespace
+	}
+	if p.Empty() {
+		return nil
+	}
+	return &p
 }
 
 func buildPolicy(e *policyEntry) model.Policy {

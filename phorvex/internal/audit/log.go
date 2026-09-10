@@ -91,6 +91,19 @@ type Record struct {
 	RollbackRef    string   `json:"rollbackRef,omitempty"`
 	MutationKind   string   `json:"mutationKind,omitempty"`
 
+	// M-18 Phoenix forensic identity of the emission attempt: the AMTD context, the
+	// created SecurityEvent's name and server-assigned UID, and the logical rule tuple.
+	// ADDITIVE AND OPTIONAL — a pointer with omitempty, so records that have no such
+	// metadata serialize exactly as before and the v2 top-level contract is unchanged.
+	// It establishes CORRELATION for an investigator, never execution success.
+	//
+	// COMPATIBILITY LIMIT (documented, not claimed away): a reader built before this
+	// field exists simply ignores it — but such a reader CANNOT be said to preserve the
+	// payload if it decodes and re-serializes a record, because the unknown field is
+	// dropped on the way out. Records written before this field carry no metadata at
+	// all; that means UNAVAILABLE, and never that no SecurityEvent was emitted.
+	Phoenix *model.PhoenixForensics `json:"phoenix,omitempty"`
+
 	// P-DASHBOARD-2: the P-CONTEXT predictive horizon, serialized so the Live-Ops + Context
 	// panels can stream the moved-before-next-stage story (IP-sensitive — owner-redacted).
 	PreemptMargin         float64 `json:"preemptMargin,omitempty"`
@@ -264,11 +277,27 @@ func ToRecord(d model.Decision) Record {
 		ObjectsTouched:        d.ObjectsTouched,
 		RollbackRef:           d.RollbackRef,
 		MutationKind:          d.MutationKind,
+		Phoenix:               phoenixRecord(d.Phoenix),
 		PreemptMargin:         round4(d.PreemptMargin),
 		ProjectedNextStageSec: round4(d.ProjectedNextStageSec),
 		AIClassified:          d.AIClassified,
 		DecisionTrace:         d.Trace,
 	}
+}
+
+// phoenixRecord deep-copies the decision's Phoenix payload into the record (M-18).
+//
+// The audit logger serializes asynchronously with respect to the tick that produced the
+// decision, so the record must OWN its copy: sharing the pointer would let a later tick
+// mutating or clearing decision.Phoenix change what an in-flight record serializes.
+// PhoenixForensics is all-scalar, so copying the value is a complete deep copy — there
+// is no reference field to alias. nil stays nil: absence is preserved, not materialized.
+func phoenixRecord(p *model.PhoenixForensics) *model.PhoenixForensics {
+	if p == nil {
+		return nil
+	}
+	owned := *p
+	return &owned
 }
 
 // Record logs one decision.

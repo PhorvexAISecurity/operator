@@ -159,10 +159,16 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 	if err := p.Client.Create(ctx, se); err != nil {
 		return Result{}, fmt.Errorf("emit SecurityEvent for %s/%s: %w", req.Namespace, req.Pod, err)
 	}
+	// [M-18] Create decoded the API server's response back into se, which is exactly how
+	// se.Name (assigned from GenerateName) is already read here. se.UID comes from that
+	// same acknowledged response, so it costs no additional read or permission. Both are
+	// reached only after Create returned nil: a rejected create takes the branch above
+	// and fabricates nothing.
 	return Result{
 		Actuator:        p.Name(),
 		AMTDName:        amtdName(req.Namespace, req.Tenant),
 		EventName:       se.Name,
+		EventUID:        string(se.UID),
 		RuleType:        ruleType,
 		RuleThreatLevel: RuleThreatLevel,
 		RuleSource:      RuleSource,

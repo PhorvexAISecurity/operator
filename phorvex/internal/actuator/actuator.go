@@ -63,9 +63,15 @@ type Request struct {
 type Result struct {
 	Note string
 
-	Actuator        string
-	AMTDName        string
-	EventName       string
+	Actuator  string
+	AMTDName  string
+	EventName string
+	// EventUID is the server-assigned UID of the created SecurityEvent, read from the
+	// SAME successful Create response that supplies EventName — no extra read, no extra
+	// RBAC (M-18). It is the only identity that distinguishes a recreated same-name
+	// object from the original. Empty when the create failed or the actuator has no
+	// server-acknowledged object; never synthesized.
+	EventUID        string
 	RuleType        string
 	RuleThreatLevel string
 	RuleSource      string
