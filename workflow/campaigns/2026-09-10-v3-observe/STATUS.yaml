@@ -3,11 +3,11 @@ campaign_id: 2026-09-10-v3-observe
 profile: workflow-v2
 question: Observe ordinary live brain behavior over time to discover and reconcile
   V3 issues
-state: RUNNING
+state: ANALYZING
 owner: mehrdad
 approval_ref: workflow/assessments/20260910-readiness/LIVE-OBSERVATION-PLAN.md
 created_at: '2026-09-10T18:50:40+00:00'
-updated_at: '2026-09-10T19:51:43+00:00'
+updated_at: '2026-09-10T20:12:51+00:00'
 scope:
   environment: dev
   source_release: live-observed-0.4.109-20260910
@@ -25,26 +25,27 @@ safety:
     drift, or observer resource pressure
   phase_approval_ref: null
   unresolved: []
-  cleanup: pending
+  cleanup: PASS
 positive_control: PASS
 rounds:
 - id: round-1
   state: ABORTED
 - id: round-2
-  state: RUNNING
-findings: []
+  state: COMPLETE
+findings:
+- RPT-20260910-200300-policy-cadence
+- RPT-20260910-200300-primary-image-identity
 verdict:
   result: pending
   artifact: verdict.md
-  reviewer: null
+  reviewer: claude-audit-integration
 roles:
   campaign_lead: codex-lead
-  independent_reviewer: null
+  independent_reviewer: claude-audit-integration
   coordinator: codex-lead
 next_action:
   owner: codex-lead
-  action: Finish segment2; analyze both segments with transport gap and independent
-    review
+  action: Obtain independent review of segmented live findings and intake classification
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -107,4 +108,16 @@ transitions:
   phase_approval_ref: null
   note: Resume metadata after invalid-enum correction. Segment2 actualstart remains19:44:36,
     not this transition time. Cumulative ceiling61m,2GiB; read-only.
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-10T20:12:51+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/observations.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: 'Round2 completed its23-minute observation protocol. COMPLETE means protocol
+    ended, not lossless evidence: collectorcomplete=false due2rotationnotices; segment1ABORTED
+    afterHTTP2GOAWAY. Totalactualcapture60m9.620s;703.625scapturegap. No live mutations.
+    Independent verdictpending.'
   forced: false

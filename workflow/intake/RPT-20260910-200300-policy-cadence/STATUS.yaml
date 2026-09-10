@@ -1,0 +1,58 @@
+schema_version: 1
+intake_id: RPT-20260910-200300-policy-cadence
+kind: OBSERVATION
+title: Observed decision cadence exceeds configured policy interval
+state: VERIFYING
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T20:02:37+00:00'
+updated_at: '2026-09-10T20:03:20+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.109
+  deployed_digest: sha256:e384b100ddef9bc611971dbea1337ec43a994a36188671aced3b4355aa9470df
+  deployed_git_sha: dbf5fa4321b35651e8142cb2c13d4f28f8c6dcca
+  environment: Read-only dev observation plus local real producer replay; no mutation
+verification:
+  result: pending
+  artifact: VERIFICATION.md
+  positive_control: pending
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Obtain independent source/live evidence and dedup challenge before classification
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T20:03:19+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: Bounded read-only observation and local producer replay retained; peer challenge
+    pending.
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T20:03:20+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: Bounded read-only observation and local producer replay retained; peer challenge
+    pending.
+  approval_ref: null
+  forced: false
+revision: 2

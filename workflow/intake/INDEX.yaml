@@ -96,3 +96,17 @@ intakes:
     state: FILED
     issue_id: M-167
     aliases: []
+  RPT-20260910-200300-policy-cadence:
+    directory: intake/RPT-20260910-200300-policy-cadence
+    kind: OBSERVATION
+    title: Observed decision cadence exceeds configured policy interval
+    state: VERIFYING
+    issue_id: null
+    aliases: []
+  RPT-20260910-200300-primary-image-identity:
+    directory: intake/RPT-20260910-200300-primary-image-identity
+    kind: BUG
+    title: Primary running image projection selects a sidecar by status order
+    state: VERIFYING
+    issue_id: null
+    aliases: []
