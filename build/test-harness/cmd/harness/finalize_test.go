@@ -178,8 +178,21 @@ func TestBoundedCloseDoesNotHangOnAContextFreeCloser(t *testing.T) {
 		// boundedClose delegates to boundedCloseWithin under the shared cleanup
 		// budget, which is minutes — far too long for a test. Drive the same
 		// function with a short bound instead of duplicating its logic.
+		//
+		// The closer blocks on a RELEASE CHANNEL rather than `select {}`: a test
+		// must not leave an immortal goroutine behind, and draining it afterwards
+		// also proves the buffered hand-off lets the abandoned call finish
+		// without blocking.
+		release := make(chan struct{})
+		closerReturned := make(chan struct{})
+		closer := func() error {
+			<-release
+			close(closerReturned)
+			return nil
+		}
+
 		done := make(chan error, 1)
-		go func() { done <- boundedCloseWithin(func() error { select {} }, 40*time.Millisecond) }()
+		go func() { done <- boundedCloseWithin(closer, 40*time.Millisecond) }()
 		select {
 		case err := <-done:
 			if err == nil || !strings.Contains(err.Error(), "did not return within") {
@@ -187,6 +200,14 @@ func TestBoundedCloseDoesNotHangOnAContextFreeCloser(t *testing.T) {
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatalf("boundedClose hung on a context-free closer")
+		}
+
+		// Release and drain: nothing outlives the test.
+		close(release)
+		select {
+		case <-closerReturned:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the released closer never returned")
 		}
 	})
 }
