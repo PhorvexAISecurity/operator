@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 37
+revision: 38
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -18,11 +18,11 @@ checks:
     approval_ref: AUTHORIZATION.md
   red:
     result: PASS
-    by: claude-v3-m161
+    by: codex-lead
     artifact: evidence/incident.md
-    sha256: aeac5f503c43dd9a6bd97d76d8c110b58b25233a7665d494a3aa1dd86bde85a0
+    sha256: e5492f56e9c537112982c3f8fe7dffcea2f7cbe61372422e0ac645397b055c13
     source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-    at: '2026-09-10T22:48:50+00:00'
+    at: '2026-09-10T22:51:26+00:00'
   preflight:
     result: PASS
     by: claude-v3-m161
@@ -78,18 +78,27 @@ checks:
     - build/test-harness
     inputs_sha256: 988a5d024be769e662819befd07898d918f90b0afca56f8a92231b8a7b53e2aa
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 509264c09f254095c5e89e850befd2fd93566a877802c52f5ce54866e0731cdc
-    source_sha: 113f99acb778dc0d305f956c6a97a67e4094d30f
-    at: '2026-09-10T20:47:51+00:00'
+    sha256: 8505f27a726bac0a2d1e36a0b0fcaeafdba76b0f3eedcb8729526160179e4b11
+    source_sha: 9db59ccaaf7aabc7fa4f1ea7f445e7b0e3f5c3ac
+    at: '2026-09-10T22:51:26+00:00'
+    incident_sha256: e5492f56e9c537112982c3f8fe7dffcea2f7cbe61372422e0ac645397b055c13
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e5492f56e9c537112982c3f8fe7dffcea2f7cbe61372422e0ac645397b055c13
+    source_sha: 9db59ccaaf7aabc7fa4f1ea7f445e7b0e3f5c3ac
+    at: '2026-09-10T22:51:26+00:00'
+    baseline_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
 fix_id: V3-M161
 issues:
 - M-161
 title: Keep invalid and unobserved benchmark results out of defense scores
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -134,7 +143,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -150,10 +159,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-10T22:48:51+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T22:51:28+00:00'
 configuration_history:
 - at: '2026-09-10T17:40:22+00:00'
   by: codex-lead
@@ -255,13 +264,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T22:51:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T22:51:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: V3-M161:37:submit
-  from: claude-v3-m161
+  id: V3-M161:38:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 37
+  role: coordinator
+  kind: review
+  revision: 38
 check_history:
 - check: implementation
   result: PASS
@@ -539,3 +564,17 @@ check_history:
   inputs:
   - build/test-harness
   inputs_sha256: 988a5d024be769e662819befd07898d918f90b0afca56f8a92231b8a7b53e2aa
+- check: red
+  result: PASS
+  by: claude-v3-m161
+  artifact: evidence/incident.md
+  sha256: aeac5f503c43dd9a6bd97d76d8c110b58b25233a7665d494a3aa1dd86bde85a0
+  source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  at: '2026-09-10T22:48:50+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 509264c09f254095c5e89e850befd2fd93566a877802c52f5ce54866e0731cdc
+  source_sha: 113f99acb778dc0d305f956c6a97a67e4094d30f
+  at: '2026-09-10T20:47:51+00:00'
