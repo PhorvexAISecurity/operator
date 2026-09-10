@@ -205,7 +205,6 @@ fixes:
     related_issues: []
     state: IN_PR
     dependencies: []
-    stacked_on:
-    - https://github.com/PhorvexSecurity/operator/pull/150
+    stacked_on: []
     branch: parallel/actuation-m048-policy-identity
     head_sha: 2543473928f14cf3cd14eff971684565a25b08f9
