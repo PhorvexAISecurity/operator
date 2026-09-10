@@ -36,3 +36,10 @@ intakes:
     state: FILED
     issue_id: M-163
     aliases: []
+  RPT-20260910-180900-e2e-validity:
+    directory: intake/RPT-20260910-180900-e2e-validity
+    kind: BUG
+    title: E2E verification reports success from failed or absent observations
+    state: FILED
+    issue_id: M-165
+    aliases: []

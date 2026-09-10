@@ -1,0 +1,231 @@
+schema_version: 1
+intake_id: RPT-20260910-180900-e2e-validity
+kind: BUG
+title: E2E verification reports success from failed or absent observations
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T18:07:19+00:00'
+updated_at: '2026-09-10T18:07:44+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline actual Python E2E producer and consumers; denied transport
+    and observed controls; no live mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-155
+    score: 38
+    overlap:
+    - action
+    - api
+    - can
+    - counts
+    - decision
+    - e2e
+    - event
+    - evidence
+    - failed
+    - groundtruth
+    - its
+    - kubectl
+    - live
+    - never
+    - not
+    - observed
+    - pass
+    - phoenix
+    - pod
+    - race
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-144
+    score: 37
+    overlap:
+    - absent
+    - all
+    - also
+    - attribution
+    - because
+    - becomes
+    - can
+    - cannot
+    - confirmed
+    - consistent
+    - counts
+    - decision
+    - effect
+    - event
+    - evidence
+    - explicit
+    - full
+    - have
+    - its
+    - live
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-9
+    score: 36
+    overlap:
+    - action
+    - adapter
+    - can
+    - cannot
+    - decision
+    - effect
+    - event
+    - full
+    - generic
+    - into
+    - its
+    - live
+    - log
+    - name
+    - never
+    - not
+    - pass
+    - phoenix
+    - pod
+    - probe
+    title: '`Emitted` is a request-ack, not an effect — the brain never learns what
+      Phoenix did'
+  - issue_id: M-146
+    score: 34
+    overlap:
+    - absent
+    - all
+    - because
+    - cannot
+    - decision
+    - evidence
+    - fields
+    - inputs
+    - keep
+    - live
+    - log
+    - missing
+    - must
+    - nested
+    - never
+    - not
+    - numeric
+    - observations
+    - rather
+    - reports
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-140
+    score: 30
+    overlap:
+    - all
+    - also
+    - attribution
+    - because
+    - can
+    - confirmed
+    - effect
+    - evidence
+    - have
+    - intended
+    - into
+    - its
+    - kubectl
+    - live
+    - mechanism
+    - must
+    - name
+    - never
+    - new
+    - not
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-2
+    score: 29
+    overlap:
+    - action
+    - all
+    - also
+    - api
+    - because
+    - cannot
+    - complete
+    - confirmed
+    - contract
+    - current
+    - evidence
+    - fail
+    - full
+    - its
+    - kubectl
+    - list
+    - live
+    - lora
+    - missing
+    - not
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-165
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-165.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T18:07:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T18:07:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T18:07:20+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T18:07:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T18:07:44+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-165.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4
