@@ -256,8 +256,8 @@ fixes:
     issues:
     - M-163
     related_issues: []
-    state: IMPLEMENTED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m163-shadow-isolation
-    head_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+    head_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
