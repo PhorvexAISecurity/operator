@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -80,11 +80,18 @@ checks:
     source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
     at: '2026-09-10T04:48:11+00:00'
     incident_sha256: 2a3605c9585073452cff64b6f2e06e4f0d7569983b967c9190ab91f28d450972
+  patch_equivalence:
+    result: PASS
+    by: console-lead
+    artifact: evidence/pr-equivalence.md
+    sha256: 7e27b54776097fe43144efb97149b07057a1e8bd84355dfa792bca726d90e4f7
+    source_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
+    at: '2026-09-10T04:52:09+00:00'
 fix_id: CONSOLE-LIVE-HISTORY
 issues: []
 title: Restore reliable console decision history and compact live cards
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: hamihoriyat
   proposer: console-lead
@@ -111,11 +118,11 @@ implementation:
   head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/165
+  reviewed_head: 1ba967f3f949f7471a0450a2710bac58cca74eee
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -145,10 +152,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T04:48:12+00:00'
+  owner: hamihoriyat
+  action: Review Draft PR165; merge and deployment require separate authorization;
+    L3 remains pending
+updated_at: '2026-09-10T04:52:10+00:00'
 configuration_history:
 - at: '2026-09-10T04:16:08+00:00'
   by: console-lead
@@ -167,6 +174,11 @@ configuration_history:
   by: console-worker
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-10T04:52:09+00:00'
+  by: console-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -216,6 +228,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T04:52:10+00:00'
+  by: console-lead
+  artifact: evidence/pr-equivalence.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: CONSOLE-LIVE-HISTORY:9:review
