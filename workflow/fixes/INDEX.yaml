@@ -234,7 +234,7 @@ fixes:
     issues:
     - M-21
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: parallel/contract-m021-actuator-selection-repertoire
