@@ -2432,7 +2432,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-163 · Shadow optimization mutates production stage clocks and exclusion counters · **OPEN** · `CHOICE`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: V3-M163
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CHOICE` — anatomy locus review required.
