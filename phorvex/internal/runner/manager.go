@@ -1709,20 +1709,28 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				continue
 			}
 		}
-		score := decisions[i].DecisionValue()
-		if score > 1 {
-			score = 1
+		score := -1.0
+		var coverageValue *float64
+		if decisions[i].Engine == "p0-greedy" {
+			score = decisions[i].ThreatRisk
+			if score > 1 {
+				score = 1
+			}
+		} else {
+			value := decisions[i].CoverageValue
+			coverageValue = &value
 		}
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
-			Tenant:    pol.Tenant,
-			Namespace: decisions[i].Namespace,
-			Pod:       decisions[i].Pod,
-			TargetUID: v.Pod.UID,
-			Action:    decisions[i].Action,
-			Reason:    decisions[i].Reason,
-			Score:     score,
+			Tenant:        pol.Tenant,
+			Namespace:     decisions[i].Namespace,
+			Pod:           decisions[i].Pod,
+			Action:        decisions[i].Action,
+			Reason:        decisions[i].Reason,
+			Score:         score,
+			CoverageValue: coverageValue,
+			TargetUID:     v.Pod.UID,
 		})
 		if err != nil {
 			outcome := slo.OutcomeFailed

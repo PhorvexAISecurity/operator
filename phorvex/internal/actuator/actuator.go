@@ -49,7 +49,10 @@ type Request struct {
 	Pod       string
 	Action    model.Action
 	Reason    string
-	Score     float64 // optional anomaly score in [0,1] (<0 = unscored)
+	Score     float64 // genuine anomaly score in [0,1] (<0 = unscored)
+	// CoverageValue is an optional raw selection-time sum of recon fact weights.
+	// Presence takes precedence over Score, including invalid coverage values.
+	CoverageValue *float64
 }
 
 // Result records what was emitted (used by the audit log + integration proof). The

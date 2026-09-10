@@ -7,6 +7,8 @@ package actuator
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -141,7 +143,16 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 			Description: phorvexDescription(req),
 		},
 	}
-	if req.Score >= 0 {
+	if req.CoverageValue != nil {
+		se.Annotations = map[string]string{"phorvex.ai/coverage-contract": "selection-fact-weight-v1"}
+		value := *req.CoverageValue
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+			se.Annotations["phorvex.ai/coverage-status"] = "invalid-source-value"
+		} else {
+			se.Spec.Metrics = map[string]string{"coverageValue": strconv.FormatFloat(value, 'g', -1, 64)}
+			se.Annotations["phorvex.ai/coverage-status"] = "present"
+		}
+	} else if req.Score >= 0 {
 		s := fmt.Sprintf("%.4f", req.Score)
 		se.Spec.AnomalyScore = &s
 	}
