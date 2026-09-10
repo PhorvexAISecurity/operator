@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Lens } from "@/lib/api";
+import { Lens, Session, api, isUnauthenticated } from "@/lib/api";
 import { StepId, useJourneySignals, readStep, goStep } from "@/lib/journey";
 import { Shell } from "@/components/shell";
 import { Landing } from "@/components/steps/landing";
@@ -18,7 +18,32 @@ export default function Page() {
   const [lens, setLens] = React.useState<Lens>("investor");
   const [active, setActive] = React.useState<StepId>("landing");
   const [demo, setDemo] = React.useState(false);
+  const [session, setSession] = React.useState<Session | null>(null);
+  const [sessionError, setSessionError] = React.useState("");
   const signals = useJourneySignals(lens);
+
+  // [M-136] Resolve the effective grant once, then land on a lens this identity actually holds.
+  // Server enforcement is unchanged by any of this; it only stops the UI from offering a view
+  // that will 403 on every panel.
+  React.useEffect(() => {
+    let live = true;
+    api
+      .session(lens)
+      .then((s) => {
+        if (!live) return;
+        setSession(s);
+        if (!s.roles.includes(lens)) setLens(s.lens);
+      })
+      .catch((e) => {
+        if (!live) return;
+        setSessionError(
+          isUnauthenticated(e)
+            ? "session expired — reload to sign in"
+            : String((e as Error).message || e),
+        );
+      });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
     setActive(readStep());
@@ -33,7 +58,7 @@ export default function Page() {
 
   return (
     <>
-      <Shell lens={lens} setLens={setLens} active={active} go={go} signals={signals} onDemo={() => { setDemo(true); go("landing"); }}>
+      <Shell lens={lens} setLens={setLens} session={session} sessionError={sessionError} active={active} go={go} signals={signals} onDemo={() => { setDemo(true); go("landing"); }}>
         {active === "landing" && <Landing lens={lens} signals={signals} go={go} onDemo={() => { setDemo(true); }} />}
         {active === "connect" && <ConnectStep lens={lens} go={go} />}
         {active === "scan" && <ScanStep lens={lens} go={go} />}

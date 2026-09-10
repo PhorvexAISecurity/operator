@@ -53,7 +53,26 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": "streaming unsupported"})
 		return
 	}
-	lens := lensOf(r) // default-deny: a missing/unknown lens streams the REDACTED owner projection
+	// The projection comes from the GRANT, narrowed by any lens the request asked for. It is not
+	// a header the caller chooses: an operator lens on an owner-only grant stays owner.
+	p := principalOf(r)
+	lens := lensOfRequest(r)
+	// [M-136] Tenant scoping for the stream. An owner lens must name one of ITS granted tenants;
+	// an investor/operator lens streams only the tenants its grant covers, so an omitted or
+	// mismatched ?tenant= yields nothing rather than every tenant's decisions.
+	askedTenant := strings.TrimSpace(r.URL.Query().Get("tenant"))
+	if askedTenant != "" && !p.AllowsTenant(askedTenant) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "tenant " + askedTenant + " is outside this identity's tenant scope"})
+		return
+	}
+	if lens == string(RoleOwner) && askedTenant == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "select a tenant to stream owner events"})
+		return
+	}
+	if lens != string(RoleOwner) && !p.CanRead() {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": accessDenialMessage(accessRead)})
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -61,9 +80,19 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	// SCOPED per provider: ?context=<kubeconfig-context> selects which operator's audit to stream
 	// (EKS vs vCluster), so the dashboard shows ONLY the selected provider's decisions.
 	path := s.liveAuditPath(r)
-	ownerTenant := r.URL.Query().Get("tenant") // [P4c F4] owner stream is tenant-scoped
+	ownerTenant := askedTenant // [P4c F4] owner stream is tenant-scoped
+	// inScope is the cross-tenant control for EVERY lens, not just owner.
+	inScope := func(rec audit.Record) bool {
+		if askedTenant != "" {
+			return rec.Tenant == askedTenant
+		}
+		return p.TenantWildcard() || p.AllowsTenant(rec.Tenant)
+	}
 	visible := func(rec audit.Record) bool {
-		return rec.Kind == "phorvex.decision" && (lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated)))
+		if rec.Kind != "phorvex.decision" || !inScope(rec) {
+			return false
+		}
+		return lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated))
 	}
 	notice := func(message string) {
 		b, _ := json.Marshal(map[string]string{"message": message})
@@ -72,6 +101,10 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	}
 	emit := func(rec audit.Record) {
 		if rec.Kind != "phorvex.decision" {
+			return
+		}
+		// The same tenant control applies on the tailing path, not just the replay path.
+		if !inScope(rec) {
 			return
 		}
 		var payload any

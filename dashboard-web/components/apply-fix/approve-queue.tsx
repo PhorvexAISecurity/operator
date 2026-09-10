@@ -1,16 +1,18 @@
 "use client";
 import * as React from "react";
-import { applyFixApi, AFIdentity, AFPending, Lens } from "@/lib/api";
+import { applyFixApi, AFScope, AFPending, Lens, Session } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Loader2, KeyRound, Ban } from "lucide-react";
 
 export function ApproveQueue({
-  id,
+  session,
+  scope,
   lens,
   refreshKey,
   onApproved,
 }: {
-  id: AFIdentity;
+  session: Session | null;
+  scope: AFScope;
   lens: Lens;
   refreshKey: number;
   onApproved: () => void;
@@ -19,18 +21,19 @@ export function ApproveQueue({
   const [applierMode, setApplierMode] = React.useState("record-only");
   const [busy, setBusy] = React.useState("");
   const [msg, setMsg] = React.useState<{ id: string; ok: boolean; text: string } | null>(null);
-  const ready = !!id.user;
+  // Approving is an operator control; a read-only grant sees the queue but cannot act.
+  const ready = !!session?.canEdit;
 
   const load = React.useCallback(() => {
-    if (!id.tenant) return;
+    if (!scope.tenant) return;
     applyFixApi
-      .pending(id, lens)
+      .pending(scope, lens)
       .then((d) => {
         setPending(d.pending || []);
         setApplierMode(d.applierMode || "record-only");
       })
       .catch(() => {});
-  }, [id, lens]);
+  }, [scope, lens]);
 
   React.useEffect(() => {
     load();
@@ -40,7 +43,7 @@ export function ApproveQueue({
     setBusy(reqId);
     setMsg(null);
     try {
-      await applyFixApi.approve(reqId, id, lens);
+      await applyFixApi.approve(reqId, scope, lens);
       setMsg({ id: reqId, ok: true, text: `Approved + applied (${applierMode})` });
       onApproved();
       load();
@@ -63,11 +66,12 @@ export function ApproveQueue({
         </div>
 
         {pending.length === 0 && (
-          <p className="text-sm text-muted-foreground">No pending submissions for tenant {id.tenant || "?"}.</p>
+          <p className="text-sm text-muted-foreground">No pending submissions for tenant {scope.tenant || "?"}.</p>
         )}
 
         {pending.map((p) => {
-          const selfApprove = p.requester === id.user;
+          // The requester is the verified subject the server recorded ("<issuer>#<subject>").
+          const selfApprove = !!session && p.requester.endsWith("#" + session.subject);
           return (
             <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-panel/40 px-3 py-2.5">
               <div className="min-w-0 text-sm">
@@ -95,8 +99,7 @@ export function ApproveQueue({
 
         <p className="text-xs text-muted-foreground">
           Two-key: the approver must be a <span className="text-foreground">DISTINCT</span> verified identity from the
-          requester — a self-approval is refused server-side (422). Switch your user above to approve as a different
-          person. The applier is <span className="text-warning">record-only</span> until a deployment wires the
+          requester — a self-approval is refused server-side (422). A distinct signed-in operator must approve it. The applier is <span className="text-warning">record-only</span> until a deployment wires the
           per-namespace-SA CRD patch.
         </p>
       </CardContent>

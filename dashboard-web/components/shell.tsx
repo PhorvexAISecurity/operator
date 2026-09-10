@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Lens, api, ClusterTarget } from "@/lib/api";
+import { Lens, api, ClusterTarget, Session } from "@/lib/api";
 import { STEPS, StepId, JourneySignals, stepState } from "@/lib/journey";
 import { useSelectedTarget, setSelectedTarget } from "@/lib/provider-store";
 import { Activity, ShieldCheck, Lock, Check, PlayCircle, Home, ChevronRight, Server, ChevronDown, Sun, Moon } from "lucide-react";
@@ -34,6 +34,30 @@ function ThemeToggle() {
       className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-elevated/40 text-muted-foreground transition-colors hover:text-foreground">
       {light ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
     </button>
+  );
+}
+
+// SessionBadge states, in one place, who the server says you are and what it granted — so an
+// unavailable panel reads as "your grant does not cover this" rather than as a broken console.
+function SessionBadge({ session, error }: { session: Session | null; error: string }) {
+  if (error) {
+    return (
+      <span className="hidden items-center gap-1 text-[10px] text-warning xl:flex" title={error}>
+        <Lock className="h-3 w-3" /> {error}
+      </span>
+    );
+  }
+  if (!session) {
+    return <span className="hidden text-[10px] text-muted-foreground/70 xl:flex">resolving session…</span>;
+  }
+  const scope = session.tenants.includes("*") ? "all tenants" : `${session.tenants.length} tenant(s)`;
+  return (
+    <span
+      className="hidden items-center gap-1 text-[10px] text-muted-foreground/70 xl:flex"
+      title={`Verified ${session.source === "alb" ? "ALB Cognito" : "bearer"} identity ${session.subject}. Roles and tenant scope are server-side grants; the lens only narrows this view.`}
+    >
+      <Lock className="h-3 w-3" /> {session.subject} · {session.roles.join("/") || "no role"} · {scope}
+    </span>
   );
 }
 
@@ -84,13 +108,18 @@ function ProviderSelector({ lens }: { lens: Lens }) {
 }
 
 export function Shell({
-  lens, setLens, active, go, signals, onDemo, children,
+  lens, setLens, session, sessionError, active, go, signals, onDemo, children,
 }: {
   lens: Lens; setLens: (l: Lens) => void;
+  session: Session | null; sessionError: string;
   active: StepId; go: (s: StepId) => void;
   signals: JourneySignals; onDemo: () => void;
   children: React.ReactNode;
 }) {
+  // [M-136] The lens selector offers only the roles the SERVER granted this identity. It is a
+  // presentation control: picking a lens narrows the view and can never widen the grant, and the
+  // server re-checks every request whatever is selected here.
+  const grantedLenses = (Object.keys(LENS_META) as Lens[]).filter((l) => !session || session.roles.includes(l));
   return (
     <div className="flex min-h-screen flex-col">
       {/* header */}
@@ -115,11 +144,9 @@ export function Shell({
           </button>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <span className="hidden items-center gap-1 text-[10px] text-muted-foreground/70 xl:flex" title="The owner IP-wall redaction is enforced server-side. Lens SELECTION is demo-trust until real authn (P-VCLUSTER).">
-              <Lock className="h-3 w-3" /> demo-trust lens · redaction enforced
-            </span>
+            <SessionBadge session={session} error={sessionError} />
             <div className="flex items-center gap-1 rounded-lg border border-border bg-panel/60 p-1">
-              {(Object.keys(LENS_META) as Lens[]).map((l) => (
+              {grantedLenses.map((l) => (
                 <button key={l} onClick={() => setLens(l)} title={LENS_META[l].hint}
                   className={cn("rounded-md px-3 py-1.5 text-[12px] font-medium transition-all", lens === l ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
                   {LENS_META[l].label}

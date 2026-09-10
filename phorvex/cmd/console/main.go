@@ -1,9 +1,32 @@
 /*
  * Phorvex Console (P-DASHBOARD) — the data-layer backend binary.
  *
- * A read-only HTTP API over the Phorvex reports/metrics/audit + safe triggers of the
- * existing entrypoints (harness -config). The Next.js frontend renders it. It changes
- * NOTHING in the brain/actuator/harness.
+ * An HTTP API over the Phorvex reports/metrics/audit plus the operator controls, and the built
+ * dashboard served from the same port. Every API route sits behind a verified identity.
+ *
+ * [M-136] There is no demo-trust mode. The console REFUSES TO START without at least one
+ * configured credential path, and a broken auth configuration is a startup error rather than a
+ * warning. The previous build did the opposite: an unset PHORVEX_OIDC_ISSUER, or an IdP that
+ * failed to load, logged "staying demo-trust" and served an internet-facing control plane whose
+ * identity was whatever the request asserted.
+ *
+ * Configuration (see docs/CONSOLE-AUTH.md):
+ *
+ *   ALB Cognito browser path (what console.phorvex.ai actually uses)
+ *     PHORVEX_CONSOLE_ALB_SIGNER_ARN   the exact load-balancer ARN whose signature is trusted
+ *     PHORVEX_CONSOLE_ALB_ISSUER       the Cognito user-pool issuer URL
+ *     PHORVEX_CONSOLE_ALB_CLIENT_ID    the user-pool app-client id
+ *     PHORVEX_CONSOLE_ALB_REGION       optional; defaults to the region inside the signer ARN
+ *
+ *   Bearer OIDC path (CLI / automation)
+ *     PHORVEX_CONSOLE_OIDC_ISSUER      exact token issuer
+ *     PHORVEX_CONSOLE_OIDC_AUDIENCE    exact required audience
+ *     PHORVEX_CONSOLE_OIDC_JWKS_URL    https JWKS URL
+ *     PHORVEX_CONSOLE_OIDC_ALGS        optional comma list; default RS256
+ *
+ *   Authorization and browser boundary
+ *     PHORVEX_CONSOLE_GRANTS           path to the subject grant table (JSON)
+ *     PHORVEX_CONSOLE_TRUSTED_ORIGINS  comma list of exact browser origins
  */
 
 package main
@@ -16,6 +39,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/console"
 )
@@ -24,15 +48,19 @@ func main() {
 	var (
 		root         string
 		addr         string
-		audit        string
+		auditPath    string
 		web          string
 		metricsAllow string
+		grantsPath   string
+		origins      string
 	)
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
-	flag.StringVar(&audit, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
+	flag.StringVar(&auditPath, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
 	flag.StringVar(&web, "web", "", "Static SPA dir (default <root>/dashboard-web/out).")
 	flag.StringVar(&metricsAllow, "metrics-allow", "", "Comma-separated host[:port] allowlist for /api/metrics?url= SSRF guard (loopback always allowed; metadata/link-local always blocked).")
+	flag.StringVar(&grantsPath, "auth-grants", "", "Path to the subject grant table (JSON). Overrides PHORVEX_CONSOLE_GRANTS.")
+	flag.StringVar(&origins, "trusted-origins", "", "Comma-separated exact browser origins allowed to drive the console. Overrides PHORVEX_CONSOLE_TRUSTED_ORIGINS.")
 	flag.Parse()
 
 	if root == "" {
@@ -42,8 +70,8 @@ func main() {
 	}
 	cfg := console.DefaultConfig(root)
 	cfg.Addr = addr
-	if audit != "" {
-		cfg.AuditPath = audit
+	if auditPath != "" {
+		cfg.AuditPath = auditPath
 	}
 	if web != "" {
 		cfg.Web = web
@@ -54,35 +82,61 @@ func main() {
 		}
 	}
 
+	authCfg := console.AuthConfig{
+		GrantsPath:     firstNonEmpty(grantsPath, os.Getenv("PHORVEX_CONSOLE_GRANTS")),
+		TrustedOrigins: splitList(firstNonEmpty(origins, os.Getenv("PHORVEX_CONSOLE_TRUSTED_ORIGINS"))),
+	}
+	if arn := strings.TrimSpace(os.Getenv("PHORVEX_CONSOLE_ALB_SIGNER_ARN")); arn != "" {
+		authCfg.ALB = &console.ALBConfig{
+			SignerARN: arn,
+			Issuer:    os.Getenv("PHORVEX_CONSOLE_ALB_ISSUER"),
+			ClientID:  os.Getenv("PHORVEX_CONSOLE_ALB_CLIENT_ID"),
+			Region:    os.Getenv("PHORVEX_CONSOLE_ALB_REGION"),
+		}
+	}
+	if iss := strings.TrimSpace(os.Getenv("PHORVEX_CONSOLE_OIDC_ISSUER")); iss != "" {
+		authCfg.Bearer = &console.BearerConfig{
+			Issuer:     iss,
+			Audience:   os.Getenv("PHORVEX_CONSOLE_OIDC_AUDIENCE"),
+			JWKSURL:    os.Getenv("PHORVEX_CONSOLE_OIDC_JWKS_URL"),
+			Algorithms: splitList(os.Getenv("PHORVEX_CONSOLE_OIDC_ALGS")),
+		}
+	}
+	// FAIL CLOSED. A missing or malformed identity configuration stops the process; it never
+	// degrades into a console that serves cluster controls to whoever asks.
+	auth, err := console.NewAuthenticator(authCfg)
+	if err != nil {
+		log.Fatalf("Phorvex Console: refusing to start — %v\n"+
+			"Configure the ALB signed identity (PHORVEX_CONSOLE_ALB_SIGNER_ARN / _ISSUER / _CLIENT_ID) "+
+			"and/or a bearer IdP (PHORVEX_CONSOLE_OIDC_ISSUER / _AUDIENCE / _JWKS_URL). See docs/CONSOLE-AUTH.md.", err)
+	}
+
 	url := "http://localhost" + addr
 	_, statErr := os.Stat(filepath.Join(cfg.Web, "index.html"))
 	hasWeb := statErr == nil
 	log.Printf("Phorvex Console")
 	log.Printf("  root      : %s", root)
 	log.Printf("  dashboard : %s  ->  open %s", map[bool]string{true: "built (serving the SPA)", false: "NOT BUILT (run: cd dashboard-web && npm run build)"}[hasWeb], url)
-	log.Printf("  api       : %s/api/* (read-only data + safe triggers)", url)
-	// [P-VCLUSTER Pass 2] enable the safe apply-fix write-path + per-tenant DoS quota. OIDC is wired
-	// from config in production (verified identity); here it is nil => demo-trust dev mode (?user=&tenant=
-	// for local click-through). The applier is nil => record-only until a deployment injects the
-	// per-namespace-SA CRD patch (the UI labels this honestly).
-	srv := console.NewServer(cfg)
-	// OIDC: if the IdP is configured via env, build the verified-identity verifier (fail-closed on a
-	// bad config); else nil => demo-trust dev mode. [PENDING-IDP-CONFIG] — see REAL-ENV-VALIDATION.md.
-	var oidc *console.OIDCVerifier
-	if iss := os.Getenv("PHORVEX_OIDC_ISSUER"); iss != "" {
-		cfgOIDC := console.OIDCConfig{
-			Issuer: iss, Audience: os.Getenv("PHORVEX_OIDC_AUDIENCE"), JWKSURL: os.Getenv("PHORVEX_OIDC_JWKS_URL"),
-			TenantClaim: os.Getenv("PHORVEX_OIDC_TENANT_CLAIM"), LensClaim: os.Getenv("PHORVEX_OIDC_LENS_CLAIM"),
-		}
-		if v, err := console.LoadOIDCVerifier(context.Background(), cfgOIDC, nil); err != nil {
-			log.Printf("  oidc      : config present but FAILED to load (%v) — staying demo-trust", err)
-		} else {
-			oidc = v
-			log.Printf("  oidc      : verified identity ENABLED (issuer %s)", iss)
-		}
+	log.Printf("  api       : %s/api/* (authenticated; only /api/health and the static SPA are public)", url)
+	log.Printf("  auth      : %s", strings.Join(auth.Modes(), "+"))
+	log.Printf("  origins   : %s", originSummary(auth.TrustedOrigins()))
+	if n := auth.GrantCount(); n == 0 {
+		// Visibly fail closed: the service runs, authenticates callers, and authorizes nobody
+		// until DevOps supplies the bindings. Crash-looping the sidecar would take the operator
+		// pod with it and hide the reason.
+		log.Printf("  grants    : NONE CONFIGURED — every authenticated caller is denied. " +
+			"Supply the subject grant table (-auth-grants / PHORVEX_CONSOLE_GRANTS) before rollout; " +
+			"no user is an operator until it is bound explicitly.")
+	} else {
+		log.Printf("  grants    : %d subject binding(s) loaded", n)
 	}
-	srv.EnableVCluster(oidc, console.NewTenantQuota(console.DefaultQuota()), console.NewApplyFixManager(nil, nil, nil))
-	log.Printf("  apply-fix : %s/api/apply-fix/* (allowlist + gate-check + two-key; %s identity; record-only applier [PENDING-CLUSTER-VALIDATION])", url, map[bool]string{true: "OIDC", false: "demo-trust"}[oidc != nil])
+
+	srv := console.NewServer(cfg)
+	srv.EnableAuth(auth)
+	// The applier is nil => record-only until a deployment injects the per-namespace-SA CRD
+	// patch (the UI labels this honestly).
+	srv.EnableVCluster(console.NewTenantQuota(console.DefaultQuota()), console.NewApplyFixManager(nil, nil, nil))
+	log.Printf("  apply-fix : %s/api/apply-fix/* (allowlist + gate-check + two-key on verified subjects; record-only applier [PENDING-CLUSTER-VALIDATION])", url)
 	// P-UPTIME: background sampler records MEASURED service availability (K8s API) so /api/uptime can
 	// show the real actuator impact on uptime. Read-only; no-ops if no cluster is reachable.
 	srv.StartUptimeSampler(context.Background())
@@ -91,9 +145,45 @@ func main() {
 	// to "under attack" forever (the state the dashboard was stuck in after heavy Fire-live use).
 	srv.StartRedTeamSweeper(context.Background())
 	log.Printf("  redteam   : auto-expiring fired attack events after %s", "5m")
-	if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
+
+	// Explicit server budgets. ReadHeaderTimeout bounds slow-header clients; WriteTimeout stays
+	// zero because /api/live and /api/runs/stream are long-lived SSE streams that a write
+	// deadline would sever mid-stream.
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := httpSrv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func splitList(raw string) []string {
+	var out []string
+	for _, v := range strings.Split(raw, ",") {
+		if s := strings.TrimSpace(v); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func originSummary(origins []string) string {
+	if len(origins) == 0 {
+		return "NONE CONFIGURED — browser state-changing requests are refused (bearer clients unaffected)"
+	}
+	return strings.Join(origins, ", ")
 }
 
 // guessRoot walks up from wd looking for the dir that contains both phorvex/ and

@@ -1,0 +1,24 @@
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.console.auth.grants.enabled .Values.phorvex.console.auth.grants.create }}
+# ── console subject grants (M-136) ────────────────────────────────────────────
+# The console's authorization policy: which VERIFIED issuer+subject holds which role, over which
+# tenants and cluster targets. This is DevOps policy, not something the console can infer.
+#
+# Rendering it here is a convenience for GitOps. The console never invents an entry: no binding
+# means the subject is authenticated and authorized for nothing, which is the correct state until
+# a human decides who the operators are. Do NOT bind a subject because an identity provider let
+# them log in, because their email looks internal, or to "unblock" a demo — a wildcard tenant
+# grant on the operator role is full cluster control through the console's ServiceAccount.
+#
+# Subjects are the Cognito user-pool `sub` (a UUID), not an email address.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
+  labels:
+    app.kubernetes.io/name: {{ include "phorvex.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: console-auth
+data:
+  {{ .Values.phorvex.console.auth.grants.fileName }}: |
+{{ .Values.phorvex.console.auth.grants.data | default "{\n  \"version\": 1,\n  \"subjects\": []\n}\n" | indent 4 }}
+{{- end }}

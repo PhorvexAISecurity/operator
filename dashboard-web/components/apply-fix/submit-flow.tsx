@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { applyFixApi, ApplyFixDelta, AFIdentity, GatePreview, Lens } from "@/lib/api";
+import { applyFixApi, ApplyFixDelta, AFScope, GatePreview, Lens, Session } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { ShieldCheck, ShieldAlert, Loader2, Send, FlaskConical } from "lucide-react";
 
@@ -22,14 +22,16 @@ const PRESETS: { name: string; danger?: boolean; delta: ApplyFixDelta }[] = [
 const field =
   "w-full rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none";
 
-export function SubmitFlow({ id, lens, onSubmitted }: { id: AFIdentity; lens: Lens; onSubmitted: () => void }) {
+export function SubmitFlow({ session, scope, lens, onSubmitted }: { session: Session | null; scope: AFScope; lens: Lens; onSubmitted: () => void }) {
   const [delta, setDelta] = React.useState<ApplyFixDelta>({ normSparsity: 1.5 });
   const [preview, setPreview] = React.useState<GatePreview | null>(null);
   const [previewing, setPreviewing] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<{ ok: boolean; msg: string } | null>(null);
 
-  const ready = !!id.user && !!id.tenant;
+  // [M-136] Ready means the SERVER says this identity may write, and a granted tenant is
+  // selected. The subject is never something this form supplies.
+  const ready = !!session?.canEdit && !!scope.tenant;
 
   function setNum(key: keyof ApplyFixDelta, v: string) {
     setPreview(null);
@@ -47,7 +49,7 @@ export function SubmitFlow({ id, lens, onSubmitted }: { id: AFIdentity; lens: Le
     setPreviewing(true);
     setResult(null);
     try {
-      setPreview(await applyFixApi.gatePreview(delta, id, lens));
+      setPreview(await applyFixApi.gatePreview(delta, scope, lens));
     } catch (e: any) {
       setPreview({ pass: false, reason: String(e.message || e) });
     } finally {
@@ -59,9 +61,9 @@ export function SubmitFlow({ id, lens, onSubmitted }: { id: AFIdentity; lens: Le
     if (!ready) return;
     setSubmitting(true);
     setResult(null);
-    const reqId = `af-${id.tenant}-${Date.now()}`;
+    const reqId = `af-${scope.tenant}-${Date.now()}`;
     try {
-      const r = await applyFixApi.submit(reqId, delta, "operator-initiated policy tune", id, lens);
+      const r = await applyFixApi.submit(reqId, delta, "operator-initiated policy tune", scope, lens);
       setResult({ ok: true, msg: `Submitted ${r.id} — ${r.note}` });
       onSubmitted();
     } catch (e: any) {
@@ -155,7 +157,13 @@ export function SubmitFlow({ id, lens, onSubmitted }: { id: AFIdentity; lens: Le
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Submit for approval
           </Button>
-          {!ready && <span className="text-xs text-muted-foreground">set your user + tenant above first</span>}
+          {!ready && (
+            <span className="text-xs text-muted-foreground">
+              {session && !session.canEdit
+                ? "your grant is read-only — the operator role is required to submit"
+                : "select one of your granted tenants above first"}
+            </span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           The server re-runs the safety gate on submit (and again at approval — no TOCTOU). A gate-breaking delta is

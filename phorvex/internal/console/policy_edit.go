@@ -69,7 +69,7 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 		msg := fmt.Sprintf("%s is not editable from the console: spec.tenant keys the tenant's learned state; "+
 			"merging duals is not supported and a rename is a state reset (M-140) — change it deliberately with kubectl", key)
 		s.auditConsoleMutation(consoleMutation{
-			Actor: lensOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+			Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
 			Field: "spec.tenant", Verdict: "rejected-tenant-key-write", Message: msg,
 		})
 		writeJSON(w, 409, map[string]string{"error": msg, "verdict": "rejected-tenant-key-write"})
@@ -155,14 +155,14 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 			status = 422
 		}
 		s.auditConsoleMutation(consoleMutation{
-			Actor: lensOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+			Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
 			Field: "spec", Patch: string(patch), Verdict: "rejected-by-apiserver", Message: verdict,
 		})
 		writeJSON(w, status, map[string]any{"ok": false, "error": "patch rejected: " + verdict, "verdict": "rejected-by-apiserver"})
 		return
 	}
 	s.auditConsoleMutation(consoleMutation{
-		Actor: lensOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+		Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
 		Field: "spec", Patch: string(patch), Verdict: "applied", Message: verdict,
 	})
 	writeJSON(w, 200, map[string]any{

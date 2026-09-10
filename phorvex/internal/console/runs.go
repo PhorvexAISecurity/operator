@@ -10,6 +10,7 @@
 package console
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/yaml"
 )
 
 // envBase is the inherited process environment (so KUBECONFIG etc. reach the harness).
@@ -60,6 +62,13 @@ type RunStatus struct {
 	TargetLabel string    `json:"targetLabel,omitempty"` // human label of the target cluster
 	ExpectedTrials int    `json:"expectedTrials"`      // trialsPerArm × arms — drives the progress bar
 	QueuePos       int    `json:"queuePos,omitempty"`  // 1-based slot in the pending queue while state=="queued" (0 once running)
+	// Owner is the VERIFIED identity that started the run ("<issuer>#<subject>"), recorded so a
+	// run id can be authorized rather than guessed at. It is never read from a request body.
+	Owner string `json:"owner,omitempty"`
+	// ScopeTarget is the cluster TARGET ID the run was authorized against. Target above is the
+	// kubeconfig context handed to the harness, which is a different string for most clusters;
+	// authorization has to compare the same identifier the grant is written in.
+	ScopeTarget string `json:"scopeTarget,omitempty"`
 }
 
 // tsNow is the canonical run timestamp format (UTC) used for the report history.
@@ -102,6 +111,11 @@ func NewRunManager(cfg Config) *RunManager {
 const (
 	maxConcurrentRuns = 1               // serialize: runs share one sandbox ns + fixed operator ports (:18090/:18091), so concurrent runs collide (port-bind fail -> dead brain -> false "attack landed")
 	minStartInterval  = 3 * time.Second // rate limit between launches
+	// scenarioSandboxNamespace and scenarioFallbackContext are StartScenario's OWN substitutions.
+	// They are named so the destination the auth boundary authorizes and the destination the
+	// launcher uses cannot drift apart.
+	scenarioSandboxNamespace = "amtd-attack-test"
+	scenarioFallbackContext  = "kind-amtd-test"
 )
 
 // guard enforces the concurrency cap + rate limit on exec endpoints (DoS hardening; the lens
@@ -182,8 +196,9 @@ func (rm *RunManager) AllowedConfigs() []string {
 }
 
 // Start triggers a harness run for a whitelisted config. nativeActuator selects Phorvex's
-// own hands (PHORVEX_ACTUATOR=native). Returns the run id.
-func (rm *RunManager) Start(name string, nativeActuator bool, startedAt string) (string, error) {
+// own hands (PHORVEX_ACTUATOR=native). owner is the verified identity that requested it.
+// Returns the run id.
+func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner, scopeTarget string) (string, error) {
 	su, ok := allowedConfigs[name]
 	if !ok {
 		return "", fmt.Errorf("config %q not in the allowed attack-agent suites", name)
@@ -197,7 +212,9 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt string) 
 	rm.active++
 	rm.lastStart = time.Now()
 	id := fmt.Sprintf("run-%d", rm.seq)
-	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator}
+	// scopeTarget is the destination SuiteDestination read out of the suite's own config (or the
+	// host target when the config declares none) — never a stamped default.
+	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator, Owner: owner, ScopeTarget: normalizeTargetID(scopeTarget)}
 	rm.runs[id] = st
 	rm.runOut[id] = su.OutDir
 	rm.mu.Unlock()
@@ -287,7 +304,7 @@ func (rm *RunManager) ClusterTargets() []ClusterTarget {
 // d-phorvex (compared against no-MTD); otherwise the non-PX baselines. The harness deploys its
 // own synthetic attacker + victim into `namespace` and confines every object there — it does
 // not touch pre-existing workloads in other namespaces.
-func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, targetID, namespace, startedAt string) (string, error) {
+func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, targetID, namespace, startedAt, owner string) (string, error) {
 	if len(scenarios) == 0 {
 		return "", fmt.Errorf("no scenario selected")
 	}
@@ -303,8 +320,10 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	// (core.Env.CleanupOwned deleteNamespace=true). So an attack MUST run only in a dedicated,
 	// disposable sandbox — NEVER a real workload namespace, or that namespace + its app get
 	// destroyed. We therefore IGNORE any caller-supplied namespace and always use the sandbox.
-	namespace = "amtd-attack-test"
-	target := "kind-amtd-test"
+	// ScenarioDestination mirrors both of these substitutions so the auth boundary authorizes
+	// the destination this function actually uses.
+	namespace = scenarioSandboxNamespace
+	target := scenarioFallbackContext
 	provider, targetLabel := "Kubernetes", target
 	for _, t := range rm.ClusterTargets() {
 		if t.ID == targetID {
@@ -364,7 +383,7 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	} else {
 		rm.active++
 	}
-	st := &RunStatus{ID: id, Config: scenLabel, State: state, Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials}
+	st := &RunStatus{ID: id, Config: scenLabel, State: state, Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials, Owner: owner, ScopeTarget: normalizeTargetID(target)}
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
 	if queued {
@@ -376,6 +395,92 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	rm.mu.Unlock()
 	go rm.run(id, su, compare3)
 	return id, nil
+}
+
+// runDestination is what a triggered run will ACTUALLY touch, after every default and fallback
+// the launcher applies. Authorization has to be decided against this, not against the target the
+// request named — a request can omit the target entirely and still reach a concrete cluster.
+type runDestination struct {
+	// Targets always includes hostTargetID: launching the harness is itself a privileged act on
+	// the machine this console runs on. It additionally includes the cluster context the run's
+	// config selects, when one can be determined.
+	Targets []string
+	// Tenants is the namespace the run confines itself to, when the config declares one.
+	Tenants []string
+	// ScopeTarget is the identifier recorded on the RunStatus for later run-id authorization.
+	ScopeTarget string
+}
+
+// hostTargetID is the target identifier for "the machine this console runs on" — the console's
+// own cluster and the host that executes harness subprocesses. It is the same sentinel a request
+// selects by omitting ?target=/?context=.
+const hostTargetID = defaultTargetID
+
+// suiteConfig is the subset of a harness config that decides WHERE a suite runs.
+type suiteConfig struct {
+	Context   string `json:"context"`
+	Namespace string `json:"namespace"`
+}
+
+// SuiteDestination reads the whitelisted suite's OWN config to find the cluster context and
+// namespace it will drive. It never assumes: an unreadable or context-less config yields only
+// the host target, because without a usable config the harness reaches no cluster at all — the
+// subprocess launch on this host remains the effect that must still be authorized.
+func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
+	su, ok := allowedConfigs[name]
+	if !ok {
+		return runDestination{}, fmt.Errorf("config %q not in the allowed attack-agent suites", name)
+	}
+	dest := runDestination{Targets: []string{hostTargetID}, ScopeTarget: hostTargetID}
+	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
+	if err != nil {
+		return dest, nil
+	}
+	var cfg suiteConfig
+	// The shipped configs carry a UTF-8 BOM; strip it so the destination is actually parsed
+	// rather than silently falling back to "host only".
+	if yaml.Unmarshal(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")), &cfg) != nil {
+		return dest, nil
+	}
+	if ctx := strings.TrimSpace(cfg.Context); ctx != "" {
+		dest.Targets = append(dest.Targets, ctx)
+		dest.ScopeTarget = ctx
+	}
+	if ns := strings.TrimSpace(cfg.Namespace); ns != "" {
+		dest.Tenants = append(dest.Tenants, ns)
+	}
+	return dest, nil
+}
+
+// ScenarioDestination mirrors StartScenario's OWN resolution: an unknown or omitted target falls
+// back to the kind sandbox context, and the namespace is forced to the disposable sandbox
+// whatever the caller asked for. Authorizing the requested target instead of this one would let
+// an omitted parameter reach a cluster the grant never covered.
+func (rm *RunManager) ScenarioDestination(targetID string) runDestination {
+	target := scenarioFallbackContext
+	for _, t := range rm.ClusterTargets() {
+		if t.ID == targetID {
+			target = t.Context
+		}
+	}
+	return runDestination{
+		Targets:     []string{hostTargetID, target},
+		Tenants:     []string{scenarioSandboxNamespace},
+		ScopeTarget: target,
+	}
+}
+
+// Ownership reports the verified creator and cluster target recorded for a run id. The auth
+// boundary uses it to decide whether this caller may read, stream or stop the run; an unknown
+// id returns ok=false so probing ids discloses nothing about another operator's runs.
+func (rm *RunManager) Ownership(id string) (owner, target string, ok bool) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	st, found := rm.runs[id]
+	if !found {
+		return "", "", false
+	}
+	return st.Owner, st.ScopeTarget, true
 }
 
 // Status returns a snapshot of a run (with the latest parsed metrics).

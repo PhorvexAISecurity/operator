@@ -612,10 +612,15 @@ func (s *Server) fillCost(ctxName string, r *attackRecord) {
 
 func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
 	s.loadAttacks()
+	// [M-136] The attack ledger spans every namespace the console has ever fired at, so it is
+	// filtered to the tenants this identity is granted. A cross-tenant grant sees all of it.
+	p := principalOf(r)
 	attackMu.Lock()
 	out := make([]*attackRecord, 0, len(attackList))
 	for i := len(attackList) - 1; i >= 0; i-- { // newest first
-		out = append(out, attackList[i])
+		if rec := attackList[i]; p.TenantWildcard() || p.AllowsTenant(rec.Namespace) {
+			out = append(out, rec)
+		}
 	}
 	attackMu.Unlock()
 	writeJSON(w, 200, map[string]any{"attacks": out})

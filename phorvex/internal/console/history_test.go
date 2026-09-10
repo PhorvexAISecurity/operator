@@ -40,20 +40,28 @@ func writeHistory(t *testing.T, path string, recs ...audit.Record) {
 		}
 	}
 }
+// getHistory drives the history handler as a verified operator with cross-tenant scope. These
+// are DATA-behaviour tests (paging, cursors, filters, truncation); the identity and scope
+// boundary itself is asserted in auth_boundary_test.go against the real router.
 func getHistory(t *testing.T, s *Server, q url.Values, want int) (historyPage, string) {
 	t.Helper()
+	return getHistoryAs(t, s, testOperatorPrincipal(), q, want)
+}
+
+func getHistoryAs(t *testing.T, s *Server, caller *Principal, q url.Values, want int) (historyPage, string) {
+	t.Helper()
 	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/live/history?"+q.Encode(), nil))
+	s.liveHistory(w, withTestPrincipal(httptest.NewRequest("GET", "/api/live/history?"+q.Encode(), nil), caller))
 	if w.Code != want {
 		t.Fatalf("history status %d want %d: %s", w.Code, want, w.Body.String())
 	}
-	var p historyPage
+	var page historyPage
 	if want == 200 {
-		if e := json.Unmarshal(w.Body.Bytes(), &p); e != nil {
+		if e := json.Unmarshal(w.Body.Bytes(), &page); e != nil {
 			t.Fatal(e)
 		}
 	}
-	return p, w.Body.String()
+	return page, w.Body.String()
 }
 func eventPod(t *testing.T, item historyItem) string {
 	t.Helper()
@@ -178,12 +186,16 @@ func TestHistoryScopesPredicatesAndInvalidCursors(t *testing.T) {
 	vc.Actuated = true
 	writeHistory(t, filepath.Join(filepath.Dir(path), "phorvex-live-vcluster.jsonl"), vc)
 	s := NewServer(Config{AuditPath: path})
+	// [M-136] The projection follows the GRANT. An owner-granted subject gets the owner
+	// projection whether it asks for lens=owner, sends nothing, or sends a bogus lens — an
+	// unrecognised lens can neither escalate nor accidentally widen the tenant filter.
+	owner := testOwnerPrincipal("acme")
 	for _, lens := range []string{"owner", "", "unknown"} {
-		p, _ := getHistory(t, s, url.Values{"lens": {lens}}, 200)
+		p, _ := getHistoryAs(t, s, owner, url.Values{"lens": {lens}}, 200)
 		if len(p.Events) != 0 {
 			t.Fatal("unscoped owner leak")
 		}
-		p, body := getHistory(t, s, url.Values{"lens": {lens}, "tenant": {"acme"}}, 200)
+		p, body := getHistoryAs(t, s, owner, url.Values{"lens": {lens}, "tenant": {"acme"}}, 200)
 		if len(p.Events) != 3 {
 			t.Fatalf("owner eligibility: %s", body)
 		}
@@ -341,7 +353,7 @@ func TestLiveReplaySurvivesReplacementDuringFlush(t *testing.T) {
 					}
 				}
 			}
-			NewServer(Config{AuditPath: path}).live(recorder, httptest.NewRequest("GET", "/api/live?lens=operator", nil).WithContext(ctx))
+			NewServer(Config{AuditPath: path}).live(recorder, withTestPrincipal(httptest.NewRequest("GET", "/api/live?lens=operator", nil).WithContext(ctx), testOperatorPrincipal()))
 			if !strings.Contains(recorder.Body.String(), `"pod":"after"`) {
 				t.Fatalf("replacement event lost: %s", recorder.Body.String())
 			}
@@ -452,7 +464,7 @@ func TestHistoryConcurrentRotationRejectsMixedManifest(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	s := NewServer(Config{AuditPath: path})
-	s.liveHistoryWithOpener(w, httptest.NewRequest("GET", "/api/live/history?lens=operator", nil), openFile)
+	s.liveHistoryWithOpener(w, withTestPrincipal(httptest.NewRequest("GET", "/api/live/history?lens=operator", nil), testOperatorPrincipal()), openFile)
 	if !rotated || w.Code != 409 {
 		t.Fatalf("mixed manifest accepted: rotated=%v status=%d %s", rotated, w.Code, w.Body.String())
 	}

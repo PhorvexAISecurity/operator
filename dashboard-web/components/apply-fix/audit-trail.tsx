@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { applyFixApi, AFIdentity, AFAuditEntry, Lens } from "@/lib/api";
+import { applyFixApi, AFScope, AFAuditEntry, Lens } from "@/lib/api";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 
 type V = "real" | "danger" | "pending" | "neutral" | "accent";
@@ -13,22 +13,22 @@ const EVENT_META: Record<string, { label: string; variant: V }> = {
   "apply-fix.apply.error": { label: "apply error", variant: "danger" },
 };
 
-export function AuditTrail({ id, lens, refreshKey }: { id: AFIdentity; lens: Lens; refreshKey: number }) {
+export function AuditTrail({ scope, lens, refreshKey }: { scope: AFScope; lens: Lens; refreshKey: number }) {
   const [entries, setEntries] = React.useState<AFAuditEntry[]>([]);
   React.useEffect(() => {
-    if (!id.tenant) return;
+    if (!scope.tenant) return;
     applyFixApi
-      .audit(id, lens)
+      .audit(scope, lens)
       .then((d) => setEntries((d.audit || []).slice().reverse()))
       .catch(() => {});
-  }, [id, lens, refreshKey]);
+  }, [scope, lens, refreshKey]);
 
   return (
     <Card>
       <CardContent className="space-y-2 p-5">
         <h3 className="text-sm font-semibold text-foreground">Audit trail</h3>
         {entries.length === 0 && (
-          <p className="text-sm text-muted-foreground">No apply-fix events yet for tenant {id.tenant || "?"}.</p>
+          <p className="text-sm text-muted-foreground">No apply-fix events yet for tenant {scope.tenant || "?"}.</p>
         )}
         <ul className="space-y-1.5">
           {entries.map((e, i) => {

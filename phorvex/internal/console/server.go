@@ -1,12 +1,15 @@
 /*
- * Phorvex Console (P-DASHBOARD) — the HTTP API (read-only data + safe triggers).
+ * Phorvex Console (P-DASHBOARD) — the HTTP API (data, streams and controls).
  *
- * THREE auth scopes, enforced server-side (the lens is not a CSS toggle):
- *   - vendor   (Investor): the full moat — effectiveness, frontier, the IP internals.
- *   - operator (Operator): effectiveness, frontier, run-attack-agents — customer-safe.
- *   - owner    (Customer-Owner): ONLY the IP-walled OwnerEvent list. The owner scope is
- *     physically barred from the vendor/operator handlers and the trigger endpoints it may
- *     not invoke. The owner payload is the whitelist DTO (owner.go) — never a Record.
+ * THREE authorization roles, granted server-side per verified subject (auth_grants.go) and
+ * enforced at the request boundary (auth_middleware.go) before any handler runs:
+ *   - investor: the full moat — effectiveness, frontier, the IP internals. READ ONLY.
+ *   - operator: the same evidence plus the controls, confined to its granted tenant/target scope.
+ *   - owner   : ONLY the IP-walled OwnerEvent projection, for its own granted tenants.
+ *
+ * The lens is not an identity and never was a credential: X-Phorvex-Lens / ?lens= may narrow a
+ * caller's projection below its grant, and can never widen it. The routing contract lives in
+ * routes.go — Handler() is built from that table so no route can be added outside the boundary.
  */
 
 package console
@@ -28,102 +31,26 @@ import (
 type Server struct {
 	cfg  Config
 	runs *RunManager
-	// [P-VCLUSTER Pass 2] optional multi-tenant write-path components (nil => demo-trust dev mode):
-	oidc     *OIDCVerifier    // verified identity (replaces demo-trust as the authz boundary)
+	// auth is the identity/authorization boundary. Nil means the console has NO trust boundary,
+	// and in that state every API route answers 503 rather than serving anything.
+	auth *Authenticator
+	// [P-VCLUSTER Pass 2] multi-tenant write-path components:
 	quota    *TenantQuota     // per-tenant DoS limiter on tenant-facing surfaces
 	applyfix *ApplyFixManager // the safe apply-fix write-path
 }
 
 func NewServer(cfg Config) *Server { return &Server{cfg: cfg, runs: NewRunManager(cfg)} }
 
-// EnableVCluster wires the Pass-2 production components (OIDC identity, per-tenant quota, safe apply-fix
-// write-path). Called by the deployment with a configured OIDC IdP; absent it, the console runs in
-// demo-trust dev mode (single-tenant, no write-path).
-func (s *Server) EnableVCluster(oidc *OIDCVerifier, quota *TenantQuota, applyfix *ApplyFixManager) {
-	s.oidc, s.quota, s.applyfix = oidc, quota, applyfix
-}
+// EnableAuth installs the verified-identity boundary. Without it the API is closed: there is no
+// "demo trust" construction path, so a deployment cannot forget to configure authentication and
+// still serve data.
+func (s *Server) EnableAuth(a *Authenticator) { s.auth = a }
 
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	// vendor + operator scope (full data).
-	mux.HandleFunc("/api/health", s.withCORS(s.health))
-	mux.HandleFunc("/api/version", s.withCORS(s.version))
-	mux.HandleFunc("/api/effectiveness", s.withCORS(s.scoped("operator", s.effectiveness)))
-	mux.HandleFunc("/api/frontier", s.withCORS(s.scoped("operator", s.frontier)))
-	mux.HandleFunc("/api/suites", s.withCORS(s.scoped("operator", s.suites)))
-	mux.HandleFunc("/api/runs/start", s.withCORS(s.scoped("operator", s.startRun)))
-	mux.HandleFunc("/api/runs/scenario", s.withCORS(s.scoped("operator", s.startScenario)))
-	mux.HandleFunc("/api/vllm/attack", s.withCORS(s.scoped("operator", s.vllmAttack)))
-	mux.HandleFunc("/api/workload/attack", s.withCORS(s.scoped("operator", s.workloadAttack)))
-	// Per-app attack compatibility: which attacks this app's stack supports and which are armed.
-	mux.HandleFunc("/api/workload/attacks", s.withCORS(s.scoped("operator", s.workloadAttacks)))
-	// LIVE cluster control: patch a PhorvexPolicy (mode, budget, enabled actuators).
-	// A real cluster write, safe because the ALB enforces Cognito login ahead of it.
-	mux.HandleFunc("/api/policy/edit", s.withCORS(s.scoped("operator", s.policyEdit)))
-	// Fire a catalogue scenario as a REAL SecurityEvent at a live app's pod (not the sandbox).
-	mux.HandleFunc("/api/workload/fire-scenario", s.withCORS(s.scoped("operator", s.fireScenarioLive)))
-	mux.HandleFunc("/api/attack-results", s.withCORS(s.scoped("operator", s.attackResults)))
-	// LIVE-ATTACK MONITORING — before/during/after availability + real downtime cost per attack.
-	mux.HandleFunc("/api/attack-monitoring", s.withCORS(s.scoped("operator", s.attackMonitoringHandler)))
-	// THREE-ARM availability: no-defense vs blind-timer vs Phorvex, measured on the same app.
-	mux.HandleFunc("/api/availability-arms", s.withCORS(s.scoped("operator", s.availabilityArms)))
-	mux.HandleFunc("/api/availability-arms/run", s.withCORS(s.scoped("operator", s.runArmsExperiment)))
-	// OPTIMIZER BENCH — in-process real-engine parameter sweep vs R6-blind + attack-landed (no live attack).
-	mux.HandleFunc("/api/benchmark-sim", s.withCORS(s.scoped("operator", s.benchmarkSim)))
-	mux.HandleFunc("/api/runs/status", s.withCORS(s.scoped("operator", s.runStatus)))
-	mux.HandleFunc("/api/runs/stream", s.withCORS(s.scoped("operator", s.runStream)))
-	mux.HandleFunc("/api/runs/list", s.withCORS(s.scoped("operator", s.runsList)))
-	mux.HandleFunc("/api/runs/stop", s.withCORS(s.scoped("operator", s.runStop)))
-	mux.HandleFunc("/api/runs/evidence", s.withCORS(s.scoped("operator", s.runEvidence)))
-	mux.HandleFunc("/api/targets", s.withCORS(s.scoped("operator", s.targets)))
-	// LIVE WORKLOADS (P-DASHBOARD-LIVE) — enumerate the real workloads on the selected cluster.
-	mux.HandleFunc("/api/workloads", s.withCORS(s.scoped("operator", s.workloads)))
-	mux.HandleFunc("/api/capabilities", s.withCORS(s.scoped("operator", s.capabilities)))
-	// EVIDENCE group (Wave 1) — operator/investor scope.
-	mux.HandleFunc("/api/catalog", s.withCORS(s.scoped("operator", s.catalog)))
-	mux.HandleFunc("/api/benchmarks", s.withCORS(s.scoped("operator", s.benchmarks)))
-	mux.HandleFunc("/api/threat-matrix", s.withCORS(s.scoped("operator", s.threatMatrix)))
-	mux.HandleFunc("/api/posture", s.withCORS(s.scoped("operator", s.posture)))
-	mux.HandleFunc("/api/rawlog", s.withCORS(s.scoped("operator", s.rawlog)))
-	// SUBSYSTEMS (Wave 3) — operator/investor scope (IP); exec EXISTING entrypoints read-only.
-	mux.HandleFunc("/api/scan", s.withCORS(s.scoped("operator", s.scan)))
-	mux.HandleFunc("/api/ablation", s.withCORS(s.scoped("operator", s.ablation)))
-	mux.HandleFunc("/api/cluster", s.withCORS(s.scoped("operator", s.cluster)))
-	mux.HandleFunc("/api/handlers", s.withCORS(s.scoped("operator", s.handlers)))
-	mux.HandleFunc("/api/matrix", s.withCORS(s.scoped("operator", s.matrix)))
-	mux.HandleFunc("/api/ai-surface", s.withCORS(s.scoped("operator", s.aiSurface)))
-	mux.HandleFunc("/api/metrics", s.withCORS(s.scoped("operator", s.metricsScrape)))
-	// LIVE group (Wave 2) — SSE, per-lens projected at the stream boundary.
-	mux.HandleFunc("/api/live", s.withCORS(s.live))
-	mux.HandleFunc("/api/live/history", s.withCORS(s.liveHistory))
-	// clear the live decision audit (operator-only write; truncates the JSONL the SSE replays).
-	mux.HandleFunc("/api/live/clear", s.withCORS(s.scoped("operator", s.liveClear)))
-	// owner scope (IP-walled — ONLY OwnerEvents + the owner-safe rollup).
-	mux.HandleFunc("/api/owner/events", s.withCORS(s.scoped("owner", s.ownerEvents)))
-	mux.HandleFunc("/api/owner/tenants", s.withCORS(s.scoped("owner", s.ownerTenants)))
-	mux.HandleFunc("/api/reports", s.withCORS(s.scoped("operator", s.reports)))
-	mux.HandleFunc("/api/cost", s.withCORS(s.scoped("operator", s.cost)))
-	mux.HandleFunc("/api/cost-timeseries", s.withCORS(s.scoped("operator", s.costTimeseries)))
-	// UPTIME (P-UPTIME) — MEASURED actuator impact on service availability (K8s API + audit markers).
-	mux.HandleFunc("/api/uptime", s.withCORS(s.scoped("operator", s.uptime)))
-	mux.HandleFunc("/api/pricing", s.withCORS(s.scoped("operator", s.pricing)))
-	// RED-TEAM CONTROL group (P-REDTEAM) — additive; reads real artifacts + execs the attacker tool.
-	mux.HandleFunc("/api/redteam/curves", s.withCORS(s.scoped("operator", s.redteamCurves)))
-	mux.HandleFunc("/api/redteam/campaigns", s.withCORS(s.scoped("operator", s.redteamCampaigns)))
-	mux.HandleFunc("/api/redteam/live", s.withCORS(s.scoped("operator", s.redteamLive)))
-	mux.HandleFunc("/api/redteam/findings", s.withCORS(s.scoped("operator", s.redteamFindings)))
-	mux.HandleFunc("/api/redteam/decision", s.withCORS(s.scoped("operator", s.redteamDecision)))
-	mux.HandleFunc("/api/redteam/gates", s.withCORS(s.scoped("operator", s.redteamGates)))
-	mux.HandleFunc("/api/redteam/run", s.withCORS(s.scoped("operator", s.redteamRun)))
-	mux.HandleFunc("/api/redteam/run-status", s.withCORS(s.scoped("operator", s.redteamRunStatus)))
-	mux.HandleFunc("/api/redteam/continuous", s.withCORS(s.scoped("operator", s.redteamContinuous)))
-	mux.HandleFunc("/redteam", s.withCORS(s.redteamPage))
-	// [P-VCLUSTER Pass 2] the safe apply-fix write-path (submit/approve) behind verified identity + quota.
-	s.registerVCluster(mux)
-	// Static SPA (the built Next.js export) served at / on the SAME port as /api — one
-	// process, one port, no proxy. SPA fallback to index.html for client-side routes.
-	mux.HandleFunc("/", s.spa)
-	return mux
+// EnableVCluster wires the per-tenant quota and the safe apply-fix write-path. Identity is NOT a
+// parameter here any more — it belongs to EnableAuth and applies to every route, not just this
+// write-path.
+func (s *Server) EnableVCluster(quota *TenantQuota, applyfix *ApplyFixManager) {
+	s.quota, s.applyfix = quota, applyfix
 }
 
 // spa serves the built dashboard (cfg.Web). Unknown non-/api paths fall back to index.html
@@ -177,13 +104,37 @@ func (s *Server) matrix(w http.ResponseWriter, r *http.Request) {
 func (s *Server) aiSurface(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.cfg.AISurfaceDecode())
 }
+// metricsScrape reports per-pod risk from a Prometheus scrape. The scrape is cluster-wide, so
+// the per-pod rows are filtered to the granted tenants; the aggregate metadata stays intact.
 func (s *Server) metricsScrape(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, s.cfg.MetricsScrape(r.URL.Query().Get("url")))
+	p := principalOf(r)
+	res := s.cfg.MetricsScrape(r.URL.Query().Get("url"))
+	if !p.TenantWildcard() {
+		pods := make([]PodRisk, 0, len(res.Pods))
+		for _, pod := range res.Pods {
+			if p.AllowsTenant(pod.Namespace) {
+				pods = append(pods, pod)
+			}
+		}
+		res.Pods = pods
+	}
+	writeJSON(w, 200, res)
 }
+// cluster lists the live PhorvexPolicy control-plane state. The CRD is cluster-scoped and the
+// list is unfiltered at the API server, so the response is filtered HERE to the tenants and
+// namespaces this identity is granted — a limited operator sees its own policies, not the whole
+// customer estate. A cross-tenant grant sees everything.
 func (s *Server) cluster(w http.ResponseWriter, r *http.Request) {
+	p := principalOf(r)
 	pols, ok := s.cfg.ClusterPolicies()
-	writeJSON(w, 200, map[string]any{"policies": pols, "available": ok,
-		"note": "live PhorvexPolicy CRD spec + Status (operator control-plane). Editing from the UI is [PENDING-wire · write path]."})
+	visible := make([]PolicyView, 0, len(pols))
+	for _, pol := range pols {
+		if p.TenantWildcard() || p.AllowsTenant(pol.Namespace) || (pol.Tenant != "" && p.AllowsTenant(pol.Tenant)) {
+			visible = append(visible, pol)
+		}
+	}
+	writeJSON(w, 200, map[string]any{"policies": visible, "available": ok,
+		"note": "live PhorvexPolicy CRD spec + Status (operator control-plane), filtered to this identity's granted tenants. Editing from the UI is [PENDING-wire · write path]."})
 }
 
 func (s *Server) rawlog(w http.ResponseWriter, r *http.Request) {
@@ -195,40 +146,24 @@ func (s *Server) rawlog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"log": body})
 }
 
-// lensOf reads the request lens (header, then query for EventSource). Missing/unknown maps
-// to the LEAST-privileged lens ("owner") — default-deny, never "operator".
-func lensOf(r *http.Request) string {
-	l := r.Header.Get("X-Phorvex-Lens")
-	if l == "" {
-		l = r.URL.Query().Get("lens")
-	}
-	switch l {
-	case "investor", "operator", "owner":
-		return l
-	default:
-		return "owner" // DEFAULT-DENY: an unknown/missing lens cannot reach vendor data
-	}
-}
-
-// scoped enforces the auth scope SERVER-SIDE with DEFAULT-DENY. A vendor/operator endpoint
-// admits ONLY the investor/operator lens; a missing/unknown/owner lens is rejected (403) —
-// so vendor IP can never reach the owner path by an absent header. Owner endpoints are
-// reachable by any valid lens but ALWAYS return the redacted ToOwnerEvent DTO (they never
-// marshal a Record). (Real authn/SSO is [PENDING-P-VCLUSTER]; this is the redaction boundary.)
-func (s *Server) scoped(required string, h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		lens := lensOf(r)
-		if required == "operator" && lens != "investor" && lens != "operator" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "this data requires the investor or operator lens; the customer-owner lens is IP-walled"})
-			return
-		}
-		h(w, r)
-	}
-}
-
+// health is the ONLY public API route: a liveness answer and nothing else. It used to return
+// s.cfg.Root and the resolved harness/binary paths, which handed an unauthenticated caller the
+// deployment's filesystem layout. Those moved to /api/diagnostics behind the auth boundary.
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "GET only"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// diagnostics is the authenticated form of what /api/health used to disclose: whether the
+// harness corpora and binaries this console reads are actually present.
+func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
-		"ok": true, "root": s.cfg.Root,
+		"ok":           true,
+		"root":         s.cfg.Root,
 		"hasP3Deep":    fileExists(s.harnessOutCfg("out-p3deep")),
 		"hasPactuator": fileExists(s.harnessOutCfg("out-pactuator")),
 		"phorvexBin":   fileExists(s.cfg.PhorvexBin),
@@ -368,7 +303,15 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		StartedAt      string `json:"startedAt"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt)
+	// The boundary already authorized this suite's REAL destination (its own config's context and
+	// namespace, plus the host that runs the subprocess). Record that same target on the run, so
+	// a later run-id lookup is authorized against what the run actually touches.
+	dest, err := s.runs.SuiteDestination(body.Config)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest.ScopeTarget)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
@@ -391,7 +334,7 @@ func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 	if len(scenarios) == 0 && body.Scenario != "" {
 		scenarios = []string{body.Scenario}
 	}
-	id, err := s.runs.StartScenario(scenarios, body.WithPX, body.Compare3, body.Target, body.Namespace, body.StartedAt)
+	id, err := s.runs.StartScenario(scenarios, body.WithPX, body.Compare3, body.Target, body.Namespace, body.StartedAt, principalKey(principalOf(r)))
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
@@ -399,17 +342,37 @@ func (s *Server) startScenario(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"id": id})
 }
 
+// targets lists the cluster targets this identity may select — filtered by the target scope in
+// its grant, so the selector never advertises a cluster the caller cannot reach.
 func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"targets": s.runs.ClusterTargets()})
+	p := principalOf(r)
+	all := s.runs.ClusterTargets()
+	out := make([]ClusterTarget, 0, len(all))
+	for _, t := range all {
+		if p.AllowsTarget(t.ID) || (t.ID == "" && p.AllowsTarget(defaultTargetID)) {
+			out = append(out, t)
+		}
+	}
+	writeJSON(w, 200, map[string]any{"targets": out})
 }
 
-// runsList returns the post-attack report history (every triggered run, newest first, with
-// date + per-arm with/without-Phorvex metrics). Updates after each live attack finishes.
+// runsList returns the post-attack report history, confined to the runs this identity may see:
+// its own, plus any on a cluster target inside its grant. A run belonging to another operator on
+// an out-of-scope target is simply absent, not redacted.
 func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"runs": s.runs.List()})
+	p := principalOf(r)
+	all := s.runs.List()
+	out := make([]RunStatus, 0, len(all))
+	for _, st := range all {
+		if p.AllowsTarget(st.ScopeTarget) || (st.Owner != "" && st.Owner == principalKey(p)) {
+			out = append(out, st)
+		}
+	}
+	writeJSON(w, 200, map[string]any{"runs": out})
 }
 
 // runEvidence returns the full per-arm + per-trial metric ledger for one run (evidence view).
+// The boundary has already resolved the id to a run inside this identity's scope.
 func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	arms, trials, st, ok := s.runs.RunEvidence(r.URL.Query().Get("id"))
 	if !ok {
@@ -451,8 +414,16 @@ func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {
 // ownerEvents returns the IP-walled OwnerEvent list. It reads a real decision audit JSONL
 // (audit.Record), projects EACH through ToOwnerEvent (the whitelist), and returns ONLY that.
 // It NEVER marshals a Record. If no audit trail exists yet, it returns an honest empty state.
+//
+// The ?tenant= is now checked against the caller's GRANT by the auth boundary before this runs,
+// so it selects among the tenants this identity owns rather than asserting one. The filter below
+// is retained as the data-level control: an empty or unmatched tenant returns nothing.
 func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
-	tenant := r.URL.Query().Get("tenant")
+	tenant := strings.TrimSpace(r.URL.Query().Get("tenant"))
+	if !principalOf(r).AllowsTenant(tenant) { // defence in depth; the boundary already checked
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "tenant is outside this identity's scope"})
+		return
+	}
 	recs := s.readAudit()
 	var events []OwnerEvent
 	for _, rec := range recs {
@@ -460,8 +431,7 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 			continue // owners see ACTIONS, not every evaluated candidate
 		}
 		// [P4c D7/F4 cross-tenant FIX] FAIL-CLOSED: an owner sees ONLY their own tenant. An
-		// empty/absent ?tenant= previously skipped the filter and returned ALL tenants; now it
-		// returns NOTHING. (Tenant identity is demo-trust until P-VCLUSTER; this stops the leak.)
+		// empty/absent ?tenant= returns NOTHING rather than every tenant.
 		if tenant == "" || rec.Tenant != tenant {
 			continue
 		}
@@ -490,23 +460,40 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		"events": events,
 		"empty":  len(events) == 0,
 		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept, "dispatched": dispatched, "isolationAttempts": isolationAttempts},
-		"note":   "kind-scale demo data; live real-cluster streaming is tracked by PHORVEXSEC-151. Tenant scoping is by request param (demo-trust) until real authn/RBAC lands under PHORVEXSEC-152.",
+		"note":   "Tenant scoping is enforced against this identity's server-side grant; only granted tenants are selectable.",
 	})
 }
 
-// ownerTenants lists the DISTINCT tenants present in the decision audit (demo-trust: the owner
-// view selects which customer's platform to show; real per-tenant authn is [PENDING-P-VCLUSTER]).
-// Lets the owner lens pass a concrete ?tenant= so its panels populate (the fail-closed empty-tenant
-// guard in ownerEvents otherwise returns nothing).
+// ownerTenants lists the tenants this identity may actually select. It is a SELECTOR, so it is
+// filtered by the grant: a tenant the caller is not granted never appears, and its presence or
+// absence in the audit is not disclosed. Previously it enumerated every tenant in the decision
+// audit, which leaked the customer list to anyone who could ask.
 func (s *Server) ownerTenants(w http.ResponseWriter, r *http.Request) {
+	p := principalOf(r)
 	recs := s.readAudit()
 	seen := map[string]bool{}
 	tenants := []string{}
 	for _, rec := range recs {
-		if (rec.Selected || rec.Actuated) && rec.Tenant != "" && !seen[rec.Tenant] {
-			seen[rec.Tenant] = true
-			tenants = append(tenants, rec.Tenant)
+		if !rec.Selected && !rec.Actuated {
+			continue
 		}
+		if rec.Tenant == "" || seen[rec.Tenant] || !p.AllowsTenant(rec.Tenant) {
+			continue
+		}
+		seen[rec.Tenant] = true
+		tenants = append(tenants, rec.Tenant)
+	}
+	sort.Strings(tenants)
+	// A wildcard grant sees whatever the audit holds; a scoped grant additionally gets its
+	// granted-but-idle tenants listed, so a tenant with no decisions yet is still selectable.
+	if !p.TenantWildcard() {
+		for _, t := range p.Tenants {
+			if t != wildcardScope && !seen[t] {
+				seen[t] = true
+				tenants = append(tenants, t)
+			}
+		}
+		sort.Strings(tenants)
 	}
 	writeJSON(w, 200, map[string]any{"tenants": tenants})
 }
@@ -576,19 +563,6 @@ func (s *Server) harnessOutCfg(name string) string {
 }
 
 // --- helpers ---
-
-func (s *Server) withCORS(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Phorvex-Lens")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(204)
-			return
-		}
-		h(w, r)
-	}
-}
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")

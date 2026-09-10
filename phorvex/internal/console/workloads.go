@@ -208,8 +208,16 @@ func (s *Server) workloads(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// [M-136] The List calls above are cluster-wide (namespace ""), so the RESPONSE is filtered
+	// to the tenants this identity is granted. A limited operator enumerates its own namespaces;
+	// a cross-tenant grant sees the whole cluster. Without this, any operator role could inventory
+	// every customer's workloads regardless of its tenant scope.
+	p := principalOf(r)
 	out := make([]WorkloadNS, 0, len(byNS))
 	for _, g := range byNS {
+		if !p.TenantWildcard() && !p.AllowsTenant(g.Namespace) {
+			continue
+		}
 		sort.Slice(g.Workloads, func(i, j int) bool { return g.Workloads[i].Name < g.Workloads[j].Name })
 		out = append(out, *g)
 	}

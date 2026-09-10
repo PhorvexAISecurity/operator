@@ -323,7 +323,18 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 		writeJSON(w, 400, map[string]string{"error": "to precedes from"})
 		return
 	}
-	lens, tenant, path := lensOf(r), q.Get("tenant"), s.liveAuditPath(r)
+	// [M-136] Projection and tenant scope come from the verified grant, narrowed by any lens the
+	// request asked for — never from the X-Phorvex-Lens header or a self-asserted ?tenant=.
+	p := principalOf(r)
+	lens, tenant, path := lensOfRequest(r), strings.TrimSpace(q.Get("tenant")), s.liveAuditPath(r)
+	if tenant != "" && !p.AllowsTenant(tenant) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "tenant " + tenant + " is outside this identity's tenant scope"})
+		return
+	}
+	if lens != string(RoleOwner) && !p.CanRead() {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": accessDenialMessage(accessRead)})
+		return
+	}
 	search := strings.ToLower(strings.TrimSpace(q.Get("q")))
 	if len(search) > 512 || len(q.Get("action")) > 128 || len(tenant) > 512 || len(q.Get("context")) > 1024 {
 		writeJSON(w, 400, map[string]string{"error": "history filter too long"})
@@ -455,6 +466,16 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 				continue
 			}
 			if lens == "owner" && (rec.Tenant != tenant || (!rec.Selected && !rec.Actuated)) {
+				continue
+			}
+			// [M-136] The cross-tenant control applies to EVERY lens: an explicit ?tenant= pins
+			// the page to that tenant, and with none named a scoped grant still sees only the
+			// tenants it holds. Counts and notices derive from these same filtered records.
+			if tenant != "" {
+				if rec.Tenant != tenant {
+					continue
+				}
+			} else if !p.TenantWildcard() && !p.AllowsTenant(rec.Tenant) {
 				continue
 			}
 			if q.Get("action") != "" && rec.Action != q.Get("action") {
