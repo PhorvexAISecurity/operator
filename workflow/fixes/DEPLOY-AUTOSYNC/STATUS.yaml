@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 10
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -81,11 +81,18 @@ checks:
     source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
     at: '2026-09-10T08:33:09+00:00'
     incident_sha256: d34324885a69edd907411dd0cbf76eb3b36fc52443ac077b6ee92266ccec65f5
+  patch_equivalence:
+    result: PASS
+    by: deploy-lead
+    artifact: evidence/patch-equivalence.md
+    sha256: 3cde37d99ff9c3556664ecf88961f7f07897630e02e242cb4dc8b5b889c10403
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:38:33+00:00'
 fix_id: DEPLOY-AUTOSYNC
 issues: []
 title: Restore ArgoCD deployment automation and fail fast on disabled sync
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: hamihoriyat
   proposer: deploy-lead
@@ -112,8 +119,8 @@ implementation:
   head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/166
+  reviewed_head: 73f7b0817ba907d6146d8f04ac4626c538e76d85
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -146,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T08:33:10+00:00'
+  owner: hamihoriyat
+  action: Review Draft PR166/remote checks and merge when authorized; verify durable
+    Git/CI implementation after merge. Live0.4.104 recovery complete; formal L3 pending.
+updated_at: '2026-09-10T08:38:33+00:00'
 configuration_history:
 - at: '2026-09-10T08:14:53+00:00'
   by: deploy-lead
@@ -165,6 +172,12 @@ configuration_history:
   by: deploy-worker
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-10T08:38:33+00:00'
+  by: deploy-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -214,6 +227,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T08:38:33+00:00'
+  by: deploy-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: DEPLOY-AUTOSYNC:7:review
