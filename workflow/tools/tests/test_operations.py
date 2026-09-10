@@ -792,8 +792,8 @@ class AgentOperationsTests(unittest.TestCase):
             self.assertEqual(status["state"], "DEPLOYED")
 
     def test_report_file_must_stay_inside_workflow_tree(self) -> None:
-        with sandbox() as (_, _, _):
-            outside = Path("/tmp/workflow-outside-report.md")
+        with sandbox() as (repo, _, _):
+            outside = repo / "workflow-outside-report.md"
             outside.write_text("secret\n", encoding="utf-8")
             args = intake_args("RPT-20260907-000006-outside")
             args.report_file = str(outside)
