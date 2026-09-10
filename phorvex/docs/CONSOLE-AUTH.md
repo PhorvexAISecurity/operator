@@ -158,6 +158,19 @@ A route's declared scope has to match what its handler actually does, not what t
 - **An endpoint authorizes the destination it will actually read.** `/api/cost` falls back to the
   first runnable cluster when no `context`/`target` is named; the boundary resolves and authorizes
   that same cluster rather than the `default` sentinel.
+- **An identifier is resolved once, for both authorization and execution.** `/api/runs/stop`
+  accepts a run id in the query or the body. The boundary resolves exactly one, refuses a request
+  whose query and body name *different* runs, and hands the resolved id to the handler — which
+  never re-reads it. Previously the boundary preferred the query id and the handler preferred the
+  body id, so a caller could be authorized for one run and stop another.
+- **Query aliases for one target resolve once.** Where a route accepts both `?context=` and
+  `?target=`, they are aliases for a single cluster, not two independent scopes. Checking each
+  separately made the alias a caller *did not* use mean "default", so an identity granted only a
+  remote cluster was refused for naming that cluster explicitly.
+- **Every local reader names the source it reads.** The owner surfaces, the audit aggregates, the
+  attack ledger and the whole private evidence corpus read this console's own audit file, ledger
+  and harness corpus. They declare that source's cluster, so an identity with a tenant grant but
+  no cluster target cannot read them. A tenant grant is not a source grant.
 
 ### The three data classes
 

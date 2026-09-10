@@ -56,7 +56,7 @@ func (s *Server) apiRoutes() []route {
 		{path: "/api/session", spec: routeSpec{methods: getOnly, access: accessAny}, h: s.session},
 
 		// ── version ───────────────────────────────────────────────────────────────────────
-		read("/api/version", s.version, routeSpec{}),
+		read("/api/version", s.version, routeSpec{fixedTarget: defaultTargetID}),
 
 		// ── shared product metadata (any read grant) ──────────────────────────────────────
 		// Catalogue and registry facts that describe the PRODUCT, not a customer: no tenant is
@@ -72,21 +72,21 @@ func (s *Server) apiRoutes() []route {
 		// tenant, so they cannot be filtered down to one: an identity limited to some tenants
 		// gets none of it, and a vendor-side identity holds the wildcard that does. This is the
 		// "indivisible unattributable private evidence" case, not shared catalogue metadata.
-		read("/api/effectiveness", s.effectiveness, routeSpec{requireTenantWildcard: true}),
-		read("/api/frontier", s.frontier, routeSpec{requireTenantWildcard: true}),
-		read("/api/benchmarks", s.benchmarks, routeSpec{requireTenantWildcard: true}),
-		read("/api/posture", s.posture, routeSpec{requireTenantWildcard: true}),
-		read("/api/rawlog", s.rawlog, routeSpec{requireTenantWildcard: true}),
-		read("/api/matrix", s.matrix, routeSpec{requireTenantWildcard: true}),
-		read("/api/ai-surface", s.aiSurface, routeSpec{requireTenantWildcard: true}),
-		read("/api/reports", s.reports, routeSpec{requireTenantWildcard: true}),
-		read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly, requireTenantWildcard: true}),
+		read("/api/effectiveness", s.effectiveness, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/frontier", s.frontier, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/benchmarks", s.benchmarks, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/posture", s.posture, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/rawlog", s.rawlog, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/matrix", s.matrix, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/ai-surface", s.aiSurface, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/reports", s.reports, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly, fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 
 		// ── tenant-attributable data (filtered to the granted tenants in the handler) ──────
 		read("/api/metrics", s.metricsScrape, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/cost-timeseries", s.costTimeseries, routeSpec{fixedTarget: defaultTargetID}),
-		read("/api/attack-results", s.attackResults, routeSpec{}),
-		read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{}),
+		read("/api/attack-results", s.attackResults, routeSpec{fixedTarget: defaultTargetID}),
+		read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/diagnostics", s.diagnostics, routeSpec{fixedTarget: defaultTargetID}),
 
 		// ── target-scoped reads ───────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ func (s *Server) apiRoutes() []route {
 		// /api/cost falls back to the first runnable cluster when no context/target is named, so
 		// the destination hook authorizes THAT cluster rather than the "default" sentinel an
 		// omitted parameter would otherwise stand for.
-		read("/api/cost", s.cost, routeSpec{targetQ: []string{"context", "target"}, destination: costDestination}),
+		read("/api/cost", s.cost, routeSpec{destination: costDestination}),
 		read("/api/uptime", s.uptime, routeSpec{targetQ: []string{"context"}}),
 		read("/api/pricing", s.pricing, routeSpec{targetQ: []string{"target"}}),
 		read("/api/workloads", s.workloads, routeSpec{targetQ: []string{"target"}}),
@@ -121,8 +121,8 @@ func (s *Server) apiRoutes() []route {
 		control("/api/live/clear", s.liveClear, routeSpec{targetQ: []string{"context"}, requireTenantWildcard: true}),
 
 		// ── owner surfaces ────────────────────────────────────────────────────────────────
-		{path: "/api/owner/events", spec: routeSpec{methods: getOnly, access: accessOwnerData, tenantQ: []string{"tenant"}}, h: s.ownerEvents},
-		{path: "/api/owner/tenants", spec: routeSpec{methods: getOnly, access: accessOwnerData}, h: s.ownerTenants},
+		{path: "/api/owner/events", spec: routeSpec{methods: getOnly, access: accessOwnerData, fixedTarget: defaultTargetID, tenantQ: []string{"tenant"}}, h: s.ownerEvents},
+		{path: "/api/owner/tenants", spec: routeSpec{methods: getOnly, access: accessOwnerData, fixedTarget: defaultTargetID}, h: s.ownerTenants},
 
 		// ── controls: harness runs ────────────────────────────────────────────────────────
 		// Both launch a subprocess on THIS host and then drive a cluster. The destination hooks
@@ -148,16 +148,16 @@ func (s *Server) apiRoutes() []route {
 		// The red-team state is GLOBAL console state: one artifact set, one decisions file, one
 		// background job. None of it is attributable to a tenant, so the writes take a
 		// cross-tenant grant and run on this host's target.
-		read("/api/redteam/curves", s.redteamCurves, routeSpec{requireTenantWildcard: true}),
-		read("/api/redteam/campaigns", s.redteamCampaigns, routeSpec{requireTenantWildcard: true}),
-		read("/api/redteam/live", s.redteamLive, routeSpec{requireTenantWildcard: true}),
-		read("/api/redteam/findings", s.redteamFindings, routeSpec{requireTenantWildcard: true}),
+		read("/api/redteam/curves", s.redteamCurves, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/redteam/campaigns", s.redteamCampaigns, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/redteam/live", s.redteamLive, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/redteam/findings", s.redteamFindings, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		read("/api/redteam/gates", s.redteamGates, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/redteam/run-status", s.redteamRunStatus, routeSpec{requireTenantWildcard: true}),
+		read("/api/redteam/run-status", s.redteamRunStatus, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		control("/api/redteam/decision", s.redteamDecision, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		control("/api/redteam/run", s.redteamRun, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		control("/api/redteam/continuous", s.redteamContinuous, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/redteam", s.redteamPage, routeSpec{requireTenantWildcard: true}),
+		read("/redteam", s.redteamPage, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 
 		// ── apply-fix write path ──────────────────────────────────────────────────────────
 		// The tenant is resolved from the grant (requestTenant), never from the body, and the

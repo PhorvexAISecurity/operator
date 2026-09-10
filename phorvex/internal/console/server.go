@@ -404,7 +404,7 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 // runEvidence returns the full per-arm + per-trial metric ledger for one run (evidence view).
 // The boundary has already resolved the id to a run inside this identity's scope.
 func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
-	arms, trials, st, ok := s.runs.RunEvidence(r.URL.Query().Get("id"))
+	arms, trials, st, ok := s.runs.RunEvidence(runIDOf(r))
 	if !ok {
 		writeJSON(w, 404, map[string]string{"error": "run not found"})
 		return
@@ -416,24 +416,20 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// runStop stops the run the BOUNDARY resolved and authorized. It deliberately does not read the
+// id again: this handler used to prefer the body id while the boundary preferred the query id, so
+// a request could be authorized for one run and stop another.
 func (s *Server) runStop(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		ID string `json:"id"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.ID == "" {
-		body.ID = r.URL.Query().Get("id")
-	}
-	if err := s.runs.Stop(body.ID); err != nil {
+	id := runIDOf(r)
+	if err := s.runs.Stop(id); err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, map[string]string{"status": "stopping", "id": body.ID})
+	writeJSON(w, 200, map[string]string{"status": "stopping", "id": id})
 }
 
 func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	st, ok := s.runs.Status(id)
+	st, ok := s.runs.Status(runIDOf(r))
 	if !ok {
 		writeJSON(w, 404, map[string]string{"error": "run not found"})
 		return

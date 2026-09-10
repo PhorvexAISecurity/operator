@@ -20,6 +20,7 @@ package console
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -511,6 +512,179 @@ func TestCostAuthorizesTheClusterItActuallyReads(t *testing.T) {
 	}
 }
 
+// A request that names a resource in two places must not be authorized on one and executed on
+// the other. The boundary and the handler resolve the run id ONCE.
+//
+// The launcher serializes runs (maxConcurrentRuns) and rate-limits back-to-back starts, so the
+// two real runs are created in sequence rather than concurrently.
+func TestRunStopResolvesOneIdentifier(t *testing.T) {
+	dir := scratchDir(t)
+	bin := filepath.Join(dir, "local-harness")
+	cfgFile := filepath.Join(dir, allowedConfigs["fpprobe"].File)
+	cfg := Config{Root: dir, HarnessDir: dir, HarnessBin: bin}
+	f := newAuthFixture(t, cfg,
+		operatorGrant("creator", []string{wildcardScope}, []string{defaultTargetID}),
+		operatorGrant("stranger", []string{"tenant-a"}, []string{defaultTargetID}),
+	)
+	start := func(ns string) string {
+		t.Helper()
+		if err := os.WriteFile(cfgFile, []byte("namespace: "+ns+"\ncontext: default\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		w := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/start", `{"config":"fpprobe"}`, "creator"))
+		var b struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &b)
+		if w.Code != http.StatusOK || b.ID == "" {
+			t.Fatalf("start(%s): %d %s", ns, w.Code, w.Body.String())
+		}
+		t.Cleanup(func() { _ = f.srv.runs.Stop(b.ID) })
+		return b.ID
+	}
+	stop := func(query, body, subject string) *httptest.ResponseRecorder {
+		t.Helper()
+		path := "/api/runs/stop"
+		if query != "" {
+			path += "?id=" + query
+		}
+		payload := "{}"
+		if body != "" {
+			payload = `{"id":"` + body + `"}`
+		}
+		return f.do(f.albReqAs(t, http.MethodPost, path, payload, subject))
+	}
+	running := func(id string) bool {
+		t.Helper()
+		st, ok := f.srv.runs.Status(id)
+		return ok && st.State == "running"
+	}
+
+	// A tenant-a run the stranger IS granted. Query-only stop is the first positive control.
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexec sleep 30\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mine := start("tenant-a")
+	// RunManager.Stop is a no-op until the launcher has registered the process, so wait for that
+	// before stopping. (That race is a run-lifecycle limit this fix deliberately does not touch.)
+	waitForRunProcess(t, f.srv.runs, mine, 10*time.Second)
+	if w := stop(mine, "", "stranger"); w.Code != http.StatusOK {
+		t.Fatalf("query-only authorized stop: %d %s", w.Code, w.Body.String())
+	}
+
+	// A tenant-b run the stranger is NOT granted. The launcher serializes runs and rate-limits
+	// back-to-back starts, so wait for the slot to be released rather than guessing at a delay —
+	// otherwise a slow release would fail this test for a reason unrelated to authorization.
+	waitForRunToLeaveRunning(t, f.srv.runs, mine, 10*time.Second)
+	time.Sleep(minStartInterval + 200*time.Millisecond)
+	foreign := start("tenant-b")
+	waitForRunProcess(t, f.srv.runs, foreign, 10*time.Second)
+
+	// The counterexample: authorize the id in the query, act on a different id in the body.
+	if w := stop(mine, foreign, "stranger"); w.Code == http.StatusOK {
+		t.Fatalf("authorized %s in the query but acted on %s in the body: %s", mine, foreign, w.Body.String())
+	}
+	if !running(foreign) {
+		t.Fatal("the foreign run was stopped by a request authorized for a different run")
+	}
+	// Conflicting ids are rejected outright rather than resolved by precedence — even for an
+	// identity granted BOTH runs, because the request has no single meaning.
+	if w := stop(mine, foreign, "creator"); w.Code != http.StatusBadRequest {
+		t.Fatalf("conflicting ids: got %d, want 400\n%s", w.Code, w.Body.String())
+	}
+	if !running(foreign) {
+		t.Fatal("a rejected conflicting-id request still stopped the run")
+	}
+	// The foreign id alone stays hidden from the stranger.
+	if w := stop(foreign, foreign, "stranger"); w.Code != http.StatusNotFound {
+		t.Fatalf("foreign id: got %d, want 404\n%s", w.Code, w.Body.String())
+	}
+	if !running(foreign) {
+		t.Fatal("a 404'd request still stopped the run")
+	}
+	// Body-only stop by an authorized identity is the second positive control.
+	if w := stop("", foreign, "creator"); w.Code != http.StatusOK {
+		t.Fatalf("body-only authorized stop: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// Local readers of the console's own audit, attack ledger and evidence corpus name the source
+// they read, so a grant with no cluster target cannot read them.
+func TestLocalSourceReadsRequireTheSourceTarget(t *testing.T) {
+	rec := decisionRec("tenant-a", "private-pod")
+	cfg := Config{Root: t.TempDir(), AuditPath: writeDecisionAudit(t, rec)}
+
+	ownerNoTarget := ownerGrant("owner", []string{"tenant-a"})
+	ownerNoTarget.Targets = nil
+	noTarget := newAuthFixture(t, cfg, ownerNoTarget,
+		operatorGrant("op", []string{wildcardScope}, []string{}),
+	)
+	granted := newAuthFixture(t, cfg,
+		ownerGrant("owner", []string{"tenant-a"}),
+		operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}),
+	)
+
+	// Owner surfaces read the default decision-audit source.
+	for _, path := range []string{"/api/owner/events?tenant=tenant-a", "/api/owner/tenants"} {
+		w := noTarget.do(noTarget.albReqAs(t, http.MethodGet, path, "", "owner"))
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("%s with no target grant: got %d, want 403\n%s", path, w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "private-pod") {
+			t.Fatalf("%s disclosed audit data in its denial: %s", path, w.Body.String())
+		}
+		// Positive control: the same owner WITH the default target reads its own tenant.
+		if w := granted.do(granted.albReqAs(t, http.MethodGet, path, "", "owner")); w.Code != http.StatusOK {
+			t.Fatalf("%s with the default target: %d %s", path, w.Code, w.Body.String())
+		}
+	}
+
+	// The attack ledger, the audit aggregates and the private corpus read the same local source.
+	local := []string{
+		"/api/attack-results", "/api/attack-monitoring", "/api/cost-timeseries",
+		"/api/effectiveness", "/api/reports", "/api/rawlog", "/api/redteam/findings", "/api/version",
+	}
+	for _, path := range local {
+		if w := noTarget.do(noTarget.albReqAs(t, http.MethodGet, path, "", "op")); w.Code != http.StatusForbidden {
+			t.Errorf("%s with no target grant: got %d, want 403\n%s", path, w.Code, w.Body.String())
+		}
+		if w := granted.do(granted.albReqAs(t, http.MethodGet, path, "", "op")); w.Code == http.StatusForbidden {
+			t.Errorf("%s must stay available with the source's target granted: %s", path, w.Body.String())
+		}
+	}
+
+	// Shared catalogue metadata describes the product, not a source, and stays available.
+	for _, path := range []string{"/api/catalog", "/api/suites", "/api/threat-matrix", "/api/handlers"} {
+		if w := noTarget.do(noTarget.albReqAs(t, http.MethodGet, path, "", "op")); w.Code == http.StatusForbidden {
+			t.Errorf("%s is shared product metadata and must stay available: %s", path, w.Body.String())
+		}
+	}
+}
+
+// Query aliases for one cluster target resolve ONCE. Checking each alias separately made an
+// omitted alias mean "default", so an identity granted only a remote cluster was refused for
+// naming that cluster explicitly.
+func TestTargetAliasesResolveOnce(t *testing.T) {
+	// This grant holds ONE remote cluster and deliberately NOT the default.
+	remoteOnly := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{wildcardScope}, []string{"remote-eks"}))
+	for _, path := range []string{"/api/cost?target=remote-eks", "/api/cost?context=remote-eks"} {
+		if w := remoteOnly.do(remoteOnly.albReqAs(t, http.MethodGet, path, "", "op")); w.Code == http.StatusForbidden {
+			t.Fatalf("%s: a grant for remote-eks must not additionally require the default target: %s", path, w.Body.String())
+		}
+	}
+	// Naming a cluster outside the grant is still refused through either alias.
+	for _, path := range []string{"/api/cost?target=other-eks", "/api/cost?context=other-eks"} {
+		if w := remoteOnly.do(remoteOnly.albReqAs(t, http.MethodGet, path, "", "op")); w.Code != http.StatusForbidden {
+			t.Fatalf("%s: got %d, want 403\n%s", path, w.Code, w.Body.String())
+		}
+	}
+	// And a default-only grant still reaches the default cluster (positive control).
+	defaultOnly := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}))
+	if w := defaultOnly.do(defaultOnly.albReqAs(t, http.MethodGet, "/api/cost", "", "op")); w.Code == http.StatusForbidden {
+		t.Fatalf("default-only grant on the default cluster: %s", w.Body.String())
+	}
+}
+
 // The global red-team controls write shared state that belongs to no tenant.
 func TestGlobalRedteamControlsRequireCrossTenantGrant(t *testing.T) {
 	limited := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"vllm"}, []string{wildcardScope}))
@@ -537,6 +711,37 @@ func scratchDir(t *testing.T) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(d) })
 	return d
+}
+
+// waitForRunProcess blocks until the launcher has registered the run's process, which is when
+// RunManager.Stop can actually signal it.
+func waitForRunProcess(t *testing.T, rm *RunManager, id string, within time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		rm.mu.Lock()
+		cmd := rm.procs[id]
+		rm.mu.Unlock()
+		if cmd != nil && cmd.Process != nil {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("run %s never registered a process within %s", id, within)
+}
+
+// waitForRunToLeaveRunning blocks until the launcher has released the run's concurrency slot.
+func waitForRunToLeaveRunning(t *testing.T, rm *RunManager, id string, within time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		if st, ok := rm.Status(id); ok && st.State != "running" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	st, _ := rm.Status(id)
+	t.Fatalf("run %s did not leave the running state within %s (state=%v)", id, within, st)
 }
 
 func waitForFile(path string, within time.Duration) bool {

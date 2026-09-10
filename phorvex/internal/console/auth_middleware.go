@@ -21,8 +21,10 @@ package console
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -177,11 +179,18 @@ func (s *Server) guard(rt route) http.HandlerFunc {
 				return
 			}
 		}
-		if code, msg, ok := s.checkScope(r, principal, rt.spec); !ok {
+		runID, code, msg, ok := s.checkScope(r, principal, rt.spec)
+		if !ok {
 			writeJSON(w, code, map[string]string{"error": msg})
 			return
 		}
-		rt.h(w, r.WithContext(withPrincipal(r.Context(), principal)))
+		// The handler receives the principal AND the resolved run id, so it acts on exactly what
+		// was authorized rather than re-deriving either.
+		ctx := withPrincipal(r.Context(), principal)
+		if runID != "" {
+			ctx = withRunID(ctx, runID)
+		}
+		rt.h(w, r.WithContext(ctx))
 	}
 }
 
@@ -297,19 +306,20 @@ func readScopedBody(r *http.Request, targetKeys []string) (scopedBody, bool) {
 	return out, true
 }
 
-// checkScope enforces the route's declared tenant/target/run ownership against the grant.
-func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int, string, bool) {
+// checkScope enforces the route's declared tenant/target/run ownership against the grant. It
+// returns the run id it resolved and authorized, so the handler can act on that exact value.
+func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (string, int, string, bool) {
 	q := r.URL.Query()
 
 	if spec.fixedTenant != "" && !p.AllowsTenant(spec.fixedTenant) {
-		return http.StatusForbidden, "namespace " + spec.fixedTenant + " is outside this identity's tenant scope", false
+		return "", http.StatusForbidden, "namespace " + spec.fixedTenant + " is outside this identity's tenant scope", false
 	}
 	if spec.fixedTarget != "" && !p.AllowsTarget(spec.fixedTarget) {
-		return http.StatusForbidden, "this route acts on cluster target " + normalizeTargetID(spec.fixedTarget) + ", which is outside this identity's target scope", false
+		return "", http.StatusForbidden, "this route acts on cluster target " + normalizeTargetID(spec.fixedTarget) + ", which is outside this identity's target scope", false
 	}
 
 	if spec.requireTenantWildcard && !p.TenantWildcard() {
-		return http.StatusForbidden, "this operation is indivisible across tenants and requires a cross-tenant grant; a tenant-limited identity cannot perform it", false
+		return "", http.StatusForbidden, "this operation is indivisible across tenants and requires a cross-tenant grant; a tenant-limited identity cannot perform it", false
 	}
 
 	for i, key := range spec.tenantQ {
@@ -319,20 +329,24 @@ func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int,
 				// An omitted scope parameter widens the request to every tenant. Only a
 				// cross-tenant grant may ask for that; a limited grant must name its tenant.
 				if spec.wildcardWhenUnscoped && i == 0 && !p.TenantWildcard() {
-					return http.StatusForbidden, "omitting " + key + " requests every tenant; name a tenant this identity is granted, or hold a cross-tenant grant", false
+					return "", http.StatusForbidden, "omitting " + key + " requests every tenant; name a tenant this identity is granted, or hold a cross-tenant grant", false
 				}
 				continue
 			}
-			return http.StatusBadRequest, "the " + key + " parameter is required and must name a tenant this identity is granted", false
+			return "", http.StatusBadRequest, "the " + key + " parameter is required and must name a tenant this identity is granted", false
 		}
 		if !p.AllowsTenant(v) {
-			return http.StatusForbidden, "tenant " + v + " is outside this identity's tenant scope", false
+			return "", http.StatusForbidden, "tenant " + v + " is outside this identity's tenant scope", false
 		}
 	}
 
-	for _, key := range spec.targetQ {
-		if !p.AllowsTarget(q.Get(key)) {
-			return http.StatusForbidden, "cluster target " + normalizeTargetID(q.Get(key)) + " is outside this identity's target scope", false
+	// targetQ names ALIASES for one cluster target, not several independent ones. They are
+	// resolved to a single effective value and checked once: checking each key separately made an
+	// omitted alias mean "default", so a caller granted only a remote cluster was refused for
+	// naming it, because the alias it did not use still demanded the default target.
+	if len(spec.targetQ) > 0 {
+		if !p.AllowsTarget(firstNonEmptyQuery(q, spec.targetQ)) {
+			return "", http.StatusForbidden, "cluster target " + normalizeTargetID(firstNonEmptyQuery(q, spec.targetQ)) + " is outside this identity's target scope", false
 		}
 	}
 
@@ -341,20 +355,20 @@ func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int,
 	if needBody {
 		var ok bool
 		if body, ok = readScopedBody(r, spec.targetBody); !ok {
-			return http.StatusBadRequest, "request body is unreadable, too large, or not the JSON object this route requires", false
+			return "", http.StatusBadRequest, "request body is unreadable, too large, or not the JSON object this route requires", false
 		}
 	}
 	if spec.tenantBody {
 		if body.Namespace == "" {
-			return http.StatusBadRequest, "the namespace field is required and must name a tenant this identity is granted", false
+			return "", http.StatusBadRequest, "the namespace field is required and must name a tenant this identity is granted", false
 		}
 		if !p.AllowsTenant(body.Namespace) {
-			return http.StatusForbidden, "namespace " + body.Namespace + " is outside this identity's tenant scope", false
+			return "", http.StatusForbidden, "namespace " + body.Namespace + " is outside this identity's tenant scope", false
 		}
 	}
 	for _, key := range spec.targetBody {
 		if !p.AllowsTarget(body.Target[key]) {
-			return http.StatusForbidden, "cluster target " + normalizeTargetID(body.Target[key]) + " is outside this identity's target scope", false
+			return "", http.StatusForbidden, "cluster target " + normalizeTargetID(body.Target[key]) + " is outside this identity's target scope", false
 		}
 	}
 
@@ -363,39 +377,84 @@ func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int,
 	if spec.destination != nil {
 		dest, err := spec.destination(s, r, body)
 		if err != nil {
-			return http.StatusBadRequest, err.Error(), false
+			return "", http.StatusBadRequest, err.Error(), false
 		}
 		if dest.RequireTenantWildcard && !p.TenantWildcard() {
-			return http.StatusForbidden, "the namespace this request would act on cannot be determined from its configuration; that needs a cross-tenant grant rather than an unscoped launch", false
+			return "", http.StatusForbidden, "the namespace this request would act on cannot be determined from its configuration; that needs a cross-tenant grant rather than an unscoped launch", false
 		}
 		for _, target := range dest.Targets {
 			if !p.AllowsTarget(target) {
-				return http.StatusForbidden, "this request would act on cluster target " + normalizeTargetID(target) + ", which is outside this identity's target scope", false
+				return "", http.StatusForbidden, "this request would act on cluster target " + normalizeTargetID(target) + ", which is outside this identity's target scope", false
 			}
 		}
 		for _, tenant := range dest.Tenants {
 			if !p.AllowsTenant(tenant) {
-				return http.StatusForbidden, "this request would act on namespace " + tenant + ", which is outside this identity's tenant scope", false
+				return "", http.StatusForbidden, "this request would act on namespace " + tenant + ", which is outside this identity's tenant scope", false
 			}
 		}
 	}
 
 	if spec.runQ != "" || spec.runBody {
-		id := ""
-		if spec.runQ != "" {
-			id = strings.TrimSpace(q.Get(spec.runQ))
-		}
-		if id == "" && spec.runBody {
-			id = body.ID
-		}
-		if id == "" {
-			return http.StatusBadRequest, "a run id is required", false
+		id, err := resolveRunID(r, spec, body)
+		if err != nil {
+			return "", http.StatusBadRequest, err.Error(), false
 		}
 		if code, msg, ok := s.runInScope(p, id); !ok {
-			return code, msg, false
+			return "", code, msg, false
+		}
+		// The handler reads this resolved id rather than re-deriving one. Authorizing the id in
+		// the query and then acting on a different id in the body is how a caller stopped a run
+		// it had been refused: one resolution, used by both.
+		return id, 0, "", true
+	}
+	return "", 0, "", true
+}
+
+// resolveRunID produces the ONE run id a request refers to. A query id and a body id that
+// disagree are rejected outright rather than resolved by precedence: a request that names two
+// different resources has no single meaning, and picking one is exactly the gap that let
+// authorization and execution diverge.
+func resolveRunID(r *http.Request, spec routeSpec, body scopedBody) (string, error) {
+	var fromQuery, fromBody string
+	if spec.runQ != "" {
+		fromQuery = strings.TrimSpace(r.URL.Query().Get(spec.runQ))
+	}
+	if spec.runBody {
+		fromBody = strings.TrimSpace(body.ID)
+	}
+	if fromQuery != "" && fromBody != "" && fromQuery != fromBody {
+		return "", fmt.Errorf("conflicting run ids: the query names %q and the body names %q; send one", fromQuery, fromBody)
+	}
+	if fromQuery != "" {
+		return fromQuery, nil
+	}
+	if fromBody != "" {
+		return fromBody, nil
+	}
+	return "", fmt.Errorf("a run id is required")
+}
+
+type runIDCtxKey struct{}
+
+func withRunID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, runIDCtxKey{}, id)
+}
+
+// runIDOf returns the run id the auth boundary resolved and authorized for this request. A
+// handler must never re-derive one: the value it acts on has to be the value that was checked.
+func runIDOf(r *http.Request) string {
+	id, _ := r.Context().Value(runIDCtxKey{}).(string)
+	return id
+}
+
+// firstNonEmptyQuery resolves a set of query aliases to their single effective value.
+func firstNonEmptyQuery(q url.Values, keys []string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(q.Get(key)); v != "" {
+			return v
 		}
 	}
-	return 0, "", true
+	return ""
 }
 
 // runInScope resolves a run id to the destination it actually drives and decides whether this
