@@ -425,7 +425,14 @@ def _ground(doc):
             window = g.get("observationWindow") or {}
             # The effect and its cause are shown as two separate lines because they are two
             # separate claims: an observed replacement is not a defended attack.
-            attribution = (f'<p class="lbl" style="margin-top:6px">Attribution: '
+            # Three separate lines because they are three separate claims: what kind of
+            # evidence, whether the effect was measured, and whether we caused it.
+            level = g.get("evidenceLevel", "unrecorded")
+            observed = ("measured effect" if g.get("effectObserved")
+                        else "configuration only — enforcement not measured")
+            attribution = (f'<p class="lbl" style="margin-top:6px">Evidence: {esc(level)}'
+                           f' · {esc(observed)}</p>'
+                           f'<p class="lbl">Attribution: '
                            f'{esc(g.get("attribution", "unavailable"))}'
                            + (f' — {esc(g["attributionDetail"])}' if g.get("attributionDetail") else "")
                            + "</p>")

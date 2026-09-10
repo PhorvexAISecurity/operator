@@ -253,10 +253,15 @@ def _main():
         out.append("<details><summary>Cluster ground truth (" + str(len(gt)) +
                    ") — verified with kubectl, not with what Phorvex reported</summary>")
         out.append("")
-        out.append("| verdict | attribution | action | pod | detail |")
-        out.append("|:--|:--|:--|:--|:--|")
+        out.append("| verdict | evidence | attribution | action | pod | detail |")
+        out.append("|:--|:--|:--|:--|:--|:--|")
         for g in gt:
-            out.append(f"| {g['verdict']} | {g.get('attribution', 'unavailable')} "
+            # `evidence` is the column that keeps a configured NetworkPolicy from reading
+            # as measured isolation.
+            level = g.get('evidenceLevel', 'unrecorded')
+            if g.get('evidenceLevel') and not g.get('effectObserved'):
+                level += ' (not measured)'
+            out.append(f"| {g['verdict']} | {level} | {g.get('attribution', 'unavailable')} "
                        f"| `{g['action']}` | `{g.get('namespace', '?')}/{g['pod']}` "
                        f"| {g['detail']} |")
         out.append("")

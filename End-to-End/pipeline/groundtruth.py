@@ -37,6 +37,18 @@ VERIFIABLE = {
 
 CONFIRMED, CONTRADICTED, UNVERIFIABLE = "confirmed", "contradicted", "unverifiable"
 
+# What KIND of evidence a verdict rests on. "Confirmed" is not one thing: an observed Pod
+# replacement and a NetworkPolicy that merely selects the pod are different claims, and
+# collapsing them is how configuration gets read as enforced effect.
+OBJECT_IDENTITY = "object-identity"        # observed cluster state: UIDs, readiness, owners
+WORKLOAD_LOG = "workload-log"              # the attacked service reported doing it itself
+CONFIGURATION = "configuration"            # a resource is configured to have the effect
+OBSERVED_ENFORCEMENT = "observed-enforcement"   # measured effect; nothing here produces it
+NOT_OBSERVED = "not-observed"
+
+# Levels that describe an effect this suite actually saw happen.
+OBSERVED_LEVELS = (OBJECT_IDENTITY, WORKLOAD_LOG, OBSERVED_ENFORCEMENT)
+
 # What we can say about cause. `correlated` requires a forensic identity shared by the
 # injected event and the decision record; `unsupported` means the deployed audit schema
 # has no such field at all, which is a coverage gap rather than a negative result.
@@ -50,15 +62,20 @@ def _iso(epoch):
 class Verdict:
     """One ground-truth result, assembled so no field can be forgotten."""
 
-    def __init__(self, record, namespace, started_at):
+    def __init__(self, record, namespace, started_at, decided_at=None):
         self.action = record.get("action")
         self.namespace = namespace
         self.pod = record.get("pod")
         self.started_at = started_at
+        # This decision's own recorded time. The run's injection time bounds the run; it
+        # does not bound an individual action taken two minutes into it.
+        self.decided_at = decided_at
 
     def build(self, verdict, detail, evidence="", read=None, attribution=None,
-              attribution_detail="", identity=None):
+              attribution_detail="", identity=None, evidence_level=None):
         observed_at = read.observed_at if read is not None else None
+        if evidence_level is None:
+            evidence_level = OBJECT_IDENTITY if verdict == CONFIRMED else NOT_OBSERVED
         return {
             "action": self.action,
             "namespace": self.namespace,
@@ -70,13 +87,17 @@ class Verdict:
                 self.action, "no independent verification is defined for this action"),
             "attribution": attribution or ATTR_UNAVAILABLE,
             "attributionDetail": attribution_detail,
+            # Structured, so a consumer cannot lose the distinction in prose.
+            "evidenceLevel": evidence_level,
+            "effectObserved": evidence_level in OBSERVED_LEVELS,
             "targetIdentity": identity or {},
             "observation": read.to_json() if read is not None else None,
             "observationWindow": {
                 "actionStartedAt": _iso(self.started_at),
+                "decisionRecordedAt": _iso(self.decided_at),
                 "observedAt": _iso(observed_at),
-                "intervalSec": (None if (observed_at is None or self.started_at is None)
-                                else round(observed_at - self.started_at, 3)),
+                "intervalSec": (None if (observed_at is None or self.decided_at is None)
+                                else round(observed_at - self.decided_at, 3)),
             },
         }
 
@@ -116,15 +137,23 @@ def verify(cluster, actuated_records, baseline, namespace=None, action_started_a
     # Every Pod UID the namespace held before the action. Not just the target's.
     known_uids = {identity.get("uid") for identity in (baseline or {}).values()
                   if isinstance(identity, dict) and identity.get("uid")}
+    by_uid = {identity["uid"]: identity for identity in (baseline or {}).values()
+              if isinstance(identity, dict) and identity.get("uid")}
+    # A name-keyed baseline is ONE pre-action snapshot. It can answer for at most the first
+    # decision against that name in the window; after that the name may denote an instance
+    # the snapshot never saw.
+    name_used = set()
     out = []
     for r in actuated_records:
         ns, pod, action = r.get("namespace"), r.get("pod"), r.get("action")
-        v = Verdict(r, ns, action_started_at)
+        decided_at = parse_k8s_time(r.get("time"))
+        v = Verdict(r, ns, action_started_at, decided_at)
         attribution, attribution_detail = attribution_of(r)
 
-        def finish(verdict, detail, evidence="", read=None, identity=None):
+        def finish(verdict, detail, evidence="", read=None, identity=None,
+                   evidence_level=None):
             return v.build(verdict, detail, evidence, read, attribution,
-                           attribution_detail, identity)
+                           attribution_detail, identity, evidence_level)
 
         if not ns or not pod:
             out.append(finish(UNVERIFIABLE, "the record carries no namespace or pod"))
@@ -136,17 +165,31 @@ def verify(cluster, actuated_records, baseline, namespace=None, action_started_a
                 f"covers {namespace} only"))
             continue
 
-        before = (baseline or {}).get(pod) or {}
+        before, problem = _decision_target(r, pod, baseline, by_uid, name_used)
+        if problem:
+            out.append(finish(UNVERIFIABLE, problem))
+            continue
+        name_used.add(pod)
         identity = {k: before.get(k) for k in ("uid", "ownerUID", "ownerKind", "namespace")}
+        identity["resolvedFrom"] = before.get("_resolvedFrom")
+
+        # Every effect claim is about an interval that starts when THIS decision was
+        # recorded. A record with no usable time cannot be placed on that axis at all.
+        if decided_at is None and action in ("rotate", "kv-reset", "adapter-rotate"):
+            out.append(finish(
+                UNVERIFIABLE,
+                "this decision carries no usable time, so no observation interval can be "
+                "established for it", identity=identity))
+            continue
 
         if action == "rotate":
             out.append(_rotate(cluster, ns, pod, before, identity, finish, known_uids,
-                               action_started_at, clock_skew_sec))
+                               decided_at, clock_skew_sec))
         elif action == "quarantine":
             out.append(_quarantine(cluster, ns, pod, before, identity, finish))
         elif action in ("kv-reset", "adapter-rotate"):
             out.append(_service_log(cluster, ns, pod, action, before, identity,
-                                    action_started_at, log_patterns, finish))
+                                    decided_at - clock_skew_sec, log_patterns, finish))
         else:
             out.append(finish(
                 UNVERIFIABLE,
@@ -155,7 +198,41 @@ def verify(cluster, actuated_records, baseline, namespace=None, action_started_a
     return out
 
 
-def _rotate(cluster, ns, pod, before, identity, finish, known_uids, started_at,
+def _decision_target(record, pod, baseline, by_uid, name_used):
+    """The pre-action identity of the instance THIS decision was about.
+
+    `decisionTrace.assetUID` names the exact Pod instance the engine decided on
+    (model/decision_trace.go:354). Using it is the difference between verifying the
+    decision in hand and verifying whichever pod happened to carry that name when the
+    suite started — which, after one rotation, is a different object.
+    """
+    trace = record.get("decisionTrace")
+    asset_uid = trace.get("assetUID") if isinstance(trace, dict) else None
+    if isinstance(asset_uid, str) and asset_uid:
+        identity = by_uid.get(asset_uid)
+        if identity is None:
+            return {}, (
+                f"this decision targets Pod UID {asset_uid[:8]}, which the pre-action "
+                f"snapshot does not contain; another instance's identity is not a "
+                f"substitute for it")
+        named = trace.get("assetName")
+        if named and named != pod:
+            return {}, (f"the record names pod {pod!r} but its decision trace targets "
+                        f"{named!r}; the two disagree about what was acted on")
+        return dict(identity, _resolvedFrom="decisionTrace.assetUID"), None
+
+    identity = (baseline or {}).get(pod)
+    if not identity:
+        return {}, "no pre-action identity was captured for this pod"
+    if pod in name_used:
+        # Two decisions, one snapshot, no way to tell the instances apart.
+        return {}, ("the single pre-action identity for this pod name was already used by an "
+                    "earlier decision in this window, and this record carries no "
+                    "decisionTrace.assetUID to distinguish the instances")
+    return dict(identity, _resolvedFrom="pod name (no decisionTrace.assetUID in the record)"), None
+
+
+def _rotate(cluster, ns, pod, before, identity, finish, known_uids, decided_at,
             clock_skew_sec):
     """A rotation is a replacement, and a replacement has to be seen — not inferred.
 
@@ -217,12 +294,15 @@ def _rotate(cluster, ns, pod, before, identity, finish, known_uids, started_at,
                       f"({', '.join(sorted(p['name'] for p in survivors)) or 'none'})",
                       read, identity)
 
-    if started_at is None:
+    if decided_at is None:
         return finish(UNVERIFIABLE,
-                      "no action start time was recorded, so a new pod cannot be placed "
+                      "no action time was recorded, so a new pod cannot be placed "
                       "inside the observation window", detail_uid, read, identity)
 
-    window_start = started_at - clock_skew_sec
+    # The replacement has to postdate THIS decision, not the start of the run. The audit
+    # record is written around the dispatch, so its own time is the best lower bound we
+    # have; the skew tolerance is the only slack, and no dispatch timestamp is invented.
+    window_start = decided_at - clock_skew_sec
     timed, undated = [], []
     for p in candidates:
         created = parse_k8s_time(p.get("creationTimestamp"))
@@ -241,9 +321,9 @@ def _rotate(cluster, ns, pod, before, identity, finish, known_uids, started_at,
                       + ", ".join(sorted(p["name"] for p in undated)), read, identity)
     if not timed:
         return finish(UNVERIFIABLE,
-                      "the only new pods under this controller were created before the action "
-                      "started, so none of them is its replacement",
-                      f"{detail_uid}; creation times "
+                      "the only new pods under this controller were created before this "
+                      "decision was recorded, so none of them is its replacement",
+                      f"{detail_uid}; decision recorded {_iso(decided_at)}; creation times "
                       + ", ".join(f"{p['name']}={p.get('creationTimestamp')}" for p in candidates),
                       read, identity)
     if not ready:
@@ -295,10 +375,14 @@ def _quarantine(cluster, ns, pod, before, identity, finish):
                       f"{len(state['additiveAllowPolicies'])} other policies additively allow "
                       "its traffic — isolation is not established",
                       evidence, read, identity)
+    # The strongest true statement: the configuration that would isolate the pod is in
+    # place and selects this exact instance. Whether packets actually stop is not measured
+    # here, and `evidenceLevel` carries that to every consumer so the prose cannot be the
+    # only thing standing between configuration and enforced effect.
     return finish(CONFIRMED,
                   "a deny-all NetworkPolicy selects this exact Pod UID — configuration "
                   "evidence only; packet-level blocking and CNI enforcement are not probed",
-                  evidence, read, identity)
+                  evidence, read, identity, evidence_level=CONFIGURATION)
 
 
 def _service_log(cluster, ns, pod, action, before, identity, started_at, patterns, finish):
@@ -342,4 +426,5 @@ def _service_log(cluster, ns, pod, action, before, identity, started_at, pattern
     return finish(CONFIRMED,
                   "the service itself recorded a matching command in its own log inside the "
                   "observation window",
-                  f"{matches[-1][:160]} [{where}]", read, identity)
+                  f"{matches[-1][:160]} [{where}]", read, identity,
+                  evidence_level=WORKLOAD_LOG)

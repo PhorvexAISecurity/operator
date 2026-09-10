@@ -215,9 +215,11 @@ class GroundTruthRollupTests(unittest.TestCase):
     """A03 called a half-observed set of claims a pass."""
 
     @staticmethod
-    def gt(verdict, attribution="unsupported", action="rotate", pod="voice-a"):
+    def gt(verdict, attribution="unsupported", action="rotate", pod="voice-a",
+           level="object-identity", observed=True):
         return {"verdict": verdict, "action": action, "namespace": "voice", "pod": pod,
-                "detail": "fixture", "attribution": attribution}
+                "detail": "fixture", "attribution": attribution,
+                "evidenceLevel": level, "effectObserved": observed}
 
     def test_a_mix_of_confirmed_and_unverifiable_is_not_a_pass(self):
         got = checks.a03(ctx(ground_truth=[self.gt("confirmed"),
@@ -236,6 +238,14 @@ class GroundTruthRollupTests(unittest.TestCase):
     def test_all_confirmed_and_correlated_is_full_coverage(self):
         got = checks.a03(ctx(ground_truth=[self.gt("confirmed", attribution="correlated")]))
         self.assertEqual((got["status"], got["coverage"]), ("pass", "full"))
+
+    def test_a_configuration_only_confirmation_is_never_reported_as_measured(self):
+        got = checks.a03(ctx(ground_truth=[
+            self.gt("confirmed", attribution="correlated", action="quarantine",
+                    level="configuration", observed=False)]))
+        self.assertEqual((got["status"], got["coverage"]), ("pass", "partial"))
+        self.assertIn("not on measured enforcement", got["summary"])
+        self.assertIn("configuration", got["evidence"][0])
 
     def test_a_contradiction_still_fails(self):
         got = checks.a03(ctx(ground_truth=[self.gt("confirmed"), self.gt("contradicted")]))

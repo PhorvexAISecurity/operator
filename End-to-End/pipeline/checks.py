@@ -840,6 +840,7 @@ def a03(ctx):
     unknown = [g for g in ctx.ground_truth if g["verdict"] == "unverifiable"]
     confirmed = [g for g in ctx.ground_truth if g["verdict"] == "confirmed"]
     ev = [f"{g['action']} on {g['namespace']}/{g['pod']}: {g['verdict']} — {g['detail']}"
+          + f" [evidence: {g.get('evidenceLevel', 'unrecorded')}]"
           + (f" [attribution: {g.get('attribution')}]" if g.get("attribution") else "")
           for g in ctx.ground_truth]
     if fails:
@@ -850,11 +851,20 @@ def a03(ctx):
     if unknown:
         return result(WARN, f"{len(confirmed)} of {len(ctx.ground_truth)} claims confirmed; "
                             f"{len(unknown)} could not be observed", ev, coverage=PARTIAL)
+    # A claim resting on configuration is not a measured effect. Saying "independently
+    # confirmed" without that qualifier is how a deny-all policy becomes blocked traffic.
+    configured = [g for g in confirmed if not g.get("effectObserved", True)]
     attributed = sum(1 for g in confirmed if g.get("attribution") == "correlated")
+    notes = []
+    if configured:
+        notes.append(f"{len(configured)} rest on configuration that was observed to be in "
+                     f"place, not on measured enforcement")
+    if attributed < len(confirmed):
+        notes.append(f"{len(confirmed) - attributed} observed effects could not be "
+                     f"attributed to the injected action")
     return result(PASS, f"all {len(confirmed)} claims independently confirmed"
-                  + (f"; {len(confirmed) - attributed} observed effects could not be attributed "
-                     f"to the injected action" if attributed < len(confirmed) else ""),
-                  ev, coverage=PARTIAL if attributed < len(confirmed) else FULL)
+                  + ("; " + "; ".join(notes) if notes else ""),
+                  ev, coverage=PARTIAL if notes else FULL)
 
 
 @check("A04", "actuator", "nothing was actuated under dryRun",

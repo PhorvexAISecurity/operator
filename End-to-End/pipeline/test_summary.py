@@ -154,14 +154,22 @@ class HonestHeadlineTests(unittest.TestCase):
         self.assertIn("Causal attribution unavailable", got.stdout)
         self.assertIn("not as a defended attack", got.stdout)
 
-    def test_ground_truth_attribution_is_a_column_of_its_own(self):
+    def test_ground_truth_evidence_and_attribution_are_columns_of_their_own(self):
         doc = dict(self.base(), verdict="WARN")
-        doc["groundTruth"] = [{"verdict": "confirmed", "action": "rotate", "namespace": "voice",
-                               "pod": "voice-a", "detail": "successor is Ready",
-                               "attribution": "unsupported"}]
+        doc["groundTruth"] = [
+            {"verdict": "confirmed", "action": "rotate", "namespace": "voice",
+             "pod": "voice-a", "detail": "successor is Ready",
+             "evidenceLevel": "object-identity", "effectObserved": True,
+             "attribution": "unsupported"},
+            {"verdict": "confirmed", "action": "quarantine", "namespace": "voice",
+             "pod": "voice-b", "detail": "a deny-all policy selects the pod",
+             "evidenceLevel": "configuration", "effectObserved": False,
+             "attribution": "unsupported"}]
         got = self.render(doc)
-        self.assertIn("| verdict | attribution |", got.stdout)
-        self.assertIn("| confirmed | unsupported |", got.stdout)
+        self.assertIn("| verdict | evidence | attribution |", got.stdout)
+        self.assertIn("| confirmed | object-identity | unsupported |", got.stdout)
+        # The one that matters: a configured policy must not read as measured isolation.
+        self.assertIn("| confirmed | configuration (not measured) | unsupported |", got.stdout)
 
     def test_a_skipped_check_shows_whether_it_was_unobservable_or_irrelevant(self):
         doc = dict(self.base(), verdict="WARN")

@@ -261,11 +261,16 @@ does when one of them is absent.
 `groundtruth.py` reads no Phorvex field at all. It answers two separate questions and never
 lets one stand in for the other:
 
-**Did the claimed effect happen?**
+**Did the claimed effect happen?** Each verdict is about the Pod instance *that decision*
+was made on — `decisionTrace.assetUID`, not whatever carries the pod's name now. After one
+rotation the name denotes a different object, so a decision whose target the pre-action
+snapshot never held is `unverifiable` rather than checked against another instance. The
+observation interval starts at the decision's own recorded `time`, not the run's: a
+successor created before a decision cannot be its replacement, however early the run began.
 
 | action | what confirms it |
 |--------|------------------|
-| `rotate` | the original Pod UID is gone **and** a Ready successor under the same controller UID is observed. Mere disappearance is not replacement — a deleted Deployment looks identical |
+| `rotate` | the original Pod UID is gone **and** a Ready pod under the same controller UID, absent from the baseline and created after this decision, is observed. Mere disappearance is not replacement — a deleted Deployment looks identical — and a surviving replica of a two-replica Deployment is not a successor |
 | `quarantine` | a deny-all NetworkPolicy selects that exact Pod UID (matchExpressions included) and no other policy in the namespace additively allows its traffic. This is *configuration* evidence: nothing here probes a packet, and whether the CNI enforces policy at all is outside what kubectl can answer |
 | `kv-reset` | vLLM logged a reviewed, command-specific line, in this Pod instance's own log, after the action started |
 | `adapter-rotate` | the same, once a reviewed pattern is configured. `lora` alone is not one — it appears in the startup banner |
@@ -273,6 +278,20 @@ lets one stand in for the other:
 
 A read that failed is `unverifiable`, never `confirmed`. A Forbidden pod list is not an
 absent pod, and one namespace's baseline says nothing about another's.
+
+Each verdict also carries `evidenceLevel` and `effectObserved`, because "confirmed" is not
+one thing:
+
+| Level | Means |
+|:--|:--|
+| `object-identity` | observed cluster state — UIDs, readiness, ownership. A measured effect |
+| `workload-log` | the attacked service reported doing it in its own log. A measured effect |
+| `configuration` | a resource is configured to have the effect. **Not** measured — this is what a quarantine gets |
+| `observed-enforcement` | a measured enforcement effect. Nothing in this suite produces it |
+
+It is a field rather than prose so that A03, the dashboard and the PR comment all have to
+carry it. A quarantine is `confirmed` at `configuration`, and A03 reports it as resting on
+configuration that was observed to be in place — not as measured isolation.
 
 **Was it caused by what we injected?** Separately, as `attribution`. Binding a decision to
 our signal needs the identity of the SecurityEvent that *caused* it, plus the target Pod's

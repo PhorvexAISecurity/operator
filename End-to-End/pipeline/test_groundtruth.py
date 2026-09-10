@@ -14,8 +14,9 @@ POD = "voice-a"
 # 2025-09-04T15:33:20Z. BEFORE/AFTER straddle it, so a successor's creationTimestamp
 # decides whether it can be the replacement.
 STARTED = 1_757_000_000
-BEFORE = "2025-09-04T15:00:00Z"
-AFTER = "2025-09-04T15:34:00Z"
+DECIDED = "2025-09-04T15:33:30Z"      # the decision's own recorded time, 10s into the run
+BEFORE = "2025-09-04T15:00:00Z"       # predates the decision
+AFTER = "2025-09-04T15:34:00Z"        # postdates it
 
 
 def baseline(uid="original-uid", owner="rs-voice-1"):
@@ -24,12 +25,19 @@ def baseline(uid="original-uid", owner="rs-voice-1"):
 
 
 def run(cluster_kwargs, action="rotate", base=None, namespace=NS, patterns=None,
-        started=STARTED, attribution_of=None):
+        started=STARTED, attribution_of=None, decided=DECIDED, trace=None, records=None):
     cluster = Cluster(F.FakeKubectl(**cluster_kwargs))
-    records = [{"namespace": namespace, "pod": POD, "action": action, "actuated": True}]
-    return verify(cluster, records, baseline() if base is None else base,
-                  namespace=NS, action_started_at=started,
-                  log_patterns=patterns, attribution_of=attribution_of)[0]
+    if records is None:
+        record = {"namespace": namespace, "pod": POD, "action": action, "actuated": True}
+        if decided is not None:
+            record["time"] = decided
+        if trace is not None:
+            record["decisionTrace"] = trace
+        records = [record]
+    got = verify(cluster, records, baseline() if base is None else base,
+                 namespace=NS, action_started_at=started,
+                 log_patterns=patterns, attribution_of=attribution_of)
+    return got[0] if len(got) == 1 else got
 
 
 class RotationTests(unittest.TestCase):
@@ -73,7 +81,7 @@ class RotationTests(unittest.TestCase):
         got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
                                   creation=BEFORE)]})
         self.assertEqual(got["verdict"], "unverifiable")
-        self.assertIn("created before the action started", got["detail"])
+        self.assertIn("created before this decision was recorded", got["detail"])
 
     def test_a_successor_with_no_usable_creation_time_cannot_be_placed(self):
         got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
@@ -81,11 +89,63 @@ class RotationTests(unittest.TestCase):
         self.assertEqual(got["verdict"], "unverifiable")
         self.assertIn("no usable creation time", got["detail"])
 
-    def test_without_an_action_start_time_a_successor_cannot_be_placed(self):
+    def test_a_decision_with_no_usable_time_cannot_be_placed_on_the_interval(self):
         got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
-                                  creation=AFTER)]}, started=None)
+                                  creation=AFTER)]}, decided=None)
         self.assertEqual(got["verdict"], "unverifiable")
-        self.assertIn("cannot be placed inside the observation window", got["detail"])
+        self.assertIn("no usable time", got["detail"])
+
+    def test_a_successor_predating_this_decision_does_not_confirm_it(self):
+        """The run started at 15:33:20, but THIS decision was recorded at 15:35."""
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation="2025-09-04T15:34:00Z")]},
+                  decided="2025-09-04T15:35:00Z")
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("created before this decision was recorded", got["detail"])
+
+
+class PerDecisionIdentityTests(unittest.TestCase):
+    """Each decision is about one Pod instance, and the record says which."""
+
+    def trace(self, uid, name=POD):
+        return {"assetUID": uid, "assetName": name, "assetNamespace": NS}
+
+    def test_the_decision_trace_asset_uid_selects_the_target(self):
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=AFTER)]}, trace=self.trace("original-uid"))
+        self.assertEqual(got["verdict"], "confirmed")
+        self.assertEqual(got["targetIdentity"]["resolvedFrom"], "decisionTrace.assetUID")
+
+    def test_a_target_the_baseline_never_saw_is_never_verified_against_another(self):
+        """A second rotation targets the replacement, which the snapshot never held."""
+        got = run({"pods": [F.pod(POD, uid="replacement", owner_uid="rs-voice-1",
+                                  creation=AFTER)]}, trace=self.trace("replacement"))
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("the pre-action snapshot does not contain", got["detail"])
+
+    def test_a_still_present_target_is_contradicted_not_confirmed(self):
+        got = run({"pods": [F.pod(POD, uid="original-uid", owner_uid="rs-voice-1"),
+                            F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=AFTER)]}, trace=self.trace("original-uid"))
+        self.assertEqual(got["verdict"], "contradicted")
+
+    def test_a_trace_naming_a_different_pod_than_the_record_is_a_disagreement(self):
+        got = run({"pods": []}, trace=self.trace("original-uid", name="somebody-else"))
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("disagree about what was acted on", got["detail"])
+
+    def test_one_name_snapshot_answers_for_at_most_one_decision(self):
+        # Without decisionTrace.assetUID there is no way to tell the instances apart, so
+        # the second decision against the same name has no captured identity.
+        record = {"namespace": NS, "pod": POD, "action": "rotate", "actuated": True,
+                  "time": DECIDED}
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=AFTER)]},
+                  records=[dict(record), dict(record)])
+        self.assertEqual(got[0]["verdict"], "confirmed")
+        self.assertEqual(got[1]["verdict"], "unverifiable")
+        self.assertIn("already used by an earlier decision", got[1]["detail"])
+        self.assertIn("pod name", got[0]["targetIdentity"]["resolvedFrom"])
 
     def test_a_successor_owned_by_a_different_controller_is_not_our_replacement(self):
         got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="some-other-rs",
@@ -144,6 +204,22 @@ class QuarantineTests(unittest.TestCase):
         self.assertEqual(got["verdict"], "confirmed")
         self.assertIn("configuration evidence only", got["detail"])
         self.assertIn("not probed", got["detail"])
+        # Structured, not just prose: a consumer reading fields cannot lose the distinction.
+        self.assertEqual(got["evidenceLevel"], "configuration")
+        self.assertIs(got["effectObserved"], False)
+
+    def test_an_observed_replacement_is_marked_as_a_measured_effect(self):
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=AFTER)]})
+        self.assertEqual(got["evidenceLevel"], "object-identity")
+        self.assertIs(got["effectObserved"], True)
+
+    def test_a_workload_log_confirmation_is_marked_as_a_measured_effect(self):
+        got = run({"pods": [F.pod(POD, uid="original-uid")],
+                   "logs": {POD: "vLLM reset_prefix_cache done\n"}},
+                  action="kv-reset", patterns={"kv-reset": "reset_prefix_cache"})
+        self.assertEqual(got["evidenceLevel"], "workload-log")
+        self.assertIs(got["effectObserved"], True)
 
     def test_a_missing_policy_contradicts_the_claim(self):
         pod, _ = F.quarantined(POD, uid="original-uid")
@@ -205,12 +281,25 @@ class ServiceLogTests(unittest.TestCase):
         self.assertEqual(got["verdict"], "unverifiable")
         self.assertIn("no longer the observed instance", got["evidence"])
 
-    def test_without_an_action_start_time_no_log_evidence_is_bounded(self):
+    def test_without_a_decision_time_no_log_evidence_is_bounded(self):
+        # The log window comes from THIS decision's own time, not the run's start: two
+        # kv-resets minutes apart must not share one window.
         got = run({"pods": [F.pod(POD, uid="original-uid")],
                    "logs": {POD: "reset_prefix_cache\n"}},
-                  action="kv-reset", patterns=self.patterns, started=None)
+                  action="kv-reset", patterns=self.patterns, decided=None)
         self.assertEqual(got["verdict"], "unverifiable")
-        self.assertIn("cannot be bounded", got["detail"])
+        self.assertIn("no usable time", got["detail"])
+
+    def test_the_log_window_starts_at_this_decision_not_the_run(self):
+        transport = F.FakeKubectl(pods=[F.pod(POD, uid="original-uid")],
+                                  logs={POD: "reset_prefix_cache\n"})
+        verify(Cluster(transport),
+               [{"namespace": NS, "pod": POD, "action": "kv-reset", "actuated": True,
+                 "time": "2025-09-04T15:40:00Z"}],
+               baseline(), namespace=NS, action_started_at=STARTED,
+               log_patterns=self.patterns)
+        self.assertTrue(any("--since-time=2025-09-04T15:39:58Z" in c
+                            for c in transport.commands), transport.commands)
 
 
 class AttributionTests(unittest.TestCase):
