@@ -1,0 +1,224 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 7
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+  deploy: user:2026-09-10 fix confirmed disabled-auto-sync deployment
+checks:
+  decision:
+    result: PASS
+    by: deploy-lead
+    artifact: 03-decision.md
+    sha256: 9aad668c2125f417fa348545ce809e558477cf222f70cf6b0305943e248b4308
+    source_sha: 1014a028c796d98f38cf91e61a274ea6f8c5ecf5
+    at: '2026-09-10T08:14:54+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  red:
+    result: PASS
+    by: deploy-lead
+    artifact: evidence/red.txt
+    sha256: 2762c2fd9733cd367fc248cf2e204a0e245e7982db28f8756652592cf018dfa6
+    source_sha: 1014a028c796d98f38cf91e61a274ea6f8c5ecf5
+    at: '2026-09-10T08:21:23+00:00'
+  preflight:
+    result: PASS
+    by: deploy-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 7032aa969c68e9e4491bf05ed7cc1c2960cb44fc8be75d19fc80da258973b946
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:29:37+00:00'
+  implementation:
+    result: PASS
+    by: deploy-worker
+    artifact: 04-diff.patch
+    sha256: 7d4af10b00861d98112fad6129265d11b5c166b2158f75de41ee6c4bf88d224c
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:29:37+00:00'
+  l0:
+    result: PASS
+    by: deploy-worker
+    artifact: evidence/worker-validation.txt
+    sha256: d87c080d2c62af424c9e1a1b7bc1b98bff2276f4bb3c03700aff78511146c413
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:29:37+00:00'
+  l1:
+    result: PASS
+    by: deploy-worker
+    artifact: evidence/worker-validation.txt
+    sha256: d87c080d2c62af424c9e1a1b7bc1b98bff2276f4bb3c03700aff78511146c413
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:29:37+00:00'
+  l2:
+    result: PASS
+    by: deploy-worker
+    artifact: evidence/worker-validation.txt
+    sha256: d87c080d2c62af424c9e1a1b7bc1b98bff2276f4bb3c03700aff78511146c413
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:29:37+00:00'
+  positive_control:
+    result: PASS
+    by: deploy-worker
+    artifact: evidence/worker-validation.txt
+    sha256: d87c080d2c62af424c9e1a1b7bc1b98bff2276f4bb3c03700aff78511146c413
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:29:37+00:00'
+  incident:
+    result: PASS
+    by: deploy-lead
+    artifact: evidence/incident.md
+    sha256: d34324885a69edd907411dd0cbf76eb3b36fc52443ac077b6ee92266ccec65f5
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:33:09+00:00'
+    baseline_sha: 1014a028c796d98f38cf91e61a274ea6f8c5ecf5
+  p3:
+    result: PASS
+    by: deploy-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 46a556b88c62bf86172abb5bf41ed01f9084847013201e20a0b969f2cdd554d8
+    source_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+    at: '2026-09-10T08:33:09+00:00'
+    incident_sha256: d34324885a69edd907411dd0cbf76eb3b36fc52443ac077b6ee92266ccec65f5
+fix_id: DEPLOY-AUTOSYNC
+issues: []
+title: Restore ArgoCD deployment automation and fail fast on disabled sync
+profile: standard
+state: PR_READY
+roles:
+  human_owner: hamihoriyat
+  proposer: deploy-lead
+  implementer: deploy-worker
+  skeptic: deploy-lead
+  live_verifier: deploy-lead
+  coordinator: deploy-lead
+capabilities_required:
+  go_toolchain: false
+  cluster_access: true
+  deployment_authority: true
+baseline:
+  code_branch: main
+  code_sha: 1014a028c796d98f38cf91e61a274ea6f8c5ecf5
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/deploy-autosync
+  base_sha: 1014a028c796d98f38cf91e61a274ea6f8c5ecf5
+  head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T08:33:10+00:00'
+configuration_history:
+- at: '2026-09-10T08:14:53+00:00'
+  by: deploy-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - roles
+  - verification
+  approval_ref: user:2026-09-10 fix confirmed disabled-auto-sync deployment
+- at: '2026-09-10T08:29:37+00:00'
+  by: deploy-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T08:14:53+00:00'
+  by: deploy-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T08:14:54+00:00'
+  by: deploy-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T08:29:37+00:00'
+  by: deploy-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T08:29:37+00:00'
+  by: deploy-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T08:33:09+00:00'
+  by: deploy-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T08:33:10+00:00'
+  by: deploy-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: DEPLOY-AUTOSYNC:7:review
+  from: deploy-lead
+  to: deploy-lead
+  role: coordinator
+  kind: review
+  revision: 7
