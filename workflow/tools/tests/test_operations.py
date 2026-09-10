@@ -792,8 +792,10 @@ class AgentOperationsTests(unittest.TestCase):
             self.assertEqual(status["state"], "DEPLOYED")
 
     def test_report_file_must_stay_inside_workflow_tree(self) -> None:
-        with sandbox() as (_, _, _):
-            outside = Path("/tmp/workflow-outside-report.md")
+        # A per-test directory, still outside the sandboxed workflow tree. A shared
+        # fixed /tmp filename can already belong to another user on this host.
+        with sandbox() as (_, _, _), tempfile.TemporaryDirectory() as elsewhere:
+            outside = Path(elsewhere) / "workflow-outside-report.md"
             outside.write_text("secret\n", encoding="utf-8")
             args = intake_args("RPT-20260907-000006-outside")
             args.report_file = str(outside)
