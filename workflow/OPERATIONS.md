@@ -10,6 +10,7 @@ Read one runbook and its target record. Commands run from the repository root: `
 | Reconcile main or deployment | `operations/SYNC.md` | `sync-main --check` or `release-sync --check` |
 | Test Phorvex/the dev cluster, or run a broad live experiment | `operations/CAMPAIGN.md` | `attacks preflight`, then `new-campaign` and a selected test plan |
 | Regenerate master issues / system assessment | `operations/ASSESSMENT.md` | `guide assessment --show` |
+| Assess and resolve issues in parallel tiers | `operations/TIERS.md` | pin source/deployment and start assessment coverage |
 | Inspect state/provenance | `operations/AUDIT.md` | `doctor`, then bounded `brief` |
 | Unclear request | `operations/TRIAGE.md` | `guide triage` |
 | Improve this harness | `tools/`, `stages/`, relevant tests | inspect and test; no product-fix cycle required |
