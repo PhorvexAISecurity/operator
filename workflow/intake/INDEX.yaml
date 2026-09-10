@@ -110,3 +110,10 @@ intakes:
     state: FILED
     issue_id: M-173
     aliases: []
+  RPT-20260910-225200-tracked-credential:
+    directory: intake/RPT-20260910-225200-tracked-credential
+    kind: RISK
+    title: Development SSH credential is committed in agent tool settings
+    state: FILED
+    issue_id: M-175
+    aliases: []

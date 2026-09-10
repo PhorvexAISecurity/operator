@@ -1,6 +1,6 @@
 # Readiness assessment and tiered remediation
 
-- Status: REVIEWED_BASELINE_TIER1_IN_PROGRESS; V3 source/live assessment and semantic tier review complete, implementation review and full PR set pending.
+- Status: WAITING_FOR_DEPLOYMENT; all eight implementation PRs open after review, with remote CI limitations recorded in TIER1-DELIVERY.md.
 - Authorization: user's 2026-09-10 request to reconcile all existing issues against actual code, independently find missing defects, improve the attack catalogue, launch Claude workers automatically, and deliver parallel tiers of reviewed PRs. Stop after each tier's complete PR set; resume after all are merged and deployed and independently verified live.
 - Lead: codex-lead, current GPT-6 session; exact Astra variant is not independently exposed. Prior request mentioned Astra; do not mislabel a worker or configured model as Astra.
 - Workers: new explicitly assigned Claude CLI sessions; identities, actual model, source, results and review recorded per assignment. Existing M-18/M-21/M-79 sessions retain their assignments.
@@ -8,13 +8,13 @@
 - Deployment: earlier observations captured v0.4.108 then v0.4.109. Fresh live decision claims/traces at18:50–18:54 independently identify dbf5fa4321b35651e8142cb2c13d4f28f8c6dcca on0.4.109; observed manager digest sha256:e384b100ddef9bc611971dbea1337ec43a994a36188671aced3b4355aa9470df. No PHORVEX_GIT_SHA/envFrom override in the manager Pod. Main alone is not deployment evidence; per-fix live acceptance still remains separate.
 - Scope: shipping Go operator/engines, API/CRD/configuration, all actuators and routed backends, charts/RBAC, dashboard/API, detector/controller integrations, tests, and workflow attack catalogue plus executable scenarios. Audit mathematical correctness and assumptions; defer elective mathematical optimization to later research.
 - Environment: local isolated worktrees and tests; read-only dev-cluster observations. DevOps owns deployment. Merge and live mutations are not authorized by this assessment's broad request. Prepare bounded verification experiments before any mutation-dependent work.
-- Resource policy: initial cap3 was increased to4 after checking host resources. Current supervisor concurrency3 plus one bounded bootstrap review/repair job equals4. Limit Go compilation with GOMAXPROCS2/-p1; do not disturb existing interactive workers.
+- Resource policy: initial cap3 was increased to4 after checking host resources. Current supervisor concurrency4; all workers and bootstrap jobs have completed. Limit Go compilation with GOMAXPROCS2/-p1; do not disturb existing interactive workers.
 - Model policy: latest user instruction requires explicit Claude Opus 5 with **high reasoning** on new jobs and resumes; this supersedes maximum effort. See MODEL-POLICY.md for settings and retained historical provenance.
 - Architecture plan: refresh the source-derived anatomy as a v3 assessment snapshot and review its issue/contract dependency joins before finalizing tiers; see ANATOMY-V3-PLAN.md. Canonical deployed anatomy remains separately pinned.
 - Prior exposure: lead has reviewed historical M-140/M-18/M-21/M-79 context. Fresh investigators must first inspect source/tests without historical issue bodies; preserve and hash that pass before reconciliation.
 - Existing deliveries: PR #170 M-21 and #171 M-18 are open and must be reconciled rather than duplicated. M-79 prerequisite claims require fresh source checks. M-140 is merged; live verification remains pending.
 - Completion claim: no known unresolved defects within explicitly assessed coverage, backed by source, tests and live evidence. Never assert that software is provably free of all bugs. Unknowns, missing hardware, untested scenarios, and accepted risk remain visible.
-- Next action: finish independent review of the eight first-tier implementation packages, compose their exact source heads and workflow records, publish reviewed V3/runner artifacts and all tier PRs, then await owner/DevOps deployment. Passive observation and independent synthesis are complete with explicit gaps; post-deployment acceptance remains pending.
+- Next action: all eight first-tier implementation PRs are open and combined offline validation passes. Track the explicit current CI limitations in TIER1-DELIVERY.md and await owner/DevOps deployment. No next-tier implementation; post-deployment acceptance remains pending. The late M175 repository credential finding is filed for the next refresh, with external rotation owned by DevOps.
 
 The owner re-emphasized on2026-09-10 that sustained live observation must help
 **discover** issues, in addition to post-deployment fix acceptance. This is a
