@@ -187,3 +187,13 @@ fixes:
     stacked_on: []
     branch: t1/control-economics-m140-tenant-state-lifecycle
     head_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
+  DEPLOY-AUTOSYNC:
+    directory: fixes/DEPLOY-AUTOSYNC
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/deploy-autosync
+    head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
