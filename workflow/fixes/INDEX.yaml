@@ -234,8 +234,8 @@ fixes:
     issues:
     - M-18
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: parallel/record-m018-phoenix-forensic-fields
-    head_sha: null
+    head_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8

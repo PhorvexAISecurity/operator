@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -31,12 +31,66 @@ checks:
     source_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
     at: '2026-09-10T14:24:22+00:00'
     baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  preflight:
+    result: PASS
+    by: claude-m018
+    artifact: evidence/preflight/receipt.json
+    sha256: 44fbbf2ff0456f66bb26fcd4cdacf44e1c343b72c3d47b7a7355286a369453b7
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:33:53+00:00'
+  implementation:
+    result: PASS
+    by: claude-m018
+    artifact: 04-diff.patch
+    sha256: 33499a9c9f8f83672515e4a6684707905937de4f5f6f5a83a3aff711ee681c9c
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:33:53+00:00'
+  l0:
+    result: PASS
+    by: claude-m018
+    artifact: evidence/head/04-l0-build-vet-m018-suite.txt
+    sha256: 56593f2b293b80bd09df05a13e9c9877cabbeb819e92ad08c9924070d2c1850a
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:33:53+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 983700f3312598ef0c8f6c8aa8a5c16d455b12a77acc173dded12093f5f48788
+  l1:
+    result: PASS
+    by: claude-m018
+    artifact: evidence/head/02-full-module-race-PASS.txt
+    sha256: 892173bd9c02cc0a2e050545abe29448b9f47c9fa62203a65852776c6c74ce91
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:33:53+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 983700f3312598ef0c8f6c8aa8a5c16d455b12a77acc173dded12093f5f48788
+  l2:
+    result: PASS
+    by: claude-m018
+    artifact: evidence/head/05-l2-baseline-vs-head-comparison.txt
+    sha256: 38934d0c0f7e35eb256f6474844a0cc66744d18483af297e2fd564cf42ceea39
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:33:53+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 983700f3312598ef0c8f6c8aa8a5c16d455b12a77acc173dded12093f5f48788
+  positive_control:
+    result: PASS
+    by: claude-m018
+    artifact: evidence/head/03-positive-control-mutations.txt
+    sha256: ecbdb6dba36e5d70436cf10c593e29951cb0b0f40f69cf6df93b4fdcabaf9723
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:33:53+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 983700f3312598ef0c8f6c8aa8a5c16d455b12a77acc173dded12093f5f48788
 fix_id: M-18
 issues:
 - M-18
 title: Preserve Phoenix forensic identifiers through audit records
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -60,7 +114,7 @@ blind_derivation:
 implementation:
   branch: parallel/record-m018-phoenix-forensic-fields
   base_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
-  head_sha: null
+  head_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
   stacked_on: []
 pull_request:
   url: null
@@ -82,12 +136,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -97,10 +151,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: 'Claude worker: retain the baseline reproduction, implement signed 03-decision.md,
-    run required preflight and submit-review to codex-lead; no further proposal gate.'
-updated_at: '2026-09-10T14:24:22+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-10T14:33:55+00:00'
 configuration_history:
 - at: '2026-09-10T12:58:21+00:00'
   by: codex-lead
@@ -116,6 +170,11 @@ configuration_history:
   approval_ref: null
 - at: '2026-09-10T14:23:43+00:00'
   by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T14:33:53+00:00'
+  by: claude-m018
   fields:
   - implementation
   approval_ref: null
@@ -136,6 +195,22 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T14:33:53+00:00'
+  by: claude-m018
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T14:33:54+00:00'
+  by: claude-m018
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: base_review
   result: PASS
@@ -145,3 +220,10 @@ check_history:
   source_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
   at: '2026-09-10T14:23:44+00:00'
   baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+handoff:
+  id: M-18:9:submit
+  from: claude-m018
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 9
