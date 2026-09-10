@@ -1,0 +1,32 @@
+package runner
+
+import (
+ "testing"
+ "time"
+ metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ "github.com/phorvex/phorvex/internal/decision"
+)
+
+func TestIndependentConflictOwnerAndEmissionCompose(t *testing.T) {
+ m:=m140Manager(decision.NewCoverageEngine())
+ p:=m140Policy("review-policy","review-tenant","review-A")
+ p.Spec.Budget.AntiOverRotationWindow=metav1.Duration{Duration:time.Minute}
+ if err:=m.Upsert(p);err!=nil {t.Fatal(err)}
+ key:="ns/review-policy";old:=m.policies[key];epoch:=m.ownerEpoch(old.ownerKey())
+ now:=time.Unix(100000,0)
+ if n,_:=m.emissionWindow(old,3,now);n!=3 {t.Fatalf("positive control did not record n=%d",n)}
+ same:=p.DeepCopy();same.Generation++
+ if err:=m.Upsert(same);err!=nil {t.Fatal(err)}
+ if n,_:=m.emissionWindow(m.policies[key],0,now.Add(time.Second));n!=3 {t.Fatalf("same UID lost emissions: %d",n)}
+ next:=p.DeepCopy();next.UID="review-B"
+ if err:=m.Upsert(next);err!=nil {t.Fatal(err)}
+ if m.ownerCurrent(old.ownerKey(),epoch) {t.Fatal("replacement left predecessor epoch current")}
+ current:=m.policies[key]
+ if n,complete:=m.emissionWindow(current,0,now.Add(2*time.Second));n!=0||complete {t.Fatalf("replacement inherited history: n=%d complete=%v",n,complete)}
+ if n,complete:=m.emissionWindow(old,41,now.Add(3*time.Second));n!=0||complete {t.Fatalf("stale predecessor was accepted n=%d complete=%v",n,complete)}
+ if n,_:=m.emissionWindow(current,2,now.Add(4*time.Second));n!=2 {t.Fatalf("new owner blocked: %d",n)}
+ m.DrainLifecycle()
+ if m.ownerCurrent(old.ownerKey(),epoch) {t.Fatal("drain resurrected predecessor")}
+ if !m.ownerCurrent(current.ownerKey(),m.ownerEpoch(current.ownerKey())) {t.Fatal("drain retired current owner")}
+ if n,_:=m.emissionWindow(current,0,now.Add(5*time.Second));n!=2 {t.Fatalf("drain lost replacement history: %d",n)}
+}
