@@ -57,7 +57,8 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 						t.Fatalf("route control=%v", got)
 					}
 					if want == 1 {
-						for a, kind := range map[model.Action]string{model.ActionModelShardReplace: FactModelFingerprint, model.ActionMIGRebind: FactGPUContentionChannel, model.ActionKVMigrateInvalidate: FactSession, model.ActionRequestDrain: FactInflightRequests, model.ActionGuardrailRotate: FactGuardrailBypass, model.ActionAdapterRotate: FactAdapterIntegrity} {
+						// M-037 also withholds modelFingerprint; preserve the remaining independent grants.
+						for a, kind := range map[model.Action]string{model.ActionMIGRebind: FactGPUContentionChannel, model.ActionKVMigrateInvalidate: FactSession, model.ActionRequestDrain: FactInflightRequests, model.ActionGuardrailRotate: FactGuardrailBypass, model.ActionAdapterRotate: FactAdapterIntegrity} {
 							keys := af.CoverByAction[a]
 							expected := (Fact{Scope: ScopePod, Asset: "ns/llm", Kind: kind}).Key()
 							if len(keys) != 1 || keys[0] != expected {
