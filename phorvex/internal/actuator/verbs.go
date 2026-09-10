@@ -24,8 +24,9 @@ import (
 // Every model.MutatingActions member MUST have an entry — verbs_test.go fails the build
 // otherwise (the action-completeness pattern), so a new action forces a verb decision.
 var actionVerbs = map[model.Action][]authz.Verb{
-	model.ActionRotate:              {{Resource: "pods", Verb: "delete"}},
-	model.ActionQuarantine:          {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Resource: "pods", Verb: "update"}},
+	model.ActionRotate: {{Resource: "pods", Verb: "delete"}},
+	// Includes managed repair and proven legacy retirement; RequiredVerbs routing is unchanged.
+	model.ActionQuarantine:          {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
 	model.ActionDebugger:            {{Resource: "pods/ephemeralcontainers", Verb: "update"}},
 	model.ActionCustomInject:        {{Resource: "pods/ephemeralcontainers", Verb: "update"}},
 	model.ActionIdentityRotate:      {{Resource: "pods", Verb: "update"}},

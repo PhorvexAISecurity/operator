@@ -10,7 +10,7 @@
 # namespaces explicitly approved for ephemeral-container injection — it is OFF BY DEFAULT.
 #
 # `kubectl auth can-i` (as system:serviceaccount:<NS>:phorvex-actuator) MUST show:
-#   yes: delete/update/get/list pods; create/get/delete networkpolicies; get replicasets/
+#   yes: delete/update/get/list pods; create/get/list/delete/update networkpolicies; get replicasets/
 #        statefulsets/daemonsets/jobs; get/list/update services  (in <NS>)
 #   no : delete pods --all-namespaces; delete pod -n kube-system; get/delete secrets;
 #        patch/create/delete services; update endpointslices; patch pods; delete nodes
@@ -42,10 +42,10 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "delete", "update"]
-  # quarantine: create the deny-all NetworkPolicy + rollback deletes it.
+  # quarantine: create/reconcile deny-all NetworkPolicy; migration/rollback delete verified policies.
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
-    verbs: ["create", "get", "delete"]
+    verbs: ["create", "get", "list", "delete", "update"]
   # LOAD-BEARING: quarantine reads the owning controller's selector (ReplicaSet, StatefulSet,
   # DaemonSet, Job) to detach the pod out of it (preserving the stateful job — the lead
   # demo). Read-only. MUST NOT be dropped.

@@ -64,7 +64,7 @@ export interface BenchGroup { scenario: string; source: string; arms: BenchArm[]
 export interface CoverageTechnique { technique: string; scenarios: string[]; product: string; covered: boolean }
 export interface PostureSub { label: string; score: number; basis: string }
 export interface Posture { grade: string; score: number; subs: PostureSub[]; note: string }
-export interface OwnerRollup { actions: number; attacksPrevented: number; workPreserved: number; sloKept: number }
+export interface OwnerRollup { dispatched?: number; isolationAttempts?: number; actions: number; attacksPrevented: number; workPreserved: number; sloKept: number }
 
 // --- P-VCLUSTER Pass 2: the safe apply-fix write-path client ---
 export interface ApplyFixDelta {

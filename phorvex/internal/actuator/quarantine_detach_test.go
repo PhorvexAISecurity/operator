@@ -12,8 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -33,7 +35,17 @@ func qtnScheme() *runtime.Scheme {
 }
 
 func qtnClient(objs ...client.Object) client.Client {
-	return fake.NewClientBuilder().WithScheme(qtnScheme()).WithObjects(objs...).Build()
+	for _, obj := range objs {
+		if obj.GetUID() == "" {
+			obj.SetUID(types.UID("uid-" + obj.GetName()))
+		}
+	}
+	return fake.NewClientBuilder().WithScheme(qtnScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+		if obj.GetUID() == "" {
+			obj.SetUID(uuid.NewUUID())
+		}
+		return c.Create(ctx, obj, opts...)
+	}}).Build()
 }
 
 func ownedPod(ns, name string, labels map[string]string, owner metav1.OwnerReference) *corev1.Pod {
@@ -74,7 +86,7 @@ func selectorOf(labels map[string]string) *metav1.LabelSelector {
 
 func enactQuarantine(t *testing.T, c client.Client, ns, name string) (HandlerResult, *corev1.Pod) {
 	t.Helper()
-	res, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c}, Request{Namespace: ns, Pod: name, Action: model.ActionQuarantine})
+	res, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: ns, Pod: name, Action: model.ActionQuarantine})
 	if err != nil {
 		t.Fatalf("quarantine enact: %v", err)
 	}
@@ -92,7 +104,7 @@ func enactQuarantine(t *testing.T, c client.Client, ns, name string) (HandlerRes
 		t.Fatalf("ownerReferences not stripped: %+v", got.OwnerReferences)
 	}
 	var np networkingv1.NetworkPolicy
-	if err := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: "phorvex-quarantine-" + name}, &np); err != nil {
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: quarantinePolicy(&got).Name}, &np); err != nil {
 		t.Fatalf("deny-all NetworkPolicy missing: %v", err)
 	}
 	return res, &got
@@ -117,7 +129,7 @@ func TestQuarantineDetachBreaksStatefulSetSelector(t *testing.T) {
 		t.Fatalf("note does not attribute the detach to the owner: %q", res.Note)
 	}
 
-	if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "nats-1"}, "ns/nats-1"); err != nil {
+	if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: "nats-1"}, res.RollbackRef); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
 	var restored corev1.Pod
@@ -226,18 +238,16 @@ func TestQuarantineDetachBarePodFallsBackToServiceKeys(t *testing.T) {
 	}
 }
 
-func TestQuarantineDetachUnresolvableOwnerFallsBackToServiceKeys(t *testing.T) {
-	// A CRD-owned pod whose owner kind is unknown to the client (no RBAC / no scheme).
+func TestQuarantineDetachUnresolvableOwnerRefusesBeforeMutation(t *testing.T) {
 	pod := ownedPod("ns", "rollout-1", map[string]string{"app": "canary"}, ctrlRef("argoproj.io/v1alpha1", "Rollout", "canary"))
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "canary"},
-		Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "canary"}}}
-	c := qtnClient(pod, svc)
-	res, got := enactQuarantine(t, c, "ns", "rollout-1")
-	if got.Labels["app"] != "canary-quarantined" {
-		t.Fatalf("fallback to Service keys did not happen: %v", got.Labels)
+	c := qtnClient(pod)
+	res, err := (quarantineHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: pod.Name})
+	if err == nil || res.Emitted {
+		t.Fatalf("unsupported owner: %+v %v", res, err)
 	}
-	if !strings.Contains(res.Note, "Service/canary") {
-		t.Fatalf("note must attribute the fallback: %q", res.Note)
+	var policies networkingv1.NetworkPolicyList
+	if err := c.List(context.Background(), &policies); err != nil || len(policies.Items) != 0 {
+		t.Fatal("preflight mutated policy")
 	}
 }
 
@@ -252,7 +262,7 @@ func TestQuarantineDetachReportsWhenNoSelectorCanBeBroken(t *testing.T) {
 		t.Fatalf("note must not claim a detach it did not perform: %q", res.Note)
 	}
 	// Idempotent: a second enact is a no-op.
-	again, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "orphan", Action: model.ActionQuarantine})
+	again, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: "orphan", Action: model.ActionQuarantine})
 	if err != nil || !strings.Contains(again.Note, "already quarantined") {
 		t.Fatalf("second enact = %+v, %v; want idempotent no-op", again, err)
 	}
