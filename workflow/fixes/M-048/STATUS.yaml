@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 15
+revision: 16
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -88,7 +88,7 @@ issues:
 - M-48
 title: UID-bound quarantine policy reconciliation
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: Milad
   proposer: milad-lead
@@ -150,10 +150,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T11:21:44+00:00'
+  owner: milad-lead
+  action: Track PR167 human review and Hami operational verification; live verification
+    remains pending
+updated_at: '2026-09-10T11:27:05+00:00'
 configuration_history:
 - at: '2026-09-10T10:38:42+00:00'
   by: milad-lead
@@ -253,6 +253,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T11:27:05+00:00'
+  by: milad-lead
+  artifact: null
+  note: PR167 opened for review with offline evidence and live verification pending
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision

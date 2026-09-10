@@ -203,7 +203,7 @@ fixes:
     issues:
     - M-48
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - https://github.com/PhorvexSecurity/operator/pull/150
