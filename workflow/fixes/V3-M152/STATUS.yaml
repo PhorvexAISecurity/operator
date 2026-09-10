@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,48 @@ checks:
     at: '2026-09-10T17:25:12+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  implementation:
+    result: PASS
+    by: claude-v3-m152
+    artifact: 04-diff.patch
+    sha256: ba391ed2d78a22f1d3f3548c8c983d288a10a3689cbda677beca7bffc3958331
+    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+    at: '2026-09-10T17:49:42+00:00'
+  red:
+    result: PASS
+    by: claude-v3-m152
+    artifact: evidence/impl/baseline-red-platform-regression.log
+    sha256: 07a495bb97a12ec00215c08f87b87eab1d73bfe17bf1501123f04dca13a367dc
+    source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+    at: '2026-09-10T17:49:46+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m152
+    artifact: evidence/impl/head-l0-build-vet.log
+    sha256: 37198e19c23acf721a8a3532d006c9bad54b7c1ed9ce15f05b76c2dc9f96cd8c
+    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+    at: '2026-09-10T17:49:49+00:00'
+  l1:
+    result: PASS
+    by: claude-v3-m152
+    artifact: evidence/impl/head-l1-focused-packages.log
+    sha256: 496864ef285fa913e3a77abeba55a828b0c7593e2c0feca1923bbfa0e9f7020a
+    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+    at: '2026-09-10T17:49:52+00:00'
+  l2:
+    result: PASS
+    by: claude-v3-m152
+    artifact: evidence/impl/head-l2-full-suite.log
+    sha256: 68acc2bf98f336b534a24a7108b59fe7ed23022683d2fba0a0435d4be34c3515
+    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+    at: '2026-09-10T17:49:55+00:00'
+  positive_control:
+    result: PASS
+    by: claude-v3-m152
+    artifact: evidence/impl/head-positive-controls.log
+    sha256: 349d6359d5eb5bc8c685660dd2e67d0a132f04af4ecf9d9794d49dcff0ed67b2
+    source_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
+    at: '2026-09-10T17:50:00+00:00'
 fix_id: V3-M152
 issues:
 - M-152
@@ -45,7 +87,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m152-vram-presence
   base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-  head_sha: null
+  head_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +109,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -85,7 +127,7 @@ next_action:
   owner: implementer
   action: Implement 03-decision.md, reproduce baseline, submit tested source for independent
     review
-updated_at: '2026-09-10T17:25:53+00:00'
+updated_at: '2026-09-10T17:50:00+00:00'
 configuration_history:
 - at: '2026-09-10T17:24:55+00:00'
   by: codex-lead
@@ -98,6 +140,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-10T17:43:06+00:00'
+  by: claude-v3-m152
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING

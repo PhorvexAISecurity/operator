@@ -260,4 +260,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/v3-m152-vram-presence
-    head_sha: null
+    head_sha: 8e473344f62d6a5e3b51ea320367bfa427032ca7
