@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 29
+revision: 31
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -106,7 +106,7 @@ issues:
 - M-165
 title: Make end-to-end verification causal and observation-aware
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -133,8 +133,8 @@ implementation:
   head_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/177
+  reviewed_head: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -168,9 +168,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T22:18:41+00:00'
+  action: Check PR177 CI, await owner and DevOps delivery, then independently verify
+    registered live capture and report controls.
+updated_at: '2026-09-10T22:19:56+00:00'
 configuration_history:
 - at: '2026-09-10T18:27:19+00:00'
   by: codex-lead
@@ -212,6 +212,11 @@ configuration_history:
   by: claude-v3-e2e
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-10T22:19:55+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -277,6 +282,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T22:19:56+00:00'
+  by: codex-lead
+  artifact: https://github.com/PhorvexSecurity/operator/pull/177
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: red
