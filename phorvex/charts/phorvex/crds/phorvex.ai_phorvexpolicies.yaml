@@ -519,10 +519,9 @@ spec:
             properties:
               actuated:
                 description: |-
-                  Actuated is true while at least one move was really enacted inside the trailing
-                  AntiOverRotationWindow — a rolling condition, not a latch. It returns to false once
-                  the window passes without an emit, stays false for the whole dry-run lifetime, and
-                  after a restart until the next emit.
+                  Actuated is true while at least one observed emission remains in the trailing
+                  AntiOverRotationWindow. Dry-run/kill-switch changes preserve earlier emissions.
+                  False with EmissionHistory Unknown is not proof of no emission before observation.
                 type: boolean
               conditions:
                 description: Conditions includes Ready, DryRun, ValidationError, KillSwitch,
@@ -614,10 +613,10 @@ spec:
                 type: string
               movesThisWindow:
                 description: |-
-                  MovesThisWindow is the number of moves ENACTED (really emitted to the actuator)
-                  inside the trailing AntiOverRotationWindow (budget accounting). Selected-but-not-
-                  emitted decisions (dry-run, kill-switch, actuator failure) do not count. The ledger
-                  is in-memory: after a restart it rebuilds from the next emit.
+                  MovesThisWindow counts observed emission acknowledgements in the trailing
+                  AntiOverRotationWindow. It does not measure confirmed effects or control budgets.
+                  While EmissionHistory is Unknown this is a lower bound, including zero.
+                  History is in-memory and becomes complete after one fully observed window.
                 type: integer
               observedGeneration:
                 format: int64

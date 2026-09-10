@@ -1,0 +1,5 @@
+=== RUN   TestM007RestrictedRequests
+    m007_authorization_test.go:110: restricted Pod GET/UPDATE persisted, NetworkPolicy LIST succeeded, six sensitive/cross-scope authorization negatives denied
+--- PASS: TestM007RestrictedRequests (7.66s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/actuator	7.710s

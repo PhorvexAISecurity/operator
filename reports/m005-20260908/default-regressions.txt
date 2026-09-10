@@ -1,0 +1,9 @@
+=== RUN   TestM005TwoManagersAndHandoff
+    m005_election_test.go:57: requires isolated envtest API server
+--- SKIP: TestM005TwoManagersAndHandoff (0.00s)
+=== RUN   TestManagerTickLoopRequiresLeaderElection
+--- PASS: TestManagerTickLoopRequiresLeaderElection (0.00s)
+=== RUN   TestHelmChartEnablesLeaderElectionByDefault
+--- PASS: TestHelmChartEnablesLeaderElectionByDefault (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/runner	0.083s

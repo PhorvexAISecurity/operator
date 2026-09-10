@@ -39,7 +39,7 @@ func m140Policy(name, tenant, uid string) *v1alpha1.PhorvexPolicy {
 
 func m140Manager(e *decision.CoverageEngine) *Manager {
 	return &Manager{
-		policies: map[string]*policyEntry{}, emits: map[string][]time.Time{},
+		policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{},
 		Optimizer: e, Clock: exposure.NewClock(), Intents: exposure.NewIntents(),
 		Log: logr.Discard(),
 	}

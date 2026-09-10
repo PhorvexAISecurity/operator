@@ -209,16 +209,6 @@ fixes:
     stacked_on: []
     branch: parallel/knowledge-m035-withhold-endpoint-cover
     head_sha: 148902e9d54729fb4c925959a49e93e010270cba
-  CONSOLE-LIVE-HISTORY:
-    directory: fixes/CONSOLE-LIVE-HISTORY
-    aliases: []
-    issues: []
-    related_issues: []
-    state: IN_PR
-    dependencies: []
-    stacked_on: []
-    branch: fix/console-live-history
-    head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
   DEPLOY-AUTOSYNC:
     directory: fixes/DEPLOY-AUTOSYNC
     aliases: []
@@ -229,6 +219,27 @@ fixes:
     stacked_on: []
     branch: fix/deploy-autosync
     head_sha: c3646f98be6ea56d147a4d2423cf78603d8488cd
+  M-048:
+    directory: fixes/M-048
+    aliases: []
+    issues:
+    - M-48
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: parallel/actuation-m048-policy-identity
+    head_sha: 2543473928f14cf3cd14eff971684565a25b08f9
+  CONSOLE-LIVE-HISTORY:
+    directory: fixes/CONSOLE-LIVE-HISTORY
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/console-live-history
+    head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
   AUDIT-VOLUME-GUARD:
     directory: fixes/AUDIT-VOLUME-GUARD
     aliases: []
