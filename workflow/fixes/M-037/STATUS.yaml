@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 14
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -88,12 +88,19 @@ checks:
     source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
     at: '2026-09-10T04:48:48+00:00'
     incident_sha256: bf87d3676dfb41250b0a3d23c6157eeb9f67a08a108741cdb115d56a040a4f87
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/patch-equivalence.md
+    sha256: bfa20b97d550c40a6af28db7dfda60b01abf216164fe3d96c80b4b3d136bd5eb
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:50:21+00:00'
 fix_id: M-037
 issues:
 - M-037
 title: Withhold unsupported modelFingerprint cover (PHORVEXSEC-230)
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: Milad
   proposer: codex-lead
@@ -120,8 +127,8 @@ implementation:
   head_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/164
+  reviewed_head: 5992d84762a4d30530070e010eb72e3f76bbacbe
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -157,9 +164,9 @@ residuals:
   still pending.
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-10T04:48:54+00:00'
+  action: PR164 delivered stacked on PR163; await Hami review and separately authorized
+    merge/live verification
+updated_at: '2026-09-10T04:50:22+00:00'
 configuration_history:
 - at: '2026-09-10T04:35:58+00:00'
   by: codex-lead
@@ -175,6 +182,11 @@ configuration_history:
   by: codex-worker-230
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-10T04:50:20+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -224,6 +236,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T04:50:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: red

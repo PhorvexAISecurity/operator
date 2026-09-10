@@ -193,7 +193,7 @@ fixes:
     issues:
     - M-037
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: parallel/knowledge-m037-withhold-fingerprint-cover
