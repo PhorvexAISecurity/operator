@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -86,12 +86,19 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: 7fdf748ea4f8d21c0c131b1e34792b1b9a16afd7c3006df9fcf18b0e8cf37792
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 2a88775468117e68e5cf503b1af028cd27f6cdac8d3e9677b8595818519cd33e
+    source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+    at: '2026-09-10T21:24:32+00:00'
 fix_id: V3-M163
 issues:
 - M-163
 title: Keep shadow evaluation isolated from production state and metrics
 profile: standard
-state: OFFLINE_VERIFIED
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +143,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +159,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-10T21:15:41+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-10T21:24:32+00:00'
 configuration_history:
 - at: '2026-09-10T17:50:53+00:00'
   by: codex-lead
@@ -211,6 +218,14 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-10T21:24:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: red
   result: FAIL
@@ -220,9 +235,9 @@ check_history:
   source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
   at: '2026-09-10T21:14:54+00:00'
 handoff:
-  id: V3-M163:8:submit
-  from: claude-v3-m163
-  to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  id: V3-M163:9:review
+  from: codex-lead
+  to: claude-v3-m163
+  role: implementer
+  kind: review
+  revision: 9
