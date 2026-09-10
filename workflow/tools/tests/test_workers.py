@@ -22,6 +22,7 @@ DEFAULT_RUNTIME = workers.RUNTIME
 TERMINAL = workers.TERMINAL_STATES
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 DENIED_STREAM = FIXTURES / "claude-stream-permission-denied.jsonl"
+QUOTA_STREAM = FIXTURES / "claude-stream-quota-synthetic.jsonl"
 
 FAKE_CLAUDE = r'''#!/usr/bin/env python3
 """Stands in for the Claude CLI: records its argv and emits stream-json events."""
@@ -145,6 +146,9 @@ class RunnerTestCase(unittest.TestCase):
         self.addCleanup(os.environ.pop, "FAKE_CLAUDE_LOG", None)
         self.addCleanup(os.environ.pop, "FAKE_CLAUDE_MODE", None)
         self.addCleanup(os.environ.pop, "FAKE_CLAUDE_REPLAY", None)
+        # Only wrappers this test actually spawns may ever be signalled, so the
+        # spawn list starts empty and cleanup derives its targets from it.
+        workers.SPAWNED.clear()
         self.addCleanup(self.kill_survivors)
         self.prompt = root / "prompt.md"
         self.prompt.write_text("Implement the approved plan and report honestly.\n")
@@ -153,28 +157,47 @@ class RunnerTestCase(unittest.TestCase):
         return subprocess.run(["git", "-C", str(self.repo), *args], check=True,
                               capture_output=True, text=True)
 
-    def kill_survivors(self):
-        with contextlib.suppress(SystemExit):
-            for job in workers.load_state()["jobs"].values():
-                for pid_key, start_key in (("pid", "pid_start"), ("cli_pid", "cli_pid_start")):
-                    if workers.process_alive(job.get(pid_key), job.get(start_key)):
-                        with contextlib.suppress(ProcessLookupError):
-                            os.killpg(job[pid_key], signal.SIGKILL)
-        for directory in (self.runtime / "jobs").glob("*"):
+    def fixture_processes(self):
+        """Live processes this fixture actually created, with verified identity.
+
+        Derived from the wrappers this test spawned, never from a simulated
+        runtime record: some tests plant the test runner's own PID in state to
+        prove the runner refuses to signal it, and cleanup must not act on that.
+        """
+        spawned = {child.pid for child in workers.SPAWNED}
+        targets = {pid: workers.process_start(pid) for pid in spawned}
+        for directory in sorted((self.runtime / "jobs").glob("*")):
             child = workers.read_json(directory / "child.json")
-            for pid_key, start_key in (("pid", "pid_start"), ("cli_pid", "cli_pid_start")):
-                if workers.process_alive(child.get(pid_key), child.get(start_key)):
-                    with contextlib.suppress(ProcessLookupError):
-                        os.killpg(child[pid_key], signal.SIGKILL)
-        marker = Path(str(self.log) + ".descendant")
-        if marker.exists():
-            with contextlib.suppress(ValueError, ProcessLookupError, OSError):
-                os.kill(int(marker.read_text()), signal.SIGKILL)
+            if child.get("pid") not in spawned:
+                continue  # Not a wrapper this test created.
+            cli, cli_start = child.get("cli_pid"), child.get("cli_pid_start")
+            if not workers.process_alive(cli, cli_start):
+                continue
+            targets[cli] = str(cli_start)
+            # Descendants prove their lineage by still being in the CLI's group.
+            targets.update(workers.group_members(cli))
+        forbidden = {0, 1, os.getpid(), os.getppid(), os.getpgid(0)}
+        return [(pid, start) for pid, start in targets.items()
+                if start and pid not in forbidden and workers.process_alive(pid, start)]
+
+    def kill_survivors(self):
+        for _ in range(3):
+            live = self.fixture_processes()
+            if not live:
+                break
+            for pid, start in live:
+                # One verified PID at a time; never killpg, which could reach
+                # this test runner's own group.
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.kill(pid, signal.SIGKILL)
+            time.sleep(0.05)
         for _ in range(100):
             workers.reap()
             if not workers.SPAWNED:
                 break
             time.sleep(0.02)
+        self.assertEqual(self.fixture_processes(), [],
+                         "the fixture left one of its own processes running")
 
     # --- helpers -------------------------------------------------------------
 
@@ -333,24 +356,39 @@ class SessionContinuityTests(RunnerTestCase):
                       "--role", "implementer", "--allow-tool", "Read"])
         worker = workers.load_state()["workers"]["w1"]
         self.assertEqual(worker["model"], "claude-opus-5")
-        self.assertEqual(worker["effort"], "max")
+        self.assertEqual(worker["effort"], "high", "the campaign default is now high")
         self.enqueue(key="first")
         self.settle("w1:first")
         self.enqueue(key="second")
         self.settle("w1:second")
         first, second = self.invocations()
+        session = workers.load_state()["workers"]["w1"]["session_id"]
         for call in (first, second):
             argv = call["argv"]
             self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-5")
-            self.assertEqual(argv[argv.index("--effort") + 1], "max")
+            self.assertEqual(argv[argv.index("--effort") + 1], "high")
+            self.assertEqual(argv[argv.index("--permission-mode") + 1], "manual")
+            self.assertEqual(argv[argv.index("--tools") + 1], "Read")
+            self.assertEqual(argv[argv.index("--allowedTools") + 1], "Read")
+            self.assertEqual(call["session"], session, "exact session on launch and resume")
         self.assertIn("--session-id", first["argv"])
         self.assertIn("--resume", second["argv"])
         report = json.loads(self.status())
         self.assertEqual(report["workers"][0]["model"], "claude-opus-5")
-        self.assertEqual(report["workers"][0]["effort"], "max")
-        self.assertEqual(report["jobs"][0]["effort_requested"], "max")
+        self.assertEqual(report["workers"][0]["effort"], "high")
+        self.assertEqual(report["jobs"][0]["effort_requested"], "high")
         self.assertEqual(report["jobs"][0]["models_observed"], ["claude-opus-5-fake"])
         self.assertFalse(report["jobs"][0]["model_mismatch"])
+
+    def test_explicit_max_effort_remains_supported(self):
+        self.register(extra=["--effort", "max"])
+        self.assertEqual(workers.load_state()["workers"]["w1"]["effort"], "max")
+        self.enqueue()
+        self.settle("w1:j1")
+        argv = self.invocations()[0]["argv"]
+        self.assertEqual(argv[argv.index("--effort") + 1], "max")
+        self.assertEqual(workers.DEFAULT_EFFORT, "high")
+        self.assertIn("max", workers.EFFORTS)
 
     def test_floating_model_aliases_and_unknown_efforts_are_rejected(self):
         for bad in ("opus", "default", "claude-opus-latest", "sonnet", "gpt-5"):
@@ -765,6 +803,46 @@ class StreamShapeTests(RunnerTestCase):
         self.assertTrue(any("not a success subtype" in p for p in bare["problems"]))
         self.assertTrue(any("result text is missing" in p for p in bare["problems"]))
 
+    def test_boolean_metadata_is_not_an_integer(self):
+        summary = self.summary([INIT, ASSISTANT, dict(RESULT, num_turns=True)])
+        self.assertEqual(summary["problems"], ["final num_turns is a bool, not a int"])
+        for value in (3, None):
+            with self.subTest(num_turns=value):
+                clean = dict(RESULT)
+                if value is None:
+                    clean.pop("num_turns")
+                else:
+                    clean["num_turns"] = value
+                self.assertEqual(self.summary([INIT, ASSISTANT, clean])["problems"], [])
+        status = self.summary([INIT, ASSISTANT, dict(RESULT, api_error_status=True)])
+        self.assertIn("final api_error_status is a bool, not a int", status["problems"])
+
+    def test_malformed_denial_entries_keep_provenance_and_report_the_shape(self):
+        final = dict(RESULT, permission_denials=["a bare string", {"tool_name": "Bash",
+                                                                  "tool_use_id": "toolu_9"}])
+        summary = self.summary([INIT, ASSISTANT, final])
+        self.assertEqual(summary["problems"],
+                         ["final permission_denials[0] is a str, not an object; "
+                          "the denial is kept without tool attribution"])
+        self.assertEqual([(d["index"], d["tool"], d.get("malformed")) for d in summary["denials"]],
+                         [(0, None, "str"), (1, "Bash", None)])
+
+    def test_unhashable_subtypes_report_problems_without_raising(self):
+        for subtype in ([], {}, None, 42):
+            with self.subTest(subtype=subtype):
+                summary = self.summary([INIT, ASSISTANT, dict(RESULT, subtype=subtype)])
+                self.assertTrue(any("not a success subtype" in problem
+                                    for problem in summary["problems"]), summary["problems"])
+        self.assertIsInstance(workers.SUCCESS_SUBTYPES, tuple,
+                             "membership must compare, not hash, so unhashable values are safe")
+
+    def test_clean_result_remains_accepted(self):
+        summary = self.summary([INIT, ASSISTANT, RESULT])
+        self.assertEqual(summary["problems"], [])
+        self.assertEqual(summary["denials"], [])
+        self.assertEqual(summary["synthetic_models"], [])
+        self.assertFalse(summary["model_mismatch"])
+
     def test_original_session_and_model_checks_still_apply(self):
         other = dict(RESULT, session_id="another-session")
         self.assertTrue(any("result session id does not match" in p
@@ -773,6 +851,86 @@ class StreamShapeTests(RunnerTestCase):
         problems = self.summary([INIT, swapped, RESULT])["problems"]
         self.assertTrue(any("model mismatch" in problem for problem in problems), problems)
         self.assertTrue(self.summary([INIT, ASSISTANT, RESULT, RESULT])["problems"])
+
+
+class QuotaAttributionTests(RunnerTestCase):
+    """A quota failure is a failure, and its error placeholder is not a model."""
+
+    def quota_events(self):
+        text = QUOTA_STREAM.read_text().replace("SESSION", SESSION)
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+    def summary(self, events):
+        return workers.summarize(events, SESSION, requested_model="claude-opus-5")
+
+    def test_recorded_quota_failure_is_reported_as_an_error_not_a_substitution(self):
+        summary = self.summary(self.quota_events())
+        self.assertEqual(summary["synthetic_models"], ["<synthetic>"])
+        self.assertFalse(summary["model_mismatch"])
+        self.assertEqual(summary["models_observed"], ["claude-opus-5"])
+        self.assertEqual(summary["model_usage_ids"], ["claude-opus-5"])
+        self.assertEqual(summary["api_error_status"], 429)
+        self.assertEqual(summary["terminal_reason"], "api_error")
+        self.assertTrue(any("is_error is True" in problem for problem in summary["problems"]))
+        self.assertTrue(any("api_error_status 429" in problem
+                            for problem in summary["problems"]))
+        self.assertTrue(any("synthetic error attribution" in problem
+                            for problem in summary["problems"]))
+        self.assertFalse(any("model mismatch" in problem for problem in summary["problems"]),
+                         "the error placeholder must not be reported as a substituted model")
+        self.assertIn("session limit", summary["error_text"])
+
+    def test_real_mismatch_control_still_flags_a_substituted_model(self):
+        events = self.quota_events()
+        for event in events:
+            message = event.get("message")
+            if isinstance(message, dict) and message.get("model") == "<synthetic>":
+                message["model"] = "claude-sonnet-5"  # the only changed field
+        summary = self.summary(events)
+        self.assertTrue(summary["model_mismatch"])
+        self.assertEqual(summary["synthetic_models"], [])
+        self.assertIn("claude-sonnet-5", summary["models_observed"])
+        self.assertTrue(any("model mismatch" in problem for problem in summary["problems"]))
+
+    def test_error_only_control_has_no_synthetic_attribution(self):
+        events = [event for event in self.quota_events()
+                  if not (isinstance(event.get("message"), dict)
+                          and event["message"].get("model") == "<synthetic>")]
+        summary = self.summary(events)
+        self.assertEqual(summary["synthetic_models"], [])
+        self.assertFalse(summary["model_mismatch"])
+        self.assertTrue(any("is_error is True" in problem for problem in summary["problems"]))
+        self.assertFalse(any("synthetic" in problem for problem in summary["problems"]))
+
+    def test_unknown_model_strings_are_never_treated_as_synthetic(self):
+        for name in ("<other>", "synthetic", "<synthetic", "gpt-5", ""):
+            with self.subTest(model=name):
+                events = self.quota_events()
+                for event in events:
+                    message = event.get("message")
+                    if isinstance(message, dict) and message.get("model") == "<synthetic>":
+                        message["model"] = name
+                summary = self.summary(events)
+                self.assertEqual(summary["synthetic_models"], [])
+                if name:
+                    self.assertTrue(summary["model_mismatch"])
+
+    def test_quota_failure_reaches_the_job_record_as_a_failure(self):
+        self.register()
+        self.enqueue()
+        os.environ["FAKE_CLAUDE_REPLAY"] = str(QUOTA_STREAM)
+        job = self.settle("w1:j1", mode="replay")["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "failed")
+        self.assertEqual(job["execution_verdict"], "failed")
+        self.assertEqual(job["synthetic_models"], ["<synthetic>"])
+        self.assertFalse(job["model_mismatch"])
+        self.assertEqual(job["api_error_status"], 429)
+        self.assertEqual(job["terminal_reason"], "api_error")
+        self.assertIn("synthetic error attribution", job["reason"])
+        self.assertNotIn("model mismatch", job["reason"])
+        report = self.status()
+        self.assertIn("<synthetic>", report)
+        self.assertIn("api_error", report)
 
 
 class RecoveryTests(RunnerTestCase):
@@ -1445,6 +1603,70 @@ class NoticeTests(RunnerTestCase):
         with self.assertRaises(SystemExit):
             self.enqueue(extra=["--notify-lead", "--subject-kind", "campaign",
                                 "--subject-id", "../escape"])
+
+
+@unittest.skipIf(os.environ.get("PHORVEX_RUNNER_META_TEST"), "already inside a meta-test child")
+class CleanupOwnershipTests(unittest.TestCase):
+    """An outside observer checks that a test run survives its own cleanup.
+
+    One runner test plants the test runner's own PID in a simulated runtime
+    record. Cleanup that signalled such a record killed the whole run whenever
+    the test process happened to lead its process group.
+    """
+
+    WORKFLOW = Path(__file__).resolve().parents[2]
+    TARGETS = (
+        # Plants this process's PID in state, then cleanup must ignore it.
+        "tools.tests.test_workers.StopTests.test_stop_without_a_matching_child_record_signals_nothing",
+        # Real wrapper, CLI and descendant that cleanup must actually end.
+        "tools.tests.test_workers.ProcessGroupTests.test_cancellation_ends_a_surviving_cli_descendant",
+    )
+
+    def run_targets(self, *, new_session):
+        environment = dict(os.environ, PHORVEX_RUNNER_META_TEST="1")
+        for name in ("FAKE_CLAUDE_LOG", "FAKE_CLAUDE_MODE", "FAKE_CLAUDE_REPLAY"):
+            environment.pop(name, None)  # The child fixture sets its own.
+        return subprocess.run([sys.executable, "-m", "unittest", "-b", *self.TARGETS],
+                              cwd=str(self.WORKFLOW), env=environment, text=True,
+                              capture_output=True, timeout=300,
+                              start_new_session=new_session)
+
+    def check(self, result):
+        self.assertGreaterEqual(result.returncode, 0,
+                                f"the test runner was killed by signal {-result.returncode}: "
+                                f"{result.stderr[-800:]}")
+        self.assertEqual(result.returncode, 0, result.stderr[-1500:])
+        self.assertIn("OK", result.stderr)
+        self.assertIn("Ran 2 tests", result.stderr)
+
+    def test_cleanup_leaves_an_ordinary_child_test_runner_alive(self):
+        self.check(self.run_targets(new_session=False))
+
+    def test_cleanup_leaves_a_session_leading_test_runner_alive(self):
+        result = self.run_targets(new_session=True)
+        self.check(result)
+
+    def test_a_planted_runtime_record_is_not_a_cleanup_target(self):
+        case = StopTests("test_stop_without_a_matching_child_record_signals_nothing")
+        case.setUp()
+        self.addCleanup(case.doCleanups)
+        with workers.locked_state() as state:
+            state["workers"]["w1"] = {"id": "w1", "role": "implementer",
+                                      "worktree": str(case.repo), "model": "claude-opus-5",
+                                      "effort": "high", "permission_mode": "manual",
+                                      "allowed_tools": ["Read"], "disallowed_tools": [],
+                                      "session_id": "s", "session_started": False}
+            state["jobs"]["w1:planted"] = {
+                "job_id": "w1:planted", "worker": "w1", "key": "planted", "sequence": 1,
+                "state": "running", "created_at": workers.utc(), "prompt_sha256": "x",
+                "prompt_bytes": 1, "scope": "", "timeout_seconds": 60, "attempts": 1,
+                "unresolved": False, "invocation_id": "planted",
+                "pid": os.getpid(), "pid_start": workers.process_start(os.getpid()),
+                "cli_pid": os.getpid(), "cli_pid_start": workers.process_start(os.getpid())}
+        self.assertEqual(case.fixture_processes(), [],
+                         "a simulated record naming this process must never be a target")
+        case.kill_survivors()
+        self.assertTrue(workers.process_alive(os.getpid(), workers.process_start(os.getpid())))
 
 
 if __name__ == "__main__":

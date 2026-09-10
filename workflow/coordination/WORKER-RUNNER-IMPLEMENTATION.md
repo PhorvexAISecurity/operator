@@ -13,21 +13,75 @@ merged or self-approved.
   user-directed `WORKER-RUNNER-MODEL-POLICY.md`.
 - Pass 3: all five corrections in `WORKER-RUNNER-REVIEW-R2.md`, with the model
   policy re-confirmed and extended.
-- Pass 4 (this report): live-use defect — a legitimate `system`
-  `permission_denied` event whose `message` is a **string** crashed denial
-  collection and misreported a successful job as failed. Fixed with typed stream
-  reads, three-source denial capture and an explicit execution verdict. Earlier
-  behaviour, tests and recorded evidence are preserved; see the post-acceptance
-  section of `WORKER-RUNNER-ACCEPTANCE.md`.
+- Pass 4: live-use defect — a legitimate `system` `permission_denied` event whose
+  `message` is a **string** crashed denial collection and misreported a
+  successful job as failed. Fixed with typed stream reads, three-source denial
+  capture and an explicit execution verdict. See the post-acceptance section of
+  `WORKER-RUNNER-ACCEPTANCE.md`.
+- Pass 5 (this report): the four pre-publication findings in
+  `LEAD-REVIEW-R4.md` — test-cleanup process ownership, completed typed final
+  metadata, synthetic quota sentinel attribution, and the `high` effort default.
+  The lead's acceptance and review artifacts are left exactly as they are.
+
+## Pass 5: R4 pre-publication findings
+
+1. **Test cleanup owns only what it created.** The fixture's cleanup derived
+   kill targets from runtime records, including simulated ones that some tests
+   deliberately fill with the test runner's own PID, and used `killpg` — so a
+   `unittest` invocation that led its own process group killed itself. Cleanup
+   now enumerates only the wrappers this test spawned (`workers.SPAWNED`), the
+   CLI each of those wrappers recorded, and processes still in that CLI's group;
+   it verifies `(pid, start time)` identity, refuses PID 0/1, this process, its
+   parent and its group, sends `SIGKILL` per verified PID instead of `killpg`,
+   and finally asserts it left nothing of its own running. Reproduced and
+   verified with an outside observer: the previous fixture, run as a session
+   leader, ends with `returncode -9`; the repaired fixture exits `0`. Two meta
+   tests run a bounded two-test selection as an ordinary child and as a
+   session/group leader and assert normal exit, plus a direct test that a
+   planted record naming this process is never a cleanup target.
+2. **Typed final metadata completed.** `num_turns` and `api_error_status` now
+   reject `bool` explicitly (it is an `int` subclass, which is how `True` passed
+   as an integer in the lead's probes). A `permission_denials` element with the
+   wrong shape keeps its occurrence and index — provenance is preserved — and
+   raises an explicit `final permission_denials[i] is a str, not an object`
+   problem instead of becoming a silent anonymous denial. `terminal_reason` is
+   type-checked, and an errored final event reports its `api_error_status` and
+   `terminal_reason`. As the review notes, list/dict `subtype` values already
+   produced problems without raising: `SUCCESS_SUBTYPES` stays a tuple so
+   membership compares instead of hashing, now with a comment and a regression
+   test. No unhashable-subtype crash was reproduced or claimed. A clean result
+   still yields no problems.
+3. **Synthetic quota sentinel attribution.** Real quota failures attribute a
+   turn to exactly `<synthetic>` with `is_error: true`,
+   `api_error_status: 429`, `terminal_reason: "api_error"` and
+   `subtype: "success"`. That placeholder is now recorded in `synthetic_models`,
+   always adds a problem (so quota failures stay failures and no synthetic run
+   is accepted), and is never counted as a model substitution; real mismatches
+   still fail, and `model_usage_ids` stays separate. Only that exact sentinel is
+   recognised — no unknown model string is accepted. A sanitized fixture drawn
+   from the real quota shapes drives the test, with real-mismatch and error-only
+   controls derived from it by changing one field.
+4. **`high` is the campaign default.** `DEFAULT_EFFORT` is `high`, with `max`
+   still selectable and historical `max` receipts untouched. Runbook and report
+   examples and the lead smoke test use `high`. Tests assert that both launch and
+   resume argv keep the exact session id, pinned model, effort and bounded tool
+   settings, and that explicit `max` still works.
+
+Verified against real private streams (read-only, verdicts only): the M152
+denial run still reports zero problems; two real quota runs now fail with the
+synthetic error attribution and `api_error_status 429` and **no** model
+mismatch; a smoke run and a completed high-effort resume run report zero
+problems.
 
 ## Changed paths
 
 | Path | Change |
 | --- | --- |
-| `workflow/coordination/workers.py` | 1506 lines: register / enqueue / run / status / result / stop / resolve plus the `_child` wrapper |
-| `workflow/tools/tests/test_workers.py` | 1451 lines, **90 tests** driving a fake Claude executable, real process-group fixtures and a recorded-shape stream replay |
+| `workflow/coordination/workers.py` | 1552 lines: register / enqueue / run / status / result / stop / resolve plus the `_child` wrapper |
+| `workflow/tools/tests/test_workers.py` | 1673 lines, **103 tests** driving a fake Claude executable, real process-group fixtures, recorded-shape stream replays and outside-observer cleanup checks |
 | `workflow/tools/tests/fixtures/claude-stream-permission-denied.jsonl` | pass 4: sanitized replay of the real event shapes, with a README explaining what is synthetic |
-| `workflow/coordination/WORKERS.md` | 273-line runbook: layout and umask rules, model/effort policy, commands, invocation flags, outcome and denial rules, group-aware recovery/cancellation/timeout, service, notices, lead smoke test, stopping point |
+| `workflow/tools/tests/fixtures/claude-stream-quota-synthetic.jsonl` | pass 5: sanitized quota failure with the `<synthetic>` error placeholder |
+| `workflow/coordination/WORKERS.md` | 287-line runbook: layout and umask rules, model/effort policy including the synthetic placeholder, commands, invocation flags, outcome and denial rules, group-aware recovery/cancellation/timeout, service, notices, lead smoke test, stopping point |
 | `workflow/coordination/WORKER-RUNNER-ACCEPTANCE.md` | pass 4: post-acceptance defect and correction appended; earlier acceptance evidence untouched |
 | `workflow/coordination/BUS.md` | four-line pointer to `WORKERS.md` in the runner-handoff section |
 | `workflow/tools/tests/test_operations.py` | R1 item 8: per-test temp path replaces the shared `/tmp` report fixture |
@@ -217,6 +271,22 @@ Pass 4 re-ran the suites on both interpreters after the fix (session umask):
 | `-m unittest -b tools.tests.test_workers` | **90 OK** (~26 s) | **90 OK** (~27 s) |
 | `-m unittest discover -b -s tools/tests -p 'test_*.py'` | **203 OK** (~55 s) | **203 OK** (~52 s) |
 
+Pass 5 ran everything on the pinned interpreter
+(`/home/mehrdad/.local/share/phorvex-tools/workflow-py311/bin/python`, 3.11.16):
+
+| Run | Result |
+| --- | --- |
+| `-m unittest -b tools.tests.test_workers` (session umask `0077`) | **103 OK** (48.6 s) |
+| same suite under umask `0002` | **103 OK** (49.2 s) |
+| `-m unittest discover -b -s tools/tests -p 'test_*.py'` | **216 OK** (82.8 s) |
+| `-m compileall -q .` | clean |
+| `tools/workflow.py sync-index --check` | `fix index: PASS` |
+| `tools/workflow.py render-issues --check` | `issues render: PASS` |
+| `tools/workflow.py doctor` | 0 errors, 17 pre-existing warnings |
+
+The runner suite grew from 90 to 103 tests: three cleanup-ownership tests, four
+typed-metadata tests, five quota-attribution tests and one explicit-`max` test.
+
 - Focused runner tests also pass under the standard `0022` umask (80 OK at pass 3).
 - `python3 -m compileall -q .`; `tools/workflow.py sync-index --check` (PASS);
   `render-issues --check` (PASS); `doctor` — 0 errors, 17 pre-existing
@@ -268,11 +338,21 @@ full-suite `PermissionError` and its cause were as reported.
   fixtures, and — new in pass 4 — a read-only replay of one real recorded stream
   produced by the lead's own runs. The invocation flag set was validated by the
   lead's real smoke test at acceptance, not here.
-- The pass-4 fix is verified against **one** real stream. Other event shapes the
-  CLI can emit (for example a denial reported only through a shape not seen in
-  that run) remain unproven; the typed accessors make an unknown shape a visible
-  problem rather than a crash, which is the best guarantee available without more
-  recorded runs.
+- Shape handling is verified against the real streams available locally (one
+  denial run, two quota failures, two clean runs, replayed read-only in pass 5).
+  Other shapes the CLI can emit remain unproven; the typed accessors make an
+  unknown shape a visible problem rather than a crash, which is the best
+  guarantee available without more recorded runs.
+- `<synthetic>` is the only recognised error placeholder. If the CLI adds
+  another, it would be reported as a model mismatch — visible and failing, but
+  named imprecisely — until the constant is extended. That is deliberate: no
+  unknown model string is accepted as synthetic.
+- A synthetic attribution always fails the job, so a hypothetical run that was
+  genuinely fine except for one CLI-generated error turn would still be failed
+  and need a lead decision.
+- The cleanup meta tests spawn two bounded child test runs, adding roughly 20 s
+  to the runner suite; they are skipped inside a meta-test child
+  (`PHORVEX_RUNNER_META_TEST`).
 - `--effort` value names (`low|medium|high|max`) are enforced locally but
   unverified against the CLI; a mismatch fails loudly rather than silently
   running at a lower effort.
@@ -299,11 +379,15 @@ full-suite `PermissionError` and its cause were as reported.
   lead's decision, not the runner's.
 - `stop`/`resolve` hold the state lock while waiting up to ~5 s for a child
   record or terminating a group, which can briefly delay a concurrent `status`.
-- The file grew to 1506 lines for this behaviour, well above the "modest" size of
+- The file grew to 1552 lines for this behaviour, well above the "modest" size of
   pass 1; it is organized in labeled sections of single-purpose functions.
-- `execution_verdict` and `denial_count` appear only on jobs finalized after this
-  fix; jobs recorded earlier keep their old fields, and the affected job keeps
-  the failed reason the lead already resolved.
+- `execution_verdict`, `denial_count`, `synthetic_models`, `api_error_status` and
+  `terminal_reason` appear only on jobs finalized after the pass that added
+  them; jobs recorded earlier keep their old fields, and the affected M152 job
+  keeps the failed reason the lead already resolved.
+- The `high` default applies to **new** registrations. Workers already registered
+  keep their persisted effort until re-registered with `--update`, and historical
+  receipts keep the effort they ran with.
 - Group enumeration scans `/proc` when a group probe says the group is non-empty:
   at most two scans per active job per supervisor pass (~ms each at a 2 s
   interval), which is fine here but is not free.
@@ -321,7 +405,7 @@ full-suite `PermissionError` and its cause were as reported.
 ```sh
 W=workflow/coordination/workers.py
 python3 $W register --worker claude-impl-1 --worktree /abs/existing/worktree \
-    --role implementer --model claude-opus-5 --effort max \
+    --role implementer --model claude-opus-5 --effort high \
     --permission-mode manual --allow-tool Read
 python3 $W enqueue --worker claude-impl-1 --key t1-m140-impl --prompt-file /path/task.md \
     --scope 'one file and its tests' --timeout 3600 \

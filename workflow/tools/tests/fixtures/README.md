@@ -7,6 +7,15 @@ emits `system` / `subtype=permission_denied` with `message` as a plain **string*
 alongside `permission_denials` in the final `result` event. Reading `message` as
 an object crashed reconciliation and turned a successful run into a failure.
 
+`claude-stream-quota-synthetic.jsonl` mirrors the shapes of the real quota
+failures seen on 2026-09-10: the CLI attributes its own error turn to the
+placeholder model id `<synthetic>` and reports `is_error: true`,
+`api_error_status: 429`, `terminal_reason: "api_error"` while still using
+`subtype: "success"`. The placeholder is an error attribution, not a substituted
+model; the run is still a failure. Tests derive their controls from this file by
+changing only one field — the placeholder to a real other model (real mismatch)
+or dropping the placeholder turn (error only).
+
 Content is synthetic. Prompts, model output, session ids, tool arguments and
 process records from the affected job stay private in the Git common directory
 and are not copied here. `SESSION` is a placeholder the test replaces with the

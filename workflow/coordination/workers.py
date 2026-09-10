@@ -45,13 +45,20 @@ SAFE_TOOL = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*(\([^()\n]{0,120}\))?")
 # is supported by the CLI but deliberately unavailable here.
 PERMISSION_MODES = ("manual", "auto", "acceptEdits", "dontAsk", "plan")
 DEFAULT_PERMISSION_MODE = "manual"
-# User-directed for this campaign: pinned Opus 5 at maximum reasoning effort,
-# with no floating alias and no fallback model.
+# User-directed for this campaign: pinned Opus 5 at high reasoning effort, with
+# no floating alias and no fallback model. `max` stays selectable explicitly and
+# receipts from earlier max runs keep their recorded values.
 DEFAULT_MODEL = "claude-opus-5"
-DEFAULT_EFFORT = "max"
+DEFAULT_EFFORT = "high"
 EFFORTS = ("low", "medium", "high", "max")
 MODEL_ALIASES = ("default", "opus", "sonnet", "haiku", "opusplan", "sonnet[1m]")
 PINNED_MODEL = re.compile(r"claude-[a-z]+-\d+[A-Za-z0-9.\-]*")
+# Exactly the placeholder the CLI attributes its own synthetic error turns to
+# (seen with quota errors). It is not a model, and no other unknown string is
+# treated this way: anything else outside the requested family stays a mismatch.
+SYNTHETIC_MODEL_IDS = ("<synthetic>",)
+# A sequence, not a set: `subtype` may hold an unhashable list or dict, and
+# membership must report a problem rather than raise.
 SUCCESS_SUBTYPES = ("success",)
 ACTIVE_STATES = ("starting", "running")
 TERMINAL_STATES = ("done", "failed", "interrupted", "canceled")
@@ -590,11 +597,15 @@ def collect_denials(events: list[dict]) -> list[dict]:
                             "reason_type": as_text(event.get("decision_reason_type")),
                             "detail": note[:200] or None})
         if kind == "result":
-            for denial in as_list(event.get("permission_denials")):
+            for index, denial in enumerate(as_list(event.get("permission_denials"))):
                 entry = as_dict(denial)
-                denials.append({"tool": as_text(entry.get("tool_name")),
-                                "tool_use_id": as_text(entry.get("tool_use_id")),
-                                "source": "result"})
+                record = {"tool": as_text(entry.get("tool_name")),
+                          "tool_use_id": as_text(entry.get("tool_use_id")),
+                          "source": "result", "index": index}
+                if not isinstance(denial, dict):
+                    # Keep the occurrence, and say plainly that its shape is wrong.
+                    record["malformed"] = type(denial).__name__
+                denials.append(record)
         for block in as_list(as_dict(event.get("message")).get("content")):
             entry = as_dict(block)
             if entry.get("type") != "tool_result" or not entry.get("is_error"):
@@ -615,6 +626,7 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
     problems: list[str] = []
     model = None
     observed: list[str] = []
+    synthetic: list[str] = []
     for position, event in enumerate(events, 1):
         if event.get("type") == "assistant":
             message = event.get("message")
@@ -628,6 +640,12 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
             problems.append(f"event {position} reports a non-string model id "
                             f"({type(reported).__name__})")
             reported = None
+        if reported in SYNTHETIC_MODEL_IDS:
+            # The CLI's own error placeholder: an error attribution, not a model
+            # the assignment ran on, and not a substitution.
+            if reported not in synthetic:
+                synthetic.append(reported)
+            continue
         # Every model id the CLI reported, so a substitution cannot hide.
         model = reported or model
         if model and model not in observed:
@@ -637,6 +655,11 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
     if substituted:
         problems.append(f"model mismatch: requested {requested_model}, "
                         f"observed {', '.join(substituted)}")
+    if synthetic:
+        problems.append(f"synthetic error attribution: the CLI reported "
+                        f"{', '.join(synthetic)} for at least one turn, which marks its own "
+                        f"error output (for example a quota error) and is not a model "
+                        f"substitution; this run is not a clean success")
     if malformed:
         problems.append(f"{malformed} malformed stream line(s)")
     if non_object:
@@ -659,16 +682,31 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
         if not isinstance(text, str) or not text.strip():
             problems.append("final result text is missing or empty")
         # Final metadata is untrusted too: a wrong shape is reported, never
-        # crashed on and never quietly accepted as a clean run.
+        # crashed on and never quietly accepted as a clean run. `bool` is an
+        # `int` subclass, so numeric fields reject it explicitly.
         for field, kind in (("permission_denials", list), ("modelUsage", dict),
-                            ("num_turns", int), ("usage", dict)):
+                            ("usage", dict), ("terminal_reason", str),
+                            ("num_turns", int), ("api_error_status", int)):
             value = final.get(field)
-            if value is not None and not isinstance(value, kind):
+            if value is None:
+                continue
+            if not isinstance(value, kind) or (kind is int and isinstance(value, bool)):
                 problems.append(f"final {field} is a {type(value).__name__}, "
                                 f"not a {kind.__name__}")
+        if final.get("is_error"):
+            status, terminal = final.get("api_error_status"), final.get("terminal_reason")
+            if status is not None or terminal is not None:
+                problems.append(f"final event reports api_error_status {status!r}, "
+                                f"terminal_reason {terminal!r}")
     # Auxiliary models the CLI billed (helper models appear here); reported, but
     # only the turn's own model ids decide a substitution.
     usage_ids = sorted(name for name in as_dict(final.get("modelUsage")) if isinstance(name, str))
+    denials = collect_denials(events)
+    for denial in denials:
+        if denial.get("malformed"):
+            problems.append(f"final permission_denials[{denial['index']}] is a "
+                            f"{denial['malformed']}, not an object; the denial is kept "
+                            f"without tool attribution")
     return {
         "init_session": inits[0].get("session_id") if len(inits) == 1 else None,
         "result_session": final.get("session_id"),
@@ -677,14 +715,17 @@ def summarize(events: list[dict], session_id: str, malformed: int = 0,
         "model": model,
         "models_observed": observed,
         "model_usage_ids": usage_ids,
+        "synthetic_models": synthetic,
         "model_mismatch": bool(substituted),
         "is_error": final.get("is_error") if results else None,
         "result_subtype": final.get("subtype") if results else None,
         "result_chars": len(final["result"]) if isinstance(final.get("result"), str) else 0,
         "num_turns": final.get("num_turns"),
+        "api_error_status": final.get("api_error_status"),
+        "terminal_reason": final.get("terminal_reason"),
         "error_text": (str(final.get("result") or final.get("error") or "")[:500]
                        if results and final.get("is_error") else None),
-        "denials": collect_denials(events),
+        "denials": denials,
         "malformed_stream_lines": malformed,
         "non_object_stream_lines": non_object,
         "session_match": (len(inits) == 1 and len(results) == 1
@@ -924,7 +965,10 @@ def finalize(state: dict, job: dict, directory: Path, receipt: dict) -> None:
         model_reported=summary["model"],
         models_observed=summary["models_observed"],
         model_usage_ids=summary["model_usage_ids"],
+        synthetic_models=summary["synthetic_models"],
         model_mismatch=summary["model_mismatch"],
+        api_error_status=summary["api_error_status"],
+        terminal_reason=summary["terminal_reason"],
         is_error=summary["is_error"],
         result_subtype=summary["result_subtype"],
         result_chars=summary["result_chars"],
@@ -1024,7 +1068,8 @@ def notice_body(state: dict, identifier: str, job: dict, worker: dict) -> str:
         f"Reason: {job.get('reason') or 'none'}.",
         f"Requested {job.get('model_requested')} at effort {job.get('effort_requested')}; "
         f"observed {job.get('models_observed') or 'none'}"
-        f"{' -- MODEL MISMATCH' if job.get('model_mismatch') else ''}.",
+        f"{' -- MODEL MISMATCH' if job.get('model_mismatch') else ''}"
+        f"{' -- synthetic error attribution' if job.get('synthetic_models') else ''}.",
         f"Exit status: {job.get('exit_status')}. Execution verdict: "
         f"{job.get('execution_verdict')}. Denials recorded: {len(job.get('denials') or [])}.",
         f"Unresolved owned process: {bool(job.get('unresolved'))}.",
@@ -1160,7 +1205,8 @@ def public_job(job: dict) -> dict:
               "started_at", "finished_at", "resumed", "attempts", "exit_status", "timed_out",
               "is_error", "result_subtype", "result_chars", "num_turns", "session_match",
               "model_requested", "model_reported", "models_observed", "model_usage_ids",
-              "model_mismatch", "effort_requested", "permission_mode", "execution_verdict",
+              "synthetic_models", "model_mismatch", "api_error_status", "terminal_reason",
+              "effort_requested", "permission_mode", "execution_verdict",
               "denial_count", "denials",
               "malformed_stream_lines", "non_object_stream_lines", "error_text", "stderr_tail",
               "scope", "timeout_seconds", "prompt_sha256", "prompt_bytes", "needs_lead_decision",

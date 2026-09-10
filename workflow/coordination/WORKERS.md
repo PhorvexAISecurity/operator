@@ -41,7 +41,7 @@ Worker ids, idempotency keys, models and tool specifications must match
 ```sh
 W=workflow/coordination/workers.py
 python3 $W register --worker claude-impl-1 --worktree /absolute/existing/worktree \
-    --role implementer --model claude-opus-5 --effort max --permission-mode manual \
+    --role implementer --model claude-opus-5 --effort high --permission-mode manual \
     --allow-tool Read --allow-tool 'Bash(git status:*)' --deny-tool WebFetch
 python3 $W enqueue --worker claude-impl-1 --key t1-m140-impl --prompt-file /path/task.md \
     --scope 'phorvex/control/tenant_state.py and its tests' --timeout 3600 \
@@ -67,17 +67,30 @@ together. Durations must be finite and positive (`--timeout` ≤ 86400,
 
 ## Model and reasoning effort
 
-User-directed for this campaign: pinned `claude-opus-5` at effort `max`, which
+User-directed for this campaign: pinned `claude-opus-5` at effort `high`, which
 are the registration defaults. `--model` accepts only an explicitly pinned id —
 `opus`, `sonnet`, `default` and anything containing `latest` are rejected, and
 there is no fallback model. `--effort` is one of `low`, `medium`, `high`, `max`,
-is persisted with the worker, and is sent on **every** launch and resume.
+is persisted with the worker, and is sent on **every** launch and resume;
+`--effort max` remains selectable and receipts from earlier `max` runs keep the
+effort they recorded.
 
 Each job records the requested model and effort plus `models_observed`, every
-model id the CLI reported. If an observed id is not the requested one (a dated
-variant of the same id is accepted), the job records `model_mismatch: true`,
-fails with `model mismatch: requested ..., observed ...`, and the completion
-notice says so. A substituted model is never relabelled as Opus 5.
+model id the CLI reported for a turn. If an observed id is not the requested one
+(a dated variant of the same id is accepted), the job records
+`model_mismatch: true`, fails with `model mismatch: requested ..., observed ...`,
+and the completion notice says so. A substituted model is never relabelled as
+Opus 5.
+
+Two model fields are deliberately *not* mismatches. `model_usage_ids` lists
+everything the final event billed, which normally includes an auxiliary helper
+model. `synthetic_models` lists the CLI's own error placeholder — exactly
+`<synthetic>` — which it attributes an error turn to, for example on a quota
+error (`is_error: true`, `api_error_status: 429`,
+`terminal_reason: "api_error"`, while `subtype` is still `success`). That
+placeholder is recorded as a synthetic **error attribution** and always fails the
+job, so a quota failure stays a failure; it is never reported as a substituted
+model, and no other unknown model string is treated this way.
 
 ## Invocation and permissions
 
@@ -244,14 +257,15 @@ through another worktree.
 
 ## Bounded real-CLI smoke test (lead)
 
-1. `python3 $W register --worker smoke-1 --worktree "$PWD" --role implementer --model claude-opus-5 --effort max --allow-tool Read`
+1. `python3 $W register --worker smoke-1 --worktree "$PWD" --role implementer --model claude-opus-5 --effort high --allow-tool Read`
 2. Write `/tmp/smoke.md`: "Print the current branch name and stop. Do not edit files."
 3. `python3 $W enqueue --worker smoke-1 --key smoke-a --prompt-file /tmp/smoke.md --timeout 300`
 4. `python3 $W run --once --claude /absolute/path/to/claude --no-notices`, then
    `python3 $W status --worker smoke-1` until the job is terminal; check
    `session_started: true`, `state: done`, `models_observed`, `model_mismatch:
-   false` and `effort_requested: max`. If the CLI rejects a flag (`--effort`
-   included), the job fails with the CLI's stderr in `stderr_tail`.
+   false`, empty `synthetic_models` and `effort_requested: high`. If the CLI
+   rejects a flag (`--effort` included), the job fails with the CLI's stderr in
+   `stderr_tail`.
 5. Enqueue `--key smoke-b` and repeat step 4; confirm `resumed: true` and that
    `result` shows the session kept the earlier context.
 6. Try a denied action (for example a prompt needing `Bash` while only `Read` is
