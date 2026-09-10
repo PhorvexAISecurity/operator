@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 45
+revision: 46
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -22,7 +22,7 @@ checks:
     artifact: evidence/preflight-r4.json
     sha256: 4aacdb853f39e0ffe1cf7a981d3ae09db989d617f107b29f4f962fe9d4cdbb2c
     source_sha: b8a245ae6a04ac471ce97f2c3447c67cd604c646
-    at: '2026-09-10T22:25:47+00:00'
+    at: '2026-09-10T22:26:03+00:00'
   l1:
     result: PASS
     by: claude-v3-m136
@@ -64,7 +64,7 @@ checks:
     artifact: 04-diff.patch
     sha256: 496664ce7dc924ab89aaa4fbe8929cd9c957f68169585a33414cc6a7d895fd37
     source_sha: b8a245ae6a04ac471ce97f2c3447c67cd604c646
-    at: '2026-09-10T22:23:00+00:00'
+    at: '2026-09-10T22:26:03+00:00'
   p3:
     result: FAIL
     by: codex-lead
@@ -77,7 +77,7 @@ issues:
 - M-136
 title: Authenticate console requests and enforce server-side role and tenant grants
 profile: standard
-state: IMPLEMENTED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,10 +138,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
-    prior evidence.
-updated_at: '2026-09-10T22:25:47+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-10T22:26:04+00:00'
 configuration_history:
 - at: '2026-09-10T17:56:52+00:00'
   by: codex-lead
@@ -185,6 +185,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-10T22:22:59+00:00'
+  by: claude-v3-m136
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T22:26:03+00:00'
   by: claude-v3-m136
   fields:
   - implementation
@@ -258,6 +263,14 @@ transitions:
   to: IMPLEMENTED
   at: '2026-09-10T22:08:51+00:00'
   by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T22:26:03+00:00'
+  by: claude-v3-m136
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -487,10 +500,24 @@ check_history:
   sha256: 1d980f60f94ee1970ddd7da70e995d3a8953e8742c9bd125b81dd1da52bf8474
   source_sha: b8a245ae6a04ac471ce97f2c3447c67cd604c646
   at: '2026-09-10T22:24:33+00:00'
+- check: preflight
+  result: PASS
+  by: claude-v3-m136
+  artifact: evidence/preflight-r4.json
+  sha256: 4aacdb853f39e0ffe1cf7a981d3ae09db989d617f107b29f4f962fe9d4cdbb2c
+  source_sha: b8a245ae6a04ac471ce97f2c3447c67cd604c646
+  at: '2026-09-10T22:25:47+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m136
+  artifact: 04-diff.patch
+  sha256: 496664ce7dc924ab89aaa4fbe8929cd9c957f68169585a33414cc6a7d895fd37
+  source_sha: b8a245ae6a04ac471ce97f2c3447c67cd604c646
+  at: '2026-09-10T22:23:00+00:00'
 handoff:
-  id: V3-M136:36:review
-  from: codex-lead
-  to: claude-v3-m136
-  role: implementer
-  kind: review
-  revision: 36
+  id: V3-M136:46:submit
+  from: claude-v3-m136
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 46
