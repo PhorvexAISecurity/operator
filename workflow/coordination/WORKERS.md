@@ -172,13 +172,28 @@ CLI exited. Recovery is evidence-based and never silently replays a job:
 
 | Evidence for an in-flight job | Outcome |
 | --- | --- |
-| Receipt for this invocation | finalized from the receipt |
+| Receipt for this invocation, identity bound | finalized from the receipt |
 | Live wrapper with the exact recorded PID and start time | adopted, no second child |
 | Wrapper gone, its CLI still running | `interrupted`, **unresolved** |
 | Wrapper gone, records disagree with a live PID | `interrupted`, **unresolved**, nothing signalled |
 | Leader gone but owned members remain in its process group | `interrupted`, **unresolved**, leftover PIDs listed |
-| Wrapper gone with no receipt | `interrupted`, unresolved |
+| Wrapper gone with no receipt after a refreshed read | `interrupted`, unresolved |
+| Receipt binds this invocation but not the child's process identity | `interrupted`, **unresolved**, never finalized |
 | Nothing, past the spawn grace window | `interrupted`, unresolved; whether a CLI ran is unknown |
+
+Those reads are ordered deliberately. The wrapper fsyncs and renames its receipt
+**before** exiting, so a receipt that looked absent on the first read while the
+wrapper is already gone means the invocation finished between the two reads.
+Reconciliation therefore re-reads the child's own records once after observing
+the wrapper gone, and only then reaches a crash, orphan or spawn-window verdict —
+otherwise a completed job would be reported as `interrupted` with no model
+metadata at all. The same re-read guards `stop` (an invocation that finished on
+its own is finalized from its receipt instead of being recorded as a
+cancellation nothing actually performed) and `resolve`. A receipt is only used
+when its invocation id is a non-empty match **and** its process identity agrees
+with the child record; because the wrapper publishes that record twice — before
+exec, then with the CLI it started — a disagreement is re-read once before it is
+reported, so a stale snapshot is not mistaken for a mismatched receipt.
 
 An unresolved job holds its worker **and** one concurrency slot: no later job
 can reuse that session until the lead clears it. `status` reports `held_slots`,

@@ -896,31 +896,97 @@ def reconcile(state: dict) -> None:
                        reason=f"reconcile error: {type(exc).__name__}: {exc}")
 
 
+def receipt_verdict(job: dict, child: dict, receipt: dict) -> tuple[bool, str | None]:
+    """Is this the child's own receipt for this exact invocation?
+
+    Binds the invocation id and, when the child's own identity record is
+    present, its process identity too. A receipt that claims this invocation
+    from a different process is reported, never finalized. Two absent records
+    are not a match: an empty expected id binds nothing.
+    """
+    expected = job.get("invocation_id")
+    if not isinstance(expected, str) or not expected:
+        return False, None
+    if receipt.get("invocation_id") != expected:
+        return False, None
+    if child.get("invocation_id") == expected:
+        for pid_key, start_key in (("pid", "pid_start"), ("cli_pid", "cli_pid_start")):
+            if receipt.get(pid_key) is None and child.get(pid_key) is None:
+                continue
+            if (receipt.get(pid_key) != child.get(pid_key)
+                    or str(receipt.get(start_key)) != str(child.get(start_key))):
+                return False, (f"receipt for this invocation reports {pid_key} "
+                               f"{receipt.get(pid_key)!r} while the child record reports "
+                               f"{child.get(pid_key)!r}; refusing to finalize a receipt whose "
+                               f"process identity does not bind")
+    return True, None
+
+
+def bound_receipt(job: dict) -> tuple[dict, dict, str | None]:
+    """The child's own validated receipt, refreshing once before any disagreement.
+
+    The wrapper publishes its identity record twice — before exec, then with the
+    CLI it started — so a child snapshot taken between those writes looks like an
+    identity mismatch. A disagreement is only reported after a fresh re-read.
+    Returns the exact validated receipt object, so callers never finalize a
+    second, unchecked read.
+    """
+    directory = job_dir(job["job_id"])
+    child: dict = {}
+    for attempt in (0, 1):
+        child = read_json(directory / "child.json")
+        receipt = read_json(directory / "receipt.json")
+        usable, disagreement = receipt_verdict(job, child, receipt)
+        if usable:
+            return receipt, child, None
+        if not disagreement:
+            return {}, child, None
+        if attempt:
+            return {}, child, disagreement
+    return {}, child, None
+
+
 def reconcile_job(state: dict, identifier: str, job: dict) -> None:
     directory = job_dir(identifier)
-    child = read_json(directory / "child.json")
-    matching = child.get("invocation_id") == job.get("invocation_id")
-    if matching:
-        job.update(pid=child.get("pid"), pid_start=child.get("pid_start"),
-                   cli_pid=child.get("cli_pid"), cli_pid_start=child.get("cli_pid_start"))
-    note_session_evidence(state, job, directory)
-    receipt = read_json(directory / "receipt.json")
-    records = process_records(job, child) if matching else []
-    if receipt.get("invocation_id") == job.get("invocation_id"):
-        finalize(state, job, directory, receipt)
-        return
-    if any(record["alive"] and record["label"] == "wrapper" for record in records):
-        job["state"] = "running"  # Adopt the existing wrapper; never start a second one.
-        return
-    orphans = unresolved_processes(records)
-    if orphans:
-        interrupt(job, "wrapper is gone but its Claude CLI work is not accounted for: "
-                       + "; ".join(orphans) + ". Resolve it before this worker runs again")
-    elif matching:
-        interrupt(job, "child exited without a receipt (killed or crashed mid-invocation)")
-    elif time.time() - job.get("requested_at", 0) > SPAWN_GRACE_SECONDS:
-        interrupt(job, "supervisor stopped inside the spawn window; whether a Claude CLI ran "
-                       "is unknown, so this job is reported rather than replayed")
+    # Two bounded passes. The wrapper fsyncs and renames its receipt *before*
+    # exiting, so a receipt that was absent on the first read but whose wrapper
+    # is already gone means the invocation completed between our two reads: it
+    # must be re-read before any crash, orphan or spawn-window verdict, or a
+    # finished job would be reported as interrupted with no model metadata.
+    for final_pass in (False, True):
+        child = read_json(directory / "child.json")
+        matching = child.get("invocation_id") == job.get("invocation_id")
+        if matching:
+            job.update(pid=child.get("pid"), pid_start=child.get("pid_start"),
+                       cli_pid=child.get("cli_pid"), cli_pid_start=child.get("cli_pid_start"))
+        note_session_evidence(state, job, directory)
+        receipt = read_json(directory / "receipt.json")
+        usable, disagreement = receipt_verdict(job, child, receipt)
+        if usable:
+            finalize(state, job, directory, receipt)
+            return
+        if disagreement:
+            # A child snapshot read before the wrapper published its CLI
+            # identity looks like a mismatch; only a refreshed pair is final.
+            if final_pass:
+                interrupt(job, disagreement)
+                return
+            continue
+        records = process_records(job, child) if matching else []
+        if any(record["alive"] and record["label"] == "wrapper" for record in records):
+            job["state"] = "running"  # Adopt the existing wrapper; never a second one.
+            return
+        if not final_pass:
+            continue  # Wrapper looks gone: re-read its own records once, then decide.
+        orphans = unresolved_processes(records)
+        if orphans:
+            interrupt(job, "wrapper is gone but its Claude CLI work is not accounted for: "
+                           + "; ".join(orphans) + ". Resolve it before this worker runs again")
+        elif matching:
+            interrupt(job, "child exited without a receipt (killed or crashed mid-invocation)")
+        elif time.time() - job.get("requested_at", 0) > SPAWN_GRACE_SECONDS:
+            interrupt(job, "supervisor stopped inside the spawn window; whether a Claude CLI "
+                           "ran is unknown, so this job is reported rather than replayed")
 
 
 def interrupt(job: dict, reason: str) -> None:
@@ -1324,6 +1390,21 @@ def stop_job(state: dict, job: dict) -> dict:
         interrupt(job, "stop could not account for every owned process: " + "; ".join(problems))
         return {"job": job["job_id"], "state": job["state"], "signaled": signaled,
                 "unresolved": True, "problems": problems}
+    directory = job_dir(job["job_id"])
+    if not signaled:
+        # Nothing owned was alive to signal: the invocation may have finished on
+        # its own while the request was arriving. Its own receipt is better
+        # evidence than a cancellation this stop did not actually perform.
+        receipt, _, disagreement = bound_receipt(job)
+        if receipt:
+            finalize(state, job, directory, receipt)
+            return {"job": job["job_id"], "state": job["state"], "signaled": [],
+                    "unresolved": bool(job.get("unresolved")),
+                    "action": "invocation had already finished; finalized from its own receipt"}
+        if disagreement:
+            interrupt(job, disagreement)
+            return {"job": job["job_id"], "state": job["state"], "signaled": [],
+                    "unresolved": True, "problems": [disagreement]}
     job.update(state="canceled", reason="canceled by stop request", finished_at=utc(),
                unresolved=False, resolution="stopped by request", resolved_at=utc())
     return {"job": job["job_id"], "state": "canceled", "signaled": signaled, "unresolved": False}
@@ -1338,11 +1419,13 @@ def cmd_resolve(args: argparse.Namespace) -> int:
         directory = job_dir(args.job)
         # Every recovery transition keeps session evidence, whatever it decides.
         note_session_evidence(state, job, directory)
-        receipt = read_json(directory / "receipt.json")
-        if (receipt.get("invocation_id") == job.get("invocation_id")
-                and job["state"] in (*ACTIVE_STATES, "interrupted")):
+        receipt, _, disagreement = bound_receipt(job)
+        recoverable = job["state"] in (*ACTIVE_STATES, "interrupted")
+        if receipt and recoverable:
             # A receipt is better evidence than an interruption guess.
             finalize(state, job, directory, receipt)
+        elif disagreement and recoverable:
+            interrupt(job, disagreement)
         if not job.get("unresolved"):
             outcome = {"job": args.job, "state": job["state"], "unresolved": False,
                        "action": "nothing to resolve"}
@@ -1363,10 +1446,16 @@ def cmd_resolve(args: argparse.Namespace) -> int:
                            "action": "still running; pass --terminate to end the owned "
                                      "process, or wait for it to finish"}
             else:
+                # Nothing owned is alive any more: re-read in case the receipt
+                # landed after the read above, so a finished invocation is
+                # finalized rather than released as an interruption.
+                late, _, _ = bound_receipt(job)
+                if late and job["state"] in (*ACTIVE_STATES, "interrupted"):
+                    finalize(state, job, directory, late)
                 job.update(unresolved=False, resolved_at=utc(), needs_lead_decision=False,
                            resolution=f"resolved by lead{' with --terminate' if args.terminate else ''}")
                 outcome = {"job": args.job, "state": job["state"], "unresolved": False,
-                           "signaled": signaled,
+                           "signaled": signaled, "late_receipt": bool(late),
                            "action": "worker released; queued jobs may dispatch again"}
     print(json.dumps(outcome, indent=2))
     return int(bool(outcome.get("unresolved")))

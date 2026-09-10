@@ -18,10 +18,45 @@ merged or self-approved.
   successful job as failed. Fixed with typed stream reads, three-source denial
   capture and an explicit execution verdict. See the post-acceptance section of
   `WORKER-RUNNER-ACCEPTANCE.md`.
-- Pass 5 (this report): the four pre-publication findings in
-  `LEAD-REVIEW-R4.md` — test-cleanup process ownership, completed typed final
-  metadata, synthetic quota sentinel attribution, and the `high` effort default.
-  The lead's acceptance and review artifacts are left exactly as they are.
+- Pass 5: the four pre-publication findings in `LEAD-REVIEW-R4.md` — test-cleanup
+  process ownership, completed typed final metadata, synthetic quota sentinel
+  attribution, and the `high` effort default.
+- Pass 6 (this report): the receipt/liveness race found by the independent
+  combined-suite runs on PR175 head `4d5e5b0` — completed jobs were sometimes
+  recorded as `interrupted` with no model metadata. The lead's acceptance and
+  review artifacts are left exactly as they are.
+
+## Pass 6: receipt reconciliation race
+
+`reconcile_job` read `receipt.json` first and process liveness second. A wrapper
+that finished between those two reads was seen as "no receipt, wrapper dead" and
+the completed job was interrupted — which also explains the missing
+`model_mismatch` field in the first 254-test composition run (an interrupted job
+never reaches `finalize`, so no model metadata exists) and the three
+`interrupted != done/failed` failures in the second. The lead reproduced it
+deterministically with a real wrapper and CLI in `lead_receipt_race.py`.
+
+The ordering is now used as the guarantee: the wrapper fsyncs and renames its
+receipt **before** exiting, so observing the wrapper gone means a completed run's
+receipt is already durable.
+
+- `reconcile_job` runs two bounded passes. After the wrapper is observed gone it
+  re-reads the child's own records once, and only then reaches a crash, orphan or
+  spawn-window verdict. No job is replayed and no orphan ownership is relaxed.
+- `receipt_verdict` binds identity before anything is finalized: a non-empty
+  invocation id must match (two absent records are not a match), and when the
+  child record is present its `pid`/`cli_pid` and start times must agree.
+  A receipt that claims the invocation from another process is reported and
+  never finalized.
+- Because the wrapper publishes its identity record twice — before exec, then
+  with the CLI it started — a child snapshot taken between those writes looks
+  like an identity mismatch. `bound_receipt` re-reads the pair once before any
+  disagreement is reported, so a stale snapshot is not mistaken for tampering.
+- The analogous windows are closed the same way: `stop` finalizes the exact
+  already-validated receipt when it finds nothing alive to signal (rather than
+  recording a cancellation it never performed), and `resolve` re-reads before
+  releasing a worker. Deliberate cancellations that did signal a live process
+  still record `canceled`.
 
 ## Pass 5: R4 pre-publication findings
 
@@ -77,11 +112,11 @@ problems.
 
 | Path | Change |
 | --- | --- |
-| `workflow/coordination/workers.py` | 1552 lines: register / enqueue / run / status / result / stop / resolve plus the `_child` wrapper |
-| `workflow/tools/tests/test_workers.py` | 1673 lines, **103 tests** driving a fake Claude executable, real process-group fixtures, recorded-shape stream replays and outside-observer cleanup checks |
+| `workflow/coordination/workers.py` | 1641 lines: register / enqueue / run / status / result / stop / resolve plus the `_child` wrapper |
+| `workflow/tools/tests/test_workers.py` | 1853 lines, **110 tests** driving a fake Claude executable, real process-group fixtures, recorded-shape stream replays, outside-observer cleanup checks and deterministic real-wrapper scheduling races |
 | `workflow/tools/tests/fixtures/claude-stream-permission-denied.jsonl` | pass 4: sanitized replay of the real event shapes, with a README explaining what is synthetic |
 | `workflow/tools/tests/fixtures/claude-stream-quota-synthetic.jsonl` | pass 5: sanitized quota failure with the `<synthetic>` error placeholder |
-| `workflow/coordination/WORKERS.md` | 287-line runbook: layout and umask rules, model/effort policy including the synthetic placeholder, commands, invocation flags, outcome and denial rules, group-aware recovery/cancellation/timeout, service, notices, lead smoke test, stopping point |
+| `workflow/coordination/WORKERS.md` | 302-line runbook: layout and umask rules, model/effort policy including the synthetic placeholder, commands, invocation flags, outcome and denial rules, receipt/liveness read ordering, group-aware recovery/cancellation/timeout, service, notices, lead smoke test, stopping point |
 | `workflow/coordination/WORKER-RUNNER-ACCEPTANCE.md` | pass 4: post-acceptance defect and correction appended; earlier acceptance evidence untouched |
 | `workflow/coordination/BUS.md` | four-line pointer to `WORKERS.md` in the runner-handoff section |
 | `workflow/tools/tests/test_operations.py` | R1 item 8: per-test temp path replaces the shared `/tmp` report fixture |
@@ -287,6 +322,30 @@ Pass 5 ran everything on the pinned interpreter
 The runner suite grew from 90 to 103 tests: three cleanup-ownership tests, four
 typed-metadata tests, five quota-attribution tests and one explicit-`max` test.
 
+Pass 6 (pinned 3.11) after the receipt-race repair:
+
+| Run | Result |
+| --- | --- |
+| lead probe `lead_receipt_race.py` | **OK**, `ACTUAL_JOB done None` (was `FAIL: 'interrupted' != 'done'`) |
+| `-m unittest -b tools.tests.test_workers` | **110 OK** (48.7 s) |
+| `-m unittest discover -b -s tools/tests -p 'test_*.py'` | **223 OK**, three consecutive runs (81.6 s, 77.3 s, 78.3 s) |
+| `-m compileall -q .` | clean |
+| `sync-index --check` / `render-issues --check` | PASS / PASS |
+| `doctor` | 0 errors, 17 pre-existing warnings |
+
+Red/green evidence for the seven new tests, run against PR175 head `4d5e5b0`
+with only the runner module swapped: 3 failures + 5 errors of 7 tests, including
+`test_receipt_written_between_reads_is_finalized_not_interrupted`
+(`'interrupted' != 'done'` — the reported defect),
+`test_receipt_whose_process_identity_disagrees_is_never_finalized`
+(`'done' != 'interrupted'` for both `pid` and `cli_pid` — the old code finalized
+an unbound receipt) and the stop-race test. Two intentionally pass on the old
+code because they are controls: the real-crash control (`interrupted` must stay
+`interrupted`) and the resolve path that already re-read. The stale-child control
+is red against the intermediate version of this fix — verified by temporarily
+treating any disagreement as final, which produced `'interrupted' != 'done'`,
+then reverting.
+
 - Focused runner tests also pass under the standard `0022` umask (80 OK at pass 3).
 - `python3 -m compileall -q .`; `tools/workflow.py sync-index --check` (PASS);
   `render-issues --check` (PASS); `doctor` — 0 errors, 17 pre-existing
@@ -353,6 +412,15 @@ full-suite `PermissionError` and its cause were as reported.
 - The cleanup meta tests spawn two bounded child test runs, adding roughly 20 s
   to the runner suite; they are skipped inside a meta-test child
   (`PHORVEX_RUNNER_META_TEST`).
+- The receipt re-read is bounded to one extra pair of reads, not a poll: it
+  relies on the wrapper writing its receipt before exiting. A wrapper that was
+  killed after fsync but before rename would still be reported as a crash, which
+  is the conservative direction.
+- The re-read closes the reported window; it cannot make an arbitrarily delayed
+  external writer safe. Only the runner's own wrapper writes these records.
+- `stop` finalizes instead of cancelling only when it signalled nothing. If it
+  did signal a live process and a receipt appears afterwards, the job stays
+  `canceled`, and the receipt remains readable in the job directory.
 - `--effort` value names (`low|medium|high|max`) are enforced locally but
   unverified against the CLI; a mismatch fails loudly rather than silently
   running at a lower effort.

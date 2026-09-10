@@ -268,6 +268,42 @@ class RunnerTestCase(unittest.TestCase):
             time.sleep(0.05)
         raise AssertionError("the fake CLI recorded no descendant")
 
+    def wait_for_receipt(self, identifier):
+        path = workers.job_dir(identifier) / "receipt.json"
+        for _ in range(400):
+            record = workers.read_json(path)
+            if record.get("invocation_id"):
+                return record
+            time.sleep(0.05)
+        raise AssertionError("the real wrapper wrote no receipt")
+
+    def gated_receipt_read(self, identifier, *, require_receipt=True):
+        """A `read_json` replacement that hides the *first* receipt read.
+
+        It first waits for the real wrapper to be gone, so the caller observes
+        exactly the reported window: the receipt looked absent on the initial
+        read, and the liveness read then found the wrapper already exited.
+        """
+        original = workers.read_json
+        directory = workers.job_dir(identifier)
+        hidden = []
+
+        def read(path):
+            path = Path(path)
+            if path.name == "receipt.json" and not hidden:
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    child = original(directory / "child.json")
+                    gone = not workers.process_alive(child.get("pid"), child.get("pid_start"))
+                    if gone and (original(path).get("invocation_id") or not require_receipt):
+                        hidden.append(str(path))
+                        return {}
+                    time.sleep(0.01)
+                raise AssertionError("the real wrapper did not settle within the test bound")
+            return original(path)
+
+        return read, hidden
+
     def wait_until_dead(self, pid, pid_start):
         for _ in range(200):
             if not workers.process_alive(pid, pid_start):
@@ -1052,6 +1088,150 @@ class RecoveryTests(RunnerTestCase):
         self.assertEqual(job["state"], "done", job.get("reason"))
         self.assertIsNone(job["reason"])
         self.assertTrue(workers.load_state()["workers"]["w1"]["session_started"])
+
+
+class ReceiptRaceTests(RunnerTestCase):
+    """A receipt that lands between two reads is a finished job, not a crash."""
+
+    def rearm(self, identifier="w1:j1"):
+        """Present the finished invocation to reconcile as still in flight."""
+        with workers.locked_state() as state:
+            state["jobs"][identifier]["state"] = "running"
+
+    def test_receipt_written_between_reads_is_finalized_not_interrupted(self):
+        self.register()
+        self.enqueue()
+        self.pass_once()
+        self.wait_for_cli("w1:j1")
+        self.rearm()
+        read, hidden = self.gated_receipt_read("w1:j1")
+        with patch.object(workers, "read_json", side_effect=read):
+            state = self.pass_once()
+        self.assertTrue(hidden, "the first receipt read must have been hidden")
+        job = state["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "done", job.get("reason"))
+        self.assertIsNone(job["reason"])
+        self.assertFalse(job["unresolved"])
+        self.assertEqual(job["exit_status"], 0)
+        self.assertEqual(job["execution_verdict"], "succeeded")
+        # The metadata a false interruption used to omit entirely.
+        for field in ("model_mismatch", "models_observed", "session_match", "num_turns"):
+            self.assertIn(field, job)
+        self.assertEqual(job["models_observed"], ["claude-opus-5-fake"])
+        self.assertEqual(len(self.invocations()), 1, "no replay of a finished job")
+
+    def test_stale_child_snapshot_is_refreshed_before_any_mismatch_verdict(self):
+        self.register()
+        self.enqueue()
+        self.pass_once()
+        receipt = self.wait_for_receipt("w1:j1")
+        self.assertTrue(receipt["cli_pid"])
+        self.rearm()
+        original = workers.read_json
+        stale = []
+
+        def read(path):
+            record = original(path)
+            if Path(path).name == "child.json" and not stale and record.get("cli_pid"):
+                stale.append(True)
+                # Exactly the pre-exec write: identity known, CLI not yet published.
+                return dict(record, cli_pid=None, cli_pid_start=None)
+            return record
+
+        with patch.object(workers, "read_json", side_effect=read):
+            state = self.pass_once()
+        self.assertTrue(stale, "the stale child snapshot must have been served once")
+        job = state["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "done", job.get("reason"))
+        self.assertIsNone(job["reason"])
+        self.assertFalse(job["unresolved"])
+
+    def test_a_real_crash_without_a_receipt_is_still_interrupted(self):
+        self.register()
+        self.enqueue()
+        self.pass_once("hang")
+        child = self.wait_for_cli("w1:j1")
+        for pid_key, start_key in (("pid", "pid_start"), ("cli_pid", "cli_pid_start")):
+            os.kill(child[pid_key], signal.SIGKILL)
+            self.wait_until_dead(child[pid_key], child[start_key])
+        read, hidden = self.gated_receipt_read("w1:j1", require_receipt=False)
+        with patch.object(workers, "read_json", side_effect=read):
+            state = self.pass_once("hang")
+        self.assertTrue(hidden)
+        job = state["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "interrupted")
+        self.assertIn("without a receipt", job["reason"])
+        self.assertTrue(job["unresolved"])
+        self.assertNotIn("execution_verdict", job)
+
+    def test_receipt_whose_process_identity_disagrees_is_never_finalized(self):
+        self.register()
+        self.enqueue()
+        self.pass_once()
+        receipt = self.wait_for_receipt("w1:j1")
+        path = workers.job_dir("w1:j1") / "receipt.json"
+        for field in ("pid", "cli_pid"):
+            with self.subTest(field=field):
+                workers.write_private(path, json.dumps(dict(receipt,
+                                                            **{field: receipt[field] + 7})))
+                self.rearm()
+                job = self.pass_once()["jobs"]["w1:j1"]
+                self.assertEqual(job["state"], "interrupted")
+                self.assertIn("process identity does not bind", job["reason"])
+                self.assertIn(field, job["reason"])
+                self.assertTrue(job["unresolved"])
+        workers.write_private(path, json.dumps(receipt))
+        self.rearm()
+        self.assertEqual(self.pass_once()["jobs"]["w1:j1"]["state"], "done")
+
+    def test_two_absent_records_are_never_a_receipt_match(self):
+        for job in ({}, {"invocation_id": None}, {"invocation_id": ""}):
+            with self.subTest(job=job):
+                self.assertEqual(workers.receipt_verdict(job, {}, {}), (False, None))
+        usable, problem = workers.receipt_verdict({"invocation_id": "abc"}, {}, {})
+        self.assertEqual((usable, problem), (False, None))
+        usable, problem = workers.receipt_verdict(
+            {"invocation_id": "abc"},
+            {"invocation_id": "abc", "pid": 5, "pid_start": "1", "cli_pid": 6,
+             "cli_pid_start": "2"},
+            {"invocation_id": "abc", "pid": 5, "pid_start": "1", "cli_pid": 6,
+             "cli_pid_start": "2"})
+        self.assertEqual((usable, problem), (True, None))
+
+    def settled_wrapper(self, identifier="w1:j1"):
+        """Wait until the real wrapper has written its receipt and exited."""
+        child = self.wait_for_cli(identifier)
+        self.wait_for_receipt(identifier)
+        self.wait_until_dead(child["pid"], child["pid_start"])
+        return child
+
+    def test_stop_after_the_invocation_finished_finalizes_from_its_receipt(self):
+        self.register()
+        self.enqueue()
+        self.pass_once()
+        self.settled_wrapper()
+        self.rearm()
+        outcome = json.loads(self.capture(["stop", "--job", "w1:j1"]))
+        self.assertEqual(outcome["signaled"], [])
+        self.assertIn("finalized from its own receipt", outcome["action"])
+        job = workers.load_state()["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "done", job.get("reason"))
+        self.assertEqual(job["execution_verdict"], "succeeded")
+        self.assertIn("model_mismatch", job)
+        self.assertFalse(job["unresolved"])
+
+    def test_resolve_finalizes_a_receipt_that_lands_after_its_first_read(self):
+        self.register()
+        self.enqueue()
+        self.pass_once()
+        self.settled_wrapper()
+        with workers.locked_state() as state:
+            workers.interrupt(state["jobs"]["w1:j1"], "fixture: interrupted before the receipt")
+        outcome = json.loads(self.capture(["resolve", "--job", "w1:j1"]))
+        self.assertEqual(outcome["unresolved"], False)
+        job = workers.load_state()["jobs"]["w1:j1"]
+        self.assertEqual(job["state"], "done", job.get("reason"))
+        self.assertIn("model_mismatch", job)
 
 
 class StopTests(RunnerTestCase):
