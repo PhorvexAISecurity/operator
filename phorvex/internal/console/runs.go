@@ -332,7 +332,7 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	target := scenarioFallbackContext
 	provider, targetLabel := "Kubernetes", target
 	for _, t := range rm.ClusterTargets() {
-		if t.ID == targetID {
+		if normalizeTargetID(t.ID) == normalizeTargetID(targetID) {
 			if !t.Runnable {
 				return "", fmt.Errorf("cluster target %q execution is %s", t.Label, t.Note)
 			}
@@ -475,7 +475,9 @@ func (rm *RunManager) SuiteDestination(name string) (runDestination, error) {
 func (rm *RunManager) ScenarioDestination(targetID string) runDestination {
 	target := scenarioFallbackContext
 	for _, t := range rm.ClusterTargets() {
-		if t.ID == targetID {
+		// Alias-aware: the selector may send "in-cluster" for the same cluster a grant spells
+		// "default", and an omitted target means that cluster too.
+		if normalizeTargetID(t.ID) == normalizeTargetID(targetID) {
 			target = t.Context
 		}
 	}

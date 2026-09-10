@@ -685,6 +685,129 @@ func TestTargetAliasesResolveOnce(t *testing.T) {
 	}
 }
 
+// /api/cost is a COMPOSITE of three sources with different owners. A grant for a remote cluster
+// authorizes that cluster's pricing and nothing else: it must not pull in this console's own
+// decision audit or its local benchmark corpus.
+func TestCompositeCostSourcesAreAuthorizedSeparately(t *testing.T) {
+	// Two real audit records an hour apart => a measurable actuation rate of 2/hr.
+	first := decisionRec("tenant-a", "private-pod")
+	second := decisionRec("tenant-a", "private-pod")
+	first.Time = time.Date(2026, 9, 10, 20, 0, 0, 0, time.UTC)
+	second.Time = first.Time.Add(time.Hour)
+	cfg := Config{Root: t.TempDir(), AuditPath: writeDecisionAudit(t, first, second)}
+
+	read := func(f *authFixture, subject, target string) (int, map[string]any) {
+		t.Helper()
+		w := f.do(f.albReqAs(t, http.MethodGet, "/api/cost?target="+target, "", subject))
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("cost body: %v (%s)", err, w.Body.String())
+		}
+		return w.Code, body
+	}
+
+	// Positive control FIRST: a grant on this console's own cluster measures the real rate, so
+	// the fixture genuinely produces the figure the remote case below must not receive.
+	local := newAuthFixture(t, cfg, operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}))
+	code, body := read(local, "op", defaultTargetID)
+	if code != http.StatusOK || body["actuationRatePerHr"] != float64(2) {
+		t.Fatalf("local-source positive control: %d rate=%v", code, body["actuationRatePerHr"])
+	}
+
+	// A remote-only grant reads the remote cluster's pricing and NOTHING local.
+	remote := newAuthFixture(t, cfg, operatorGrant("op", []string{wildcardScope}, []string{"remote-eks"}))
+	code, body = read(remote, "op", "remote-eks")
+	if code != http.StatusOK {
+		t.Fatalf("a remote-only grant must still read its own cluster's pricing: %d", code)
+	}
+	if _, present := body["actuationRatePerHr"]; present {
+		t.Fatalf("remote-only grant received the local audit's actuation rate: %v", body["actuationRatePerHr"])
+	}
+	if _, present := body["pricing"]; !present {
+		t.Fatal("the remote cluster's pricing must still be served to a grant that holds it")
+	}
+	// Withholding is stated, not silently zeroed.
+	withheld, _ := body["withheld"].([]any)
+	if len(withheld) == 0 {
+		t.Fatalf("withheld figures must be named in the response: %v", body)
+	}
+
+	// A tenant-limited grant on the local cluster gets the audit rate (tenant-filtered) but NOT
+	// the unattributable benchmark corpus.
+	scoped := newAuthFixture(t, cfg, operatorGrant("op", []string{"tenant-a"}, []string{defaultTargetID}))
+	code, body = read(scoped, "op", defaultTargetID)
+	if code != http.StatusOK || body["actuationRatePerHr"] != float64(2) {
+		t.Fatalf("tenant-limited local grant: %d rate=%v", code, body["actuationRatePerHr"])
+	}
+	if _, present := body["totalSavings"]; present {
+		t.Fatalf("the private benchmark corpus reached a tenant-limited grant: %v", body)
+	}
+}
+
+// A request that NAMES a cluster must never be served from a different one. The in-cluster
+// fallback is legitimate only for the spellings that mean "this console's own cluster".
+func TestNamedClusterIsNeverSubstitutedByTheDefault(t *testing.T) {
+	// No kubeconfig and no in-cluster environment: nothing can resolve.
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "")
+
+	if _, err := restConfigFor("remote-eks"); err == nil {
+		t.Fatal("an explicitly named, unreachable cluster must be an error")
+	} else if !strings.Contains(err.Error(), "remote-eks") {
+		t.Fatalf("the error must name the cluster that could not be reached: %v", err)
+	}
+	// The local aliases mean "this pod's own cluster" — a legitimate default. With nothing
+	// configured at all they fail for the ordinary reason rather than substituting a cluster.
+	for _, name := range []string{"", inClusterTargetID, defaultTargetID} {
+		if _, err := restConfigFor(name); err == nil {
+			t.Fatalf("restConfigFor(%q) unexpectedly resolved with no configuration at all", name)
+		}
+	}
+}
+
+// The three spellings of "this console's own cluster" are ONE resource everywhere: in a grant, in
+// the effective destination, and in the credential resolver. A documented ["default"] grant has
+// to cover the id the dashboard's selector actually sends, which in a deployed pod is
+// "in-cluster".
+func TestLocalClusterAliasesAreOneResource(t *testing.T) {
+	for _, spelling := range []string{"", inClusterTargetID, defaultTargetID} {
+		if got := normalizeTargetID(spelling); got != defaultTargetID {
+			t.Fatalf("normalizeTargetID(%q) = %q, want %q", spelling, got, defaultTargetID)
+		}
+	}
+	if normalizeTargetID("remote-eks") != "remote-eks" {
+		t.Fatal("a real cluster name must not be collapsed into the local alias")
+	}
+
+	// A grant written the documented way reaches all three spellings, and nothing else.
+	granted := testPrincipal([]Role{RoleOperator}, []string{wildcardScope}, []string{defaultTargetID})
+	for _, spelling := range []string{"", inClusterTargetID, defaultTargetID} {
+		if !granted.AllowsTarget(spelling) {
+			t.Fatalf("a [\"default\"] grant must cover the %q spelling of its own cluster", spelling)
+		}
+	}
+	if granted.AllowsTarget("remote-eks") {
+		t.Fatal("a local-cluster grant must not reach a remote cluster")
+	}
+
+	// End to end: the selector's "in-cluster" id is served to a documented default grant.
+	f := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}))
+	for _, q := range []string{"", "?target=" + inClusterTargetID, "?target=" + defaultTargetID} {
+		if w := f.do(f.albReqAs(t, http.MethodGet, "/api/pricing"+q, "", "op")); w.Code == http.StatusForbidden {
+			t.Fatalf("/api/pricing%s for a [\"default\"] grant: %s", q, w.Body.String())
+		}
+	}
+	// And a grant for ONLY the in-cluster spelling reaches the same cluster under any spelling.
+	f2 := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{wildcardScope}, []string{inClusterTargetID}))
+	if w := f2.do(f2.albReqAs(t, http.MethodGet, "/api/pricing?target="+defaultTargetID, "", "op")); w.Code == http.StatusForbidden {
+		t.Fatalf("an [\"in-cluster\"] grant must reach the same cluster spelled \"default\": %s", w.Body.String())
+	}
+	if w := f2.do(f2.albReqAs(t, http.MethodGet, "/api/pricing?target=remote-eks", "", "op")); w.Code != http.StatusForbidden {
+		t.Fatalf("a local-cluster grant reached remote-eks: %d", w.Code)
+	}
+}
+
 // The global red-team controls write shared state that belongs to no tenant.
 func TestGlobalRedteamControlsRequireCrossTenantGrant(t *testing.T) {
 	limited := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"vllm"}, []string{wildcardScope}))

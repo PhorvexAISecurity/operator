@@ -31,6 +31,21 @@ func kubeContexts() []string {
 	return out
 }
 
+// kubeContextExists reports whether the operator's kubeconfig really defines this context. It
+// distinguishes a DELIBERATELY configured context that happens to be called "default" or
+// "in-cluster" from the sentinel spellings that mean "this console's own cluster".
+func kubeContextExists(name string) bool {
+	if name == "" {
+		return false
+	}
+	cfg, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	if err != nil || cfg == nil {
+		return false
+	}
+	_, ok := cfg.Contexts[name]
+	return ok
+}
+
 // classifyContext maps a kubeconfig context name to a target label/note WITHOUT inventing a
 // context string — the ID/Context IS the real kubeconfig context.
 func classifyContext(ctx string) ClusterTarget {

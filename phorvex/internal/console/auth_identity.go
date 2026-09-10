@@ -44,6 +44,25 @@ const wildcardScope = "*"
 // an omitted parameter can never silently escape the configured scope.
 const defaultTargetID = "default"
 
+// inClusterTargetID is what ClusterTargets() emits for that SAME cluster when the console runs as
+// a pod with no kubeconfig, and it is what the dashboard's selector then sends back. It names the
+// same resource as defaultTargetID and as an omitted parameter.
+//
+// All three spellings are reconciled in exactly one place — normalizeTargetID — so a grant
+// written as the documented ["default"] covers the id the UI actually sends, and the credential
+// resolver recognises the same alias set. Letting them drift meant a documented default grant
+// denied the console's own cluster.
+const inClusterTargetID = "in-cluster"
+
+// isLocalTargetAlias reports whether a target name refers to this console's own cluster.
+func isLocalTargetAlias(s string) bool {
+	switch strings.TrimSpace(s) {
+	case "", inClusterTargetID, defaultTargetID:
+		return true
+	}
+	return false
+}
+
 // Principal is an authenticated, authorized console caller.
 type Principal struct {
 	Issuer  string // verified token issuer (ALB: the Cognito user-pool issuer)
@@ -58,13 +77,15 @@ type Principal struct {
 	Lens string
 }
 
-// normalizeTargetID maps an omitted ?target=/?context= onto the explicit default-target id, so
-// scope checks never treat "unspecified" as "unrestricted".
+// normalizeTargetID maps every spelling of "this console's own cluster" — omitted, "in-cluster",
+// or the "default" sentinel — onto one id, so scope checks never treat "unspecified" as
+// "unrestricted" and never treat two names for one cluster as two different clusters.
 func normalizeTargetID(s string) string {
-	if t := strings.TrimSpace(s); t != "" {
-		return t
+	t := strings.TrimSpace(s)
+	if isLocalTargetAlias(t) {
+		return defaultTargetID
 	}
-	return defaultTargetID
+	return t
 }
 
 func scopeContains(scope []string, want string) bool {

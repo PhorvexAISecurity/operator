@@ -95,11 +95,14 @@ func ParseGrantPolicy(raw []byte) (*GrantTable, error) {
 				roles = append(roles, role)
 			}
 		}
-		tenants, err := cleanScope(g.Tenants)
+		tenants, err := cleanScope(g.Tenants, nil)
 		if err != nil {
 			return nil, fmt.Errorf("grants: entry %d (%s): tenants: %w", i, subject, err)
 		}
-		targets, err := cleanScope(g.Targets)
+		// Target entries are normalized as they are stored, so a grant written "in-cluster" and a
+		// grant written "default" are the same scope — the same reconciliation the request side
+		// applies. Otherwise the two spellings of one cluster would be two different grants.
+		targets, err := cleanScope(g.Targets, normalizeTargetID)
 		if err != nil {
 			return nil, fmt.Errorf("grants: entry %d (%s): targets: %w", i, subject, err)
 		}
@@ -111,13 +114,18 @@ func ParseGrantPolicy(raw []byte) (*GrantTable, error) {
 	return t, nil
 }
 
-func cleanScope(in []string) ([]string, error) {
+// cleanScope validates and de-duplicates a scope list. normalize, when supplied, folds equivalent
+// spellings of one resource together before storage.
+func cleanScope(in []string, normalize func(string) string) ([]string, error) {
 	out := make([]string, 0, len(in))
 	seen := map[string]bool{}
 	for _, s := range in {
 		v := strings.TrimSpace(s)
 		if v == "" {
 			return nil, fmt.Errorf("empty scope entry")
+		}
+		if normalize != nil && v != wildcardScope {
+			v = normalize(v)
 		}
 		if seen[v] {
 			continue

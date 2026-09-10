@@ -112,9 +112,21 @@ caller's projection below its grant and can never widen it. It is not a credenti
 
 - `tenants` — tenant / namespace identifiers. `["*"]` is cross-tenant admin and has to be written
   out; an omitted or empty list grants nothing.
-- `targets` — cluster target identifiers. `"default"` names the cluster this console runs on (the
-  target a request selects by omitting `?target=` / `?context=`); `["*"]` is every target. An
-  omitted list grants no target, so an omitted parameter cannot escape the configured scope.
+- `targets` — cluster target identifiers. `"default"` names the cluster this console runs on;
+  `["*"]` is every target. An omitted list grants no target, so an omitted parameter cannot escape
+  the configured scope.
+
+  Three spellings mean that one cluster and are treated as a single resource everywhere — in a
+  grant, in an effective destination, and in the credential resolver: an **omitted**
+  `?target=`/`?context=`, the id `in-cluster` (what the target selector sends in a deployed pod),
+  and the `default` sentinel. Writing the documented `["default"]` therefore covers what the
+  dashboard actually sends. A kubeconfig that deliberately defines a context named `default` or
+  `in-cluster` is still honoured as that context; the sentinel only applies when no such context
+  exists.
+
+  Any OTHER named cluster must resolve. A request that names a cluster the console cannot reach is
+  an error — it is never served from the pod's own cluster instead, because that would silently
+  substitute a different resource for the one the grant was checked against.
 
 Unknown subject, role, tenant or target fails closed. The audit actor on `/api/policy/edit` and
 the requester/approver on the apply-fix two-key flow are the **verified subject**
@@ -167,6 +179,12 @@ A route's declared scope has to match what its handler actually does, not what t
   `?target=`, they are aliases for a single cluster, not two independent scopes. Checking each
   separately made the alias a caller *did not* use mean "default", so an identity granted only a
   remote cluster was refused for naming that cluster explicitly.
+- **A composite endpoint authorizes each source separately.** `/api/cost` mixes three: the
+  selected cluster's pricing and operator footprint, this console's own decision audit (the
+  actuation rate), and this console's local benchmark corpus (the scenario comparison). A grant
+  for a remote cluster authorizes the first and nothing else; the figures it does not cover are
+  **omitted and named** in a `withheld` list rather than emitted as zeros that would read as a
+  measurement.
 - **Every local reader names the source it reads.** The owner surfaces, the audit aggregates, the
   attack ledger and the whole private evidence corpus read this console's own audit file, ledger
   and harness corpus. They declare that source's cluster, so an identity with a tenant grant but

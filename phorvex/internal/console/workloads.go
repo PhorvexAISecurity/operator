@@ -12,6 +12,7 @@ package console
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -26,7 +27,7 @@ import (
 
 // Workload is one real controller (or standalone pod) on the live cluster.
 type Workload struct {
-	Kind     string            `json:"kind"`     // Deployment | StatefulSet | DaemonSet | Pod
+	Kind     string            `json:"kind"` // Deployment | StatefulSet | DaemonSet | Pod
 	Name     string            `json:"name"`
 	Replicas int               `json:"replicas"`
 	Ready    int               `json:"ready"`
@@ -59,21 +60,37 @@ func clientForContext(ctxName string) (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(rc)
 }
 
-// restConfigFor resolves the REST config for a kubeconfig context, falling back to the pod's
-// in-cluster ServiceAccount when no kubeconfig resolves ("" or the "in-cluster" sentinel). It is
-// the one place the dual dev-box/in-cluster credential resolution lives.
+// restConfigFor resolves the REST config for a kubeconfig context. It is the one place the dual
+// dev-box/in-cluster credential resolution lives.
+//
+// [M-136] The in-cluster fallback applies ONLY when no cluster was named — "" or the explicit
+// "in-cluster" sentinel, which mean "this pod's own cluster" and are a legitimate default. A
+// request that NAMES a cluster and cannot reach it is an error, not an invitation to read a
+// different one: falling back there let a request authorized for a named remote cluster read the
+// deployment's own in-cluster data instead, which is a silent substitution of the resource the
+// grant was checked against.
 func restConfigFor(ctxName string) (*rest.Config, error) {
-	if ctxName == "in-cluster" {
-		ctxName = ""
+	name := strings.TrimSpace(ctxName)
+	// The alias set is the one normalizeTargetID uses, so the cluster the grant was checked
+	// against and the cluster the credential resolves to are the same resource.
+	local := isLocalTargetAlias(name)
+	if local && name != "" && !kubeContextExists(name) {
+		// Nothing in the kubeconfig claims this name, so it is the sentinel rather than a
+		// context. A kubeconfig that DOES define a context called "default" or "in-cluster" is
+		// honoured deliberately by the check above rather than being shadowed by the sentinel.
+		name = ""
 	}
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	overrides := &clientcmd.ConfigOverrides{}
-	if ctxName != "" {
-		overrides.CurrentContext = ctxName
+	if name != "" {
+		overrides.CurrentContext = name
 	}
 	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
 	rc, err := cc.ClientConfig()
 	if err != nil {
+		if !local {
+			return nil, fmt.Errorf("cluster context %q is not available: %w", ctxName, err)
+		}
 		ic, ierr := rest.InClusterConfig()
 		if ierr != nil {
 			return nil, err

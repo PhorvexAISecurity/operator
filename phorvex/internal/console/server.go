@@ -232,21 +232,57 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 		nodeRate = pricing.TotalPerHr // no GPU → use the cluster's blended node rate
 	}
 	perActionCost := perActionSeconds / 3600.0 * nodeRate
-	// [M-136] The actuation rate is measured from the TENANT decision audit, so it is counted only
-	// over the tenants this identity is granted. Without the filter a tenant-limited operator's
-	// "cost of running Phorvex" was really every tenant's actuation volume.
-	actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost, tenantFilterFor(r))
-	defenseCost := operatorCost + actuationCost
-	scen, totWithout, totBlind, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost, target)
-	_, costSource, costRun := s.cfg.comparisonMetricsPath(target)
-	writeJSON(w, 200, map[string]any{
-		"available": ok, "scenarios": scen, "source": costSource, "runId": costRun,
-		"totalWithout": totWithout, "totalBlind": totBlind, "totalWith": totWith, "totalSavings": totSavings,
+
+	// [M-136] /api/cost is a COMPOSITE of three sources with different owners, and each is
+	// authorized against its own:
+	//   (a) the pricing and operator footprint above come from `target` — the cluster the
+	//       boundary already authorized, so a remote-only grant legitimately reads them;
+	//   (b) the actuation rate is measured from THIS console's own decision audit;
+	//   (c) the scenario comparison comes from THIS console's local benchmark corpus, which is
+	//       unattributable private evidence.
+	// A grant for a remote cluster says nothing about (b) or (c). Withheld figures are OMITTED
+	// and named, never emitted as zeros that would read as a measurement.
+	p := principalOf(r)
+	localSource := p.AllowsTarget(defaultTargetID)
+	corpusSource := localSource && p.TenantWildcard()
+	withheld := []string{}
+
+	body := map[string]any{
 		"pricing": pricing, "valueAtRisk": valueAtRisk,
-		"defenseOverhead": defenseCost, "operatorCost": operatorCost, "actuationCost": actuationCost,
-		"actuationRatePerHr": actuationRatePerHr, "perActionCost": perActionCost, "overheadBasis": overheadBasis,
-		"note": "All figures are live AWS on-demand prices (" + pricing.Provider + " · " + pricing.Region + "). Value at risk = your cluster's real infrastructure cost/yr; Phorvex OFF = that infra fully exposed (attack lands); ON = residual after the measured disruption + the real cost of running Phorvex = operator footprint (" + overheadBasis + ") + actuation compute (measured action rate × per-action AWS compute). Per attack, 'defensive actions' shows how hard Phorvex worked. Nothing is a fabricated figure.",
-	})
+		"operatorCost": operatorCost, "perActionCost": perActionCost, "overheadBasis": overheadBasis,
+	}
+	defenseCost := operatorCost
+	note := "Live AWS on-demand prices for " + normalizeTargetID(target) + " (" + pricing.Provider + " · " + pricing.Region + "). Value at risk = that cluster's real infrastructure cost/yr; Phorvex OFF = that infra fully exposed (attack lands). Nothing is a fabricated figure."
+
+	if localSource {
+		// The audit is tenant data as well as local-source data: count only granted tenants.
+		actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost, tenantFilterFor(r))
+		defenseCost += actuationCost
+		body["actuationCost"] = actuationCost
+		body["actuationRatePerHr"] = actuationRatePerHr
+		note += " Defense overhead = operator footprint (" + overheadBasis + ") + actuation compute (measured action rate × per-action AWS compute)."
+	} else {
+		withheld = append(withheld, "actuationCost", "actuationRatePerHr")
+		note += " Actuation compute is withheld: it is measured from this console's own decision audit, which this identity is not granted."
+	}
+	body["defenseOverhead"] = defenseCost
+
+	if corpusSource {
+		scen, totWithout, totBlind, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost, target)
+		_, costSource, costRun := s.cfg.comparisonMetricsPath(target)
+		body["available"], body["scenarios"], body["source"], body["runId"] = ok, scen, costSource, costRun
+		body["totalWithout"], body["totalBlind"] = totWithout, totBlind
+		body["totalWith"], body["totalSavings"] = totWith, totSavings
+	} else {
+		body["available"], body["scenarios"] = false, []CostScenario{}
+		withheld = append(withheld, "scenarios", "totalWithout", "totalBlind", "totalWith", "totalSavings")
+		note += " The scenario comparison is withheld: it is this console's local benchmark corpus, which is not attributable to a tenant and needs a cross-tenant grant on this console's own cluster."
+	}
+	if len(withheld) > 0 {
+		body["withheld"] = withheld
+	}
+	body["note"] = note
+	writeJSON(w, 200, body)
 }
 
 // CostTimePoint is one cumulative sample for the cost-over-time chart: at time T, the running
