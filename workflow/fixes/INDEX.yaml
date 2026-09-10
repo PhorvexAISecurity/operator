@@ -256,8 +256,8 @@ fixes:
     issues:
     - M-161
     related_issues: []
-    state: IMPLEMENTED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m161-measurement-validity
-    head_sha: 113f99acb778dc0d305f956c6a97a67e4094d30f
+    head_sha: 9db59ccaaf7aabc7fa4f1ea7f445e7b0e3f5c3ac
