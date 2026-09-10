@@ -21,19 +21,52 @@ happened to produce. Three properties are non-negotiable:
 
 import json
 
-# SSE separates events with a blank line; every payload line we care about starts with
-# "data: " and comment/heartbeat lines start with ":". See the console's /api/live handler.
-DATA_PREFIX = "data: "
+# SSE framing: fields until a blank line, `:` starts a comment, and the `event:` field names
+# the frame type. Reading only `data:` lines and ignoring `event:` is what let the console's
+# own continuity notices be mistaken for decisions — and then, under a namespace scope,
+# silently filtered as somebody else's traffic.
+DATA_PREFIX = "data:"
+EVENT_PREFIX = "event:"
 COMMENT_PREFIX = ":"
 HEARTBEAT = "connected"
+DEFAULT_EVENT = "message"
+NOTICE_EVENT = "notice"
+
+# Every notice `internal/console/live.go` emits means records did not reach us or the source
+# changed underneath the read: rotation, truncation, a failed read, an omitted oversized
+# record, or a scan/replay budget cutting the history short. There is no benign one. The
+# reason codes below are for reporting; an unrecognised notice is still treated as lost
+# continuity, because a notice this reader does not know is not evidence of a full window.
+NOTICE_REASONS = (
+    ("replaced or truncated", "source-rotated"),
+    ("changed while reading", "source-changed"),
+    ("read failed", "source-read-failed"),
+    ("was omitted", "record-omitted"),
+    ("history is partial", "history-partial"),
+    ("budget reached", "scan-budget-reached"),
+    ("limited to", "replay-truncated"),
+)
+UNKNOWN_NOTICE = "source-notice-unrecognised"
+
+
+def notice_reason(message):
+    lowered = (message or "").lower()
+    for marker, reason in NOTICE_REASONS:
+        if marker in lowered:
+            return reason
+    return UNKNOWN_NOTICE
 
 
 class CaptureOverflow(RuntimeError):
     """A hard resource limit was reached, so the window was NOT fully observed."""
 
-    def __init__(self, limit, message):
+    def __init__(self, limit, message, counters=None, records=()):
         super().__init__(message)
         self.limit = limit
+        # What had been observed when the limit hit. A cap fails the run, but the evidence
+        # collected up to it is still evidence and must not vanish with the exception.
+        self.counters = dict(counters or {})
+        self.records = list(records)
 
 
 class CaptureScope:
@@ -101,6 +134,7 @@ class CaptureResult:
         c = self.counters
         return (f"{c['accepted']} accepted · {c['filtered']} out of scope · "
                 f"{c['malformed']} malformed · {c['incompleteFrames']} incomplete · "
+                f"{c.get('notices', 0)} source notices · "
                 f"{c['bytes']} bytes ({self.scope.describe()})")
 
 
@@ -118,11 +152,18 @@ class StreamCapture:
         self.connected = False
         self._buffer = bytearray()
         self._overflow = None
+        self._event = DEFAULT_EVENT
+        self._data = []
         self.counters = {"bytes": 0, "lines": 0, "dataFrames": 0, "heartbeats": 0,
                          "accepted": 0, "filtered": 0, "malformed": 0,
-                         "incompleteFrames": 0, "other": 0}
+                         "incompleteFrames": 0, "other": 0, "notices": 0}
         self.malformed_samples = []
         self.incomplete_samples = []
+        # Source notices are kept whole and separately. They are the only evidence that the
+        # window has a hole in it, so they are never filtered by scope and never counted as
+        # somebody else's namespace traffic.
+        self.notices = []
+        self.continuity_lost = None
 
     # ── ingestion ─────────────────────────────────────────────────────────
     def feed(self, chunk):
@@ -142,21 +183,29 @@ class StreamCapture:
                 break
             line = bytes(self._buffer[:index])
             del self._buffer[:index + 1]
+            # The bound is on a frame's line, whether or not it ever terminated: a
+            # 2 MiB line that arrives with its newline attached costs exactly as much
+            # memory as one that does not.
+            self._guard_frame_size(len(line))
             self._line(line)
-        # A single frame that never terminates is the other way an unbounded stream can
-        # exhaust memory, so it is capped on its own.
-        if len(self._buffer) > self.limits.max_frame_bytes:
+        # A frame still accumulating counts against the same bound, so an unterminated
+        # line cannot grow without limit between newlines either.
+        self._guard_frame_size(len(self._buffer))
+
+    def _guard_frame_size(self, size):
+        if size > self.limits.max_frame_bytes:
             raise self._overflowed(
-                "frame", f"a single audit frame exceeded {self.limits.max_frame_bytes} bytes "
-                         f"without terminating")
+                "frame", f"a single audit frame of {size} bytes exceeded the "
+                         f"{self.limits.max_frame_bytes}-byte frame cap")
 
     def _overflowed(self, limit, message):
         self._overflow = message
-        return CaptureOverflow(limit, message)
+        return CaptureOverflow(limit, message, self.counters, self.records)
 
     def _line(self, raw):
         text = raw.decode("utf-8", errors="replace").rstrip("\r")
         if not text.strip():
+            self._dispatch()                       # a blank line ends the frame
             return
         self.counters["lines"] += 1
         if text.startswith(COMMENT_PREFIX):
@@ -164,11 +213,25 @@ class StreamCapture:
             if text[1:].strip() == HEARTBEAT:
                 self.connected = True
             return
-        if not text.startswith(DATA_PREFIX):
-            self.counters["other"] += 1
+        if text.startswith(EVENT_PREFIX):
+            self._event = text[len(EVENT_PREFIX):].strip() or DEFAULT_EVENT
+            return
+        if text.startswith(DATA_PREFIX):
+            self._data.append(text[len(DATA_PREFIX):].lstrip(" "))
+            return
+        self.counters["other"] += 1
+
+    def _dispatch(self):
+        """Emit the accumulated frame, if there is one, and reset the frame fields."""
+        event, data = self._event, self._data
+        self._event, self._data = DEFAULT_EVENT, []
+        if not data:
+            return
+        payload = "\n".join(data)
+        if event == NOTICE_EVENT:
+            self._notice(payload)
             return
         self.counters["dataFrames"] += 1
-        payload = text[len(DATA_PREFIX):]
         try:
             record = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -193,6 +256,19 @@ class StreamCapture:
         self.records.append(record)
         self.counters["accepted"] += 1
 
+    def _notice(self, payload):
+        """The console telling us the source moved, or that records did not reach us."""
+        self.counters["notices"] += 1
+        try:
+            message = json.loads(payload).get("message", payload)
+        except (json.JSONDecodeError, AttributeError):
+            message = payload
+        message = str(message)[:300]
+        reason = notice_reason(message)
+        self.notices.append({"reason": reason, "message": message})
+        if self.continuity_lost is None:
+            self.continuity_lost = f"{reason}: {message}"
+
     # ── completion ────────────────────────────────────────────────────────
     def finish(self, complete=True, reason=""):
         """Close the capture, accounting for whatever is still in the buffer.
@@ -203,12 +279,22 @@ class StreamCapture:
         """
         tail = bytes(self._buffer).strip()
         self._buffer.clear()
-        if tail:
+        # A frame whose fields arrived but whose terminating blank line did not is also an
+        # unfinished frame, not a frame we can dispatch.
+        if self._data or tail:
             self.counters["incompleteFrames"] += 1
-            self.incomplete_samples.append(
-                tail.decode("utf-8", errors="replace")[:160])
+            sample = (tail.decode("utf-8", errors="replace")
+                      or "\n".join(self._data))[:160]
+            self.incomplete_samples.append(sample)
             complete = False
             reason = reason or "the stream stopped in the middle of a frame"
+        self._data, self._event = [], DEFAULT_EVENT
+        if self.continuity_lost:
+            # The source rotated, was truncated, dropped a record or cut its own history.
+            # Nothing here proves gap-free continuity across that, so the window is not a
+            # complete observation — whatever it managed to collect on either side of it.
+            complete = False
+            reason = self.continuity_lost
         if self._overflow:
             complete, reason = False, self._overflow
         if self.counters["malformed"]:
@@ -219,4 +305,6 @@ class StreamCapture:
             detail["malformedSamples"] = list(self.malformed_samples)
         if self.incomplete_samples:
             detail["incompleteSamples"] = list(self.incomplete_samples)
+        if self.notices:
+            detail["sourceNotices"] = list(self.notices)
         return CaptureResult(self.records, detail, self.scope, self.limits, complete, reason)

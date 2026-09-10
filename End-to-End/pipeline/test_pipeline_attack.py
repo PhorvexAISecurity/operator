@@ -45,10 +45,26 @@ class RotatingCluster(F.FakeKubectl):
 
 def rotating(**kwargs):
     base = cluster(**kwargs)
+    # Created now, i.e. inside the observation window — a successor stamped before the
+    # action would (correctly) not count as its replacement.
     return RotatingCluster(
-        F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1", namespace="voice"),
+        F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1", namespace="voice",
+              creation=F._now()),
         pods=base.pods, inventory=base.inventory, policies=base.policies,
         create_response=base.create_response, deny=base.deny)
+
+
+def caused(**overrides):
+    """A reaction carrying the CAUSING event's identity — a hypothetical schema.
+
+    M-18 supplies `phoenix.eventUID` for the event the actuator EMITTED, which is a
+    different object; see attribution.HYPOTHETICAL_INJECTED_EVENT_UID_PATHS.
+    """
+    return F.hypothetical_cause_record(
+        overrides.pop("cause", EVENT_UID), target_uid=overrides.pop("target", TARGET_UID),
+        **dict(dict(namespace="voice", pod="voice-a", action="rotate", selected=True,
+                    feasible=True, actuated=True, dryRun=False, threatPosture=0.9),
+               **overrides))
 
 
 def rotation(**overrides):
@@ -88,7 +104,7 @@ class AttackRunTests(unittest.TestCase):
         ground = doc["groundTruth"]
         self.assertEqual([g["verdict"] for g in ground], ["confirmed"])
         self.assertEqual(ground[0]["attribution"], "unsupported")
-        self.assertIn("Ready successor", ground[0]["detail"])
+        self.assertIn("Ready pod created after the action", ground[0]["detail"])
         self.assertIsNotNone(ground[0]["observationWindow"]["intervalSec"])
         self.assertEqual(check(doc, "A03")["coverage"], "partial")
 
@@ -102,12 +118,12 @@ class AttackRunTests(unittest.TestCase):
         # A confirmed effect the run cannot attribute is a WARN, not a green board.
         self.assertEqual(doc["verdict"], "WARN")
 
-    def test_a_forensic_record_lets_the_same_run_attribute_the_reaction(self):
-        # The forward-compatible control: with PR171/M18's fields present, the identical
-        # run reaches a causal PASS.
-        doc, _ = self.run_attack(
-            cluster=rotating(), records=[F.record()],
-            post_records=[rotation(eventUID=EVENT_UID, podUID=TARGET_UID)])
+    def test_a_hypothetical_cause_field_lets_the_same_run_attribute_the_reaction(self):
+        # The forward control. It is HYPOTHETICAL: no inspected producer records the
+        # causing event's UID, so this is what such a schema would have to look like, not
+        # what M-18 delivers.
+        doc, _ = self.run_attack(cluster=rotating(), records=[F.record()],
+                                 post_records=[caused()])
         a05 = check(doc, "A05")
         self.assertEqual(a05["status"], "pass")
         self.assertIn("attributable to the injected event", a05["summary"])
@@ -115,10 +131,19 @@ class AttackRunTests(unittest.TestCase):
         self.assertEqual(doc["groundTruth"][0]["attribution"], "correlated")
         self.assertEqual(check(doc, "A03")["coverage"], "full")
 
+    def test_the_m18_emitted_event_uid_does_not_make_the_run_attributable(self):
+        doc, _ = self.run_attack(
+            cluster=rotating(), records=[F.record()],
+            post_records=[rotation(phoenix=F.phoenix_forensics(),
+                                   decisionTrace=F.decision_trace(asset_uid=TARGET_UID))])
+        self.assertEqual(doc["attribution"]["support"], "output-event-uid")
+        self.assertFalse(doc["attribution"]["supported"])
+        self.assertEqual(check(doc, "A05")["status"], "warn")
+
     def test_an_unrelated_event_in_the_same_window_is_not_attributed_to_us(self):
         doc, _ = self.run_attack(
             cluster=rotating(), records=[F.record()],
-            post_records=[rotation(eventUID="another-detectors-event", podUID=TARGET_UID)])
+            post_records=[caused(cause="another-detectors-event")])
         a05 = check(doc, "A05")
         self.assertEqual(a05["status"], "warn")
         self.assertIn("none of them bound to the injected event", a05["summary"])

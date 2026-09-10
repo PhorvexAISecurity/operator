@@ -87,16 +87,35 @@ def no_attribution(record):
                          "no observed effect can be attributed to the injected action")
 
 
+def parse_k8s_time(value):
+    """RFC3339 as the API server writes it, or None — never a guessed epoch."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc).timestamp()
+    except (ValueError, TypeError):
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+        except (ValueError, TypeError):
+            return None
+
+
 def verify(cluster, actuated_records, baseline, namespace=None, action_started_at=None,
-           log_patterns=None, attribution_of=None):
+           log_patterns=None, attribution_of=None, clock_skew_sec=2.0):
     """Return one verdict per actuated decision.
 
-    `baseline` is the identity snapshot for `namespace` only. A decision about any other
+    `baseline` is the identity snapshot for `namespace` only, and it is used whole: the set
+    of Pod UIDs that already existed before the action is what makes a *new* successor
+    distinguishable from a replica that was there all along. A decision about any other
     namespace is reported unverifiable rather than checked against identities that were
     never captured for it — one namespace's baseline says nothing about another's pods.
     """
     log_patterns = log_patterns or {}
     attribution_of = attribution_of or no_attribution
+    # Every Pod UID the namespace held before the action. Not just the target's.
+    known_uids = {identity.get("uid") for identity in (baseline or {}).values()
+                  if isinstance(identity, dict) and identity.get("uid")}
     out = []
     for r in actuated_records:
         ns, pod, action = r.get("namespace"), r.get("pod"), r.get("action")
@@ -121,7 +140,8 @@ def verify(cluster, actuated_records, baseline, namespace=None, action_started_a
         identity = {k: before.get(k) for k in ("uid", "ownerUID", "ownerKind", "namespace")}
 
         if action == "rotate":
-            out.append(_rotate(cluster, ns, pod, before, identity, finish))
+            out.append(_rotate(cluster, ns, pod, before, identity, finish, known_uids,
+                               action_started_at, clock_skew_sec))
         elif action == "quarantine":
             out.append(_quarantine(cluster, ns, pod, before, identity, finish))
         elif action in ("kv-reset", "adapter-rotate"):
@@ -135,8 +155,16 @@ def verify(cluster, actuated_records, baseline, namespace=None, action_started_a
     return out
 
 
-def _rotate(cluster, ns, pod, before, identity, finish):
-    """A rotation is a replacement, and a replacement has to be seen — not inferred."""
+def _rotate(cluster, ns, pod, before, identity, finish, known_uids, started_at,
+            clock_skew_sec):
+    """A rotation is a replacement, and a replacement has to be seen — not inferred.
+
+    The trap this arm exists to avoid: the original UID being gone is necessary but not
+    sufficient. A Deployment with two replicas already has a Ready pod under the same
+    controller before anything happens, so "same owner, not the original, Ready" describes
+    a surviving sibling exactly as well as a new successor. A successor has to be one the
+    baseline did not already contain AND one created inside the observation window.
+    """
     if not before.get("uid"):
         return finish(UNVERIFIABLE, "no Pod UID was captured for this target before the action",
                       identity=identity)
@@ -166,30 +194,72 @@ def _rotate(cluster, ns, pod, before, identity, finish):
                       "no successor can be shown to belong to the same workload",
                       f"uid before the action {before['uid'][:8]}", read, identity)
 
-    successors = [p for p in pods.values()
+    detail_uid = f"uid before the action {before['uid'][:8]}"
+    same_owner = [p for p in pods.values()
                   if p.get("ownerUID") == owner and p.get("uid") != before["uid"]
                   and not p.get("terminating")]
-    ready = [p for p in successors if p.get("ready") is True]
-    detail_uid = f"uid before the action {before['uid'][:8]}"
-    if not successors:
+    # A pod whose UID was already in the baseline is not a successor, whatever its name.
+    survivors = [p for p in same_owner if p.get("uid") in known_uids]
+    candidates = [p for p in same_owner if p.get("uid") not in known_uids]
+
+    if not candidates:
         # Disappearance is not replacement: a deleted Deployment, an evicted node and a
-        # successful rotate all remove the original UID.
+        # successful rotate all remove the original UID. A surviving replica proves the
+        # workload still runs; it does not prove the target was replaced.
         return finish(UNVERIFIABLE,
+                      "the original pod is gone but no NEW pod under the same controller was "
+                      "observed — disappearance beside a surviving replica is not a successful "
+                      "replacement" if survivors else
                       "the original pod is gone but no successor under the same controller was "
                       "observed — disappearance is not a successful replacement",
-                      f"{detail_uid}; controller {owner[:8]} owns no live successor", read, identity)
+                      f"{detail_uid}; controller {owner[:8]}; "
+                      f"{len(survivors)} pre-existing replica(s) survived "
+                      f"({', '.join(sorted(p['name'] for p in survivors)) or 'none'})",
+                      read, identity)
+
+    if started_at is None:
+        return finish(UNVERIFIABLE,
+                      "no action start time was recorded, so a new pod cannot be placed "
+                      "inside the observation window", detail_uid, read, identity)
+
+    window_start = started_at - clock_skew_sec
+    timed, undated = [], []
+    for p in candidates:
+        created = parse_k8s_time(p.get("creationTimestamp"))
+        if created is None:
+            undated.append(p)
+        elif created >= window_start:
+            timed.append(p)
+    ready = [p for p in timed if p.get("ready") is True]
+
+    if undated and not ready:
+        # An unparseable or absent creationTimestamp is not evidence of when it appeared.
+        return finish(UNVERIFIABLE,
+                      f"{len(undated)} candidate successor(s) carry no usable creation time, so "
+                      f"none can be placed after the action",
+                      f"{detail_uid}; undated "
+                      + ", ".join(sorted(p["name"] for p in undated)), read, identity)
+    if not timed:
+        return finish(UNVERIFIABLE,
+                      "the only new pods under this controller were created before the action "
+                      "started, so none of them is its replacement",
+                      f"{detail_uid}; creation times "
+                      + ", ".join(f"{p['name']}={p.get('creationTimestamp')}" for p in candidates),
+                      read, identity)
     if not ready:
         return finish(UNVERIFIABLE,
-                      f"a same-controller successor exists but is not Ready "
-                      f"({', '.join(sorted(p['name'] for p in successors))})",
-                      f"{detail_uid}; successor readiness "
-                      + ", ".join(f"{p['name']}={p.get('ready')}" for p in successors),
+                      f"a new same-controller pod exists but is not Ready "
+                      f"({', '.join(sorted(p['name'] for p in timed))})",
+                      f"{detail_uid}; readiness "
+                      + ", ".join(f"{p['name']}={p.get('ready')}" for p in timed),
                       read, identity)
     return finish(CONFIRMED,
-                  "the original UID is gone and a Ready successor under the same controller "
-                  "is running",
+                  "the original UID is gone and a Ready pod created after the action, under the "
+                  "same controller, is running",
                   f"{detail_uid} → {ready[0]['uid'][:8]} ({ready[0]['name']}, "
-                  f"controller {owner[:8]}, ready)", read, identity)
+                  f"controller {owner[:8]}, created {ready[0].get('creationTimestamp')}, ready)"
+                  + (f"; {len(survivors)} pre-existing replica(s) also survived" if survivors else ""),
+                  read, identity)
 
 
 def _quarantine(cluster, ns, pod, before, identity, finish):
@@ -258,6 +328,13 @@ def _service_log(cluster, ns, pod, action, before, identity, started_at, pattern
              f"podUID={(value.get('podUID') or '')[:8]} "
              f"lines={value.get('linesRead')}")
     if not matches:
+        if read.status == obs.PARTIAL:
+            # Absence over a truncated read is not absence. A contradiction here would be a
+            # claim about lines nobody looked at.
+            return finish(UNVERIFIABLE,
+                          "no matching line was found, but the log read did not cover the "
+                          "whole window, so its absence proves nothing",
+                          f"{read.reason}; {where}", read, identity)
         return finish(CONTRADICTED,
                       f"the action was reported but no line matching the reviewed pattern "
                       f"appears in this instance's log after the action started", where,

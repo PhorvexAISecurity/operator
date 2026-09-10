@@ -11,7 +11,11 @@ from transport import Cluster
 
 NS = "voice"
 POD = "voice-a"
+# 2025-09-04T15:33:20Z. BEFORE/AFTER straddle it, so a successor's creationTimestamp
+# decides whether it can be the replacement.
 STARTED = 1_757_000_000
+BEFORE = "2025-09-04T15:00:00Z"
+AFTER = "2025-09-04T15:34:00Z"
 
 
 def baseline(uid="original-uid", owner="rs-voice-1"):
@@ -43,23 +47,55 @@ class RotationTests(unittest.TestCase):
         self.assertIn("disappearance is not a successful replacement", got["detail"])
         self.assertEqual(got["observation"]["status"], "ok")
 
-    def test_a_ready_same_owner_successor_confirms_the_replacement(self):
-        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1")]})
+    def test_a_ready_new_same_owner_successor_confirms_the_replacement(self):
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=AFTER)]})
         self.assertEqual(got["verdict"], "confirmed")
-        self.assertIn("Ready successor", got["detail"])
+        self.assertIn("created after the action", got["detail"])
         self.assertIn("original-uid"[:8], got["evidence"])
 
     def test_same_name_uid_replacement_is_allowed_when_owner_and_readiness_hold(self):
-        got = run({"pods": [F.pod(POD, uid="new-uid", owner_uid="rs-voice-1")]})
+        got = run({"pods": [F.pod(POD, uid="new-uid", owner_uid="rs-voice-1", creation=AFTER)]})
         self.assertEqual(got["verdict"], "confirmed")
 
+    def test_a_surviving_pre_existing_replica_is_not_the_replacement(self):
+        """A Deployment with two replicas always has a Ready same-owner sibling."""
+        base = dict(baseline(), **{"voice-b": {"namespace": NS, "name": "voice-b",
+                                               "uid": "sibling-uid", "ownerUID": "rs-voice-1",
+                                               "ownerKind": "ReplicaSet"}})
+        got = run({"pods": [F.pod("voice-b", uid="sibling-uid", owner_uid="rs-voice-1")]},
+                  base=base)
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("no NEW pod under the same controller", got["detail"])
+        self.assertIn("1 pre-existing replica(s) survived", got["evidence"])
+
+    def test_a_new_pod_created_before_the_action_is_not_its_replacement(self):
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=BEFORE)]})
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("created before the action started", got["detail"])
+
+    def test_a_successor_with_no_usable_creation_time_cannot_be_placed(self):
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=None)]})
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("no usable creation time", got["detail"])
+
+    def test_without_an_action_start_time_a_successor_cannot_be_placed(self):
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  creation=AFTER)]}, started=None)
+        self.assertEqual(got["verdict"], "unverifiable")
+        self.assertIn("cannot be placed inside the observation window", got["detail"])
+
     def test_a_successor_owned_by_a_different_controller_is_not_our_replacement(self):
-        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="some-other-rs")]})
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="some-other-rs",
+                                  creation=AFTER)]})
         self.assertEqual(got["verdict"], "unverifiable")
         self.assertIn("no successor under the same controller", got["detail"])
 
     def test_an_unready_successor_is_not_yet_a_replacement(self):
-        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1", ready=False)]})
+        got = run({"pods": [F.pod("voice-b", uid="new-uid", owner_uid="rs-voice-1",
+                                  ready=False, creation=AFTER)]})
         self.assertEqual(got["verdict"], "unverifiable")
         self.assertIn("not Ready", got["detail"])
 

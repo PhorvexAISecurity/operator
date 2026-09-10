@@ -235,5 +235,113 @@ class FramingTests(unittest.TestCase):
         self.assertEqual(got.records, [])
 
 
+class SourceContinuityTests(unittest.TestCase):
+    """The console's own `event: notice` frames say the window has a hole in it.
+
+    Reading only `data:` lines turned each of these into a decision that failed to parse
+    or, under a namespace scope, into somebody else's traffic that was quietly filtered —
+    and the capture then reported itself complete.
+    """
+
+    def feed(self, wire, scope=None):
+        stream = StreamCapture(limits(), scope)
+        stream.feed(wire)
+        return stream.finish()
+
+    def test_the_rotation_notice_makes_the_window_incomplete(self):
+        got = self.feed(F.sse([F.record()], notices=[F.ROTATION_NOTICE]),
+                        CaptureScope(["voice"]))
+        self.assertFalse(got.complete)
+        self.assertIn("source-rotated", got.reason)
+        self.assertEqual(got.counters["notices"], 1)
+        self.assertEqual(got.counters["filtered"], 0)   # never mistaken for other traffic
+        self.assertEqual(got.counters["malformed"], 0)  # nor for a broken decision frame
+        self.assertEqual(got.counters["accepted"], 1)   # the real decision still arrives
+        self.assertEqual(got.counters["sourceNotices"][0]["reason"], "source-rotated")
+
+    def test_a_clean_window_with_no_notice_is_complete(self):
+        got = self.feed(F.sse([F.record()]), CaptureScope(["voice"]))
+        self.assertTrue(got.complete, got.reason)
+        self.assertEqual(got.counters["notices"], 0)
+
+    def test_every_notice_the_console_emits_is_treated_as_lost_continuity(self):
+        for message, reason in ((F.ROTATION_NOTICE, "source-rotated"),
+                                (F.READ_FAILED_NOTICE, "source-read-failed"),
+                                (F.OMITTED_NOTICE, "record-omitted"),
+                                (F.REPLAY_LIMIT_NOTICE, "replay-truncated"),
+                                ("Audit replay changed while reading.", "source-changed"),
+                                ("Replay scan budget reached; use /api/live/history.",
+                                 "scan-budget-reached")):
+            with self.subTest(message=message):
+                got = self.feed(F.sse([F.record()], notices=[message]))
+                self.assertFalse(got.complete)
+                self.assertIn(reason, got.reason)
+
+    def test_an_unrecognised_notice_still_fails_closed(self):
+        got = self.feed(F.sse([F.record()], notices=["Something new the reader has not seen"]))
+        self.assertFalse(got.complete)
+        self.assertIn("source-notice-unrecognised", got.reason)
+
+    def test_a_notice_split_across_chunk_boundaries_is_still_a_notice(self):
+        wire = F.sse([F.record()], notices=[F.ROTATION_NOTICE])
+        stream = StreamCapture(limits())
+        for i in range(0, len(wire), 5):
+            stream.feed(wire[i:i + 5])
+        got = stream.finish()
+        self.assertFalse(got.complete)
+        self.assertEqual(got.counters["notices"], 1)
+
+    def test_a_multi_line_data_frame_is_joined_rather_than_split(self):
+        # SSE allows a payload to span several data: lines; they concatenate with \n.
+        got = self.feed(b'data: {"namespace":"voice",\ndata: "pod":"voice-a"}\n\n')
+        self.assertEqual(got.counters["accepted"], 1)
+        self.assertEqual(got.records[0]["pod"], "voice-a")
+
+    def test_frame_fields_without_their_terminating_blank_line_are_incomplete(self):
+        got = self.feed(b'data: {"namespace":"voice","pod":"voice-a"}\n')
+        self.assertFalse(got.complete)
+        self.assertEqual(got.counters["incompleteFrames"], 1)
+
+
+class FrameCapTests(unittest.TestCase):
+    """The per-frame bound has to hold wherever the newline happens to land."""
+
+    def oversized(self, terminated):
+        payload = json.dumps({"namespace": "voice", "pad": "x" * 150}).encode()
+        return b"data: " + payload + (b"\n\n" if terminated else b"")
+
+    def feed(self, wire):
+        from capture import CaptureOverflow
+        stream = StreamCapture(limits(total=100000, records=10, frame=64),
+                               CaptureScope(["voice"]))
+        try:
+            stream.feed(wire)
+            return None, stream
+        except CaptureOverflow as overflow:
+            return overflow, stream
+
+    def test_a_complete_oversized_line_overflows_like_an_unterminated_one(self):
+        for terminated in (True, False):
+            with self.subTest(terminated=terminated):
+                overflow, _ = self.feed(self.oversized(terminated))
+                self.assertIsNotNone(overflow)
+                self.assertEqual(overflow.limit, "frame")
+
+    def test_the_overflow_carries_the_evidence_collected_before_it(self):
+        stream = StreamCapture(limits(total=100000, records=10, frame=64),
+                               CaptureScope(["voice"]))
+        stream.feed(b'data: {"namespace":"voice","pod":"a"}\n\n')
+        from capture import CaptureOverflow
+        with self.assertRaises(CaptureOverflow) as caught:
+            stream.feed(self.oversized(True))
+        self.assertEqual(caught.exception.counters["accepted"], 1)
+        self.assertEqual(len(caught.exception.records), 1)
+
+    def test_a_frame_within_the_bound_is_accepted(self):
+        overflow, stream = self.feed(b'data: {"namespace":"voice","pod":"a"}\n\n')
+        self.assertIsNone(overflow)
+        self.assertEqual(stream.finish().counters["accepted"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

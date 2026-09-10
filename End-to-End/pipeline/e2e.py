@@ -265,6 +265,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     # What this run's captures claim to cover, decided once and recorded next to the
     # counters. A scoped run must not be read as a cluster-wide observation.
     ctx.scope = capture_scope(cap, ctx.target)
+    ctx.clock_skew_sec = float(cap.get("clock_skew_tolerance_sec", 2))
     log(f"capture scope: {ctx.scope.describe()} · limits {limits.to_json()}", 1)
 
     # A stage is only green here if preflight found a live system: an unreachable console or
@@ -402,8 +403,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         # recorded rather than left as an invisible strictly-greater-than. It only widens
         # which records are *considered*: what makes one attributable is A05's identity
         # binding, not its position in the window.
-        skew = float(cap.get("clock_skew_tolerance_sec", 2))
-        ctx.clock_skew_sec = skew
+        skew = ctx.clock_skew_sec
         ctx.post_records = [r for r in dedupe(post)
                             if record_key(r) not in pre_keys
                             and (ctx.parse_time(r.get("time")) or 0) >= attack_started_at - skew]
@@ -442,7 +442,8 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
             # written before the pipeline began can answer for what it observed.
             action_started_at=attack_started_at or started.timestamp(),
             log_patterns=ctx.inv.get("action_log_evidence"),
-            attribution_of=(ctx.correlator.classify if ctx.correlator else None))
+            attribution_of=(ctx.correlator.classify if ctx.correlator else None),
+            clock_skew_sec=ctx.clock_skew_sec)
         for g in ctx.ground_truth:
             log(f"{g['verdict']:14s} {g['action']:16s} {g['namespace']}/{g['pod']}: "
                 f"{g['detail']} [attribution: {g['attribution']}]", 1)

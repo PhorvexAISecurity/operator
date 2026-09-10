@@ -275,10 +275,22 @@ A read that failed is `unverifiable`, never `confirmed`. A Forbidden pod list is
 absent pod, and one namespace's baseline says nothing about another's.
 
 **Was it caused by what we injected?** Separately, as `attribution`. Binding a decision to
-our signal needs the SecurityEvent's UID *and* the target Pod's UID inside the record.
-`phorvex.audit.v2` carries neither — it has `events[].name` and a Pod name — so attribution
-is reported `unsupported` and `A05` cannot pass. PR171/M18 supplies the forensic event UID;
-support is feature-detected from the records rather than assumed.
+our signal needs the identity of the SecurityEvent that *caused* it, plus the target Pod's
+UID. Read against the producers, here is what exists:
+
+| Field | What it actually identifies |
+|:--|:--|
+| `decisionTrace.assetUID` | the target Pod. Real, and present today (`model/decision_trace.go:354`) |
+| `events[].name` | names of the events that fed this asset's evidence. `model.EventEvidence` has no UID field, and a name cannot survive recreation |
+| `phoenix.eventUID` | M-18 `PhoenixForensics`: the SecurityEvent **the actuator emitted**. Its own doc comment says it "establishes CORRELATION only" — to the Phoenix resources an investigator inspects |
+
+`phoenix.eventUID` is the trap. It is an *output* identity: the event Phorvex created, not
+the event our detector injected as the cause. They are different objects with different
+UIDs, and equating them would let a rotation triggered by anything at all correlate to our
+injection. So **no inspected schema records the causing event**, attribution is reported
+`unsupported`, and `A05` cannot pass. Support is feature-detected from the records rather
+than assumed, and the correlation path is exercised by a fixture that is labelled
+hypothetical because nothing writes it.
 
 ## The dashboard
 
@@ -336,10 +348,19 @@ check means one decorated function in `checks.py`.
 - A capture that hits its traffic or record cap, or loses the stream, is an **incomplete
   observation** — reported as such and never as a shorter successful one. There is no
   reconnect: nothing here can prove a resumed stream had no hole in it.
-- `A05` cannot pass against the currently deployed audit schema. It needs the forensic
-  event UID and target Pod UID that PR171/M18 adds; until then a reaction is reported as an
-  observed reaction with attribution unavailable. This is a declared coverage gap, not a
-  failure, and it must not be closed by matching on the namespace or the event name.
+- The console emits `event: notice` frames when the audit file rotates or is truncated, a
+  read fails, an oversized record is omitted, or a replay/scan budget cuts the history
+  short (`internal/console/live.go`). Every one of them means records did not reach the
+  reader, so any notice marks the window incomplete. An unrecognised notice does too — a
+  notice this reader does not know is not evidence of a full window.
+- `A05` cannot pass against any inspected audit schema, because none records the event that
+  *caused* a decision. A reaction is reported as an observed reaction with attribution
+  unavailable. This is a declared coverage gap, not a failure, and it must not be closed by
+  matching on the namespace, the event name, or `phoenix.eventUID` — that last one
+  identifies the event Phorvex emitted, not the one we injected.
+- Log evidence is bounded by `--tail`. A read that fills its tail cap is `partial`: a match
+  in it still confirms, but an *absent* match over it cannot contradict, because earlier
+  lines in the window were never seen.
 - `A03` can only confirm four action types. Everything else is reported `unverifiable`
   rather than assumed good. `adapter-rotate` additionally needs a reviewed vLLM log pattern
   in `invariants.action_log_evidence`; none is shipped, so it reports `unverifiable`.

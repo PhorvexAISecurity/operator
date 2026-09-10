@@ -28,6 +28,7 @@ the second is the reason a NaN could ride through the optimiser unremarked.
 import math
 import re
 
+import attribution as attribution_mod
 from trace import all_numeric_fields, is_finite_number
 
 PASS, FAIL, WARN, SKIP = "pass", "fail", "warn", "skip"
@@ -993,6 +994,12 @@ def a05(ctx):
             ev.append(f"{len(named)} decisions name the injected event "
                       f"{correlator.injection.get('eventName')}, but a name is not a UID-bound "
                       f"causal identity")
+        if correlator.support == attribution_mod.OUTPUT_ONLY:
+            # phoenix.eventUID identifies what the actuator emitted. Reading it as the cause
+            # would attribute every rotation in the window to whatever we happened to inject.
+            ev.append("phoenix.eventUID identifies the SecurityEvent this operator EMITTED, "
+                      "not the detector event that caused the decision; the two are "
+                      "different objects and must not be equated")
         return result(WARN,
                       f"{len(acted)} actuations and {len(selected)} selections followed the "
                       f"injection in {ns}, but this audit schema cannot bind any of them to the "

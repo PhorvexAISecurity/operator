@@ -34,12 +34,19 @@ injection nothing can be attributed to. These identities are what `A05` needs, a
 they cannot be reconstructed afterwards.
 
 Attribution is a separate claim from effect. Binding a decision to this event
-requires the event UID **and** the target Pod UID inside the audit record.
-`phorvex.audit.v2` carries neither — it has `events[].name` and a Pod name — so
-`A05` reports `unsupported` and cannot pass; PR171/M18 supplies the forensic event
-UID and support is feature-detected from the records. Do not close this gap by
-matching the namespace, the pod name or the event name: a reaction in the target
-namespace is something the operator also produces on its own schedule.
+requires the identity of the event that CAUSED it, plus the target Pod UID. The
+target UID exists today at `decisionTrace.assetUID`. The causing event's identity
+does not exist anywhere: `events[].name` is a name, and M-18's `phoenix.eventUID`
+identifies the SecurityEvent the **actuator emitted** — its own doc comment scopes
+it to correlation with Phoenix resources. That is an output, not our injected
+cause; the two are different objects with different UIDs.
+
+So `A05` reports `unsupported` and cannot pass, and support is feature-detected
+from the records rather than assumed. Do not close this gap by matching the
+namespace, the pod name, the event name, or `phoenix.eventUID`: a reaction in the
+target namespace is something the operator also produces on its own schedule.
+Recording the causing event would be a product schema change, and it needs its own
+issue rather than a harness workaround.
 
 The audit stream must acknowledge its readiness heartbeat **before** injection.
 Capture stays open through the injection and observation window; a new post-fire

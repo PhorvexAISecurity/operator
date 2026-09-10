@@ -137,11 +137,67 @@ def record(**overrides):
     return base
 
 
-def sse(records, heartbeat=True, trailing_partial=False):
+# The exact notices internal/console/live.go writes. Each one means records did not reach
+# the reader or the source moved underneath it.
+ROTATION_NOTICE = ("Audit replaced or truncated; following the current file. "
+                   "Retained history is available at /api/live/history.")
+READ_FAILED_NOTICE = "Audit stream read failed."
+OMITTED_NOTICE = "Audit record exceeds 1 MiB and was omitted from the stream."
+REPLAY_LIMIT_NOTICE = ("Replay is limited to 1000 records; use /api/live/history for older "
+                       "decisions.")
+
+
+def source_notice(message=ROTATION_NOTICE):
+    """One `event: notice` frame, byte-for-byte as live.go writes it."""
+    return b"event: notice\ndata: " + json.dumps({"message": message}).encode() + b"\n\n"
+
+
+def decision_trace(asset_uid="uid-voice-a", asset_namespace="voice", asset_name="voice-a",
+                   policy_uid="policy-uid-1", policy_name="voice-defense", **extra):
+    """The subset of model.DecisionTraceV2 this pipeline reads.
+
+    `assetUID` is the target Pod identity that already exists in the deployed schema
+    (model/decision_trace.go:354) — it is the one identity here that is not hypothetical.
+    """
+    return dict({"assetUID": asset_uid, "assetNamespace": asset_namespace,
+                 "assetName": asset_name, "policyUID": policy_uid,
+                 "policyName": policy_name, "policyNamespace": asset_namespace},
+                **extra)
+
+
+def phoenix_forensics(event_uid="phoenix-emitted-event-uid",
+                      event_name="phorvex-rotate-abc12", amtd_name="voice-amtd",
+                      amtd_namespace="voice", rule_source="PhorvexE2EDetector"):
+    """M-18 model.PhoenixForensics: the SecurityEvent the ACTUATOR CREATED.
+
+    Its own doc comment is explicit that this establishes correlation to Phoenix resources
+    only. It is an OUTPUT identity — not the detector event that caused the decision — and
+    the tests exist partly to keep the two from being conflated again.
+    """
+    return {"amtdName": amtd_name, "amtdNamespace": amtd_namespace,
+            "eventName": event_name, "eventUID": event_uid,
+            "ruleType": "Panic", "ruleThreatLevel": "critical", "ruleSource": rule_source}
+
+
+def hypothetical_cause_record(cause_event_uid, target_uid="uid-voice-a", **overrides):
+    """A record carrying the CAUSING event's identity.
+
+    HYPOTHETICAL. No inspected producer writes `causeEventUID`; M-18 supplies
+    `phoenix.eventUID`, which identifies the emitted event instead. This fixture exists
+    only to exercise the correlation path, and it must not be cited as an existing or
+    planned schema. See attribution.HYPOTHETICAL_INJECTED_EVENT_UID_PATHS.
+    """
+    return record(causeEventUID=cause_event_uid,
+                  decisionTrace=decision_trace(asset_uid=target_uid), **overrides)
+
+
+def sse(records, heartbeat=True, trailing_partial=False, notices=()):
     """The byte stream the console's /api/live emits."""
     frames = [b": connected\n\n"] if heartbeat else []
     for r in records:
         frames.append(b"data: " + json.dumps(r).encode() + b"\n\n")
+    for message in notices:
+        frames.append(source_notice(message))
     body = b"".join(frames)
     if trailing_partial:
         body += b'data: {"namespace":"voice","pod":"voice-'

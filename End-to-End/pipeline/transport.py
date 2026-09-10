@@ -694,16 +694,42 @@ class Cluster:
             source=f"container log {namespace}/{pod}", timeout=35)
         if not read.usable:
             return read
+
+        # The UID was checked before the read; a rotation between the two would have handed
+        # us the successor's log under the same name. Check it again on the way out, so the
+        # window between the two reads cannot silently change whose log this is.
+        after = self.observe(
+            f"-n {shlex.quote(namespace)} get pod {shlex.quote(pod)} -o jsonpath='{{.metadata.uid}}'",
+            source=f"log identity {namespace}/{pod}", absent_is_ok=True)
+        if not after.usable:
+            return after
+        settled_uid = (after.value or "").strip().strip("'")
+        if settled_uid != observed_uid:
+            return obs.Observation.unavailable(
+                f"the pod was replaced while its log was being read "
+                f"({observed_uid[:8]} → {(settled_uid or 'absent')[:8]})",
+                source=f"container log {namespace}/{pod}", reason_code=obs.NOT_FOUND)
+
         try:
             expression = re.compile(pattern)
         except re.error as error:
             return obs.Observation.malformed(f"invalid log evidence pattern: {error}",
                                              source=f"container log {namespace}/{pod}")
-        matches = [line for line in (read.value or "").splitlines() if expression.search(line)]
-        return obs.Observation.observed(
-            {"matches": matches, "podUID": observed_uid, "sinceTime": rfc3339(since_epoch),
-             "pattern": pattern, "linesRead": len((read.value or "").splitlines())},
-            source=read.source)
+        lines = (read.value or "").splitlines()
+        matches = [line for line in lines if expression.search(line)]
+        # `--tail` caps how far back the read reached. A read that filled its cap may have
+        # left earlier lines unseen, so an ABSENT match over it proves nothing — which is a
+        # different fact from an absent match over the whole window.
+        truncated = len(lines) >= int(tail)
+        value = {"matches": matches, "podUID": observed_uid, "sinceTime": rfc3339(since_epoch),
+                 "pattern": pattern, "linesRead": len(lines), "tail": int(tail),
+                 "truncated": truncated}
+        if truncated:
+            return obs.Observation.partial(
+                value, f"the log read filled its {int(tail)}-line tail cap, so earlier lines "
+                       f"in the window were not observed",
+                reason_code=obs.TRUNCATED, source=read.source)
+        return obs.Observation.observed(value, source=read.source)
 
     def phorvex_policy(self, namespace):
         """The governing PhorvexPolicy, with the identity a per-owner budget belongs to.
