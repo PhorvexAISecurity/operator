@@ -1,3 +1,6 @@
-
 # Retained patches are evidence; preserve context-line whitespace verbatim.
 workflow/**/*.patch -whitespace
+# Retained raw command output is evidence for the same reason: it is captured
+# byte-for-byte from the tool, and editing it to satisfy a source lint destroys
+# the exactness that makes it attestable.
+workflow/**/evidence/**/*.log -whitespace
