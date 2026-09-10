@@ -160,7 +160,8 @@ type Manager struct {
 	// monitored but never read by production scoring.
 	Calibration *calib.Runtime
 
-	Recorder record.EventRecorder
+	Recorder          record.EventRecorder
+	ActuationRecorder record.EventRecorder
 	// ActionsSupportedDebounce is the number of consecutive mismatching policy ticks
 	// required before status becomes False. <=0 uses the default.
 	ActionsSupportedDebounce int
@@ -182,7 +183,7 @@ type Manager struct {
 	// not the policyEntry, so a spec edit (Upsert) does not forget real actuations. It is
 	// in-memory only: a restart or leadership change can only UNDER-report until the next
 	// emit — never claim an actuation the running brain did not perform.
-	emits map[string][]time.Time
+	emits map[string]*emissionHistory
 	// degraded tracks each telemetry source's outage state so a whole-source failure is
 	// logged ONCE on transition (down / recovered), surfaced as a policy condition and
 	// counted — never one ERROR line per tick (PHORVEXSEC-200 / M-113, P-LOUD-OUTAGE).
@@ -359,12 +360,15 @@ func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
 	last := time.Time{}
 	unsupportedTicks := 0
 	unsupportedSignature := ""
-	if existing != nil {
+	if existing != nil && existing.uid == string(p.UID) {
 		last = existing.lastTick
 		if existing.generation == p.Generation {
 			unsupportedTicks = existing.actionsUnsupportedTicks
 			unsupportedSignature = existing.actionsUnsupportedSignature
 		}
+	}
+	if existing != nil && existing.uid != string(p.UID) {
+		delete(m.emits, key.String())
 	}
 	entry := &policyEntry{
 		key:       key,
@@ -675,39 +679,9 @@ func (m *Manager) closePendingForOwner(ev lifecycleEvent) int {
 	return dropped
 }
 
-// recordEmits appends n enacted moves at now to the policy's ledger, drops entries older
-// than the trailing window and returns how many enacted moves remain inside it. Called
-// exactly once per tick, OUTSIDE the status conflict-retry loop, so a retried write never
-// double-counts. Selected-but-not-emitted decisions (dry-run, kill-switch, actuator
-// failure) are never recorded.
-func (m *Manager) recordEmits(key string, n int, now time.Time, window time.Duration) int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.emits == nil {
-		m.emits = map[string][]time.Time{}
-	}
-	ledger := m.emits[key]
-	for i := 0; i < n; i++ {
-		ledger = append(ledger, now)
-	}
-	cutoff := now.Add(-window)
-	kept := ledger[:0]
-	for _, ts := range ledger {
-		if ts.After(cutoff) {
-			kept = append(kept, ts)
-		}
-	}
-	if len(kept) == 0 {
-		delete(m.emits, key)
-		return 0
-	}
-	m.emits[key] = kept
-	return len(kept)
-}
-
-// NeedLeaderElection keeps the mutating tick loop in controller-runtime's
-// leader-elected runnable group. Without this method every replica starts the
-// loop even when the manager itself has leader election enabled.
+// NeedLeaderElection explicitly documents the mutating tick loop's leader group.
+// controller-runtime v0.21.0 also puts ordinary runnables in this group by default.
+// Election must still be enabled on the enclosing manager.
 func (*Manager) NeedLeaderElection() bool { return true }
 
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
@@ -799,6 +773,7 @@ func (m *Manager) tick(ctx context.Context) {
 	m.tickEpochs = dueEpochs
 	m.PublishTenantCollisions(ctx)
 
+	m.refreshEmissionStatus(ctx, now)
 	killEngaged := m.KillSwitch.Engaged(ctx)
 	metrics.SetKillSwitch(killEngaged)
 
@@ -1534,15 +1509,27 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		}
 	}
 
+	// M100: freeze the reporting source BEFORE actuation; no later resnapshot or
+	// shared map/slice can rewrite the evidence used for this claim.
+	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
+	representationInventory := outcomeInventory(snap.Events, pol)
+	representationInputs := make([]model.RepresentationSnapshot, len(decisions))
+	versions := make(map[string]string, len(views))
+	for _, v := range views {
+		versions[v.Pod.Namespace+"/"+v.Pod.Name] = v.Pod.UID
+	}
+	for i, d := range decisions {
+		representationInputs[i] = representationSnapshotV1(d, pol, versions[d.Namespace+"/"+d.Pod], reportClaim, representationInventory)
+	}
+
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
-	actuated := 0
 	if !effectiveDryRun && !killEngaged && m.Actuator != nil {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
 		}
-		actuated = m.actuate(ctx, e, pol, decisions, viewByKey)
+		m.actuate(ctx, e, pol, decisions, viewByKey)
 	}
 
 	assessmentInput := colocationInput(snap, e)
@@ -1550,6 +1537,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
+		appendRepresentation(&decisions[i], representationInputs[i])
 		m.Audit.Record(decisions[i])
 		m.recordColocation(assessmentInput, decisions[i], pol)
 		if decisions[i].Selected {
@@ -1583,7 +1571,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
 	}
 	m.updateExistentialStatus(ctx, e, decisions, inventory)
-	m.updateStatus(ctx, e, len(views), selected, actuated, killEngaged, snap.Now, actionsSupport)
+	m.updateStatus(ctx, e, len(views), selected, 0, killEngaged, time.Now(), actionsSupport)
 
 	m.mu.Lock()
 	if cur := m.policies[e.key.String()]; cur != nil {
@@ -1758,6 +1746,8 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			value := decisions[i].CoverageValue
 			coverageValue = &value
 		}
+		// Capture immutable target identity before a handler can delete the Pod.
+		eventTarget := actuationEventTarget(v)
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
@@ -1770,12 +1760,25 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			CoverageValue: coverageValue,
 			TargetUID:     v.Pod.UID,
 		})
+		if res.Emitted {
+			m.emissionWindow(e, 1, time.Now())
+		}
+		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil {
+			// Retain partial native writes without promoting an error to success.
+			decisions[i].Handler = res.Handler
+			decisions[i].ObjectsTouched = res.ObjectsTouched
+			decisions[i].RollbackRef = res.RollbackRef
+			decisions[i].MutationKind = res.MutationKind
+
 			outcome := slo.OutcomeFailed
 			dispatchReason := "failed"
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				outcome = slo.OutcomeDeadlineExpired
 				dispatchReason = "deadline-expired"
+			}
+			if res.Note != "" {
+				dispatchReason += ": " + res.Note
 			}
 			stampDispatch(model.DispatchError, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)

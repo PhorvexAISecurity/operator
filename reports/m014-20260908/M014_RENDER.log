@@ -1,0 +1,1 @@
+PASS: HTTP projection -> rendered owner rows, escaped identifiers, honest badges, stale-payload fallback

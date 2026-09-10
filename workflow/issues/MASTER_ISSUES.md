@@ -716,7 +716,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-48 · Quarantine NetworkPolicy: stale-UID selector after pod-name recycle · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: M-048
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
