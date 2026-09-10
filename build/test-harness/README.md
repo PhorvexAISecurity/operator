@@ -170,10 +170,15 @@ Rules the runner and every report enforce:
   budget expires is a problem, reported with its terminating/finalizer state. With
   `deleteNamespace=true` the namespace's own disappearance is verified the same
   way.
-- **The final teardown is part of the run result.** A run whose matrix passed but
-  whose final teardown did not verify is INCOMPLETE: it raises a barrier, lands in
-  `provenance.json` and exits non-zero, because it leaves the cluster dirty for
-  the next run.
+- **The final teardown is part of the run result, and honours the same ownership
+  barrier.** A run whose matrix passed but whose final teardown did not verify is
+  INCOMPLETE: it raises a barrier, lands in `provenance.json` and exits non-zero,
+  because it leaves the cluster dirty for the next run. And if cleanup this run
+  still owns has not returned even after the bounded drain, the final teardown is
+  NOT ATTEMPTED at all — deleting the namespace underneath a live callback would
+  race it, and a teardown that merely collided with one is not a verified
+  teardown. Refusing is recorded as `blocked`, never as verified. The
+  context-free closer is bounded the only way it can be: by bounding the wait.
 - **Legacy rows stay legacy.** A metrics file written before this contract still
   decodes; those rows are counted and displayed as `legacy-unverified` and
   excluded from certified scores. Nothing is inferred from their zero fields and

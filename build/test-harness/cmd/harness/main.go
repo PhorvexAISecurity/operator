@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"math/rand"
 
@@ -253,16 +254,22 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		}
 	}
 
-	// 7) Final teardown: remove the sandbox namespace + all owned objects. Its
-	// failures are part of the RUN RESULT, not a warning: an unverified final
+	// 7) Final teardown: remove the sandbox namespace + all owned objects — but
+	// ONLY if no cleanup this run still owns is still running. Its failures are
+	// part of the RUN RESULT, not a warning: an unverified (or refused) final
 	// teardown leaves the cluster dirty for the NEXT run, so it makes this run
 	// INCOMPLETE, lands in the provenance and exits non-zero.
-	finalErr := finalTeardown(ctx, factory, outDir)
-	runner.RecordFinalTeardown(finalErr)
-	outcome = runner.Outcome()
-	if finalErr != nil {
-		fmt.Fprintf(os.Stderr, "FINAL TEARDOWN NOT VERIFIED: %v\n", finalErr)
+	finalErr, attempted := finalizeRun(ctx, runner.UnreturnedCleanups(), factory, outDir)
+	if attempted {
+		runner.RecordFinalTeardown(finalErr)
+		if finalErr != nil {
+			fmt.Fprintf(os.Stderr, "FINAL TEARDOWN NOT VERIFIED: %v\n", finalErr)
+		}
+	} else {
+		runner.RecordFinalTeardownBlocked(finalErr.Error())
+		fmt.Fprintf(os.Stderr, "FINAL TEARDOWN NOT ATTEMPTED: %v\n", finalErr)
 	}
+	outcome = runner.Outcome()
 
 	// 8) Reports + provenance.
 	reproduce := fmt.Sprintf("go run ./cmd/harness -config <config.yaml>   # masterSeed=%d + the fixed per-trial seeds reproduce this run exactly", cfg.MasterSeed)
@@ -296,6 +303,37 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	return errors.Join(runErr, finalErr)
 }
 
+// finalizeRun performs the run-level teardown, honouring the SAME ownership
+// barrier the per-trial cleanup enforces.
+//
+// If cleanup this run still owns has not returned, that call is still operating
+// on this namespace and these objects. Deleting the namespace underneath it
+// would race it, and a teardown that merely collided with a live callback is not
+// a verified teardown. So the teardown is refused, and the caller records it as
+// NOT ATTEMPTED — never as verified.
+//
+// It returns (result, attempted). When attempted is false the error explains the
+// refusal; the run stays INCOMPLETE either way.
+//
+// The `Returned` predicate is applied HERE rather than trusted from the caller:
+// a barrier that depends on someone else having filtered the list correctly is
+// one refactor away from being no barrier at all.
+func finalizeRun(ctx context.Context, late []core.LateCleanup, factory core.EnvFactory, outDir string) (error, bool) {
+	var steps []string
+	for _, l := range late {
+		if l.Returned {
+			continue // it finished; it no longer owns anything
+		}
+		steps = append(steps, fmt.Sprintf("%s/%s trial %d %s (still running after %.1fs)",
+			l.Scenario, l.Defender, l.Trial, l.Step, l.Seconds))
+	}
+	if len(steps) > 0 {
+		return fmt.Errorf("%d cleanup call(s) this run owns have not returned and still hold the sandbox namespace, "+
+			"so deleting it now would race them: %s", len(steps), strings.Join(steps, "; ")), false
+	}
+	return finalTeardown(ctx, factory, outDir), true
+}
+
 // finalTeardown removes the sandbox namespace and every owned object after the
 // matrix, and returns whether that VERIFIED. Every link of the real chain —
 // building the environment, the cleanup helper and the closer — is a failure
@@ -308,11 +346,33 @@ func finalTeardown(ctx context.Context, factory core.EnvFactory, outDir string) 
 	fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
 	defer fcancel()
 	cleanupErr := env.CleanupOwned(fctx, true)
-	var closeErr error
-	if closer != nil {
-		closeErr = closer()
-	}
+	closeErr := boundedClose(closer)
 	return errors.Join(cleanupErr, closeErr)
+}
+
+// boundedClose waits on the context-free closer under the shared cleanup budget.
+func boundedClose(closer func() error) error {
+	return boundedCloseWithin(closer, cleanupBudget)
+}
+
+// boundedCloseWithin waits on the context-free closer under a wall-clock bound.
+// The closer receives no context, so the only way to stop it outlasting the run
+// is to stop WAITING on it — and to say plainly that it never returned, rather
+// than hang the command forever.
+func boundedCloseWithin(closer func() error, bound time.Duration) error {
+	if closer == nil {
+		return nil
+	}
+	done := make(chan error, 1) // buffered: a late send never blocks or leaks
+	go func() { done <- closer() }()
+	timer := time.NewTimer(bound)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("final teardown closer did not return within %s: UNRESOLVED, it may still be running", bound)
+	}
 }
 
 // dollarInputsFromConfig assembles the DollarInputs from the live config $ knobs

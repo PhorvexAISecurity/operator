@@ -83,6 +83,11 @@ type FinalTeardown struct {
 	// Verified is true only when the teardown ran AND reported no problem.
 	Verified bool   `json:"verified"`
 	Error    string `json:"error,omitempty"`
+	// Blocked is true when the teardown was deliberately NOT ATTEMPTED because
+	// cleanup this run still owns had not returned. Deleting the namespace out
+	// from under a live callback is the same overlap the per-trial barrier
+	// forbids, so it is refused here too — and refusing is not verifying.
+	Blocked bool `json:"blocked,omitempty"`
 }
 
 // Runner executes the generic scenario x defender x trial matrix.
@@ -135,6 +140,39 @@ func (r *Runner) mirror(format string, args ...any) {
 	if r.onMirror != nil {
 		r.onMirror(fmt.Sprintf(format, args...))
 	}
+}
+
+// UnreturnedCleanups returns the cleanup calls this run still OWNS: ones that
+// outlived their bound and have not returned even after draining. While the list
+// is non-empty those calls are still working on this run's namespace and
+// objects, so no other cleanup may touch the same state.
+func (r *Runner) UnreturnedCleanups() []LateCleanup {
+	r.lateMu.Lock()
+	defer r.lateMu.Unlock()
+	var out []LateCleanup
+	for _, l := range r.outcome.LateCleanups {
+		if !l.Returned {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// RecordFinalTeardownBlocked records that the run-level teardown was NOT
+// ATTEMPTED because cleanup this run still owns had not returned.
+//
+// This is the run-level counterpart of the per-trial ordering barrier: deleting
+// the namespace while a live callback is still operating on it would race that
+// callback and would let the harness claim a teardown that merely collided with
+// one. Refusing is honest — and refusing is not verifying, so the run stays
+// INCOMPLETE with a barrier recorded.
+func (r *Runner) RecordFinalTeardownBlocked(reason string) {
+	r.lateMu.Lock()
+	r.outcome.FinalTeardown = &FinalTeardown{Attempted: false, Verified: false, Blocked: true, Error: reason}
+	r.outcome.Barriers = append(r.outcome.Barriers, "final teardown NOT ATTEMPTED: "+reason)
+	r.lateMu.Unlock()
+	r.outcome.Complete = false
+	r.mirror("FINAL TEARDOWN NOT ATTEMPTED: %s", reason)
 }
 
 // RecordFinalTeardown records the RUN-LEVEL cleanup the caller performs after
