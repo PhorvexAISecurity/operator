@@ -2060,7 +2060,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-18 · Phoenix-path forensics dropped · **OPEN** · `RECORD`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: M-18
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
