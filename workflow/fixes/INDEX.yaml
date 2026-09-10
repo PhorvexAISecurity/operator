@@ -234,7 +234,7 @@ fixes:
     issues:
     - M-18
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: parallel/record-m018-phoenix-forensic-fields
