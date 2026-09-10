@@ -260,4 +260,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/v3-m163-shadow-isolation
-    head_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+    head_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
