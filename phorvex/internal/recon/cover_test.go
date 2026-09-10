@@ -51,16 +51,20 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	}
 
 	// (2) AI serving pod — the serving actuators become selectable (request-drain / guardrail-rotate /
-	//     kv-reset / endpoint-rotate / model-shard-replace / mig-rebind / warm-swap / kv-migrate-invalidate).
+	//     kv-reset / model-shard-replace / kv-migrate-invalidate / adapter-rotate).
 	ai := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil"}}
 	ac := prof.AssetFacts(ai, fctx).CoverByAction
 	for _, a := range []model.Action{
-		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset, model.ActionEndpointRotate,
+		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset,
 		model.ActionModelShardReplace, model.ActionKVMigrateInvalidate, model.ActionAdapterRotate,
 	} {
 		if len(ac[a]) == 0 {
 			t.Errorf("AI serving pod: %q has EMPTY cover set — optimizer can never select it", a)
 		}
+	}
+
+	if got := ac[model.ActionEndpointRotate]; len(got) != 0 {
+		t.Errorf("endpoint-rotate must have no cover without locator invalidation proof; got %v", got)
 	}
 
 	// [PHVX-26a] warm-swap and mig-rebind were removed from the list above ON PURPOSE, and the
