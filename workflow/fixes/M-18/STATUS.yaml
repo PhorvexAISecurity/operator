@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -85,12 +85,28 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: 983700f3312598ef0c8f6c8aa8a5c16d455b12a77acc173dded12093f5f48788
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 9301724357c324256e93a571db219cb2de4acce9788ed27d60082abb2a37c524
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:37:13+00:00'
+    baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 566bb79b2149cb3bc3071fad3793ef2adc53bdf0eaa088a61b976d664b24a0e8
+    source_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+    at: '2026-09-10T14:37:13+00:00'
+    incident_sha256: 9301724357c324256e93a571db219cb2de4acce9788ed27d60082abb2a37c524
 fix_id: M-18
 issues:
 - M-18
 title: Preserve Phoenix forensic identifiers through audit records
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -135,7 +151,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -151,10 +167,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-10T14:33:55+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-10T14:37:15+00:00'
 configuration_history:
 - at: '2026-09-10T12:58:21+00:00'
   by: codex-lead
@@ -211,6 +227,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T14:37:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T14:37:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: base_review
   result: PASS
@@ -221,9 +253,9 @@ check_history:
   at: '2026-09-10T14:23:44+00:00'
   baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
 handoff:
-  id: M-18:9:submit
-  from: claude-m018
+  id: M-18:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 10
