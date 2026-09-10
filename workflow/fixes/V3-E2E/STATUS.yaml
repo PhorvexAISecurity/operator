@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 18
+revision: 19
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -83,13 +83,20 @@ checks:
     inputs:
     - End-to-End
     inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d09c629d02073e9a1ff35f9ebcab1b0dd47ffc552eadee2fb0fa6588bcee9d8e
+    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+    at: '2026-09-10T21:50:47+00:00'
 fix_id: V3-E2E
 issues:
 - M-155
 - M-165
 title: Make end-to-end verification causal and observation-aware
 profile: standard
-state: OFFLINE_VERIFIED
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -134,7 +141,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -150,10 +157,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-10T21:48:36+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-10T21:50:47+00:00'
 configuration_history:
 - at: '2026-09-10T18:27:19+00:00'
   by: codex-lead
@@ -215,6 +222,14 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-10T21:48:35+00:00'
   by: claude-v3-e2e
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-10T21:50:47+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -318,9 +333,9 @@ check_history:
     confirms a replacement, and a decision about the actual original target still
     confirms. No case regressed.'
 handoff:
-  id: V3-E2E:18:submit
-  from: claude-v3-e2e
-  to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 18
+  id: V3-E2E:19:review
+  from: codex-lead
+  to: claude-v3-e2e
+  role: implementer
+  kind: review
+  revision: 19
