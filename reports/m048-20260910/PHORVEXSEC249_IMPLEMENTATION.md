@@ -8,6 +8,8 @@ A freshly authorized Pod with a reused name now receives a separate policy bound
 
 The fix checks existing policy ownership and reconciles managed selector/spec drift through the real retry path. Management labels alone do not authorize adoption. Foreign/shared/ambiguous objects are refused. Correct retries report no new mutation. Accepted writes and subsequent errors remain visible through the existing result path.
 
+PR: https://github.com/PhorvexSecurity/operator/pull/167
+
 ## Source and integration
 
 Baseline: `4510b6adec6dbc3cca8105ee104c391aadcb536e`, combining PR150 `d2ce4aed6b9afd6553c6af8fb7be3077f21d1c0a` with main `7434376e164dc2610820ee15758c3084bba0c595`.
