@@ -1,0 +1,81 @@
+=== RUN   TestR2OracleErrorScoresFullDisruptionAndBeatsRealDefenseOnCost
+    zz_reviewer_runner_test.go:152: INVALID(oracle-error): disruption=1 actions=0 securityPerCost=1.000 securityPerCostDollars=610000 annualDefenseCost=8.00
+    zz_reviewer_runner_test.go:155: GENUINE(3 actions):     disruption=1 actions=3 securityPerCost=0.333 securityPerCostDollars=542222 annualDefenseCost=9.00
+--- PASS: TestR2OracleErrorScoresFullDisruptionAndBeatsRealDefenseOnCost (0.00s)
+=== RUN   TestR2MissingBaselineIsInventedAsSuccessful
+    zz_reviewer_runner_test.go:177: no observed positive control; disruption credited=1 skipped=false
+--- PASS: TestR2MissingBaselineIsInventedAsSuccessful (0.00s)
+=== RUN   TestR2AdaptiveArmIsStructurallyUnanchoredAndCanCreditTheBaselineArm
+    zz_reviewer_runner_test.go:225: row defender=d-rv-nomtd       trial=0 adaptivePass=false oracleAchieved=true disruption=0 anchored=true
+    zz_reviewer_runner_test.go:225: row defender=d-rv-nomtd       trial=2 adaptivePass=true oracleAchieved=false disruption=1 anchored=false
+    zz_reviewer_runner_test.go:225: row defender=d-rv-defended    trial=0 adaptivePass=false oracleAchieved=true disruption=0 anchored=true
+    zz_reviewer_runner_test.go:225: row defender=d-rv-defended    trial=2 adaptivePass=true oracleAchieved=false disruption=1 anchored=false
+--- PASS: TestR2AdaptiveArmIsStructurallyUnanchoredAndCanCreditTheBaselineArm (0.00s)
+=== RUN   TestR2ExecuteErrorStillScoresAsDisruption
+    zz_reviewer_runner_test.go:250: attack stimulus errored; row still scored: skipped=false disruption=1 skipReason=""
+--- PASS: TestR2ExecuteErrorStillScoresAsDisruption (0.00s)
+=== RUN   TestR2TeardownFailureIsInvisibleInTheMetric
+    zz_reviewer_runner_test.go:269: teardown returned an error; metric shows skipped=false skipReason="" (no cleanup field exists in the schema)
+--- PASS: TestR2TeardownFailureIsInvisibleInTheMetric (0.00s)
+=== RUN   TestR2SetupFailureIsCorrectlyInvalidated
+    zz_reviewer_runner_test.go:288: CONTROL: setup failure correctly invalidated: skipped=true reason="scenario setup failed: setup boom" disruption=0
+--- PASS: TestR2SetupFailureIsCorrectlyInvalidated (0.00s)
+PASS
+ok  	github.com/r6security/phoenix-test-harness/internal/core	0.015s
+=== RUN   TestR2InvalidRowSilentlyInflatesReportedDisruption
+    zz_reviewer_aggregate_test.go:42: 1 genuine row (disruption 0) + 1 oracle-error row (disruption 1) => reported Disruption%=50% over trials=2, skipped=false
+--- PASS: TestR2InvalidRowSilentlyInflatesReportedDisruption (0.00s)
+=== RUN   TestR2UnrunNegativeControlIsIndistinguishableFromAMeasuredZero
+    zz_reviewer_aggregate_test.go:66: arm with NO negative control reports NegFalseMoves=0; arm with an OBSERVED clean negative control reports NegFalseMoves=0 — indistinguishable
+--- PASS: TestR2UnrunNegativeControlIsIndistinguishableFromAMeasuredZero (0.00s)
+=== RUN   TestR2PartialSkipsAreDroppedFromTheReport
+    zz_reviewer_aggregate_test.go:92: 2 emitted rows (1 scored, 1 skipped) => report shows Trials=1 Skipped=false Disruption%=100%; the invalidated trial leaves no trace
+--- PASS: TestR2PartialSkipsAreDroppedFromTheReport (0.00s)
+PASS
+ok  	github.com/r6security/phoenix-test-harness/internal/report	0.011s
+=== RUN   TestR2AbsentPodScoresAsDisruptionC1Lateral
+    zz_reviewer_absentpod_test.go:51: empty cluster (pod B never existed), poll took 43s => achieved=false skipped=false state="target pod B not reachable (rotated/absent)" evidence=map[]
+    zz_reviewer_absentpod_test.go:53: => composed with runner R2-A1/A2: this row scores DisruptionVsOracle=1, SecurityPerCost=1 (zero actions), with no defensive action having occurred
+--- PASS: TestR2AbsentPodScoresAsDisruptionC1Lateral (43.05s)
+=== RUN   TestR2ObservationTimeoutIsIndistinguishableFromEvictionC3IMDS
+    zz_reviewer_absentpod_test.go:80: observation context expired => achieved=false skipped=false state="compromised pod absent for cred replay" evidence=map[credUsed:false]
+    zz_reviewer_absentpod_test.go:82: => identical metric row to a genuine eviction; R6ResponseTag for this scenario is "R6CannotRespond", which the oracle can contradict
+--- PASS: TestR2ObservationTimeoutIsIndistinguishableFromEvictionC3IMDS (2.00s)
+=== RUN   TestR2ControlMarkerPresentScoresAttackAchieved
+    zz_reviewer_absentpod_test.go:103: CONTROL: live pod "c2dwell-target" with the marker present => backdoorAlive=true (the positive observable path works)
+    zz_reviewer_absentpod_test.go:111: CONTROL: live pod, marker absent => backdoorAlive=false; note this ALSO fires when the in-pod exec fails, which is the same conflation as E1/E2
+--- PASS: TestR2ControlMarkerPresentScoresAttackAchieved (0.00s)
+=== RUN   TestR2CredTheftOracleReplacesTheStolenCredential
+    zz_reviewer_credtheft_test.go:192: stolen-from-pod value="STOLEN-FROM-POD-abcdefghijklmnop" was read by Execute and DISCARDED; the oracle minted "MINTED-BY-ORACLE" and replayed THAT. API saw: [Bearer MINTED-BY-ORACLE]
+    zz_reviewer_credtheft_test.go:194: oracle evidence: map[apiAuthorized:true apiDetail:HTTP 200, listed 0 pods with stolen identity tokenObtained:true]
+    zz_reviewer_credtheft_test.go:199: NOTE: the full stolen value appears in the trial log (head -c 16 of a real JWT would be the constant RS256 header prefix, not secret material)
+--- PASS: TestR2CredTheftOracleReplacesTheStolenCredential (0.00s)
+=== RUN   TestR2CredTheftOracleMintsANonPodBoundCredential
+    zz_reviewer_credtheft_test.go:226: oracle TokenRequest.Spec = {BoundObjectRef:nil Audiences:[] ExpirationSeconds:<nil>} => an UNBOUND, pod-independent credential
+--- PASS: TestR2CredTheftOracleMintsANonPodBoundCredential (0.00s)
+=== RUN   TestR2CredTheftFailedTheftStillScoresAsSuccess
+    zz_reviewer_credtheft_test.go:251: in-pod theft returned exit=1 with EMPTY output; Execute err=nil stages=3; oracle achieved=true; API saw [Bearer MINTED-BY-ORACLE]
+--- PASS: TestR2CredTheftFailedTheftStillScoresAsSuccess (0.00s)
+=== RUN   TestR2CredTheftDeniedControl
+    zz_reviewer_credtheft_test.go:269: CONTROL: API returned 401 => oracle achieved=false state="stolen SA token used against API: authorized=false (list pods denied/error: )" (API saw [Bearer MINTED-BY-ORACLE])
+--- PASS: TestR2CredTheftDeniedControl (0.00s)
+=== RUN   TestR2CredTheftTransportFailureLooksLikeSuccessfulDefense
+    zz_reviewer_dump_test.go:44: TRANSPORT FAILURE (connection refused) => oracle achieved=false, apiAuthorized="false", state="stolen SA token used against API: authorized=false (list pods denied/error: Get \"http://127.0.0.1:35311/api/v1/namespaces/sandbox/pods\": dial tcp 127.0.0.1:35311: connect: connection refused)" — indistinguishable from an RBAC denial or a genuine defensive revocation
+--- PASS: TestR2CredTheftTransportFailureLooksLikeSuccessfulDefense (0.00s)
+=== RUN   TestR2DumpScenarioImplementationMap
+    zz_reviewer_dump_test.go:83: wrote 112 scenario rows to /home/mehrdad/operator-audit-catalogue/workflow/assessments/20260910-readiness/fresh-catalogue/evidence-r2/scenario-map.tsv
+--- PASS: TestR2DumpScenarioImplementationMap (0.00s)
+=== RUN   TestR2DumpDefenderMap
+    zz_reviewer_dump_test.go:118: wrote 13 defender rows to /home/mehrdad/operator-audit-catalogue/workflow/assessments/20260910-readiness/fresh-catalogue/evidence-r2/defender-map.tsv
+--- PASS: TestR2DumpDefenderMap (0.00s)
+=== RUN   TestR2F2HarnessRepairCreditsOnlyTheEmitterArm
+    zz_reviewer_f2_test.go:195: arm=d-fullphoenix   attackerAchieved=false persistenceDisrupted=true  neutralized=true  harnessRestoreCalls=1 securityEventsCreated=1 podCarriesRotationTargetLabel=false
+    zz_reviewer_f2_test.go:195: arm=d-phorvex       attackerAchieved=true  persistenceDisrupted=false neutralized=false harnessRestoreCalls=0 securityEventsCreated=0 podCarriesRotationTargetLabel=false
+    zz_reviewer_f2_test.go:195: arm=d-nomtd         attackerAchieved=true  persistenceDisrupted=false neutralized=false harnessRestoreCalls=0 securityEventsCreated=0 podCarriesRotationTargetLabel=false
+    zz_reviewer_f2_test.go:198: d-fullphoenix observedState: poisoned model served=false; served digest after drift=sha256:r6thgoldenmodel golden-restored=true (signing=provenance not benignity)
+    zz_reviewer_f2_test.go:199: d-phorvex     observedState: poisoned model served=true; served digest after drift=sha256:r6thpoisonedmodel golden-restored=false (signing=provenance not benignity)
+    zz_reviewer_f2_test.go:225: CONTROL RESULT: d-phorvex is indistinguishable from d-nomtd (no defense) on this scenario: achieved=true/true disrupted="false"/"false"
+    zz_reviewer_f2_test.go:232: SUBSTRATE: the poisoned pod carries no "r6th.io/rotation-target" label, so neither the Phoenix AMTD PodSelector nor the PhorvexPolicy selector could ever have selected it
+--- PASS: TestR2F2HarnessRepairCreditsOnlyTheEmitterArm (12.01s)
+PASS
+ok  	github.com/r6security/phoenix-test-harness/scenarios	57.096s
