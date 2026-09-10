@@ -6,20 +6,36 @@ kubectl are directly reachable), and keeps the rest of the code transport-agnost
 
 No secret is ever written to disk by this module, and the password is passed to sshpass
 through an environment variable rather than argv, so it does not appear in `ps` output.
+
+Every read of the cluster returns an `Observation` (see observation.py) rather than a bare
+value. A Forbidden pod list and an empty pod list are the same `{}` to a caller that only
+looks at the value, and that equivalence is precisely how "the pod is gone" became
+"the rotation was confirmed". Callers here have to look at the status.
 """
 
 import json
 import os
+import re
 import selectors
 import shlex
 import signal
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+
+import observation as obs
+from capture import CaptureLimits, CaptureOverflow, CaptureScope, StreamCapture
 
 
 class TransportError(RuntimeError):
     pass
+
+
+# How a deliberately bounded stream command reports "the window elapsed": `timeout` kills
+# with 124, `curl -m` gives up with 28, and a shell reports a SIGTERM'd child as 143. Any
+# other non-zero exit means the read failed and the window was not observed.
+EXPECTED_STREAM_EXITS = (0, 28, 124, 143)
 
 
 def _password():
@@ -33,6 +49,11 @@ def _password():
     raise TransportError(
         "no SSH password: set PHORVEX_SSH_PASSWORD or write it to ~/.phorvex-e2e/secret (chmod 600)"
     )
+
+
+def rfc3339(epoch):
+    """kubectl --since-time wants RFC3339; seconds resolution is what the API accepts."""
+    return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Transport:
@@ -76,22 +97,31 @@ class Transport:
         try:
             p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
-            return 124, "", f"timeout after {timeout}s"
+            return obs.TIMEOUT_RC, "", f"timeout after {timeout}s"
         except FileNotFoundError as e:
             raise TransportError(f"transport binary missing: {e}") from e
         return p.returncode, p.stdout, p.stderr
 
-    def capture_live(self, command, seconds, max_bytes, on_connected):
-        """Open SSE before firing; retain bytes while the bounded callback runs.
+    def capture_live(self, command, seconds, limits, scope=None, on_connected=None):
+        """Frame the stream as it arrives; fire (once) only after it is genuinely open.
 
-        A post-fire reconnect can lose a fast reaction: the deployed console's
-        initial replay has a small byte window, not a guaranteed record count.
-        Wait for its actual heartbeat, then fire once and observe a full window.
+        A post-fire reconnect can lose a fast reaction: the deployed console's initial
+        replay has a small byte window, not a guaranteed record count. Wait for its actual
+        heartbeat, then fire once and observe a full window.
+
+        There is deliberately no reconnect. Reopening the stream after a drop would produce
+        a record set with an unknown hole in it, and nothing in this API proves gap-free
+        continuity, so a lost stream fails closed instead of resuming.
         """
         argv, env = self._command(command)
-        output, errors = bytearray(), bytearray()
-        connected = False
+        stream = StreamCapture(limits, scope)
+        errors = bytearray()
+        live = on_connected is not None
         deadline = time.monotonic() + self.connect_timeout + 15
+        # Without a callback there is nothing to synchronise with, so the window starts now.
+        if not live:
+            deadline = time.monotonic() + seconds
+        closed_early = False
         p = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              start_new_session=True)
         try:
@@ -104,23 +134,41 @@ class Transport:
                         if not chunk:
                             selector.unregister(key.fileobj)
                             if key.data == "stdout":
-                                raise TransportError("audit stream closed before observation completed: "
-                                                     + errors.decode(errors="replace")[-500:])
+                                closed_early = True
                             continue
                         if key.data == "stderr":
                             errors.extend(chunk)
                             del errors[:-65536]
                             continue
-                        output.extend(chunk)
-                        if len(output) >= max_bytes:
-                            raise TransportError("audit capture reached its byte cap before observation completed")
-                        if not connected and b": connected\n\n" in output:
-                            connected = True
-                            on_connected()  # exactly once; stdout pipe retains early decisions
+                        try:
+                            stream.feed(chunk)
+                        except CaptureOverflow as overflow:
+                            raise TransportError(str(overflow)) from overflow
+                        if on_connected is not None and stream.connected:
+                            on_connected()          # exactly once; the pipe retains early decisions
+                            on_connected = None
                             deadline = time.monotonic() + seconds
-                if not connected:
+                    if closed_early:
+                        break
+                if closed_early and live:
+                    # The remote window outlives ours by 90s, so an early close here means
+                    # the stream dropped — and the reaction we fired for may be in the hole.
+                    raise TransportError(
+                        "audit stream closed before observation completed: "
+                        + obs.redact(errors.decode(errors="replace")[-500:]))
+                if on_connected is not None:
                     raise TransportError("audit stream never acknowledged readiness; no signal fired")
-                return output.decode(errors="replace")
+                if closed_early:
+                    # Without a callback the remote command bounds the window itself, so it
+                    # ending is the normal path — but only with an exit code that means
+                    # "the window elapsed". Anything else is a failed read, not a short one.
+                    code = p.wait(timeout=5)
+                    if code not in EXPECTED_STREAM_EXITS:
+                        return stream.finish(
+                            complete=False,
+                            reason=f"the stream command exited {code}: "
+                                   + obs.redact(errors.decode(errors="replace")[-300:]))
+                return stream.finish()
         finally:
             # Own process group only; also stops local shell pipeline children.
             if p.poll() is None:
@@ -229,43 +277,29 @@ class Console:
         except json.JSONDecodeError:
             return {"_raw": out}
 
-    def stream_decisions(self, seconds, max_bytes, on_connected=None):
+    def stream_decisions(self, seconds, limits, scope=None, on_connected=None):
         """Capture the audit SSE stream for a bounded window.
 
         The stream replays the audit file and then tails it, so a short window still
-        yields the recent decision history. Bounded on BOTH time and bytes: an operator
-        under heavy churn must not be able to hang the pipeline or exhaust memory.
+        yields the recent decision history. The result carries its own completeness: a
+        capped, truncated or mid-frame stream comes back with `complete=False` and the
+        caller must not treat it as a shorter successful observation.
         """
         # The callback may perform two bounded 30s detector calls (or one console
         # POST). Keep the remote process bounded, but allow the observation window
         # to begin AFTER the callback. capture_live terminates it at that deadline.
         remote_seconds = seconds + 90 if on_connected else seconds
         replay = "&tail=1" if on_connected else ""
+        # No `head -c` any more: truncating the stream remotely produces a partial final
+        # frame that the reader cannot tell from a decision it lost. The byte budget is
+        # enforced locally by StreamCapture, where hitting it is a reportable failure.
         if self.mode == "kubectl-proxy":
-            # `timeout` bounds the stream the way curl -m did; head -c caps the bytes.
-            cmd = (
-                f"timeout {remote_seconds} kubectl get --raw "
-                f"{shlex.quote(self.proxy + '/api/live?lens=' + self.lens + replay)} | head -c {int(max_bytes)}"
-            )
+            cmd = (f"timeout {remote_seconds} kubectl get --raw "
+                   f"{shlex.quote(self.proxy + '/api/live?lens=' + self.lens + replay)}")
         else:
-            cmd = (
-                f"curl -sN -m {remote_seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
-                f"{shlex.quote(self.base + '/api/live?lens=' + self.lens + replay)} | head -c {int(max_bytes)}"
-            )
-        # curl/timeout exits non-zero on the bounded-window timeout, which is the normal path.
-        if on_connected:
-            out = self.t.capture_live(cmd, seconds, max_bytes, on_connected)
-        else:
-            _, out, _ = self.t.run(cmd, timeout=seconds + 20)
-        records, malformed = [], 0
-        for line in out.splitlines():
-            if not line.startswith("data: "):
-                continue
-            try:
-                records.append(json.loads(line[6:]))
-            except json.JSONDecodeError:
-                malformed += 1  # a truncated final line from `head -c` is expected
-        return records, malformed
+            cmd = (f"curl -sN -m {remote_seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
+                   f"{shlex.quote(self.base + '/api/live?lens=' + self.lens + replay)}")
+        return self.t.capture_live(cmd, seconds, limits, scope, on_connected)
 
 
 class Metrics:
@@ -275,6 +309,9 @@ class Metrics:
     switch, which suppresses actuation while leaving `dryRun` false. Reading it here is how
     the pipeline tells a deliberate decision-only mirror apart from a broken actuator,
     instead of inferring it from an absence.
+
+    A failed scrape and a scrape with no such gauge are different facts, and A06 changes its
+    verdict between them, so this returns an Observation rather than an empty dict.
     """
 
     def __init__(self, transport, cfg):
@@ -297,12 +334,12 @@ class Metrics:
         if self.proxy:
             return self._scrape_proxy(timeout)
         if not self.url:
-            return {}
-        rc, out, _ = self.t.run(
+            return obs.Observation.unavailable(
+                "no audit_writer.metrics_url or kubectl_pod_proxy is configured",
+                source="metrics", reason_code=obs.NOT_FOUND)
+        rc, out, err = self.t.run(
             f"curl -s -m {timeout - 3} {shlex.quote(self.url)}", timeout=timeout)
-        if rc != 0 and not out:
-            return {}
-        return self._parse(out)
+        return obs.classify(rc, out, err, source="metrics scrape", parser=self._parse)
 
     def _scrape_proxy(self, timeout):
         """Read the operator's own metrics through the API server's pod proxy.
@@ -322,10 +359,8 @@ class Metrics:
             f"[ -n \"$POD\" ] && "
             f"kubectl get --raw \"/api/v1/namespaces/{ns}/pods/$POD:{port}/proxy{path}\""
         )
-        rc, out, _ = self.t.run(cmd, timeout=timeout)
-        if rc != 0 and not out:
-            return {}
-        return self._parse(out)
+        rc, out, err = self.t.run(cmd, timeout=timeout)
+        return obs.classify(rc, out, err, source="metrics pod proxy", parser=self._parse)
 
     @staticmethod
     def _parse(out):
@@ -341,6 +376,80 @@ class Metrics:
         return vals
 
 
+# ─────────────────────────── selector evaluation ───────────────────────────
+
+def selector_matches(selector, labels):
+    """Full LabelSelector semantics, matchExpressions included.
+
+    Reading only matchLabels made every expression-based policy look like it selected
+    nothing, which silently downgraded a real quarantine to "the policy does not select
+    the pod" — and, in the other direction, let an expression-based *allow* policy sit
+    unnoticed next to a deny-all.
+    """
+    if selector is None:
+        return False
+    labels = labels or {}
+    for key, want in (selector.get("matchLabels") or {}).items():
+        if labels.get(key) != want:
+            return False
+    for expression in selector.get("matchExpressions") or []:
+        key = expression.get("key")
+        operator = expression.get("operator")
+        values = expression.get("values") or []
+        present = key in labels
+        if operator == "In" and (not present or labels[key] not in values):
+            return False
+        if operator == "NotIn" and present and labels[key] in values:
+            return False
+        if operator == "Exists" and not present:
+            return False
+        if operator == "DoesNotExist" and present:
+            return False
+        if operator not in ("In", "NotIn", "Exists", "DoesNotExist"):
+            raise ValueError(f"unknown label selector operator {operator!r}")
+    return True
+
+
+def _pod_identity(item, namespace):
+    """The identity a later observation can be compared against.
+
+    Namespace + Pod UID + controller UID. A name alone is not an identity: a Deployment
+    recreates the same name with a new UID, and a name that reappears under a different
+    controller is a different workload entirely.
+    """
+    meta = item.get("metadata") or {}
+    status = item.get("status") or {}
+    conditions = status.get("conditions") or []
+    ready = next((c.get("status") == "True" for c in conditions if c.get("type") == "Ready"), None)
+    owner = next((r for r in meta.get("ownerReferences") or [] if r.get("controller") is True), None)
+    terminated = [
+        {"container": c.get("name"), "reason": (c.get("state", {}).get("terminated") or {}).get("reason"),
+         "exitCode": (c.get("state", {}).get("terminated") or {}).get("exitCode"),
+         "finishedAt": (c.get("state", {}).get("terminated") or {}).get("finishedAt")}
+        for c in status.get("containerStatuses") or []
+        if (c.get("state") or {}).get("terminated")
+    ]
+    uid = meta.get("uid")
+    if not uid:
+        raise ValueError("pod inventory item carries no UID")
+    return {
+        "namespace": meta.get("namespace") or namespace,
+        "name": meta.get("name"),
+        "uid": uid,
+        "ownerKind": (owner or {}).get("kind"),
+        "ownerName": (owner or {}).get("name"),
+        "ownerUID": (owner or {}).get("uid"),
+        "phase": status.get("phase", "Unknown"),
+        # None, not False: "there is no Ready condition yet" is not "it reported not ready".
+        "ready": ready,
+        "terminating": bool(meta.get("deletionTimestamp")),
+        "deletionTimestamp": meta.get("deletionTimestamp"),
+        "creationTimestamp": meta.get("creationTimestamp"),
+        "labels": meta.get("labels") or {},
+        "terminated": terminated,
+    }
+
+
 class Cluster:
     """kubectl ground truth — deliberately independent of anything Phorvex reports."""
 
@@ -351,21 +460,30 @@ class Cluster:
         rc, out, err = self.t.run("kubectl " + args, timeout=timeout)
         return rc, out.strip(), err.strip()
 
+    def observe(self, args, source, parser=None, timeout=25, absent_is_ok=False):
+        """One kubectl read, classified. This is the only way anything here reads state."""
+        rc, out, err = self.kubectl(args, timeout=timeout)
+        return obs.classify(rc, out, err, source=source, parser=parser,
+                            absent_is_ok=absent_is_ok)
+
     def pod_uids(self, namespace, selector=None):
+        """Observed pod identities in one namespace, keyed by name.
+
+        The value is a mapping only for convenience: every comparison downstream is on the
+        UID and the controller UID inside it, because a Deployment happily reuses a name.
+        """
         sel = f"-l {shlex.quote(selector)} " if selector else ""
-        rc, out, _ = self.kubectl(
-            f"-n {shlex.quote(namespace)} get pod {sel}"
-            "-o jsonpath='{range .items[*]}{.metadata.name}|{.metadata.uid}|"
-            "{.metadata.ownerReferences[0].kind}|{.status.phase}{\"\\n\"}{end}'"
-        )
-        pods = {}
-        if rc != 0:
-            return pods
-        for line in out.strip("'").splitlines():
-            f = line.strip().split("|")
-            if len(f) >= 4 and f[0]:
-                pods[f[0]] = {"uid": f[1], "owner": f[2], "phase": f[3]}
-        return pods
+
+        def parse(out):
+            doc = json.loads(out)
+            items = doc.get("items")
+            if not isinstance(items, list):
+                raise ValueError("pod list carries no items array")
+            return {item["metadata"]["name"]: _pod_identity(item, namespace) for item in items}
+
+        return self.observe(
+            f"-n {shlex.quote(namespace)} get pod {sel}-o json",
+            source=f"pod inventory {namespace}", parser=parse)
 
     def controller_pods(self, namespace="phorvex-system", deployments=None):
         """Resolve expected Deployments -> ReplicaSets -> Pods by controller UID.
@@ -386,12 +504,17 @@ class Cluster:
             return {f"deployment/{name}": {"phase": phase, "restarts": 0,
                     "ready": False, "reason": reason} for name in expected}
 
-        rc, out, _ = self.kubectl(
-            f"-n {shlex.quote(namespace)} get deployments.apps,replicasets.apps,pods -o json")
-        if rc != 0:
-            return unavailable("Unknown", "controller inventory could not be read")
+        read = self.observe(
+            f"-n {shlex.quote(namespace)} get deployments.apps,replicasets.apps,pods -o json",
+            source=f"controller inventory {namespace}")
+        if not read.usable:
+            return obs.Observation(read.status,
+                                   unavailable("Unknown", "controller inventory could not be read: "
+                                               + (read.reason_code or read.status)),
+                                   reason=read.reason, reason_code=read.reason_code,
+                                   source=read.source)
         try:
-            items = json.loads(out)["items"]
+            items = json.loads(read.value)["items"]
             if not isinstance(items, list) or any(not isinstance(x, dict) for x in items):
                 raise ValueError("invalid inventory")
 
@@ -433,60 +556,224 @@ class Cluster:
                         "ready": any(c.get("type") == "Ready" and c.get("status") == "True"
                                      for c in status.get("conditions", [])),
                         "deployment": name,
+                        "uid": pod.get("metadata", {}).get("uid"),
+                        "ownerUID": owner(pod, "ReplicaSet"),
                     }
-            return pods
-        except (ValueError, KeyError, TypeError, AttributeError):
-            return unavailable("Unknown", "controller inventory was malformed")
+            return obs.Observation.observed(pods, source=read.source)
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            # The synthetic "Unknown" entries are kept as the value so P05 still sees an
+            # unhealthy controller set rather than an empty one it could read as "nothing
+            # to check"; the status says why they are synthetic.
+            return obs.Observation(
+                obs.MALFORMED, unavailable("Unknown", "controller inventory was malformed"),
+                reason=f"controller inventory was malformed: {type(error).__name__}: {error}",
+                reason_code=obs.INVALID, source=read.source)
 
     def pod_is_stateful(self, namespace, pod):
         """Mirror of ingest/kube.go:406 — StatefulSet-owned, or mounts a PVC, or a Job."""
-        rc, out, _ = self.kubectl(
+        def parse(out):
+            owner, _, claims = out.strip("'").partition("|")
+            return owner in ("StatefulSet", "Job") or bool(claims.strip())
+
+        return self.observe(
             f"-n {shlex.quote(namespace)} get pod {shlex.quote(pod)} "
             "-o jsonpath='{.metadata.ownerReferences[0].kind}|"
-            "{range .spec.volumes[*]}{.persistentVolumeClaim.claimName}{\" \"}{end}'"
-        )
-        if rc != 0:
-            return None
-        owner, _, claims = out.strip("'").partition("|")
-        return owner in ("StatefulSet", "Job") or bool(claims.strip())
+            "{range .spec.volumes[*]}{.persistentVolumeClaim.claimName}{\" \"}{end}'",
+            source=f"stateful probe {namespace}/{pod}", parser=parse)
 
-    def quarantine_state(self, namespace, pod):
-        """Read the real Phoenix quarantine effect: a deny-all policy selecting the pod."""
-        policy = f"{namespace}-{pod}-policy"
-        rc, pod_out, _ = self.kubectl(
-            f"-n {shlex.quote(namespace)} get pod {shlex.quote(pod)} -o json")
-        if rc != 0:
-            return None
-        rc, policy_out, _ = self.kubectl(
-            f"-n {shlex.quote(namespace)} get networkpolicy {shlex.quote(policy)} -o json")
-        if rc != 0:
-            return {"active": False, "policy": policy,
-                    "evidence": f"NetworkPolicy {policy} is missing"}
+    def network_policies(self, namespace):
+        """Every NetworkPolicy in the namespace, because isolation is an additive property."""
+        def parse(out):
+            items = json.loads(out).get("items")
+            if not isinstance(items, list):
+                raise ValueError("networkpolicy list carries no items array")
+            return items
+
+        return self.observe(f"-n {shlex.quote(namespace)} get networkpolicy -o json",
+                            source=f"networkpolicy inventory {namespace}", parser=parse)
+
+    def quarantine_state(self, namespace, pod, expect_uid=None):
+        """Read the configuration behind a claimed quarantine — and only that.
+
+        A NetworkPolicy that selects the pod is *configuration* evidence. It is not proof
+        that packets stop: another policy in the namespace may additively allow the same
+        traffic, and whether the CNI enforces policy at all is outside what kubectl can
+        answer. Both facts travel with the result so a verdict cannot overstate them.
+        """
+        policy_name = f"{namespace}-{pod}-policy"
+        pod_read = self.observe(
+            f"-n {shlex.quote(namespace)} get pod {shlex.quote(pod)} -o json",
+            source=f"pod {namespace}/{pod}", parser=json.loads, absent_is_ok=True)
+        if not pod_read.usable:
+            return pod_read
+        policies = self.network_policies(namespace)
+        if not policies.usable:
+            return policies
+
+        pod_doc = pod_read.value
+        pod_uid = ((pod_doc or {}).get("metadata") or {}).get("uid")
+        labels = ((pod_doc or {}).get("metadata") or {}).get("labels") or {}
+        by_name = {(p.get("metadata") or {}).get("name"): p for p in policies.value}
+        policy = by_name.get(policy_name)
+
+        selecting, allowing = [], []
         try:
-            pod_doc, policy_doc = json.loads(pod_out), json.loads(policy_out)
-        except json.JSONDecodeError:
-            return None
+            for name, doc in by_name.items():
+                spec = doc.get("spec") or {}
+                if not selector_matches(spec.get("podSelector") or {}, labels):
+                    continue
+                selecting.append(name)
+                if (spec.get("ingress") or []) or (spec.get("egress") or []):
+                    allowing.append(name)
+        except ValueError as error:
+            return obs.Observation.malformed(
+                f"a NetworkPolicy selector could not be evaluated: {error}",
+                source=f"quarantine {namespace}/{pod}")
 
-        label_key = "amtd.r6security.com/network-policy"
-        pod_label = (pod_doc.get("metadata", {}).get("labels", {}) or {}).get(label_key, "")
-        spec = policy_doc.get("spec", {}) or {}
-        selector = ((spec.get("podSelector", {}) or {}).get("matchLabels", {}) or {}).get(label_key, "")
-        policy_types = set(spec.get("policyTypes", []) or [])
-        deny_all = not (spec.get("ingress") or []) and not (spec.get("egress") or [])
-        active = (pod_label == policy and selector == policy and deny_all and
-                  {"Ingress", "Egress"}.issubset(policy_types))
-        return {
-            "active": active,
-            "policy": policy,
-            "evidence": (f"podLabel={pod_label or '<missing>'}; selector={selector or '<missing>'}; "
-                         f"denyAll={str(deny_all).lower()}; policyTypes={','.join(sorted(policy_types)) or '<missing>'}"),
+        spec = (policy or {}).get("spec") or {}
+        policy_types = set(spec.get("policyTypes") or [])
+        deny_all = bool(policy) and not (spec.get("ingress") or []) and not (spec.get("egress") or [])
+        selects = policy_name in selecting
+        identity_ok = expect_uid is None or (pod_uid is not None and pod_uid == expect_uid)
+        active = bool(policy) and selects and deny_all and {"Ingress", "Egress"}.issubset(policy_types)
+
+        state = {
+            "active": active and identity_ok,
+            "policy": policy_name,
+            "policyPresent": bool(policy),
+            "podUID": pod_uid,
+            "identityMatches": identity_ok,
+            "selects": selects,
+            "denyAll": deny_all,
+            "policyTypes": sorted(policy_types),
+            "selectingPolicies": sorted(selecting),
+            "additiveAllowPolicies": sorted(n for n in allowing if n != policy_name),
+            # Nothing here probes a packet. Say so, in the record, every time.
+            "effectiveBlockingProven": False,
+            "evidence": (
+                f"policy={'present' if policy else '<missing>'}; selectsPod={str(selects).lower()}; "
+                f"denyAll={str(deny_all).lower()}; "
+                f"policyTypes={','.join(sorted(policy_types)) or '<missing>'}; "
+                f"podUID={(pod_uid or '<missing>')[:8]}; "
+                f"identityMatches={str(identity_ok).lower()}; "
+                f"additiveAllow={','.join(sorted(n for n in allowing if n != policy_name)) or 'none'}"),
         }
+        if pod_doc is None:
+            return obs.Observation.partial(
+                state, "the target Pod no longer exists, so no policy can select it",
+                reason_code=obs.NOT_FOUND, source=f"quarantine {namespace}/{pod}")
+        return obs.Observation.observed(state, source=f"quarantine {namespace}/{pod}")
 
-    def container_log(self, namespace, pod, since="3m", grep=None, tail=400):
-        cmd = f"-n {shlex.quote(namespace)} logs {shlex.quote(pod)} --since={since} --tail={tail}"
-        rc, out, _ = self.kubectl(cmd, timeout=35)
-        if rc != 0:
-            return ""
-        if grep:
-            return "\n".join(l for l in out.splitlines() if grep in l)
-        return out
+    def container_log(self, namespace, pod, pod_uid, since_epoch, pattern, tail=400,
+                      container=None):
+        """Command-specific, time-bounded, instance-bound log evidence.
+
+        Three bindings, all required. `--since-time` from the action's own start, so a line
+        written before the command cannot answer for it. A compiled command-specific
+        pattern, because "lora" appears in a vLLM startup banner. And a re-read of the Pod
+        UID, because `kubectl logs <name>` after a rotation reads a *different* container's
+        log under the same name.
+        """
+        identity = self.observe(
+            f"-n {shlex.quote(namespace)} get pod {shlex.quote(pod)} -o jsonpath='{{.metadata.uid}}'",
+            source=f"log identity {namespace}/{pod}", absent_is_ok=True)
+        if not identity.usable:
+            return identity
+        observed_uid = (identity.value or "").strip().strip("'")
+        if pod_uid and observed_uid != pod_uid:
+            return obs.Observation.unavailable(
+                f"the pod under this name is no longer the observed instance "
+                f"({(observed_uid or 'absent')[:8]} != {pod_uid[:8]}), so its log cannot "
+                f"answer for the action",
+                source=f"container log {namespace}/{pod}", reason_code=obs.NOT_FOUND)
+
+        c = f"-c {shlex.quote(container)} " if container else ""
+        read = self.observe(
+            f"-n {shlex.quote(namespace)} logs {shlex.quote(pod)} {c}"
+            f"--since-time={shlex.quote(rfc3339(since_epoch))} --tail={int(tail)}",
+            source=f"container log {namespace}/{pod}", timeout=35)
+        if not read.usable:
+            return read
+        try:
+            expression = re.compile(pattern)
+        except re.error as error:
+            return obs.Observation.malformed(f"invalid log evidence pattern: {error}",
+                                             source=f"container log {namespace}/{pod}")
+        matches = [line for line in (read.value or "").splitlines() if expression.search(line)]
+        return obs.Observation.observed(
+            {"matches": matches, "podUID": observed_uid, "sinceTime": rfc3339(since_epoch),
+             "pattern": pattern, "linesRead": len((read.value or "").splitlines())},
+            source=read.source)
+
+    def phorvex_policy(self, namespace):
+        """The governing PhorvexPolicy, with the identity a per-owner budget belongs to.
+
+        `items[0]` used to be taken blind. Two policies in one namespace is not a detail:
+        without knowing which one governs a decision there is no owner to hold a budget
+        against, so ambiguity is reported rather than resolved by list order.
+        """
+        def parse(out):
+            items = json.loads(out).get("items")
+            if not isinstance(items, list):
+                raise ValueError("phorvexpolicy list carries no items array")
+            return items
+
+        read = self.observe(f"-n {shlex.quote(namespace)} get phorvexpolicy -o json",
+                            source=f"phorvexpolicy {namespace}", parser=parse)
+        if not read.usable:
+            return read
+        items = read.value
+        if not items:
+            return obs.Observation(obs.OK, None, reason="no PhorvexPolicy governs this namespace",
+                                   reason_code=obs.NOT_FOUND, source=read.source)
+        if len(items) > 1:
+            return obs.Observation.partial(
+                None, f"{len(items)} PhorvexPolicies govern {namespace}; a per-owner budget "
+                      f"cannot be attributed to one of them",
+                reason_code=obs.INVALID, source=read.source)
+        item = items[0]
+        meta, spec = item.get("metadata") or {}, item.get("spec") or {}
+        budget = (spec.get("budget") or {}).get("maxMovesPerTick")
+        return obs.Observation.observed({
+            "uid": meta.get("uid"),
+            "name": meta.get("name"),
+            "namespace": meta.get("namespace") or namespace,
+            "maxMovesPerTick": budget if isinstance(budget, int) and not isinstance(budget, bool) else None,
+            "budgetDeclared": budget is not None,
+            "mode": spec.get("mode"),
+            "dryRun": spec.get("dryRun"),
+        }, source=read.source)
+
+
+def capture_limits(cfg):
+    """Build the capture bounds from config, with the record cap made explicit."""
+    return CaptureLimits(
+        max_total_bytes=int(cfg.get("max_bytes", 16000000)),
+        max_records=int(cfg.get("max_records", 20000)),
+        max_frame_bytes=int(cfg.get("max_frame_bytes", 1 << 20)))
+
+
+def capture_scope(cfg, target):
+    """Declare what a run's captures cover.
+
+    A run with a target scopes to that namespace: the pipeline only reads *that*
+    namespace's policy, baseline and pods, so a record from elsewhere is traffic it cannot
+    verify anything about. An untargeted observe run makes the cluster-wide claim, and the
+    run document says which of the two it was.
+    """
+    declared = cfg.get("namespaces", "target")
+    if declared is None:
+        return CaptureScope(None, note="explicitly configured as cluster-wide")
+    if isinstance(declared, list):
+        return CaptureScope(declared, note="explicitly configured namespace list")
+    if declared != "target":
+        raise TransportError("capture.namespaces must be null, a list, or \"target\"")
+    if not target:
+        return CaptureScope(None, note="no target: cluster-wide observation")
+    return CaptureScope([target["namespace"]],
+                        note="scoped to the target namespace the run can verify")
+
+
+__all__ = ["Cluster", "Console", "Metrics", "Transport", "TransportError",
+           "CaptureLimits", "CaptureScope", "capture_limits", "capture_scope",
+           "selector_matches", "rfc3339"]

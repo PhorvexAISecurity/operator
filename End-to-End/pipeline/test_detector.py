@@ -11,15 +11,20 @@ IDENTITY = "system:serviceaccount:phorvex-system:phorvex-phorvex-e2e-detector"
 TARGET = {"namespace": "voice", "detector": {"identity": IDENTITY, "selector": "app=voice"}}
 
 
-def pod(name, ready=True, **metadata):
-    return {"metadata": dict(name=name, **metadata), "status": {
+EVENT_UID = "event-uid-9f3c"
+
+
+def pod(name, ready=True, uid=None, **metadata):
+    return {"metadata": dict(name=name, uid=uid or f"uid-{name}", **metadata), "status": {
         "phase": "Running", "conditions": [{"type": "Ready", "status": "True" if ready else "False"}]}}
 
 
 class FakeTransport:
-    def __init__(self, pods=None, creator=IDENTITY, create_rc=0, delete_rc=0):
+    def __init__(self, pods=None, creator=IDENTITY, create_rc=0, delete_rc=0,
+                 event_uid=EVENT_UID):
         self.pods = pods if pods is not None else [pod("voice-a")]
         self.creator, self.create_rc, self.delete_rc = creator, create_rc, delete_rc
+        self.event_uid = event_uid
         self.commands = []
         self.event = None
 
@@ -29,8 +34,13 @@ class FakeTransport:
             return 0, json.dumps({"items": self.pods}), ""
         if " create -f " in command:
             self.event = json.loads(shlex.split(command)[2])
-            return self.create_rc, json.dumps({"metadata": {
-                "annotations": {"phorvex.ai/creator-identity": self.creator}}}), "create error"
+            stored = {"metadata": {
+                "name": self.event["metadata"]["name"],
+                "creationTimestamp": "2026-09-10T18:30:05Z",
+                "annotations": {"phorvex.ai/creator-identity": self.creator}}}
+            if self.event_uid:
+                stored["metadata"]["uid"] = self.event_uid
+            return self.create_rc, json.dumps(stored), "create error"
         if " delete securityevent " in command:
             return self.delete_rc, "", "delete error"
         raise AssertionError(command)
@@ -96,6 +106,40 @@ class DetectorTests(unittest.TestCase):
     def test_runs_never_reuse_event_creation_timestamp(self):
         a, b = DetectorSignal(FakeTransport(), TARGET), DetectorSignal(FakeTransport(), TARGET)
         self.assertNotEqual(a.name, b.name)
+
+    def test_every_identity_a_later_attribution_needs_is_kept_from_the_response(self):
+        t = FakeTransport()
+        s = DetectorSignal(t, TARGET, run_id="run-1")
+        response = s.fire()
+        self.assertEqual(response["eventUID"], EVENT_UID)
+        self.assertEqual(response["eventName"], s.name)
+        self.assertEqual(response["eventCreatedAt"], "2026-09-10T18:30:05Z")
+        self.assertEqual(response["targetUID"], "uid-voice-a")
+        self.assertEqual((response["targetNamespace"], response["targetPod"]),
+                         ("voice", "voice-a"))
+        self.assertEqual(response["runId"], "run-1")
+        self.assertEqual(s.injection_identity(), {
+            "kind": "SecurityEvent", "eventName": s.name, "eventUID": EVENT_UID,
+            "eventCreatedAt": "2026-09-10T18:30:05Z", "identity": IDENTITY,
+            "targetNamespace": "voice", "targetPod": "voice-a", "targetUID": "uid-voice-a",
+            "runId": "run-1"})
+
+    def test_a_response_without_an_event_uid_fails_closed(self):
+        # An injection nothing can be attributed to must not become a run that reports a
+        # defended attack.
+        t = FakeTransport(event_uid=None)
+        s = DetectorSignal(t, TARGET)
+        with self.assertRaisesRegex(TransportError, "no event UID"):
+            s.fire()
+        self.assertTrue(s.attempted)
+
+    def test_a_target_pod_without_a_uid_is_never_fired_at(self):
+        t = FakeTransport([{"metadata": {"name": "voice-a"},
+                            "status": {"phase": "Running",
+                                       "conditions": [{"type": "Ready", "status": "True"}]}}])
+        with self.assertRaisesRegex(TransportError, "no UID"):
+            DetectorSignal(t, TARGET).fire()
+        self.assertEqual(len(t.commands), 1)  # discovery only; nothing was created
 
 
 if __name__ == "__main__":

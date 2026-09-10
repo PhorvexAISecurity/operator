@@ -11,25 +11,32 @@ import unittest
 from unittest.mock import patch
 
 import e2e
-from run_output import RunOutput
+import fixtures as F
+import observation as obs
+from capture import CaptureLimits, CaptureScope, StreamCapture
+from run_output import SCHEMA, RunOutput
 from transport import TransportError
 from test_detector import FakeTransport as DetectorTransport, IDENTITY
-import test_transport
 
 ROOT = Path(__file__).resolve().parents[1]
+NS = 'fixture-ns'
 
 
 class OfflineTransport(DetectorTransport):
+    """The detector's fake, extended to answer the cluster reads the run makes."""
+
     def describe(self):
         return 'offline fixture'
 
     def run(self, command, timeout=60):
         if 'get deployments.apps,replicasets.apps,pods' in command:
-            return 0, json.dumps({'items': test_transport.ControllerPodsTests.workload('fixture-controller')}), ''
-        if ' get pod ' in command:
-            return 0, '', ''
-        if ' get phorvexpolicy ' in command:
-            return 0, '3|Enforce|false', ''
+            return 0, json.dumps({'items': F.deployment_stack('fixture-controller')}), ''
+        if 'get pod ' in command and '-o json' in command:
+            return 0, json.dumps({'items': [F.pod('voice-a', namespace=NS)]}), ''
+        if 'get pod ' in command and 'persistentVolumeClaim' in command:
+            return 0, "'ReplicaSet|'", ''
+        if 'get phorvexpolicy' in command:
+            return 0, json.dumps({'items': [F.phorvex_policy(namespace=NS)]}), ''
         return super().run(command, timeout)
 
 
@@ -39,28 +46,33 @@ class RunOutputTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.cfg = {'invariants': {}, 'transport': {'kind': 'local'}, 'console': {},
-                    'capture': {'stream_seconds': 1, 'post_attack_seconds': 1, 'settle_seconds': 0, 'max_bytes': 1000},
+                    'capture': {'stream_seconds': 1, 'post_attack_seconds': 1,
+                                'settle_seconds': 0, 'max_bytes': 100000, 'max_records': 100},
                     'controller_deployments': ['fixture-controller'],
-                    'targets': [{'name': 'fixture', 'namespace': 'fixture-ns',
+                    'targets': [{'name': 'fixture', 'namespace': NS,
                                  'detector': {'identity': IDENTITY, 'selector': 'app=fixture'},
                                  'attack': {'path': '/unused', 'body': {}}}]}
 
     def attempt(self, *, mode='observe', preflight_error=None, capture_error=None,
-                transport=None, baseline=None, renderer=None):
-        transport = transport or OfflineTransport()
-        def stream(seconds, max_bytes, on_connected=None):
+                transport=None, baseline=None, renderer=None, records=()):
+        transport = transport or OfflineTransport(pods=[F.pod('voice-a', namespace=NS)])
+        def stream(seconds, limits, scope=None, on_connected=None):
             if on_connected:
                 on_connected()
                 if capture_error:
                     raise capture_error
-            return [], 0
+            capture = StreamCapture(limits, scope)
+            if records:
+                capture.feed(F.sse(list(records)))
+            return capture.finish()
         output = RunOutput(self.root, mode, 'fixture', source_commit='a' * 40)
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.object(e2e, 'Transport', return_value=transport))
             stack.enter_context(patch.object(e2e.Console, 'wait_preflight',
                 side_effect=preflight_error, return_value=({'ok': True}, {'operator': 'test', 'console': 'test'})))
             stack.enter_context(patch.object(e2e.Console, 'stream_decisions', side_effect=stream))
-            stack.enter_context(patch.object(e2e.Metrics, 'scrape', return_value={}))
+            stack.enter_context(patch.object(e2e.Metrics, 'scrape',
+                                             return_value=obs.Observation.observed({})))
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
             if renderer:
                 stack.enter_context(patch.object(e2e, 'render', side_effect=renderer))

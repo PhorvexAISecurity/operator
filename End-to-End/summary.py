@@ -26,6 +26,11 @@ VERDICT = {
 
 MARKER = "<!-- phorvex-e2e-report -->"
 
+# Kept in step with pipeline/run_output.py SCHEMA / SCHEMA_ACCEPTED; test_summary.py asserts
+# the two lists agree, so a schema bump cannot silently orphan the PR comment. /1 reports
+# have no `coverage` or `capture` block and are rendered without those lines.
+SCHEMA_ACCEPTED = ('phorvex.e2e/1', 'phorvex.e2e/2')
+
 
 def _main():
     ap = argparse.ArgumentParser()
@@ -43,7 +48,7 @@ def _main():
         if not a.run_json or not Path(a.run_json).is_file():
             raise ValueError('No report file was produced for this attempt')
         doc = json.loads(Path(a.run_json).read_text(encoding="utf-8"))
-        if not isinstance(doc, dict) or doc.get('schema') != 'phorvex.e2e/1':
+        if not isinstance(doc, dict) or doc.get('schema') not in SCHEMA_ACCEPTED:
             raise ValueError('Invalid report schema')
         for key, expected in (('runId', a.expect_run_id), ('sourceCommit', a.expect_source_commit)):
             if expected and doc.get(key) != expected:
@@ -75,6 +80,17 @@ def _main():
         for record in doc.get('groundTruth') or []:
             if not isinstance(record, dict) or not {'verdict', 'action', 'pod', 'detail'}.issubset(record):
                 raise ValueError('Malformed ground truth record')
+        for key in ('coverage', 'capture', 'attribution'):
+            if doc.get(key) is not None and not isinstance(doc[key], dict):
+                raise ValueError('Malformed report object')
+        # The three outputs have to make the same claim. A report that says PASS while its
+        # own capture record says the window was not fully observed, or while a critical
+        # contract went unobserved, contradicts itself — and a PR comment is the last place
+        # that should be resolved in favour of the green word.
+        capture = doc.get('capture') or {}
+        unobserved = (doc.get('coverage') or {}).get('criticalUnobserved') or []
+        if doc.get('verdict') == 'PASS' and (capture.get('complete') is False or unobserved):
+            raise ValueError('Report claims PASS over an incomplete or unobserved window')
     except (OSError, ValueError, TypeError) as error:
         unavailable = True
         doc = {'verdict': 'ABORTED', 'runId': a.expect_run_id or 'unknown',
@@ -148,14 +164,42 @@ def _main():
                    f"is a permanent blind spot.")
         out.append("")
 
+    # Coverage before contracts: how much was examined bounds what any verdict below means.
+    capture = doc.get("capture") or {}
+    coverage = doc.get("coverage") or {}
+    unobserved = coverage.get("criticalUnobserved") or []
+    scope = capture.get("scope") or {}
+    if capture.get("complete") is False:
+        out.append(f"> ⚠️ **The observation window was not fully captured** — "
+                   f"{capture.get('reason') or 'reason unrecorded'}. Checks below are "
+                   f"reported over an incomplete record set.")
+        out.append("")
+    if unobserved:
+        out.append(f"> ⚠️ **{len(unobserved)} critical contract(s) could not be observed at "
+                   f"all:** " + ", ".join(f"`{i}`" for i in unobserved) +
+                   ". These are unavailable, not satisfied.")
+        out.append("")
+    if scope and not scope.get("global", True):
+        out.append(f"> ℹ️ Capture scope: `{', '.join(scope.get('namespaces') or [])}`. "
+                   f"Counts below cover that scope only, not the whole cluster.")
+        out.append("")
+    attribution = doc.get("attribution")
+    if attribution and not attribution.get("supported"):
+        out.append(f"> ℹ️ Causal attribution unavailable (`{attribution.get('support')}`): "
+                   f"{attribution.get('reason')}. An observed reaction is reported as an "
+                   f"observed reaction, not as a defended attack.")
+        out.append("")
+
     # The headline numbers. `skip` is shown as prominently as `pass` on purpose: a board of
     # 30 passes and 20 skips is not the same claim as 50 passes, and hiding the skips is
     # how a green badge starts meaning nothing.
-    out.append(f"| Passed | Failed | Warned | Skipped | Mode | Target | Decisions |")
-    out.append("|---:|---:|---:|---:|:--|:--|---:|")
+    out.append(f"| Passed | Failed | Warned | Skipped | Full cov. | Partial | Unobserved "
+               f"| Mode | Target | Decisions |")
+    out.append("|---:|---:|---:|---:|---:|---:|---:|:--|:--|---:|")
     out.append(
         f"| {tally.get('pass', 0)} | {tally.get('fail', 0)} | {tally.get('warn', 0)} "
-        f"| {tally.get('skip', 0)} | `{doc.get('mode', '?')}` | `{target}` "
+        f"| {tally.get('skip', 0)} | {coverage.get('full', 0)} | {coverage.get('partial', 0)} "
+        f"| {coverage.get('none', 0)} | `{doc.get('mode', '?')}` | `{target}` "
         f"| {counts.get('records', 0)} |"
     )
     out.append("")
@@ -197,7 +241,9 @@ def _main():
                    ") — these prove nothing either way</summary>")
         out.append("")
         for c in skipped:
-            out.append(f"- `{c['id']}` **{c['title']}** — {c['summary']}")
+            # "not-applicable" (the situation never arose) and "none" (we could not look)
+            # are different holes, and only one of them is benign.
+            out.append(f"- `{c['id']}` [{c.get('coverage', 'none')}] **{c['title']}** — {c['summary']}")
         out.append("")
         out.append("</details>")
         out.append("")
@@ -207,10 +253,12 @@ def _main():
         out.append("<details><summary>Cluster ground truth (" + str(len(gt)) +
                    ") — verified with kubectl, not with what Phorvex reported</summary>")
         out.append("")
-        out.append("| verdict | action | pod | detail |")
-        out.append("|:--|:--|:--|:--|")
+        out.append("| verdict | attribution | action | pod | detail |")
+        out.append("|:--|:--|:--|:--|:--|")
         for g in gt:
-            out.append(f"| {g['verdict']} | `{g['action']}` | `{g['pod']}` | {g['detail']} |")
+            out.append(f"| {g['verdict']} | {g.get('attribution', 'unavailable')} "
+                       f"| `{g['action']}` | `{g.get('namespace', '?')}/{g['pod']}` "
+                       f"| {g['detail']} |")
         out.append("")
         out.append("</details>")
         out.append("")

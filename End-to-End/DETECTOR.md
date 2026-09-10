@@ -27,11 +27,28 @@ fail the run. SIGKILL/host loss cannot execute cleanup: inspect leftover
 `phorvex-e2e-*` events after an interrupted runner, and delete only the recorded
 event for that run. GitHub's `phorvex-e2e-live` concurrency group must remain intact.
 
+The run keeps every identity the API server assigned: the event's UID, name and
+creationTimestamp, and the namespace, name and UID of the Pod chosen at fire time.
+A CREATE response carrying no event UID fails the run rather than producing an
+injection nothing can be attributed to. These identities are what `A05` needs, and
+they cannot be reconstructed afterwards.
+
+Attribution is a separate claim from effect. Binding a decision to this event
+requires the event UID **and** the target Pod UID inside the audit record.
+`phorvex.audit.v2` carries neither — it has `events[].name` and a Pod name — so
+`A05` reports `unsupported` and cannot pass; PR171/M18 supplies the forensic event
+UID and support is feature-detected from the records. Do not close this gap by
+matching the namespace, the pod name or the event name: a reaction in the target
+namespace is something the operator also produces on its own schedule.
+
 The audit stream must acknowledge its readiness heartbeat **before** injection.
 Capture stays open through the injection and observation window; a new post-fire
 connection can miss an immediate reaction because the deployed console's replay
-window is byte-limited. Reaching the capture byte cap now fails explicitly instead
-of silently dropping evidence. Pre-injection replay is excluded from post records.
+window is byte-limited. The stream is framed incrementally and bounded by explicit
+traffic and record caps; reaching one, or losing the stream, is reported as an
+incomplete observation and never as a shorter successful one. There is no
+reconnect — nothing available proves a resumed stream had no hole in it.
+Pre-injection replay is excluded from post records.
 
 Before a live run, verify operator/console readiness, the admission policy's
 type-check status, denied out-of-namespace server-side dry-run probes, and the

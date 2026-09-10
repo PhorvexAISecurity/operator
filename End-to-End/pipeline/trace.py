@@ -30,7 +30,6 @@ FIELDS = {
         ("threatPosture", "Threat posture",     "0 … 1", "ctxprov/sensed.go:24 Context",         "event severity, decayed by event age"),
         ("exposure",      "Exposure pressure",  "0 … 1", "ctxprov/sensed.go:24 Context",         "time since the last move, relative to the proactive floor"),
         ("sloHeadroom",   "SLO headroom",       "0 … 1", "ctxprov/sensed.go:24 Context",         "1 means full freedom to act"),
-        ("belief",        "Belief in hold",     "0 … 1", "killchain/hazard.go:236 Assess",       "the same pHold; probability the attacker still has a foothold"),
         ("phase",         "Workload phase",     "text",  "ctxprov/sensed.go:24 Context",         "sets the rotation cost inside RLS"),
         ("stage",         "Attacker stage",     "text",  "killchain/hazard.go:236 Assess",       "recon → exploit → persist → lateral → impact"),
         ("nextStage",     "Next stage",         "text",  "killchain/hazard.go:44 successorOf",   "can skip intermediate stages under neighbour pressure"),
@@ -42,9 +41,13 @@ FIELDS = {
     "brain": [
         ("engine",        "Decision engine",    "text", "decision/coverage.go:79 Name",             "p1-coverage means submodular greedy"),
         ("lambda",        "λ shadow price",     "≥ 0",  "cost/dual.go:54 Step",                    "self-tuning under budget pressure; never set by hand"),
-        ("risk",          "Coverage (gain)",    "≥ 0",  "decision/coverage.go:381",                "weight of the recon facts this move invalidates"),
+        # `risk` was retired in phorvex.audit.v2 (audit/contract.go:36 renames it to
+        # coverageValue; audit/log.go rejects a v2 record that still carries it). Reading the
+        # old name meant the net identity had nothing to check and skipped on every run.
+        ("coverageValue", "Coverage (gain)",    "≥ 0",  "decision/coverage.go:670 CoverageValue",  "weight of the recon facts this move invalidates"),
+        ("threatRisk",    "Legacy threat risk", "≥ 0",  "audit/contract.go:36 (legacy P0 read shim)", "only present on translated pre-v2 records; the P1 gain term is coverageValue"),
         ("cost",          "ECost",              "≥ 0",  "cost/p1cost.go:49 ECost",                 "0.4×C_norm + 0.6×C_flow — dimensionless"),
-        ("net",           "Net",                "real", "decision/coverage.go:378",                "risk − λ×cost; this single subtraction is the decision"),
+        ("net",           "Net",                "real", "decision/coverage.go:662",                "coverageValue − λ×cost; this single subtraction is the decision"),
         ("perDollar",     "Coverage per cost",  "≥ 0",  "decision/coverage.go:355",                "the yardstick candidates are ranked on"),
         ("coveredWeight", "Covered weight",     "≥ 0",  "decision/coverage.go:256",                "the fresh share this move adds"),
         ("coveredFacts",  "Fact count",         "count", "decision/coverage.go:256",               "how many independent facts get invalidated"),
@@ -114,18 +117,33 @@ def trace_of(rec):
     }
 
 
-def all_numeric_fields(rec):
-    """Every numeric leaf, for the global non-finite sweep."""
+MAX_SWEEP_DEPTH = 12  # deep enough for decisionTrace; bounded so a cyclic-looking doc ends
+
+
+def all_numeric_fields(rec, prefix="", depth=0):
+    """Every numeric leaf at any depth, for the global non-finite sweep.
+
+    The old sweep read top-level numbers and one level of list-of-objects, which is not
+    where the interesting numbers live: `decisionTrace` and `pHoldInputs` are nested
+    objects, so a NaN carried into the optimiser through a trace input was invisible to the
+    check whose entire purpose is to catch exactly that. Booleans stay excluded — they are
+    ints in Python and finiteness says nothing about them.
+    """
     out = []
-    for k, v in rec.items():
-        if isinstance(v, bool):
+    if depth > MAX_SWEEP_DEPTH:
+        return out
+    if isinstance(rec, dict):
+        items = rec.items()
+    elif isinstance(rec, (list, tuple)):
+        items = ((str(i), v) for i, v in enumerate(rec))
+    else:
+        return out
+    for key, value in items:
+        path = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
+        if isinstance(value, bool):
             continue
-        if isinstance(v, (int, float)):
-            out.append((k, v))
-        elif isinstance(v, list):
-            for i, item in enumerate(v):
-                if isinstance(item, dict):
-                    for ik, iv in item.items():
-                        if isinstance(iv, (int, float)) and not isinstance(iv, bool):
-                            out.append((f"{k}[{i}].{ik}", iv))
+        if isinstance(value, (int, float)):
+            out.append((path, value))
+        elif isinstance(value, (dict, list, tuple)):
+            out.extend(all_numeric_fields(value, path, depth + 1))
     return out

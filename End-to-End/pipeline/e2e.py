@@ -28,19 +28,26 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import checks as checks_mod                      # noqa: E402
+from attribution import Correlator               # noqa: E402
 from groundtruth import verify                   # noqa: E402
 from notify import Notifier                      # noqa: E402
 from report import render                        # noqa: E402
 from trace import trace_of                       # noqa: E402
-from transport import Cluster, Console, Metrics, Transport, TransportError  # noqa: E402
+from transport import (Cluster, Console, Metrics, Transport, TransportError,  # noqa: E402
+                       capture_limits, capture_scope)
 from detector import DetectorSignal             # noqa: E402
-from run_output import Cleanup, RunOutput, error_text  # noqa: E402
+from run_output import Cleanup, RunOutput, SCHEMA, error_text  # noqa: E402
 
 ROOT = HERE.parent
 
 
 class Ctx:
-    """Everything the checks are allowed to look at."""
+    """Everything the checks are allowed to look at.
+
+    Observations travel alongside the values they produced. A check that reads
+    `writer_metrics` can also read `metrics_observation` and tell "the gauge is absent"
+    apart from "the scrape failed" — the distinction A06 exists to make.
+    """
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -51,14 +58,26 @@ class Ctx:
         self.preflight = {}
         self.target = None
         self.baseline_pods = {}
+        self.baseline_namespace = None
         self.stateful_by_pod = {}
         self.ground_truth = []
         self.attack_fired = False
+        self.attack_started_at = None
         self.max_moves_per_tick = None
+        self.policy = None
+        self.policy_observation = None
         self.policy_mode = None
         self.policy_dryrun = None
         self.controller_pods = {}
+        self.controller_observation = None
         self.writer_metrics = {}
+        self.metrics_observation = None
+        self.scope = None
+        self.clock_skew_sec = 0.0
+        self.capture_complete = True
+        self.capture_reason = ""
+        self.captures = {}
+        self.correlator = None
         self.stale_after_sec = 180
         self.max_restarts = int(cfg.get("invariants", {}).get("max_controller_restarts", 10))
 
@@ -83,11 +102,23 @@ def log(msg, indent=0):
     print(f"{'  ' * indent}{msg}", flush=True)
 
 
+def record_key(r):
+    """Identity of a decision for deduplication.
+
+    Two decisions can legitimately share a tick timestamp, a pod name and an action while
+    belonging to different tenants or namespaces — a pod name is not unique across a
+    cluster. Dropping the second one silenced a real owner's decision, so every identity
+    field the record carries is part of the key.
+    """
+    return (r.get("time"), r.get("tenant"), r.get("namespace"), r.get("pod"),
+            r.get("action"), r.get("selected"), r.get("actuated"))
+
+
 def dedupe(records):
     """The SSE endpoint replays the audit file, so a re-read yields repeats."""
     seen, out = set(), []
     for r in records:
-        k = (r.get("time"), r.get("namespace"), r.get("pod"), r.get("action"), r.get("selected"))
+        k = record_key(r)
         if k in seen:
             continue
         seen.add(k)
@@ -99,21 +130,23 @@ DEFAULT_MAX_MOVES_PER_TICK = 3  # api/v1alpha1/defaults.go:20 — used when the 
 
 
 def read_policy(cluster, namespace):
-    """Live PhorvexPolicy budget and mode.
+    """Live PhorvexPolicy identity, budget and mode.
 
-    The field is spec.budget.maxMovesPerTick; an unset value means the operator applies its
-    own default, so the pipeline falls back to that same constant rather than skipping the
-    budget check and pretending it has no opinion.
+    The budget is a per-owner ceiling, so the owner's identity travels with it: without a
+    policy UID there is nobody to hold the budget against, and B07 says so instead of
+    attributing every tenant's selections to whichever policy `items[0]` happened to be.
+
+    An unset spec.budget.maxMovesPerTick means the operator applies its own default, so the
+    pipeline uses that same constant rather than skipping the check and pretending it has
+    no opinion. The result records which of the two it was.
     """
-    rc, out, _ = cluster.kubectl(
-        f"-n {namespace} get phorvexpolicy -o jsonpath="
-        "'{.items[0].spec.budget.maxMovesPerTick}|{.items[0].spec.mode}|{.items[0].spec.dryRun}'")
-    if rc != 0:
-        return None, None, None
-    budget, _, rest = out.strip().strip("'").partition("|")
-    mode, _, dry = rest.partition("|")
-    b = int(budget) if budget.strip().isdigit() else DEFAULT_MAX_MOVES_PER_TICK
-    return b, (mode.strip() or None), (dry.strip() or None)
+    read = cluster.phorvex_policy(namespace)
+    if not read.usable or not read.value:
+        return None, read
+    policy = dict(read.value)
+    if policy.get("maxMovesPerTick") is None:
+        policy["maxMovesPerTick"] = DEFAULT_MAX_MOVES_PER_TICK
+    return policy, read
 
 
 def run(cfg, mode, target_name, out_dir, stream_override=None, notifier=None, run_label=None,
@@ -167,6 +200,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     cluster = Cluster(t)
     metrics = Metrics(t, cfg.get("audit_writer"))
     cap = cfg["capture"]
+    limits = capture_limits(cap)
     started = output.started
     n = notifier or Notifier(enabled=False)
     log(f"● transport: {t.describe()}   mode: {mode}")
@@ -177,14 +211,20 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     output.stage = 'preflight'
     n.running(0)
     ctx.preflight["health"], ctx.preflight["version"] = console.wait_preflight()
-    ctx.controller_pods = cluster.controller_pods(
+    ctx.controller_observation = cluster.controller_pods(
         cfg.get("operator_namespace", "phorvex-system"), cfg.get("controller_deployments"))
+    ctx.controller_pods = ctx.controller_observation.value or {}
     ctx.preflight["controllers"] = ctx.controller_pods
-    ctx.writer_metrics = metrics.scrape()
+    ctx.preflight["controllerRead"] = ctx.controller_observation.to_json()
+    ctx.metrics_observation = metrics.scrape()
+    ctx.writer_metrics = ctx.metrics_observation.value_or({})
     ks = ctx.writer_metrics.get("phorvex_kill_switch_engaged")
-    ctx.preflight["auditWriter"] = {"metricsUrl": metrics.describe(), "killSwitchEngaged": ks}
+    ctx.preflight["auditWriter"] = {"metricsUrl": metrics.describe(), "killSwitchEngaged": ks,
+                                    "read": ctx.metrics_observation.to_json()}
     if ks is not None:
         log(f"audit writer: kill switch = {'engaged (decide only, no action)' if ks else 'off'}", 1)
+    elif not ctx.metrics_observation.usable:
+        log("audit writer: metrics " + ctx.metrics_observation.describe(), 1)
     for name, meta in ctx.controller_pods.items():
         log(f"{name}: {meta['phase']} · restarts={meta['restarts']}", 1)
     log(f"console {ctx.preflight['version'].get('console')} · "
@@ -196,16 +236,36 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
             raise SystemExit(f"unknown target: {target_name} "
                              f"(available: {', '.join(x['name'] for x in cfg['targets'])})")
         ns = ctx.target["namespace"]
-        ctx.baseline_pods = cluster.pod_uids(ns)
-        ctx.max_moves_per_tick, ctx.policy_mode, ctx.policy_dryrun = read_policy(cluster, ns)
+        ctx.baseline_namespace = ns
+        baseline_read = cluster.pod_uids(ns)
+        # An unreadable baseline is not an empty namespace. Continuing with `{}` here is
+        # what let a later "the pod is not in the inventory" read as a successful rotation.
+        if not baseline_read.usable:
+            raise TransportError("the target pod baseline could not be captured, so no later "
+                                 "observation could be compared against it: "
+                                 + baseline_read.describe())
+        ctx.baseline_pods = baseline_read.value
+        ctx.preflight["baselineRead"] = baseline_read.to_json()
+        ctx.policy, ctx.policy_observation = read_policy(cluster, ns)
+        if ctx.policy:
+            ctx.max_moves_per_tick = ctx.policy["maxMovesPerTick"]
+            ctx.policy_mode, ctx.policy_dryrun = ctx.policy.get("mode"), ctx.policy.get("dryRun")
         for pod in ctx.baseline_pods:
             st = cluster.pod_is_stateful(ns, pod)
-            if st is not None:
-                ctx.stateful_by_pod[(ns, pod)] = st
+            if st.usable:
+                ctx.stateful_by_pod[(ns, pod)] = st.value
         log(f"target {ctx.target['name']} · {len(ctx.baseline_pods)} pods · "
             f"stateful={sum(1 for v in ctx.stateful_by_pod.values() if v)} · "
             f"maxMovesPerTick={ctx.max_moves_per_tick} · mode={ctx.policy_mode} "
             f"· dryRun={ctx.policy_dryrun}", 1)
+        if not ctx.policy:
+            log("no single governing PhorvexPolicy was observed: "
+                + ctx.policy_observation.describe(), 1)
+
+    # What this run's captures claim to cover, decided once and recorded next to the
+    # counters. A scoped run must not be read as a cluster-wide observation.
+    ctx.scope = capture_scope(cap, ctx.target)
+    log(f"capture scope: {ctx.scope.describe()} · limits {limits.to_json()}", 1)
 
     # A stage is only green here if preflight found a live system: an unreachable console or
     # a controller that is not Running makes every later stage meaningless, and the board
@@ -222,15 +282,17 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     output.stage = 'baseline capture'
     log(f"\n[1/6] baseline capture ({secs}s of the decision stream)")
     n.running(1, f"{secs}s")
-    pre, malformed = console.stream_decisions(secs, cap["max_bytes"])
-    ctx.pre_records = dedupe(pre)
-    log(f"{len(ctx.pre_records)} unique records"
-        f"{f' ({malformed} malformed lines from the cut)' if malformed else ''}", 1)
+    pre = console.stream_decisions(secs, limits, ctx.scope)
+    ctx.captures["baseline"] = pre
+    output.captures["baseline"] = pre.to_json()
+    ctx.pre_records = dedupe(pre.records)
+    log(f"{len(ctx.pre_records)} unique records · {pre.describe()}", 1)
+    if not pre.complete:
+        log(f"baseline capture incomplete: {pre.reason}", 1)
     # No records at all is a failed capture, not an empty one — every check downstream would
     # skip, and a board of skips reads as a pass.
-    n.stage(1, "ok" if ctx.pre_records else "fail",
-            f"{len(ctx.pre_records)} records"
-            + (f" · {malformed} malformed" if malformed else ""))
+    n.stage(1, "ok" if (ctx.pre_records and pre.complete) else "fail",
+            f"{len(ctx.pre_records)} records · {pre.describe()}")
 
     # ── 2 · fire ─────────────────────────────────────────────────────────────
     attack_response = None
@@ -245,9 +307,10 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         a = ctx.target["attack"]
         n.running(2, ctx.target["name"])
         if ctx.target.get("detector"):
-            detector = DetectorSignal(t, ctx.target)
+            detector = DetectorSignal(t, ctx.target, run_id=output.run_id)
             output.injection = {'kind': 'SecurityEvent', 'name': detector.name,
                                 'identity': detector.identity, 'targetNamespace': detector.namespace,
+                                'runId': output.run_id,
                                 'createAttempted': False, 'createResponseValidated': False,
                                 'cleanup': 'not-needed'}
 
@@ -272,8 +335,15 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
                     output.injection['createResponseValidated'] = True
                 finally:
                     output.injection['createAttempted'] = detector.attempted
+                    # Whatever the API server assigned, kept verbatim: this is the only
+                    # identity any later record can be bound to.
+                    output.injection.update(detector.injection_identity())
             else:
+                # A console signal returns no event identity at all, so nothing downstream
+                # can bind a reaction to it. That is recorded here rather than glossed over.
                 output.injection = {'kind': 'console-signal', 'targetNamespace': ctx.target['namespace'],
+                                    'eventUID': None, 'eventName': None, 'targetUID': None,
+                                    'runId': output.run_id,
                                     'createAttempted': True, 'cleanup': 'not-configured'}
                 log(f"\n[2/6] firing a real attack → POST {a['path']} {json.dumps(a['body'])}")
                 # Also clear legacy console signals on exceptions after POST.
@@ -298,9 +368,12 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
             ctx.attack_fired = True
 
         log("\n[2/6] opening audit stream before injection (waiting for readiness heartbeat)")
-        captured_post, _ = console.stream_decisions(
-            cap["post_attack_seconds"] + cap["settle_seconds"], cap["max_bytes"],
+        live = console.stream_decisions(
+            cap["post_attack_seconds"] + cap["settle_seconds"], limits, ctx.scope,
             on_connected=fire_when_stream_ready)
+        ctx.captures["live"] = live
+        output.captures["live"] = live.to_json()
+        captured_post = live.records
         log(str(attack_response)[:300], 1)
         # The console answers 200-with-error for an unarmed namespace and 503 when no
         # attackable pod is left, so "did it fire" is a field, not an HTTP code.
@@ -319,21 +392,42 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         log(f"\n[3/6] post-attack capture ({win}s)")
         n.running(3, f"{win}s")
         post = captured_post
-        pre_keys = {(r.get("time"), r.get("pod"), r.get("action")) for r in ctx.pre_records}
+        # The "already seen it" key has to carry namespace and tenant too: two namespaces
+        # can produce a decision for the same pod name, action and tick, and dropping the
+        # second one deletes another owner's evidence.
+        pre_keys = {record_key(r) for r in ctx.pre_records}
+        # Record timestamps come from the operator's clock and `attack_started_at` from
+        # ours, so comparing them assumes the two agree. They agree to within NTP, not
+        # exactly, and the audit stamps whole records — so the tolerance is declared and
+        # recorded rather than left as an invisible strictly-greater-than. It only widens
+        # which records are *considered*: what makes one attributable is A05's identity
+        # binding, not its position in the window.
+        skew = float(cap.get("clock_skew_tolerance_sec", 2))
+        ctx.clock_skew_sec = skew
         ctx.post_records = [r for r in dedupe(post)
-                            if (r.get("time"), r.get("pod"), r.get("action")) not in pre_keys
-                            and (ctx.parse_time(r.get("time")) or 0) >= attack_started_at]
-        log(f"{len(ctx.post_records)} fresh records after firing", 1)
+                            if record_key(r) not in pre_keys
+                            and (ctx.parse_time(r.get("time")) or 0) >= attack_started_at - skew]
+        log(f"{len(ctx.post_records)} fresh records after firing · "
+            f"{ctx.captures['live'].describe()}", 1)
+        if not ctx.captures["live"].complete:
+            log(f"live capture incomplete: {ctx.captures['live'].reason}", 1)
         # An attack that produced no new decision at all is a finding: either the signal
         # never reached ingest or the operator stopped ticking. Warn rather than fail —
         # the check catalogue at [5/6] is what decides the run.
-        n.stage(3, "ok" if ctx.post_records else "warn",
+        n.stage(3, "ok" if (ctx.post_records and ctx.captures["live"].complete) else "warn",
                 f"{len(ctx.post_records)} fresh records")
     else:
         log("\n[3/6] post-attack capture — skipped")
         n.stage(3, "skip", "nothing fired")
 
     ctx.records = dedupe(ctx.pre_records + ctx.post_records)
+    ctx.attack_started_at = attack_started_at
+    ctx.capture_complete = all(c.complete for c in ctx.captures.values())
+    ctx.capture_reason = "; ".join(f"{k}: {c.reason}" for k, c in ctx.captures.items()
+                                  if not c.complete)
+    # What this run's records are capable of proving about cause, feature-detected from the
+    # records themselves rather than assumed from the schema we hope is deployed.
+    ctx.correlator = Correlator(output.injection or {}, ctx.records) if ctx.attack_fired else None
 
     # ── 4 · ground truth ─────────────────────────────────────────────────────
     log("\n[4/6] independent verification against the cluster")
@@ -341,9 +435,17 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     acted = [r for r in ctx.records if r.get("actuated")]
     if acted:
         n.running(4, f"{len(acted)} actions")
-        ctx.ground_truth = verify(cluster, acted, ctx.baseline_pods)
+        ctx.ground_truth = verify(
+            cluster, acted, ctx.baseline_pods,
+            namespace=ctx.baseline_namespace,
+            # Without an injection, the run's own start bounds the log evidence: nothing
+            # written before the pipeline began can answer for what it observed.
+            action_started_at=attack_started_at or started.timestamp(),
+            log_patterns=ctx.inv.get("action_log_evidence"),
+            attribution_of=(ctx.correlator.classify if ctx.correlator else None))
         for g in ctx.ground_truth:
-            log(f"{g['verdict']:14s} {g['action']:16s} {g['pod']}: {g['detail']}", 1)
+            log(f"{g['verdict']:14s} {g['action']:16s} {g['namespace']}/{g['pod']}: "
+                f"{g['detail']} [attribution: {g['attribution']}]", 1)
         # groundtruth.py returns `unverifiable` for the actions it cannot independently
         # confirm. That is not a failure — it is the module refusing to vouch for something
         # it did not look at — so it is counted separately from a real contradiction.
@@ -373,12 +475,25 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         log(f"{mark} {c['id']:5s} {c['title']}  —  {r['summary']}", 1)
 
     tally = {s: sum(1 for r in results if r["status"] == s) for s in ("pass", "fail", "warn", "skip")}
+    coverage_tally = {c: sum(1 for r in results if r.get("coverage") == c)
+                      for c in ("full", "partial", "none", "not-applicable")}
     # Severity-aware roll-up: a failing MINOR check is a real finding but must not read as a
     # broken system, and a passing board built on skips must not read as full coverage.
     hard = [r for r in results if r["status"] == "fail" and r["severity"] in ("critical", "major")]
     soft = [r for r in results if (r["status"] == "fail" and r["severity"] == "minor")
             or r["status"] == "warn"]
-    verdict = "FAIL" if hard else ("WARN" if soft else "PASS")
+    # A critical contract that could not be observed at all is not a passing contract. It is
+    # separated from `not-applicable` on purpose: "no actuation happened, so there was
+    # nothing to verify" is a legitimate PASS; "the cluster would not tell us" is not.
+    unobserved = [r for r in results
+                  if r["severity"] == "critical" and r.get("coverage") == "none"]
+    incomplete = [] if ctx.capture_complete else [ctx.capture_reason]
+    verdict = ("FAIL" if hard else
+               "WARN" if (soft or unobserved or incomplete) else "PASS")
+    for r in unobserved:
+        log(f"! {r['id']} is critical and could not be observed — {r['summary']}", 1)
+    if incomplete:
+        log(f"! the capture window was not fully observed — {ctx.capture_reason}", 1)
 
     # The verdict above stays honest: a contract violation is a FAIL whether or not anyone
     # wrote it down. The baseline only separates "already broken" from "broken by this
@@ -410,7 +525,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     traces = [trace_of(r) for r in ctx.records]
 
     run_doc = {
-        "schema": "phorvex.e2e/1",
+        "schema": SCHEMA,
         "startedAt": started.isoformat(),
         "finishedAt": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
@@ -418,6 +533,15 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         "target": ctx.target,
         "verdict": verdict,
         "tally": tally,
+        # Coverage sits next to the tally because they answer different questions: the tally
+        # says how many contracts held, coverage says how many were actually examined.
+        "coverage": dict(coverage_tally,
+                         criticalUnobserved=[r["id"] for r in unobserved]),
+        "capture": {"scope": ctx.scope.to_json(), "limits": limits.to_json(),
+                    "complete": ctx.capture_complete, "reason": ctx.capture_reason,
+                    "clockSkewToleranceSec": ctx.clock_skew_sec,
+                    "windows": {k: c.to_json() for k, c in ctx.captures.items()}},
+        "attribution": ctx.correlator.to_json() if ctx.correlator else None,
         # What the gate acted on, recorded next to the verdict so a green CI run next to a
         # red report is self-explaining rather than suspicious.
         "baselined": baselined,
@@ -429,7 +553,12 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
         "attackStartedAtEpoch": attack_started_at,
         "injection": output.injection,
         "policy": {"maxMovesPerTick": ctx.max_moves_per_tick,
-                   "mode": ctx.policy_mode, "dryRun": ctx.policy_dryrun},
+                   "mode": ctx.policy_mode, "dryRun": ctx.policy_dryrun,
+                   "uid": (ctx.policy or {}).get("uid"), "name": (ctx.policy or {}).get("name"),
+                   "namespace": (ctx.policy or {}).get("namespace"),
+                   "budgetDeclared": (ctx.policy or {}).get("budgetDeclared"),
+                   "read": ctx.policy_observation.to_json() if ctx.policy_observation else None},
+        "baselineNamespace": ctx.baseline_namespace,
         "baselinePods": ctx.baseline_pods,
         "controllerPods": ctx.controller_pods,
         "statefulPods": [f"{ns}/{p}" for (ns, p), v in ctx.stateful_by_pod.items() if v],
