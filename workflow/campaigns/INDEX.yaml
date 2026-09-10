@@ -12,3 +12,7 @@ campaigns:
     directory: campaigns/2026-09-07-quarantine-brain
     state: PAUSED
     profile: workflow-v2
+  2026-09-10-v3-observe:
+    directory: campaigns/2026-09-10-v3-observe
+    state: RUNNING
+    profile: workflow-v2
