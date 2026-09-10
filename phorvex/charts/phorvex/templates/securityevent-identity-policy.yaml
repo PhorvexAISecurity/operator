@@ -1,0 +1,112 @@
+{{- $detectors := .Values.phorvex.trustedDetectors | default list -}}
+{{- if not .Values.phorvex.eventIdentityPolicy.enabled -}}
+{{- if gt (len $detectors) 0 -}}
+{{- fail "phorvex.eventIdentityPolicy.enabled=false with a non-empty phorvex.trustedDetectors: the phorvex.ai/creator-identity annotation is then only as trustworthy as the mutating stamp endpoint, which is failurePolicy=Ignore — while it is down a client keeps whatever creator it wrote, so an allowlisted detector identity can be forged (M-94). Keep the policy enabled, or set phorvex.trustedDetectors=[] and accept that no external SecurityEvent supplies belief evidence." -}}
+{{- end -}}
+{{- else -}}
+{{- if not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version) -}}
+{{- fail (printf "phorvex.eventIdentityPolicy requires Kubernetes >=1.30 for stable admissionregistration.k8s.io/v1 ValidatingAdmissionPolicy; this cluster reports %s. The guard is NOT silently omitted: upgrade the cluster, or set phorvex.eventIdentityPolicy.enabled=false together with phorvex.trustedDetectors=[] and run with no trusted external detector." .Capabilities.KubeVersion.Version) -}}
+{{- end -}}
+{{- $name := include "phorvex.eventIdentityPolicyName" . }}
+# M-94 — SecurityEvent creator-identity guard (ValidatingAdmissionPolicy + Deny binding).
+#
+# WHY THIS EXISTS. The creator-identity annotation is written by the mutating stamp webhook
+# (templates/admission-webhook.yaml, failurePolicy: Ignore) from the admission request's
+# authenticated UserInfo, and ingest grants belief evidence only to an allowlisted stamp.
+# `Ignore` means that while the webhook Service has no ready endpoint the API server stores
+# the object UNCHANGED — so the annotation a client sent stands, and any identity holding
+# securityevents-create can mint an event stamped with an allowlisted detector's name. That
+# is the residual M-94 forgery this policy closes.
+#
+# Validation runs AFTER mutation, and a ValidatingAdmissionPolicy is evaluated IN-PROCESS by
+# the API server: it has no endpoint that can be unreachable, so it cannot fail open the way
+# the webhook does. On the healthy path the stamper has already overwritten the annotation
+# with the requester's own username, so the equality below is trivially satisfied and normal
+# admission is unchanged. During an outage the annotation is whatever the client sent, and
+# the same equality rejects a foreign claim.
+#
+# THE CONTRACT (03-decision.md):
+#   - A present, non-empty phorvex.ai/creator-identity must equal request.userInfo.username.
+#     Asserting your OWN identity is allowed: your authenticated username already grants
+#     exactly that authority, and ingest still has to find it on the detector allowlist.
+#   - An absent or empty annotation is ADMITTED. An honest detector that emits during the
+#     outage is not blocked; its event simply lands unstamped and carries no belief evidence.
+#     Fail-closed on belief, open on ingestion.
+#   - A missing/empty username never authorises a non-empty claim (equality fails).
+#   - There is deliberately NO exception for an UNCHANGED foreign stamp on UPDATE. Such an
+#     exception was proposed and rejected: it lets an untrusted updater rewrite a trusted
+#     event's targets/rule/score/annotations while retaining the original principal's stamp,
+#     which is the same forgery through a different door. An updater that has no business
+#     owning the stamp must clear it (the event becomes untrusted) or be denied.
+#
+# SUBRESOURCES. `resources` names the full resource only, never securityevents/status. A
+# status write is a different resource, so it is not matched and legitimate status updates by
+# Phoenix or any controller keep working. That is not a hole: for a CRD with the status
+# subresource enabled the API server replaces the incoming ObjectMeta and spec with the
+# stored ones and takes only `status`, so the creator-identity annotation cannot be changed
+# through /status. Matching /status here would instead re-check a STORED annotation against
+# whichever controller happens to write status, and would deny honest status updates.
+#
+# SCOPE LIMIT. This binds future CREATE/UPDATE only. Objects already stored keep whatever
+# annotation they have; nothing here retroactively authenticates them, and installing this
+# policy does not remove or disprove a historical forgery. Pre-guard trusted events must be
+# inventoried and reconciled separately (see workflow/fixes/V3-M094).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: securityevent-identity
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    # Equivalent + apiVersions "*": the guard must not lapse if the SecurityEvent CRD ever
+    # serves an additional version. metadata.annotations and userInfo are version-independent.
+    matchPolicy: Equivalent
+    resourceRules:
+      - apiGroups: ["amtd.r6security.com"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        # Full resource only — deliberately NOT securityevents/status; see header.
+        resources: ["securityevents"]
+        # The CRD is cluster-scoped today; "*" keeps the guard in force for every
+        # SecurityEvent in the cluster even if an install serves it namespaced.
+        scope: "*"
+  variables:
+    - name: claim
+      expression: >-
+        has(object.metadata.annotations) && 'phorvex.ai/creator-identity' in object.metadata.annotations
+          ? object.metadata.annotations['phorvex.ai/creator-identity']
+          : ''
+    - name: actor
+      expression: "request.userInfo.username"
+  validations:
+    # One rule, no exemption list: either the object carries no creator claim, or the claim
+    # names the authenticated requester.
+    - expression: "variables.claim == '' || variables.claim == variables.actor"
+      reason: Forbidden
+      messageExpression: >-
+        "securityevent/creator-identity: the phorvex.ai/creator-identity annotation must name the
+        authenticated requester ('" + variables.actor + "'), but this request claims '" +
+        variables.claim + "'. Omit the annotation — the Phorvex admission stamp writes it, and an
+        unstamped event is still accepted, it just supplies no belief evidence."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: securityevent-identity
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: {{ $name }}
+  # Deny, not Warn/Audit: a policy without an enforcing binding changes nothing.
+  validationActions: ["Deny"]
+  # No matchResources, no namespaceSelector, no user or namespace exemption: every
+  # SecurityEvent CREATE/UPDATE the policy matches is enforced.
+{{- end }}

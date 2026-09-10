@@ -22,3 +22,14 @@ app.kubernetes.io/part-of: phorvex
 {{- $scope := printf "%s/%s" .Release.Namespace (include "phorvex.fullname" .) -}}
 {{- printf "%s-%s-audit-pvc-%s" (.Release.Namespace | trunc 16 | trimSuffix "-") (include "phorvex.fullname" . | trunc 24 | trimSuffix "-") ($scope | sha256sum | trunc 10) -}}
 {{- end -}}
+
+{{/*
+M-94 SecurityEvent creator-identity guard. Cluster-scoped like the audit guard, so the
+name carries namespace + release and a hash of the UNTRUNCATED scope: two releases never
+collide, and the value is a pure function of the scope — repeated renders of the same
+release produce the same name (no genCA/randAlphaNum drift).
+*/}}
+{{- define "phorvex.eventIdentityPolicyName" -}}
+{{- $scope := printf "%s/%s" .Release.Namespace (include "phorvex.fullname" .) -}}
+{{- printf "%s-%s-se-creator-%s" (.Release.Namespace | trunc 16 | trimSuffix "-") (include "phorvex.fullname" . | trunc 24 | trimSuffix "-") ($scope | sha256sum | trunc 10) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
