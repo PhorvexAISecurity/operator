@@ -81,8 +81,10 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	urg := 0.5 + 0.5*stageUrg
 
 	// AI recon facts — emitted on GPU/served-model assets. Cover is granted per physical mechanism,
-	// not to the group as a whole: model-shard-replace and endpoint-rotate invalidate their matching
-	// facts; mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
+	// not to the group as a whole: modelFingerprint stays audit-only because model-shard-replace
+	// has no loaded-identity/effect witness. EndpointPath remains audit-only because route
+	// restitching does not prove locator invalidation;
+	// mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
 	// warm-swap and GPU co-location remain cover-free until anti-affinity proves relocation; and
 	// kv-migrate-invalidate maps to session state below. This keeps selectable cover narrower than
 	// the emitted audit universe whenever an actuator cannot guarantee the claimed effect.
@@ -100,8 +102,8 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		if af.CoverByAction == nil {
 			af.CoverByAction = map[model.Action][]string{}
 		}
-		af.CoverByAction[model.ActionModelShardReplace] = append(af.CoverByAction[model.ActionModelShardReplace], mf.Key())
-		af.CoverByAction[model.ActionEndpointRotate] = append(af.CoverByAction[model.ActionEndpointRotate], ep.Key())
+		// M-035: retain endpointPath and its weight for audit, but withhold cover from every action.
+		// A route declaration or selector change does not prove the learned DNS/API locator is unusable.
 		// [PHVX-26a] The GPU cover, corrected. These two actions used to receive byte-identical
 		// grants {gpuColocation, gpuContentionChannel}, which made them indistinguishable to the
 		// optimizer and asserted more than either performs.
@@ -142,7 +144,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 
 		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
 		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
-		// route they learned, which is what endpointPath represents and what endpoint-rotate erases.
+		// route they learned, which is what the audit-only endpointPath represents.
 		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
 		// class as PHVX-9e.
 		if sessKey != "" {
@@ -179,7 +181,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// A NAMED attack vector targeting this pod makes the matching serving fact DOMINATE — the
 		// same ×3 structural dominance as adapter-integrity — so the engine picks the SURGICAL
 		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
-		// jailbreak, request-drain for a request hijack) over the cheaper generic endpoint-rotate.
+		// jailbreak, request-drain for a request hijack) over other eligible moves.
 		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
 		// only the weight is lifted. Self-limiting: the boost is gone once the event ages out.
 		if hasVectorEvent(view.Events, model.AttackVectorKV) && sessKey != "" {
