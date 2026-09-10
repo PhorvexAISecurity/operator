@@ -5,3 +5,6 @@ workflow/**/*.patch -whitespace
 # Sealed independent review output retains source blank lines and empty TSV cells.
 workflow/assessments/20260910-readiness/fresh-integration/r4/evidence/r4-integration-nodes.txt -whitespace
 workflow/assessments/20260910-readiness/fresh-integration/r4/evidence/r4-join-matrix.tsv -whitespace
+
+# Anatomy TSV schemas retain empty terminal cells; do not trim generated columns.
+workflow/assessments/20260910-readiness/anatomy-v3/pipeline/*.tsv -whitespace
