@@ -2297,7 +2297,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-155 · The A05 e2e attack gate is a two-operator race: Phoenix's SecurityEvent controller can delete the redteam target before the brain's next tick — the attack DID react, just not in the decision stream, and the gate fails spuriously · **OPEN** · `ACTUATION`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: V3-E2E
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
@@ -2462,7 +2462,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-165 · E2E verification reports success from failed or absent observations · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: V3-E2E
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.
