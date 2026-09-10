@@ -1618,7 +1618,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-21 · The default actuator rejects every AI-native move while reporting `ActionsSupported: True` · **OPEN** · `CONTRACT`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: M-21
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · phoenix:actuate SecurityEvent.Create @ internal/actuator/phoenix.go:140

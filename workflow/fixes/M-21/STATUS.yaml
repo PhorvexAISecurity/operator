@@ -1,0 +1,118 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 1537e08d167bac41f37e0f890086ec86194c56613df8c46d6df97990662957fe
+    source_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+    at: '2026-09-10T13:07:56+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+fix_id: M-21
+issues:
+- M-21
+title: Validate actuator selection and report actual backend support
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: claude-m021
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: origin/main
+  code_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: parallel/contract-m021-actuator-selection-repertoire
+  base_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: implementer
+  action: 'Claude worker: retain the baseline reproduction, implement signed 03-decision.md,
+    run required preflight and submit-review to codex-lead; no further proposal gate.'
+updated_at: '2026-09-10T13:07:56+00:00'
+configuration_history:
+- at: '2026-09-10T12:58:22+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - capabilities_required
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T13:07:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T13:07:56+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
