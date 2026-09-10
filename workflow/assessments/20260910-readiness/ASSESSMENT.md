@@ -5,10 +5,12 @@
 - Lead: codex-lead, current GPT-6 session; exact Astra variant is not independently exposed. Prior request mentioned Astra; do not mislabel a worker or configured model as Astra.
 - Workers: new explicitly assigned Claude CLI sessions; identities, actual model, source, results and review recorded per assignment. Existing M-18/M-21/M-79 sessions retain their assignments.
 - Initial source: PhorvexSecurity/operator dbf5fa4321b3 (resolve full SHA in evidence/source.json). Always refresh main before allocating an implementation tier.
-- Deployment: observation pending; main is not deployment evidence.
+- Deployment: read-only observations captured v0.4.108 and then v0.4.109 with separate image/digest records; embedded source SHA remains unobserved. Main is not deployment evidence.
 - Scope: shipping Go operator/engines, API/CRD/configuration, all actuators and routed backends, charts/RBAC, dashboard/API, detector/controller integrations, tests, and workflow attack catalogue plus executable scenarios. Audit mathematical correctness and assumptions; defer elective mathematical optimization to later research.
 - Environment: local isolated worktrees and tests; read-only dev-cluster observations. DevOps owns deployment. Merge and live mutations are not authorized by this assessment's broad request. Prepare bounded verification experiments before any mutation-dependent work.
 - Resource policy: at most three new Claude workers concurrently initially; limit Go compilation concurrency on this 8 GB host. Reassess if memory or subscription limits intervene. Do not disturb existing interactive workers.
+- Model policy: user now requires explicit Claude Opus 5 with maximum reasoning on new jobs and resumes; see MODEL-POLICY.md for retained pre-change provenance.
+- Architecture plan: refresh the source-derived anatomy as a v3 assessment snapshot and review its issue/contract dependency joins before finalizing tiers; see ANATOMY-V3-PLAN.md. Canonical deployed anatomy remains separately pinned.
 - Prior exposure: lead has reviewed historical M-140/M-18/M-21/M-79 context. Fresh investigators must first inspect source/tests without historical issue bodies; preserve and hash that pass before reconciliation.
 - Existing deliveries: PR #170 M-21 and #171 M-18 are open and must be reconciled rather than duplicated. M-79 prerequisite claims require fresh source checks. M-140 is merged; live verification remains pending.
 - Completion claim: no known unresolved defects within explicitly assessed coverage, backed by source, tests and live evidence. Never assert that software is provably free of all bugs. Unknowns, missing hardware, untested scenarios, and accepted risk remain visible.
