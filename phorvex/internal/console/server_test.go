@@ -30,10 +30,14 @@ func TestNoAuthConfigured_APIIsClosed(t *testing.T) {
 }
 
 // Vendor data follows the GRANT, not the header. A header-only caller is unauthenticated.
+//
+// The vendor-side identities hold the cross-tenant grant, because /api/effectiveness is part of
+// the private evidence corpus: it is not attributable to a tenant, so it cannot be filtered down
+// to one. TestPrivateEvidenceCorpusNeedsACrossTenantGrant covers that rule on its own.
 func TestVendorDataRequiresGrantedRole(t *testing.T) {
 	f := newAuthFixture(t, Config{Root: "."},
-		operatorGrant("op", []string{"acme"}, []string{defaultTargetID}),
-		investorGrant("inv", []string{"acme"}, []string{defaultTargetID}),
+		operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}),
+		investorGrant("inv", []string{wildcardScope}, []string{defaultTargetID}),
 		ownerGrant("own", []string{"acme"}),
 	)
 

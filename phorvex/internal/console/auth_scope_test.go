@@ -315,6 +315,202 @@ func TestClusterWritesRequireTheClusterTarget(t *testing.T) {
 	}
 }
 
+// Aggregates built from the decision audit are TENANT data. Summing the whole audit handed a
+// tenant-limited operator another tenant's cost and decision count.
+func TestAuditDerivedAggregatesAreTenantScoped(t *testing.T) {
+	mine := decisionRec("tenant-a", "mine-pod")
+	mine.Cost = 11
+	theirs := decisionRec("tenant-b", "private-pod")
+	theirs.Cost = 1729
+	cfg := Config{Root: t.TempDir(), AuditPath: writeDecisionAudit(t, mine, theirs)}
+
+	read := func(f *authFixture, subject string) (int, float64, int) {
+		t.Helper()
+		w := f.do(f.albReqAs(t, http.MethodGet, "/api/cost-timeseries", "", subject))
+		var body struct {
+			Total     float64 `json:"totalPhorvex"`
+			Decisions int     `json:"decisions"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &body)
+		return w.Code, body.Total, body.Decisions
+	}
+
+	// Positive control first: a cross-tenant grant sees BOTH records, so the fixture really does
+	// carry the foreign cost the scoped cases below must not receive.
+	wide := newAuthFixture(t, cfg, operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}))
+	if code, total, n := read(wide, "op"); code != http.StatusOK || total != 1740 || n != 2 {
+		t.Fatalf("cross-tenant control: %d total=%v decisions=%d", code, total, n)
+	}
+
+	// A tenant-a operator sees only tenant-a's cost — never tenant-b's 1729.
+	scoped := newAuthFixture(t, cfg, operatorGrant("op", []string{"tenant-a"}, []string{defaultTargetID}))
+	code, total, n := read(scoped, "op")
+	if code != http.StatusOK || total != 11 || n != 1 {
+		t.Fatalf("tenant-a operator: %d total=%v decisions=%d (must be 11 over 1 decision)", code, total, n)
+	}
+
+	// An empty target grant reaches the endpoint at all.
+	noTarget := newAuthFixture(t, cfg, operatorGrant("op", []string{wildcardScope}, []string{}))
+	if code, _, _ := read(noTarget, "op"); code != http.StatusForbidden {
+		t.Fatalf("empty target grant: got %d, want 403", code)
+	}
+}
+
+// Sharing a cluster does not make one tenant's run readable by another, and "I started it" is
+// not authorization: the check is the grant held NOW.
+func TestRunIDHonoursTenantAndCurrentScope(t *testing.T) {
+	dir := scratchDir(t)
+	bin := filepath.Join(dir, "local-harness")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A real suite config naming tenant-b on the default cluster.
+	if err := os.WriteFile(filepath.Join(dir, allowedConfigs["fpprobe"].File),
+		[]byte("namespace: tenant-b\ncontext: default\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{Root: dir, HarnessDir: dir, HarnessBin: bin}
+	f := newAuthFixture(t, cfg,
+		operatorGrant("creator", []string{"tenant-b"}, []string{defaultTargetID}),
+		operatorGrant("stranger", []string{"tenant-a"}, []string{defaultTargetID}),
+	)
+	w := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/start", `{"config":"fpprobe"}`, "creator"))
+	if w.Code != http.StatusOK {
+		t.Fatalf("producer start: %d %s", w.Code, w.Body.String())
+	}
+	var started struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &started); err != nil || started.ID == "" {
+		t.Fatalf("producer id: %s", w.Body.String())
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Positive control: the tenant-b operator reads its own run on every id-scoped route.
+	idRoutes := []string{"/api/runs/status?id=", "/api/runs/evidence?id="}
+	for _, base := range idRoutes {
+		if w := f.do(f.albReqAs(t, http.MethodGet, base+started.ID, "", "creator")); w.Code != http.StatusOK {
+			t.Fatalf("creator %s: %d %s", base, w.Code, w.Body.String())
+		}
+	}
+	// A tenant-a operator on the SAME cluster gets nothing, on every id-scoped route.
+	for _, base := range append(idRoutes, "/api/runs/stream?id=") {
+		w := f.do(f.albReqAs(t, http.MethodGet, base+started.ID, "", "stranger"))
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("stranger %s: got %d, want 404\n%s", base, w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "tenant-b") || strings.Contains(w.Body.String(), "creator") {
+			t.Fatalf("the denial disclosed the run's owner or namespace: %s", w.Body.String())
+		}
+	}
+	if w := f.do(f.albReqAs(t, http.MethodPost, "/api/runs/stop", `{"id":"`+started.ID+`"}`, "stranger")); w.Code != http.StatusNotFound {
+		t.Fatalf("stranger stop: got %d, want 404", w.Code)
+	}
+	// The listing agrees with the id check rather than advertising what status would refuse.
+	if w := f.do(f.albReqAs(t, http.MethodGet, "/api/runs/list", "", "stranger")); strings.Contains(w.Body.String(), started.ID) {
+		t.Fatalf("the run list leaked another tenant's run: %s", w.Body.String())
+	}
+
+	// The creator's OWN grant, narrowed to a tenant it no longer holds, loses the run with it —
+	// there is no standing creator bypass.
+	narrowed := newAuthFixture(t, cfg, operatorGrant("creator", []string{"tenant-a"}, []string{defaultTargetID}))
+	narrowed.srv.runs = f.srv.runs // same run manager, a differently-scoped identity
+	if w := narrowed.do(narrowed.albReqAs(t, http.MethodGet, "/api/runs/status?id="+started.ID, "", "creator")); w.Code != http.StatusNotFound {
+		t.Fatalf("creator whose grant no longer covers the run: got %d, want 404\n%s", w.Code, w.Body.String())
+	}
+}
+
+// A run whose namespace could not be recorded (legacy, or a config that named none) is not
+// readable by a tenant-limited grant just because it has no tenant to compare.
+func TestRunWithoutRecordedNamespaceFailsClosed(t *testing.T) {
+	f := newAuthFixture(t, Config{Root: "."},
+		operatorGrant("scoped", []string{"tenant-a"}, []string{defaultTargetID}),
+		operatorGrant("wide", []string{wildcardScope}, []string{defaultTargetID}),
+	)
+	f.srv.runs.mu.Lock()
+	f.srv.runs.runs["run-legacy"] = &RunStatus{ID: "run-legacy", State: "done", ScopeTarget: defaultTargetID}
+	f.srv.runs.runOut["run-legacy"] = "out-legacy"
+	f.srv.runs.mu.Unlock()
+
+	if w := f.do(f.albReqAs(t, http.MethodGet, "/api/runs/status?id=run-legacy", "", "scoped")); w.Code != http.StatusNotFound {
+		t.Fatalf("legacy run for a tenant-limited grant: got %d, want 404", w.Code)
+	}
+	// Positive control: an explicit cross-tenant grant may still reach it.
+	if w := f.do(f.albReqAs(t, http.MethodGet, "/api/runs/status?id=run-legacy", "", "wide")); w.Code != http.StatusOK {
+		t.Fatalf("cross-tenant grant: got %d, want 200\n%s", w.Code, w.Body.String())
+	}
+}
+
+// A suite config that names no namespace does not mean "no tenant effect".
+func TestSuiteWithNoNamespaceNeedsACrossTenantGrant(t *testing.T) {
+	dir := scratchDir(t)
+	bin := filepath.Join(dir, "local-harness")
+	marker := filepath.Join(dir, "started")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho x > started\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, allowedConfigs["fpprobe"].File), []byte("context: default\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{Root: dir, HarnessDir: dir, HarnessBin: bin}
+
+	scoped := newAuthFixture(t, cfg, operatorGrant("op", []string{"tenant-a"}, []string{defaultTargetID}))
+	if w := scoped.do(scoped.albReqAs(t, http.MethodPost, "/api/runs/start", `{"config":"fpprobe"}`, "op")); w.Code != http.StatusForbidden {
+		t.Fatalf("suite with an undetermined namespace: got %d, want 403\n%s", w.Code, w.Body.String())
+	}
+	if waitForFile(marker, 200*time.Millisecond) {
+		t.Fatal("a refused suite still launched the harness")
+	}
+	// Positive control: a cross-tenant grant may launch it.
+	wide := newAuthFixture(t, cfg, operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}))
+	if w := wide.do(wide.albReqAs(t, http.MethodPost, "/api/runs/start", `{"config":"fpprobe"}`, "op")); w.Code != http.StatusOK {
+		t.Fatalf("cross-tenant control: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// The private evidence corpus is not attributable to a tenant, so it cannot be filtered down to
+// one: a tenant-limited grant gets none of it, a cross-tenant grant gets it.
+func TestPrivateEvidenceCorpusNeedsACrossTenantGrant(t *testing.T) {
+	corpus := []string{
+		"/api/effectiveness", "/api/frontier", "/api/benchmarks", "/api/posture",
+		"/api/rawlog", "/api/matrix", "/api/ai-surface", "/api/reports",
+		"/api/redteam/curves", "/api/redteam/campaigns", "/api/redteam/findings", "/api/redteam/run-status",
+	}
+	scoped := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"tenant-a"}, []string{wildcardScope}))
+	wide := newAuthFixture(t, Config{Root: "."}, investorGrant("inv", []string{wildcardScope}, []string{wildcardScope}))
+	for _, path := range corpus {
+		if w := scoped.do(scoped.albReqAs(t, http.MethodGet, path, "", "op")); w.Code != http.StatusForbidden {
+			t.Errorf("%s for a tenant-limited grant: got %d, want 403\n%s", path, w.Code, w.Body.String())
+		}
+		if w := wide.do(wide.albReqAs(t, http.MethodGet, path, "", "inv")); w.Code == http.StatusForbidden {
+			t.Errorf("%s must remain available to a cross-tenant grant: %s", path, w.Body.String())
+		}
+	}
+	// Shared product metadata stays available to a tenant-limited read grant.
+	for _, path := range []string{"/api/catalog", "/api/suites", "/api/threat-matrix", "/api/handlers", "/api/version"} {
+		if w := scoped.do(scoped.albReqAs(t, http.MethodGet, path, "", "op")); w.Code == http.StatusForbidden {
+			t.Errorf("%s is shared product metadata and must stay available: %s", path, w.Body.String())
+		}
+	}
+}
+
+// /api/cost falls back to the first runnable cluster; the boundary must authorize THAT cluster,
+// not the sentinel an omitted parameter stands for.
+func TestCostAuthorizesTheClusterItActuallyReads(t *testing.T) {
+	f := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{wildcardScope}, []string{defaultTargetID}))
+	// The handler and the boundary must agree on one destination.
+	req := f.albReqAs(t, http.MethodGet, "/api/cost", "", "op")
+	if got := f.srv.effectiveCostTarget(req); !principalOf(withTestPrincipal(req, testOperatorPrincipal())).AllowsTarget(got) {
+		t.Fatalf("effectiveCostTarget resolved %q, which a wildcard-target principal must allow", got)
+	}
+	// Naming a cluster outside the grant is refused whichever parameter carries it.
+	for _, q := range []string{"?target=prod-eks", "?context=prod-eks"} {
+		if w := f.do(f.albReqAs(t, http.MethodGet, "/api/cost"+q, "", "op")); w.Code != http.StatusForbidden {
+			t.Fatalf("/api/cost%s: got %d, want 403\n%s", q, w.Code, w.Body.String())
+		}
+	}
+}
+
 // The global red-team controls write shared state that belongs to no tenant.
 func TestGlobalRedteamControlsRequireCrossTenantGrant(t *testing.T) {
 	limited := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"vllm"}, []string{wildcardScope}))

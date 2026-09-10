@@ -58,29 +58,43 @@ func (s *Server) apiRoutes() []route {
 		// ── version ───────────────────────────────────────────────────────────────────────
 		read("/api/version", s.version, routeSpec{}),
 
-		// ── evidence / aggregates (investor + operator) ───────────────────────────────────
-		read("/api/effectiveness", s.effectiveness, routeSpec{}),
-		read("/api/frontier", s.frontier, routeSpec{}),
+		// ── shared product metadata (any read grant) ──────────────────────────────────────
+		// Catalogue and registry facts that describe the PRODUCT, not a customer: no tenant is
+		// attributable to them and nothing private is disclosed by sharing them.
 		read("/api/suites", s.suites, routeSpec{}),
 		read("/api/catalog", s.catalog, routeSpec{}),
-		read("/api/benchmarks", s.benchmarks, routeSpec{}),
 		read("/api/threat-matrix", s.threatMatrix, routeSpec{}),
-		read("/api/posture", s.posture, routeSpec{}),
-		read("/api/rawlog", s.rawlog, routeSpec{}),
 		read("/api/handlers", s.handlers, routeSpec{}),
-		read("/api/matrix", s.matrix, routeSpec{}),
-		read("/api/ai-surface", s.aiSurface, routeSpec{}),
+
+		// ── private evidence corpus (indivisible; needs an explicit cross-tenant grant) ────
+		// The benchmark/effectiveness corpus, the retained evidence reports and their raw logs,
+		// and the red-team artifacts are the vendor-side moat. They are not attributable to any
+		// tenant, so they cannot be filtered down to one: an identity limited to some tenants
+		// gets none of it, and a vendor-side identity holds the wildcard that does. This is the
+		// "indivisible unattributable private evidence" case, not shared catalogue metadata.
+		read("/api/effectiveness", s.effectiveness, routeSpec{requireTenantWildcard: true}),
+		read("/api/frontier", s.frontier, routeSpec{requireTenantWildcard: true}),
+		read("/api/benchmarks", s.benchmarks, routeSpec{requireTenantWildcard: true}),
+		read("/api/posture", s.posture, routeSpec{requireTenantWildcard: true}),
+		read("/api/rawlog", s.rawlog, routeSpec{requireTenantWildcard: true}),
+		read("/api/matrix", s.matrix, routeSpec{requireTenantWildcard: true}),
+		read("/api/ai-surface", s.aiSurface, routeSpec{requireTenantWildcard: true}),
+		read("/api/reports", s.reports, routeSpec{requireTenantWildcard: true}),
+		read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly, requireTenantWildcard: true}),
+
+		// ── tenant-attributable data (filtered to the granted tenants in the handler) ──────
 		read("/api/metrics", s.metricsScrape, routeSpec{fixedTarget: defaultTargetID}),
-		read("/api/reports", s.reports, routeSpec{}),
-		read("/api/cost-timeseries", s.costTimeseries, routeSpec{}),
+		read("/api/cost-timeseries", s.costTimeseries, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/attack-results", s.attackResults, routeSpec{}),
 		read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{}),
-		read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly}),
 		read("/api/diagnostics", s.diagnostics, routeSpec{fixedTarget: defaultTargetID}),
 
 		// ── target-scoped reads ───────────────────────────────────────────────────────────
 		read("/api/targets", s.targets, routeSpec{}),
-		read("/api/cost", s.cost, routeSpec{targetQ: []string{"context", "target"}}),
+		// /api/cost falls back to the first runnable cluster when no context/target is named, so
+		// the destination hook authorizes THAT cluster rather than the "default" sentinel an
+		// omitted parameter would otherwise stand for.
+		read("/api/cost", s.cost, routeSpec{targetQ: []string{"context", "target"}, destination: costDestination}),
 		read("/api/uptime", s.uptime, routeSpec{targetQ: []string{"context"}}),
 		read("/api/pricing", s.pricing, routeSpec{targetQ: []string{"target"}}),
 		read("/api/workloads", s.workloads, routeSpec{targetQ: []string{"target"}}),
@@ -134,16 +148,16 @@ func (s *Server) apiRoutes() []route {
 		// The red-team state is GLOBAL console state: one artifact set, one decisions file, one
 		// background job. None of it is attributable to a tenant, so the writes take a
 		// cross-tenant grant and run on this host's target.
-		read("/api/redteam/curves", s.redteamCurves, routeSpec{}),
-		read("/api/redteam/campaigns", s.redteamCampaigns, routeSpec{}),
-		read("/api/redteam/live", s.redteamLive, routeSpec{}),
-		read("/api/redteam/findings", s.redteamFindings, routeSpec{}),
-		read("/api/redteam/gates", s.redteamGates, routeSpec{fixedTarget: defaultTargetID}),
-		read("/api/redteam/run-status", s.redteamRunStatus, routeSpec{}),
+		read("/api/redteam/curves", s.redteamCurves, routeSpec{requireTenantWildcard: true}),
+		read("/api/redteam/campaigns", s.redteamCampaigns, routeSpec{requireTenantWildcard: true}),
+		read("/api/redteam/live", s.redteamLive, routeSpec{requireTenantWildcard: true}),
+		read("/api/redteam/findings", s.redteamFindings, routeSpec{requireTenantWildcard: true}),
+		read("/api/redteam/gates", s.redteamGates, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		read("/api/redteam/run-status", s.redteamRunStatus, routeSpec{requireTenantWildcard: true}),
 		control("/api/redteam/decision", s.redteamDecision, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		control("/api/redteam/run", s.redteamRun, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		control("/api/redteam/continuous", s.redteamContinuous, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/redteam", s.redteamPage, routeSpec{}),
+		read("/redteam", s.redteamPage, routeSpec{requireTenantWildcard: true}),
 
 		// ── apply-fix write path ──────────────────────────────────────────────────────────
 		// The tenant is resolved from the grant (requestTenant), never from the body, and the
@@ -164,6 +178,12 @@ func suiteRunDestination(s *Server, _ *http.Request, body scopedBody) (runDestin
 		return runDestination{}, fmt.Errorf("config is required and must name an allowed attack-agent suite")
 	}
 	return s.runs.SuiteDestination(name)
+}
+
+// costDestination resolves the ONE cluster /api/cost will actually price and read, so the
+// boundary authorizes that cluster instead of the sentinel an omitted parameter stands for.
+func costDestination(s *Server, r *http.Request, _ scopedBody) (runDestination, error) {
+	return runDestination{Targets: []string{s.effectiveCostTarget(r)}}, nil
 }
 
 // scenarioRunDestination resolves what POST /api/runs/scenario will touch. StartScenario

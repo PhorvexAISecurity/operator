@@ -243,9 +243,12 @@ phorvex:
         #     ]
         #   }
         # "tenants": ["*"] is cross-tenant admin. Write it out only when that is the intent — and
-        # note that some operations REQUIRE it because they cannot be confined to one tenant:
-        # clearing the shared decision audit, the global red-team controls, and the unscoped
-        # (namespace-omitted) forms of /api/scan and /api/ablation.
+        # note that some surfaces REQUIRE it because they cannot be confined to one tenant:
+        # clearing the shared decision audit, the global red-team controls and artifacts, the
+        # unscoped (namespace-omitted) forms of /api/scan and /api/ablation, and the private
+        # evidence corpus (benchmarks, effectiveness, frontier, posture, matrix, ai-surface,
+        # reports, raw logs). A vendor-side identity that needs those holds the wildcard; a
+        # customer-facing operator scoped to specific tenants deliberately does not.
         #
         # "targets" must likewise list every cluster the identity may reach. "default" is this
         # console's own cluster AND the host that runs harness subprocesses; a run whose config

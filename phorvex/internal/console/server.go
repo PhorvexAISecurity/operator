@@ -3,9 +3,19 @@
  *
  * THREE authorization roles, granted server-side per verified subject (auth_grants.go) and
  * enforced at the request boundary (auth_middleware.go) before any handler runs:
- *   - investor: the full moat — effectiveness, frontier, the IP internals. READ ONLY.
- *   - operator: the same evidence plus the controls, confined to its granted tenant/target scope.
+ *   - investor: read-only. Never a control.
+ *   - operator: reads plus the controls, confined to its granted tenant/target scope.
  *   - owner   : ONLY the IP-walled OwnerEvent projection, for its own granted tenants.
+ *
+ * The role says WHAT KIND of call is allowed; the grant's tenant/target scope says WHERE. Both
+ * are enforced, and one never substitutes for the other. Data falls into three classes, declared
+ * per route in routes.go:
+ *   - shared product metadata (catalogue, registry, version): any read grant;
+ *   - tenant-attributable data (the decision audit and live cluster state): filtered to the
+ *     tenants the grant covers, so an omitted or mismatched scope yields nothing, not everything;
+ *   - the private evidence corpus (benchmarks, effectiveness, reports, raw logs, red-team
+ *     artifacts): indivisible and attributable to no tenant, so it takes an explicit
+ *     cross-tenant grant rather than being readable by any tenant-limited identity.
  *
  * The lens is not an identity and never was a credential: X-Phorvex-Lens / ?lens= may narrow a
  * caller's projection below its grant, and can never widen it. The routing contract lives in
@@ -104,6 +114,7 @@ func (s *Server) matrix(w http.ResponseWriter, r *http.Request) {
 func (s *Server) aiSurface(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.cfg.AISurfaceDecode())
 }
+
 // metricsScrape reports per-pod risk from a Prometheus scrape. The scrape is cluster-wide, so
 // the per-pod rows are filtered to the granted tenants; the aggregate metadata stays intact.
 func (s *Server) metricsScrape(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +131,7 @@ func (s *Server) metricsScrape(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, res)
 }
+
 // cluster lists the live PhorvexPolicy control-plane state. The CRD is cluster-scoped and the
 // list is unfiltered at the API server, so the response is filtered HERE to the tenants and
 // namespaces this identity is granted — a limited operator sees its own policies, not the whole
@@ -175,9 +187,13 @@ func (s *Server) effectiveness(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"stats": s.cfg.Effectiveness()})
 }
 
-func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
-	// SCOPED per provider: ?context=<kubeconfig-context> (the SPA's header selection). Our target IDs
-	// ARE the kubeconfig contexts, so the same value prices the cluster AND picks the provider's run.
+// effectiveCostTarget resolves the ONE cluster /api/cost prices and reports on, including the
+// fallback to the first runnable target when no context/target is named.
+//
+// [M-136] The auth boundary calls this too, so the cluster it authorizes is the cluster the
+// handler then uses. Authorizing an omitted parameter as "default" and afterwards selecting some
+// other runnable cluster would check a different destination from the one being read.
+func (s *Server) effectiveCostTarget(r *http.Request) string {
 	target := r.URL.Query().Get("context")
 	if target == "" {
 		target = r.URL.Query().Get("target")
@@ -190,6 +206,13 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	return target
+}
+
+func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
+	// SCOPED per provider: ?context=<kubeconfig-context> (the SPA's header selection). Our target IDs
+	// ARE the kubeconfig contexts, so the same value prices the cluster AND picks the provider's run.
+	target := s.effectiveCostTarget(r)
 	// DYNAMIC + AWS-GROUNDED: both numbers come from the live cluster, NOT fabricated knobs.
 	//   valueAtRisk      = the cluster's real on-demand infrastructure cost ($/yr) the attack exposes.
 	//   defense overhead = the REAL cost of the running Phorvex operator (its measured CPU/memory
@@ -209,7 +232,10 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 		nodeRate = pricing.TotalPerHr // no GPU → use the cluster's blended node rate
 	}
 	perActionCost := perActionSeconds / 3600.0 * nodeRate
-	actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost)
+	// [M-136] The actuation rate is measured from the TENANT decision audit, so it is counted only
+	// over the tenants this identity is granted. Without the filter a tenant-limited operator's
+	// "cost of running Phorvex" was really every tenant's actuation volume.
+	actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost, tenantFilterFor(r))
 	defenseCost := operatorCost + actuationCost
 	scen, totWithout, totBlind, totWith, totSavings, ok := s.cfg.CostComparison(valueAtRisk, defenseCost, perActionCost, target)
 	_, costSource, costRun := s.cfg.comparisonMetricsPath(target)
@@ -242,7 +268,10 @@ type CostTimePoint struct {
 // action was actuated. Downsampled to <=120 points so the chart stays sane.
 func (s *Server) costTimeseries(w http.ResponseWriter, r *http.Request) {
 	const maxPoints = 120
-	live := s.readAudit()
+	// [M-136] Decision records are TENANT data. Summing the whole audit handed a tenant-limited
+	// operator another tenant's cost and decision count, so the series is built only from the
+	// tenants this identity is granted.
+	live := s.readScopedAudit(r)
 	// defensive: the file is append-only/chronological, but resilient to clock skew / merged files.
 	sort.Slice(live, func(i, j int) bool { return live[i].Time.Before(live[j].Time) })
 
@@ -311,7 +340,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
 	}
-	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest.ScopeTarget)
+	id, err := s.runs.Start(body.Config, body.NativeActuator, body.StartedAt, principalKey(principalOf(r)), dest)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
@@ -356,15 +385,16 @@ func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"targets": out})
 }
 
-// runsList returns the post-attack report history, confined to the runs this identity may see:
-// its own, plus any on a cluster target inside its grant. A run belonging to another operator on
-// an out-of-scope target is simply absent, not redacted.
+// runsList returns the post-attack report history, confined to the runs this identity may see
+// under the grant it holds NOW — the same rule the boundary applies to a run id, so the list
+// cannot advertise a run that /api/runs/status would then refuse. A run on an out-of-scope
+// cluster, or in an out-of-scope namespace, is simply absent rather than redacted.
 func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r)
 	all := s.runs.List()
 	out := make([]RunStatus, 0, len(all))
 	for _, st := range all {
-		if p.AllowsTarget(st.ScopeTarget) || (st.Owner != "" && st.Owner == principalKey(p)) {
+		if runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant}) {
 			out = append(out, st)
 		}
 	}
@@ -511,6 +541,32 @@ func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"id": id, "title": title, "content": content})
+}
+
+// tenantFilterFor returns the predicate that decides whether a tenant's records may be counted
+// for this request. It is the single definition of "tenant-attributable data is grant-scoped",
+// shared by every reader of the decision audit.
+func tenantFilterFor(r *http.Request) func(string) bool {
+	p := principalOf(r)
+	if p.TenantWildcard() {
+		return func(string) bool { return true }
+	}
+	return func(tenant string) bool { return p.AllowsTenant(tenant) }
+}
+
+// readScopedAudit is readAudit confined to the tenants this request is granted. Every aggregate
+// built from the decision audit uses it; readAudit itself stays unscoped for the handlers that
+// apply their own per-tenant projection (the owner surfaces).
+func (s *Server) readScopedAudit(r *http.Request) []audit.Record {
+	allowed := tenantFilterFor(r)
+	all := s.readAudit()
+	out := make([]audit.Record, 0, len(all))
+	for _, rec := range all {
+		if allowed(rec.Tenant) {
+			out = append(out, rec)
+		}
+	}
+	return out
 }
 
 // readAudit loads decision Records from the configured audit JSONL (or the newest one found

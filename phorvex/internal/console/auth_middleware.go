@@ -365,6 +365,9 @@ func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int,
 		if err != nil {
 			return http.StatusBadRequest, err.Error(), false
 		}
+		if dest.RequireTenantWildcard && !p.TenantWildcard() {
+			return http.StatusForbidden, "the namespace this request would act on cannot be determined from its configuration; that needs a cross-tenant grant rather than an unscoped launch", false
+		}
 		for _, target := range dest.Targets {
 			if !p.AllowsTarget(target) {
 				return http.StatusForbidden, "this request would act on cluster target " + normalizeTargetID(target) + ", which is outside this identity's target scope", false
@@ -395,22 +398,38 @@ func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int,
 	return 0, "", true
 }
 
-// runInScope resolves a run id to its recorded creator and cluster target and decides whether
-// this identity may see or steer it. An unknown id is reported as not-found WITHOUT revealing
-// anything else, so probing ids leaks no other tenant's run.
+// runInScope resolves a run id to the destination it actually drives and decides whether this
+// identity may see or steer it, using the grant it holds NOW.
+//
+// Deliberately absent: a creator bypass. "I started it" is not authorization — a subject whose
+// grant has since been narrowed or revoked must lose the run with it, so the check is current
+// scope only. Sharing a cluster is also not enough: a run's namespace has to be in scope too,
+// or one tenant's operator reads another tenant's run on the same cluster.
+//
+// A run whose namespace could not be recorded (an older run, or a config that named none) fails
+// closed short of a cross-tenant grant. An unknown or out-of-scope id is reported as not-found
+// WITHOUT revealing anything else, so probing ids discloses no other tenant's run.
 func (s *Server) runInScope(p *Principal, id string) (int, string, bool) {
-	owner, target, ok := s.runs.Ownership(id)
+	own, ok := s.runs.Ownership(id)
 	if !ok {
 		return http.StatusNotFound, "run not found", false
 	}
-	if p.AllowsTarget(target) {
-		return 0, "", true
+	if !runVisibleTo(p, own) {
+		return http.StatusNotFound, "run not found", false
 	}
-	// A run this identity created stays reachable to it even if the target grant later narrows.
-	if owner != "" && owner == principalKey(p) {
-		return 0, "", true
+	return 0, "", true
+}
+
+// runVisibleTo is the single definition of "this identity may see this run", shared by the
+// boundary's id check and the run listing so the two cannot disagree.
+func runVisibleTo(p *Principal, own runOwnership) bool {
+	if !p.AllowsTarget(own.Target) {
+		return false
 	}
-	return http.StatusNotFound, "run not found", false
+	if own.Tenant == "" {
+		return p.TenantWildcard()
+	}
+	return p.AllowsTenant(own.Tenant)
 }
 
 // principalKey is the stable identity string a run records as its creator.

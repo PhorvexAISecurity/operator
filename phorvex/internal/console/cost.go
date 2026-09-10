@@ -150,7 +150,13 @@ type CostScenario struct {
 // actuation rate, and prices it at perActionCost (the measured per-action AWS compute). This is
 // the "Phorvex actually doing the work" cost that the bare operator-pod footprint omits. Returns
 // (0,0) if no audit / no actuations. perActionCost is $ per single actuation.
-func (c *Config) actuationCostPerYear(perActionCost float64) (costYr, ratePerHr float64) {
+// tenantAllowed filters which tenants' actuations are counted. [M-136] The decision audit is
+// tenant data, so an identity limited to some tenants must not have another tenant's actuation
+// volume priced into its own "cost of running Phorvex".
+func (c *Config) actuationCostPerYear(perActionCost float64, tenantAllowed func(string) bool) (costYr, ratePerHr float64) {
+	if tenantAllowed == nil {
+		tenantAllowed = func(string) bool { return false } // fail closed rather than count everything
+	}
 	path := c.AuditPath
 	if path == "" {
 		return 0, 0
@@ -183,9 +189,13 @@ func (c *Config) actuationCostPerYear(perActionCost float64) (costYr, ratePerHr 
 		var rec struct {
 			Time     string `json:"time"`
 			Kind     string `json:"kind"`
+			Tenant   string `json:"tenant"`
 			Actuated bool   `json:"actuated"`
 		}
 		if json.Unmarshal([]byte(ln), &rec) != nil || rec.Kind != "phorvex.decision" {
+			continue
+		}
+		if !tenantAllowed(rec.Tenant) {
 			continue
 		}
 		pt, err := time.Parse(time.RFC3339Nano, rec.Time)
@@ -253,7 +263,12 @@ func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64,
 		if r.ROI.AvoidedBreachValueDollars > 0 {
 			a.avoided = r.ROI.AvoidedBreachValueDollars
 		}
-		oracle := func(n *int, ach *int) { *n++; if r.OracleAchieved { *ach++ } }
+		oracle := func(n *int, ach *int) {
+			*n++
+			if r.OracleAchieved {
+				*ach++
+			}
+		}
 		switch r.Defender {
 		case "d-nomtd": // NO DEFENSE — the attack lands
 			a.withoutSum += r.Disruption
@@ -334,9 +349,9 @@ func (c *Config) CostComparison(valueAtRisk, defenseCost, perActionCost float64,
 		risk = scen[0].AvoidedBreach
 	}
 	n := float64(len(scen))
-	totWithout = risk                                              // NO DEFENSE: the whole infra is exposed
-	totBlind = risk*(1-disruptBlindSum/n) + 0                      // BLIND R6: residual after its weak disruption
-	totWith = risk*(1-disruptOnSum/n) + defenseCost                // PHORVEX: residual + real defense cost
+	totWithout = risk                               // NO DEFENSE: the whole infra is exposed
+	totBlind = risk*(1-disruptBlindSum/n) + 0       // BLIND R6: residual after its weak disruption
+	totWith = risk*(1-disruptOnSum/n) + defenseCost // PHORVEX: residual + real defense cost
 	totSavings = totWithout - totWith
 	sort.Slice(scen, func(i, j int) bool { return scen[i].Savings > scen[j].Savings })
 	return scen, totWithout, totBlind, totWith, totSavings, true

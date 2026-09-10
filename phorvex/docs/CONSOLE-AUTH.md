@@ -147,10 +147,32 @@ A route's declared scope has to match what its handler actually does, not what t
   `/api/availability-arms`, `/api/metrics`, `/api/live`, `/api/live/history` and the owner
   surfaces all confine their rows to the granted tenants. A read role does not bypass the
   grant's tenant limits.
+- **Aggregates over the decision audit are tenant data too.** `/api/cost-timeseries` and the
+  actuation-rate half of `/api/cost` are summed only over the granted tenants, so a
+  tenant-limited operator's totals and decision counts are its own.
+- **A run id is authorized by what the run drives, under the grant held now.** Each run records
+  the cluster target and the namespace resolved from its producer. `list`, `status`, `stream`,
+  `evidence` and `stop` all require both to be in scope. There is deliberately **no creator
+  bypass**: "I started it" is not authorization, so narrowing or revoking a grant takes the run
+  with it. A run whose namespace could not be recorded fails closed short of a cross-tenant grant.
+- **An endpoint authorizes the destination it will actually read.** `/api/cost` falls back to the
+  first runnable cluster when no `context`/`target` is named; the boundary resolves and authorizes
+  that same cluster rather than the `default` sentinel.
 
-Shared, non-tenant catalogue and build metadata (`/api/catalog`, `/api/benchmarks`,
-`/api/threat-matrix`, `/api/suites`, `/api/handlers`, `/api/version`) stays available to any read
-grant, because it describes the product rather than a customer.
+### The three data classes
+
+| Class | Rule | Routes |
+|---|---|---|
+| Shared product metadata | Any read grant | `/api/catalog`, `/api/suites`, `/api/threat-matrix`, `/api/handlers`, `/api/version`, `/api/session` |
+| Tenant-attributable data | Filtered to the granted tenants | `/api/cost`, `/api/cost-timeseries`, `/api/uptime`, `/api/live`, `/api/live/history`, `/api/owner/*`, `/api/attack-results`, `/api/attack-monitoring`, `/api/availability-arms`, `/api/workloads`, `/api/cluster`, `/api/metrics`, `/api/targets`, the run routes |
+| Private evidence corpus | Requires an explicit cross-tenant grant | `/api/effectiveness`, `/api/frontier`, `/api/benchmarks`, `/api/posture`, `/api/matrix`, `/api/ai-surface`, `/api/reports`, `/api/rawlog`, `/api/benchmark-sim`, `/api/redteam/*`, `/redteam` |
+
+The third class is the vendor-side moat: benchmark corpora, retained evidence reports and their
+raw logs, and red-team artifacts. None of it is attributable to a tenant, so it cannot be filtered
+down to one — an identity limited to some tenants gets none of it, and a vendor-side identity is
+granted `"tenants": ["*"]` and gets all of it. **Consequence for grants:** a customer-facing
+operator scoped to specific tenants will not see the benchmark/evidence tabs. That is intended; if
+an identity needs them, grant it the wildcard deliberately rather than by accident.
 
 ## Rollout prerequisite
 
