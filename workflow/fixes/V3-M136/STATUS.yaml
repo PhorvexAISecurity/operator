@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,48 @@ checks:
     at: '2026-09-10T17:56:53+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: claude-v3-m136
+    artifact: evidence/preflight-r1.json
+    sha256: 48bf56fef3000cacdd191a4dc043844bb6d601efcdeaf77c24d3a646ee8bcb62
+    source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
+    at: '2026-09-10T21:01:37+00:00'
+  l1:
+    result: PASS
+    by: claude-v3-m136
+    artifact: evidence/console-suite.log
+    sha256: cf78c6ca60e75fc09e22d9b0eb7416a0c1fa428bd69eafa4d190f6eef0bfa58d
+    source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
+    at: '2026-09-10T21:01:42+00:00'
+  red:
+    result: PASS
+    by: claude-v3-m136
+    artifact: evidence/lead-scope-r2-repaired.log
+    sha256: 6460d3c0bf173a3fa767f7e93ed1c4ea0d1924b8ad5dc6b35144aa1c296bcf80
+    source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+    at: '2026-09-10T21:01:51+00:00'
+  positive_control:
+    result: PASS
+    by: claude-v3-m136
+    artifact: evidence/lead-scope-r1-repaired.log
+    sha256: 4c695bb26edb9ac646a4815c2be94774d10853f81d1a8049e7961113ee394c60
+    source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
+    at: '2026-09-10T21:01:56+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m136
+    artifact: 05-evidence.md
+    sha256: 5627efce3e5e321bbdde591107bdf5df0d90886b2c573f05315b021e08fd5086
+    source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
+    at: '2026-09-10T21:02:03+00:00'
+  l2:
+    result: PASS
+    by: claude-v3-m136
+    artifact: evidence/chart-render-eks.yaml
+    sha256: f32c0383cb92a1bda122c23855635732cd2eab945c075f1b7e9d02215b91145f
+    source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
+    at: '2026-09-10T21:02:03+00:00'
 fix_id: V3-M136
 issues:
 - M-136
@@ -45,7 +87,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m136-console-auth
   base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-  head_sha: null
+  head_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +109,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -84,7 +126,7 @@ residuals: []
 next_action:
   owner: implementer
   action: Implement authenticated role and tenant boundary and submit review
-updated_at: '2026-09-10T17:56:54+00:00'
+updated_at: '2026-09-10T21:02:03+00:00'
 configuration_history:
 - at: '2026-09-10T17:56:52+00:00'
   by: codex-lead
@@ -97,6 +139,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-10T21:01:33+00:00'
+  by: claude-v3-m136
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
