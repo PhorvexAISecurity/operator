@@ -107,3 +107,24 @@ follow-ups before the PR; this acceptance does not claim universal shape safety.
 The source delta keeps one session per worker, bounded permissions, no model fallback, current high default and explicit legacy max support. Test cleanup signals only owned fixture children, never simulated runtime PIDs or the test process group. Unknown event shapes remain conservative failures; no universal shape guarantee or deployment authority is implied.
 
 The lead accepts this source for the local campaign supervisor. With the independent bootstrap job completed, supervisor concurrency may be4 within the existing total4 external-worker cap. Before any future bootstrap job, free/reduce a supervisor slot. Restart uses KillMode=process and the runner's between-pass shutdown; existing wrappers/sessions are adopted rather than relaunched. Historical job receipts are not rewritten. Branch publication is authorized; merge and shared-cluster deployment are not performed.
+
+### Independent lead acceptance of 47715dd
+
+2026-09-10: accepted the completion-receipt/liveness race repair after reproducing
+the original failure with a real wrapper and CLI under a deterministic scheduling
+gate. The first receipt read is held until the wrapper has durably published its
+receipt and exited. At 4d5e5b0 it falsely reports an interruption; at 47715dd the
+identical probe returns done with no reason and preserves completion metadata.
+Original and repaired outputs are retained in lead-receipt-r5-*.log.
+
+The independent full Python 3.11 workflow suite passes all 223 tests. Review covered
+the bounded second read, invocation/process identity checks, absent-record and
+stale-child snapshot controls, actual crash/orphan handling, and the stop/resolve
+paths. No replay or weaker permission/model decision is introduced. Runtime
+receipts remain execution evidence, not implementation approval. The broader
+combined-branch suite is recorded separately in the readiness delivery evidence.
+
+The separate bootstrap worker has exited successfully. The lead may adopt this
+source in the local supervisor and restore its four-worker limit under the
+existing total 4 cap; preserve running wrappers and exact sessions using the
+existing KillMode=process restart. No historical job record is rewritten.

@@ -4,3 +4,7 @@ workflow/**/*.patch -whitespace
 
 # Retain exact independent test output, including negative-control diagnostics.
 workflow/coordination/lead-runner-r4-tests.log -whitespace
+
+# Exact independent race and workflow validation output.
+workflow/coordination/lead-receipt-r5-*.log -whitespace
+workflow/coordination/lead-runner-r5-suite.log -whitespace
