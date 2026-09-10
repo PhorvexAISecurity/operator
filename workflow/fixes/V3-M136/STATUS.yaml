@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 24
+revision: 31
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -27,44 +27,44 @@ checks:
     result: PASS
     by: claude-v3-m136
     artifact: evidence/console-suite.log
-    sha256: c881f037a93b25e3d96290152bda57c0faaa6cf1e251343d1ba950374cd485dd
-    source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
-    at: '2026-09-10T21:15:49+00:00'
+    sha256: 4b2554c3c1bae48e6f00bc07484c73de35af6e4b724cba2d26dfb4e3ae5e905f
+    source_sha: a2e6c085a79ce774d2af0f1cc0ade9638661d4e4
+    at: '2026-09-10T22:01:11+00:00'
   red:
     result: PASS
     by: claude-v3-m136
-    artifact: evidence/lead-scope-r3-repaired.log
-    sha256: 9928935da122d0072949ca7d821b64c128853c00c8163cd2153eabafd3a29245
+    artifact: evidence/lead-scope-r4-repaired.log
+    sha256: c8a3f936dec7c459b71ec025ffceb3bfd5ac6281ce366a28edcca4d6d5114706
     source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-    at: '2026-09-10T21:15:56+00:00'
+    at: '2026-09-10T22:01:11+00:00'
   positive_control:
     result: PASS
     by: claude-v3-m136
     artifact: evidence/lead-scope-r1-repaired.log
-    sha256: 2b42c79d1e9e1e9a2c38b652115c3becd651c49c906ee1d693983cd727968223
-    source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
-    at: '2026-09-10T21:16:01+00:00'
+    sha256: 6343dca9cbff6c6f8b9afd1443cc2d13fbe7e5f55e936b38dfa20c62c86425d7
+    source_sha: a2e6c085a79ce774d2af0f1cc0ade9638661d4e4
+    at: '2026-09-10T22:01:11+00:00'
   l0:
     result: PASS
     by: claude-v3-m136
     artifact: 05-evidence.md
-    sha256: e04d8a85f53477399ffcd890f78a8ef7589f0640ffe6027880e614931e0afb42
-    source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
-    at: '2026-09-10T21:15:49+00:00'
+    sha256: ec71a2814cffd6b21b9203b52d2ec55feabf07470909c9f7a8e0514004670ee0
+    source_sha: a2e6c085a79ce774d2af0f1cc0ade9638661d4e4
+    at: '2026-09-10T22:01:11+00:00'
   l2:
     result: PASS
     by: claude-v3-m136
     artifact: evidence/chart-render-eks.yaml
-    sha256: 1794a2dd900d52f18d23416237cf57b2a8b4cdad784971e92c3dff98e03d0c52
-    source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
-    at: '2026-09-10T21:15:56+00:00'
+    sha256: b55093050a06c6562ffe8a02eab6039ef6d6f607d847d186185e80869bbcd558
+    source_sha: a2e6c085a79ce774d2af0f1cc0ade9638661d4e4
+    at: '2026-09-10T22:01:11+00:00'
   implementation:
     result: PASS
     by: claude-v3-m136
     artifact: 04-diff.patch
-    sha256: a8d4e880e896c8a0f894e75036f1cf43ed046587f6eaa1e0e0be1d7812298c81
-    source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
-    at: '2026-09-10T21:21:46+00:00'
+    sha256: 3e7017d5e283833bc3553ae6e77e9df3148280ebeeacc9bea330f6506b8a6d63
+    source_sha: a2e6c085a79ce774d2af0f1cc0ade9638661d4e4
+    at: '2026-09-10T22:01:11+00:00'
   p3:
     result: FAIL
     by: codex-lead
@@ -101,7 +101,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m136-console-auth
   base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
-  head_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  head_sha: a2e6c085a79ce774d2af0f1cc0ade9638661d4e4
   stacked_on: []
 pull_request:
   url: null
@@ -141,7 +141,7 @@ next_action:
   owner: implementer
   action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
     prior evidence.
-updated_at: '2026-09-10T21:35:25+00:00'
+updated_at: '2026-09-10T22:01:11+00:00'
 configuration_history:
 - at: '2026-09-10T17:56:52+00:00'
   by: codex-lead
@@ -170,6 +170,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-10T21:21:46+00:00'
+  by: claude-v3-m136
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T22:00:57+00:00'
   by: claude-v3-m136
   fields:
   - implementation
@@ -316,6 +321,48 @@ check_history:
   sha256: f231e7798ca09fc9ae8c54a1e3c0e3207a69cd97dd000eaad86de57e3508ee50
   source_sha: 3c37b3d1e00986ed0540b29413361cb1e5652b19
   at: '2026-09-10T21:03:48+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m136
+  artifact: 05-evidence.md
+  sha256: e04d8a85f53477399ffcd890f78a8ef7589f0640ffe6027880e614931e0afb42
+  source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  at: '2026-09-10T21:15:49+00:00'
+- check: l1
+  result: PASS
+  by: claude-v3-m136
+  artifact: evidence/console-suite.log
+  sha256: c881f037a93b25e3d96290152bda57c0faaa6cf1e251343d1ba950374cd485dd
+  source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  at: '2026-09-10T21:15:49+00:00'
+- check: l2
+  result: PASS
+  by: claude-v3-m136
+  artifact: evidence/chart-render-eks.yaml
+  sha256: 1794a2dd900d52f18d23416237cf57b2a8b4cdad784971e92c3dff98e03d0c52
+  source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  at: '2026-09-10T21:15:56+00:00'
+- check: red
+  result: PASS
+  by: claude-v3-m136
+  artifact: evidence/lead-scope-r3-repaired.log
+  sha256: 9928935da122d0072949ca7d821b64c128853c00c8163cd2153eabafd3a29245
+  source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  at: '2026-09-10T21:15:56+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-v3-m136
+  artifact: evidence/lead-scope-r1-repaired.log
+  sha256: 2b42c79d1e9e1e9a2c38b652115c3becd651c49c906ee1d693983cd727968223
+  source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  at: '2026-09-10T21:16:01+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m136
+  artifact: 04-diff.patch
+  sha256: a8d4e880e896c8a0f894e75036f1cf43ed046587f6eaa1e0e0be1d7812298c81
+  source_sha: 5acea897893707763ecf9f7979d6eab0f900ceaa
+  at: '2026-09-10T21:21:46+00:00'
 handoff:
   id: V3-M136:24:review
   from: codex-lead
