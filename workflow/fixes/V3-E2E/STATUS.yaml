@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 25
+revision: 27
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -59,19 +59,25 @@ checks:
       behaviour, 4 unchanged. The unchanged four are the controls that already behaved
       correctly at base and must not move. No case regressed.'
   preflight:
-    result: PASS
+    result: UNAVAILABLE
     by: claude-v3-e2e
     artifact: evidence/preflight/receipt.json
-    sha256: 0c639f83706d74dac626c38423708c60bed51139af78bdbfa44ea161b6aa6dbe
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:48:34+00:00'
+    sha256: 676b7c0f466fae1c6652ac26d4830ba47619cc53c74bd7b3be42a2ad008ceb65
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:15:31+00:00'
+    rationale: The PASS attested at revision 18 was for source f0edebe and does not
+      apply to this source; the current receipt is not a pass. Recorded as UNAVAILABLE
+      pending a fresh run at f3d9bff rather than left standing as a stale PASS.
   implementation:
     result: PASS
     by: claude-v3-e2e
     artifact: 04-diff.patch
-    sha256: a307977715e7e12d84a9879557cf983151c121a37838e566f9360d876e08ce11
-    source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
-    at: '2026-09-10T21:48:34+00:00'
+    sha256: 0ffdc0f1a3b0ba2099d0c8f573b750c672bbff8ac4db7a325748f85f234e71cb
+    source_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
+    at: '2026-09-10T22:12:38+00:00'
+    rationale: The implementation diff at the pinned head. End-to-End/ product scope
+      plus the fix records; no product source, CI workflow, chart, deployment configuration
+      or baseline.json change.
   positive_control:
     result: PASS
     by: claude-v3-e2e
@@ -163,7 +169,7 @@ next_action:
   owner: implementer
   action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
     prior evidence.
-updated_at: '2026-09-10T22:09:58+00:00'
+updated_at: '2026-09-10T22:15:31+00:00'
 configuration_history:
 - at: '2026-09-10T18:27:19+00:00'
   by: codex-lead
@@ -393,6 +399,20 @@ check_history:
   inputs:
   - End-to-End
   inputs_sha256: 78584ba36a721602466421c8e7873ebdb22121f9e00eb5ea0a5c2509a814a182
+- check: implementation
+  result: PASS
+  by: claude-v3-e2e
+  artifact: 04-diff.patch
+  sha256: a307977715e7e12d84a9879557cf983151c121a37838e566f9360d876e08ce11
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:48:34+00:00'
+- check: preflight
+  result: PASS
+  by: claude-v3-e2e
+  artifact: evidence/preflight/receipt.json
+  sha256: 0c639f83706d74dac626c38423708c60bed51139af78bdbfa44ea161b6aa6dbe
+  source_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+  at: '2026-09-10T21:48:34+00:00'
 handoff:
   id: V3-E2E:19:review
   from: codex-lead

@@ -261,4 +261,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/v3-e2e-verification
-    head_sha: f0edebe290ede2f574a4737bc26c307affd87e08
+    head_sha: f3d9bffa6ec2960c676d2d3b80032b3b02a95a59
