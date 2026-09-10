@@ -70,13 +70,13 @@ func (s *Server) apiRoutes() []route {
 		read("/api/handlers", s.handlers, routeSpec{}),
 		read("/api/matrix", s.matrix, routeSpec{}),
 		read("/api/ai-surface", s.aiSurface, routeSpec{}),
-		read("/api/metrics", s.metricsScrape, routeSpec{}),
+		read("/api/metrics", s.metricsScrape, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/reports", s.reports, routeSpec{}),
 		read("/api/cost-timeseries", s.costTimeseries, routeSpec{}),
 		read("/api/attack-results", s.attackResults, routeSpec{}),
 		read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{}),
 		read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly}),
-		read("/api/diagnostics", s.diagnostics, routeSpec{}),
+		read("/api/diagnostics", s.diagnostics, routeSpec{fixedTarget: defaultTargetID}),
 
 		// ── target-scoped reads ───────────────────────────────────────────────────────────
 		read("/api/targets", s.targets, routeSpec{}),
@@ -85,14 +85,14 @@ func (s *Server) apiRoutes() []route {
 		read("/api/pricing", s.pricing, routeSpec{targetQ: []string{"target"}}),
 		read("/api/workloads", s.workloads, routeSpec{targetQ: []string{"target"}}),
 		read("/api/capabilities", s.capabilities, routeSpec{targetQ: []string{"target"}}),
-		read("/api/cluster", s.cluster, routeSpec{}),
+		read("/api/cluster", s.cluster, routeSpec{fixedTarget: defaultTargetID}),
 		// scan and ablation exec the analyzer over a namespace. Omitting ns makes them
 		// CLUSTER-WIDE, so the unscoped form needs a cross-tenant grant; naming a granted
 		// namespace stays available to a limited one.
 		read("/api/scan", s.scan, routeSpec{targetQ: []string{"context"}, tenantQ: []string{"ns"}, tenantOptional: true, wildcardWhenUnscoped: true}),
-		read("/api/ablation", s.ablation, routeSpec{tenantQ: []string{"ns"}, tenantOptional: true, wildcardWhenUnscoped: true}),
-		read("/api/availability-arms", s.availabilityArms, routeSpec{tenantQ: []string{"ns"}, tenantOptional: true}),
-		read("/api/workload/attacks", s.workloadAttacks, routeSpec{tenantQ: []string{"namespace"}}),
+		read("/api/ablation", s.ablation, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"ns"}, tenantOptional: true, wildcardWhenUnscoped: true}),
+		read("/api/availability-arms", s.availabilityArms, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"ns"}, tenantOptional: true}),
+		read("/api/workload/attacks", s.workloadAttacks, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"namespace"}}),
 
 		// ── live decision stream + history ────────────────────────────────────────────────
 		// Any granted role may connect; the projection and the tenant filter are resolved from
@@ -124,11 +124,11 @@ func (s *Server) apiRoutes() []route {
 		read("/api/runs/evidence", s.runEvidence, routeSpec{runQ: "id"}),
 
 		// ── controls: live cluster writes ─────────────────────────────────────────────────
-		control("/api/policy/edit", s.policyEdit, routeSpec{tenantBody: true}),
-		control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTenant: vllmAttackNS}),
-		control("/api/workload/attack", s.workloadAttack, routeSpec{tenantBody: true}),
-		control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{tenantBody: true}),
-		control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{tenantBody: true}),
+		control("/api/policy/edit", s.policyEdit, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
+		control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTarget: defaultTargetID, fixedTenant: vllmAttackNS}),
+		control("/api/workload/attack", s.workloadAttack, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
+		control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
+		control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 
 		// ── red team ──────────────────────────────────────────────────────────────────────
 		// The red-team state is GLOBAL console state: one artifact set, one decisions file, one
@@ -138,19 +138,19 @@ func (s *Server) apiRoutes() []route {
 		read("/api/redteam/campaigns", s.redteamCampaigns, routeSpec{}),
 		read("/api/redteam/live", s.redteamLive, routeSpec{}),
 		read("/api/redteam/findings", s.redteamFindings, routeSpec{}),
-		read("/api/redteam/gates", s.redteamGates, routeSpec{targetQ: []string{"context"}}),
+		read("/api/redteam/gates", s.redteamGates, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/redteam/run-status", s.redteamRunStatus, routeSpec{}),
-		control("/api/redteam/decision", s.redteamDecision, routeSpec{requireTenantWildcard: true}),
-		control("/api/redteam/run", s.redteamRun, routeSpec{targetQ: []string{"context"}, requireTenantWildcard: true}),
-		control("/api/redteam/continuous", s.redteamContinuous, routeSpec{targetQ: []string{"context"}, requireTenantWildcard: true}),
+		control("/api/redteam/decision", s.redteamDecision, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		control("/api/redteam/run", s.redteamRun, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		control("/api/redteam/continuous", s.redteamContinuous, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
 		read("/redteam", s.redteamPage, routeSpec{}),
 
 		// ── apply-fix write path ──────────────────────────────────────────────────────────
 		// The tenant is resolved from the grant (requestTenant), never from the body, and the
 		// applier acts on this console's own cluster.
-		control("/api/apply-fix/submit", s.applyFixSubmit, routeSpec{targetQ: []string{"target"}}),
-		control("/api/apply-fix/approve", s.applyFixApprove, routeSpec{targetQ: []string{"target"}}),
-		control("/api/apply-fix/gate-preview", s.applyFixGatePreview, routeSpec{targetQ: []string{"target"}}),
+		control("/api/apply-fix/submit", s.applyFixSubmit, routeSpec{fixedTarget: defaultTargetID}),
+		control("/api/apply-fix/approve", s.applyFixApprove, routeSpec{fixedTarget: defaultTargetID}),
+		control("/api/apply-fix/gate-preview", s.applyFixGatePreview, routeSpec{fixedTarget: defaultTargetID}),
 		control("/api/apply-fix/pending", s.applyFixPending, routeSpec{methods: getOnly}),
 		control("/api/apply-fix/audit", s.applyFixAudit, routeSpec{methods: getOnly}),
 	}

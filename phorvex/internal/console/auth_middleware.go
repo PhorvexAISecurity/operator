@@ -63,6 +63,11 @@ type routeSpec struct {
 	// targetQ names query keys carrying a cluster target/context. An omitted value is the
 	// explicit default target, which still has to be granted.
 	targetQ []string
+	// fixedTarget names the cluster a route ALWAYS acts on because it offers no choice — the
+	// console's own cluster, reached through the pod ServiceAccount or the default kubeconfig.
+	// Without this, a grant with no target scope could still drive kubectl against that cluster:
+	// having a tenant is not the same as being allowed to reach the cluster the tenant lives in.
+	fixedTarget string
 	// targetBody names JSON body keys carrying a cluster target.
 	targetBody []string
 
@@ -298,6 +303,9 @@ func (s *Server) checkScope(r *http.Request, p *Principal, spec routeSpec) (int,
 
 	if spec.fixedTenant != "" && !p.AllowsTenant(spec.fixedTenant) {
 		return http.StatusForbidden, "namespace " + spec.fixedTenant + " is outside this identity's tenant scope", false
+	}
+	if spec.fixedTarget != "" && !p.AllowsTarget(spec.fixedTarget) {
+		return http.StatusForbidden, "this route acts on cluster target " + normalizeTargetID(spec.fixedTarget) + ", which is outside this identity's target scope", false
 	}
 
 	if spec.requireTenantWildcard && !p.TenantWildcard() {

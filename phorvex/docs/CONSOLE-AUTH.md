@@ -135,6 +135,10 @@ A route's declared scope has to match what its handler actually does, not what t
   requires `"tenants": ["*"]` — the operator role alone is not enough. The same applies to the
   global red-team controls (`/api/redteam/decision`, `/run`, `/continuous`), whose state belongs
   to no tenant.
+- **A tenant grant is not a cluster grant.** Every control that drives this console's own cluster
+  (`/api/policy/edit`, the attack and fire-scenario triggers, the three-arm runner, the apply-fix
+  write path) declares that cluster explicitly, so an identity granted a namespace but no target
+  cannot reach it. The same applies to the cluster-reading endpoints.
 - **Omitting a scope parameter is a widening.** `GET /api/scan` and `GET /api/ablation` become
   cluster-wide when `ns` is omitted, so the unscoped form requires the cross-tenant grant while
   `?ns=<granted>` stays available to a limited one.

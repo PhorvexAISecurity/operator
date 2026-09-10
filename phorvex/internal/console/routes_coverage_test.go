@@ -175,6 +175,16 @@ func TestRouteContractsAreCoherent(t *testing.T) {
 				t.Errorf("%s changes state and must not be GET-reachable", rt.path)
 			}
 		}
+		// A control that changes state does so SOMEWHERE. It must say where — a fixed cluster, a
+		// target parameter, a resolved destination, or a run whose own target is checked —
+		// because a grant that holds a tenant does not thereby hold the cluster it lives in.
+		hasTargetScope := rt.spec.fixedTarget != "" || len(rt.spec.targetQ) > 0 ||
+			len(rt.spec.targetBody) > 0 || rt.spec.destination != nil ||
+			rt.spec.runQ != "" || rt.spec.runBody
+		if !hasTargetScope {
+			t.Errorf("%s changes state but declares no target scope: add fixedTarget, targetQ, "+
+				"targetBody, a destination resolver, or a run-id check", rt.path)
+		}
 	}
 	for path := range stateChanging {
 		if !seen[path] {

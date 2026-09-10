@@ -281,6 +281,40 @@ func TestClusterWideReadsAreFilteredToTheGrant(t *testing.T) {
 	}
 }
 
+// Holding a TENANT is not the same as being allowed to reach the CLUSTER that tenant lives in.
+// Every control that drives this console's own cluster requires the default target explicitly.
+func TestClusterWritesRequireTheClusterTarget(t *testing.T) {
+	controls := []struct{ path, body string }{
+		{"/api/policy/edit", `{"namespace":"vllm","name":"vllm-defense","mode":"dryRun"}`},
+		{"/api/workload/attack", `{"namespace":"vllm","action":"foothold"}`},
+		{"/api/workload/fire-scenario", `{"namespace":"vllm","scenario":"kv-poison"}`},
+		{"/api/vllm/attack", `{"action":"poison"}`},
+		{"/api/availability-arms/run", `{"namespace":"vllm","attack":"foothold"}`},
+	}
+	// The grant holds the tenant but NO cluster target.
+	var denied []string
+	noTarget := newAuthFixture(t, execRecordingConfig(&denied), operatorGrant("op", []string{"vllm"}, []string{}))
+	for _, c := range controls {
+		w := noTarget.do(noTarget.albReqAs(t, http.MethodPost, c.path, c.body, "op"))
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("%s with a tenant but no target grant: got %d, want 403\n%s", c.path, w.Code, w.Body.String())
+		}
+	}
+	if len(denied) != 0 {
+		t.Fatalf("a target-refused control still reached the kubectl dispatcher: %v", denied)
+	}
+
+	// Positive control: the same grant plus the default target reaches the dispatcher.
+	var allowed []string
+	withTarget := newAuthFixture(t, execRecordingConfig(&allowed), operatorGrant("op", []string{"vllm"}, []string{defaultTargetID}))
+	if w := withTarget.do(withTarget.albReqAs(t, http.MethodPost, "/api/policy/edit", controls[0].body, "op")); w.Code != http.StatusOK {
+		t.Fatalf("positive control: %d %s", w.Code, w.Body.String())
+	}
+	if len(allowed) != 1 {
+		t.Fatalf("the authorized edit must dispatch exactly once, got %v", allowed)
+	}
+}
+
 // The global red-team controls write shared state that belongs to no tenant.
 func TestGlobalRedteamControlsRequireCrossTenantGrant(t *testing.T) {
 	limited := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"vllm"}, []string{wildcardScope}))
