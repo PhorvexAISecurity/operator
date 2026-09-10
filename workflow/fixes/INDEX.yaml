@@ -187,6 +187,16 @@ fixes:
     stacked_on: []
     branch: t1/control-economics-m140-tenant-state-lifecycle
     head_sha: 9ca607ed8e756d6f941aa95c32c55750ddff964a
+  CONSOLE-LIVE-HISTORY:
+    directory: fixes/CONSOLE-LIVE-HISTORY
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/console-live-history
+    head_sha: 80c9ce2fcbdc708fc06413543b5b4ffb3e90c989
   DEPLOY-AUTOSYNC:
     directory: fixes/DEPLOY-AUTOSYNC
     aliases: []
