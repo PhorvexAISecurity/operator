@@ -50,6 +50,116 @@ type metricRow struct {
 		ReplayAttempts             int `json:"replayAttempts"`
 		StaticBaselineReplaySuccess int `json:"staticBaselineReplaySuccess"`
 	} `json:"reuse"`
+	// Validity is the harness measurement-validity contract; nil for rows
+	// written before it existed (LEGACY/UNVERIFIED).
+	Validity *metricValidity `json:"validity"`
+}
+
+// metricValidity mirrors the harness contract (internal/core/validity.go). The
+// console CONSUMES it: a row's own `scored` flag is never trusted alone, so a
+// panel cannot publish a number the harness itself would refuse.
+type metricValidity struct {
+	Version        int    `json:"version"`
+	Kind           string `json:"kind"`
+	Status         string `json:"status"`
+	OracleObserved bool   `json:"oracleObserved"`
+	CostObserved   bool   `json:"costObserved"`
+	Scored         bool   `json:"scored"`
+	UnscoredReason string `json:"unscoredReason"`
+	Baseline       struct {
+		Usable bool `json:"usable"`
+	} `json:"baseline"`
+	Cleanup struct {
+		Complete   bool `json:"complete"`
+		Unresolved bool `json:"unresolved"`
+	} `json:"cleanup"`
+}
+
+// validityVersion is the contract version this reader understands.
+const validityVersion = 1
+
+// legacy reports a row written before the validity contract.
+func (m metricRow) legacy() bool { return m.Validity == nil }
+
+// scorable reports whether this row's comparison may be published.
+func (m metricRow) scorable() bool {
+	v := m.Validity
+	if v == nil {
+		return false
+	}
+	return v.Version == validityVersion && v.Status == "valid" && v.Kind == "ordinary" &&
+		v.Scored && v.OracleObserved && v.Baseline.Usable &&
+		v.Cleanup.Complete && !v.Cleanup.Unresolved
+}
+
+// excluded reports a row the contract explicitly refuses. Legacy rows predate
+// the contract and are disclosed rather than refused, so historical panels stay
+// readable while never being presented as certified.
+func (m metricRow) excluded() bool { return !m.legacy() && !m.scorable() }
+
+// costUsable reports whether DefensiveActions is an observation. `-1` is the
+// harness's UNOBSERVED sentinel and must never be averaged as a cost.
+func (m metricRow) costUsable() bool {
+	if m.DefensiveActions < 0 {
+		return false
+	}
+	if v := m.Validity; v != nil {
+		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
+	}
+	return true
+}
+
+// negControlUsable reports whether this negative-control row establishes a
+// MEASURED false-move count.
+func (m metricRow) negControlUsable() bool {
+	if m.FalseDefensiveActions < 0 {
+		return false
+	}
+	if v := m.Validity; v != nil {
+		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
+	}
+	return false // legacy: never verified, so it cannot establish a clean arm
+}
+
+// NegControlCensus is the complete negative-control accounting for one arm, so a
+// panel can report `partial` rather than implying a clean arm from a subset.
+type NegControlCensus struct {
+	Total  int    `json:"total"`
+	Usable int    `json:"usable"`
+	State  string `json:"state"` // not-run | unobserved | partial | observed
+	// MaxFalseMoves is -1 unless State == "observed".
+	MaxFalseMoves int `json:"maxFalseMoves"`
+}
+
+// negControlCensus builds the census for one (scenario, defender) arm.
+func negControlCensus(rows []metricRow, scenario, defender string) NegControlCensus {
+	c := NegControlCensus{MaxFalseMoves: -1}
+	best := -1
+	for _, m := range rows {
+		if m.Scenario != scenario || m.Defender != defender || !m.NegativeControl {
+			continue
+		}
+		c.Total++
+		if !m.negControlUsable() {
+			continue
+		}
+		c.Usable++
+		if m.FalseDefensiveActions > best {
+			best = m.FalseDefensiveActions
+		}
+	}
+	switch {
+	case c.Total == 0:
+		c.State = "not-run"
+	case c.Usable == 0:
+		c.State = "unobserved"
+	case c.Usable < c.Total:
+		c.State = "partial"
+	default:
+		c.State = "observed"
+		c.MaxFalseMoves = best
+	}
+	return c
 }
 
 var markerRe = regexp.MustCompile(`\[([a-z0-9-]+)=?([^\]]*)\]`)
@@ -85,7 +195,11 @@ func readMetrics(path string) ([]metricRow, bool) {
 	return out, true
 }
 
-// fixedTrials drops negative-control + adaptive rows, keeping the headline trials per arm.
+// fixedTrials drops negative-control + adaptive rows, keeping the headline
+// trials per arm, and drops every row the harness measurement-validity contract
+// refuses. A refused row is an infrastructure failure, an unanchored comparison
+// or an unresolved cleanup — publishing it would present a failed measurement as
+// a defensive result.
 func fixedTrials(rows []metricRow, scenario, defender string) []metricRow {
 	maxFixed := -1
 	for _, m := range rows {
@@ -101,7 +215,23 @@ func fixedTrials(rows []metricRow, scenario, defender string) []metricRow {
 		if maxFixed >= 0 && m.Trial > maxFixed {
 			continue // adaptive row
 		}
+		if m.excluded() {
+			continue // refused by the validity contract
+		}
 		out = append(out, m)
+	}
+	return out
+}
+
+// costObservedTrials narrows a trial set to the rows whose defensive-action
+// count is an OBSERVATION, so an unobserved cost never enters a cost mean or a
+// favorable efficiency ratio.
+func costObservedTrials(rows []metricRow) []metricRow {
+	var out []metricRow
+	for _, m := range rows {
+		if m.costUsable() {
+			out = append(out, m)
+		}
 	}
 	return out
 }

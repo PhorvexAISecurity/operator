@@ -135,6 +135,26 @@ type dollarRow struct {
 	// trial; otherwise every dollar/Schwartau figure below is NOT MEASURED.
 	Economics bool
 	Validity  ArmValidity
+	// NegControlState / Total / Usable disclose the arm's negative-control census
+	// so a hypothesis verdict never implies a clean arm on a partial control.
+	NegControlState  string
+	NegControlTotal  int
+	NegControlUsable int
+}
+
+// negStateOf derives the negative-control state from a complete census. Any
+// unusable control demotes a fully-observed claim to `partial`.
+func negStateOf(total, usable, unusable int) string {
+	switch {
+	case total == 0:
+		return NegControlNotRun
+	case usable == 0:
+		return NegControlUnobserved
+	case unusable > 0:
+		return NegControlPartial
+	default:
+		return NegControlObserved
+	}
 }
 
 // recomputeEconomics builds the per-arm dollar rows from the metric stream. For
@@ -153,6 +173,10 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		trigger    string
 		replaySucc []int
 		validity   ArmValidity
+		// Negative-control census, carried so a hypothesis verdict can disclose a
+		// partial or failed control instead of implying a clean arm.
+		negTotal, negUsable, negUnusable int
+		negFalseMax                      int
 	}
 	byArm := map[ArmKey]*acc{}
 	order := []ArmKey{}
@@ -178,16 +202,43 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 
 	for i := range metrics {
 		m := metrics[i]
-		if m.AnchorOnly || m.Kind() != core.TrialOrdinary {
+		if m.AnchorOnly {
 			continue
 		}
-		v := m.MeasurementState()
+		// The SAME validated interpretation the main report uses: a row's own
+		// `scored` claim never reaches a dollar figure on its own.
+		val := m.Validated()
+		v := val.Claim
+		rowKind := val.Kind()
+		if m.IsLegacy() && m.NegativeControl {
+			rowKind = core.TrialNegativeControl
+		}
 		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender}
 		a, ok := byArm[k]
 		if !ok {
-			a = &acc{}
+			a = &acc{negFalseMax: -1}
 			byArm[k] = a
 			order = append(order, k)
+		}
+
+		// The negative-control census travels with the economics view so a
+		// hypothesis verdict can disclose a partial or failed control.
+		if rowKind == core.TrialNegativeControl {
+			a.negTotal++
+			switch {
+			case val.Legacy, !val.CostUsable, val.Unverified, v.Status != core.MeasurementValid, m.FalseDefensiveActions < 0:
+				a.negUnusable++
+				a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
+			default:
+				a.negUsable++
+				if m.FalseDefensiveActions > a.negFalseMax {
+					a.negFalseMax = m.FalseDefensiveActions
+				}
+			}
+			continue
+		}
+		if rowKind != core.TrialOrdinary {
+			continue
 		}
 		a.validity.Emitted++
 
@@ -199,27 +250,32 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		}
 
 		switch {
-		case m.IsLegacy():
+		case val.Legacy:
 			a.validity.Legacy++
 			a.validity.addReason("legacy/unverified row: excluded from every $ and Schwartau denominator")
 			continue
-		case v.Status == core.MeasurementInvalid:
+		case val.Unverified:
+			a.validity.Unverified++
+			a.validity.addReason(val.Rejections...)
+			continue
+		case val.Status() == core.MeasurementInvalid:
 			a.validity.Invalid++
-			a.validity.addReason(v.Reasons...)
+			a.validity.addReason(val.Reasons()...)
 			continue
-		case v.Status == core.MeasurementSkipped:
+		case val.Status() == core.MeasurementSkipped:
 			a.validity.Skipped++
-			a.validity.addReason(v.Reasons...)
+			a.validity.addReason(val.Reasons()...)
 			continue
-		case !v.Scored:
+		case !val.Scorable:
 			a.validity.UnscoredValid++
 			a.validity.addReason(v.UnscoredReason)
+			a.validity.addReason(val.Rejections...)
 			continue
 		}
 		if !v.Cleanup.Complete {
 			a.validity.CleanupFailed++
 		}
-		if !v.CostObserved {
+		if !val.CostUsable {
 			// A scored disruption with an UNOBSERVED cost cannot produce an ROI or
 			// efficiency number; the row is retained as a counted exclusion.
 			a.validity.CostUnobserved++
@@ -263,6 +319,9 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			DetectorAbsent:     a.detAbsent,
 			Economics:          len(a.disruption) > 0,
 			Validity:           a.validity,
+			NegControlState:    negStateOf(a.negTotal, a.negUsable, a.negUnusable),
+			NegControlTotal:    a.negTotal,
+			NegControlUsable:   a.negUsable,
 		}
 		if !row.Economics {
 			// Nothing was measured for this arm: publish no dollar figure at all.
@@ -345,12 +404,13 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString("| Scenario | Defender | Accounting | Reasons |\n|---|---|---|---|\n")
 	for _, r := range rows {
 		v := r.Validity
-		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d cleanupFailed=%d costUnobserved=%d legacy=%d",
-			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.CleanupFailed, v.CostUnobserved, v.Legacy)
+		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+			r.NegControlState, r.NegControlUsable, r.NegControlTotal)
 		if !v.Complete() {
 			acct = "INCOMPLETE " + acct
 		}
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", r.Scenario, r.Defender, acct, truncate(strings.Join(v.Reasons, " · "), 220)))
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", r.Scenario, r.Defender, acct, truncate(strings.Join(v.Reasons, " · "), 260)))
 	}
 	b.WriteString("\n")
 
@@ -367,6 +427,7 @@ func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string
 	var b strings.Builder
 	b.WriteString("## Hypotheses H1 / H2 / H3 (PHORVEX Part 9 -- defined transparently from the rotation-vs-static thesis; no pre-registered doc exists in the repo)\n\n")
 	b.WriteString("Each verdict is evaluated over SCORED, cost-observed arms only. UNSCORED means no valid measurement existed — it is neither a pass nor a measured failure.\n\n")
+	b.WriteString(renderNegControlCaveat(rows))
 
 	rotating := map[string]bool{"d-r6blindtimer": true, "d-randomequal": true, "d-fullphoenix": true}
 
@@ -426,6 +487,40 @@ func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string
 		pctOrNA(fpCI), pctBandOrNA(fpCI), fpCI.N, pctOrNA(reuseCI), verdict(fpCI.N, fpCI.N > 0 && fpCI.CILow > 0)))
 
 	b.WriteString("\n**Phorvex column (d-phorvex-slot): TO-BE-FILLED** -- the slot arm currently skips-with-note; the real Phorvex defender drops in later as one file and these H1/H2/H3 rows fill its comparison column with zero harness changes.\n")
+	return b.String()
+}
+
+// renderNegControlCaveat states, before any verdict, which scored arms lack a
+// fully observed negative control. A hypothesis about defensive value rests on
+// the false-move rate being measured; where it is not, the verdict below is a
+// disruption claim only and must not be read as "no false positives".
+func renderNegControlCaveat(rows []dollarRow) string {
+	var partial, missing []string
+	for _, r := range rows {
+		if !r.Economics {
+			continue
+		}
+		arm := r.Scenario + "/" + r.Defender
+		switch r.NegControlState {
+		case NegControlObserved:
+		case NegControlPartial:
+			partial = append(partial, fmt.Sprintf("%s (%d of %d observed)", arm, r.NegControlUsable, r.NegControlTotal))
+		default:
+			missing = append(missing, fmt.Sprintf("%s (%s)", arm, r.NegControlState))
+		}
+	}
+	if len(partial) == 0 && len(missing) == 0 {
+		return "**Negative controls**: every scored arm below has a fully observed negative control.\n\n"
+	}
+	var b strings.Builder
+	b.WriteString("**Negative controls (verdict caveat)**: the false-move rate is NOT fully measured for every scored arm, so no verdict below establishes an absence of false defensive moves.\n")
+	if len(partial) > 0 {
+		b.WriteString(fmt.Sprintf("- PARTIALLY observed: %s\n", strings.Join(partial, "; ")))
+	}
+	if len(missing) > 0 {
+		b.WriteString(fmt.Sprintf("- NOT observed: %s\n", strings.Join(missing, "; ")))
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 

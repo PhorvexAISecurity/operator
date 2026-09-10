@@ -335,8 +335,9 @@ func TestValidityNegativeControlStatesAreDistinct(t *testing.T) {
 		}
 		cell := lastRowCell(RenderMarkdown(tc.metrics, 0.95, nil), tc.def)
 		if tc.want == NegControlObserved {
-			if cell != "0" {
-				t.Errorf("observed clean control cell = %q, want the measured 0", cell)
+			// A measured zero, with the census that backs it.
+			if !strings.HasPrefix(cell, "0 (n=") {
+				t.Errorf("observed clean control cell = %q, want the measured 0 with its census", cell)
 			}
 			continue
 		}

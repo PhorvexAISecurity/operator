@@ -34,6 +34,74 @@ type Metric struct {
 	Skipped              bool    `json:"skipped"`
 	ObservedState        string  `json:"observedState"`
 	MeanRotationInterval float64 `json:"meanRotationIntervalSeconds"`
+	// Validity is the harness measurement-validity contract; nil for rows
+	// written before it existed (LEGACY/UNVERIFIED).
+	Validity *metricValidity `json:"validity"`
+}
+
+// metricValidity mirrors the harness contract (internal/core/validity.go). This
+// reader CONSUMES it: a row's own `scored` flag is never trusted alone, so a
+// hand-edited or newer-format file cannot make this view certify something the
+// harness would refuse.
+type metricValidity struct {
+	Version        int    `json:"version"`
+	Kind           string `json:"kind"`
+	Status         string `json:"status"`
+	OracleObserved bool   `json:"oracleObserved"`
+	CostObserved   bool   `json:"costObserved"`
+	Scored         bool   `json:"scored"`
+	UnscoredReason string `json:"unscoredReason"`
+	Baseline       struct {
+		Usable bool `json:"usable"`
+	} `json:"baseline"`
+	Cleanup struct {
+		Complete   bool `json:"complete"`
+		Unresolved bool `json:"unresolved"`
+	} `json:"cleanup"`
+}
+
+const validityVersion = 1
+
+func (m Metric) legacy() bool { return m.Validity == nil }
+
+func (m Metric) scorable() bool {
+	v := m.Validity
+	if v == nil {
+		return false
+	}
+	return v.Version == validityVersion && v.Status == "valid" && v.Kind == "ordinary" &&
+		v.Scored && v.OracleObserved && v.Baseline.Usable &&
+		v.Cleanup.Complete && !v.Cleanup.Unresolved
+}
+
+// excluded reports a row the contract explicitly refuses. Legacy rows predate
+// the contract, so they are disclosed rather than refused.
+func (m Metric) excluded() bool { return !m.legacy() && !m.scorable() }
+
+// costUsable reports whether DefensiveActions is an observation. `-1` is the
+// harness's UNOBSERVED sentinel and must never be averaged as a cost.
+func (m Metric) costUsable() bool {
+	if m.DefensiveActions < 0 {
+		return false
+	}
+	if v := m.Validity; v != nil {
+		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
+	}
+	return true
+}
+
+// negControlUsable reports whether this negative-control row establishes a
+// MEASURED false-move result. A negative control is never "scorable" (it has no
+// disruption comparison), so scorability is the wrong question for it: what
+// matters is that its cost was actually observed on an interpretable, valid row.
+func (m Metric) negControlUsable() bool {
+	if m.DefensiveActions < 0 {
+		return false
+	}
+	if v := m.Validity; v != nil {
+		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
+	}
+	return false // legacy: never verified, so it cannot establish a clean arm
 }
 
 var markerRe = regexp.MustCompile(`\[([a-z0-9-]+)=([^\]]*)\]`)
@@ -135,12 +203,31 @@ func render(rows []Metric, src string) string {
 	}
 	defsSeen := map[string]bool{}
 	scsSeen := map[string]bool{}
+	// Measurement-validity census, disclosed with the tables below.
+	var excludedRows, legacyRows, costUnobserved, negTotal, negUsable int
 	for _, m := range rows {
-		if m.Skipped || m.NegativeControl {
+		if m.NegativeControl {
+			// Count every control trial; only MEASURED ones can establish that an
+			// arm made no false defensive moves.
+			negTotal++
+			if m.negControlUsable() {
+				negUsable++
+			}
+			continue
+		}
+		if m.Skipped {
 			continue
 		}
 		if n, ok := trialsN[aggKey{m.Scenario, m.Defender}]; ok && m.Trial > n {
 			continue // adaptive row
+		}
+		// A row the validity contract refuses never reaches a published number.
+		if m.excluded() {
+			excludedRows++
+			continue
+		}
+		if m.legacy() {
+			legacyRows++
 		}
 		defsSeen[m.Defender] = true
 		scsSeen[m.Scenario] = true
@@ -148,7 +235,12 @@ func render(rows []Metric, src string) string {
 		c.interval, _ = armInterval(m.Defender, m.MeanRotationInterval)
 		mk := markers(m.ObservedState)
 		c.prevent = append(c.prevent, m.DisruptionVsOracle)
-		c.cost = append(c.cost, float64(m.DefensiveActions))
+		// An UNOBSERVED cost is not a zero cost.
+		if m.costUsable() {
+			c.cost = append(c.cost, float64(m.DefensiveActions))
+		} else {
+			costUnobserved++
+		}
 		c.harm = append(c.harm, b2f(mk["harm"] != "" && mk["harm"] != "none"))
 		c.infeas = append(c.infeas, b2f(mk["infeasible-rotate"] == "true"))
 		if v, ok := mk["recon-valid"]; ok {
@@ -159,6 +251,20 @@ func render(rows []Metric, src string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f, a...); b.WriteByte('\n') }
 	w("# P3-DEEP — the structural zero-day proof (interval-sweep + recon-validity + dilution)")
+	w("")
+	// Measurement validity, stated BEFORE any number that rests on it.
+	negState := "not-run"
+	switch {
+	case negTotal == 0:
+	case negUsable == 0:
+		negState = "UNOBSERVED"
+	case negUsable < negTotal:
+		negState = "PARTIAL"
+	default:
+		negState = "observed"
+	}
+	w("> **Measurement validity:** %d attack row(s) REFUSED by the harness validity contract and excluded; %d LEGACY/UNVERIFIED row(s) (written before the contract — counted, never certified); %d row(s) with an UNOBSERVED defensive cost excluded from every cost mean. Negative controls: %s (%d of %d observed) — an unobserved or partial control does NOT establish an absence of false defensive moves.",
+		excludedRows, legacyRows, costUnobserved, negState, negUsable, negTotal)
 	w("")
 	w("> **HONEST VERDICT: STRONGLY EVIDENCES the structural claim; does NOT fully prove it.**")
 	w("> The harm / learnability / dilution / prediction-presence legs are T-INVARIANT (proven);")

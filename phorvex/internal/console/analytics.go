@@ -37,12 +37,16 @@ type MatrixResult struct {
 	Arms        []string     `json:"arms"`
 	Scenarios   []string     `json:"scenarios"`
 	Cells       []MatrixCell `json:"cells"`
-	FPRows      int          `json:"fpRows"`
-	FPViolations int         `json:"fpViolations"`
-	FPRate      float64      `json:"fpRate"`
-	Learnability []LearnArm  `json:"learnability"`
-	LearnScenario string      `json:"learnScenario"`
-	Note        string       `json:"note"`
+	// FPRows counts only MEASURED negative-control trials; FPUnobserved counts
+	// the control trials whose false-move result was never observed. FPRate is
+	// -1 when nothing was measured — it is never a measured zero.
+	FPRows        int        `json:"fpRows"`
+	FPUnobserved  int        `json:"fpUnobserved"`
+	FPViolations  int        `json:"fpViolations"`
+	FPRate        float64    `json:"fpRate"`
+	Learnability  []LearnArm `json:"learnability"`
+	LearnScenario string     `json:"learnScenario"`
+	Note          string     `json:"note"`
 }
 
 func meanOf(xs []float64) float64 {
@@ -104,6 +108,14 @@ func (c *Config) Matrix() MatrixResult {
 			if !r.NegativeControl {
 				continue
 			}
+			// Count EVERY control trial, but only a MEASURED one can be evidence
+			// of "no false defensive move". An unobserved control is not a clean
+			// one, so it inflates neither the numerator nor the denominator — it
+			// is disclosed separately as unobserved.
+			if !r.negControlUsable() {
+				res.FPUnobserved++
+				continue
+			}
 			res.FPRows++
 			if r.FalseDefensiveActions > 0 {
 				res.FPViolations++
@@ -112,6 +124,8 @@ func (c *Config) Matrix() MatrixResult {
 	}
 	if res.FPRows > 0 {
 		res.FPRate = float64(res.FPViolations) / float64(res.FPRows)
+	} else {
+		res.FPRate = -1 // NOT MEASURED, never a measured zero false-positive rate
 	}
 
 	// learnability: per-arm disruption on the adaptive scenario, split first-half vs second-half

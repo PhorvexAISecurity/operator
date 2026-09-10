@@ -51,6 +51,119 @@ type Metric struct {
 		SchwartauPositive bool `json:"schwartauPositive"`
 		DetectionAbsent   bool `json:"detectionAbsent"`
 	} `json:"schwartau"`
+	// Validity is the harness measurement-validity contract. It is nil for rows
+	// written before the contract existed (LEGACY/UNVERIFIED).
+	Validity *metricValidity `json:"validity"`
+}
+
+// metricValidity mirrors the harness contract (internal/core/validity.go). This
+// reader CONSUMES it; it does not reinterpret it. A row's own `scored` flag is
+// never trusted on its own — the same corroboration the harness performs is
+// repeated here, so a hand-edited or newer-format file cannot make this report
+// certify something the harness would refuse.
+type metricValidity struct {
+	Version        int    `json:"version"`
+	Kind           string `json:"kind"`
+	Status         string `json:"status"`
+	OracleObserved bool   `json:"oracleObserved"`
+	CostObserved   bool   `json:"costObserved"`
+	Scored         bool   `json:"scored"`
+	UnscoredReason string `json:"unscoredReason"`
+	Baseline       struct {
+		Usable bool `json:"usable"`
+	} `json:"baseline"`
+	Cleanup struct {
+		Complete   bool `json:"complete"`
+		Unresolved bool `json:"unresolved"`
+	} `json:"cleanup"`
+}
+
+// validityVersion is the contract version this reader understands. A row
+// stamped with anything else is UNVERIFIED here, exactly as in the harness.
+const validityVersion = 1
+
+// legacy reports a row written before the validity contract: it makes no claim
+// either way. Such rows are counted and DISCLOSED as unverified rather than
+// silently certified.
+func (m Metric) legacy() bool { return m.Validity == nil }
+
+// scorable reports whether this row's disruption comparison may enter a score.
+// A legacy row is not certifiable, but it is also not refutable, so the caller
+// decides (see excluded); an explicit contract row must corroborate every claim.
+func (m Metric) scorable() bool {
+	v := m.Validity
+	if v == nil {
+		return false
+	}
+	return v.Version == validityVersion && v.Status == "valid" && v.Kind == "ordinary" &&
+		v.Scored && v.OracleObserved && v.Baseline.Usable &&
+		v.Cleanup.Complete && !v.Cleanup.Unresolved
+}
+
+// excluded reports a row the contract explicitly refuses. Legacy rows are NOT
+// excluded (they predate the contract and are disclosed instead); a row that
+// carries a validity block and fails it is.
+func (m Metric) excluded() bool { return !m.legacy() && !m.scorable() }
+
+// costUsable reports whether DefensiveActions/SecurityPerCost/ROI on this row
+// are observations. `-1` is the harness's UNOBSERVED sentinel and must never be
+// averaged as a cost or turned into a favorable ratio.
+func (m Metric) costUsable() bool {
+	if m.DefensiveActions < 0 {
+		return false
+	}
+	if v := m.Validity; v != nil {
+		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
+	}
+	return true // legacy: no claim recorded, disclosed as unverified
+}
+
+// negControlUsable reports whether this negative-control row establishes a
+// MEASURED false-move count. An unobserved or refused control does not.
+func (m Metric) negControlUsable() bool {
+	if m.FalseDefensiveActions < 0 {
+		return false
+	}
+	if v := m.Validity; v != nil {
+		return v.Version == validityVersion && v.Status == "valid" && v.CostObserved
+	}
+	return false // legacy: never verified, so it cannot establish a clean arm
+}
+
+// validityCensus is the run-wide accounting this report discloses so a reader
+// can see how much of the corpus was actually certified.
+type validityCensus struct {
+	total, legacy, excluded, scored int
+	// negTotal/negUsable are the negative-control census.
+	negTotal, negUsable int
+	reasons             []string
+}
+
+func (c *validityCensus) note(reason string) {
+	if reason == "" {
+		return
+	}
+	for _, r := range c.reasons {
+		if r == reason {
+			return
+		}
+	}
+	c.reasons = append(c.reasons, reason)
+}
+
+// negState summarises the negative-control census. Only a fully observed set
+// can establish a clean arm.
+func (c validityCensus) negState() string {
+	switch {
+	case c.negTotal == 0:
+		return "not-run"
+	case c.negUsable == 0:
+		return "unobserved"
+	case c.negUsable < c.negTotal:
+		return "partial"
+	default:
+		return "observed"
+	}
 }
 
 const (
@@ -91,9 +204,14 @@ type armAgg struct {
 	adaptiveDwell   float64
 	adaptiveDisrupt float64
 	hasAdaptive     bool
-	// negative control
-	falseMovesMax int
-	hasNegCtl     bool
+	// negative control. falseMovesMax counts ONLY usable (measured) controls, and
+	// negTotal/negUsable keep the full census so a partial control is never
+	// reported as a clean one.
+	falseMovesMax       int
+	hasNegCtl           bool
+	negTotal, negUsable int
+	// measurement validity: how many of this arm's rows were certifiable.
+	census validityCensus
 }
 
 var markerRe = regexp.MustCompile(`\[([a-z0-9-]+)=([^\]]*)\]`)
@@ -183,11 +301,39 @@ func aggregate(rows []Metric) (map[string]map[string]*armAgg, []string, []string
 			continue
 		}
 		if m.NegativeControl {
+			// EVERY negative-control row is counted; only MEASURED ones establish
+			// the false-move maximum. An unobserved or refused control cannot make
+			// an arm look clean.
+			a.negTotal++
+			a.census.negTotal++
+			if !m.negControlUsable() {
+				a.census.note("negative control not observed: its false-move count is UNOBSERVED, not zero")
+				continue
+			}
+			a.negUsable++
+			a.census.negUsable++
 			a.hasNegCtl = true
 			if m.FalseDefensiveActions > a.falseMovesMax {
 				a.falseMovesMax = m.FalseDefensiveActions
 			}
 			continue
+		}
+		// A row the validity contract refuses never reaches a published number.
+		a.census.total++
+		if m.legacy() {
+			a.census.legacy++
+		}
+		if m.excluded() {
+			a.census.excluded++
+			reason := "row refused by the measurement-validity contract"
+			if m.Validity != nil && m.Validity.UnscoredReason != "" {
+				reason = m.Validity.UnscoredReason
+			}
+			a.census.note(reason)
+			continue
+		}
+		if m.scorable() {
+			a.census.scored++
 		}
 		mk := parseMarkers(m.ObservedState)
 		if haveN && m.Trial == n+1 {
@@ -204,9 +350,15 @@ func aggregate(rows []Metric) (map[string]map[string]*armAgg, []string, []string
 			a.dwell = append(a.dwell, parseSecs(v))
 		}
 		a.disruption = append(a.disruption, m.DisruptionVsOracle)
-		a.actions = append(a.actions, float64(m.DefensiveActions))
-		a.secPerCost = append(a.secPerCost, m.SecurityPerCost)
-		if m.ROI != nil {
+		// An UNOBSERVED cost is not a zero cost: it enters no mean and produces
+		// no efficiency figure.
+		if m.costUsable() {
+			a.actions = append(a.actions, float64(m.DefensiveActions))
+			a.secPerCost = append(a.secPerCost, m.SecurityPerCost)
+		} else {
+			a.census.note("defensive cost UNOBSERVED: excluded from the cost and security-per-cost means")
+		}
+		if m.ROI != nil && m.costUsable() && m.scorable() {
 			a.secUSD = append(a.secUSD, m.ROI.SecurityPerCostDollars)
 			a.gpuUSD = append(a.gpuUSD, m.ROI.GpuOverheadDollarsPerYearSaved)
 		}
@@ -278,11 +430,25 @@ func render(rows []Metric, phase string, recon float64, src string) string {
 	w("scaled-for-test; real periodic rotation is minutes–hours — the RELATIVE ordering is the point).")
 	w("")
 
-	// Controls
+	// Controls + the measurement-validity census behind them.
 	negMax, negSeen, posOK, posTot := 0, false, 0, 0
+	run := validityCensus{}
 	for _, sc := range scenarios {
 		for _, arm := range arms {
-			if a := byScArm[sc][arm]; a != nil && a.hasNegCtl {
+			a := byScArm[sc][arm]
+			if a == nil {
+				continue
+			}
+			run.total += a.census.total
+			run.legacy += a.census.legacy
+			run.excluded += a.census.excluded
+			run.scored += a.census.scored
+			run.negTotal += a.census.negTotal
+			run.negUsable += a.census.negUsable
+			for _, r := range a.census.reasons {
+				run.note(r)
+			}
+			if a.hasNegCtl {
 				negSeen = true
 				if a.falseMovesMax > negMax {
 					negMax = a.falseMovesMax
@@ -297,10 +463,35 @@ func render(rows []Metric, phase string, recon float64, src string) string {
 		}
 	}
 	w("## Controls")
-	if negSeen {
-		w("- **Negative control:** max falseDefensiveActions = **%d** (target 0). %s", negMax, pass(negMax == 0))
+	// A maximum over an unobserved or PARTIAL set of negative controls does not
+	// establish an absence of false defensive moves, so it is never rendered as
+	// a pass.
+	switch state := run.negState(); state {
+	case "observed":
+		w("- **Negative control:** max falseDefensiveActions = **%d** (target 0) over %d/%d observed control trial(s). %s",
+			negMax, run.negUsable, run.negTotal, pass(negSeen && negMax == 0))
+	case "partial":
+		w("- **Negative control: PARTIAL (%d of %d control trials observed).** Max falseDefensiveActions over the OBSERVED subset = %d; this does NOT establish an absence of false defensive moves for the unobserved trials. **NOT MEASURED**",
+			run.negUsable, run.negTotal, negMax)
+	case "unobserved":
+		w("- **Negative control: UNOBSERVED (0 of %d control trials measured).** False defensive moves are unknown, not zero. **NOT MEASURED**", run.negTotal)
+	default:
+		w("- **Negative control: NOT RUN.** False defensive moves are unknown, not zero. **NOT MEASURED**")
 	}
 	w("- **Positive control:** %d/%d scenarios where d-nomtd (undefended) achieved the oracle. %s", posOK, posTot, pass(posTot > 0 && posOK == posTot))
+	w("")
+
+	// Measurement validity: how much of this corpus was actually certified.
+	w("## Measurement validity")
+	w("- Attack rows: **%d** total — %d certified by the validity contract, %d REFUSED, %d LEGACY/UNVERIFIED (written before the contract; counted, never certified).",
+		run.total, run.scored, run.excluded, run.legacy)
+	w("- Negative-control trials: **%s** (%d of %d observed).", run.negState(), run.negUsable, run.negTotal)
+	if run.legacy > 0 {
+		w("- Legacy rows carry no validity evidence, so the numbers below that rest on them are NOT certified measurements. Re-run the benchmark on a current harness to certify them.")
+	}
+	for _, r := range run.reasons {
+		w("- Excluded: %s", r)
+	}
 	w("")
 
 	// LEAD DEMO callout

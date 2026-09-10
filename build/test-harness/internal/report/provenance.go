@@ -37,8 +37,26 @@ type ProvenanceEntry struct {
 	ControlDefender string `json:"controlDefender,omitempty"`
 	ControlUsable   bool   `json:"controlUsable"`
 	UnscoredReason  string `json:"unscoredReason,omitempty"`
-	// CleanupComplete is false when owed cleanup did not verify.
-	CleanupComplete bool `json:"cleanupComplete"`
+	// CleanupComplete is false when owed cleanup did not verify;
+	// CleanupUnresolved is true when a cleanup call outlived its bound and may
+	// still be running.
+	CleanupComplete   bool `json:"cleanupComplete"`
+	CleanupUnresolved bool `json:"cleanupUnresolved,omitempty"`
+	// Unverified is true when this build could not interpret the row's validity
+	// claims or found them self-contradictory.
+	Unverified bool `json:"unverified,omitempty"`
+}
+
+// unscoredReason prefers the producer's own explanation and falls back to this
+// build's first rejection, so a row refused on decode still says why.
+func unscoredReason(val core.ValidatedMeasurement) string {
+	if val.Scorable {
+		return ""
+	}
+	if r := val.Claim.UnscoredReason; r != "" {
+		return r
+	}
+	return firstNonEmpty(val.Rejections)
 }
 
 // ProvenanceMap is the whole map plus the run-level reproduction recipe.
@@ -64,26 +82,31 @@ func BuildProvenance(metrics []core.Metric, masterSeed int64, trialsPerArm int, 
 		HowToReproduce: reproduceCmd,
 	}
 	for _, m := range metrics {
-		v := m.MeasurementState()
+		// The provenance entry carries the VALIDATED verdict, not the row's own
+		// claim, so a provenance consumer sees exactly what the reports scored.
+		val := m.Validated()
+		v := val.Claim
 		pm.Entries = append(pm.Entries, ProvenanceEntry{
-			Scenario:        m.Scenario,
-			Defender:        m.Defender,
-			Trial:           m.Trial,
-			Seed:            m.Seed,
-			RawLogPath:      m.RawLogPath,
-			Commands:        m.Commands,
-			OracleAchieved:  m.OracleAchieved,
-			Disruption:      m.DisruptionVsOracle,
-			ObservedState:   m.ObservedState,
-			NegativeControl: m.NegativeControl,
-			TrialKind:       m.Kind(),
-			Status:          v.Status,
-			Scored:          v.Scored,
-			OracleObserved:  v.OracleObserved,
-			ControlDefender: v.Baseline.Defender,
-			ControlUsable:   v.Baseline.Usable,
-			UnscoredReason:  v.UnscoredReason,
-			CleanupComplete: v.Cleanup.Complete,
+			Scenario:          m.Scenario,
+			Defender:          m.Defender,
+			Trial:             m.Trial,
+			Seed:              m.Seed,
+			RawLogPath:        m.RawLogPath,
+			Commands:          m.Commands,
+			OracleAchieved:    m.OracleAchieved,
+			Disruption:        m.DisruptionVsOracle,
+			ObservedState:     m.ObservedState,
+			NegativeControl:   m.NegativeControl,
+			TrialKind:         m.Kind(),
+			Status:            val.Status(),
+			Scored:            val.Scorable,
+			OracleObserved:    val.OracleUsable,
+			ControlDefender:   v.Baseline.Defender,
+			ControlUsable:     v.Baseline.Usable && val.Scorable,
+			UnscoredReason:    unscoredReason(val),
+			CleanupComplete:   v.Cleanup.Complete,
+			CleanupUnresolved: v.Cleanup.Unresolved,
+			Unverified:        val.Unverified,
 		})
 	}
 	return pm

@@ -3,8 +3,10 @@ package core
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/adaptive"
@@ -63,6 +65,10 @@ type RunOutcome struct {
 	// it runs positive trials only, so its negative control and adaptive pass are
 	// NOT run and must never be reported as having passed.
 	BaselineAnchorOnly bool `json:"baselineAnchorOnly,omitempty"`
+	// LateCleanups retains every cleanup call that outlived its wall-clock bound,
+	// with whatever it eventually returned. Their trials stay unresolved: a late
+	// return is not evidence the state was clean when the run needed it to be.
+	LateCleanups []LateCleanup `json:"lateCleanups,omitempty"`
 }
 
 // Runner executes the generic scenario x defender x trial matrix.
@@ -75,6 +81,11 @@ type Runner struct {
 	// learners memoizes one adaptive Learner per (scenario, defender) arm.
 	learners map[string]*adaptive.Learner
 	outcome  RunOutcome
+	// pending tracks cleanup calls the runner still owns, including ones that
+	// outlived their bound; lateMu guards outcome.LateCleanups, which those
+	// goroutines write to.
+	pending sync.WaitGroup
+	lateMu  sync.Mutex
 }
 
 // NewRunner constructs a runner.
@@ -96,8 +107,15 @@ func NewRunner(opts RunnerOptions, factory EnvFactory, metrics *MetricWriter, on
 
 // Outcome reports what the last Run actually executed. It is the authority on
 // matrix completeness; a caller must not describe the report as a complete
-// matrix when Complete is false.
-func (r *Runner) Outcome() RunOutcome { return r.outcome }
+// matrix when Complete is false. The LateCleanups slice is copied because
+// retained cleanup goroutines keep updating it.
+func (r *Runner) Outcome() RunOutcome {
+	r.lateMu.Lock()
+	defer r.lateMu.Unlock()
+	out := r.outcome
+	out.LateCleanups = append([]LateCleanup(nil), r.outcome.LateCleanups...)
+	return out
+}
 
 func (r *Runner) mirror(format string, args ...any) {
 	if r.onMirror != nil {
@@ -283,25 +301,36 @@ func (r *Runner) runAndRecord(ctx context.Context, s trialSpec) error {
 	}
 	r.outcome.WrittenTrials++
 
-	v := m.MeasurementState()
+	// The runner reads its OWN freshly written row back through the same
+	// validated interpretation every downstream consumer uses, so an anchor can
+	// never rest on a claim the readers would reject.
+	val := m.Validated()
+	v := val.Claim
 	// Record the positive-control observation only when the control trial's whole
 	// lifecycle — including cleanup — is known to be valid. Only kinds that can
 	// serve as a control are recorded; a negative control anchors nothing.
 	if s.isBaseline && s.kind != TrialNegativeControl {
-		if v.Status == MeasurementValid && v.OracleObserved {
+		if val.OracleUsable && v.Cleanup.Complete {
 			s.anchors[anchorKey{s.trial, s.kind}] = anchorObservation{
 				defender: m.Defender, valid: true, oracleAchieved: m.OracleAchieved,
 			}
 		} else {
 			r.mirror("positive control %s/%s trial %d (%s) is NOT usable as an anchor: %s",
-				m.Scenario, m.Defender, m.Trial, v.Kind, m.SkipReason)
+				m.Scenario, m.Defender, m.Trial, val.Kind(), m.SkipReason)
 		}
 	}
 
-	// Unverified cleanup: no later trial may reuse potentially contaminated state.
+	// Unverified cleanup: no later trial may reuse potentially contaminated
+	// state. This covers steps that FAILED and steps that are UNRESOLVED — a
+	// call that outlived its bound may still be mutating the namespace, so it is
+	// at least as disqualifying as one that returned an error.
 	if !v.Cleanup.Complete {
 		var steps string
-		for _, f := range v.Cleanup.Failures() {
+		for _, f := range v.Cleanup.Unfinished() {
+			if f.Unresolved {
+				steps += fmt.Sprintf("; %s: UNRESOLVED after %.1fs (may still be running)", f.Step, f.Seconds)
+				continue
+			}
 			steps += "; " + f.Step + ": " + f.Error
 		}
 		reason := fmt.Sprintf("cleanup did not verify for %s/%s trial %d%s",
@@ -522,6 +551,13 @@ func (t *trialRun) execute(ctx context.Context) {
 // implements DefenseObserver. A missing observer is UNOBSERVED cost, not zero
 // actions; a failing observer is a propagated error, also leaving cost
 // unobserved. Neither may be turned into a favorable efficiency or ROI number.
+//
+// A returned value is only accepted as an OBSERVATION once it is self-consistent
+// (see validateObservation). An observer that reports a negative count, a
+// non-finite or non-positive timestamp, or a timestamp list that disagrees with
+// its own count has not measured anything usable, so the cost stays UNOBSERVED
+// with the contradiction recorded — and the contradictory timings never reach
+// the adaptive learner.
 func (t *trialRun) readDefensiveActions(ctx context.Context) {
 	obs, ok := t.spec.defender.(DefenseObserver)
 	if !ok {
@@ -536,54 +572,211 @@ func (t *trialRun) readDefensiveActions(ctx context.Context) {
 		t.v.note(PhaseObserver, "defense-observer read failed: "+err.Error()+" (cost and timing UNOBSERVED)")
 		return
 	}
+	if problem := validateObservation(c, at); problem != "" {
+		t.env.Log.Logf("defensive-actions read is not a usable observation: %s", problem)
+		t.v.note(PhaseObserver, "defense-observer returned an unusable observation: "+problem+" (cost and timing UNOBSERVED)")
+		return
+	}
 	t.v.CostObserved = true
 	t.actCount, t.actTimes = c, at
 	t.spec.learner.ObserveRotations(at)
 }
 
-// cleanupContext returns a BOUNDED, DETACHED context for cleanup. It is detached
-// so the cleanup owed by the phases already entered is still attempted after the
-// trial context is cancelled, and bounded so there is no unbounded retry.
-func (r *Runner) cleanupContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(ctx), r.opts.CleanupTimeout)
+// validateObservation returns "" when the observer's report can be used as a
+// measurement, or the reason it cannot. It is deliberately strict: an
+// unusable-but-accepted count becomes a cost denominator and an ROI number.
+func validateObservation(count int, atUnix []float64) string {
+	if count < 0 {
+		return fmt.Sprintf("negative defensive-action count %d", count)
+	}
+	for i, ts := range atUnix {
+		switch {
+		case math.IsNaN(ts):
+			return fmt.Sprintf("action timestamp %d is NaN", i)
+		case math.IsInf(ts, 0):
+			return fmt.Sprintf("action timestamp %d is infinite", i)
+		case ts <= 0:
+			return fmt.Sprintf("action timestamp %d is %v, not a positive unix time", i, ts)
+		}
+	}
+	if len(atUnix) > 0 && len(atUnix) != count {
+		return fmt.Sprintf("%d action timestamp(s) contradict the reported count of %d", len(atUnix), count)
+	}
+	return ""
+}
+
+// cleanupParent returns the DETACHED parent context for a trial's cleanup. It is
+// detached so the cleanup owed by the phases already entered is still attempted
+// after the trial context is cancelled. Each individual step is bounded
+// separately (see cleanupStep), so one slow step cannot silently consume the
+// budget of the steps that follow it and make them look unresolved.
+func (r *Runner) cleanupParent(ctx context.Context) context.Context {
+	return context.WithoutCancel(ctx)
 }
 
 // cleanup performs, in reverse order, every teardown owed by a phase this trial
 // actually entered — including after a partial setup/start failure — and retains
-// EVERY attempt and failure. It never touches resources this trial did not own.
+// EVERY attempt, failure and unresolved step. It never touches resources this
+// trial did not own.
+//
+// The bound is enforced on WALL CLOCK, not merely by handing a plugin a context
+// with a deadline. A plugin may ignore its context, and env.Close takes none at
+// all, so each step is waited on with a timeout: if it does not return in time
+// the step is recorded UNRESOLVED, the run is stopped, and the still-running
+// call is retained (see Runner.PendingCleanup) rather than abandoned. A late
+// return does NOT retroactively make the trial clean.
 func (t *trialRun) cleanup(ctx context.Context) {
-	cctx, cancel := t.r.cleanupContext(ctx)
-	defer cancel()
+	parent := t.r.cleanupParent(ctx)
 
 	if t.owedScenarioTeardown {
-		t.cleanupStep("scenario.Teardown", func() error { return t.spec.scenario.Teardown(cctx, t.env) })
+		t.cleanupStep(parent, "scenario.Teardown", func(c context.Context) error { return t.spec.scenario.Teardown(c, t.env) })
 	}
 	if t.owedDefenderStop {
-		t.cleanupStep("defender.Stop", func() error { return t.spec.defender.Stop(cctx, t.env) })
+		t.cleanupStep(parent, "defender.Stop", func(c context.Context) error { return t.spec.defender.Stop(c, t.env) })
 	}
 	if t.owedDefenderTeardown {
-		t.cleanupStep("defender.Teardown", func() error { return t.spec.defender.Teardown(cctx, t.env) })
+		t.cleanupStep(parent, "defender.Teardown", func(c context.Context) error { return t.spec.defender.Teardown(c, t.env) })
 	}
 	if t.closeEnv != nil {
-		t.cleanupStep("env.Close", t.closeEnv)
+		// env.Close is a context-free callback owned by the cmd wiring. It is
+		// bounded here the only way it can be: by waiting on it, not by trusting
+		// it to observe a deadline it never receives.
+		t.cleanupStep(parent, "env.Close", func(context.Context) error { return t.closeEnv() })
 	}
 
-	t.v.Cleanup.Complete = len(t.v.Cleanup.Failures()) == 0
+	unfinished := t.v.Cleanup.Unfinished()
+	for _, s := range unfinished {
+		if s.Unresolved {
+			t.v.Cleanup.Unresolved = true
+		}
+	}
+	t.v.Cleanup.Complete = len(unfinished) == 0
+	// Verified is only claimed when every owed step is known to have finished
+	// cleanly. The cleanup helpers themselves verify absence of owned objects
+	// (see Env.CleanupOwned); an error from any of them lands above.
+	t.v.Cleanup.Verified = t.v.Cleanup.Complete
 	if !t.v.Cleanup.Complete {
-		t.v.fail(PhaseCleanup, fmt.Sprintf("%d owed cleanup step(s) failed; trial state is unverified", len(t.v.Cleanup.Failures())))
+		t.v.fail(PhaseCleanup, fmt.Sprintf(
+			"%d owed cleanup step(s) did not finish cleanly (%d failed, %d unresolved past the %s per-step bound); trial state is unverified",
+			len(unfinished), len(t.v.Cleanup.Failures()), len(unfinished)-len(t.v.Cleanup.Failures()), t.r.opts.CleanupTimeout))
 	}
 }
 
-func (t *trialRun) cleanupStep(name string, fn func() error) {
+// cleanupStep runs one owed cleanup call under its OWN wall-clock bound.
+//
+// The step is given a context carrying the deadline (so a cooperative plugin can
+// observe it) AND is waited on with the same bound (so an uncooperative one —
+// including the context-free env.Close callback — cannot outlast it unnoticed).
+// A step that does not return in time is recorded UNRESOLVED and the runner
+// keeps ownership of the still-running call: the run stops, the caller can drain
+// it with Runner.WaitForPendingCleanup, and its late result is retained in the
+// run outcome instead of being silently discarded.
+func (t *trialRun) cleanupStep(parent context.Context, name string, fn func(context.Context) error) {
 	step := CleanupStep{Step: name}
-	if err := fn(); err != nil {
-		step.Error = err.Error()
-		if t.env != nil {
-			t.env.Log.Logf("%s error: %v", name, err)
+	started := time.Now()
+	cctx, cancel := context.WithTimeout(parent, t.r.opts.CleanupTimeout)
+	// Buffered so the worker can always deliver its result and exit, even after
+	// the bound has elapsed and nobody is waiting yet.
+	done := make(chan error, 1)
+	go func() {
+		defer cancel()
+		done <- fn(cctx)
+	}()
+
+	timer := time.NewTimer(t.r.opts.CleanupTimeout)
+	defer timer.Stop()
+
+	select {
+	case err := <-done:
+		step.Seconds = time.Since(started).Seconds()
+		if err != nil {
+			step.Error = err.Error()
+			if t.env != nil {
+				t.env.Log.Logf("%s error: %v", name, err)
+			}
+			t.r.mirror("CLEANUP FAILED %s/%s trial %d: %s: %v", t.m.Scenario, t.m.Defender, t.m.Trial, name, err)
 		}
-		t.r.mirror("CLEANUP FAILED %s/%s trial %d: %s: %v", t.m.Scenario, t.m.Defender, t.m.Trial, name, err)
+	case <-timer.C:
+		step.Seconds = time.Since(started).Seconds()
+		step.Unresolved = true
+		step.Error = ""
+		if t.env != nil {
+			t.env.Log.Logf("%s did not return within the %s cleanup bound: UNRESOLVED, it may still be running", name, t.r.opts.CleanupTimeout)
+		}
+		t.r.mirror("CLEANUP UNRESOLVED %s/%s trial %d: %s exceeded the %s bound and may still be running",
+			t.m.Scenario, t.m.Defender, t.m.Trial, name, t.r.opts.CleanupTimeout)
+		// Ownership is retained: the runner keeps waiting on the abandoned call
+		// so its eventual result is recorded rather than lost.
+		t.r.retainLateCleanup(t.m, name, started, done)
 	}
 	t.v.Cleanup.Attempted = append(t.v.Cleanup.Attempted, step)
+}
+
+// LateCleanup records a cleanup call that outlived its bound, together with the
+// result it eventually produced (if it produced one before the run reported).
+type LateCleanup struct {
+	Scenario string  `json:"scenario"`
+	Defender string  `json:"defender"`
+	Trial    int     `json:"trial"`
+	Step     string  `json:"step"`
+	Seconds  float64 `json:"seconds"`
+	Error    string  `json:"error,omitempty"`
+	// Returned is false while the call is STILL RUNNING: its resources are still
+	// owned by this run and their state is unknown.
+	Returned bool `json:"returned"`
+}
+
+// retainLateCleanup is called ONLY for a step that outlived its bound. It
+// records the unresolved step immediately — so it is visible even if the call
+// never returns — and keeps waiting on it so the eventual result is captured
+// instead of abandoned. The decision is taken by the waiter, never by the
+// worker, so a step that resolved in time is never mistaken for a late one.
+//
+// A late result NEVER upgrades the trial that already reported: that row was
+// written while the state was unknown, and it stays unresolved.
+func (r *Runner) retainLateCleanup(m Metric, step string, started time.Time, done <-chan error) {
+	r.lateMu.Lock()
+	idx := len(r.outcome.LateCleanups)
+	r.outcome.LateCleanups = append(r.outcome.LateCleanups, LateCleanup{
+		Scenario: m.Scenario, Defender: m.Defender, Trial: m.Trial, Step: step,
+		Seconds: time.Since(started).Seconds(), Returned: false,
+	})
+	r.lateMu.Unlock()
+
+	r.pending.Add(1)
+	go func() {
+		defer r.pending.Done()
+		err := <-done
+		r.lateMu.Lock()
+		defer r.lateMu.Unlock()
+		r.outcome.LateCleanups[idx].Returned = true
+		r.outcome.LateCleanups[idx].Seconds = time.Since(started).Seconds()
+		if err != nil {
+			r.outcome.LateCleanups[idx].Error = err.Error()
+		}
+	}()
+}
+
+// WaitForPendingCleanup blocks until every cleanup call the runner still owns
+// has returned, or until the timeout elapses. It returns the number of late
+// cleanups recorded. Callers use it to avoid abandoning work that outlived its
+// bound; it does NOT make an unresolved trial clean. A non-zero return after the
+// timeout means cleanup is still running and its resources are still owned.
+func (r *Runner) WaitForPendingCleanup(timeout time.Duration) int {
+	drained := make(chan struct{})
+	go func() {
+		r.pending.Wait()
+		close(drained)
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-drained:
+	case <-timer.C:
+	}
+	r.lateMu.Lock()
+	defer r.lateMu.Unlock()
+	return len(r.outcome.LateCleanups)
 }
 
 // finalize stamps the raw observations, resolves the positive control and — only

@@ -27,11 +27,14 @@ type ArmKey struct {
 	Defender string
 }
 
-// Negative-control states. "unobserved" and "not-run" must never be rendered as
-// a measured zero false defensive moves.
+// Negative-control states. Only "observed" — EVERY negative-control row of the
+// arm usable — can establish a measured zero false defensive moves. "not-run",
+// "unobserved" and "partial" must never be rendered as a measured zero: a clean
+// maximum over a subset says nothing about the trials that were not observed.
 const (
 	NegControlNotRun     = "not-run"
 	NegControlUnobserved = "unobserved"
+	NegControlPartial    = "partial"
 	NegControlObserved   = "observed"
 )
 
@@ -48,21 +51,34 @@ type ArmValidity struct {
 	CleanupFailed  int
 	CostUnobserved int
 	Legacy         int
-	Reasons        []string
+	// Unverified counts rows this build cannot interpret or whose validity
+	// evidence contradicts itself (unknown version/kind/status, `scored` claimed
+	// without a usable control, cleanup or oracle). They are counted here so they
+	// stay visible instead of disappearing from every bucket.
+	Unverified int
+	Reasons    []string
 }
 
+// addReason appends each distinct, non-empty reason, skipping duplicates. Every
+// reason is considered independently: a reason that repeats must never suppress
+// the DISTINCT reasons supplied after it, or a later cleanup failure vanishes
+// behind an earlier oracle failure.
 func (a *ArmValidity) addReason(reasons ...string) {
 	for _, r := range reasons {
-		if r == "" {
+		if r == "" || a.hasReason(r) {
 			continue
-		}
-		for _, seen := range a.Reasons {
-			if seen == r {
-				return
-			}
 		}
 		a.Reasons = append(a.Reasons, r)
 	}
+}
+
+func (a *ArmValidity) hasReason(r string) bool {
+	for _, seen := range a.Reasons {
+		if seen == r {
+			return true
+		}
+	}
+	return false
 }
 
 // Complete reports whether every emitted row of the arm was scored.
@@ -91,10 +107,17 @@ type ArmSummary struct {
 	OracleAchievedPct    float64
 	OracleObservedTrials int
 	// NegFalseMovesMax is the max false defensive moves observed by the arm's
-	// no-attack negative control. It is `-1` when NegativeControl is not
-	// `observed`, so the field alone can never be read as a measured zero.
+	// no-attack negative control. It is `-1` unless NegativeControl is exactly
+	// `observed` (EVERY negative-control row usable), so the field alone can
+	// never be read as a measured zero.
 	NegFalseMovesMax int
 	NegativeControl  string
+	// NegControlTotal/Usable/Unusable are the complete negative-control census
+	// behind that state, so a partially observed arm is disclosed rather than
+	// summarised away.
+	NegControlTotal    int
+	NegControlUsable   int
+	NegControlUnusable int
 	// AnchorOnly marks a force-included positive-control arm.
 	AnchorOnly bool
 	// ControlDefender is the positive control the scored rows anchored to.
@@ -129,11 +152,27 @@ type armAcc struct {
 	oracleHits, oracleObserved       int
 	category                         core.Category
 	r6                               core.R6Tag
-	negState                         string
+	negTotal, negUsable, negUnusable int
 	negFalseMax                      int
 	control                          string
 	validity                         ArmValidity
 	skipReason                       string
+}
+
+// negState derives the negative-control state from the COMPLETE census of the
+// arm's negative-control rows. A clean maximum over a usable subset does not
+// establish a clean arm, so any unusable row demotes `observed` to `partial`.
+func (a *armAcc) negState() string {
+	switch {
+	case a.negTotal == 0:
+		return NegControlNotRun
+	case a.negUsable == 0:
+		return NegControlUnobserved
+	case a.negUnusable > 0:
+		return NegControlPartial
+	default:
+		return NegControlObserved
+	}
 }
 
 func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anchorOnly bool) []ArmSummary {
@@ -145,7 +184,7 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		if !ok {
 			// negFalseMax starts at -1 (UNOBSERVED) so an arm that never observed a
 			// negative control can never present a zero.
-			a = &armAcc{category: m.Category, r6: m.R6Tag, negState: NegControlNotRun, negFalseMax: -1}
+			a = &armAcc{category: m.Category, r6: m.R6Tag, negFalseMax: -1}
 			byArm[k] = a
 			order = append(order, k)
 		}
@@ -156,29 +195,37 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		if m.AnchorOnly != anchorOnly {
 			continue
 		}
-		v := m.MeasurementState()
-		rowKind := m.Kind()
+		// One validated interpretation for every consumer: the row's own claims
+		// are never trusted on their own.
+		val := m.Validated()
+		v := val.Claim
+		rowKind := val.Kind()
+		if m.IsLegacy() && m.NegativeControl {
+			rowKind = core.TrialNegativeControl
+		}
 
 		if rowKind == core.TrialNegativeControl {
-			// The negative control belongs to the ordinary view of its arm.
+			// The negative control belongs to the ordinary view of its arm. EVERY
+			// negative-control row is counted, so a failed or legacy control cannot
+			// hide behind a clean sibling.
 			if kind != core.TrialOrdinary {
 				continue
 			}
 			a := touch(m)
+			a.negTotal++
 			switch {
-			case m.IsLegacy():
-				if a.negState != NegControlObserved {
-					a.negState = NegControlUnobserved
-				}
+			case val.Legacy:
+				a.negUnusable++
 				a.validity.addReason("negative control is a legacy/unverified row: its false-move count is not evidence of a measurement")
-			case v.Status != core.MeasurementValid || !v.CostObserved:
-				if a.negState != NegControlObserved {
-					a.negState = NegControlUnobserved
-				}
+			case !val.CostUsable || v.Status != core.MeasurementValid || val.Unverified:
+				a.negUnusable++
 				a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
-				a.validity.addReason(v.Reasons...)
+				a.validity.addReason(val.Reasons()...)
+			case m.FalseDefensiveActions < 0:
+				a.negUnusable++
+				a.validity.addReason("negative control reports the UNOBSERVED sentinel for false defensive moves")
 			default:
-				a.negState = NegControlObserved
+				a.negUsable++
 				if m.FalseDefensiveActions > a.negFalseMax {
 					a.negFalseMax = m.FalseDefensiveActions
 				}
@@ -191,12 +238,12 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 
 		a := touch(m)
 		a.validity.Emitted++
-		if m.IsLegacy() {
+		if val.Legacy {
 			a.validity.Legacy++
-			a.validity.addReason(v.Reasons...)
+			a.validity.addReason(val.Reasons()...)
 			continue
 		}
-		if !v.CostObserved {
+		if !val.CostUsable {
 			a.validity.CostUnobserved++
 		}
 		if !v.Cleanup.Complete {
@@ -205,17 +252,27 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		if v.Baseline.Defender != "" && a.control == "" {
 			a.control = v.Baseline.Defender
 		}
-		switch v.Status {
+		// A row this build cannot interpret, or whose evidence contradicts
+		// itself, is UNVERIFIED: visible, counted, explained, never scored.
+		if val.Unverified {
+			a.validity.Unverified++
+			a.validity.addReason(val.Reasons()...)
+			if a.skipReason == "" {
+				a.skipReason = "UNVERIFIED: " + firstNonEmpty(val.Rejections)
+			}
+			continue
+		}
+		switch val.Status() {
 		case core.MeasurementInvalid:
 			a.validity.Invalid++
-			a.validity.addReason(v.Reasons...)
+			a.validity.addReason(val.Reasons()...)
 			if a.skipReason == "" {
 				a.skipReason = m.SkipReason
 			}
 			continue
 		case core.MeasurementSkipped:
 			a.validity.Skipped++
-			a.validity.addReason(v.Reasons...)
+			a.validity.addReason(val.Reasons()...)
 			if a.skipReason == "" {
 				a.skipReason = m.SkipReason
 			}
@@ -223,15 +280,16 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		}
 		// Valid measurement: its oracle observation counts even when the
 		// comparison could not be anchored.
-		if v.OracleObserved {
+		if val.OracleUsable {
 			a.oracleObserved++
 			if m.OracleAchieved {
 				a.oracleHits++
 			}
 		}
-		if !v.Scored {
+		if !val.Scorable {
 			a.validity.UnscoredValid++
 			a.validity.addReason(v.UnscoredReason)
+			a.validity.addReason(val.Rejections...)
 			if a.skipReason == "" {
 				a.skipReason = v.UnscoredReason
 			}
@@ -242,7 +300,7 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		a.dwell = append(a.dwell, m.AttackerDwellSeconds)
 		a.tta = append(a.tta, m.TimeToActionSeconds)
 		a.evr = append(a.evr, m.EvidenceRetention)
-		if v.CostObserved {
+		if val.CostUsable {
 			// Efficiency is only defined against an OBSERVED cost.
 			a.spc = append(a.spc, m.SecurityPerCost)
 		} else {
@@ -269,13 +327,18 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 			EvidenceRetention:    core.ConfidenceInterval(a.evr, ciLevel),
 			OracleObservedTrials: a.oracleObserved,
 			NegFalseMovesMax:     a.negFalseMax,
-			NegativeControl:      a.negState,
+			NegativeControl:      a.negState(),
+			NegControlTotal:      a.negTotal,
+			NegControlUsable:     a.negUsable,
+			NegControlUnusable:   a.negUnusable,
 			AnchorOnly:           anchorOnly,
 			ControlDefender:      a.control,
 			Validity:             a.validity,
 		}
-		if a.negState != NegControlObserved {
-			s.NegFalseMovesMax = -1 // UNOBSERVED / not run — never a measured zero
+		if s.NegativeControl != NegControlObserved {
+			// UNOBSERVED / partial / not run — never a measured zero. A maximum over
+			// a usable subset cannot establish a clean arm.
+			s.NegFalseMovesMax = -1
 		}
 		if a.oracleObserved > 0 {
 			s.OracleAchievedPct = 100 * float64(a.oracleHits) / float64(a.oracleObserved)
@@ -422,6 +485,20 @@ func renderArmTable(summaries []ArmSummary) string {
 	return b.String()
 }
 
+// armAccounting is the one-line, complete census of an arm: every emitted row is
+// in exactly one bucket, and the negative-control census is disclosed beside it
+// so a partially observed control cannot pass as a clean one.
+func armAccounting(s ArmSummary) string {
+	v := s.Validity
+	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+		s.NegativeControl, s.NegControlUsable, s.NegControlTotal)
+	if !v.Complete() {
+		acct = "INCOMPLETE " + acct
+	}
+	return acct
+}
+
 func renderValidityTable(title string, summaries []ArmSummary) string {
 	if len(summaries) == 0 {
 		return ""
@@ -430,14 +507,9 @@ func renderValidityTable(title string, summaries []ArmSummary) string {
 	b.WriteString("## " + title + "\n\n")
 	b.WriteString("| Scenario | Defender | Accounting | Control | Reasons |\n|---|---|---|---|---|\n")
 	for _, s := range summaries {
-		v := s.Validity
-		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d cleanupFailed=%d costUnobserved=%d legacy=%d",
-			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.CleanupFailed, v.CostUnobserved, v.Legacy)
-		if !v.Complete() {
-			acct = "INCOMPLETE " + acct
-		}
+		acct := armAccounting(s)
 		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
-			s.Scenario, s.Defender, acct, dash(s.ControlDefender), truncate(strings.Join(v.Reasons, " · "), 220)))
+			s.Scenario, s.Defender, acct, dash(s.ControlDefender), truncate(strings.Join(s.Validity.Reasons, " · "), 260)))
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -455,14 +527,14 @@ func r6Grounding(metrics []core.Metric) []string {
 	best := map[string]note{}
 	var order []string
 	for _, m := range metrics {
-		v := m.MeasurementState()
+		observed := m.Validated().OracleUsable
 		cur, seen := best[m.Scenario]
 		if !seen {
 			order = append(order, m.Scenario)
-			best[m.Scenario] = note{tag: m.R6Tag, state: m.ObservedState, observed: v.OracleObserved}
+			best[m.Scenario] = note{tag: m.R6Tag, state: m.ObservedState, observed: observed}
 			continue
 		}
-		if !cur.observed && v.OracleObserved {
+		if !cur.observed && observed {
 			best[m.Scenario] = note{tag: m.R6Tag, state: m.ObservedState, observed: true}
 		}
 	}
@@ -496,7 +568,9 @@ func renderMTDEffectTable(metrics []core.Metric) string {
 		if m.Kind() != core.TrialOrdinary || m.AnchorOnly || m.IsLegacy() {
 			continue
 		}
-		if m.MeasurementState().Status != core.MeasurementValid {
+		// A MEASURED effect requires an interpretable, valid row: an unverified
+		// or contradictory one never contributes an MTD verdict.
+		if val := m.Validated(); val.Unverified || val.Status() != core.MeasurementValid {
 			continue
 		}
 		if m.SplitOracle == "" && m.MTDEffect == "" {
@@ -536,17 +610,29 @@ func oraclePct(s ArmSummary) string {
 	return fmt.Sprintf("%.0f%% (n=%d)", s.OracleAchievedPct, s.OracleObservedTrials)
 }
 
-// negCell renders the negative-control column. An unrun or unobserved control is
-// NEVER rendered as 0.
+// negCell renders the negative-control column. An unrun, unobserved or PARTIALLY
+// observed control is NEVER rendered as 0.
 func negCell(s ArmSummary) string {
 	switch s.NegativeControl {
 	case NegControlObserved:
-		return fmt.Sprintf("%d", s.NegFalseMovesMax)
+		return fmt.Sprintf("%d (n=%d)", s.NegFalseMovesMax, s.NegControlUsable)
+	case NegControlPartial:
+		return fmt.Sprintf("n/a (partial: %d of %d observed)", s.NegControlUsable, s.NegControlTotal)
 	case NegControlUnobserved:
-		return "n/a (unobserved)"
+		return fmt.Sprintf("n/a (unobserved: 0 of %d)", s.NegControlTotal)
 	default:
 		return "n/a (not run)"
 	}
+}
+
+// firstNonEmpty returns the first non-empty string, or "" .
+func firstNonEmpty(xs []string) string {
+	for _, x := range xs {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
 }
 
 func pctCI(a core.Aggregate) string {

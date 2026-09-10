@@ -141,20 +141,64 @@ Rules the runner and every report enforce:
   anchor-only baseline) the row is UNSCORED with an explicit missing-control
   reason and never borrows an ordinary baseline.
 - **Unobserved cost is not zero cost.** No `securityPerCost`, `roi` or
-  `schwartau` is derived when `costObserved` is false.
-- **Cleanup owed by every entered phase is always attempted** — on a bounded,
-  detached context, so it still runs after cancellation. A cleanup that does not
-  verify invalidates the trial, clears its derived values, and stops the run
-  before another trial can reuse unverified state.
+  `schwartau` is derived when `costObserved` is false. An observer result is only
+  accepted as an observation once it is self-consistent: a negative count, a
+  non-finite or non-positive timestamp, or a timestamp list that disagrees with
+  its own count leaves the cost UNOBSERVED with the contradiction recorded.
+- **Cleanup owed by every entered phase is always attempted** — on a detached
+  context, so it still runs after cancellation, and under a per-step WALL-CLOCK
+  bound, because a plugin may ignore its deadline and `env.Close` never receives
+  one. A cleanup that does not verify invalidates the trial, clears its derived
+  values, and stops the run before another trial can reuse unverified state.
+- **An unresolved cleanup is not a failed one and not a clean one.** A step that
+  outlives its bound is recorded `unresolved`: it may still be running, so the
+  runner keeps ownership of it (`Runner.WaitForPendingCleanup`,
+  `RunOutcome.LateCleanups`) instead of abandoning it, and a late success never
+  retroactively marks the already-reported trial clean.
+- **Deletion accepted is not absence observed.** `Env.CleanupOwned` aggregates
+  every API failure across every kind and then VERIFIES the owned objects are
+  gone; residue — including objects held by a finalizer — is an error, so no
+  later trial reuses a namespace whose previous contents are still there.
 - **Legacy rows stay legacy.** A metrics file written before this contract still
   decodes; those rows are counted and displayed as `legacy-unverified` and
   excluded from certified scores. Nothing is inferred from their zero fields and
   no historical file is rewritten.
 
+### A decoded validity block is a CLAIM, not a verdict
+
+A metrics file is an untrusted input: it may come from a newer or older harness,
+or have been edited or truncated. `Metric.Validated()` is the ONE place those
+claims are checked — against this build's supported contract and against each
+other — and it is what `IsScored`, `CostObserved`, `Kind`, every aggregator,
+every reader and the provenance map use. Nothing consults `scored` directly.
+
+A row is refused, and reported as `unverified`, when its `version`, `kind` or
+`status` is not one this build understands, or when it claims `scored` while its
+own fields say the status is not valid, the oracle was never observed, cleanup
+did not verify or is unresolved, the positive control is unusable or unnamed, the
+trial is a negative control, or `disruptionVsOracle` is outside `[0,1]`. A claimed
+`costObserved` is refused against a `-1` action count or a non-finite time. A row
+whose evidence contradicts itself contributes nothing at all — but it never
+disappears: it is counted and its rejections are rendered.
+
 The aggregate and both reports publish `emitted / scored / invalid / skipped /
-unscored / cleanupFailed / costUnobserved / legacy` counts per arm, so an arm
-with one valid and one invalid trial can never look like a complete one-trial
-result, and an arm with nothing measurable renders `n/a` rather than `0`.
+unscored / unverified / cleanupFailed / costUnobserved / legacy` counts per arm
+plus the negative-control census, so an arm with one valid and one invalid trial
+can never look like a complete one-trial result, and an arm with nothing
+measurable renders `n/a` rather than `0`.
+
+**Negative controls are counted completely.** `not-run`, `unobserved`, `partial`
+and `observed` are distinct states. Only `observed` — EVERY negative-control row
+of the arm usable — publishes a measured false-move maximum; a clean maximum over
+a usable subset cannot establish a clean arm, so `partial` renders
+`n/a (partial: k of n observed)` and the hypothesis section carries an explicit
+caveat that no verdict establishes an absence of false defensive moves.
+
+The downstream product readers (`phorvex/cmd/p3report`, `phorvex/cmd/p3deep`,
+`phorvex/internal/console`) consume this same contract: they repeat the
+corroboration rather than trusting `scored`, exclude refused rows, never average
+a `-1` cost, and disclose legacy/partial-control corpora instead of publishing
+them as measurements.
 
 **Comparison scope (honest limit).** `TrialSeed` includes the defender identity,
 so the baseline arm's trial *i* and a defended arm's trial *i* are seeded

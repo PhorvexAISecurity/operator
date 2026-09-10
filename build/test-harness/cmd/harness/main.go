@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -31,6 +32,11 @@ import (
 	_ "github.com/r6security/phoenix-test-harness/defenders"
 	_ "github.com/r6security/phoenix-test-harness/scenarios"
 )
+
+// cleanupBudget bounds the owned cleanup this command performs per trial and at
+// final teardown. It matches core.DefaultCleanupTimeout so the closer cannot
+// outlive the bound the runner is already enforcing on it.
+const cleanupBudget = core.DefaultCleanupTimeout
 
 func main() {
 	cfgPath := flag.String("config", "", "path to the per-target config (YAML/JSON). REQUIRED.")
@@ -186,8 +192,19 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		}
 		closer := func() error {
 			// Per-trial owned cleanup (idempotent), then close the logger.
-			_ = env.CleanupOwned(ctx, false)
-			return closeLogger(tl)
+			//
+			// The cleanup runs on a DETACHED, BOUNDED context: detached so the
+			// cleanup owed by this trial is still attempted when the run context
+			// has been cancelled, bounded so an unresponsive apiserver cannot make
+			// the closer hang past the runner's own cleanup bound. Both the
+			// cleanup error and the logger-close error are PROPAGATED and
+			// aggregated — a swallowed cleanup failure here is exactly how a dirty
+			// namespace used to be reported as clean.
+			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
+			defer cancel()
+			cleanupErr := env.CleanupOwned(cctx, false)
+			logErr := closeLogger(tl)
+			return errors.Join(cleanupErr, logErr)
 		}
 		return env, closer, nil
 	}
@@ -215,10 +232,33 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 		fmt.Fprintf(os.Stderr, "RUN INCOMPLETE: %v\n", runErr)
 	}
 
-	// 7) Final teardown: remove the sandbox namespace + all owned objects.
+	// 6b) Do not abandon cleanup the runner still owns. A call that outlived its
+	// bound may still be mutating the namespace; drain it (bounded) and report
+	// whatever it eventually returned. Draining does NOT make an unresolved trial
+	// clean — the row and the run outcome keep saying it is unresolved.
+	if late := runner.WaitForPendingCleanup(cleanupBudget); late > 0 {
+		outcome = runner.Outcome()
+		fmt.Fprintf(os.Stderr, "WARN: %d cleanup call(s) outlived their bound; their trials remain UNRESOLVED:\n", late)
+		for _, l := range outcome.LateCleanups {
+			fmt.Fprintf(os.Stderr, "  %s/%s trial %d %s returned after %.1fs (err=%q)\n",
+				l.Scenario, l.Defender, l.Trial, l.Step, l.Seconds, l.Error)
+		}
+	}
+
+	// 7) Final teardown: remove the sandbox namespace + all owned objects. Its
+	// failures are reported, never swallowed: an incomplete final teardown leaves
+	// the cluster dirty for the NEXT run.
 	if env, closer, ferr := factory("final", "teardown", -1, 0, filepath.Join(outDir, "raw", "final_teardown.log")); ferr == nil {
-		_ = env.CleanupOwned(ctx, true)
-		_ = closer()
+		fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupBudget)
+		if err := env.CleanupOwned(fctx, true); err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: final teardown did not verify: %v\n", err)
+		}
+		fcancel()
+		if err := closer(); err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: final teardown closer did not verify: %v\n", err)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "WARN: final teardown could not build an environment: %v\n", ferr)
 	}
 
 	// 8) Reports + provenance.

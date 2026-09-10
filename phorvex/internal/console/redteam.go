@@ -92,8 +92,12 @@ func (s *Server) redteamCurves(w http.ResponseWriter, r *http.Request) {
 type rtCampaignArm struct {
 	Arm        string  `json:"arm"`
 	Disruption float64 `json:"disruption"`
-	Actions    float64 `json:"defensiveActions"`
-	N          int     `json:"n"`
+	// Actions is the mean defensive-action count over the trials whose cost was
+	// actually OBSERVED; ActionsN is how many those were. When ActionsN is 0 the
+	// cost was never measured and Actions is -1, never 0.
+	Actions  float64 `json:"defensiveActions"`
+	ActionsN int     `json:"defensiveActionsObserved"`
+	N        int     `json:"n"`
 }
 type rtCampaign struct {
 	Scenario string          `json:"scenario"`
@@ -116,6 +120,12 @@ func (s *Server) redteamCampaigns(w http.ResponseWriter, r *http.Request) {
 		if m.NegativeControl || m.Skipped {
 			continue
 		}
+		// A row the harness measurement-validity contract refuses (failed
+		// oracle/stimulus, unanchored comparison, unresolved cleanup) is not a
+		// campaign result and never reaches a panel.
+		if m.excluded() {
+			continue
+		}
 		p := "k8s"
 		if strings.HasPrefix(m.Scenario, "ai") {
 			p = "ai"
@@ -130,7 +140,11 @@ func (s *Server) redteamCampaigns(w http.ResponseWriter, r *http.Request) {
 			agg[m.Scenario][m.Defender] = a
 		}
 		a.Disruption += m.DisruptionVsOracle
-		a.Actions += float64(m.DefensiveActions)
+		// An UNOBSERVED cost is not a zero cost and never enters the mean.
+		if m.costUsable() {
+			a.Actions += float64(m.DefensiveActions)
+			a.ActionsN++
+		}
 		a.N++
 	}
 	armOrder := []string{"d-nomtd", "d-phorvex", "d-fullphoenix", "d-r6blindtimer", "d-randomequal", "d-reactive-only"}
@@ -146,7 +160,11 @@ func (s *Server) redteamCampaigns(w http.ResponseWriter, r *http.Request) {
 			if a := agg[sc][an]; a != nil {
 				if a.N > 0 {
 					a.Disruption /= float64(a.N)
-					a.Actions /= float64(a.N)
+				}
+				if a.ActionsN > 0 {
+					a.Actions /= float64(a.ActionsN)
+				} else {
+					a.Actions = -1 // UNOBSERVED, never a measured zero cost
 				}
 				c.Arms = append(c.Arms, *a)
 			}
