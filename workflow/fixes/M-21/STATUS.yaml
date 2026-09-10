@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,14 @@ checks:
     at: '2026-09-10T13:07:56+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 5a087fee4c61f56a7681a0d5447f6a4af62428cde7d589578aa652a427987da8
+    source_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
+    at: '2026-09-10T14:24:23+00:00'
+    baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
 fix_id: M-21
 issues:
 - M-21
@@ -44,7 +52,7 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: parallel/contract-m021-actuator-selection-repertoire
-  base_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
+  base_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
   head_sha: 7dc07cd6c1edce7dcb6d10b359b094c4b3a96671
   stacked_on: []
 pull_request:
@@ -85,7 +93,7 @@ next_action:
   owner: implementer
   action: 'Claude worker: retain the baseline reproduction, implement signed 03-decision.md,
     run required preflight and submit-review to codex-lead; no further proposal gate.'
-updated_at: '2026-09-10T13:51:40+00:00'
+updated_at: '2026-09-10T14:24:23+00:00'
 configuration_history:
 - at: '2026-09-10T12:58:22+00:00'
   by: codex-lead
@@ -109,6 +117,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-10T14:23:44+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -126,3 +139,12 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: base_review
+  result: PASS
+  by: codex-lead
+  artifact: evidence/base-review.md
+  sha256: 5a087fee4c61f56a7681a0d5447f6a4af62428cde7d589578aa652a427987da8
+  source_sha: 27e879aa6605ce38da6b1d2f18c5333b5bc3b2b9
+  at: '2026-09-10T14:23:44+00:00'
+  baseline_sha: f0348b36e12d751a84ffdac1414c6ff6952d2ee1
