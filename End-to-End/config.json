@@ -33,8 +33,8 @@
     "stream_seconds": 12,
     "post_attack_seconds": 45,
     "settle_seconds": 6,
-    "_max_bytes_comment": "Full decision traces exhausted 8 MB in ~36s on EKS; budget 16 MB for the bounded 51s live observation, still fail explicitly if exhausted.",
-    "max_bytes": 16000000
+    "_max_bytes_comment": "Measured on EKS with 13 tenants (dev+prod): the unfiltered operator stream runs ~413 KB/s (~229 KB per decision, full DecisionTraceV2), so the 51s post-attack window plus the fire callback needs ~22 MB and 16 MB was exhausted at ~37s. The post-attack capture is now namespace-scoped (~13x smaller), but the cap must still cover an unfiltered stream against a console that predates ?namespace=. 64 MB = ~155s at the measured rate; still fail explicitly if exhausted.",
+    "max_bytes": 64000000
   },
   "invariants": {
     "net_identity_tolerance": 0.005,

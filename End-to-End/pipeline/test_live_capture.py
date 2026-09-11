@@ -73,6 +73,21 @@ time.sleep(10)
         self.assertEqual(malformed, 0)
         self.assertEqual(called, [True])
         self.assertIn("timeout 135", t.cmd)
+        self.assertNotIn("namespace=", t.cmd)
+
+    def test_console_scopes_capture_to_namespace_server_side(self):
+        # The post-attack capture asks the console for ONE namespace so the byte cap
+        # is not exhausted by every other tenant's full decision traces.
+        class FakeTransport:
+            def capture_live(self, cmd, seconds, max_bytes, on_connected):
+                self.cmd = cmd
+                on_connected()
+                return ': connected\n\ndata: {"action":"rotate","namespace":"voice-prod"}\n\n'
+        t = FakeTransport()
+        records, _ = Console(t, {"mode": "kubectl-proxy"}).stream_decisions(
+            45, 8000000, lambda: None, namespace="voice-prod")
+        self.assertEqual(records, [{"action": "rotate", "namespace": "voice-prod"}])
+        self.assertIn("/api/live?lens=operator&tail=1&namespace=voice-prod", t.cmd)
 
 
 if __name__ == "__main__":

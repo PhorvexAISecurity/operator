@@ -298,9 +298,13 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
             ctx.attack_fired = True
 
         log("\n[2/6] opening audit stream before injection (waiting for readiness heartbeat)")
+        # Scoped to the target namespace: the post-attack checks (A05) only read records
+        # from the namespace that was attacked, and the unfiltered cluster-wide stream is
+        # what exhausted the byte cap mid-window. The baseline at [1/6] stays cluster-wide
+        # so the schema/invariant checks still see every tenant.
         captured_post, _ = console.stream_decisions(
             cap["post_attack_seconds"] + cap["settle_seconds"], cap["max_bytes"],
-            on_connected=fire_when_stream_ready)
+            on_connected=fire_when_stream_ready, namespace=ctx.target["namespace"])
         log(str(attack_response)[:300], 1)
         # The console answers 200-with-error for an unarmed namespace and 503 when no
         # attackable pod is left, so "did it fire" is a field, not an HTTP code.
