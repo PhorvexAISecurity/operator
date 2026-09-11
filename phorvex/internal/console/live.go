@@ -88,8 +88,19 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		}
 		return p.TenantWildcard() || p.AllowsTenant(rec.Tenant)
 	}
+	// ?namespace=<ns> narrows the investor/operator stream to one namespace. It is a volume
+	// control, not an access control: it only drops records inScope already lets the caller
+	// read, and it never widens anything. The E2E post-attack capture uses it — on a cluster
+	// with a dozen tenants the unfiltered stream runs at hundreds of KB/s (each decision
+	// carries its full trace) and exhausts the pipeline's byte cap before the observation
+	// window ends, while the checks only read the target namespace. The owner lens ignores it:
+	// its tenant scope stays fail-closed and is never widened or replaced.
+	namespace := r.URL.Query().Get("namespace")
+	inNamespace := func(rec audit.Record) bool {
+		return lens == "owner" || namespace == "" || rec.Namespace == namespace
+	}
 	visible := func(rec audit.Record) bool {
-		if rec.Kind != "phorvex.decision" || !inScope(rec) {
+		if rec.Kind != "phorvex.decision" || !inScope(rec) || !inNamespace(rec) {
 			return false
 		}
 		return lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated))
@@ -119,6 +130,9 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 			}
 			payload = ToOwnerEvent(rec) // <- the ONLY owner projection (never a raw Record)
 		} else {
+			if !inNamespace(rec) {
+				return
+			}
 			payload = rec // investor/operator get the full internals
 		}
 		b, _ := json.Marshal(payload)
