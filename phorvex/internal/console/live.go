@@ -62,8 +62,19 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	// (EKS vs vCluster), so the dashboard shows ONLY the selected provider's decisions.
 	path := s.liveAuditPath(r)
 	ownerTenant := r.URL.Query().Get("tenant") // [P4c F4] owner stream is tenant-scoped
+	// ?namespace=<ns> narrows the investor/operator stream to one namespace. It is a volume
+	// control, not an access control: the operator lens already sees every namespace, so the
+	// filter only drops records the caller could have read anyway. The E2E post-attack capture
+	// uses it — on a cluster with a dozen tenants the unfiltered stream runs at hundreds of
+	// KB/s (each decision carries its full trace) and exhausts the pipeline's byte cap before
+	// the observation window ends, while the checks only read the target namespace. The owner
+	// lens ignores it: its tenant scope stays fail-closed and is never widened or replaced.
+	namespace := r.URL.Query().Get("namespace")
+	inNamespace := func(rec audit.Record) bool {
+		return lens == "owner" || namespace == "" || rec.Namespace == namespace
+	}
 	visible := func(rec audit.Record) bool {
-		return rec.Kind == "phorvex.decision" && (lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated)))
+		return rec.Kind == "phorvex.decision" && inNamespace(rec) && (lens != "owner" || (ownerTenant != "" && rec.Tenant == ownerTenant && (rec.Selected || rec.Actuated)))
 	}
 	notice := func(message string) {
 		b, _ := json.Marshal(map[string]string{"message": message})
@@ -86,6 +97,9 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 			}
 			payload = ToOwnerEvent(rec) // <- the ONLY owner projection (never a raw Record)
 		} else {
+			if !inNamespace(rec) {
+				return
+			}
 			payload = rec // investor/operator get the full internals
 		}
 		b, _ := json.Marshal(payload)

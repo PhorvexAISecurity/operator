@@ -15,6 +15,7 @@ import shlex
 import signal
 import subprocess
 import time
+import urllib.parse
 from pathlib import Path
 
 
@@ -229,28 +230,37 @@ class Console:
         except json.JSONDecodeError:
             return {"_raw": out}
 
-    def stream_decisions(self, seconds, max_bytes, on_connected=None):
+    def stream_decisions(self, seconds, max_bytes, on_connected=None, namespace=None):
         """Capture the audit SSE stream for a bounded window.
 
         The stream replays the audit file and then tails it, so a short window still
         yields the recent decision history. Bounded on BOTH time and bytes: an operator
         under heavy churn must not be able to hang the pipeline or exhaust memory.
+
+        `namespace` narrows the stream server-side to one namespace (console
+        /api/live?namespace=). Every decision carries its full trace, so on a cluster
+        with a dozen tenants the unfiltered stream runs at hundreds of KB/s and a
+        51s observation exhausts a 16 MB cap in ~37s — before the window ends. A
+        console that predates the parameter ignores it and streams everything, which
+        is the previous behaviour, not a failure.
         """
         # The callback may perform two bounded 30s detector calls (or one console
         # POST). Keep the remote process bounded, but allow the observation window
         # to begin AFTER the callback. capture_live terminates it at that deadline.
         remote_seconds = seconds + 90 if on_connected else seconds
         replay = "&tail=1" if on_connected else ""
+        scope = "&namespace=" + urllib.parse.quote(namespace, safe="") if namespace else ""
+        query = "/api/live?lens=" + self.lens + replay + scope
         if self.mode == "kubectl-proxy":
             # `timeout` bounds the stream the way curl -m did; head -c caps the bytes.
             cmd = (
                 f"timeout {remote_seconds} kubectl get --raw "
-                f"{shlex.quote(self.proxy + '/api/live?lens=' + self.lens + replay)} | head -c {int(max_bytes)}"
+                f"{shlex.quote(self.proxy + query)} | head -c {int(max_bytes)}"
             )
         else:
             cmd = (
                 f"curl -sN -m {remote_seconds} -H {shlex.quote('X-Phorvex-Lens: ' + self.lens)} "
-                f"{shlex.quote(self.base + '/api/live?lens=' + self.lens + replay)} | head -c {int(max_bytes)}"
+                f"{shlex.quote(self.base + query)} | head -c {int(max_bytes)}"
             )
         # curl/timeout exits non-zero on the bounded-window timeout, which is the normal path.
         if on_connected:
