@@ -1,0 +1,269 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 724437cdcab64ae8f4db5932864896324ed3d5e82ff39a6aa627a72b4640b0d0
+    source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+    at: '2026-09-10T04:36:02+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-worker-230
+    artifact: evidence/worker/red.txt
+    sha256: a898fbd2f096efa5f168e44606117d6b296e73ce65dfe8fe2bcea4e41d72b1ae
+    source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+    at: '2026-09-10T04:47:20+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/base-review.md
+    sha256: 0a61c825211edd1f20cc466eb5a294cc123575bb4269d046638644fb3d391f3b
+    source_sha: 148902e9d54729fb4c925959a49e93e010270cba
+    at: '2026-09-10T04:44:51+00:00'
+    baseline_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  preflight:
+    result: PASS
+    by: codex-worker-230
+    artifact: evidence/preflight/receipt.json
+    sha256: 7a8da26ae85906bbdf88eb4363be81141c0173c9dadf8b9593a47368d85d4bee
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:47:46+00:00'
+  implementation:
+    result: PASS
+    by: codex-worker-230
+    artifact: 04-diff.patch
+    sha256: df3cf11ce62393e1885ce2d39424af25a6fa32ec44ef5f7c09940fa0af151ac5
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:47:46+00:00'
+  l0:
+    result: PASS
+    by: codex-worker-230
+    artifact: evidence/worker/final-l0.txt
+    sha256: 1bc89850de68130488c22bd6891ea7039943406ca30d749eaca414f35b03be3e
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:47:46+00:00'
+  l1:
+    result: PASS
+    by: codex-worker-230
+    artifact: evidence/worker/final-green-controls.txt
+    sha256: da919f7a0d889391cdf70d9fbdec5116e69f2ba3a57445dea0c761dab02a64fb
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:47:46+00:00'
+  l2:
+    result: PASS
+    by: codex-worker-230
+    artifact: evidence/worker/final-green-controls.txt
+    sha256: da919f7a0d889391cdf70d9fbdec5116e69f2ba3a57445dea0c761dab02a64fb
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:47:46+00:00'
+  positive_control:
+    result: PASS
+    by: codex-worker-230
+    artifact: evidence/worker/final-green-controls.txt
+    sha256: da919f7a0d889391cdf70d9fbdec5116e69f2ba3a57445dea0c761dab02a64fb
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:47:46+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: bf87d3676dfb41250b0a3d23c6157eeb9f67a08a108741cdb115d56a040a4f87
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:48:48+00:00'
+    baseline_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 1cbdb927d8a0a77c1f2aee39193ac080282d800aa0f40cc4b1ed73d017c5ec39
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:48:48+00:00'
+    incident_sha256: bf87d3676dfb41250b0a3d23c6157eeb9f67a08a108741cdb115d56a040a4f87
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/patch-equivalence.md
+    sha256: bfa20b97d550c40a6af28db7dfda60b01abf216164fe3d96c80b4b3d136bd5eb
+    source_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+    at: '2026-09-10T04:50:21+00:00'
+fix_id: M-037
+issues:
+- M-037
+title: Withhold unsupported modelFingerprint cover (PHORVEXSEC-230)
+profile: standard
+state: IN_PR
+roles:
+  human_owner: Milad
+  proposer: codex-lead
+  implementer: codex-worker-230
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: parallel/knowledge-m037-withhold-fingerprint-cover
+  base_sha: 148902e9d54729fb4c925959a49e93e010270cba
+  head_sha: 8fe69bf8a809d57683a3a472c17969422cb0db44
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/164
+  reviewed_head: 5992d84762a4d30530070e010eb72e3f76bbacbe
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals:
+- Positive fingerprint cover requires loaded-identity and security-effect evidence,
+  still pending.
+next_action:
+  owner: coordinator
+  action: PR164 delivered stacked on PR163; await Hami review and separately authorized
+    merge/live verification
+updated_at: '2026-09-10T04:50:22+00:00'
+configuration_history:
+- at: '2026-09-10T04:35:58+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - residuals
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-09-10T04:44:11+00:00'
+  by: codex-worker-230
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T04:50:20+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T04:35:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T04:36:03+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T04:47:47+00:00'
+  by: codex-worker-230
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T04:47:49+00:00'
+  by: codex-worker-230
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T04:48:49+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T04:48:52+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T04:50:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: red
+  result: PASS
+  by: codex-worker-230
+  artifact: evidence/worker/red.txt
+  sha256: a898fbd2f096efa5f168e44606117d6b296e73ce65dfe8fe2bcea4e41d72b1ae
+  source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  at: '2026-09-10T04:39:42+00:00'
+- check: red
+  result: PASS
+  by: codex-worker-230
+  artifact: evidence/worker/stack-red.txt
+  sha256: d8497db0a335e242bdcea9f3557f68aa997c09594b047d29ab45d548aae8d8bc
+  source_sha: 76210d5f133aee9ff5554394c7ae9660a788f0c8
+  at: '2026-09-10T04:46:57+00:00'
+handoff:
+  id: M-037:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

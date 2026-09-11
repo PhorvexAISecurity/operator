@@ -1,6 +1,6 @@
 /*
- * Phorvex — regression gate: every DEFENSIVE actuator must carry a non-empty cover set on the asset
- * it defends, otherwise the submodular optimizer (gain = marginal·prov − λ·ECost) can never select it.
+ * Phorvex — regression gate: only actuators with supported invalidation effects receive cover.
+ * Cover-free actuators remain unavailable to the coverage optimizer until their effects are proven.
  * debugger + custom-inject are MANUAL-BY-DESIGN (no cover) and are intentionally NOT asserted here.
  */
 
@@ -50,17 +50,25 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 		t.Errorf("identity-rotate claims cover %v, but it changes no identity or credential fact", got)
 	}
 
-	// (2) AI serving pod — the serving actuators become selectable (request-drain / guardrail-rotate /
-	//     kv-reset / endpoint-rotate / model-shard-replace / mig-rebind / warm-swap / kv-migrate-invalidate).
+	// (2) AI serving pod — preserve the existing grants for these serving actuators.
+	// model-shard-replace is withheld pending loaded-identity/effect evidence (M-037).
 	ai := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil"}}
 	ac := prof.AssetFacts(ai, fctx).CoverByAction
 	for _, a := range []model.Action{
-		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset, model.ActionEndpointRotate,
-		model.ActionModelShardReplace, model.ActionKVMigrateInvalidate, model.ActionAdapterRotate,
+		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset,
+		model.ActionKVMigrateInvalidate, model.ActionAdapterRotate,
 	} {
 		if len(ac[a]) == 0 {
 			t.Errorf("AI serving pod: %q has EMPTY cover set — optimizer can never select it", a)
 		}
+	}
+
+	if got := ac[model.ActionEndpointRotate]; len(got) != 0 {
+		t.Errorf("endpoint-rotate must have no cover without locator invalidation proof; got %v", got)
+	}
+
+	if got := ac[model.ActionModelShardReplace]; len(got) != 0 {
+		t.Errorf("model-shard-replace must have no cover without identity/effect evidence; got %v", got)
 	}
 
 	// [PHVX-26a] warm-swap and mig-rebind were removed from the list above ON PURPOSE, and the

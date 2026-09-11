@@ -51,7 +51,7 @@ func TestKVMigrateInvalidateCoversSessionNotRoute(t *testing.T) {
 	for _, kind := range got {
 		if kind == FactEndpointPath {
 			t.Fatalf("kv-migrate-invalidate still claims %q — a KV flush does not stale a learned "+
-				"route; endpoint-rotate is the action that does", FactEndpointPath)
+				"route; endpointPath must remain audit-only", FactEndpointPath)
 		}
 	}
 	found := false
