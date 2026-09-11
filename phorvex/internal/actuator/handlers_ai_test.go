@@ -233,7 +233,7 @@ func TestEndpointRotateRestitchesRouteAndRollsBack(t *testing.T) {
 	var p corev1.Pod
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
 	if p.Labels[labelRouteKey] == "ep-old" {
-		t.Error("route-key not re-keyed (route did not stale)")
+		t.Error("route-key not re-keyed")
 	}
 	var s corev1.Service
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer-svc"}, &s)

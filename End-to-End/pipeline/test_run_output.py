@@ -48,7 +48,7 @@ class RunOutputTests(unittest.TestCase):
     def attempt(self, *, mode='observe', preflight_error=None, capture_error=None,
                 transport=None, baseline=None, renderer=None):
         transport = transport or OfflineTransport()
-        def stream(seconds, max_bytes, on_connected=None):
+        def stream(seconds, max_bytes, on_connected=None, namespace=None):
             if on_connected:
                 on_connected()
                 if capture_error:
