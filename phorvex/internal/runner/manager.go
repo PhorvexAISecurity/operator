@@ -1653,6 +1653,19 @@ func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadV
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) int {
+	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
+	// early exit. This must precede both the EnsurePolicy guard below (which returns
+	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
+	// Placing it later left two ways for a reused decision to carry a PREVIOUS tick's
+	// SecurityEvent name/UID into a record for a tick that never attempted an emission:
+	// a failed policy setup, and a decision that is no longer selected. Both are
+	// serialized as evidence — audit.Logger.Record calls writeRecord unconditionally,
+	// and OnlySelected gates only the structured log line, not the JSONL — so a stale
+	// identifier would point an investigator at the wrong object. Only a result actually
+	// returned by Actuate in THIS call may repopulate it.
+	for i := range decisions {
+		decisions[i].Phoenix = nil
+	}
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
@@ -1760,6 +1773,19 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			CoverageValue: coverageValue,
 			TargetUID:     v.Pod.UID,
 		})
+		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch,
+		// so a result carrying real identifiers alongside an error keeps the facts the
+		// adapter actually supplied while the failure outcome stays exactly as it was.
+		// This mirrors, for the Phoenix payload, what M-48 does for the native fields
+		// inside the error branch below. Assigning unconditionally also clears any payload
+		// from a previous attempt on a reused decision, so a refused or retried move can
+		// never inherit a stale reference. phoenixForensics allocates per decision and
+		// returns nil when nothing was supplied — absence stays absent rather than
+		// becoming empty strings.
+		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
+		// M-11 emission bookkeeping and M-13 actuation notification both observe the raw
+		// result and are unaffected by the mapping above; order between them is immaterial
+		// because neither reads decisions[i].Phoenix.
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
 		}
@@ -1825,6 +1851,33 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		}
 	}
 	return actuated
+}
+
+// phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision
+// payload (M-18). EXPLICIT FIELD MAPPING ONLY — never a struct dump, so a field added to
+// actuator.Result later cannot silently widen the public audit record.
+//
+// namespace is the namespace of the request this result answers. The AMTD is namespaced
+// and EnsurePolicy maintains it for exactly that namespace/tenant pair, so the namespace
+// is attached only when an AMTD name actually exists; it is never guessed, and no AMTD
+// UID is invented (the adapter does not read one back). Returns nil when the adapter
+// supplied nothing at all, so a record shows honest absence instead of empty strings.
+func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForensics {
+	p := model.PhoenixForensics{
+		AMTDName:        res.AMTDName,
+		EventName:       res.EventName,
+		EventUID:        res.EventUID,
+		RuleType:        res.RuleType,
+		RuleThreatLevel: res.RuleThreatLevel,
+		RuleSource:      res.RuleSource,
+	}
+	if p.AMTDName != "" {
+		p.AMTDNamespace = namespace
+	}
+	if p.Empty() {
+		return nil
+	}
+	return &p
 }
 
 func buildPolicy(e *policyEntry) model.Policy {
