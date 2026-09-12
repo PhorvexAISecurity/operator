@@ -261,3 +261,14 @@ fixes:
     stacked_on: []
     branch: parallel/record-m018-phoenix-forensic-fields
     head_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+  M-21:
+    directory: fixes/M-21
+    aliases: []
+    issues:
+    - M-21
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: parallel/contract-m021-actuator-selection-repertoire
+    head_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544

@@ -45,12 +45,24 @@ func NewPhoenixActuator(c client.Client) *PhoenixActuator {
 // Name implements Actuator.
 func (*PhoenixActuator) Name() string { return "phoenix" }
 
-// SupportsAction is a stub for the Phoenix path (T1-E): Phoenix maps rotate/quarantine to
-// AMTD rules, whose per-target repertoire is not verified as a runtime fixture at this
-// layer yet. Per the ticket, stubs return capable-but-UNVERIFIED (never a silent false),
-// so an unverified capability can never masquerade as a checked one. P-08 fills this in.
-func (*PhoenixActuator) SupportsAction(_ context.Context, _ model.Action, _ Target) (bool, string) {
-	return true, "unverified: phoenix-amtd-repertoire — P-08"
+// SupportsAction answers from the SAME predicate Actuate dispatches on (RuleTypeFor), so
+// this adapter can never claim an action it would then refuse. [M-21]
+//
+// Two answers, deliberately distinct:
+//   - An action Phoenix maps (rotate, quarantine) is ACCEPTED, but qualified UNVERIFIED:
+//     the adapter takes the move, yet this layer verifies no per-target AMTD fixture, so
+//     acceptance is never reported as proof the move executed or had any security effect
+//     (T1-E's rule that a stub returns capable-but-unverified, never a silent false).
+//   - Any other action — every AI-native move, the native-only K8s moves, the noop
+//     sentinel and anything outside the vocabulary — is REJECTED, naming the backend, the
+//     action and the reason. Before M-21 all of these were claimed as supported while
+//     Actuate rejected them, which is exactly how a GPU fleet on the default backend
+//     reported ActionsSupported: True and could enact nothing.
+func (*PhoenixActuator) SupportsAction(_ context.Context, a model.Action, _ Target) (bool, string) {
+	if ok, detail := phoenixAccepts(a); !ok {
+		return false, unsupportedWhy(BackendPhoenix, a, detail)
+	}
+	return true, whyPhoenixUnverified
 }
 
 func (p *PhoenixActuator) timestamp() metav1.Time {
