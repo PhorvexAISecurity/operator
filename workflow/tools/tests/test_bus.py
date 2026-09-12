@@ -263,11 +263,13 @@ class ClaudeSocketTests(unittest.TestCase):
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(self.server.close)
         self.server.bind(str(self.endpoint)); self.server.listen(1); self.server.settimeout(2)
+        self.endpoint.chmod(0o600)
         self.entry = {'sessionId': 'exact-session', 'pid': os.getpid(), 'peerProtocol': 1,
                       'procStart': claude_socket.process_start(os.getpid()),
                       'messagingSocketPath': str(self.endpoint)}
         self.record = self.root / f'{os.getpid()}.json'
         self.record.write_text(json.dumps(self.entry))
+        self.record.chmod(0o600)
 
     def test_posts_peer_protocol_to_exact_existing_session(self):
         frames = []
