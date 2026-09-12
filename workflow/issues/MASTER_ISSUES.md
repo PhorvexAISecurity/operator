@@ -1618,7 +1618,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-21 · The default actuator rejects every AI-native move while reporting `ActionsSupported: True` · **OPEN** · `CONTRACT`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: M-21
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · phoenix:actuate SecurityEvent.Create @ internal/actuator/phoenix.go:140
@@ -2060,7 +2060,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-18 · Phoenix-path forensics dropped · **OPEN** · `RECORD`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: M-18
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
@@ -2251,7 +2251,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-152 · `stampGPU` drops `VRAMPresent` — the decision trace's VRAM field is permanently dark, even when DCGM data flows and the gate consumes the float · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: V3-M152
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
