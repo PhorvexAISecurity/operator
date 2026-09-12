@@ -22,6 +22,17 @@ import (
 // UserInfo into the CreatorIdentityAnnotation on CREATE and UPDATE, overwriting whatever the
 // client sent, and ingest believes an event only when that stamp names an allowlisted detector.
 //
+// That stamp is worth trusting only because a second, server-side control enforces it. The
+// mutating webhook is failurePolicy=Ignore (it must never block the cluster's event flow), and
+// while its endpoint is down the API server stores the object UNCHANGED — a client-written
+// annotation would then reach this code as if it had been stamped. The chart therefore also
+// ships a ValidatingAdmissionPolicy + Deny binding
+// (charts/phorvex/templates/securityevent-identity-policy.yaml) that runs in-process in the API
+// server and rejects any CREATE/UPDATE whose non-empty creator-identity is not the authenticated
+// requester's own username. Without that policy installed, an identity read here is a CLAIM, not
+// a fact: `phorvex.eventIdentityPolicy.enabled=false` is only permitted with an empty allowlist.
+// The policy does not retroactively authenticate events that were already stored.
+//
 // An event that fails the check is NOT deleted and NOT hidden: it is ingested, recorded with
 // Trusted=false and the reason, and counted — it simply carries no belief evidence. An empty
 // allowlist trusts no external detector (fail-closed); the chart ships the identities that

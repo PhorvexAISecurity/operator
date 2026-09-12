@@ -190,7 +190,11 @@ func main() {
 	if detectors.Empty() {
 		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")
 	} else {
-		setupLog.Info("SecurityEvent trust boundary active (M-94)", "trustedDetectors", detectors.List())
+		// The allowlist is configuration, not enforcement: a stamped identity is only a FACT
+		// when the cluster also runs the creator-identity ValidatingAdmissionPolicy + Deny
+		// binding the chart ships. This process cannot observe that from its own flags.
+		setupLog.Info("SecurityEvent detector allowlist configured (M-94); trusting a stamp additionally requires the creator-identity ValidatingAdmissionPolicy + binding to be installed in the cluster",
+			"trustedDetectors", detectors.List())
 	}
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
@@ -400,7 +404,8 @@ func main() {
 			os.Exit(1)
 		}
 		setupLog.Info("PhorvexPolicy validating admission webhook enabled", "port", webhookPort, "certDir", webhookCertDir)
-		setupLog.Info("SecurityEvent creator-identity stamp enabled (M-94 trust boundary)", "path", "/stamp-amtd-r6security-com-v1beta1-securityevent")
+		setupLog.Info("SecurityEvent creator-identity stamp enabled (M-94); the stamp is written here, but only the cluster's creator-identity admission policy makes a stamp unforgeable while this endpoint is down",
+			"path", "/stamp-amtd-r6security-com-v1beta1-securityevent")
 	}
 	if err = mgr.Add(rmgr); err != nil {
 		setupLog.Error(err, "unable to add the phorvex tick loop")

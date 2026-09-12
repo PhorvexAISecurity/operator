@@ -1,0 +1,266 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f9ee4a4452f47e52807b9e303cbf15ae20196f02d23745277650796a34b4b9cc
+    source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+    at: '2026-09-10T18:04:36+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: claude-v3-m094
+    artifact: evidence/red-baseline-418cf20.log
+    sha256: c9c8627a58c1d5673c892409d28ce0816aba0dd5675580e0612f6906ac6b3f5e
+    source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+    at: '2026-09-10T20:36:34+00:00'
+    rationale: 'Baseline RED at 418cf20 executed by this implementer in a disposable
+      git-archive tree: ATTACK-forged-during-outage stores a client-written allowlisted
+      creator and real ingest.CollectSnapshot returns trust=trusted with 1 belief-evidence
+      entry; positive control CONTROL-valid-stamp also trusted/1; negative control
+      CONTROL-forged-while-webhook-up untrusted/0. TestR2_M94_FailClosedHookIsNotSelectedForOrdinaryDetectorEvents
+      fails as the intended baseline assertion, and TestLeadM94ProposalRetainsForeignStampOnPayloadRewrite
+      reproduces the rejected unchanged-foreign-stamp bypass.'
+  preflight:
+    result: PASS
+    by: claude-v3-m094
+    artifact: evidence/preflight/receipt.json
+    sha256: 7c465ddb519355ec3dfa8a5a6950c905c053025104b09469d70d20688a4de5a2
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:36:38+00:00'
+  implementation:
+    result: PASS
+    by: claude-v3-m094
+    artifact: 04-diff.patch
+    sha256: 357800e517cead008c476455a824293443953379751cab6d8b8d28b715cd1166
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:36:38+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m094
+    artifact: evidence/preflight/run-1789072308648682374/go-phorvex.log
+    sha256: 4fd8e8046b1a76c6a094d959ff8c5256b5eb5251f5f7a5c77fd2755fb408f42c
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:36:38+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 93882d0527ee57c671df45195cc93bc9f7929e9b532c05d229d3d12fd4e8f567
+  l1:
+    result: PASS
+    by: claude-v3-m094
+    artifact: evidence/head-rendered-policy.yaml
+    sha256: fce757cb0e163f98403832fccaf4f5bd15783963d35f8f3c1f19612b0994fc54
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:36:38+00:00'
+    inputs:
+    - phorvex/charts/phorvex
+    inputs_sha256: 53b172f7ebd31f6cccb96d3ba2a685e1277270003b6cc5f150b0d5864f9b18d2
+  l2:
+    result: PASS
+    by: claude-v3-m094
+    artifact: evidence/head-guard-regressions.log
+    sha256: b07dd74f5b30d7dd964fefdcc66fbf1ba17f7b6739928b6c32b8e31c4bf80080
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:36:38+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    inputs_sha256: 12b0786f4490ac393676a722fe835f9af5045d740aff66bd527493d115da0502
+  positive_control:
+    result: PASS
+    by: claude-v3-m094
+    artifact: evidence/positive-control.log
+    sha256: b06e69457cdb7f9b972b3b6f256b9d78e573a6700f329846a27afc911fbf8f29
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:36:38+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    inputs_sha256: 12b0786f4490ac393676a722fe835f9af5045d740aff66bd527493d115da0502
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a8611506867305367ddb2c42739b47431bb9ac5f7bf769f1aeed9133b5b8863f
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:43:10+00:00'
+    baseline_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 4465acf3def4b103b1333092aeec3d1625751ab6f50b8074e8cecca670faa34a
+    source_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+    at: '2026-09-10T20:43:10+00:00'
+    incident_sha256: a8611506867305367ddb2c42739b47431bb9ac5f7bf769f1aeed9133b5b8863f
+fix_id: V3-M094
+issues:
+- M-94
+title: Reject forged event creator claims when the stamping webhook is unavailable
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: claude-v3-m094
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: origin/main
+  code_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/v3-m094-stamp-outage
+  base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  head_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/173
+  reviewed_head: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Monitor PR173; await complete tier deployment, then verify admission and
+    legacy event provenance live
+updated_at: '2026-09-10T20:44:37+00:00'
+configuration_history:
+- at: '2026-09-10T18:04:35+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-10T20:35:04+00:00'
+  by: claude-v3-m094
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T20:36:38+00:00'
+  by: claude-v3-m094
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T20:44:36+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T18:04:35+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T18:04:36+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T20:36:38+00:00'
+  by: claude-v3-m094
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T20:36:39+00:00'
+  by: claude-v3-m094
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T20:43:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T20:43:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T20:44:37+00:00'
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: V3-M094:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8

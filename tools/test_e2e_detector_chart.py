@@ -17,7 +17,13 @@ class DetectorChartTests(unittest.TestCase):
     def test_disabled_by_default(self):
         text = self.render()
         self.assertNotIn("test-phorvex-e2e-detector", text)
-        self.assertNotIn("ValidatingAdmissionPolicy", text)
+        # M-94's SecurityEvent creator-identity policy + binding ARE default-on: they are what
+        # makes a phorvex.ai/creator-identity annotation trustworthy while the mutating stamp
+        # endpoint is down. No other admission policy may be installed by default.
+        policies = [d for d in yaml.safe_load_all(text)
+                    if d and str(d.get("kind", "")).startswith("ValidatingAdmissionPolicy")]
+        self.assertEqual([d["metadata"]["labels"].get("phorvex.ai/policy") for d in policies],
+                         ["securityevent-identity", "securityevent-identity"])
 
     def test_enabled_requires_explicit_namespace(self):
         with self.assertRaises(subprocess.CalledProcessError):
