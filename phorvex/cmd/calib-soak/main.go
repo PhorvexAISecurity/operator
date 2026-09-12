@@ -147,7 +147,13 @@ func main() {
 		Lookback:        calib.DefaultLookback,
 		ExportDir:       outDir,
 	}, log)
-	manager := runner.NewManager(readOnlyClient, log)
+	// [M-21] An invalid explicit PHORVEX_ACTUATOR stops the soak before it constructs a
+	// shadow runtime, rather than silently soaking against the default backend.
+	manager, err := runner.NewManager(readOnlyClient, log)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "actuator configuration: %v\n", err)
+		os.Exit(1)
+	}
 	manager.BaseInterval = base
 	manager.Calibration = runtimeShadow
 	manager.KillSwitch = &runner.KillSwitch{Static: true}

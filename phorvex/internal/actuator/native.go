@@ -50,8 +50,15 @@ func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator
 // whether the node-exec TRANSPORT is wired: mig-rebind fail-closes without it, yet the
 // old status reported it supported (M-79). This makes that absence visible before scoring.
 func (n *NativeActuator) SupportsAction(_ context.Context, a model.Action, _ Target) (bool, string) {
+	// [M-21] Repertoire first, from the SAME handler registry `dispatch` routes through:
+	// an unknown action, the noop sentinel, and the declared-not-implemented `disable`
+	// are rejected here rather than accepted and then refused at the dispatch boundary.
+	if ok, detail := nativeAccepts(a); !ok {
+		return false, unsupportedWhy(BackendNative, a, detail)
+	}
+	// Then the one runtime prerequisite only this package knows (M-79), unchanged.
 	if a == model.ActionMIGRebind && !NodeExecWired() {
-		return false, "transport-unwired"
+		return false, ReasonTransportUnwired
 	}
 	return true, ""
 }
