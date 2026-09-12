@@ -15,7 +15,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -288,8 +287,28 @@ type lifecycleEvent struct {
 	newTenant string
 }
 
-// NewManager constructs a Manager with sane defaults for any nil collaborators.
-func NewManager(c client.Client, log logr.Logger) *Manager {
+// NewManager constructs a Manager, resolving PHORVEX_ACTUATOR itself.
+//
+// [M-21] It returns an error when the selector names no backend. That error MUST be
+// propagated: it is the only thing standing between an unrecognized explicit selector and
+// a process that starts reconciling on a backend nobody chose. Callers must not discard it.
+//
+// A process with SEVERAL entrypoints should resolve once at its own entrypoint and use
+// NewManagerWithBackend instead, so one invocation cannot read the environment twice.
+func NewManager(c client.Client, log logr.Logger) (*Manager, error) {
+	res, err := actuator.ResolveBackendFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return NewManagerWithBackend(c, log, res)
+}
+
+// NewManagerWithBackend constructs a Manager on an already-resolved backend. [M-21]
+func NewManagerWithBackend(c client.Client, log logr.Logger, res actuator.BackendResolution) (*Manager, error) {
+	act, err := buildActuator(c, log, res)
+	if err != nil {
+		return nil, err
+	}
 	src, _ := ingest.SourceRegistry.Default()
 	// P-PHYSICS (UCW): make the discovered-physics recon-EMR profile the engine default
 	// (byte-identical to standard-recon at nil-data; lifts only under measured dispersion).
@@ -303,7 +322,7 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		Optimizer:       decision.NewCoverageEngine(), // P1 default brain
 		Audit:           audit.New(log, nil),
 		MetricsSource:   src,
-		Actuator:        selectActuator(c, log), // P-ACTUATOR: native vs Phoenix adapter
+		Actuator:        act, // P-ACTUATOR: the ONE resolved backend (dispatch + support share it)
 		KillSwitch:      &KillSwitch{Client: c},
 		BaseInterval:    10 * time.Second,
 		Log:             log.WithName("runner"),
@@ -318,25 +337,44 @@ func NewManager(c client.Client, log logr.Logger) *Manager {
 		policies:             map[string]*policyEntry{},
 
 		ActionsSupportedDebounce: DefaultActionsSupportedDebounceTicks,
+	}, nil
+}
+
+// backendPurpose is the operator-facing one-liner logged for the resolved backend, so
+// EVERY valid branch — including the default — is observable. Before M-21 only the two
+// explicit non-default branches logged anything, so the single most common configuration
+// (the Phoenix default) resolved in silence and a typo resolved the same silent way.
+func backendPurpose(b actuator.Backend) string {
+	switch b {
+	case actuator.BackendNative:
+		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
+	case actuator.BackendHybrid:
+		return "Phoenix for rotate/quarantine, native for the AI-native moves"
+	default:
+		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
 	}
 }
 
-// selectActuator picks Phorvex's hands: the native actuator (its own client-go hands,
-// PHORVEX_ACTUATOR=native) or the Phoenix adapter (default — drives UNMODIFIED Phoenix via
-// SecurityEvent/AMTD CRs). Both satisfy the Actuator interface; the brain is unchanged.
-func selectActuator(c client.Client, log logr.Logger) actuator.Actuator {
-	switch os.Getenv("PHORVEX_ACTUATOR") {
-	case "native":
-		log.WithName("runner").Info("actuator=native (Phorvex own hands; direct client-go enactment, no Phoenix CRDs)")
-		return actuator.NewNativeActuator(c)
-	case "hybrid":
-		// Phoenix enacts rotate/quarantine (keeps the nats AMTD-CR mechanism); the native
-		// actuator enacts the AI-native moves (kv-reset, adapter-rotate, …) Phoenix can't.
-		log.WithName("runner").Info("actuator=hybrid (Phoenix for rotate/quarantine, native for AI-native moves)")
-		return actuator.NewHybridActuator(c)
-	default:
-		return actuator.NewPhoenixActuator(c)
+// buildActuator constructs the hands for an ALREADY-RESOLVED backend and logs the
+// effective choice with its source, so every valid branch — including the default — is
+// observable. [M-21]
+//
+// It takes the resolution rather than reading the environment so that a process resolves
+// PHORVEX_ACTUATOR exactly ONCE, at its entrypoint, before any code path can act. Reading
+// it again here would reintroduce the possibility of two answers in one process.
+func buildActuator(c client.Client, log logr.Logger, res actuator.BackendResolution) (actuator.Actuator, error) {
+	act, err := actuator.New(res.Backend, c)
+	if err != nil {
+		return nil, err
 	}
+	// The entrypoint reports the CONFIGURATION (what was asked for and by whom); this
+	// reports the CONSTRUCTION (what was actually wired, and what it does). Distinct facts,
+	// so a caller that never passes through cmd/main.go still observes the effective hands.
+	log.WithName("runner").Info("actuator constructed",
+		"actuator", string(res.Backend),
+		"source", res.Origin(),
+		"purpose", backendPurpose(res.Backend))
+	return act, nil
 }
 
 // Upsert adds or updates a tenant policy in the registry.
@@ -1657,6 +1695,19 @@ func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadV
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) int {
+	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
+	// early exit. This must precede both the EnsurePolicy guard below (which returns
+	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
+	// Placing it later left two ways for a reused decision to carry a PREVIOUS tick's
+	// SecurityEvent name/UID into a record for a tick that never attempted an emission:
+	// a failed policy setup, and a decision that is no longer selected. Both are
+	// serialized as evidence — audit.Logger.Record calls writeRecord unconditionally,
+	// and OnlySelected gates only the structured log line, not the JSONL — so a stale
+	// identifier would point an investigator at the wrong object. Only a result actually
+	// returned by Actuate in THIS call may repopulate it.
+	for i := range decisions {
+		decisions[i].Phoenix = nil
+	}
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
@@ -1764,6 +1815,19 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			CoverageValue: coverageValue,
 			TargetUID:     v.Pod.UID,
 		})
+		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch,
+		// so a result carrying real identifiers alongside an error keeps the facts the
+		// adapter actually supplied while the failure outcome stays exactly as it was.
+		// This mirrors, for the Phoenix payload, what M-48 does for the native fields
+		// inside the error branch below. Assigning unconditionally also clears any payload
+		// from a previous attempt on a reused decision, so a refused or retried move can
+		// never inherit a stale reference. phoenixForensics allocates per decision and
+		// returns nil when nothing was supplied — absence stays absent rather than
+		// becoming empty strings.
+		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
+		// M-11 emission bookkeeping and M-13 actuation notification both observe the raw
+		// result and are unaffected by the mapping above; order between them is immaterial
+		// because neither reads decisions[i].Phoenix.
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
 		}
@@ -1829,6 +1893,33 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		}
 	}
 	return actuated
+}
+
+// phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision
+// payload (M-18). EXPLICIT FIELD MAPPING ONLY — never a struct dump, so a field added to
+// actuator.Result later cannot silently widen the public audit record.
+//
+// namespace is the namespace of the request this result answers. The AMTD is namespaced
+// and EnsurePolicy maintains it for exactly that namespace/tenant pair, so the namespace
+// is attached only when an AMTD name actually exists; it is never guessed, and no AMTD
+// UID is invented (the adapter does not read one back). Returns nil when the adapter
+// supplied nothing at all, so a record shows honest absence instead of empty strings.
+func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForensics {
+	p := model.PhoenixForensics{
+		AMTDName:        res.AMTDName,
+		EventName:       res.EventName,
+		EventUID:        res.EventUID,
+		RuleType:        res.RuleType,
+		RuleThreatLevel: res.RuleThreatLevel,
+		RuleSource:      res.RuleSource,
+	}
+	if p.AMTDName != "" {
+		p.AMTDNamespace = namespace
+	}
+	if p.Empty() {
+		return nil
+	}
+	return &p
 }
 
 func buildPolicy(e *policyEntry) model.Policy {

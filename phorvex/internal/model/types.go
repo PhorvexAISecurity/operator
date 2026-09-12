@@ -691,10 +691,50 @@ type Decision struct {
 	RollbackRef    string   // compensating-undo token ("" = forward-only/irreversible)
 	MutationKind   string   // reversible | irreversible | forward-only | swap | declared
 
+	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
+	// supplied none; never a placeholder). Set from the actuator Result immediately
+	// after Actuate returns, so a partial result carried alongside an error keeps the
+	// facts the adapter did supply without altering the failure outcome. ---
+	Phoenix *PhoenixForensics
+
 	// Trace is populated only after selection. It is observational and never fed
 	// back into candidate generation, scoring, feasibility or actuation.
 	Trace *DecisionTraceV2
 }
+
+// PhoenixForensics is the forensic identity of ONE Phoenix emission attempt: enough to
+// link a decision record to the Phoenix resources and rule context an investigator must
+// inspect, without guessing from timestamps or pod names (M-18).
+//
+// TRUTHFUL REFERENCE SEMANTICS — each field means exactly what its source proves:
+//
+//   - EventName/EventUID identify the cluster-scoped SecurityEvent this attempt created.
+//     The UID is server-assigned and is the ONLY identity that distinguishes a recreated
+//     same-name object from the original; a name alone cannot. Both are populated ONLY
+//     from a successful Create response, never synthesized for a failed or uncertain one.
+//   - AMTDName/AMTDNamespace are the namespaced AMTD that supplies this tenant's rule
+//     CONTEXT. EnsurePolicy maintains it as separate standing policy setup, so it is NOT
+//     claimed to be created or mutated by this attempt.
+//   - RuleType/RuleThreatLevel/RuleSource are the LOGICAL matching tuple carried in the
+//     event spec. They are not a Kubernetes object: there is no Rule kind and no Rule UID.
+//
+// A populated payload establishes CORRELATION only. It never asserts that Phoenix
+// executed the action successfully — a created SecurityEvent may receive no successful
+// downstream execution at all (M-9), and adoption may be rejected later (M-134). Outcome
+// lives in Actuated/DispatchOutcome and is unchanged by this payload.
+type PhoenixForensics struct {
+	AMTDName        string `json:"amtdName,omitempty"`
+	AMTDNamespace   string `json:"amtdNamespace,omitempty"`
+	EventName       string `json:"eventName,omitempty"`
+	EventUID        string `json:"eventUID,omitempty"`
+	RuleType        string `json:"ruleType,omitempty"`
+	RuleThreatLevel string `json:"ruleThreatLevel,omitempty"`
+	RuleSource      string `json:"ruleSource,omitempty"`
+}
+
+// Empty reports whether the adapter supplied no forensic identifier at all. Absence is
+// represented honestly as a nil payload rather than a record full of empty strings.
+func (p PhoenixForensics) Empty() bool { return p == PhoenixForensics{} }
 
 // DecisionValue returns the engine's primary security-value field without merging their
 // meanings in the public Decision/audit contract. P1 uses recon CoverageValue; deprecated

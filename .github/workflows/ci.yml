@@ -19,11 +19,11 @@ on:
         type: string
         default: voicebot
       force_release:
-        description: 'Release the images already built for the current main SHA (re-deploy / recover a missed release) instead of running E2E'
+        description: 'Release the existing images explicitly named by release_from (re-deploy / rollback / recover a missed release) instead of running E2E'
         type: boolean
         default: false
       release_from:
-        description: 'force_release only — release THIS existing image tag instead of the current SHA (e.g. sha-36612f3). Also how you roll back: name an older tag.'
+        description: 'Required with force_release — release THIS existing image tag (e.g. sha-6624065). Also how you roll back: name an older tag.'
         type: string
         default: ''
 
@@ -124,11 +124,18 @@ jobs:
           bash -n deploy/argocd/wait-for-rollout.sh
           python3 tools/test_deploy_autosync.py
 
+      - name: Release image provenance regressions
+        run: |
+          bash -n deploy/ci/retag-images.sh
+          python3 tools/test_deploy_image_manifest.py
+
   # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.operator == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: self-hosted
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -147,7 +154,7 @@ jobs:
         with:
           images: ${{ steps.ecr.outputs.registry }}/phorvex
           tags: |
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=long
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -174,6 +181,7 @@ jobs:
             --image-scanning-configuration scanOnPush=true >/dev/null
 
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context:    .
           file:       deploy/docker/operator.Dockerfile
@@ -189,6 +197,8 @@ jobs:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.console == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: self-hosted
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -207,7 +217,7 @@ jobs:
         with:
           images: ${{ steps.ecr.outputs.registry }}/phorvex-console
           tags: |
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=long
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -224,6 +234,7 @@ jobs:
             --image-scanning-configuration scanOnPush=true >/dev/null
 
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context:    .
           file:       deploy/docker/console.Dockerfile
@@ -275,7 +286,7 @@ jobs:
         with:
           images: ${{ steps.ecr.outputs.registry }}/phoenix-amtd-operator
           tags: |
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=long
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -478,6 +489,17 @@ jobs:
           # bumps that component; everything else is a patch. Deliberately boring — the
           # version has to be predictable from the commit alone.
           LAST="$(git tag -l 'v*.*.*' --sort=-v:refname | head -1)"
+          # The tag is not the only record of the last release: values-eks.yaml pins it
+          # too, and the two can disagree. v0.4.109's release commit was pushed but its tag
+          # push was rejected by GitHub ("fatal error in commit_refs"), so the tag history
+          # stopped at v0.4.108 while the values file already said 0.4.109. Every following
+          # deploy then computed 0.4.109 again, rewrote the file to what it already was, and
+          # failed on "values-eks.yaml did not change". Start from whichever is newer.
+          PINNED="v$(sed -n 's/^[[:space:]]*tag:[[:space:]]*"\([0-9][0-9.]*\)"[[:space:]]*#[[:space:]]*ci:phorvex-tag[[:space:]]*$/\1/p' deploy/helm/phorvex-stack/values-eks.yaml | head -1)"
+          if [ "$PINNED" != "v" ] && [ "$(printf '%s\n%s\n' "${LAST:-v0.0.0}" "$PINNED" | sort -V | tail -1)" = "$PINNED" ]; then
+            echo "pinned $PINNED is newer than or equal to the latest tag ${LAST:-none}; starting from it"
+            LAST="$PINNED"
+          fi
           if [ -z "$LAST" ]; then
             NEXT="0.1.0"
           else
@@ -491,16 +513,7 @@ jobs:
           fi
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
 
-          # Which already-built image this version points at. Normally the commit being
-          # released, but a forced release can name one explicitly — a merge that only
-          # changed CI config builds nothing, so HEAD has no image, and rolling back means
-          # releasing an OLDER image on purpose.
-          SRC="${{ inputs.release_from }}"
-          if [ -z "$SRC" ]; then
-            SRC="sha-$(git rev-parse --short HEAD)"
-          fi
-          echo "sha_tag=$SRC" >> "$GITHUB_OUTPUT"
-          echo "Next version: $NEXT (previous: ${LAST:-none}) from image tag: $SRC"
+          echo "Next version: $NEXT (previous: ${LAST:-none})"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -531,9 +544,9 @@ jobs:
           echo "build-operator=$OPERATOR  build-console=$CONSOLE  forced=$FORCED"
           BUMP=""
           if [ "$FORCED" = "true" ]; then
-            # A forced release pins BOTH components to the current main SHA. Nothing is
-            # assumed about whether those images exist — the re-tag step below reads each
-            # manifest and fails loudly if one is missing, which is the honest answer.
+            # A forced release pins BOTH components to the explicit release_from tag.
+            # Nothing is assumed about whether those images exist — the re-tag step below
+            # reads each manifest and fails loudly if one is missing.
             BUMP="ci:phorvex-tag ci:console-tag"
           else
             [ "$OPERATOR" = "success" ] && BUMP="$BUMP ci:phorvex-tag"
@@ -552,27 +565,14 @@ jobs:
       - name: Tag the built images with the version
         if: steps.built.outputs.any == 'true'
         env:
-          REG:     ${{ steps.ecr.outputs.registry }}
-          V:       ${{ steps.version.outputs.version }}
-          SHA:     ${{ steps.version.outputs.sha_tag }}
-          MARKERS: ${{ steps.built.outputs.markers }}
-        run: |
-          # Re-tag the manifest that was just built rather than rebuilding it: a second
-          # build is not guaranteed to be bit-identical, and deploying an image that was
-          # never the one CI tested defeats the point of testing it.
-          #
-          # No `|| true` here. If a re-tag fails the release must stop, because the next
-          # step would otherwise pin values-eks.yaml to a tag that does not exist in ECR
-          # and ArgoCD would roll the cluster into ImagePullBackOff.
-          for marker in $MARKERS; do
-            case "$marker" in
-              ci:phorvex-tag) repo=phorvex ;;
-              ci:console-tag) repo=phorvex-console ;;
-              *) echo "::error::unknown marker $marker"; exit 1 ;;
-            esac
-            docker buildx imagetools create -t "$REG/$repo:$V" "$REG/$repo:$SHA"
-            echo "tagged $repo:$SHA -> $V"
-          done
+          REG:                ${{ steps.ecr.outputs.registry }}
+          V:                  ${{ steps.version.outputs.version }}
+          MARKERS:            ${{ steps.built.outputs.markers }}
+          SOURCE_MODE:        ${{ inputs.force_release && 'tag' || 'digest' }}
+          RELEASE_FROM:       ${{ inputs.release_from }}
+          OPERATOR_DIGEST:    ${{ needs.build-operator.outputs.digest }}
+          CONSOLE_DIGEST:     ${{ needs.build-console.outputs.digest }}
+        run: bash deploy/ci/retag-images.sh
 
       - name: Write the version into the GitOps values
         id: bump
@@ -624,8 +624,10 @@ jobs:
           # would otherwise version every version commit, forever.
           git commit -m "release: v$V [skip ci]" -m "Deployed by ArgoCD from deploy/helm/phorvex-stack/values-eks.yaml."
           git tag -a "v$V" -m "v$V"
-          git push origin HEAD:main
-          git push origin "v$V"
+          # One atomic push: the release commit and its tag land together or not at all.
+          # Pushed separately, a rejected tag push left main carrying a release commit
+          # with no tag, which wedged every later deploy (see "Compute the next version").
+          git push --atomic origin HEAD:main "v$V"
 
       - name: Wait for ArgoCD to roll it out
         # Only wait for a rollout that was actually requested. Without this guard a merge

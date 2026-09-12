@@ -205,6 +205,24 @@ func main() {
 			"sample", calibrationSample, "refresh", calibrationRefresh, "lookback", calibrationLookback)
 		os.Exit(2)
 	}
+	// [M-21 R1-1] Resolve PHORVEX_ACTUATOR HERE: after flag parsing, before ANY entrypoint
+	// below can dispatch. Every branch that follows — epss-feed, integration-emit, ablation,
+	// native-demo, scan and the controller — is an action entrypoint, and several of them
+	// construct an actuator directly or reach the cluster without going through the runner's
+	// checked constructor. Validating only inside that constructor left those paths able to
+	// run, and mutate, on a selector that names no backend. One resolution, at the top,
+	// closes all of them at once and is the only read of the variable in this process.
+	backend, backendErr := actuator.ResolveBackendFromEnv()
+	if backendErr != nil {
+		setupLog.Error(backendErr, "invalid actuator configuration; refusing to run")
+		os.Exit(2)
+	}
+	// Logged HERE, not only where an actuator is constructed: --integration-emit and
+	// --native-demo drive a fixed backend and build no runner, so this is the only point
+	// at which every entrypoint reports what was configured and where it came from.
+	setupLog.Info("actuator configuration resolved",
+		"actuator", string(backend.Backend), "source", backend.Origin())
+
 	if epssFeed {
 		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
 			setupLog.Error(err, "epss-feed failed; last-known-good cache was not changed")
@@ -231,7 +249,7 @@ func main() {
 	}
 
 	if ablation {
-		if err := runAblation(ablationNS, ablationSelector, ablationBudget, ablationSeeds); err != nil {
+		if err := runAblation(ablationNS, ablationSelector, ablationBudget, ablationSeeds, backend); err != nil {
 			setupLog.Error(err, "ablation failed")
 			os.Exit(1)
 		}
@@ -247,7 +265,7 @@ func main() {
 	}
 
 	if scan {
-		if err := runScan(scanNS, promURL, kubeContext); err != nil {
+		if err := runScan(scanNS, promURL, kubeContext, backend); err != nil {
 			setupLog.Error(err, "scan failed")
 			os.Exit(1)
 		}
@@ -270,7 +288,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	rmgr := runner.NewManager(mgr.GetClient(), ctrl.Log)
+	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
+	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
+	// reconciling — let alone mutating — on a backend it silently substituted.
+	rmgr, err := runner.NewManagerWithBackend(mgr.GetClient(), ctrl.Log, backend)
+	if err != nil {
+		setupLog.Error(err, "cannot construct the resolved actuator; refusing to start")
+		os.Exit(1)
+	}
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
@@ -518,7 +543,7 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 // PhysicsWitness per pod (K8s values live; AI/GPU hardware validation is tracked by
 // PHORVEXSEC-87 until a DCGM
 // adapter answers), and run the separately-ablated scarcity A/B. Read-only.
-func runScan(namespace, promURL, kubeContext string) error {
+func runScan(namespace, promURL, kubeContext string, backend actuator.BackendResolution) error {
 	// Honor an explicit kubeconfig context (DERIVED by the console from the operator's
 	// kubeconfig — never hardcoded); empty => current-context. EKS auth is the exec-credential
 	// kubeconfig (zero AWS SDK linked).
@@ -598,7 +623,13 @@ func runScan(namespace, promURL, kubeContext string) error {
 	}
 
 	if namespace != "" {
-		rmgr := runner.NewManager(c, ctrl.Log)
+		// [M-21] Same fail-fast on the one-shot path: a scan reports what the CONFIGURED
+		// backend would do, so an unresolvable selector must stop it rather than have it
+		// silently report the default backend's answers.
+		rmgr, mErr := runner.NewManagerWithBackend(c, ctrl.Log, backend)
+		if mErr != nil {
+			return mErr
+		}
 		if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 			n.SetBoundaryReader(c)
 		}
@@ -677,7 +708,7 @@ func scarcityVerdict(lift float64) string {
 }
 
 // runAblation runs the STEP-3 IP ablation live and prints the per-dollar comparison.
-func runAblation(namespace, selector string, budget, nseeds int) error {
+func runAblation(namespace, selector string, budget, nseeds int, backend actuator.BackendResolution) error {
 	if namespace == "" {
 		return fmt.Errorf("ablation-namespace is required")
 	}
@@ -693,7 +724,10 @@ func runAblation(namespace, selector string, budget, nseeds int) error {
 	if err != nil {
 		return err
 	}
-	rmgr := runner.NewManager(c, ctrl.Log)
+	rmgr, err := runner.NewManagerWithBackend(c, ctrl.Log, backend)
+	if err != nil {
+		return err
+	}
 	if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		n.SetBoundaryReader(c)
 	}
