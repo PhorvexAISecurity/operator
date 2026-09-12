@@ -15,12 +15,17 @@ import (
 // by ingest.PopulateGPUWitness). It is the Derive() override the GPU adapters share: the K8s half
 // is inherited from genericK8s; the GPU floats are stamped ONLY for pods DCGM actually reported a
 // GPU for — so with no DCGM feed the GPU half stays honest-absent (GPUPresent=false), never faked.
+//
+// Each measured float travels WITH its presence bit (M-152): the producer decides presence from
+// the actual series it got back, so an observed zero stays present and a missing/failed/non-finite
+// observation stays absent. Presence is never re-derived here from a non-zero float or from the
+// mere existence of GPU hardware.
 func stampGPU(base genericK8s, snap *ingest.Snapshot) map[string]model.PhysicsWitness {
 	out := base.Derive(snap)
 	for key, gw := range snap.GPUWitness {
 		w := out[key]
 		w.GPUPresent = true
-		w.VRAMFraction = gw.VRAMFraction
+		w.VRAMPresent, w.VRAMFraction = gw.VRAMPresent, gw.VRAMFraction
 		w.SMOccupancy = gw.SMOccupancy
 		w.SMSource = gw.SMSource
 		w.LinkBandwidth = gw.LinkBandwidth

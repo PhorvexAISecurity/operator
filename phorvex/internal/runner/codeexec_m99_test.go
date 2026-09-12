@@ -26,8 +26,10 @@ func (f fakeAdmission) Available(map[string]string) (bool, string) { return f.ok
 
 func unverifiedCodeExecWitness() capability.Witness {
 	// Empty fleet/index; no installability gaps; no SSAR checker; code-exec admission
-	// UNVERIFIED for the labelled namespace.
-	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, nil, nil).
+	// UNVERIFIED for the labelled namespace. The backend is an EXPLICIT support double
+	// (M-21): these tests isolate the code-exec and M99 no-rbac legs, and an absent
+	// backend would now exclude every action first, for the wrong reason.
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, nil, supportsAll{}).
 		WithCodeExec(
 			fakeAdmission{ok: false, reason: capability.ReasonCodeExec + ": not verified"},
 			map[string]map[string]string{"ns": {"phorvex.ai/codeexec-managed": "true"}},

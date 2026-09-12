@@ -50,7 +50,10 @@ func m140PolicyObj(uid string) *v1alpha1.PhorvexPolicy {
 func TestM140_CoalescedRecreateThroughReconcileDoesNotInheritState(t *testing.T) {
 	scheme := m140Scheme(t)
 	engine := decision.NewCoverageEngine()
-	mgr := runner.NewManager(fake.NewClientBuilder().WithScheme(scheme).Build(), logr.Discard())
+	mgr, err := runner.NewManager(fake.NewClientBuilder().WithScheme(scheme).Build(), logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	mgr.Optimizer = engine
 
 	old := m140PolicyObj("uid-A")
@@ -102,7 +105,10 @@ func TestM140_CoalescedRecreateThroughReconcileDoesNotInheritState(t *testing.T)
 // hot-looping the workqueue.
 func TestM140_ReconcileSurfacesMissingUIDInsteadOfDowngrading(t *testing.T) {
 	scheme := m140Scheme(t)
-	mgr := runner.NewManager(fake.NewClientBuilder().WithScheme(scheme).Build(), logr.Discard())
+	mgr, err := runner.NewManager(fake.NewClientBuilder().WithScheme(scheme).Build(), logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	client := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(m140PolicyObj("")).Build()
 	r := &PhorvexPolicyReconciler{Client: client, Manager: mgr}
@@ -141,7 +147,10 @@ func TestM140_TenantCollisionConditionIsPublishedAndCleared(t *testing.T) {
 	second.Name = "policy-two" // same spec.tenant, different policy and UID
 	client := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(first, second).Build()
-	mgr := runner.NewManager(client, logr.Discard())
+	mgr, err := runner.NewManager(client, logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	mgr.Optimizer = decision.NewCoverageEngine()
 
 	if err := mgr.Upsert(first); err != nil {
