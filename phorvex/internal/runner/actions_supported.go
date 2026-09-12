@@ -23,6 +23,12 @@ const (
 	actionsSupportedReason               = "AllEnabledActionsSupported"
 	actionsUnsupportedReason             = "UnsupportedActionsEnabled"
 	actionsSupportedDegradedReason       = "Degraded"
+	// actionsNoAssetsReason marks a tick that OBSERVED NOTHING: the selector matched no
+	// assets, so per-target capability was never evaluated. [M-21] It is reported Unknown
+	// rather than True because "we saw nothing" is not "everything is ready" — the old
+	// code returned an affirmative all-supported claim for an empty fleet, which is a
+	// runtime-readiness assertion no observation supports.
+	actionsNoAssetsReason = "NoSelectedAssets"
 )
 
 // actionGap is one enabled AI-capability action that is not serviceable on the WHOLE
@@ -46,6 +52,18 @@ type actionsSupportStatus struct {
 	message string
 }
 
+// capabilityReport is ONE tick's capability picture for one policy: the per-action gaps
+// PLUS the observation context needed to describe them truthfully. A bare gap list cannot
+// distinguish "every enabled action is serviceable" from "no asset was observed at all",
+// and reporting the second as the first is the readiness claim M-21 removes.
+type capabilityReport struct {
+	gaps []actionGap
+	// observed is how many selected assets this tick actually saw.
+	observed int
+	// enabled is how many enabled, actionable entries were evaluated.
+	enabled int
+}
+
 // capabilityGaps returns every enabled AI-capability action that is not serviceable on
 // the WHOLE selected fleet, with its per-asset count (T1-E's M-20 witness, now counted).
 // Honest-∃ per pod via the shared witness (the same predicate the generator's gate uses,
@@ -54,13 +72,23 @@ type actionsSupportStatus struct {
 // smeared conjunction: pod A's GPU + pod B's serving endpoint ⇒ kv-reset "supported"
 // though neither has both). A fully-supported action (every pod eligible) yields no gap;
 // a fully-unsupported one is a FLIP gap; a partial one is surfaced but does not flip.
-func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capability.Witness) []actionGap {
+func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capability.Witness) capabilityReport {
 	total := len(views)
+	rep := capabilityReport{observed: total}
 	var gaps []actionGap
-	for action, enabled := range pol.EnabledActions {
-		if !enabled || !capability.AICapabilityActions[action] {
+	// [M-21] Enumerate the enabled actions through the SAME source of truth the generator
+	// uses (model.MutatingActions filtered by model.ActionEnabled), for two reasons the
+	// old `range pol.EnabledActions` got wrong:
+	//   - a NIL EnabledActions map means the documented default set (rotate+quarantine),
+	//     which the raw range skipped entirely, so a default policy was never evaluated;
+	//   - the AICapabilityActions filter dropped every non-AI action, so a backend that
+	//     cannot enact rotate, identity-rotate or debugger was never even asked about it.
+	// Backend support is now part of the witness for EVERY action, so both had to go.
+	for _, action := range model.MutatingActions {
+		if !model.ActionEnabled(pol, action) {
 			continue
 		}
+		rep.enabled++
 		unsupported := 0
 		whyCount := map[string]int{}
 		for _, v := range views {
@@ -81,7 +109,8 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
 		gaps = append(gaps, actionGap{action: action, unsupported: unsupported, total: total, why: dominantWhy(whyCount)})
 	}
 	sort.Slice(gaps, func(i, j int) bool { return gaps[i].action < gaps[j].action })
-	return gaps
+	rep.gaps = gaps
+	return rep
 }
 
 // dominantWhy picks the reason DETERMINISTICALLY — the mode over the unsupported assets,
@@ -133,11 +162,12 @@ func flipSignature(flip []actionGap) string {
 	return strings.Join(parts, ",")
 }
 
-func (m *Manager) debounceActionsSupported(e *policyEntry, gaps []actionGap) actionsSupportStatus {
+func (m *Manager) debounceActionsSupported(e *policyEntry, rep capabilityReport) actionsSupportStatus {
 	threshold := m.ActionsSupportedDebounce
 	if threshold <= 0 {
 		threshold = DefaultActionsSupportedDebounceTicks
 	}
+	gaps := rep.gaps
 	flip := flipGaps(gaps)
 	// The condition FLIP debounces on the fully-unsupported set ONLY (count-free signature)
 	// — a fluctuating partial count, or a changing fleet size, must never trip or hold the
@@ -149,6 +179,20 @@ func (m *Manager) debounceActionsSupported(e *policyEntry, gaps []actionGap) act
 	entry := m.policies[e.key.String()]
 	if entry == nil {
 		entry = e
+	}
+	// [M-21] Nothing observed: the selector matched no asset this tick, so no per-target
+	// capability was evaluated for any enabled action. Disclose the absent observation
+	// instead of asserting readiness. It resets the debounce (an empty fleet is not
+	// evidence of capability loss) and stays Unknown rather than False, preserving M-20's
+	// deliberate refusal to flip a policy that simply matches nothing yet.
+	if rep.enabled > 0 && rep.observed == 0 {
+		entry.actionsUnsupportedTicks = 0
+		entry.actionsUnsupportedSignature = ""
+		m.mu.Unlock()
+		return actionsSupportStatus{
+			status: metav1.ConditionUnknown, reason: actionsNoAssetsReason,
+			message: fmt.Sprintf("no selected assets observed; per-target capability for the %d enabled action(s) was not evaluated", rep.enabled),
+		}
 	}
 	if len(flip) == 0 {
 		// No action is unsupported fleet-wide: the condition stays TRUE. If there are

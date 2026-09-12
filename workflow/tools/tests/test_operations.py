@@ -792,19 +792,31 @@ class AgentOperationsTests(unittest.TestCase):
             self.assertEqual(status["state"], "DEPLOYED")
 
     def test_report_file_must_stay_inside_workflow_tree(self) -> None:
-        # A per-test directory, still outside the sandboxed workflow tree. A shared
-        # fixed /tmp filename can already belong to another user on this host.
-        with sandbox() as (_, _, _), tempfile.TemporaryDirectory() as elsewhere:
-            outside = Path(elsewhere) / "workflow-outside-report.md"
+        # The fixture used a FIXED path, /tmp/workflow-outside-report.md. Any leftover from
+        # another user makes the write fail with PermissionError and the test cannot run at
+        # all — the check it guards is then silently unexercised on that machine. The
+        # sandbox's own repo directory is unique per run and cleans itself up, and the
+        # assertions pin both the PREMISE (the fixture really is outside the workflow root)
+        # and the REASON, so a refusal for some other cause (a missing file, say) cannot be
+        # mistaken for containment holding.
+        with sandbox() as (repo, _, _):
+            outside = repo / "workflow-outside-report.md"
             outside.write_text("secret\n", encoding="utf-8")
+            self.assertFalse(
+                outside.resolve().is_relative_to(Path(workflow.ROOT).resolve()),
+                "fixture must lie outside the workflow root or this test proves nothing",
+            )
             args = intake_args("RPT-20260907-000006-outside")
             args.report_file = str(outside)
-            with redirect_stderr(io.StringIO()):
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
                 result = workflow.cmd_new_intake(args)
             self.assertEqual(result, 1)
+            self.assertIn("must exist under the workflow tree", stderr.getvalue())
             self.assertFalse(
                 (workflow.INTAKE / "RPT-20260907-000006-outside").exists()
             )
+            self.assertTrue(outside.is_file(), "the tool must not consume the outside file")
 
     def test_triage_guide_is_read_only(self) -> None:
         policy_path = SOURCE_ROOT / "operations" / "POLICY.yaml"

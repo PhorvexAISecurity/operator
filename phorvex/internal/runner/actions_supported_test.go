@@ -17,21 +17,52 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
+// supportsAll is an EXPLICIT support double: a backend that implements every action. It
+// isolates the CONFIG/RBAC legs from the M-21 backend leg, which has its own tests against
+// the real adapters. A nil actuator is no longer usable for this — an absent backend
+// cannot establish affirmative support, so it would fail every action for the wrong reason.
+type supportsAll struct{}
+
+func (supportsAll) Name() string                                              { return "supports-all" }
+func (supportsAll) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
+func (supportsAll) Actuate(context.Context, actuator.Request) (actuator.Result, error) {
+	return actuator.Result{}, nil
+}
+func (supportsAll) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+
 func capWitness(fleet []model.Pod) capability.Witness {
-	// no actuator (transport not exercised here), no rbac/installable — capability leg only.
-	return capability.BuildWitness(context.Background(), capability.BuildIndex(fleet, nil, nil), nil, nil, nil)
+	// explicit support double (backend leg neutralised), no rbac/installable — config leg only.
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(fleet, nil, nil), nil, nil, supportsAll{})
+}
+
+// report wraps a synthetic gap list with an observation context for the debounce tests
+// that construct gaps directly rather than running the witness.
+func report(gaps []actionGap) capabilityReport {
+	observed, enabled := 1, 1
+	for _, g := range gaps {
+		if g.total > observed {
+			observed = g.total
+		}
+	}
+	if len(gaps) > enabled {
+		enabled = len(gaps)
+	}
+	return capabilityReport{gaps: gaps, observed: observed, enabled: enabled}
 }
 
 // flipNames returns the actions that flip the condition (fully unsupported, ∃ nobody
 // eligible) — the M-20 count-aware analog of the old unsupported-names helper.
-func flipNames(gaps []actionGap) []string {
-	out := make([]string, 0, len(gaps))
-	for _, g := range flipGaps(gaps) {
+func flipNames(rep capabilityReport) []string {
+	out := make([]string, 0, len(rep.gaps))
+	for _, g := range flipGaps(rep.gaps) {
 		out = append(out, string(g.action))
 	}
 	sort.Strings(out)
@@ -63,13 +94,13 @@ func TestUnsupportedQuietOnHeterogeneity(t *testing.T) {
 	views := []*model.WorkloadView{{Pod: full}, {Pod: cpu}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 
-	gaps := capabilityGaps(pol, views, capWitness([]model.Pod{full, cpu}))
-	if got := flipNames(gaps); len(got) != 0 {
+	rep := capabilityGaps(pol, views, capWitness([]model.Pod{full, cpu}))
+	if got := flipNames(rep); len(got) != 0 {
 		t.Fatalf("a fully-eligible pod should keep kv-reset from FLIPPING; got flip=%v", got)
 	}
 	// ...but the partial gap is still surfaced (count-while-green): kv-reset on 1 of 2.
-	if len(gaps) != 1 || gaps[0].unsupported != 1 || gaps[0].total != 2 {
-		t.Fatalf("mixed fleet must surface the partial gap (kv-reset 1/2), got %+v", gaps)
+	if len(rep.gaps) != 1 || rep.gaps[0].unsupported != 1 || rep.gaps[0].total != 2 {
+		t.Fatalf("mixed fleet must surface the partial gap (kv-reset 1/2), got %+v", rep.gaps)
 	}
 }
 
@@ -131,13 +162,13 @@ func TestConditionWhyMatchesRecordVocabulary(t *testing.T) {
 	cpu := model.Pod{Namespace: "ns", Name: "cpu"}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	wit := capWitness([]model.Pod{cpu})
-	gaps := capabilityGaps(pol, []*model.WorkloadView{{Pod: cpu}}, wit)
-	if len(gaps) != 1 {
-		t.Fatalf("want one gap, got %+v", gaps)
+	rep := capabilityGaps(pol, []*model.WorkloadView{{Pod: cpu}}, wit)
+	if len(rep.gaps) != 1 {
+		t.Fatalf("want one gap, got %+v", rep.gaps)
 	}
 	_, recordWhy := wit.Capable(&model.WorkloadView{Pod: cpu}, model.ActionKVReset)
-	if gaps[0].why != recordWhy {
-		t.Fatalf("condition why %q != record why %q — the record and condition must share vocabulary", gaps[0].why, recordWhy)
+	if rep.gaps[0].why != recordWhy {
+		t.Fatalf("condition why %q != record why %q — the record and condition must share vocabulary", rep.gaps[0].why, recordWhy)
 	}
 }
 
@@ -178,20 +209,20 @@ func TestActionsSupportedDebouncesAndRecovers(t *testing.T) {
 	missing := []actionGap{{action: model.ActionMIGRebind, unsupported: 1, total: 1, why: "no selected pod has a MIG device"}}
 
 	for observation := 1; observation <= 2; observation++ {
-		status := m.debounceActionsSupported(entry, missing)
+		status := m.debounceActionsSupported(entry, report(missing))
 		if status.status != metav1.ConditionUnknown || status.reason != actionsSupportedDegradedReason {
 			t.Fatalf("observation %d = %s/%s, want Unknown/Degraded", observation, status.status, status.reason)
 		}
 	}
-	status := m.debounceActionsSupported(entry, missing)
+	status := m.debounceActionsSupported(entry, report(missing))
 	if status.status != metav1.ConditionFalse || status.reason != actionsUnsupportedReason {
 		t.Fatalf("third observation = %s/%s, want False/%s", status.status, status.reason, actionsUnsupportedReason)
 	}
-	recovered := m.debounceActionsSupported(entry, nil)
+	recovered := m.debounceActionsSupported(entry, report(nil))
 	if recovered.status != metav1.ConditionTrue || entry.actionsUnsupportedTicks != 0 {
 		t.Fatalf("recovery did not reset debounce: %+v entry=%+v", recovered, entry)
 	}
-	if again := m.debounceActionsSupported(entry, missing); again.status != metav1.ConditionUnknown {
+	if again := m.debounceActionsSupported(entry, report(missing)); again.status != metav1.ConditionUnknown {
 		t.Fatalf("post-recovery first miss was not debounced: %+v", again)
 	}
 }
@@ -285,11 +316,12 @@ func (d runnerDenySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccess
 func TestConditionSurfacesNoRBAC(t *testing.T) {
 	pod := model.Pod{Namespace: "denied", Name: "p", HasGPU: true, ServingEndpointReady: true}
 	az := authz.NewCheckerWithClient(runnerDenySSAR{deny: true}, authz.DefaultTTL)
-	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, nil)
+	// Explicit support double so the BACKEND leg cannot mask the RBAC leg under test.
+	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, supportsAll{})
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 
-	gaps := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}}, wit)
-	if len(gaps) != 1 || gaps[0].action != model.ActionKVReset || !strings.HasPrefix(gaps[0].why, "no-rbac:") {
-		t.Fatalf("condition must surface the kv-reset no-rbac gap, got %+v", gaps)
+	rep := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}}, wit)
+	if len(rep.gaps) != 1 || rep.gaps[0].action != model.ActionKVReset || !strings.HasPrefix(rep.gaps[0].why, "no-rbac:") {
+		t.Fatalf("condition must surface the kv-reset no-rbac gap, got %+v", rep.gaps)
 	}
 }
