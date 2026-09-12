@@ -250,6 +250,39 @@ fixes:
     stacked_on: []
     branch: fix/audit-volume-guard
     head_sha: 255a23a5dcc58c4ea3be0fb9b191edbb9c68a273
+  M-18:
+    directory: fixes/M-18
+    aliases: []
+    issues:
+    - M-18
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: parallel/record-m018-phoenix-forensic-fields
+    head_sha: 3d7f3b2e265c5c84aeb60cce766851e7e21921d8
+  M-21:
+    directory: fixes/M-21
+    aliases: []
+    issues:
+    - M-21
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: parallel/contract-m021-actuator-selection-repertoire
+    head_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+  V3-M152:
+    directory: fixes/V3-M152
+    aliases: []
+    issues:
+    - M-152
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m152-vram-presence
+    head_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
   V3-E2E:
     directory: fixes/V3-E2E
     aliases: []

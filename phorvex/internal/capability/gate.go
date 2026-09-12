@@ -222,21 +222,33 @@ func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys 
 // gate (step 3) and by the runner's ActionsSupported status (∃-aggregation). ok=true for
 // any non-AI-capability action. why is the specific missing-fixture reason.
 func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, string) {
-	if !AICapabilityActions[action] {
-		return true, ""
-	}
-	pod := &v.Pod
-	if !(pod.HasGPU || pod.ModelID != "") {
-		return false, "pod advertises no GPU or model identity"
-	}
-	if why := w.configWhy(pod, action); why != "" {
-		return false, why
-	}
-	// The one fixture only the actuator PACKAGE knows: node-exec transport wired (M-79).
-	if w.act != nil {
-		if ok, why := w.act.SupportsAction(w.ctx, action, targetFrom(v)); !ok {
+	// AI-capability actions carry per-target CONFIG predicates; the rest do not. Cheapest
+	// local checks first, unchanged.
+	if AICapabilityActions[action] {
+		pod := &v.Pod
+		if !(pod.HasGPU || pod.ModelID != "") {
+			return false, "pod advertises no GPU or model identity"
+		}
+		if why := w.configWhy(pod, action); why != "" {
 			return false, why
 		}
+	}
+	// [M-21] The SELECTED backend is consulted for EVERY action, not only the AI ones.
+	// The old early `return true` for non-AI actions meant a backend that cannot enact
+	// rotate, identity-rotate or debugger was never even asked, so its inability could
+	// not reach the status. This leg answers "does the backend that would actually
+	// receive this dispatch implement the action?" — target-independent, and therefore
+	// the same answer for every pod, which is precisely why a backend gap flips the
+	// whole-fleet condition rather than showing up as a partial one.
+	//
+	// An ABSENT backend cannot establish affirmative support: with no hands wired there
+	// is nothing that could enact the move, so the honest answer is "no", never a
+	// default-true. Tests isolating the other legs wire an explicit support double.
+	if w.act == nil {
+		return false, actuator.ReasonBackendUnavailable + ": no actuator is wired to answer for this action"
+	}
+	if ok, why := w.act.SupportsAction(w.ctx, action, targetFrom(v)); !ok {
+		return false, why
 	}
 	return true, ""
 }
