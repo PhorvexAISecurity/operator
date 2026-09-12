@@ -2251,7 +2251,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-152 · `stampGPU` drops `VRAMPresent` — the decision trace's VRAM field is permanently dark, even when DCGM data flows and the gate consumes the float · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: V3-M152
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit

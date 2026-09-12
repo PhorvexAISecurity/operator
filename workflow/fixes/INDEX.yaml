@@ -272,3 +272,14 @@ fixes:
     stacked_on: []
     branch: parallel/contract-m021-actuator-selection-repertoire
     head_sha: c006e7b5f27b7220a1d24f4e65331c5d57d4b544
+  V3-M152:
+    directory: fixes/V3-M152
+    aliases: []
+    issues:
+    - M-152
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m152-vram-presence
+    head_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
