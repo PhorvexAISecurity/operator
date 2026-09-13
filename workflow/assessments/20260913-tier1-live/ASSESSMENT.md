@@ -9,7 +9,9 @@ a replacement master register, or permission to begin Tier 2.
 - Lead and live observer: codex-lead.
 - Independent reviewer: claude-tier1-auth-review, Claude Opus 5, high effort.
   Its initial source investigation and plan review are separate from the lead's
-  live observations; review of this assessment packet is recorded separately.
+  live observations; review of this assessment packet passed after corrections; see
+  [independent review](auth-integration/ASSESSMENT-REVIEW-R2.md) and
+  [lead disposition](LEAD-DISPOSITION.md).
 - Source: `6ed7d3135e97de68eaf8ebb607ddab4833d22d20`.
 - Running operator source: `58363a1796cd03c3f7834c5814f85799df95b56f`.
 - Running image identities: [report](REPORT.md) and
