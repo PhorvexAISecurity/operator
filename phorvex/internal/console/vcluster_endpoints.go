@@ -9,15 +9,19 @@
  * comes from that principal's grant.
  *
  * The two-principal approval safety (a submit and its approval must come from DISTINCT
- * subjects) is unchanged, and now rests on verified subjects rather than a query parameter.
- * Approval-lifecycle concurrency and persistence remain separate, still-open defects; nothing
- * here widens them.
+ * subjects) is unchanged, and rests on verified subjects rather than a query parameter.
+ *
+ * Approval contract (M-166): an approval names the tenant it acts on (resolved through the grant
+ * exactly like a submit — a body or query tenant can never widen scope) and the exact generation
+ * the pending listing reported. The response's `status` is what THIS call did; only
+ * `status: "applied"` means the applier accepted the candidate. See docs/CONSOLE-APPLY-FIX.md.
  */
 
 package console
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -85,11 +89,24 @@ func (s *Server) applyFixSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	// tenant/namespace/requester from the VERIFIED identity and its grant, NEVER the body.
 	req := ApplyFixRequest{ID: body.ID, Tenant: tenant, Namespace: tenant, Delta: body.Delta, Reason: body.Reason, Requester: actorOf(r)}
-	if err := s.applyfix.Submit(req); err != nil {
+	res, err := s.applyfix.Submit(req)
+	switch {
+	case errors.Is(err, ErrApplyFixConflict):
+		writeJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	case errors.Is(err, ErrApplyFixCapacity):
+		writeJSON(w, 503, map[string]string{"error": err.Error()})
+		return
+	case err != nil:
 		writeJSON(w, 422, map[string]string{"error": err.Error()}) // allowlist or safety-gate rejection
 		return
 	}
-	writeJSON(w, 200, map[string]any{"status": "pending-approval", "id": body.ID, "note": "two-key: requires a DISTINCT approver"})
+	status := string(res.State)
+	if res.State == ApplyFixPending {
+		status = "pending-approval"
+	}
+	writeJSON(w, 200, map[string]any{"status": status, "id": res.ID, "tenant": res.Tenant, "generation": res.Generation,
+		"existing": res.Existing, "note": "two-key: requires a DISTINCT approver naming this generation"})
 }
 
 func (s *Server) applyFixApprove(w http.ResponseWriter, r *http.Request) {
@@ -98,19 +115,59 @@ func (s *Server) applyFixApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ID string `json:"id"`
+		ID         string `json:"id"`
+		Tenant     string `json:"tenant"`
+		Generation string `json:"generation"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
-		writeJSON(w, 400, map[string]string{"error": "bad body (need id)"})
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" || body.Generation == "" {
+		writeJSON(w, 400, map[string]string{"error": "bad body (need id + generation from the pending listing)"})
+		return
+	}
+	// The tenant is resolved through the grant exactly as for a submit: a body/query tenant is a
+	// SELECTION among granted tenants, never a widening, and a multi/wildcard grant must name one.
+	tenant, why := requestTenant(r, body.Tenant)
+	if tenant == "" {
+		writeJSON(w, 403, map[string]string{"error": why})
 		return
 	}
 	// The approver is the verified subject. Two-key safety is unchanged: the manager refuses an
 	// approval from the same identity that submitted.
-	if err := s.applyfix.Approve(body.ID, actorOf(r)); err != nil {
-		writeJSON(w, 422, map[string]string{"error": err.Error()}) // two-key violation or gate re-check
-		return
+	res, err := s.applyfix.Approve(tenant, body.ID, body.Generation, actorOf(r))
+	code, status := approveOutcome(err)
+	out := map[string]any{"status": status, "id": res.ID, "tenant": res.Tenant, "generation": res.Generation,
+		"state": string(res.State), "approver": res.Approver, "retry": res.Retry}
+	if err != nil {
+		out["error"] = err.Error()
 	}
-	writeJSON(w, 200, map[string]string{"status": "applied", "id": body.ID})
+	writeJSON(w, code, out)
+}
+
+// approveOutcome maps ONE approval call's result to an HTTP code and the product status the UI
+// interprets. Every path is explicit; only a nil error is "applied".
+func approveOutcome(err error) (int, string) {
+	switch {
+	case err == nil:
+		return 200, "applied"
+	case errors.Is(err, ErrApplyFixNotFound):
+		return 404, "not-found"
+	case errors.Is(err, ErrApplyFixGeneration):
+		return 409, "stale-generation"
+	case errors.Is(err, ErrApplyFixInProgress):
+		return 409, "in-progress"
+	case errors.Is(err, ErrApplyFixTerminal):
+		return 409, "conflict"
+	case errors.Is(err, ErrApplyFixStaleBase):
+		return 409, "stale"
+	case errors.Is(err, ErrApplyFixTwoKey):
+		return 422, "refused"
+	case errors.Is(err, ErrApplyFixGateRefused):
+		return 422, "rejected"
+	case errors.Is(err, ErrApplyFixNoApplier):
+		return 501, "applier-unavailable"
+	case errors.Is(err, ErrApplyFixApplyFailed):
+		return 500, "failed"
+	}
+	return 400, "invalid"
 }
 
 // applyFixGatePreview runs the allowlist + safety gate on a candidate WITHOUT staging it — the UI
@@ -144,10 +201,11 @@ func (s *Server) applyFixPending(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.applyfix == nil {
-		writeJSON(w, 200, map[string]any{"pending": []any{}, "applierMode": "disabled"})
+		writeJSON(w, 200, map[string]any{"pending": []any{}, "applierMode": "disabled", "applierWired": false})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"pending": s.applyfix.Pending(tenant), "applierMode": s.applyfix.ApplierMode})
+	// applierWired is the truth an approval will act on; applierMode is only the deployment's label.
+	writeJSON(w, 200, map[string]any{"pending": s.applyfix.Pending(tenant), "applierMode": s.applyfix.ApplierMode, "applierWired": s.applyfix.Apply != nil})
 }
 
 func (s *Server) applyFixAudit(w http.ResponseWriter, r *http.Request) {
