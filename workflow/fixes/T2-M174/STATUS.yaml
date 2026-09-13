@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,12 +15,76 @@ checks:
     source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
     at: '2026-09-13T21:45:57+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: sol-m174
+    artifact: evidence/baseline-red/current-probe-baseline-red-r2.txt
+    sha256: 8ad8511a2eee34cb27814e5ae68ddf2effbfa57b0a4ea185b615b749178b5b78
+    source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+    at: '2026-09-13T22:17:37+00:00'
+  preflight:
+    result: PASS
+    by: sol-m174
+    artifact: evidence/preflight/receipt.json
+    sha256: a905b53e21d3ad704a3be55e53f60a03865d394deca8268d99c394cdbc9895bc
+    source_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+    at: '2026-09-13T22:18:35+00:00'
+  implementation:
+    result: PASS
+    by: sol-m174
+    artifact: 04-diff.patch
+    sha256: be7c79b35e2f1c1a79809cedcbbb43f43e7a3d56eadcd00c01da8a477903a1bc
+    source_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+    at: '2026-09-13T22:18:35+00:00'
+  l0:
+    result: PASS
+    by: sol-m174
+    artifact: evidence/preflight/run-1789337511579062202/go-phorvex.log
+    sha256: 84187627386a9f1fcca2943234ac3f0c32537b28653fea947b156138e8b6a571
+    source_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+    at: '2026-09-13T22:18:35+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 804c7f8fd4d00174f7b949af188532d8b2ba3c53e66aebd89fb69b8d9f8b61c2
+  l1:
+    result: PASS
+    by: sol-m174
+    artifact: evidence/l1-offline.txt
+    sha256: 331d7fcb8a4b6d327a17acc6fb08c1f8735c2a06b8fd45b35504cd363aaff34f
+    source_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+    at: '2026-09-13T22:18:36+00:00'
+    inputs:
+    - phorvex/internal/runner/m174_scheduler_test.go
+    - phorvex/internal/runner/manager.go
+    - workflow/fixes/T2-M174/verify.sh
+    inputs_sha256: 0191aec4f2ff94ebc5d7f06b0a9436f53ac298d994c33c5d5bc3bb0f646c449f
+  l2:
+    result: PASS
+    by: sol-m174
+    artifact: evidence/runner-race-final.txt
+    sha256: 013a324c5b181fbc876eed4282ef2ee14a7e0cf3b1fd46febeac843a3ae6a8db
+    source_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+    at: '2026-09-13T22:18:36+00:00'
+    inputs:
+    - phorvex/internal/runner
+    inputs_sha256: 63d0434ed5f87f1cfb1d3a6f2c66905f540d3b5bd9788d8f5b73781a0b6d416b
+  positive_control:
+    result: PASS
+    by: sol-m174
+    artifact: evidence/head-cadence-controls.txt
+    sha256: 5e46d947dff191abd52d2f6beb867f03f5e7dcd4e7dfb90981966466fe1ffc67
+    source_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+    at: '2026-09-13T22:18:36+00:00'
+    inputs:
+    - phorvex/internal/runner/m174_scheduler_test.go
+    - phorvex/internal/runner/manager.go
+    inputs_sha256: b9a771803ad0c4376691903334836f68199a612f486debfac48d231476d6a625
 fix_id: T2-M174
 issues:
 - M-174
 title: Schedule policy decisions at their requested cadence
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -44,7 +108,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m174-policy-cadence
   base_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
-  head_sha: null
+  head_sha: f0185d445d5303c13588d9d6d059309b946e0d53
   stacked_on: []
 pull_request:
   url: null
@@ -66,12 +130,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -81,9 +145,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement policy cadence with bounded failure retry
-updated_at: '2026-09-13T21:45:57+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T22:18:40+00:00'
 configuration_history:
 - at: '2026-09-13T21:45:55+00:00'
   by: codex-lead
@@ -96,6 +161,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: workflow/fixes/T2-M174/AUTHORIZATION.md
+- at: '2026-09-13T22:10:43+00:00'
+  by: sol-m174
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:18:35+00:00'
+  by: sol-m174
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -113,3 +188,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T22:18:36+00:00'
+  by: sol-m174
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T22:18:38+00:00'
+  by: sol-m174
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T2-M174:7:submit
+  from: sol-m174
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 7
