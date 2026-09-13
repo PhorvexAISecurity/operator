@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 19
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,74 +16,74 @@ checks:
     at: '2026-09-13T18:30:42+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
-  preflight:
-    result: PASS
-    by: claude-v3-m162
-    artifact: evidence/preflight/receipt.json
-    sha256: e6adca0af5b28bb523035f45c7fdada7acce4fe2f98a9dfada659097c4eefb6c
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T19:59:04+00:00'
   implementation:
     result: PASS
-    by: claude-v3-m162
+    by: sol-m162
     artifact: 04-diff.patch
-    sha256: e5ab48cd3ed06e038d99477fc3b8c0414c476889358c57cc0ecf101800243cae
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T19:59:04+00:00'
+    sha256: a01f39b910b97b5e4d59be2921f08d363183e7a29bb6cb8a6e18b65b5feae2b6
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:22:17+00:00'
   red:
     result: PASS
-    by: claude-v3-m162
+    by: sol-m162
     artifact: evidence/incident.md
     sha256: 0a20d6142ce87034339f59a8802730e5e70e2fe1cf8cb2c76f1605646a1d46b8
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T19:59:04+00:00'
+    at: '2026-09-13T21:15:59+00:00'
   l0:
     result: PASS
-    by: claude-v3-m162
-    artifact: evidence/impl-r3/l0-build.log
-    sha256: 22605eb6eaf6407f855df69c4ef416000d7bd6dc8f2985832c66e91dc4caa60a
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T19:59:04+00:00'
+    by: sol-m162
+    artifact: evidence/impl-r4/l0-build.log
+    sha256: 6de0c9c7d6a4cd53a396794df933b8d0e6e7f3c39e94a0d85114c6c730213d3d
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:22:17+00:00'
     inputs:
     - build/test-harness
-    inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+    inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
   l1:
     result: PASS
-    by: claude-v3-m162
-    artifact: evidence/impl-r3/l1-module-tests.log
-    sha256: 5301b172ad7765318fffef940d819ba45137aa348be1f4ac9f8bc1dd3b8d7f6d
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T19:59:04+00:00'
+    by: sol-m162
+    artifact: evidence/impl-r4/l1-module-tests.log
+    sha256: 56116417c395de424af6f27c4c56745fae3e34b271e9f23bcc60287eb5310b91
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:22:17+00:00'
     inputs:
     - build/test-harness
-    inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+    inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
   l2:
     result: PASS
-    by: claude-v3-m162
-    artifact: evidence/impl-r3/green-l1-l2-scenarios.log
-    sha256: a7829ce41a28665ec208294fc65c4b92505189ea634f297d0e407f3d1adc3cbd
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T19:59:04+00:00'
+    by: sol-m162
+    artifact: evidence/impl-r4/l2-runner-scenarios.log
+    sha256: fe26250967e7f7d84b439aa504c9f8124a3f8447218ba86471db2507df5719a1
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:22:17+00:00'
     inputs:
     - build/test-harness
-    inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+    inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
   positive_control:
     result: PASS
-    by: claude-v3-m162
-    artifact: evidence/impl-r3/positive-control.log
-    sha256: 4e73f477412d938050c99d652e62bf241471ade23d9844cbb920bd94d428f5e2
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T19:59:04+00:00'
+    by: sol-m162
+    artifact: evidence/impl-r4/positive-control.log
+    sha256: d703157e154082ef42c2907ba2026ed4f37e173bf8bb9409214f03153078dbda
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:22:17+00:00'
     inputs:
     - build/test-harness
-    inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+    inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
   p3:
     result: FAIL
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 944901d64533dc86d9a92dc7de6e57b18d838b7edbde3e77185b45629a303436
-    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
-    at: '2026-09-13T19:46:45+00:00'
+    sha256: d60a4b524053443a70804429ad17f6ff01e9659ab43f17abaae193775f05eac8
+    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+    at: '2026-09-13T21:08:37+00:00'
+  preflight:
+    result: PASS
+    by: sol-m162
+    artifact: evidence/preflight/receipt.json
+    sha256: c31f2f7a2842cc13065c6ce4ca5ebc2597260a46e1102e664b2663a05d92fd63
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:22:17+00:00'
 fix_id: T2-M162
 issues:
 - M-162
@@ -93,7 +93,7 @@ state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
-  implementer: claude-v3-m162
+  implementer: sol-m162
   skeptic: codex-lead
   live_verifier: codex-lead
   coordinator: codex-lead
@@ -113,7 +113,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m162-real-credential-replay
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  head_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
   stacked_on: []
 pull_request:
   url: null
@@ -153,7 +153,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-13T19:59:05+00:00'
+updated_at: '2026-09-13T21:22:18+00:00'
 configuration_history:
 - at: '2026-09-13T18:30:40+00:00'
   by: codex-lead
@@ -178,6 +178,21 @@ configuration_history:
   approval_ref: null
 - at: '2026-09-13T19:59:04+00:00'
   by: claude-v3-m162
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T21:08:39+00:00'
+  by: codex-lead
+  fields:
+  - roles
+  approval_ref: null
+- at: '2026-09-13T21:13:37+00:00'
+  by: sol-m162
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T21:22:16+00:00'
+  by: sol-m162
   fields:
   - implementation
   approval_ref: null
@@ -246,13 +261,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T21:08:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T21:22:17+00:00'
+  by: sol-m162
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M162:9:submit
-  from: claude-v3-m162
+  id: T2-M162:19:submit
+  from: sol-m162
   to: codex-lead
   role: skeptic
   kind: submit
-  revision: 9
+  revision: 19
 check_history:
 - check: preflight
   result: PASS
@@ -383,3 +414,111 @@ check_history:
   inputs:
   - build/test-harness
   inputs_sha256: c4b257684c81567a941fdc9884831eebca68b57745a36967b71d2b0acbe5ddb3
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 944901d64533dc86d9a92dc7de6e57b18d838b7edbde3e77185b45629a303436
+  source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+  at: '2026-09-13T19:46:45+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m162
+  artifact: 04-diff.patch
+  sha256: e5ab48cd3ed06e038d99477fc3b8c0414c476889358c57cc0ecf101800243cae
+  source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  at: '2026-09-13T19:59:04+00:00'
+- check: red
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/incident.md
+  sha256: 0a20d6142ce87034339f59a8802730e5e70e2fe1cf8cb2c76f1605646a1d46b8
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T19:59:04+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r3/l0-build.log
+  sha256: 22605eb6eaf6407f855df69c4ef416000d7bd6dc8f2985832c66e91dc4caa60a
+  source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  at: '2026-09-13T19:59:04+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+- check: l1
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r3/l1-module-tests.log
+  sha256: 5301b172ad7765318fffef940d819ba45137aa348be1f4ac9f8bc1dd3b8d7f6d
+  source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  at: '2026-09-13T19:59:04+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+- check: l2
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r3/green-l1-l2-scenarios.log
+  sha256: a7829ce41a28665ec208294fc65c4b92505189ea634f297d0e407f3d1adc3cbd
+  source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  at: '2026-09-13T19:59:04+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+- check: positive_control
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r3/positive-control.log
+  sha256: 4e73f477412d938050c99d652e62bf241471ade23d9844cbb920bd94d428f5e2
+  source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  at: '2026-09-13T19:59:04+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 02c01ed06fd9a43dc79c7abce8a043231648979d9fd0e199f2e83537ac325e47
+- check: implementation
+  result: PASS
+  by: sol-m162
+  artifact: 04-diff.patch
+  sha256: a01f39b910b97b5e4d59be2921f08d363183e7a29bb6cb8a6e18b65b5feae2b6
+  source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  at: '2026-09-13T21:15:59+00:00'
+- check: l0
+  result: PASS
+  by: sol-m162
+  artifact: evidence/impl-r4/l0-build.log
+  sha256: 6de0c9c7d6a4cd53a396794df933b8d0e6e7f3c39e94a0d85114c6c730213d3d
+  source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  at: '2026-09-13T21:15:59+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
+- check: l1
+  result: PASS
+  by: sol-m162
+  artifact: evidence/impl-r4/l1-module-tests.log
+  sha256: 56116417c395de424af6f27c4c56745fae3e34b271e9f23bcc60287eb5310b91
+  source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  at: '2026-09-13T21:15:59+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
+- check: l2
+  result: PASS
+  by: sol-m162
+  artifact: evidence/impl-r4/l2-runner-scenarios.log
+  sha256: fe26250967e7f7d84b439aa504c9f8124a3f8447218ba86471db2507df5719a1
+  source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  at: '2026-09-13T21:16:00+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
+- check: positive_control
+  result: PASS
+  by: sol-m162
+  artifact: evidence/impl-r4/positive-control.log
+  sha256: d703157e154082ef42c2907ba2026ed4f37e173bf8bb9409214f03153078dbda
+  source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  at: '2026-09-13T21:16:00+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
