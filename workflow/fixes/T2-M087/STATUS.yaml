@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 14
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -99,12 +99,28 @@ checks:
     sha256: 92a34fa0dad87289088f40e1e0d9a554650ee42475e44531c7073004bfe14b06
     source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
     at: '2026-09-13T18:41:40+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: a862c3445a0cdc38f405967668d0eca02df7cf66ab1cab83493e1b0643936a98
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:51:36+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 4aec3bf24a013c2b24b9b03ecd918d575b25e78316115f9ad984efe19079f9fc
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:51:37+00:00'
+    incident_sha256: a862c3445a0cdc38f405967668d0eca02df7cf66ab1cab83493e1b0643936a98
 fix_id: T2-M087
 issues:
 - M-87
 title: Enforce dry-run and tenant bounds before native rollback
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -149,7 +165,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -165,10 +181,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T18:41:43+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T18:51:39+00:00'
 configuration_history:
 - at: '2026-09-13T18:20:59+00:00'
   by: codex-lead
@@ -220,6 +236,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-13T18:41:42+00:00'
   by: claude-v3-m087
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T18:51:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T18:51:38+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -289,9 +321,9 @@ check_history:
   - phorvex
   inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
 handoff:
-  id: T2-M087:13:submit
-  from: claude-v3-m087
+  id: T2-M087:14:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 13
+  role: coordinator
+  kind: review
+  revision: 14
