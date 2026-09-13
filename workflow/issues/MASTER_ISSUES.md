@@ -1443,7 +1443,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-42 · Session-fact gate asymmetry: kv-reset vs kv-migrate · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M042
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
@@ -1650,7 +1650,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-123 · Documentation drift (the coverage doc contradicts HEAD in its headline AND its master key) · **OPEN** · `CONTRACT`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T2-M123
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1

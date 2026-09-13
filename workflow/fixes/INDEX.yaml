@@ -350,3 +350,26 @@ fixes:
     stacked_on: []
     branch: fix/v3-m153-steering-trace
     head_sha: null
+  T2-M042:
+    directory: fixes/T2-M042
+    aliases: []
+    issues:
+    - M-42
+    related_issues: []
+    state: OFFLINE_VERIFIED
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m042-session-cover
+    head_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  T2-M123:
+    directory: fixes/T2-M123
+    aliases: []
+    issues:
+    - M-123
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m123-coverage-documentation
+    head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+

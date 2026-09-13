@@ -136,24 +136,11 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
 		}
 
-		// The session fact is produced by standardRecon above; look it up by kind rather than
-		// re-minting one, so there is exactly one session fact per asset and the key cannot drift.
-		sessKey := ""
-		for _, f := range af.Facts {
-			if f.Kind == FactSession {
-				sessKey = f.Key()
-				break
-			}
-		}
-
 		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
 		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
 		// route they learned, which is what the audit-only endpointPath represents.
 		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
 		// class as PHVX-9e.
-		if sessKey != "" {
-			af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], sessKey)
-		}
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
 		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
 		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
@@ -187,16 +174,27 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
 		// jailbreak, request-drain for a request hijack) over other eligible moves.
 		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
-		// only the weight is lifted. There is deliberately no age predicate here: an event
+// only the weight is lifted. There is deliberately no age predicate here: an event
 		// retained in the workload view remains an observation until ingestion removes it.
-		if refs := vectorEvents(view.Events, model.AttackVectorKV); len(refs) > 0 && sessKey != "" {
+		if refs := vectorEvents(view.Events, model.AttackVectorKV); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactSession, model.AttackVectorKV, vectorDominance, refs) // -> kv-reset
+		}
 		}
 		if refs := vectorEvents(view.Events, model.AttackVectorGuardrail); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactGuardrailBypass, model.AttackVectorGuardrail, vectorDominance, refs) // -> guardrail-rotate
 		}
 		if refs := vectorEvents(view.Events, model.AttackVectorInflight); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactInflightRequests, model.AttackVectorInflight, vectorDominance, refs) // -> request-drain
+		}
+	}
+	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
+	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
+	if view.Pod.ServingEndpointReady {
+		for _, f := range af.Facts {
+			if f.Kind == FactSession {
+				af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], f.Key())
+				break
+			}
 		}
 	}
 
