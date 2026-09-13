@@ -27,6 +27,9 @@ import (
 )
 
 func waitM013EventAuthorization(ctx context.Context, interval time.Duration, want bool, review func(context.Context, string) (bool, error)) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("waiting for events create/patch allowed=%t: %w", want, err)
+	}
 	verbs := []string{"create", "patch"}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -49,6 +52,73 @@ func waitM013EventAuthorization(ctx context.Context, interval time.Duration, wan
 			return fmt.Errorf("waiting for events create/patch allowed=%t (last=%v): %w", want, statuses, ctx.Err())
 		case <-ticker.C:
 		}
+	}
+}
+
+type m013SARClient interface {
+	Create(context.Context, client.Object, ...client.CreateOption) error
+}
+
+func reviewM013EventAuthorization(ctx context.Context, c m013SARClient, user string, groups []string, namespace, verb string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	sar := &authv1.SubjectAccessReview{Spec: authv1.SubjectAccessReviewSpec{
+		User: user, Groups: groups,
+		ResourceAttributes: &authv1.ResourceAttributes{Namespace: namespace, Verb: verb, Resource: "events"},
+	}}
+	if err := c.Create(ctx, sar); err != nil {
+		return false, err
+	}
+	if sar.Status.EvaluationError != "" {
+		return false, fmt.Errorf("authorization evaluation: %s", sar.Status.EvaluationError)
+	}
+	return sar.Status.Allowed, nil
+}
+
+type m013SARClientFunc func(context.Context, client.Object, ...client.CreateOption) error
+
+func (f m013SARClientFunc) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	return f(ctx, obj, opts...)
+}
+
+func TestM013AuthorizationReviewDistinguishesVerdictsAndEvaluationErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, evaluationError  string
+		allowed, want, wantErr bool
+	}{
+		{name: "allowed", allowed: true, want: true},
+		{name: "denied"},
+		{name: "evaluation error", evaluationError: "authorizer unavailable", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := m013SARClientFunc(func(_ context.Context, obj client.Object, _ ...client.CreateOption) error {
+				sar := obj.(*authv1.SubjectAccessReview)
+				if sar.Spec.User != "writer" || sar.Spec.ResourceAttributes.Namespace != "m013" || sar.Spec.ResourceAttributes.Resource != "events" || sar.Spec.ResourceAttributes.Verb != "create" {
+					t.Fatalf("imprecise review: %+v", sar.Spec)
+				}
+				sar.Status.Allowed = tc.allowed
+				sar.Status.EvaluationError = tc.evaluationError
+				return nil
+			})
+			got, err := reviewM013EventAuthorization(context.Background(), fake, "writer", []string{"group"}, "m013", "create")
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Fatalf("allowed=%t err=%v, want allowed=%t wantErr=%t", got, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestM013AuthorizationWaitRejectsCancelledContextBeforeReview(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls := 0
+	err := waitM013EventAuthorization(ctx, time.Millisecond, true, func(context.Context, string) (bool, error) {
+		calls++
+		return true, nil
+	})
+	if err == nil || calls != 0 {
+		t.Fatalf("cancelled wait err=%v reviews=%d", err, calls)
 	}
 }
 
@@ -129,14 +199,7 @@ func TestM013RealEventSink(t *testing.T) {
 		t.Fatal(err)
 	}
 	review := func(reviewCtx context.Context, verb string) (bool, error) {
-		sar := &authv1.SubjectAccessReview{Spec: authv1.SubjectAccessReviewSpec{
-			User: rc.Impersonate.UserName, Groups: rc.Impersonate.Groups,
-			ResourceAttributes: &authv1.ResourceAttributes{Namespace: "m013", Verb: verb, Resource: "events"},
-		}}
-		if err := admin.Create(reviewCtx, sar); err != nil {
-			return false, err
-		}
-		return sar.Status.Allowed, nil
+		return reviewM013EventAuthorization(reviewCtx, admin, rc.Impersonate.UserName, rc.Impersonate.Groups, "m013", verb)
 	}
 	waitAuthorization := func(label string, want bool) {
 		t.Helper()
