@@ -2267,7 +2267,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: V3-M152
 
 ### M-153 · Attack-vector steering: a forgeable event type string multiplies a cover weight ×3 and hard-sets the stage — an undocumented, attacker-reachable selection lever · **OPEN** · `BELIEF->KNOWLEDGE->CHOICE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M153
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · recon
