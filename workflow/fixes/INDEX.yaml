@@ -345,7 +345,7 @@ fixes:
     issues:
     - M-120
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/v3-m120-ci-execution
