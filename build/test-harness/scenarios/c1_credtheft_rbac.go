@@ -155,16 +155,15 @@ func (s *c1CredTheftRBAC) SuccessOracle(ctx context.Context, env *core.Env) (cor
 	}
 
 	window := observationWindow(env.Config)
-	finalDeadline := s.captureTime.Add(window)
 
-	// Natural-expiry guard: if the captured (baseline-accepted) credential's own
-	// decoded expiry falls within or is reached by the end of the observation
-	// window, a post-window denial cannot be attributed to the defender rather than
-	// to the token simply expiring. Refuse to measure rather than credit the
-	// defender for natural expiry.
-	if s.credMeta.decoded && s.credMeta.expUnix > 0 {
-		exp := time.Unix(s.credMeta.expUnix, 0)
-		if !exp.After(finalDeadline) {
+	// Natural-expiry guard (planned): if the captured credential's own decoded
+	// expiry already falls within the PLANNED window measured from capture, a
+	// post-window denial could be natural expiry rather than defense. Refuse early.
+	expKnown := s.credMeta.decoded && s.credMeta.expUnix > 0
+	var exp time.Time
+	if expKnown {
+		exp = time.Unix(s.credMeta.expUnix, 0)
+		if !exp.After(s.captureTime.Add(window)) {
 			return core.OracleResult{}, fmt.Errorf("captured credential's natural expiry falls within the observation window; measurement is not attributable to the defender")
 		}
 	}
@@ -177,20 +176,41 @@ func (s *c1CredTheftRBAC) SuccessOracle(ctx context.Context, env *core.Env) (cor
 	if err := credObservationSleep(ctx, window); err != nil {
 		return core.OracleResult{}, fmt.Errorf("observation window did not complete: %w", err)
 	}
-	elapsed := time.Since(waitStart)
+
+	// Natural-expiry guard (actual, before the final call): if the decoded expiry
+	// has already passed by the time the window elapsed, the credential expired on
+	// its own and any final outcome is unattributable.
+	finalStart := time.Now()
+	if expKnown && !exp.After(finalStart) {
+		return core.OracleResult{}, fmt.Errorf("captured credential's natural expiry was reached before the final observation; measurement is not attributable to the defender")
+	}
 
 	// Final measurement: replay the SAME captured credential after the window.
+	// Bracket it with ACTUAL timestamps so scheduling/transport delay is measured
+	// against real expiry, not the planned window.
 	final := replayCapturedCredential(ctx, env, s.captured)
+	finalEnd := time.Now()
+	elapsed := finalEnd.Sub(waitStart)
+
+	// Natural-expiry guard (actual, after the final call): if the decoded expiry is
+	// reached across the final request itself, transport/scheduling delay cannot be
+	// allowed to award the defender credit for natural expiry.
+	if expKnown && !exp.After(finalEnd) {
+		return core.OracleResult{}, fmt.Errorf("captured credential's natural expiry was reached by the final observation; measurement is not attributable to the defender")
+	}
 
 	ev := map[string]string{
 		"captureSucceeded":         "true",
 		"sourcePod":                s.sourcePod,
 		"sourcePodUID":             s.sourceUID,
 		"credentialBinding":        s.credMeta.binding,
-		"credentialExpiryKnown":    fmt.Sprintf("%v", s.credMeta.decoded && s.credMeta.expUnix > 0),
+		"credentialBindingNote":    "decoded binding is descriptive metadata, not independent cryptographic proof",
+		"credentialExpiryKnown":    fmt.Sprintf("%v", expKnown),
 		"observationWindowSeconds": fmt.Sprintf("%.0f", window.Seconds()),
 		"observedElapsedSeconds":   fmt.Sprintf("%.1f", elapsed.Seconds()),
-		"baselineReplay":           "authorized",
+		"captureAtUTC":             s.captureTime.UTC().Format(time.RFC3339),
+		"finalObservationAtUTC":    finalEnd.UTC().Format(time.RFC3339),
+		"baselineReplay":           "authorized (initial post-capture; defender already running)",
 		"finalReplayClass":         final.class.String(),
 	}
 

@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -31,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	ktesting "k8s.io/client-go/testing"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/r6security/phoenix-test-harness/internal/config"
 	"github.com/r6security/phoenix-test-harness/internal/core"
@@ -104,7 +106,12 @@ func (a *ctAPI) sawAuth() []string {
 func writePodList(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}})
+	// A genuine v1 PodList: kind/apiVersion set and an items ARRAY present (empty
+	// is valid). Items must be a non-nil slice so it marshals as [] not null.
+	_ = json.NewEncoder(w).Encode(corev1.PodList{
+		TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"},
+		Items:    []corev1.Pod{},
+	})
 }
 
 func writeStatus(w http.ResponseWriter, code int, reason metav1.StatusReason) {
@@ -704,5 +711,192 @@ func TestRunnerCredReplayFinalFaultIsInvalid(t *testing.T) {
 	m := runCredMatrix(t, api, podBoundToken(t, time.Hour), 0)
 	if got := m.MeasurementState().Status; got != core.MeasurementInvalid {
 		t.Fatalf("final-fault measurement status=%q want invalid", got)
+	}
+}
+
+// -------------------------------------------------- R1 review repairs (P3 r1)
+
+// R1.1: only a genuine v1 PodList counts as usable. A generic 200 (empty object,
+// null, a success Status, or a different collection kind) is malformed, so the
+// initial replay in Execute rejects it as an unusable credential.
+func TestCredReplayRejectsNonPodListResponses(t *testing.T) {
+	bad := map[string]string{
+		"empty-object":     `{}`,
+		"null":             `null`,
+		"success-status":   `{"kind":"Status","apiVersion":"v1","status":"Success"}`,
+		"wrong-kind":       `{"kind":"SecretList","apiVersion":"v1","items":[]}`,
+		"podlist-no-items": `{"kind":"PodList","apiVersion":"v1"}`,
+	}
+	for name, body := range bad {
+		t.Run("reject/"+name, func(t *testing.T) {
+			b := body
+			api := &ctAPI{behavior: func(w http.ResponseWriter, _ int) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(b))
+			}}
+			srv := httptest.NewServer(http.HandlerFunc(api.handler))
+			defer srv.Close()
+			env, _ := newCredEnv(t, srv.URL, "", 2)
+			installExecer(t, podBoundToken(t, time.Hour), 0)
+			s := newScenario()
+			if _, err := s.Execute(context.Background(), env); err == nil {
+				t.Fatalf("Execute accepted a non-PodList 200 body %q as a usable credential", b)
+			}
+		})
+	}
+
+	// Controls: a valid empty PodList and a populated PodList are both accepted.
+	for name, items := range map[string]string{"empty-list": `[]`, "populated-list": `[{"metadata":{"name":"p1"}}]`} {
+		t.Run("accept/"+name, func(t *testing.T) {
+			body := `{"kind":"PodList","apiVersion":"v1","items":` + items + `}`
+			api := &ctAPI{behavior: func(w http.ResponseWriter, _ int) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(body))
+			}}
+			srv := httptest.NewServer(http.HandlerFunc(api.handler))
+			defer srv.Close()
+			env, _ := newCredEnv(t, srv.URL, "", 2)
+			installExecer(t, podBoundToken(t, time.Hour), 0)
+			s := newScenario()
+			if _, err := s.Execute(context.Background(), env); err != nil {
+				t.Fatalf("Execute rejected a valid PodList control (%s): %v", name, err)
+			}
+		})
+	}
+}
+
+// R1.2: natural expiry reached at the ACTUAL final observation invalidates the
+// measurement even when the credential's expiry is beyond the PLANNED window, so
+// scheduling/transport delay cannot award a defender credit for natural expiry.
+func TestCredReplayNaturalExpiryReachedAtFinalObservation(t *testing.T) {
+	api := &ctAPI{} // 200 PodList on both calls; the guard, not the API, decides
+	srv := httptest.NewServer(http.HandlerFunc(api.handler))
+	defer srv.Close()
+	env, _ := newCredEnv(t, srv.URL, "", 1) // planned window 1s
+	// Expiry is 3s out — beyond the planned 1s window, so the pre-wait guard does
+	// NOT fire; only the actual-final guard can catch it.
+	installExecer(t, podBoundToken(t, 3*time.Second), 0)
+
+	// A wait seam that actually elapses PAST the credential's expiry.
+	prev := credObservationSleep
+	credObservationSleep = func(_ context.Context, _ time.Duration) error { time.Sleep(4 * time.Second); return nil }
+	t.Cleanup(func() { credObservationSleep = prev })
+
+	s := newScenario()
+	if _, err := s.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute (accepted baseline before expiry): %v", err)
+	}
+	_, err := s.SuccessOracle(context.Background(), env)
+	if err == nil || !strings.Contains(err.Error(), "expiry") {
+		t.Fatalf("expected natural-expiry-at-final invalidation, got %v", err)
+	}
+}
+
+// R1.2 control: a long-lived credential whose expiry is never reached yields a
+// normal valid measurement (no expiry invalidation).
+func TestCredReplayNonExpiredSurvivesControl(t *testing.T) {
+	api := &ctAPI{}
+	srv := httptest.NewServer(http.HandlerFunc(api.handler))
+	defer srv.Close()
+	env, _ := newCredEnv(t, srv.URL, "", 1)
+	installExecer(t, podBoundToken(t, time.Hour), 0)
+	noSleepWindow(t)
+	s := newScenario()
+	if _, err := s.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	res, err := s.SuccessOracle(context.Background(), env)
+	if err != nil {
+		t.Fatalf("non-expired control must be a valid measurement: %v", err)
+	}
+	if !res.Achieved {
+		t.Fatalf("non-expired surviving credential achieved=%v want true", res.Achieved)
+	}
+}
+
+func caPEM(t *testing.T, srv *httptest.Server) []byte {
+	t.Helper()
+	cert := srv.Certificate()
+	if cert == nil {
+		t.Fatal("TLS server has no certificate")
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+}
+
+// R1.3: replay verifies the server's TLS identity — a trusted fixture CA succeeds,
+// a wrong CA refuses before the credential is sent, and insecure (skip-verify) is
+// refused outright.
+func TestCredReplayVerifiesServerTLS(t *testing.T) {
+	api := &ctAPI{}
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(api.handler))
+	defer tlsSrv.Close()
+
+	t.Run("trusted-CA-succeeds", func(t *testing.T) {
+		env, _ := newCredEnv(t, tlsSrv.URL, "", 2)
+		env.Rest.TLSClientConfig.CAData = caPEM(t, tlsSrv)
+		installExecer(t, podBoundToken(t, time.Hour), 0)
+		s := newScenario()
+		if _, err := s.Execute(context.Background(), env); err != nil {
+			t.Fatalf("Execute over verified TLS: %v", err)
+		}
+		if got := api.sawAuth(); len(got) == 0 {
+			t.Fatal("verified TLS replay never reached the API")
+		}
+	})
+
+	t.Run("untrusted-server-refuses", func(t *testing.T) {
+		// No trusted CA supplied and Insecure is false, so the fixture's
+		// self-signed certificate is not trusted by the system roots: verification
+		// must fail before the credential is ever sent.
+		env, _ := newCredEnv(t, tlsSrv.URL, "", 2)
+		env.Rest.TLSClientConfig.CAData = nil
+		installExecer(t, podBoundToken(t, time.Hour), 0)
+		before := len(api.sawAuth())
+		s := newScenario()
+		if _, err := s.Execute(context.Background(), env); err == nil {
+			t.Fatal("Execute accepted a server whose certificate was not trusted")
+		}
+		if len(api.sawAuth()) != before {
+			t.Fatal("credential was sent to a server whose identity was not verified")
+		}
+	})
+
+	t.Run("insecure-refused", func(t *testing.T) {
+		env, _ := newCredEnv(t, tlsSrv.URL, "", 2)
+		env.Rest.TLSClientConfig.Insecure = true
+		installExecer(t, podBoundToken(t, time.Hour), 0)
+		before := len(api.sawAuth())
+		s := newScenario()
+		if _, err := s.Execute(context.Background(), env); err == nil {
+			t.Fatal("Execute proceeded with insecure TLS (skip-verify); want a refusal")
+		}
+		if len(api.sawAuth()) != before {
+			t.Fatal("insecure replay still reached the API")
+		}
+	})
+}
+
+// R1.3: an auth/exec credential provider on the base client is OMITTED (not
+// invoked) — the replay uses only the captured bearer and never resolves the
+// provider (a bogus provider name would fail the build if it were used).
+func TestCredReplayOmitsAuthProviderWithoutInvoking(t *testing.T) {
+	api := &ctAPI{}
+	srv := httptest.NewServer(http.HandlerFunc(api.handler))
+	defer srv.Close()
+	tok := podBoundToken(t, time.Hour)
+	env, _ := newCredEnv(t, srv.URL, "", 2)
+	env.Rest.AuthProvider = &clientcmdapi.AuthProviderConfig{Name: "nonexistent-oidc-provider"}
+	installExecer(t, tok, 0)
+	noSleepWindow(t)
+	s := newScenario()
+	if _, err := s.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute failed; an omitted auth provider must not be resolved: %v", err)
+	}
+	for _, a := range api.sawAuth() {
+		if a != "Bearer "+tok {
+			t.Fatalf("replay used %q, not the captured bearer", a)
+		}
 	}
 }

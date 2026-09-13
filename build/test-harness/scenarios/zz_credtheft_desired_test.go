@@ -82,7 +82,7 @@ func dpExecer(t *testing.T, stdout string, exit int) {
 func TestDesiredFailedTheftMakesExecuteError(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}})
+		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, Items: []corev1.Pod{}})
 	}))
 	defer api.Close()
 	env := dpEnv(t, api.URL)
@@ -105,7 +105,7 @@ func TestDesiredExecuteReplaysCapturedCredential(t *testing.T) {
 		auths = append(auths, r.Header.Get("Authorization"))
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}})
+		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, Items: []corev1.Pod{}})
 	}))
 	defer api.Close()
 	env := dpEnv(t, api.URL)

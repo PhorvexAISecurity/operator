@@ -108,26 +108,26 @@ type replayOutcome struct {
 }
 
 // sanitizedReplayConfig builds a fresh rest.Config carrying ONLY the captured
-// bearer plus the connectivity/trust settings needed to reach the SAME endpoint:
-// host, TLS server verification (CA/ServerName/Insecure) and ALPN. It drops every
-// other identity (bearer file, client cert/key, basic auth, auth/exec provider,
-// impersonation) so a failure to authenticate can never be masked by the
-// harness's own admin caller. An opaque custom transport or credential-injecting
-// wrapper cannot be cleanly stripped, so it is REFUSED rather than silently
-// reused with a non-captured identity.
+// bearer plus the NON-AUTH connectivity/trust settings needed to reach the SAME
+// endpoint with the SAME verified server trust: host, TLS server verification
+// (CA/ServerName/ALPN) and any Proxy/Dial connectivity hooks. Every caller
+// identity is simply OMITTED, never invoked: a fresh config carries no bearer
+// file, client cert/key, basic auth, auth/exec provider or impersonation, so an
+// auth/exec plugin is never executed and a failure to authenticate can never be
+// masked by the harness's own admin caller. Two things are hard REFUSALS rather
+// than silent proceed: an opaque custom Transport/WrapTransport (which could
+// inject a non-captured identity we cannot strip), and insecure TLS (skip-verify),
+// because a real credential must only ever reach a server whose identity was
+// verified.
 func sanitizedReplayConfig(base *rest.Config, token string) (*rest.Config, error) {
 	if base == nil {
 		return nil, errors.New("no live rest config (non-live env)")
 	}
-	if base.AuthProvider != nil || base.ExecProvider != nil {
-		return nil, errors.New("base client uses an auth/exec credential provider that cannot be separated from the captured credential")
-	}
 	if base.Transport != nil || base.WrapTransport != nil {
 		return nil, errors.New("base client uses an opaque custom transport that may inject a non-captured identity")
 	}
-	if base.Impersonate.UserName != "" || base.Impersonate.UID != "" ||
-		len(base.Impersonate.Groups) > 0 || len(base.Impersonate.Extra) > 0 {
-		return nil, errors.New("base client sets impersonation")
+	if base.TLSClientConfig.Insecure {
+		return nil, errors.New("insecure TLS (skip-verify) is refused for credential replay; the server's identity must be verified")
 	}
 	cfg := &rest.Config{
 		Host:      base.Host,
@@ -137,12 +137,16 @@ func sanitizedReplayConfig(base *rest.Config, token string) (*rest.Config, error
 		Burst:     base.Burst,
 		Timeout:   replayReqTimeout,
 		TLSClientConfig: rest.TLSClientConfig{
-			Insecure:   base.TLSClientConfig.Insecure,
+			// Insecure is left false: server trust is always verified.
 			ServerName: base.TLSClientConfig.ServerName,
 			CAFile:     base.TLSClientConfig.CAFile,
 			CAData:     base.TLSClientConfig.CAData,
 			NextProtos: base.TLSClientConfig.NextProtos,
 		},
+		// Preserve NON-AUTH connectivity so the replay reaches the same endpoint
+		// the operator does (a proxy or custom dialer is connectivity, not identity).
+		Proxy:       base.Proxy,
+		Dial:        base.Dial,
 		BearerToken: token,
 	}
 	return cfg, nil
@@ -179,15 +183,37 @@ func replayCapturedCredential(ctx context.Context, env *core.Env, token string) 
 	if err != nil {
 		return classifyReplayError(ctx, reqCtx, err, code)
 	}
-	// A 2xx whose body does not decode to a PodList is a malformed response, not a
-	// usable success. Distinguishing this from a real list keeps a proxy error page
-	// or truncated body from being read as attacker capability.
-	var pods corev1.PodList
-	if derr := json.Unmarshal(raw, &pods); derr != nil {
-		return replayOutcome{class: replayMalformed, detail: "2xx response did not decode to a PodList"}
+	return classifyReplayBody(code, raw)
+}
+
+// classifyReplayBody accepts a replay ONLY when the API answered the exact
+// list-pods protocol: HTTP 200 with a body that is structurally a v1 PodList
+// (kind "PodList", apiVersion "v1", and an "items" array present — an empty list
+// is valid). Any other 2xx status, or a body that is empty, null, a bare object,
+// a success Status, or a different collection kind, is a MALFORMED response, not
+// evidence of credential usability: a proxy/frontend generic 200 must never be
+// read as attacker capability.
+func classifyReplayBody(code int, raw []byte) replayOutcome {
+	if code != 200 {
+		return replayOutcome{class: replayMalformed, detail: fmt.Sprintf("non-200 success status %d", code)}
 	}
-	return replayOutcome{class: replayAuthorized, podCount: len(pods.Items),
-		detail: fmt.Sprintf("HTTP 200, listed %d pods", len(pods.Items))}
+	var probe struct {
+		Kind       string             `json:"kind"`
+		APIVersion string             `json:"apiVersion"`
+		Items      *[]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return replayOutcome{class: replayMalformed, detail: "200 body did not decode as JSON"}
+	}
+	if probe.Kind != "PodList" || probe.APIVersion != "v1" {
+		return replayOutcome{class: replayMalformed,
+			detail: fmt.Sprintf("200 body is not a v1 PodList (kind=%q apiVersion=%q)", probe.Kind, probe.APIVersion)}
+	}
+	if probe.Items == nil {
+		return replayOutcome{class: replayMalformed, detail: "200 PodList body has no items list"}
+	}
+	n := len(*probe.Items)
+	return replayOutcome{class: replayAuthorized, podCount: n, detail: fmt.Sprintf("HTTP 200, listed %d pods", n)}
 }
 
 // classifyReplayError maps a failed replay into its sanitized class. It never
