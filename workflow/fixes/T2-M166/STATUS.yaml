@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 23
+revision: 25
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -25,17 +25,11 @@ checks:
     at: '2026-09-13T19:58:57+00:00'
   red:
     result: PASS
-    by: claude-v3-m166
-    artifact: evidence/incident.md
-    sha256: b8bf389d715810bdf9364346942abd2774a794ac273fa82d641d990ea58c6662
+    by: codex-lead
+    artifact: evidence/p3/r2/independent-RED.md
+    sha256: 628954b3cc68757d7eb4073a41866412a633a2060c627cb96e6c01c7651f66fd
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T19:33:02+00:00'
-    rationale: 'Executed baseline at d296799 through the real signed router and real
-      ApplyFixManager: the retained probe evidence/red/m166_probe_test.go gives 3
-      FAIL (concurrent approvers enter Apply twice; cross-tenant same-id overwrite
-      + acme-only approver applies globex''s record; nil applier answers 200 applied)
-      plus the positive control PASS (evidence/red/baseline-red-d296799.log); the
-      identical file gives 4 PASS at head f5324f2 under -race (evidence/red/head-green-f5324f2.log).'
+    at: '2026-09-13T21:12:50+00:00'
   l0:
     result: PASS
     by: claude-v3-m166
@@ -84,19 +78,28 @@ checks:
     source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
     at: '2026-09-13T20:09:58+00:00'
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: ee13ecd844b12e1339a2dd8b3eea56e28f6cf231d24a60cf46b8a0ad479896c1
-    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:46:46+00:00'
+    sha256: 23485b59fc8b60de61c33df93b608cf627d80cbf3736d9d8a775a925502604ec
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T21:12:51+00:00'
+    incident_sha256: 70135282be38706dc98d3f84e017aeef76e22728c1df770c8df246433b9bfc42
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 70135282be38706dc98d3f84e017aeef76e22728c1df770c8df246433b9bfc42
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T21:12:51+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
 fix_id: T2-M166
 issues:
 - M-166
 title: Bind console approvals to immutable tenant requests and claim each apply attempt
   once
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -141,7 +144,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -157,10 +160,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T20:10:00+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T21:12:53+00:00'
 configuration_history:
 - at: '2026-09-13T18:58:13+00:00'
   by: codex-lead
@@ -242,13 +245,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T21:12:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T21:12:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M166:23:submit
-  from: claude-v3-m166
+  id: T2-M166:25:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 23
+  role: coordinator
+  kind: review
+  revision: 25
 check_history:
 - check: implementation
   result: PASS
@@ -334,3 +353,23 @@ check_history:
   sha256: 6a54115f08fd1e3b40f7c307c9f5563162939fa236706e29471f388583d59972
   source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
   at: '2026-09-13T20:09:58+00:00'
+- check: red
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/incident.md
+  sha256: b8bf389d715810bdf9364346942abd2774a794ac273fa82d641d990ea58c6662
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T19:33:02+00:00'
+  rationale: 'Executed baseline at d296799 through the real signed router and real
+    ApplyFixManager: the retained probe evidence/red/m166_probe_test.go gives 3 FAIL
+    (concurrent approvers enter Apply twice; cross-tenant same-id overwrite + acme-only
+    approver applies globex''s record; nil applier answers 200 applied) plus the positive
+    control PASS (evidence/red/baseline-red-d296799.log); the identical file gives
+    4 PASS at head f5324f2 under -race (evidence/red/head-green-f5324f2.log).'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: ee13ecd844b12e1339a2dd8b3eea56e28f6cf231d24a60cf46b8a0ad479896c1
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:46:46+00:00'
