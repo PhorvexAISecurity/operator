@@ -40,16 +40,50 @@ class PRValidationTests(unittest.TestCase):
         self.assertTrue(any(s.get('uses') == 'azure/setup-helm@v4'
                             and s.get('with', {}).get('version') == 'v3.16.4'
                             for s in jobs['go-unit']['steps']))
+        # Separate modules are executed, not merely compiled as dependencies.
+        for module, minutes in (('build/metricvalidity', 5), ('build/test-harness', 15),
+                                ('build/phoenix-extended', 15), ('build/falco-integrator-extended', 10),
+                                ('build/prometheus-integrator-extended', 10)):
+            self.assertIn(f'go -C {module} test -mod=readonly -count=1 -timeout={minutes}m ./...', runs['go-unit'])
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])
+
+    def test_envtest_job_runs_the_eight_api_server_tests_on_pinned_local_binaries(self):
+        job = DOC['jobs']['go-envtest']
+        self.assertEqual(job['env']['KUBECONFIG'], '/dev/null')
+        self.assertEqual(job['env']['USE_EXISTING_CLUSTER'], 'false')
+        self.assertNotIn('KUBEBUILDER_ASSETS', job['env'])  # provisioned, never blanked
+        self.assertIn('timeout-minutes', job)
+        runs = '\n'.join(s.get('run', '') for s in job['steps'])
+        self.assertIn('bash tools/provision-envtest.sh', runs)
+        self.assertIn('echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"', runs)
+        self.assertIn('python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl '
+                      '--summary envtest-evidence/summary.json --timeout 10m', runs)
+        uploads = [s for s in job['steps'] if s.get('uses', '').startswith('actions/upload-artifact@')]
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(uploads[0]['if'], 'always()')
+        self.assertEqual(uploads[0]['with']['path'], 'envtest-evidence/')
+        self.assertEqual(uploads[0]['with']['if-no-files-found'], 'error')
+        # The same Go selection as go-unit: highest module go directive, local toolchain.
+        setup = [s for s in job['steps'] if s.get('uses', '').startswith('actions/setup-go@')]
+        self.assertEqual(setup[0]['with']['go-version-file'], 'build/test-harness/go.mod')
+        self.assertEqual(job['env']['GOTOOLCHAIN'], 'local')
+        script = (ROOT / 'tools/provision-envtest.sh').read_text()
+        self.assertIn('VERSION=1.34.0', script)
+        self.assertIn('SHA256=9c45e40aa56971b105e596ebb3e84af6742e8709cc0523733baf8d9bb725e69c', script)
+        self.assertIn('releases/download/envtest-v${VERSION}/envtest-v${VERSION}-linux-amd64.tar.gz', script)
+        self.assertIn('sha256sum -c -', script)
+        self.assertIn('grep -Fqx "Kubernetes v${VERSION}"', script)
+        self.assertNotIn('${ENVTEST', script)  # no environment override of version, URL or digest
+        self.assertIn('set -euo pipefail', script)
 
     def test_required_gate_rejects_failure_skip_and_cancellation(self):
         job = DOC['jobs']['pr-validation']
         self.assertEqual(job['name'], 'PR validation')
         self.assertEqual(job['if'], 'always()')
-        self.assertEqual(set(job['needs']), {'charts', 'go-unit', 'frontend'})
+        self.assertEqual(set(job['needs']), {'charts', 'go-unit', 'go-envtest', 'frontend'})
         script = job['steps'][0]['run']
-        good = dict(CHARTS='success', GO_UNIT='success', FRONTEND='success')
+        good = dict(CHARTS='success', GO_UNIT='success', GO_ENVTEST='success', FRONTEND='success')
         def check(env):
             return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', script],
                                   env=dict(os.environ, **env), timeout=5).returncode

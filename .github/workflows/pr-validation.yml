@@ -41,8 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # This job tests candidate source, never an existing cluster. Optional
-      # API-server integration tests explicitly skip without local envtest assets.
+      # This job tests candidate source, never an existing cluster. The eight
+      # KUBEBUILDER_ASSETS-guarded API-server tests skip here BY DESIGN; the
+      # separate required go-envtest job below executes them against local
+      # kube-apiserver/etcd binaries and fails if any of them skips.
       KUBECONFIG: /dev/null
       KUBEBUILDER_ASSETS: ''
       USE_EXISTING_CLUSTER: 'false'
@@ -64,6 +66,9 @@ jobs:
           cache-dependency-path: |
             phorvex/go.sum
             build/phoenix-extended/go.sum
+            build/falco-integrator-extended/go.sum
+            build/prometheus-integrator-extended/go.sum
+            build/metricvalidity/go.sum
             build/test-harness/go.sum
       # auditguard tests evaluate CEL from actual Helm renders, never a mocked verdict.
       - uses: azure/setup-helm@v4
@@ -84,6 +89,75 @@ jobs:
         run: go -C build/metricvalidity test -mod=readonly -count=1 -timeout=5m ./...
       - name: Attack-harness unit tests (fake clients, not live E2E or envtest)
         run: go -C build/test-harness test -mod=readonly -count=1 -timeout=15m ./...
+
+      # The extended Phoenix operator and the two detector integrators are ALSO
+      # separate modules (phorvex and the integrators `replace` phoenix locally).
+      # Compiling them as a dependency executes none of their tests, so until now
+      # a PR could break the Phoenix CR controllers or an integrator's event
+      # translation without any check running. These are unit suites with fake
+      # clients and local fixtures: no live webhook, no grants, no image build.
+      # The Phoenix controller package's Ginkgo envtest suite declares zero
+      # specs, so its BeforeSuite never starts an API server here.
+      - name: Extended Phoenix operator module unit tests (fake clients, no cluster)
+        run: go -C build/phoenix-extended test -mod=readonly -count=1 -timeout=15m ./...
+      - name: Falco integrator module unit tests (fake clients, no live webhook)
+        run: go -C build/falco-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
+      - name: Prometheus integrator module unit tests (fake clients, no live webhook)
+        run: go -C build/prometheus-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
+
+  # Local API-server proof. The eight tests named in tools/envtest_gate.py start
+  # real kube-apiserver/etcd processes (controller-runtime envtest) and exercise
+  # actuator preconditions, conditional detach, quarantine lifecycle/RBAC,
+  # restricted-role authorization, coverage readback, leader handoff and the
+  # real event sink against genuine API semantics: admission, RBAC, conflicts,
+  # owner references. They are NOT a cluster: envtest has no kubelet, CNI,
+  # garbage collector, cloud API or AI serving backend, and nothing here mitigates
+  # a physical attack. Everything else in go-unit is a unit test with mocks.
+  go-envtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Isolated local control plane only. The job downloads pinned binaries
+      # and must never attach to an existing cluster or fall back to a blank
+      # assets path (the gate refuses to run without KUBEBUILDER_ASSETS).
+      KUBECONFIG: /dev/null
+      USE_EXISTING_CLUSTER: 'false'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          # Same highest-module selection as go-unit (1.26.3, GOTOOLCHAIN=local).
+          go-version-file: build/test-harness/go.mod
+          cache-dependency-path: |
+            phorvex/go.sum
+            build/phoenix-extended/go.sum
+            build/metricvalidity/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # envtest-v1.34.0 linux-amd64 from kubernetes-sigs/controller-tools, matching
+      # k8s.io/api v0.34.0. The script pins URL and SHA256, verifies the digest
+      # before extraction and proves `kube-apiserver --version` is v1.34.0.
+      - name: Provision pinned envtest v1.34.0 binaries (SHA256-verified)
+        run: |
+          assets="$(bash tools/provision-envtest.sh "$RUNNER_TEMP/envtest")"
+          echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"
+      # go test -json is started directly by the gate (no shell pipe, exit
+      # preserved); the verbatim stream is retained and the verdict is computed
+      # from it. Skipped, missing, failed, malformed or empty output fails.
+      - name: Required local API-server tests (all eight must run and pass)
+        run: python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl --summary envtest-evidence/summary.json --timeout 10m
+      - name: Retain raw envtest JSON evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: envtest-evidence
+          path: envtest-evidence/
+          if-no-files-found: error
+          retention-days: 30
 
   frontend:
     runs-on: ubuntu-latest
@@ -109,7 +183,7 @@ jobs:
   pr-validation:
     name: PR validation
     if: always()
-    needs: [charts, go-unit, frontend]
+    needs: [charts, go-unit, go-envtest, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
@@ -117,8 +191,10 @@ jobs:
         env:
           CHARTS: ${{ needs.charts.result }}
           GO_UNIT: ${{ needs.go-unit.result }}
+          GO_ENVTEST: ${{ needs.go-envtest.result }}
           FRONTEND: ${{ needs.frontend.result }}
         run: |
           test "$CHARTS" = success
           test "$GO_UNIT" = success
+          test "$GO_ENVTEST" = success
           test "$FRONTEND" = success
