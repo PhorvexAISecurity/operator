@@ -349,3 +349,16 @@ fixes:
     stacked_on: []
     branch: fix/workflow-diff-portability
     head_sha: dffae505c9509bbd3af4b8235d43c46a2974ce46
+  T2-M175:
+    directory: fixes/T2-M175
+    aliases: []
+    issues:
+    - M-175
+    related_issues: []
+    state: AGREED
+    dependencies:
+    - T2-DIFF-PORTABILITY
+    stacked_on:
+    - T2-DIFF-PORTABILITY
+    branch: fix/v3-m175-local-credentials
+    head_sha: null
