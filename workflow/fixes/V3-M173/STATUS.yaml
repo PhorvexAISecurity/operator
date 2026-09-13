@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,83 @@ checks:
     at: '2026-09-13T17:14:20+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: claude-v3-m173
+    artifact: evidence/red/base-d296799-primary-image.log
+    sha256: 9a68af6b2b0c4b883131247d7621fd0c028bc60b557641d506c0854ba71d6fdb
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T17:35:38+00:00'
+    rationale: 'Intended baseline assertion executed through the real producer (projectPod)
+      and consumer (CollectSnapshot -> genericK8s.Derive): 8 producer + 9 consumer
+      incident subtests FAIL with the sidecar digest / declared tag logged as the
+      produced value and the sidecar EPSS row (0.9/9) scored as the primary; the 3
+      aligned positive controls PASS in the same run. Same tests PASS 20/20 at head
+      3d42de0.'
+  preflight:
+    result: PASS
+    by: claude-v3-m173
+    artifact: evidence/preflight/receipt.json
+    sha256: 0266277365eab1afa324c24eb3655ed1590c9a1588605d79db3bbd0c9ded2be6
+    source_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+    at: '2026-09-13T17:36:24+00:00'
+  implementation:
+    result: PASS
+    by: claude-v3-m173
+    artifact: 04-diff.patch
+    sha256: 2326cce2492c54570f9de2ac950e7cc32219f162be4078ca126a97cb4a92b4ec
+    source_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+    at: '2026-09-13T17:36:24+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m173
+    artifact: evidence/l0/head-build-vet-fmt.log
+    sha256: 4b001bde0e516f53778cd814b6689fb908838f09fba4163acd90442a390f77ca
+    source_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+    at: '2026-09-13T17:36:24+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: fbc173545b8a53d6af72a45cfcf97b8af0507ba55b816028a2d246096ffe6020
+  l1:
+    result: PASS
+    by: claude-v3-m173
+    artifact: evidence/l1/head-ingest-primary-image.log
+    sha256: f515d6053346a0a0f4640b09b75006617da838131a0b5b9f3fe949da131b8efe
+    source_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+    at: '2026-09-13T17:36:24+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: fbc173545b8a53d6af72a45cfcf97b8af0507ba55b816028a2d246096ffe6020
+  l2:
+    result: PASS
+    by: claude-v3-m173
+    artifact: evidence/l2/head-platform-primary-image-consumer.log
+    sha256: 1023ea23457fa2eeb1f6519314e10d67bdb2a6df7d7a1a39b60fa4bd90626a31
+    source_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+    at: '2026-09-13T17:36:24+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: fbc173545b8a53d6af72a45cfcf97b8af0507ba55b816028a2d246096ffe6020
+  positive_control:
+    result: PASS
+    by: claude-v3-m173
+    artifact: evidence/verify-sh-offline.log
+    sha256: a49562d8bbc4d7a8c8fd65bc19ae332f61674d4836da2df759c67fab45af3cff
+    source_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+    at: '2026-09-13T17:36:24+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: fbc173545b8a53d6af72a45cfcf97b8af0507ba55b816028a2d246096ffe6020
 fix_id: V3-M173
 issues:
 - M-173
 title: Match the primary container running image by name
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +116,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m173-primary-image
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +138,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed primary image plan; reproduce baseline, add producer/consumer
-    controls and submit for independent review.
-updated_at: '2026-09-13T17:14:20+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T17:36:26+00:00'
 configuration_history:
 - at: '2026-09-13T17:13:42+00:00'
   by: codex-lead
@@ -101,6 +172,16 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-13T17:23:38+00:00'
+  by: claude-v3-m173
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T17:36:24+00:00'
+  by: claude-v3-m173
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -118,3 +199,26 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T17:36:24+00:00'
+  by: claude-v3-m173
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T17:36:25+00:00'
+  by: claude-v3-m173
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: V3-M173:8:submit
+  from: claude-v3-m173
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8

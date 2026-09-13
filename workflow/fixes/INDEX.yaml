@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-173
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m173-primary-image
-    head_sha: null
+    head_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
