@@ -117,7 +117,12 @@
         "base_sha",
         "head_sha",
         "stacked_on"
-      ]
+      ],
+      "properties": {
+        "diff_format": {
+          "enum": ["full-patch", "git-diff-digest-v1"]
+        }
+      }
     },
     "verification": {
       "type": "object"

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 import subprocess
 import tempfile
 import unittest
@@ -9,6 +11,7 @@ from pathlib import Path
 
 from test_operations import run
 import patches
+import jsonschema
 
 
 def git_bytes(repo: Path, *args: str) -> bytes:
@@ -180,6 +183,62 @@ class PatchPortabilityTests(unittest.TestCase):
         self.assertIsNone(patches.verify(repo, self._write(abbreviated(repo, base, head, 8)), base, head))
         self.assertIn('not a full-index header', patches.mismatch(abbreviated(repo, base, head, 8), canonical, 40))
         self.assertIn('not a full-index header', patches.mismatch(self.canonical, self.canonical.replace(b'\nindex ', b'\nindex 0', 1), 40))
+
+    def test_digest_envelope_binds_every_canonical_diff_byte_and_pin(self):
+        envelope = patches.render(self.repo, self.base, self.head, patches.DIGEST_FORMAT)
+        expected = (f'format: {patches.DIGEST_FORMAT}\nbase_sha: {self.base}\nhead_sha: {self.head}\n'
+                    f'diff_sha256: {hashlib.sha256(self.canonical).hexdigest()}\n').encode()
+        self.assertEqual(envelope, expected)
+        path = self._write(envelope)
+        self.assertIsNone(patches.verify(self.repo, path, self.base, self.head, patches.DIGEST_FORMAT))
+
+        cases = [
+            envelope.replace(self.base.encode(), self.head.encode(), 1),
+            envelope.replace(self.head.encode(), self.base.encode(), 1),
+            envelope.replace(b'diff_sha256: ', b'diff_sha256: 0', 1),
+            envelope + b'diff_sha256: ' + b'0' * 64 + b'\n',
+            envelope.replace(b'format:', b'unknown:'),
+            envelope.rstrip(b'\n'),
+            self.canonical,
+        ]
+        for recorded in cases:
+            with self.subTest(recorded=recorded[:30]):
+                self.assertIsNotNone(patches.verify(self.repo, self._write(recorded), self.base, self.head,
+                                                     patches.DIGEST_FORMAT))
+        self.assertIsNotNone(patches.verify(self.repo, self._write(envelope), self.base, self.head, 'unknown'))
+        self.assertIsNotNone(patches.verify(self.repo, self._write(envelope), self.head, self.head,
+                                                 patches.DIGEST_FORMAT))
+
+    def test_digest_omits_deleted_payload_and_is_portable_across_fresh_clones(self):
+        secret = self.repo/'private-sentinel.txt'
+        secret.write_text('harmless deleted sentinel\n')
+        run(['git', 'add', 'private-sentinel.txt'], self.repo)
+        run(['git', 'commit', '-q', '-m', 'sentinel baseline'], self.repo)
+        base = run(['git', 'rev-parse', 'HEAD'], self.repo)
+        secret.unlink(); run(['git', 'add', '-u'], self.repo)
+        run(['git', 'commit', '-q', '-m', 'sentinel deletion'], self.repo)
+        head = run(['git', 'rev-parse', 'HEAD'], self.repo)
+        raw = patches.render(self.repo, base, head)
+        envelope = patches.render(self.repo, base, head, patches.DIGEST_FORMAT)
+        self.assertIn(b'harmless deleted sentinel', raw)
+        self.assertNotIn(b'harmless deleted sentinel', envelope)
+        for number in (1, 2):
+            clone = Path(self.raw.name)/f'digest-clone-{number}'
+            run(['git', 'clone', '-q', '--no-hardlinks', str(self.repo), str(clone)], Path(self.raw.name))
+            self.assertEqual(patches.render(clone, base, head, patches.DIGEST_FORMAT), envelope)
+            self.assertIsNone(patches.verify(clone, self._write(envelope), base, head,
+                                             patches.DIGEST_FORMAT))
+
+    def test_schema_accepts_known_formats_and_rejects_unknown_format(self):
+        schema = json.loads((Path(__file__).parents[2]/'schemas/fix-status.schema.json').read_text())
+        implementation_schema = schema['properties']['implementation']
+        value = {'branch': 'fix/example', 'base_sha': self.base, 'head_sha': self.head,
+                 'stacked_on': []}
+        jsonschema.validate(value, implementation_schema)
+        for selected in ('full-patch', patches.DIGEST_FORMAT):
+            jsonschema.validate({**value, 'diff_format': selected}, implementation_schema)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate({**value, 'diff_format': 'unknown'}, implementation_schema)
 
     def _write(self, data: bytes) -> Path:
         path = Path(self.raw.name)/'04-diff.patch'; path.write_bytes(data); return path

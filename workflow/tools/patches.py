@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import hashlib
 from pathlib import Path
 
 # Git's MINIMUM_ABBREV; shorter ids are never emitted by any core.abbrev setting.
@@ -19,6 +20,9 @@ DIFF_ARGS = ('--binary', '--full-index', '--no-color', '--no-ext-diff', '--no-te
 CANONICAL_COMMAND = 'git diff ' + ' '.join(DIFF_ARGS) + ' base_sha head_sha'
 GATE_MESSAGE = ('04-diff.patch must equal nonempty ' + CANONICAL_COMMAND
                 + ' (index headers may only abbreviate the pinned full ids)')
+DIGEST_FORMAT = 'git-diff-digest-v1'
+DIGEST_GATE_MESSAGE = ('04-diff.patch must be a strict git-diff-digest-v1 envelope for nonempty '
+                       + CANONICAL_COMMAND)
 INDEX_LINE = re.compile(rb'index ([0-9a-f]+)\.\.([0-9a-f]+)( [0-7]{6})?')
 # Extended header keywords that may sit between `diff --git` and the patch body.
 EXTENDED_HEADERS = (b'old mode ', b'new mode ', b'deleted file mode ', b'new file mode ',
@@ -34,9 +38,28 @@ def hex_size(repo: Path) -> int:
     return HEX_SIZE[fmt]
 
 
-def render(repo: Path, base: str, head: str) -> bytes:
+def canonical_diff(repo: Path, base: str, head: str) -> bytes:
     """Canonical patch bytes for a pinned source pair; identical in every clone."""
     return subprocess.check_output(['git', 'diff', *DIFF_ARGS, str(base), str(head)], cwd=repo)
+
+
+def resolved_commit(repo: Path, revision: str) -> str:
+    return subprocess.check_output(['git', 'rev-parse', '--verify', revision + '^{commit}'], cwd=repo).decode().strip()
+
+
+def render(repo: Path, base: str, head: str, diff_format: str | None = None) -> bytes:
+    """Render the selected evidence format; absent format retains the full-patch contract."""
+    canonical = canonical_diff(repo, base, head)
+    if diff_format is None or diff_format == 'full-patch':
+        return canonical
+    if diff_format != DIGEST_FORMAT:
+        raise ValueError(f'unknown implementation.diff_format {diff_format!r}')
+    if not canonical:
+        raise ValueError('canonical diff is empty')
+    resolved_base = resolved_commit(repo, base)
+    resolved_head = resolved_commit(repo, head)
+    return (f'format: {DIGEST_FORMAT}\nbase_sha: {resolved_base}\nhead_sha: {resolved_head}\n'
+            f'diff_sha256: {hashlib.sha256(canonical).hexdigest()}\n').encode()
 
 
 def index_header_mismatch(recorded: bytes, canonical: bytes, hexsz: int) -> str | None:
@@ -86,14 +109,28 @@ def mismatch(recorded: bytes, canonical: bytes, hexsz: int) -> str | None:
     return None
 
 
-def verify(repo: Path, patch: Path | None, base: str, head: str) -> str | None:
+def verify(repo: Path, patch: Path | None, base: str, head: str, diff_format: str | None = None) -> str | None:
     """Gate contract: the recorded artifact must be the nonempty pinned diff modulo index abbreviation."""
+    message = DIGEST_GATE_MESSAGE if diff_format == DIGEST_FORMAT else GATE_MESSAGE
     if not patch:
-        return GATE_MESSAGE
+        return message
     try:
-        canonical = render(repo, base, head)
+        canonical = canonical_diff(repo, base, head)
+        resolved_base = resolved_commit(repo, base)
+        resolved_head = resolved_commit(repo, head)
+        if diff_format == DIGEST_FORMAT:
+            if not canonical:
+                return f'{message}: canonical diff is empty'
+            expected = render(repo, resolved_base, resolved_head, diff_format)
+            recorded = patch.read_bytes()
+            lines = recorded.splitlines(keepends=True)
+            if len(lines) != 4 or any(not line.endswith(b'\n') for line in lines):
+                return f'{message}: malformed envelope'
+            return None if recorded == expected else f'{message}: envelope fields or digest differ from pinned source diff'
+        if diff_format not in (None, 'full-patch'):
+            return f'{message}: unknown implementation.diff_format {diff_format!r}'
         hexsz = hex_size(repo)
     except (subprocess.CalledProcessError, ValueError) as error:
-        return f'{GATE_MESSAGE}: {error}'
+        return f'{message}: {error}'
     reason = mismatch(patch.read_bytes(), canonical, hexsz)
-    return None if reason is None else f'{GATE_MESSAGE}: {reason}'
+    return None if reason is None else f'{message}: {reason}'
