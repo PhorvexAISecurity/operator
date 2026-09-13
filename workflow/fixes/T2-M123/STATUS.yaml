@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 20
+revision: 23
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -86,13 +86,20 @@ checks:
     source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
     at: '2026-09-13T21:16:07+00:00'
     incident_sha256: 239f60edb5b6d450a7d350838931e6e720afe7c357d43ed62d84c49e789fffd6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: cdd6da02ac5bbe3322c2eee223cfa39998a1db2c1652fa8a51ffde7d4b24a181
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T21:19:43+00:00'
 fix_id: T2-M123
 issues:
 - M-123
 title: Generate current recon coverage documentation and separate historical live
   results
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -119,11 +126,11 @@ implementation:
   head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/199
+  reviewed_head: a79320663ee8a984ef2b720d943257bc59bddf48
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -153,10 +160,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T21:16:09+00:00'
+  owner: human_owner
+  action: Review https://github.com/PhorvexSecurity/operator/pull/199; owner merges/deploys,
+    lead verifies authorized live acceptance
+updated_at: '2026-09-13T21:19:47+00:00'
 configuration_history:
 - at: '2026-09-13T19:10:43+00:00'
   by: codex-lead
@@ -183,6 +190,11 @@ configuration_history:
   by: claude-v3-m123
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T21:19:46+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -232,6 +244,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T21:19:47+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: l2
