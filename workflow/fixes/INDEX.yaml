@@ -339,3 +339,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m161-measurement-validity
     head_sha: 9db59ccaaf7aabc7fa4f1ea7f445e7b0e3f5c3ac
+  T2-M123:
+    directory: fixes/T2-M123
+    aliases: []
+    issues:
+    - M-123
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m123-coverage-documentation
+    head_sha: null
