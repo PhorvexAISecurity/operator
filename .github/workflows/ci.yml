@@ -41,11 +41,23 @@ env:
 # PHORVEX_SSH_HOST       jump host that can reach the console and the EKS API
 # PHORVEX_SSH_USER       ssh user on that host
 # PHORVEX_SSH_PASSWORD   its password (passed to sshpass via env, never argv)
+# PHORVEX_CONSOLE_TOKEN  bearer token for the console's E2E identity (M-136). Provisioned by
+#                        DevOps against the console's configured OIDC issuer/audience, with
+#                        an explicit grant for its subject. Reaches curl on stdin only; the
+#                        pipeline never decodes, logs or forwards it. Empty = not provisioned,
+#                        and preflight fails closed with that message (docs/CONSOLE-AUTH.md).
 # TELEGRAM_BOT_TOKEN     bot that posts the per-stage board
 # TELEGRAM_CHAT_ID       channel id, e.g. -1001234567890
 #
-# Optional repository variable:
-#   BUILD_PHOENIX = true   — enable the extended Phoenix operator build job.
+# Required repository variable for the E2E job:
+#   PHORVEX_CONSOLE_BASE    — the console endpoint the E2E credential is sent to: an HTTPS
+#                             URL that reaches the console verifier (NOT the Cognito ALB,
+#                             which redirects to a login), or http://127.0.0.1:<port> for a
+#                             loopback tunnel DevOps terminates on the SSH jump host.
+# Optional repository variables:
+#   PHORVEX_CONSOLE_CA_FILE — CA bundle path ON THE JUMP HOST when that endpoint uses a
+#                             private CA; certificate verification is never disabled.
+#   BUILD_PHOENIX = true    — enable the extended Phoenix operator build job.
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -356,6 +368,12 @@ jobs:
           PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          # The console credential and endpoint (see the secrets block at the top). The
+          # pipeline scrubs the token from every child environment and sends it to curl on
+          # stdin; it is never an argument. Unset inputs fail preflight closed.
+          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE }}
+          PHORVEX_CONSOLE_CA_FILE: ${{ vars.PHORVEX_CONSOLE_CA_FILE }}
+          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
         working-directory: End-to-End

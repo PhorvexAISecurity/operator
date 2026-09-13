@@ -328,3 +328,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m094-stamp-outage
     head_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+  T1-E2E-AUTH:
+    directory: fixes/T1-E2E-AUTH
+    aliases: []
+    issues:
+    - M-136
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/tier1-e2e-console-auth
+    head_sha: null

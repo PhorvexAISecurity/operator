@@ -258,29 +258,73 @@ Every other `/api/` path requires a verified identity, and an unknown `/api/` pa
 against a cluster. They are **POST-only** now; they used to be reachable by GET. The dashboard
 client already posts to all three.
 
-## Known caller impact: the End-to-End pipeline
+## The End-to-End pipeline as a caller
 
-`End-to-End/pipeline/transport.py` reaches the console through the API-server proxy to the
-in-cluster Service, deliberately bypassing the ALB, and authorizes itself with `?lens=operator`.
-That is exactly the self-asserted identity this fix removes, so it stops working: `/api/health`
-still answers (it is public), and every other call returns `401`.
+`End-to-End/pipeline/transport.py` used to reach the console through the API-server proxy to
+the in-cluster Service (`mode: kubectl-proxy`) and "authorize" itself with `?lens=operator`.
+That is exactly the self-asserted identity this fix removed, so after the rollout the
+pipeline reached `/api/health` (public) and got `401` on everything else — PR179 aborted at
+preflight. The proxy path was never a credential: `kubectl get --raw` authenticates the
+kubectl user to the **API server**, and nothing about arriving through that proxy says who is
+calling the console. No "in-cluster callers are trusted" exception was added; it would restore
+the defect in a narrower shape.
 
-This was left as a **configuration** change rather than a code exception on purpose. An
-"in-cluster callers are trusted" bypass would restore the defect in a narrower shape — reaching
-the pod through the API-server proxy is not evidence of who is calling, and the console holds the
-operator ServiceAccount either way.
+The pipeline now has an explicitly configured authenticated mode (`console.mode: http`,
+`console.auth: bearer`; see `End-to-End/README.md`):
 
-To restore the pipeline, DevOps configures a machine identity:
+- it sends `Authorization: Bearer <token>` on every GET, POST and SSE request, delivered to
+  curl as a `-K -` configuration on stdin — never argv, a URL, a query string, a child's
+  environment, a log or a retained error;
+- the token comes from exactly one of `PHORVEX_CONSOLE_TOKEN` (CI secret) or a private `0600`
+  file; empty, multi-line, oversized, malformed or world-readable inputs are refused, and the
+  client never decodes the token — the verifier here is the authority;
+- the endpoint must be HTTPS with normal certificate verification (a private CA can be named,
+  verification cannot be disabled) or plain HTTP to a loopback address **on the transport
+  host**; URL userinfo and non-loopback HTTP are refused, redirects are never followed and a
+  credential is never re-sent to a `Location`;
+- `401` is reported as "no accepted credential", `403` as "no grant for this identity"; both
+  stop preflight at once, a failed POST is never retried, and an unsuccessful stream response
+  never fires the attack stimulus;
+- the old proxy mode remains available only by explicit choice, and its `401` now says that
+  the proxy carries no console credential rather than "the console did not become ready".
 
-1. enable the bearer path on the deployment (`phorvex.console.auth.oidc.*`) against an IdP that
-   can issue a client-credentials token for CI;
-2. add one grant entry for that token's `sub`, scoped to what the pipeline actually reads —
-   `investor` is sufficient for the read-only checks, and it cannot mutate;
-3. have `transport.py` send `Authorization: Bearer <token>` instead of `?lens=`.
+None of that makes the pipeline authorized. Authorization is the grant table, and the
+pipeline's identity does not exist until DevOps provisions it.
 
-Step 3 is a one-line change in `_curl`/`get_json`, but it is only meaningful once steps 1–2 exist,
-and the token and grant are decisions for whoever runs the pipeline. This is tracked as a
-follow-up, not as part of this fix's scope.
+### DevOps handoff: what the pipeline needs provisioned
+
+The source change is complete without any of the following; the live Tier 1 acceptance run
+cannot pass until all of them exist. They are deployment decisions, recorded with the
+deployment, not defaults in this repository.
+
+1. **A bearer issuer the console verifies.** Enable the bearer path on the deployment
+   (`phorvex.console.auth.oidc.issuer` / `audience` / `jwksUrl`, optionally `algorithms`)
+   against an IdP that can issue a **headless** client-credentials or machine token for CI.
+   The existing Cognito ALB authenticates browsers with a login redirect and must **not** be
+   assumed to accept a bearer from a headless caller; the `x-amzn-oidc-*` headers are not a
+   path the pipeline can or should use.
+2. **A token provisioning and refresh method** for that identity — how the value lands in the
+   `PHORVEX_CONSOLE_TOKEN` repository secret (or a `0600` file on the runner), its lifetime,
+   and who rotates it. The pipeline never mints, extracts or caches a token, and it fails
+   closed on an expired one rather than retrying.
+3. **An explicit grant for the token's `sub`** in `phorvex.console.auth.grants` (or the
+   `PHORVEX_CONSOLE_GRANTS` file), keyed by the issuer above. Two callers want two different
+   grants:
+   - observe-only runs: `investor` on the tenants they capture (e.g. `["voice"]`) with
+     `"targets": ["default"]` — read-only, cannot fire anything;
+   - attack runs: `operator` scoped to exactly the target namespaces the run fires at
+     (`voice`, `nats`, `vllm` as configured in `End-to-End/config.json`) and
+     `"targets": ["default"]`. Not `"tenants": ["*"]`.
+4. **An endpoint that reaches the verifier**, set as the `PHORVEX_CONSOLE_BASE` repository
+   variable: an HTTPS URL served by the console (or an in-front proxy that passes the
+   `Authorization` header through unchanged and does not itself redirect to a login), or a
+   loopback `http://127.0.0.1:<port>` tunnel/port-forward terminated **on the SSH jump host**
+   the pipeline's `ssh` transport uses. A private CA is named with `PHORVEX_CONSOLE_CA_FILE`
+   (a path on that host). The pipeline does not start a port-forward, expose a Service, create
+   a ServiceAccount or change RBAC.
+5. **A controlled acceptance run** after 1–4: `observe` first, then `attack` on the
+   authorized target only. Until the real authenticated preflight, session and stream
+   succeed against the deployed console, the Tier 1 caller repair is not verified live.
 
 ## Local development
 

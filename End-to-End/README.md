@@ -39,7 +39,7 @@ The **in-cluster** stack — the one ArgoCD deploys:
 
 | | |
 |---|---|
-| console | `https://console.phorvex.ai`, a container inside the operator's pod |
+| console | a container inside the operator's pod, reached over the authenticated endpoint DevOps provisions (`PHORVEX_CONSOLE_BASE`); `console.phorvex.ai` itself sits behind a Cognito login and is not that endpoint |
 | audit | `/audit/live.jsonl` on a PVC the operator writes and the console streams |
 | kill-switch gauge | the operator's `:8080/metrics`, read through the API server's pod proxy |
 | ground truth | `kubectl` over SSH to the jump host — deliberately independent of all of the above |
@@ -51,12 +51,44 @@ an RWX filesystem would mean provisioning EFS for one append-only file.
 Earlier this suite drove a console on the jump host instead. That console was a systemd
 service running a binary built from a loose copy of the source — never built by CI, never
 deployed by ArgoCD — so the contracts were being asserted against code that could not be
-traced to a commit. The jump host is now only the SSH route to `kubectl`.
+traced to a commit. The jump host is now only the SSH route to `kubectl` — and, when
+DevOps terminates a loopback tunnel there, to the console.
+
+### Console authentication
+
+Since the identity boundary (M-136, `phorvex/docs/CONSOLE-AUTH.md`) every console route
+except `/api/health` requires a verified identity **and** an explicit server-side grant. The
+pipeline's `lens` is a presentation hint that authenticates nobody; the old API-server proxy
+path (`mode: kubectl-proxy`) carries no console credential at all, so through it every
+protected route is `401` and preflight stops. The suite now runs `console.mode: http` with
+`auth: bearer`:
+
+| Input | Source | Meaning |
+|---|---|---|
+| `PHORVEX_CONSOLE_BASE` | repo variable / env (or `console.base`) | `https://…` endpoint that reaches the console verifier with normal certificate verification, **or** `http://127.0.0.1:<port>` — loopback *on the transport host* (the SSH jump host in `ssh` mode), i.e. a tunnel DevOps owns there |
+| `PHORVEX_CONSOLE_TOKEN` | repo secret / env | the bearer token itself; one line, never written to disk by the pipeline |
+| `PHORVEX_CONSOLE_TOKEN_FILE` / `console.token_file` | env / config | a private `0600` regular file holding that one line (`~/.phorvex-e2e/console-token` by default) |
+| `PHORVEX_CONSOLE_CA_FILE` / `console.ca_file` | env / config | a CA bundle on the transport host for a private CA; there is no way to disable verification |
+
+Exactly one credential source may be present. The token goes to curl as a `-K -`
+configuration on stdin — never argv, never a URL, never the environment of a child, never a
+retained error — and the client never decodes it: the deployed verifier decides what it
+means. Redirects are refused (a Cognito login redirect is a configuration error, not a
+place to send a credential), `401` is reported as "no accepted credential", `403` as "no
+grant for this identity", and either stops preflight immediately.
+
+Who issues the token, which subject it names, what grant that subject holds and which
+endpoint reaches the verifier are DevOps decisions recorded next to the deployment; the
+pipeline provisions none of them. An observe-only caller needs `investor` (read) on the
+namespaces it captures; the `attack` mode needs `operator` scoped to the target namespaces
+it fires at and nothing wider.
 
 ## Running it
 
 ```bash
 export PHORVEX_SSH_PASSWORD='…'          # or write it to ~/.phorvex-e2e/secret (chmod 600)
+export PHORVEX_CONSOLE_BASE='https://…'   # the endpoint DevOps provisioned (see above)
+export PHORVEX_CONSOLE_TOKEN='…'          # or write it to ~/.phorvex-e2e/console-token (chmod 600)
 
 python3 pipeline/e2e.py --list-targets
 python3 pipeline/e2e.py --mode observe                    # read-only, no target
@@ -339,7 +371,8 @@ pipeline/
   e2e.py                  orchestrator + CLI
   observation.py          explicit validity for every read: ok / partial / unavailable / malformed
   capture.py              incremental SSE framing, declared scope, bounded and counted
-  transport.py            local | ssh; console API and kubectl access
+  transport.py            local | ssh; authenticated console API and kubectl access
+  console_fixture.py      a loopback console with a real RS256 verifier and grant table, for the tests
   attribution.py          binding a reaction to the injected event (feature-detected)
   trace.py                record → six-stage trace, with per-field provenance
   checks.py               the assertion catalogue
