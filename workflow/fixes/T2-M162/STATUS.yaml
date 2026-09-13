@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 19
+revision: 21
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -25,11 +25,11 @@ checks:
     at: '2026-09-13T21:22:17+00:00'
   red:
     result: PASS
-    by: sol-m162
-    artifact: evidence/incident.md
-    sha256: 0a20d6142ce87034339f59a8802730e5e70e2fe1cf8cb2c76f1605646a1d46b8
+    by: codex-lead
+    artifact: evidence/p3/r4/independent-RED.md
+    sha256: 9baa5bc0e0380c3bcdb9fdf15ef1a5803e13d6c3184115e4b7844e2e3c8f4a27
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T21:15:59+00:00'
+    at: '2026-09-13T21:27:42+00:00'
   l0:
     result: PASS
     by: sol-m162
@@ -71,12 +71,13 @@ checks:
     - build/test-harness
     inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: d60a4b524053443a70804429ad17f6ff01e9659ab43f17abaae193775f05eac8
-    source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
-    at: '2026-09-13T21:08:37+00:00'
+    sha256: fc22542405744ea4a552d363ba177e2a95c0b5615b72780eafe6a76773f93e6f
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:27:42+00:00'
+    incident_sha256: 62d42c45f8ee6f8e0c544caf1d6d61d79e7e4caca9af961657bc31499803108a
   preflight:
     result: PASS
     by: sol-m162
@@ -84,12 +85,20 @@ checks:
     sha256: c31f2f7a2842cc13065c6ce4ca5ebc2597260a46e1102e664b2663a05d92fd63
     source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
     at: '2026-09-13T21:22:17+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 62d42c45f8ee6f8e0c544caf1d6d61d79e7e4caca9af961657bc31499803108a
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:27:42+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
 fix_id: T2-M162
 issues:
 - M-162
 title: Replay the actual captured per-trial credential and classify invalid measurements
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -134,7 +143,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -150,10 +159,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T21:22:18+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T21:27:44+00:00'
 configuration_history:
 - at: '2026-09-13T18:30:40+00:00'
   by: codex-lead
@@ -277,13 +286,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T21:27:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T21:27:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M162:19:submit
-  from: sol-m162
+  id: T2-M162:21:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 19
+  role: coordinator
+  kind: review
+  revision: 21
 check_history:
 - check: preflight
   result: PASS
@@ -522,3 +547,17 @@ check_history:
   inputs:
   - build/test-harness
   inputs_sha256: 92a26f75cb64e2d2f6790ef3ef29f15fd9fa1bc9a2c8b278d5c9867bc302e007
+- check: red
+  result: PASS
+  by: sol-m162
+  artifact: evidence/incident.md
+  sha256: 0a20d6142ce87034339f59a8802730e5e70e2fe1cf8cb2c76f1605646a1d46b8
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T21:15:59+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: d60a4b524053443a70804429ad17f6ff01e9659ab43f17abaae193775f05eac8
+  source_sha: d816724f370926b254bfb43e0ba6201bb4918f3f
+  at: '2026-09-13T21:08:37+00:00'
