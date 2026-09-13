@@ -53,16 +53,37 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
-          go-version-file: phorvex/go.mod
+          # The HIGHEST `go` directive of the modules this job tests. phorvex and
+          # build/metricvalidity declare 1.26.1, build/test-harness declares
+          # 1.26.3, and the job pins GOTOOLCHAIN=local — so installing the
+          # phorvex version would make the harness step fail outright with
+          # "go.mod requires go >= 1.26.3". One toolchain that satisfies all
+          # three is simpler than per-step toolchain juggling, and avoids a
+          # network toolchain download that `local` exists to prevent.
+          go-version-file: build/test-harness/go.mod
           cache-dependency-path: |
             phorvex/go.sum
             build/phoenix-extended/go.sum
+            build/test-harness/go.sum
       # auditguard tests evaluate CEL from actual Helm renders, never a mocked verdict.
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4
       - name: Phorvex unit tests (not live E2E or envtest)
         run: go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...
+
+      # build/metricvalidity and build/test-harness are SEPARATE modules, so the
+      # phorvex run above compiles them as dependencies without ever executing
+      # their tests. That left the measurement-validity contract — the rules that
+      # decide what counts as a measurement — and the harness that produces the
+      # metric stream with no test coverage on a PR at all. Both are candidate
+      # source, and neither touches a cluster: the shared module is stdlib-only,
+      # and the harness suite runs against fake clients under the same
+      # KUBECONFIG=/dev/null, USE_EXISTING_CLUSTER=false environment as above.
+      - name: Shared measurement-validity contract unit tests (stdlib only, no cluster)
+        run: go -C build/metricvalidity test -mod=readonly -count=1 -timeout=5m ./...
+      - name: Attack-harness unit tests (fake clients, not live E2E or envtest)
+        run: go -C build/test-harness test -mod=readonly -count=1 -timeout=15m ./...
 
   frontend:
     runs-on: ubuntu-latest

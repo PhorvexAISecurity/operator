@@ -1,0 +1,288 @@
+[
+  {
+    "name": "positive-control",
+    "why": "a genuine producer row must stay certifiable everywhere",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": false,
+      "scorable": true,
+      "costUsable": true,
+      "oracleUsable": true,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "legacy",
+    "why": "a pre-contract row is readable history, never a current measurement",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0}",
+    "expect": {
+      "legacy": true,
+      "unverified": false,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "future-version",
+    "why": "a row from a newer contract cannot be interpreted by this build",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":2}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "unknown-status",
+    "why": "an unrecognised status is conservatively invalid",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"unrecognized\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "unknown-kind",
+    "why": "an unrecognised kind cannot be attributed to a comparison or a control",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"sideways\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "status-invalid",
+    "why": "an infrastructure failure is not a defensive result",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"invalid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "oracle-not-observed",
+    "why": "a scored claim with no observed oracle is a contradiction",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":false,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "baseline-contradiction",
+    "why": "a control marked usable whose own evidence denies it",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":false,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "baseline-attack-failed",
+    "why": "a control that did not achieve its oracle cannot anchor disruption",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":false,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "missing-control-identity",
+    "why": "a comparison that cannot be traced to a control arm",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "baseline-not-usable",
+    "why": "an unanchored comparison is not a measurement",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":false,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "retained-cleanup-failure",
+    "why": "a dirty trial left state nobody verified",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"error\":\"forbidden\",\"step\":\"env.Close\"}],\"complete\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "cleanup-incomplete",
+    "why": "cleanup that did not verify invalidates the trial",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"complete\":false},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "cleanup-unresolved",
+    "why": "a cleanup call that may still be running is not a clean trial",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"complete\":false,\"unresolved\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "cleanup-blocked",
+    "why": "a step not attempted because a predecessor still holds the Env",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"blocked\":true,\"step\":\"env.Close\"}],\"complete\":false},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "out-of-range-score",
+    "why": "a disruption outside [0,1] was never measured",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":2,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "cost-sentinel-contradiction",
+    "why": "a claimed cost observation against the UNOBSERVED sentinel",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":-1,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "wrong-baseline-kind",
+    "why": "an ordinary comparison anchored to an adaptive control is a different experiment",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"adaptive\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "wrong-baseline-trial",
+    "why": "a comparison may only anchor to the control observed at its OWN index",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":10,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "oracle-without-attack",
+    "why": "an oracle verdict with no executed stimulus has nothing to measure",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":false,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "cost-without-observer",
+    "why": "a cost claimed observed while nothing could have observed it",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":false,\"oracleObserved\":true,\"phase\":\"complete\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  },
+  {
+    "name": "incomplete-phase",
+    "why": "status valid at a setup phase: a valid measurement reached the terminal phase",
+    "row": "{\"attackerDwellSeconds\":2.7e-7,\"category\":\"ClassicChain\",\"commands\":[\"v161-attack\"],\"defender\":\"d-v161-arm\",\"defensiveActions\":2,\"disruptionVsOracle\":1,\"evidenceRetention\":0.5,\"falseDefensiveActions\":-1,\"negativeControl\":false,\"observedState\":\"measured\",\"oracleAchieved\":false,\"r6Tag\":\"R6Partial\",\"rawLogPath\":\"/tmp/TestSharedParityCorpus3149510137/001/raw/v161-mixed_d-v161-arm_t0.log\",\"roi\":{\"annualDefenseCostDollars\":8.666666666666666,\"avoidedBreachValueDollars\":4880000,\"dollarsPerGpuHour\":2.5,\"gpuCount\":8,\"gpuOverheadDollarsPerYearSaved\":2628,\"securityPerCostDollars\":563076.9230769231},\"scenario\":\"v161-mixed\",\"schwartau\":{\"detectionTimeSeconds\":0,\"protectionTimeSeconds\":6,\"reactionTimeSeconds\":0,\"schwartauPositive\":true},\"securityPerCost\":0.5,\"seed\":6703842088993513000,\"skipped\":false,\"timeToActionSeconds\":0,\"trial\":0,\"validity\":{\"attackExecuted\":true,\"baseline\":{\"defender\":\"d-v161-nomtd\",\"kind\":\"ordinary\",\"observed\":true,\"oracleAchieved\":true,\"required\":true,\"trial\":0,\"usable\":true,\"valid\":true},\"cleanup\":{\"attempted\":[{\"seconds\":0.000001472,\"step\":\"scenario.Teardown\"},{\"seconds\":0.000001322,\"step\":\"defender.Stop\"},{\"seconds\":0.000001141,\"step\":\"defender.Teardown\"},{\"seconds\":0.000001212,\"step\":\"env.Close\"}],\"complete\":true,\"verified\":true},\"costObserved\":true,\"kind\":\"ordinary\",\"observerPresent\":true,\"oracleObserved\":true,\"phase\":\"scenario-setup\",\"scored\":true,\"status\":\"valid\",\"version\":1}}",
+    "expect": {
+      "legacy": false,
+      "unverified": true,
+      "scorable": false,
+      "costUsable": false,
+      "oracleUsable": false,
+      "negControlUsable": false
+    }
+  }
+]

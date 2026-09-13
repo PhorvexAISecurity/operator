@@ -328,6 +328,17 @@ fixes:
     stacked_on: []
     branch: fix/v3-m094-stamp-outage
     head_sha: 23633b2b3c9d2b9c8c6817e67e88e93cb30cb4a5
+  V3-M161:
+    directory: fixes/V3-M161
+    aliases: []
+    issues:
+    - M-161
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m161-measurement-validity
+    head_sha: 9db59ccaaf7aabc7fa4f1ea7f445e7b0e3f5c3ac
   T1-E2E-AUTH:
     directory: fixes/T1-E2E-AUTH
     aliases: []

@@ -11,20 +11,37 @@ import (
 // Metric is the ONE metric struct emitted per (scenario, defender, trial). It is
 // the SAME schema on every environment. It is written as JSON lines and rendered
 // into tables by internal/report.
+//
+// READ Validity FIRST. The scoring fields below (DisruptionVsOracle,
+// SecurityPerCost, EvidenceRetention, ROI, Schwartau, Reuse) are only
+// measurements when Validity says so; on an invalid, skipped or unscored row
+// they are left at their zero values and mean "not measured", NOT "zero". The
+// raw observations (OracleAchieved/ObservedState/Commands/dwell/action counts)
+// are preserved regardless so an independently valid attack observation is never
+// discarded — but they never license a defense attribution on their own.
 type Metric struct {
 	Scenario string `json:"scenario"`
 	Defender string `json:"defender"`
 	Trial    int    `json:"trial"`
 	Seed     int64  `json:"seed"`
 
+	// Validity is the versioned measurement-validity contract for this row (see
+	// validity.go). It is nil ONLY for rows written before the contract existed,
+	// which are reported as LEGACY / UNVERIFIED and excluded from certified
+	// scores. Use Metric.MeasurementState() to read it safely.
+	Validity *MeasurementValidity `json:"validity,omitempty"`
+
 	// OracleAchieved is the concrete observable verdict (defense effect is
-	// measured strictly against this).
+	// measured strictly against this). It is only an observation when
+	// Validity.OracleObserved is true.
 	OracleAchieved bool `json:"oracleAchieved"`
 
 	// DisruptionVsOracle is the per-trial disruption of THIS arm relative to the
-	// undefended baseline oracle: 1.0 if the undefended baseline achieved the
-	// oracle but this arm did not, 0.0 if this arm still achieved it. Aggregated
-	// per arm into a mean (a disruption PERCENT).
+	// undefended baseline oracle OBSERVED AT THE SAME TRIAL INDEX AND KIND: 1.0
+	// if that control achieved the oracle but this arm did not, 0.0 if this arm
+	// still achieved it. It is a measurement ONLY when Validity.Scored is true;
+	// otherwise it is 0 because nothing was measured. Aggregated per arm into a
+	// mean (a disruption PERCENT) over SCORED rows only.
 	DisruptionVsOracle float64 `json:"disruptionVsOracle"`
 
 	// AttackerDwellSeconds is how long the planted foothold survived.
@@ -43,15 +60,23 @@ type Metric struct {
 	// evidence; lower retention is a real cost of aggressive rotation).
 	EvidenceRetention float64 `json:"evidenceRetention"`
 
-	// Skipped marks a capability-skipped or stub arm; SkipReason explains it.
+	// Skipped is the compatibility flag meaning "this row was NOT scored". It is
+	// set for a capability skip, a stub arm AND for an invalid measurement, so
+	// that any older consumer which only understands this field excludes the row
+	// rather than scoring it. The precise state (skipped vs invalid) lives in
+	// Validity.Status; SkipReason carries a human-readable, prefixed summary.
 	Skipped    bool   `json:"skipped"`
 	SkipReason string `json:"skipReason,omitempty"`
 
 	// DefensiveActions is the count of concrete defensive actions taken (cost).
+	// -1 means UNOBSERVED (the defender exposes no DefenseObserver, or the read
+	// failed) — it never means "zero actions". Check Validity.CostObserved.
 	DefensiveActions int `json:"defensiveActions"`
 
 	// FalseDefensiveActions counts defensive actions fired during the no-attack
-	// negative control (should be 0). -1 means "not a negative-control trial".
+	// negative control (should be 0). -1 means "not a negative-control trial, or
+	// the negative control's cost was never observed"; a measured zero is only
+	// claimed when Validity.CostObserved is true on a negative-control row.
 	FalseDefensiveActions int `json:"falseDefensiveActions"`
 
 	// NegativeControl marks the no-attack negative-control trial.

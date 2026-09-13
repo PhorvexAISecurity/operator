@@ -94,18 +94,174 @@ schema everywhere:
 
 | Field | Meaning |
 |---|---|
-| `oracleAchieved` | the concrete observable verdict (did the attack reach its oracle?) |
-| `disruptionVsOracle` | 1.0 if the undefended baseline achieved the oracle but this arm did not, else 0.0; aggregated to a disruption **percent** |
+| `validity` | the **versioned measurement-validity contract** (see below). READ THIS FIRST — every field below is a measurement only when `validity` says so |
+| `oracleAchieved` | the concrete observable verdict (did the attack reach its oracle?); an observation only when `validity.oracleObserved` |
+| `disruptionVsOracle` | 1.0 if the undefended control OBSERVED AT THE SAME TRIAL INDEX AND KIND achieved the oracle but this arm did not, else 0.0. A measurement only when `validity.scored`; otherwise 0 means *not measured* |
 | `attackerDwellSeconds` | wall-clock seconds the planted foothold survived |
 | `timeToActionSeconds` | seconds from attack start to the defender's first concrete action (0 = none) |
-| `securityPerCost` | disruption per unit defensive cost (rotations/actions) |
+| `securityPerCost` | disruption per unit defensive cost (rotations/actions); derived only for a scored, cost-observed trial |
 | `evidenceRetention` | fraction of attack evidence still observable after the trial (rotation that destroys a pod also destroys forensic evidence) |
-| `defensiveActions` / `falseDefensiveActions` | cost; false moves fired during the no-attack negative control (should be 0) |
+| `defensiveActions` / `falseDefensiveActions` | cost; false moves fired during the no-attack negative control (should be 0). **`-1` means UNOBSERVED, never zero** |
+| `skipped` / `skipReason` | compatibility flag: "this row was NOT scored" (a capability skip, a stub arm, an invalid measurement, or a missing control). The precise state is `validity.status` |
 | `rawLogPath` / `commands` / `seed` | provenance: exact raw log, command list, and seed for every cell |
 
 Per arm, `internal/core/stats.go` aggregates **mean + a two-sided t-interval**
 (kept even at smoke `n=2`, where the 95% t critical value is 12.706 — so the
 interval is *honestly wide*; the SAME function serves the full `n>=20` benchmark).
+
+### Measurement validity (`internal/core/validity.go`)
+
+A value alone never implies a measurement. Every trial stamps a versioned
+`validity` block so a failed operation, a missing observation or a missing
+positive control can never be read as successful defense or as measured zero
+cost:
+
+| Field | Meaning |
+|---|---|
+| `version` / `kind` | contract version; `ordinary` \| `negative-control` \| `adaptive` |
+| `status` | `valid` (lifecycle completed, outcome observed, cleanup verified) \| `invalid` (infrastructure/harness failure) \| `skipped` (REPORTED capability/stub abstention) \| `legacy-unverified` (row written before this contract) |
+| `phase` | the lifecycle phase that DECIDED the outcome |
+| `reasons` | every propagated phase error/abstention, in order |
+| `attackExecuted` / `oracleObserved` | whether the stimulus ran and whether a verdict was actually observed |
+| `observerPresent` / `costObserved` | whether the arm exposes `DefenseObserver` and whether the cost/timing were read |
+| `scored` / `unscoredReason` | whether `disruptionVsOracle` is a real comparison, and why not |
+| `baseline` | the positive control's **identity, observed result and usability** — or why none existed |
+| `cleanup` | every owed teardown attempted and every failure retained; `complete` gates the next trial |
+
+Rules the runner and every report enforce:
+
+- **A failed attack stimulus never runs an oracle**, so the absence of a result
+  is never scored as defense.
+- **A comparison is scored only against a control that was observed, valid and
+  successful** at the same trial index *and kind*. A control that errored,
+  abstained or failed its own attack invalidates the comparison; it never becomes
+  `baseHit=true` or a measured zero.
+- **The adaptive pass (index `TrialsPerArm+1`) anchors only to the baseline arm's
+  own adaptive pass.** When that control was not run (e.g. a force-included
+  anchor-only baseline) the row is UNSCORED with an explicit missing-control
+  reason and never borrows an ordinary baseline.
+- **Unobserved cost is not zero cost.** No `securityPerCost`, `roi` or
+  `schwartau` is derived when `costObserved` is false. An observer result is only
+  accepted as an observation once it is self-consistent: a negative count, a
+  non-finite or non-positive timestamp, or a timestamp list that disagrees with
+  its own count leaves the cost UNOBSERVED with the contradiction recorded.
+- **Cleanup owed by every entered phase is always attempted** — on a detached
+  context, so it still runs after cancellation, and under a per-step WALL-CLOCK
+  bound, because a plugin may ignore its deadline and `env.Close` never receives
+  one. A cleanup that does not verify invalidates the trial, clears its derived
+  values, and stops the run before another trial can reuse unverified state.
+- **An unresolved cleanup is not a failed one and not a clean one.** A step that
+  outlives its bound is recorded `unresolved`: it may still be running, so the
+  runner keeps ownership of it (`Runner.WaitForPendingCleanup`,
+  `RunOutcome.LateCleanups`) instead of abandoning it, and a late success never
+  retroactively marks the already-reported trial clean. The CLI reports whether
+  such a call has actually `Returned`; a call still running is never printed as
+  returned.
+- **Unsafe cleanup phases never overlap.** Every owed step touches the same Env —
+  its logger, its client, its namespace — and `env.Close` frees the logger the
+  earlier steps write through. So once a step is unresolved, the remaining steps
+  are NOT started: they are recorded `blocked` with the step that blocked them.
+  That is honest and just as disqualifying for reuse, whereas starting them would
+  race a live callback and then claim each phase "ran".
+- **Deletion accepted is not absence observed — and asynchronous deletion is not
+  residue.** `Env.CleanupOwned` aggregates every API failure across every kind,
+  then POLLS within its budget until the owned objects are actually gone. Ordinary
+  background deletion completes and verifies; only what is still there when the
+  budget expires is a problem, reported with its terminating/finalizer state. With
+  `deleteNamespace=true` the namespace's own disappearance is verified the same
+  way.
+- **The final teardown is part of the run result, and honours the same ownership
+  barrier.** A run whose matrix passed but whose final teardown did not verify is
+  INCOMPLETE: it raises a barrier, lands in `provenance.json` and exits non-zero,
+  because it leaves the cluster dirty for the next run. And if cleanup this run
+  still owns has not returned even after the bounded drain, the final teardown is
+  NOT ATTEMPTED at all — deleting the namespace underneath a live callback would
+  race it, and a teardown that merely collided with one is not a verified
+  teardown. Refusing is recorded as `blocked`, never as verified. The
+  context-free closer is bounded the only way it can be: by bounding the wait.
+- **Legacy rows stay legacy.** A metrics file written before this contract still
+  decodes; those rows are counted and displayed as `legacy-unverified` and
+  excluded from certified scores. Nothing is inferred from their zero fields and
+  no historical file is rewritten.
+
+### One contract, one implementation
+
+The rules live in `build/metricvalidity`, a dependency-free module that the
+harness and the Phorvex reporters/console both import. It is deliberately not
+owned by either side: the shipped product must not depend on the test harness,
+and a one-file contract should not drag a module graph behind it.
+
+That structure exists because the alternative was tried and failed. When each
+reader mirrored the wire format by hand, the mirrors quietly omitted the fields
+the producer had begun checking — the baseline evidence, the retained cleanup
+steps — and certified rows the harness itself refuses. There is now nothing to
+keep in sync.
+
+A shared implementation still leaves one gap: a reader can route through the
+right rules and yet reach the wrong answer by failing to DECODE a field those
+rules depend on. So `metricvalidity` also embeds a PARITY CORPUS — real rows
+produced by `Runner.Run`, plus single-field counterexamples derived from one of
+them — and every reader has a test that runs the corpus through its own struct
+and its own predicates and compares against the contract's verdict. Regenerate it
+with `M161_REGEN_CORPUS=1 go test ./internal/report -run TestSharedParityCorpus`.
+
+### A decoded validity block is a CLAIM, not a verdict
+
+A metrics file is an untrusted input: it may come from a newer or older harness,
+or have been edited or truncated. `metricvalidity.Evaluate` (reached as
+`Metric.Validated()` inside the harness) is the ONE place those claims are
+checked — against this build's supported contract and against each other — and it
+is what `IsScored`, `CostObserved`, `Kind`, every aggregator, every reader and the
+provenance map use. Nothing consults `scored` directly.
+
+A row is refused, and reported as `unverified`, when its `version`, `kind` or
+`status` is not one this build understands, or when it claims `scored` while its
+own fields say the status is not valid, the oracle was never observed, cleanup
+did not verify or is unresolved, the positive control is unusable or unnamed, the
+trial is a negative control, or `disruptionVsOracle` is outside `[0,1]`. A claimed
+`costObserved` is refused against a `-1` action count or a non-finite time. A row
+whose evidence contradicts itself contributes nothing at all — but it never
+disappears: it is counted and its rejections are rendered.
+
+**Cleanup and control evidence are checked on EVERY row, not only scored ones.** A
+negative control is never "scored" — that is normal for the kind — so putting
+those checks inside the scored-only path let a trial with a retained cleanup
+failure certify a clean arm. A dirty trial is dirty whatever its kind, and a
+control marked usable whose own evidence denies it is a corrupt row whatever its
+kind.
+
+The aggregate and both reports publish `emitted / scored / invalid / skipped /
+unscored / unverified / cleanupFailed / costUnobserved / legacy` counts per arm
+plus the negative-control census, so an arm with one valid and one invalid trial
+can never look like a complete one-trial result, and an arm with nothing
+measurable renders `n/a` rather than `0`.
+
+**Negative controls are counted completely.** `not-run`, `unobserved`, `partial`
+and `observed` are distinct states. Only `observed` — EVERY negative-control row
+of the arm usable — publishes a measured false-move maximum; a clean maximum over
+a usable subset cannot establish a clean arm, so `partial` renders
+`n/a (partial: k of n observed)` and the hypothesis section carries an explicit
+caveat that no verdict establishes an absence of false defensive moves.
+
+The downstream product readers (`phorvex/cmd/p3report`, `phorvex/cmd/p3deep`,
+`phorvex/internal/console`) import the same contract rather than reimplementing
+it: they exclude refused rows, never average a `-1` cost, and disclose
+partial-control corpora instead of publishing them as measurements.
+
+**Legacy rows are excluded from certified means everywhere**, including those
+product readers. A pre-contract row records no evidence that it measured
+anything, so blending it into a current score or efficiency mean would launder
+unverified history into a fresh measurement. Such rows stay readable and are
+counted openly; a corpus with nothing certified left renders UNAVAILABLE, which
+is not zero and not a measured result.
+
+**Comparison scope (honest limit).** `TrialSeed` includes the defender identity,
+so the baseline arm's trial *i* and a defended arm's trial *i* are seeded
+differently. A scored comparison means "this arm vs the undefended arm at the
+same index"; it is *not* the same trial re-run with the defense removed. The
+adaptive comparison carries a further limitation: the undefended adaptive control
+has no rotation rhythm to learn and therefore strikes immediately, so a scored
+adaptive contrast does not isolate the value of the learned strategy.
 
 ---
 

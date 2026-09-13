@@ -19,9 +19,16 @@ WORKDIR /workspace
 COPY .git/HEAD /tmp/phorvex-git/HEAD
 COPY .git/refs/heads/ /tmp/phorvex-git/refs/heads/
 
-# The replace target must exist before `go mod download` so the local module resolves.
-# Copy it first (and whole, since the operator imports its api/v1beta1 types).
+# The replace targets must exist before `go mod download` so the local modules
+# resolve. Copy them first (Phoenix whole, since the operator imports its
+# api/v1beta1 types).
 COPY build/phoenix-extended/ build/phoenix-extended/
+# `replace github.com/phorvex/metricvalidity => ../build/metricvalidity`: the
+# shared, dependency-free definition of what makes a benchmark metric row a
+# measurement. The console/report readers import it, so it must be in the context
+# too — `go mod download` fails outright on a replace target that is not there,
+# and a local `go build` in phorvex/ cannot detect that.
+COPY build/metricvalidity/ build/metricvalidity/
 
 # Cache dependency download on go.mod/go.sum alone.
 COPY phorvex/go.mod phorvex/go.mod

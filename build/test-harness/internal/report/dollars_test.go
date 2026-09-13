@@ -22,12 +22,12 @@ func dollarTestInputs() DollarInputs {
 // section. This is the no-re-run Pass-A-with-dollars guarantee.
 func TestRenderDollarsRecomputesFromPassAShapedRows(t *testing.T) {
 	metrics := []core.Metric{
-		// Static baseline: hits oracle, 0 disruption, 0 actions.
-		{Scenario: "s1", Defender: "d-nomtd", Trial: 0, OracleAchieved: true, DisruptionVsOracle: 0, DefensiveActions: 0},
-		{Scenario: "s1", Defender: "d-nomtd", Trial: 1, OracleAchieved: true, DisruptionVsOracle: 0, DefensiveActions: 0},
+		// Static baseline: hits oracle, 0 disruption, 0 observed actions.
+		scoredRow("s1", "d-nomtd", 0, 0, true, 0),
+		scoredRow("s1", "d-nomtd", 1, 0, true, 0),
 		// Rotating arm: disrupts, 1 action, time-to-action 1s.
-		{Scenario: "s1", Defender: "d-r6blindtimer", Trial: 0, OracleAchieved: false, DisruptionVsOracle: 1, DefensiveActions: 1, TimeToActionSeconds: 1},
-		{Scenario: "s1", Defender: "d-r6blindtimer", Trial: 1, OracleAchieved: false, DisruptionVsOracle: 1, DefensiveActions: 1, TimeToActionSeconds: 1},
+		scoredRow("s1", "d-r6blindtimer", 0, 1, false, 1),
+		scoredRow("s1", "d-r6blindtimer", 1, 1, false, 1),
 	}
 	md := RenderDollars(metrics, dollarTestInputs(), 0.95)
 	for _, want := range []string{
@@ -53,10 +53,11 @@ func TestRenderDollarsRecomputesFromPassAShapedRows(t *testing.T) {
 // from the arm's rotation interval: a rotating arm gets P=6, a static arm P=0.
 func TestDollarsSchwartauUsesRotationInterval(t *testing.T) {
 	in := dollarTestInputs()
+	fullRow := scoredRow("s1", "d-fullphoenix", 0, 1, false, 1)
+	fullRow.SplitOracle, fullRow.MTDEffect, fullRow.TriggerAttribution = core.SplitPersistence, core.MTDNeutralizes, core.TriggerHarnessInjected
 	metrics := []core.Metric{
-		{Scenario: "s1", Defender: "d-nomtd", Trial: 0, OracleAchieved: true, DisruptionVsOracle: 0},
-		{Scenario: "s1", Defender: "d-fullphoenix", Trial: 0, OracleAchieved: false, DisruptionVsOracle: 1, DefensiveActions: 1, TimeToActionSeconds: 1,
-			SplitOracle: core.SplitPersistence, MTDEffect: core.MTDNeutralizes, TriggerAttribution: core.TriggerHarnessInjected},
+		scoredRow("s1", "d-nomtd", 0, 0, true, 0),
+		fullRow,
 	}
 	rows := recomputeEconomics(metrics, in)
 	var fp *dollarRow
@@ -77,7 +78,9 @@ func TestDollarsSchwartauUsesRotationInterval(t *testing.T) {
 }
 
 // TestReadMetricsJSONLRoundTrip ensures the extended-schema reader parses a row and
-// that a Pass-A-shaped line (no Pass-B keys) decodes with zero Pass-B fields.
+// that a Pass-A-shaped line (no Pass-B keys) decodes with zero Pass-B fields —
+// and that such a row is visibly LEGACY / UNVERIFIED rather than being read as a
+// measurement with a zero cost.
 func TestReadMetricsJSONLRoundTrip(t *testing.T) {
 	// A Pass-A-shaped JSON line (the additive keys are absent).
 	line := `{"scenario":"s1","defender":"d-nomtd","trial":0,"oracleAchieved":true,"disruptionVsOracle":0,"r6Tag":"R6Partial","category":"ClassicChain"}`
@@ -87,5 +90,12 @@ func TestReadMetricsJSONLRoundTrip(t *testing.T) {
 	}
 	if m.SplitOracle != "" || m.ROI != nil || m.Schwartau != nil {
 		t.Fatalf("Pass-A line must decode with zero Pass-B fields, got %+v", m)
+	}
+	if !m.IsLegacy() || m.IsScored() || m.CostObserved() {
+		t.Fatalf("a pre-contract row must decode as legacy/unverified, got legacy=%v scored=%v costObserved=%v",
+			m.IsLegacy(), m.IsScored(), m.CostObserved())
+	}
+	if s := m.MeasurementState().Status; s != core.MeasurementLegacy {
+		t.Fatalf("legacy status = %q, want %q", s, core.MeasurementLegacy)
 	}
 }
