@@ -27,13 +27,32 @@ assets="$dest/controller-tools/envtest"
 for bin in kube-apiserver etcd; do
   test -x "$assets/$bin" || { echo "missing envtest binary: $assets/$bin" >&2; exit 1; }
 done
-"$assets/kube-apiserver" --version 2>&1 | grep -Fqx "Kubernetes v${VERSION}" \
-  || { echo "kube-apiserver is not Kubernetes v${VERSION}" >&2; "$assets/kube-apiserver" --version >&2; exit 1; }
-"$assets/etcd" --version 2>&1 | grep -Fq 'etcd Version:' \
-  || { echo "etcd binary does not run" >&2; exit 1; }
+kube_version=''
+if ! kube_version="$("$assets/kube-apiserver" --version 2>&1)"; then
+  echo "kube-apiserver binary does not run" >&2
+  printf '%s\n' "$kube_version" >&2
+  exit 1
+fi
+if [[ "$kube_version" != "Kubernetes v${VERSION}" ]]; then
+  echo "kube-apiserver is not Kubernetes v${VERSION}" >&2
+  printf '%s\n' "$kube_version" >&2
+  exit 1
+fi
+
+etcd_version=''
+if ! etcd_version="$("$assets/etcd" --version 2>&1)"; then
+  echo "etcd binary does not run" >&2
+  printf '%s\n' "$etcd_version" >&2
+  exit 1
+fi
+if ! grep -F 'etcd Version:' <<<"$etcd_version" >/dev/null; then
+  echo "etcd version marker is missing" >&2
+  printf '%s\n' "$etcd_version" >&2
+  exit 1
+fi
 {
   echo "envtest v${VERSION} provisioned at $assets"
-  "$assets/kube-apiserver" --version
-  "$assets/etcd" --version | head -n 1
+  printf '%s\n' "$kube_version"
+  printf '%s\n' "$etcd_version"
 } >&2
 echo "$assets"

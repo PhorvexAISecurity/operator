@@ -78,7 +78,10 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('SHA256=9c45e40aa56971b105e596ebb3e84af6742e8709cc0523733baf8d9bb725e69c', script)
         self.assertIn('releases/download/envtest-v${VERSION}/envtest-v${VERSION}-linux-amd64.tar.gz', script)
         self.assertIn('sha256sum -c -', script)
-        self.assertIn('grep -Fqx "Kubernetes v${VERSION}"', script)
+        self.assertIn('kube_version="$("$assets/kube-apiserver" --version 2>&1)"', script)
+        self.assertIn('etcd_version="$("$assets/etcd" --version 2>&1)"', script)
+        self.assertNotIn('grep -q', script)
+        self.assertNotIn('| head', script)
         self.assertNotIn('${ENVTEST', script)  # no environment override of version, URL or digest
         self.assertIn('set -euo pipefail', script)
 
