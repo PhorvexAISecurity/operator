@@ -786,6 +786,9 @@ func podSummary(f Fixture) string {
 	if f.Pod.Stateful {
 		parts = append(parts, "Stateful")
 	}
+	if f.Pod.ServingEndpointReady {
+		parts = append(parts, "ServingEndpointReady")
+	}
 	if f.Physics != nil {
 		parts = append(parts, fmt.Sprintf("physics(imageRarity=%g, epss=%g, coResidency=%g, modelRarity=%g)",
 			f.Physics.ImageRarity, f.Physics.EPSSMultiplier, f.Physics.CoResidency, f.Physics.ModelRarity))
