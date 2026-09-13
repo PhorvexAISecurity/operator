@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,86 @@ checks:
     at: '2026-09-13T17:16:08+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: claude-v3-m164
+    artifact: evidence/red/RED.md
+    sha256: d48eef6dd6d50723562dac396bc9b92eea324f65066be467667de86bac890e11
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T17:46:27+00:00'
+    rationale: 'Baseline control behaved as intended: real FalcoHandler/PrometheusHandler
+      through the real custom REST client acknowledged 200 after the local API returned
+      403 (nothing stored), returned invalid JSON, and collided distinct events in
+      the same pod+second, while the 201 control was stored and acknowledged at both
+      sources.'
+  preflight:
+    result: PASS
+    by: claude-v3-m164
+    artifact: evidence/preflight/receipt.json
+    sha256: 1e4bfe7ba9876740ab4f7b6737c69df75fd032de6d24e0b055085d7649572c63
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T17:48:33+00:00'
+  implementation:
+    result: PASS
+    by: claude-v3-m164
+    artifact: 04-diff.patch
+    sha256: 6c00648ef5ccbed73e8efce557cad7b527f72ee204694e9a4e9dbfefc0f245e7
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T17:48:33+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m164
+    artifact: evidence/l0/falco-build-vet.log
+    sha256: 30fdbde291a6e5337824f5a38741e2b816f5d0a2d78645a11bd3049a539b650a
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T17:48:33+00:00'
+    inputs:
+    - build/falco-integrator-extended
+    - build/phoenix-extended
+    - build/prometheus-integrator-extended
+    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+  l1:
+    result: PASS
+    by: claude-v3-m164
+    artifact: evidence/l1/falco-delivery-unit.log
+    sha256: e2b5a6d767c5529ec1a0cffc871ce73a1d06f943fe54e72c4fd16621d7886be2
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T17:48:33+00:00'
+    inputs:
+    - build/falco-integrator-extended
+    - build/phoenix-extended
+    - build/prometheus-integrator-extended
+    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+  l2:
+    result: PASS
+    by: claude-v3-m164
+    artifact: evidence/l2/falco-cmd-delivery.log
+    sha256: 243df59b8a3a7f2ab01d7d2edb9243a2aa53fee1abc7a8a89c7d65f1962277b8
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T17:48:33+00:00'
+    inputs:
+    - build/falco-integrator-extended
+    - build/phoenix-extended
+    - build/prometheus-integrator-extended
+    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+  positive_control:
+    result: PASS
+    by: claude-v3-m164
+    artifact: evidence/control/falco-positive-control-head.log
+    sha256: bf1de55f6b947f53f691ad1f1157eda6deadadd369e628e401d661f5a49ba82d
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T17:48:33+00:00'
+    inputs:
+    - build/falco-integrator-extended
+    - build/phoenix-extended
+    - build/prometheus-integrator-extended
+    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
 fix_id: V3-M164
 issues:
 - M-164
 title: Acknowledge detector delivery only after SecurityEvent acceptance
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +119,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m164-detector-delivery
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +141,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +156,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed detector acceptance and retry plan; retain real REST baseline/head
-    controls and submit for lead review.
-updated_at: '2026-09-13T17:16:08+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T17:48:35+00:00'
 configuration_history:
 - at: '2026-09-13T17:16:06+00:00'
   by: codex-lead
@@ -101,6 +175,16 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-13T17:46:27+00:00'
+  by: claude-v3-m164
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T17:48:33+00:00'
+  by: claude-v3-m164
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -118,3 +202,26 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T17:48:33+00:00'
+  by: claude-v3-m164
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T17:48:34+00:00'
+  by: claude-v3-m164
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: V3-M164:8:submit
+  from: claude-v3-m164
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8
