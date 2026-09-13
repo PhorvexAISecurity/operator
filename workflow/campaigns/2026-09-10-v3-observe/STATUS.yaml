@@ -1,0 +1,123 @@
+schema_version: 2
+campaign_id: 2026-09-10-v3-observe
+profile: workflow-v2
+question: Observe ordinary live brain behavior over time to discover and reconcile
+  V3 issues
+state: ANALYZING
+owner: mehrdad
+approval_ref: workflow/assessments/20260910-readiness/LIVE-OBSERVATION-PLAN.md
+created_at: '2026-09-10T18:50:40+00:00'
+updated_at: '2026-09-10T20:12:51+00:00'
+scope:
+  environment: dev
+  source_release: live-observed-0.4.109-20260910
+  included_fixes: []
+  duration_ceiling: 61m cumulative capture; explicit unobserved connection gap
+  cost_ceiling: No provisioned resources; one stream and <=1 snapshot batch/minute
+  permission: read-only
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.109
+  digest: sha256:e384b100ddef9bc611971dbea1337ec43a994a36188671aced3b4355aa9470df
+  embedded_git_sha: dbf5fa4321b35651e8142cb2c13d4f28f8c6dcca
+safety:
+  stop_conditions:
+  - 60 minutes or 2 GiB uncompressed stream, repeated access failure, deployment identity
+    drift, or observer resource pressure
+  phase_approval_ref: null
+  unresolved: []
+  cleanup: PASS
+positive_control: PASS
+rounds:
+- id: round-1
+  state: ABORTED
+- id: round-2
+  state: COMPLETE
+findings:
+- RPT-20260910-200300-policy-cadence
+- RPT-20260910-200300-primary-image-identity
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: claude-audit-integration
+roles:
+  campaign_lead: codex-lead
+  independent_reviewer: claude-audit-integration
+  coordinator: codex-lead
+next_action:
+  owner: codex-lead
+  action: Obtain independent review of segmented live findings and intake classification
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-09-10T18:55:51+00:00'
+  by: codex-lead
+  artifact: BASELINE.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: User explicitly authorized sustained live observation; hypotheses preregistered
+    before collection. Current identities replace stale inherited release defaults.
+    Initial transition command had wrong artifact-relative path; corrected without
+    weakening evidence.
+  forced: false
+- from: APPROVED
+  to: BASELINED
+  at: '2026-09-10T18:55:57+00:00'
+  by: codex-lead
+  artifact: BASELINE.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-10T18:56:06+00:00'
+  by: codex-lead
+  artifact: BASELINE.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-09-10T19:51:43+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/spec.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: 'Administrative correction: invalid partial round enum replaced with ABORTED.
+    Segment1 ended at19:32:52 after37m10s due HTTP2 GOAWAY. Authorized read-only segment2
+    has continued since19:44:36; this metadata transition does not claim collection
+    paused.'
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-09-10T19:51:43+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/spec.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Round2 spec retains fresh19:44 PodUID/image/digest baseline matching dbf5fa4.
+    Preserve12-minute unobserved gap. No deployment or live mutation.
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-09-10T19:51:43+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/spec.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Resume metadata after invalid-enum correction. Segment2 actualstart remains19:44:36,
+    not this transition time. Cumulative ceiling61m,2GiB; read-only.
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-09-10T20:12:51+00:00'
+  by: codex-lead
+  artifact: rounds/round-2/observations.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: 'Round2 completed its23-minute observation protocol. COMPLETE means protocol
+    ended, not lossless evidence: collectorcomplete=false due2rotationnotices; segment1ABORTED
+    afterHTTP2GOAWAY. Totalactualcapture60m9.620s;703.625scapturegap. No live mutations.
+    Independent verdictpending.'
+  forced: false

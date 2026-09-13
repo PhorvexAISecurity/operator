@@ -1,0 +1,7 @@
+# E2E verification reports success from failed or absent observations
+
+Actual current Python E2E transport/groundtruth/checks at418cf20 have no consistent observation-validity contract. A forbidden kubectl Pod list becomes {}, which verify interprets as confirmed rotation because the old name is absent. A generic lora log line from startup is sufficient to confirm adapter rotation. The promised global nonfinite sweep ignores nested decision trace dictionaries, while C03/C07 turn all skipped/missing inputs into PASS; partially unverified groundtruth can also yield A03 PASS. P04 tests Running rather than Ready.
+
+Lead reproduced these exact producers/consumers in evidence/lead_e2e_validity_probe.py and retained output. Same observed UID produces contradicted; top-level NaN produces FAIL, proving the probes activate intended logic. These are standalone offline measurements, not new live observations.
+
+Require explicit probe availability/identity/time and full observation counts throughout E2E checks/groundtruth/report. API errors must be unverified/error, never disappearance; rotation requires observed lifecycle/replacement evidence and effect scope, generic old logs never causal action proof, nested numeric checks must cover actual trace dictionaries, absent fields/partial checks cannot become complete PASS. Keep CI baseline-relative exit separately labeled from absolute verdict, and preserve aborts/cleanup errors. Integrate with M155 event/target attribution repair; this is a separate verification-consumer mechanism from its Phoenix race.

@@ -99,7 +99,7 @@ _emitted = set(re.findall(r'^\s{4}([A-Za-z_][A-Za-z0-9_]*)', out, re.M))
 _reserved = sorted(i for i in _emitted if i.lower() in MERMAID_RESERVED)
 assert not _reserved, f'node ids mermaid reserves as keywords; the diagram will not parse: {_reserved}'
 paths.GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-out_path = paths.GENERATED_DIR / 'ANATOMY.mmd'
+out_path = paths.MMD_PATH
 open(out_path, 'w').write(out)
 print(f'{out_path.name} · {len(top)} nodes in {len(set(n["lane"] for n in top))} lanes · '
       f'{len(seen)} edges · pin {pin["commit"]}')

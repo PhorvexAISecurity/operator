@@ -408,4 +408,34 @@ Every A-# finding was independently re-verified line-by-line (221/221 confirmed,
 New issue tokens created after the additive migration are inserted below.
 Their canonical bodies remain in `issues/entries/`.
 
+{{ISSUE:M-161}}
+
+{{ISSUE:M-162}}
+
+{{ISSUE:M-163}}
+
+{{ISSUE:M-164}}
+
+{{ISSUE:M-165}}
+
+{{ISSUE:M-166}}
+
+{{ISSUE:M-167}}
+
+{{ISSUE:M-168}}
+
+{{ISSUE:M-169}}
+
+{{ISSUE:M-170}}
+
+{{ISSUE:M-171}}
+
+{{ISSUE:M-172}}
+
+{{ISSUE:M-173}}
+
+{{ISSUE:M-174}}
+
+{{ISSUE:M-175}}
+
 <!-- WORKFLOW_NEW_ISSUES -->

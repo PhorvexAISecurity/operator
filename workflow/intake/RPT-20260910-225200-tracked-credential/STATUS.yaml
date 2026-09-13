@@ -1,0 +1,158 @@
+schema_version: 1
+intake_id: RPT-20260910-225200-tracked-credential
+kind: RISK
+title: Development SSH credential is committed in agent tool settings
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T22:54:07+00:00'
+updated_at: '2026-09-10T22:54:56+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Read-only local Git object and file comparison; no new SSH login, credential
+    change, or deployment
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-142
+    score: 17
+    overlap:
+    - already
+    - any
+    - campaign
+    - claude
+    - evidence
+    - first
+    - here
+    - not
+    - observed
+    - present
+    - record
+    - this
+    - value
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-146
+    score: 17
+    overlap:
+    - any
+    - campaign
+    - claim
+    - evidence
+    - here
+    - inputs
+    - not
+    - present
+    - raw
+    - record
+    - this
+    - value
+    - was
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-144
+    score: 16
+    overlap:
+    - already
+    - any
+    - campaign
+    - claim
+    - claude
+    - evidence
+    - first
+    - not
+    - observation
+    - observed
+    - retained
+    - same
+    - separate
+    - this
+    - value
+    - was
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-140
+    score: 14
+    overlap:
+    - already
+    - any
+    - behavior
+    - campaign
+    - evidence
+    - first
+    - not
+    - observation
+    - raw
+    - same
+    - this
+    - value
+    - was
+    - whether
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-175
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-175.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T22:54:54+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T22:54:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T22:54:55+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T22:54:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T22:54:56+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-175.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

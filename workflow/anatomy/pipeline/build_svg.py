@@ -167,7 +167,7 @@ svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W
        f'<style>{css}</style>{DEFS}<rect width="{W}" height="{H}" fill="#ffffff"/>'
        + ''.join(edges) + ''.join(out) + '</svg>')
 paths.GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-open(paths.GENERATED_DIR / 'ANATOMY.svg', 'w').write(svg)
+open(paths.SVG_PATH, 'w').write(svg)
 # count CARDS ACTUALLY WRITTEN, never the dict
 DRAWN_TOP = sum(1 for _i, d in DRAWN if d == 0)
 DRAWN_KIDS = sum(1 for _i, d in DRAWN if d > 0)

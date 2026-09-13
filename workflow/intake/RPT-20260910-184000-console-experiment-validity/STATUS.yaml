@@ -1,0 +1,271 @@
+schema_version: 1
+intake_id: RPT-20260910-184000-console-experiment-validity
+kind: BUG
+title: Console availability experiment claims attack results despite failed stimulus
+  and unsafe restart recovery
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T18:39:15+00:00'
+updated_at: '2026-09-10T18:39:49+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline current-source audit with local real-function reproductions;
+    no live mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-167
+    score: 26
+    overlap:
+    - artifacts
+    - attack
+    - cannot
+    - claim
+    - console
+    - durable
+    - evidence
+    - experiment
+    - mutation
+    - not
+    - policy
+    - recovery
+    - required
+    - results
+    - separate
+    - shipped
+    - state
+    - while
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+  - issue_id: M-140
+    score: 22
+    overlap:
+    - any
+    - behavior
+    - can
+    - evidence
+    - experiment
+    - first
+    - live
+    - not
+    - observation
+    - old
+    - policy
+    - raw
+    - restart
+    - result
+    - state
+    - verified
+    - whether
+    - while
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-136
+    score: 19
+    overlap:
+    - absent
+    - any
+    - attack
+    - can
+    - console
+    - evidence
+    - live
+    - logs
+    - mode
+    - mutation
+    - not
+    - state
+    - unsafe
+    - verified
+    - while
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-144
+    score: 18
+    overlap:
+    - absent
+    - any
+    - attack
+    - can
+    - cannot
+    - captured
+    - claim
+    - evidence
+    - first
+    - live
+    - not
+    - observation
+    - observed
+    - policy
+    - retained
+    - separate
+    - source
+    - state
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-155
+    score: 18
+    overlap:
+    - any
+    - attack
+    - can
+    - console
+    - evidence
+    - failed
+    - fire
+    - live
+    - not
+    - observed
+    - source
+    - while
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-145
+    score: 17
+    overlap:
+    - absent
+    - any
+    - claim
+    - console
+    - live
+    - not
+    - policy
+    - report
+    - shipped
+    - state
+    - without
+    title: Live policy editor rewrote `vllm-defense.spec.tenant` to `litellm` — M-140's
+      name-keyed dual, reached through a console PATCH
+  - issue_id: M-146
+    score: 17
+    overlap:
+    - absent
+    - any
+    - cannot
+    - claim
+    - evidence
+    - here
+    - inputs
+    - live
+    - not
+    - raw
+    - record
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-1
+    score: 15
+    overlap:
+    - can
+    - cannot
+    - contract
+    - live
+    - not
+    - shipped
+    - verified
+    - while
+    - without
+    title: The shipped RBAC cannot actuate; the live demos ran on a hand-applied ClusterRole
+  - issue_id: M-2
+    score: 15
+    overlap:
+    - any
+    - cannot
+    - contract
+    - evidence
+    - first
+    - invariant
+    - live
+    - not
+    - observed
+    - policy
+    - restore
+    - shipped
+    - source
+    - state
+    - verified
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-142
+    score: 14
+    overlap:
+    - any
+    - captured
+    - evidence
+    - first
+    - here
+    - live
+    - not
+    - observed
+    - record
+    - state
+    - verified
+    - while
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-168
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-168.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T18:39:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T18:39:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T18:39:16+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T18:39:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T18:39:49+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-168.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

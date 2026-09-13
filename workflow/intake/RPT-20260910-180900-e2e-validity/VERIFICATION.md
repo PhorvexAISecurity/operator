@@ -1,0 +1,3 @@
+# Lead verification PASS (defect reproduced)
+
+By codex-lead; source418cf2005a45c80c15b93f86d5548f73836bc7d7. Command: python3 workflow/assessments/20260910-readiness/evidence/lead_e2e_validity_probe.py. Seven actual function characterizations reproduce from real E2E modules; no product patch/mocked final flag. DeniedTransport only returns a real-shaped kubectl Forbidden result to Cluster.pod_uids; groundtruth.verify supplies the false confirmation. Positive controls: observed originalUID gives contradicted, top-levelNaN gives FAIL. NestedNaN/absent/partial/genericlog cases expose additional validity arms. Evidence script/log retained; replay from assessment location resolves module imports. No live frequency or hardware claim.

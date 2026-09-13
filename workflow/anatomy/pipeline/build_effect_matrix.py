@@ -8,6 +8,8 @@ from source with anchors, and marked as such.
 """
 import re, json, csv
 
+import guard  # noqa: F401 — import-time containment guard; this file writes by relative name
+
 inv = json.load(open('CALL_INVENTORY.json'))
 
 # --- CURATED: read per branch from source, one entry per control-plane call ---
