@@ -63,15 +63,16 @@ var declaredOnlyActions = []model.Action{model.ActionNoop, model.ActionDisable}
 // PodSpec is the subset of model.Pod a fixture sets. Every field is copied verbatim
 // onto model.Pod in buildView; unset fields keep the zero value.
 type PodSpec struct {
-	Namespace      string `json:"namespace"`
-	Name           string `json:"name"`
-	Node           string `json:"node,omitempty"`
-	HasGPU         bool   `json:"hasGPU,omitempty"`
-	MIGDevice      string `json:"migDevice,omitempty"`
-	ModelID        string `json:"modelID,omitempty"`
-	SuspectAdapter string `json:"suspectAdapter,omitempty"`
-	RouteService   string `json:"routeService,omitempty"`
-	Stateful       bool   `json:"stateful,omitempty"`
+	Namespace            string `json:"namespace"`
+	Name                 string `json:"name"`
+	Node                 string `json:"node,omitempty"`
+	HasGPU               bool   `json:"hasGPU,omitempty"`
+	MIGDevice            string `json:"migDevice,omitempty"`
+	ModelID              string `json:"modelID,omitempty"`
+	SuspectAdapter       string `json:"suspectAdapter,omitempty"`
+	RouteService         string `json:"routeService,omitempty"`
+	Stateful             bool   `json:"stateful,omitempty"`
+	ServingEndpointReady bool   `json:"servingEndpointReady,omitempty"`
 }
 
 // PhysicsSpec is the dispersion witness a fixture supplies. nil means model.NeutralPhysics().
@@ -175,7 +176,7 @@ func Fixtures() []Fixture {
 	unit := CtxSpec{AssetValue: 1, PHold: 1, StageUrgency: 1, LateralUrgency: 1}
 	gpuCtx := unit
 	gpuCtx.HasGPU = true
-	gpuPod := PodSpec{Namespace: ns, Name: "gpu", Node: "node-a", HasGPU: true, ModelID: "model-x", RouteService: "svc"}
+	gpuPod := PodSpec{Namespace: ns, Name: "gpu", Node: "node-a", HasGPU: true, ModelID: "model-x", RouteService: "svc", ServingEndpointReady: true}
 	vector := func(name, why, typ string, targetsPod bool, age float64) Fixture {
 		pod := gpuPod
 		pod.Name = name
@@ -185,7 +186,7 @@ func Fixtures() []Fixture {
 	return []Fixture{
 		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts and the rotate/quarantine/route-rotate grants only.",
 			Pod: PodSpec{Namespace: ns, Name: "plain", Node: "node-a"}, Ctx: unit},
-		{Name: "stateful", Why: "Stateful CPU pod: the session fact reaches full weight and kv-reset earns its session grant without any GPU.",
+		{Name: "stateful", Why: "Stateful CPU pod without a serving endpoint: the session fact reaches full weight but neither endpoint-dependent eraser earns cover.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "neighbors", Why: "Two blast-graph neighbours: one lateralEdge fact per neighbour, quarantine-only cover, weight scales with neighbour value.",
 			Pod: PodSpec{Namespace: ns, Name: "neighbors", Node: "node-a"},
@@ -198,8 +199,8 @@ func Fixtures() []Fixture {
 			Pod: gpuPod, Ctx: gpuCtx},
 		{Name: "gpu-mig", Why: "Same pod with a MIG device: mig-rebind covers gpuContentionChannel only; gpuColocation stays audit-only.",
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-mig"; p.MIGDevice = "1g.10gb"; return p }(), Ctx: gpuCtx},
-		{Name: "cpu-served-model", Why: "ModelID set but Pod.HasGPU=false and not stateful: ucw emits the AI facts (keyed on Pod.HasGPU||ModelID) while the session arm (keyed on FactContext.HasGPU||Stateful) stays at 0.6 weight with no kv-reset grant — the M-42 asymmetry.",
-			Pod: PodSpec{Namespace: ns, Name: "cpu-served-model", Node: "node-a", ModelID: "model-x", RouteService: "svc"}, Ctx: unit},
+		{Name: "cpu-served-model", Why: "Ready CPU served model: both session erasers share the produced serving-endpoint prerequisite while the non-GPU session weight remains 0.6.",
+			Pod: PodSpec{Namespace: ns, Name: "cpu-served-model", Node: "node-a", ModelID: "model-x", RouteService: "svc", ServingEndpointReady: true}, Ctx: unit},
 		{Name: "gpu-adapter", Why: "Detector-stamped SuspectAdapter: adapterIntegrity appears at 3x weight and only adapter-rotate covers it.",
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-adapter"; p.SuspectAdapter = "evil"; return p }(), Ctx: gpuCtx},
 		{Name: "gpu-phold-zero", Why: "PHold=0: every weight is 0 (base = 0.001*pHold), facts and cover sets are still emitted, nothing can carry gain.",
@@ -225,6 +226,7 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		Namespace: f.Pod.Namespace, Name: f.Pod.Name, Node: f.Pod.Node,
 		HasGPU: f.Pod.HasGPU, MIGDevice: f.Pod.MIGDevice, ModelID: f.Pod.ModelID,
 		SuspectAdapter: f.Pod.SuspectAdapter, RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
+		ServingEndpointReady: f.Pod.ServingEndpointReady,
 	}
 	ph := model.NeutralPhysics()
 	if f.Physics != nil {

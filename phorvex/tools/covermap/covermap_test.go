@@ -328,14 +328,13 @@ func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {
 		}
 	}
 
-	// M-42 asymmetry, stated as it currently is: the session/kv-reset arm keys on
-	// FactContext.HasGPU||Stateful, the AI facts on Pod.HasGPU||Pod.ModelID.
+	// M-42 common prerequisite: both session erasers key on ServingEndpointReady.
 	cpu := byKey["ucw-recon:cpu-served-model"]
 	if !emits(cpu, recon.FactInflightRequests) || len(cpu.Cover[string(model.ActionKVMigrateInvalidate)]) == 0 {
 		t.Errorf("cpu-served-model: expected AI facts and a kv-migrate-invalidate session grant (Pod.ModelID set)")
 	}
-	if got := cpu.Cover[string(model.ActionKVReset)]; len(got) != 0 {
-		t.Errorf("cpu-served-model: kv-reset must have no grant when FactContext.HasGPU and Stateful are false, got %v", got)
+	if got := cpu.Cover[string(model.ActionKVReset)]; strings.Join(got, ",") != recon.FactSession {
+		t.Errorf("cpu-served-model: kv-reset must share session cover, got %v", got)
 	}
 	for _, f := range cpu.Facts {
 		if f.Kind == recon.FactSession && f.Weight != 0.6 {
@@ -343,8 +342,11 @@ func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {
 		}
 	}
 	stateful := byKey["standard-recon:stateful"]
-	if got := stateful.Cover[string(model.ActionKVReset)]; strings.Join(got, ",") != recon.FactSession {
-		t.Errorf("stateful: kv-reset must cover session without a GPU, got %v", got)
+	if got := stateful.Cover[string(model.ActionKVReset)]; len(got) != 0 {
+		t.Errorf("stateful: no endpoint witness must mean no kv-reset cover, got %v", got)
+	}
+	if got := stateful.Cover[string(model.ActionKVMigrateInvalidate)]; len(got) != 0 {
+		t.Errorf("stateful: no endpoint witness must mean no migrate cover, got %v", got)
 	}
 
 	// PHold=0 zeroes every weight but changes no cover set.
