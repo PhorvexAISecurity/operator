@@ -345,7 +345,7 @@ fixes:
     issues:
     - M-42
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies:
     - T2-M123
     stacked_on:
