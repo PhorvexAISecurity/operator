@@ -355,10 +355,10 @@ fixes:
     issues:
     - M-175
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies:
     - T2-DIFF-PORTABILITY
     stacked_on:
     - T2-DIFF-PORTABILITY
     branch: fix/v3-m175-local-credentials
-    head_sha: null
+    head_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
