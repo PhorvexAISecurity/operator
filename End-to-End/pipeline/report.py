@@ -246,6 +246,9 @@ def _band(doc):
     t = doc["tally"]
     pf = doc.get("preflight", {}).get("version", {}) or {}
     tgt = doc.get("target") or {}
+    capture = doc.get("capture") or {}
+    scope = capture.get("scope") or {}
+    coverage = doc.get("coverage") or {}
     meta = [
         ("Mode", doc["mode"]),
         ("Target", tgt.get("name", "—")),
@@ -254,6 +257,16 @@ def _band(doc):
         ("Decision records", doc["counts"]["records"]),
         ("Actuations", doc["counts"]["actuated"]),
         ("MaxMovesPerTick", doc.get("policy", {}).get("maxMovesPerTick") or "—"),
+        # A scoped capture is a smaller claim than a cluster-wide one, so it is stated
+        # beside the verdict rather than buried in the JSON.
+        ("Capture scope", "all namespaces" if scope.get("global", True)
+         else ", ".join(scope.get("namespaces") or []) or "—"),
+        ("Capture complete", "yes" if capture.get("complete", True) else
+         f"no — {capture.get('reason', 'unknown')}"),
+        ("Check coverage", f"{coverage.get('full', 0)} full · {coverage.get('partial', 0)} partial "
+                           f"· {coverage.get('none', 0)} unobserved · "
+                           f"{coverage.get('not-applicable', 0)} n/a"),
+        ("Causal attribution", ((doc.get("attribution") or {}).get("support") or "—")),
         ("Transport", doc["transport"]),
         ("Started", doc["startedAt"][:19].replace("T", " ")),
         ("Finished", doc["finishedAt"][:19].replace("T", " ")),
@@ -302,14 +315,23 @@ def _checks(doc):
             if c.get("evidence"):
                 ev = ('<p class="lbl">Evidence</p><pre class="ev">'
                       + esc("\n".join(str(e) for e in c["evidence"])) + "</pre>")
+            cov = c.get("coverage", "full")
+            # `partial` and `none` are the difference between "this contract held" and
+            # "this contract held over what we could see", so they ride next to the status.
+            cov_pill = ("" if cov == "full" else
+                        f'<span class="pill {"skip" if cov in ("none", "not-applicable") else "warn"}">'
+                        f'{esc(cov)} coverage</span>')
+            inputs = ("" if not c.get("inputs") else
+                      '<div><p class="lbl">Inputs this verdict rests on</p><pre class="ev">'
+                      + esc("\n".join(str(i) for i in c["inputs"])) + "</pre></div>")
             rows.append(f"""<details class="chk {c['status']}" data-status="{c['status']}">
   <summary><span class="cid">{esc(c['id'])}</span>
     <span class="ctitle">{esc(c['title'])}</span>
-    <span class="pill {c['status']}">{esc(STATUS_LABEL[c['status']])}</span>
+    <span class="pill {c['status']}">{esc(STATUS_LABEL[c['status']])}</span>{cov_pill}
     <span class="csum">{esc(c['summary'])}</span></summary>
   <div class="cbody">
-    <div><p class="lbl">What a pass proves · severity {esc(c['severity'])}</p>
-    <p>{esc(c['proves'])}</p></div>{ev}
+    <div><p class="lbl">What a pass proves · severity {esc(c['severity'])} · coverage {esc(cov)}</p>
+    <p>{esc(c['proves'])}</p></div>{ev}{inputs}
   </div>
 </details>""")
         groups.append(f'<div class="grp"><h3>{esc(CHECK_STAGE_LABEL[st])}</h3>{"".join(rows)}</div>')
@@ -400,11 +422,29 @@ def _ground(doc):
     else:
         rows = []
         for g in gt:
+            window = g.get("observationWindow") or {}
+            # The effect and its cause are shown as two separate lines because they are two
+            # separate claims: an observed replacement is not a defended attack.
+            # Three separate lines because they are three separate claims: what kind of
+            # evidence, whether the effect was measured, and whether we caused it.
+            level = g.get("evidenceLevel", "unrecorded")
+            observed = ("measured effect" if g.get("effectObserved")
+                        else "configuration only — enforcement not measured")
+            attribution = (f'<p class="lbl" style="margin-top:6px">Evidence: {esc(level)}'
+                           f' · {esc(observed)}</p>'
+                           f'<p class="lbl">Attribution: '
+                           f'{esc(g.get("attribution", "unavailable"))}'
+                           + (f' — {esc(g["attributionDetail"])}' if g.get("attributionDetail") else "")
+                           + "</p>")
+            observed = ("" if not window.get("observedAt") else
+                        f'<p class="lbl">Observed {esc(window["observedAt"][:19].replace("T", " "))}'
+                        f' · {esc(window.get("intervalSec"))}s after the action started</p>')
             rows.append(f"""<div class="gtrow {esc(g['verdict'])}">
   <h4><code>{esc(g['action'])}</code> on <span class="ltr">{esc(g['namespace'])}/{esc(g['pod'])}</span>
-      — {esc({'confirmed': 'confirmed', 'contradicted': 'contradicted', 'unverifiable': 'unverifiable'}[g['verdict']])}</h4>
+      — {esc(g['verdict'])}</h4>
   <p>{esc(g['detail'])}</p>
   <p class="lbl" style="margin-top:6px">Expected: {esc(g['expected'])}</p>
+  {attribution}{observed}
   {f'<pre class="ev">{esc(g["evidence"])}</pre>' if g.get("evidence") else ''}
 </div>""")
         body = f'<div class="gt">{"".join(rows)}</div>'
