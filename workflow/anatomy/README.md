@@ -46,6 +46,52 @@ Required checks are documented in `pipeline/STATE.md`:
 - operation and curation accuracy;
 - mutation tests.
 
+## Staging a candidate for an unshipped source
+
+`--check` and `--publish` both speak about the DEPLOYED source. Neither can
+produce a reviewable anatomy for a source the canonical pin must not move to,
+which is what an assessment needs. `--stage` does:
+
+```bash
+python3 workflow/tools/workflow.py anatomy-refresh \
+  --source-ref <sha> --stage <dir> \
+  --stage-doc ANATOMY_V3.md --stage-stem anatomy_v3 --stage-edition V3
+```
+
+It generates a whole candidate edition — pipeline, inventories, reader,
+diagram — into `<dir>` from a clean temporary worktree at `--source-ref`, and
+never writes inside `workflow/anatomy/`. Flags:
+
+- `--stage-doc` / `--stage-stem` name the reader and the diagram/SVG stem;
+  each must be a single path component.
+- `--stage-edition` sets `edition_label` in the staged `SOURCE_PIN.json`, which
+  is what the reader titles itself with. Omit it and the candidate is titled as
+  a candidate without an edition; the canonical edition remains `v2`.
+- `--stage-regen-anchors` re-pins the anchor fingerprints at the staged source.
+  Opt-in, because re-pinning is a reviewed act: it makes every drifted citation
+  pass by definition.
+
+Staging refuses to write outside `<dir>`, and that refusal is enforced at both
+layers. Every destination is resolved and required to land under the staging
+directory and outside the canonical one, and the whole staged tree is scanned
+for symlinks pointing out of it — before seeding, and again after, because
+`pipeline/` and `generated/` do not exist on the first pass. Containment is
+tested in BOTH directions: `<dir>` may be neither inside `workflow/anatomy/` nor
+an ancestor of it, because the promise cannot hold for a stage tree that
+encloses the thing it promises not to touch.
+
+At the generator layer, `paths.py` repeats the descendant scan on import, and
+the pipeline scripts that write without importing it —
+`build_effect_matrix.py`, `build_operation_matrix.py` and `mutation_test.py` —
+import `guard.py`, which runs the same scan over both directories a relative
+write can land in: the script's own directory and the process CWD. So a direct
+invocation is refused too. Both are preconditions, not sandboxes: a script
+importing neither module is outside what they can promise, and a test asserts
+that no such writer exists in the pipeline.
+
+Staging never advances `PIN.yaml`. A staged candidate becomes canonical only
+through a reviewed `--publish` at the observed deployed SHA.
+
 ## Release cadence
 
 Refresh once per **deployed source SHA**. If several fixes ship in one image,

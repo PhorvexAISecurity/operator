@@ -49,6 +49,21 @@ phorvex:
     - vllm/detector-kv-canary
     - vllm/detector-adapter-inv
     - phorvex-system/operator-controller-manager
+  # M-94 server-side guard that makes the stamp above worth trusting: a
+  # ValidatingAdmissionPolicy + Deny binding requiring that any phorvex.ai/creator-identity
+  # annotation on a SecurityEvent CREATE/UPDATE equals the authenticated requester. It is
+  # evaluated in-process by the API server, so — unlike the mutating stamp webhook, which is
+  # failurePolicy=Ignore so it can never block the cluster's event flow — it has no endpoint
+  # that can be down. Without it, a client-supplied creator survives any stamp-webhook outage
+  # and forges an allowlisted detector.
+  # ON by default and required for `trustedDetectors` to mean anything: rendering with this
+  # disabled and a non-empty allowlist is rejected. Needs Kubernetes >=1.30 (stable
+  # admissionregistration.k8s.io/v1 ValidatingAdmissionPolicy); on an older cluster the render
+  # fails loudly rather than quietly dropping the guard.
+  # An event with NO creator annotation is still admitted — it is simply untrusted at ingest.
+  # It does not retroactively authenticate SecurityEvents that already exist.
+  eventIdentityPolicy:
+    enabled: true
   # Opt-in live E2E identity. Admission confines its events to one test namespace;
   # the console/operator identity is NOT added to the detector allowlist.
   e2eDetector:

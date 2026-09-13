@@ -1,0 +1,277 @@
+schema_version: 1
+intake_id: RPT-20260910-184000-console-state-persistence
+kind: BUG
+title: Shipped console storage configuration silently drops mutation and experiment
+  records
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T18:39:14+00:00'
+updated_at: '2026-09-10T18:39:48+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline current-source audit with local real-function reproductions;
+    no live mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 23
+    overlap:
+    - any
+    - attack
+    - audit
+    - cannot
+    - claim
+    - evidence
+    - file
+    - first
+    - its
+    - not
+    - observation
+    - observed
+    - one
+    - policy
+    - records
+    - retained
+    - returns
+    - separate
+    - still
+    - when
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-146
+    score: 23
+    overlap:
+    - any
+    - audit
+    - cannot
+    - claim
+    - evidence
+    - file
+    - here
+    - inputs
+    - not
+    - one
+    - raw
+    - record
+    - records
+    - still
+    - zero
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-136
+    score: 21
+    overlap:
+    - any
+    - attack
+    - audit
+    - console
+    - evidence
+    - its
+    - logs
+    - mutation
+    - not
+    - one
+    - operator
+    - read-only
+    - root
+    - silently
+    - when
+    - while
+    - zero
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-140
+    score: 19
+    overlap:
+    - any
+    - behavior
+    - evidence
+    - experiment
+    - first
+    - its
+    - not
+    - observation
+    - one
+    - operator
+    - policy
+    - raw
+    - returns
+    - silently
+    - when
+    - whether
+    - while
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-143
+    score: 18
+    overlap:
+    - any
+    - audit
+    - cannot
+    - evidence
+    - file
+    - its
+    - not
+    - policy
+    - records
+    - reproduction
+    - scope
+    - shipped
+    - still
+    - uptime
+    - while
+    - zero
+    title: pHold is algebraically pinned to 1 by pod age — the Bayesian belief layer
+      is annihilated, not outweighed
+  - issue_id: M-1
+    score: 17
+    overlap:
+    - anywhere
+    - audit
+    - cannot
+    - contract
+    - its
+    - not
+    - operator
+    - read-only
+    - records
+    - shipped
+    - still
+    - when
+    - while
+    title: The shipped RBAC cannot actuate; the live demos ran on a hand-applied ClusterRole
+  - issue_id: M-152
+    score: 16
+    overlap:
+    - cannot
+    - drops
+    - evidence
+    - line
+    - not
+    - one
+    - raw
+    - record
+    - records
+    - returns
+    - when
+    - while
+    title: '`stampGPU` drops `VRAMPresent` — the decision trace''s VRAM field is permanently
+      dark, even when DCGM data flows and the gate consumes the float'
+  - issue_id: M-154
+    score: 16
+    overlap:
+    - any
+    - audit
+    - claim
+    - evidence
+    - not
+    - observed
+    - record
+    - records
+    - retained
+    - silently
+    title: Audit retention is size-capped, not time-capped — decision-trace.v3's larger
+      records halved the observable history depth, and the pre-v3 corpus rotated out
+      unremarked
+  - issue_id: M-2
+    score: 15
+    overlap:
+    - any
+    - audit
+    - cannot
+    - contract
+    - evidence
+    - first
+    - invariant
+    - its
+    - not
+    - observed
+    - one
+    - policy
+    - shipped
+    - still
+    - when
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-145
+    score: 15
+    overlap:
+    - any
+    - claim
+    - console
+    - not
+    - one
+    - operator
+    - policy
+    - report
+    - shipped
+    - silently
+    - written
+    title: Live policy editor rewrote `vllm-defense.spec.tenant` to `litellm` — M-140's
+      name-keyed dual, reached through a console PATCH
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-167
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-167.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T18:39:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T18:39:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T18:39:15+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T18:39:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T18:39:48+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-167.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

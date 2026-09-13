@@ -3,6 +3,8 @@
 Route requests such as “generate the master issues from scratch”, “audit the whole
 system”, or “repeat the validation/recommendation work” here. This is investigation,
 not the read-only workflow health check in AUDIT.md and not a product implementation loop.
+For an assessment followed by parallel remediation and deployment barriers, also
+follow [TIERS.md](TIERS.md).
 
 ## Start and ownership
 

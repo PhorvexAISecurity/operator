@@ -7,3 +7,113 @@ intakes:
     state: DUPLICATE
     issue_id: null
     aliases: []
+  RPT-20260910-173400-credential-provenance:
+    directory: intake/RPT-20260910-173400-credential-provenance
+    kind: BUG
+    title: Credential-theft oracle replaces the captured credential with a new unbound
+      token
+    state: FILED
+    issue_id: M-162
+    aliases: []
+  RPT-20260910-173400-detector-delivery:
+    directory: intake/RPT-20260910-173400-detector-delivery
+    kind: BUG
+    title: Detector webhooks acknowledge SecurityEvent creation failures as HTTP success
+    state: FILED
+    issue_id: M-164
+    aliases: []
+  RPT-20260910-173400-measurement-validity:
+    directory: intake/RPT-20260910-173400-measurement-validity
+    kind: BUG
+    title: Benchmark errors and unobserved baselines are scored as successful defense
+    state: FILED
+    issue_id: M-161
+    aliases: []
+  RPT-20260910-173400-shadow-isolation:
+    directory: intake/RPT-20260910-173400-shadow-isolation
+    kind: BUG
+    title: Shadow optimization mutates production stage clocks and exclusion counters
+    state: FILED
+    issue_id: M-163
+    aliases: []
+  RPT-20260910-180900-e2e-validity:
+    directory: intake/RPT-20260910-180900-e2e-validity
+    kind: BUG
+    title: E2E verification reports success from failed or absent observations
+    state: FILED
+    issue_id: M-165
+    aliases: []
+  RPT-20260910-184000-approval-lifecycle:
+    directory: intake/RPT-20260910-184000-approval-lifecycle
+    kind: BUG
+    title: One pending console approval can be executed concurrently more than once
+    state: FILED
+    issue_id: M-166
+    aliases: []
+  RPT-20260910-184000-catalogue-harness-repair:
+    directory: intake/RPT-20260910-184000-catalogue-harness-repair
+    kind: BUG
+    title: AI scenario harness performs the defense it later attributes to the defender
+    state: FILED
+    issue_id: M-171
+    aliases: []
+  RPT-20260910-184000-catalogue-oracle-observation:
+    directory: intake/RPT-20260910-184000-catalogue-oracle-observation
+    kind: BUG
+    title: Scenario oracles conflate missing targets and failed observations with
+      attack disruption
+    state: FILED
+    issue_id: M-172
+    aliases: []
+  RPT-20260910-184000-catalogue-technique-realism:
+    directory: intake/RPT-20260910-184000-catalogue-technique-realism
+    kind: BUG
+    title: APT catalogue labels technique-specific attacks that execute the same generic
+      marker routine
+    state: FILED
+    issue_id: M-170
+    aliases: []
+  RPT-20260910-184000-console-experiment-validity:
+    directory: intake/RPT-20260910-184000-console-experiment-validity
+    kind: BUG
+    title: Console availability experiment claims attack results despite failed stimulus
+      and unsafe restart recovery
+    state: FILED
+    issue_id: M-168
+    aliases: []
+  RPT-20260910-184000-console-result-race:
+    directory: intake/RPT-20260910-184000-console-result-race
+    kind: BUG
+    title: Attack watcher and HTTP result readers race on shared mutable outcome records
+    state: FILED
+    issue_id: M-169
+    aliases: []
+  RPT-20260910-184000-console-state-persistence:
+    directory: intake/RPT-20260910-184000-console-state-persistence
+    kind: BUG
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+    state: FILED
+    issue_id: M-167
+    aliases: []
+  RPT-20260910-200300-policy-cadence:
+    directory: intake/RPT-20260910-200300-policy-cadence
+    kind: OBSERVATION
+    title: Observed decision cadence exceeds configured policy interval
+    state: FILED
+    issue_id: M-174
+    aliases: []
+  RPT-20260910-200300-primary-image-identity:
+    directory: intake/RPT-20260910-200300-primary-image-identity
+    kind: BUG
+    title: Primary running image projection selects a sidecar by status order
+    state: FILED
+    issue_id: M-173
+    aliases: []
+  RPT-20260910-225200-tracked-credential:
+    directory: intake/RPT-20260910-225200-tracked-credential
+    kind: RISK
+    title: Development SSH credential is committed in agent tool settings
+    state: FILED
+    issue_id: M-175
+    aliases: []

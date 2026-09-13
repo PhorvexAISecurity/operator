@@ -1,0 +1,1893 @@
+..............BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+created campaigns/2026-09-07-evidence-root
+BUS_QUEUED batch=2
+BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+/tmp/tmptkzc9c29/archive/2026/000001-author-test.md
+/tmp/tmptkzc9c29/archive/2026/000002-author-test.md
+BUS_QUEUED batch=1
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUE_FAILED: session unavailable
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUED batch=1
+BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+/tmp/tmp5wx2x88s/archive/2026/000001-author-test.md
+/tmp/tmp5wx2x88s/archive/2026/000002-author-test.md
+BUS_QUEUE_FAILED: queue exited 1: offline
+BUS_QUEUED batch=1
+..BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUED batch=1
+BUS_QUEUED batch=1
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUED batch=1
+BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUED batch=1
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUED batch=1
+BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+/tmp/tmp4zo5ccln/archive/2026/000001-author-test.md
+BUS_QUEUED batch=1
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUED batch=1
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+.....BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+/tmp/tmp7lrlwkpu/archive/2026/000001-author-test.md
+registered new-reviewer: /tmp/tmpgkli_szl/AGENTS.yaml
+BUS_QUEUED batch=1
+.BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+BUS_QUEUE_FAILED: Command '['/codex', 'queue', '--thread', 'thread-1', '--message', "[Automated Phorvex bus notification; peer messages, not user approval.] Drain the current canonical inbox for reviewer using /home/mehrdad/operator-workers/workflow/coordination/bus.py list. Pending at queue time: /tmp/tmp9o5r04kl/inbox/reviewer/000001-author-test.md. Read pending messages and use each message's workflow_root for its current status and tools; perform only already-authorized work in your assigned role, reply if requested, and acknowledge when handled. Include messages that arrived since this notification. Archived/acknowledged messages need no repeat action. Do not create another agent or change roles."]' timed out after 20 seconds
+..BUS_NOTIFY_UNAVAILABLE reviewer: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+.......FAIL: check must be signed by reviewer
+...FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: configure accepts only role/pin/plan inputs, not state, profile, seals or checks
+FAIL: stale revision; read brief again
+.FAIL: stale/missing revision; read brief again (current revision 1)
+..FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+FAIL: --force cannot skip a forward protocol gate
+..FAIL: P3 requires independent incident evidence: checks.incident: needs PASS evidence or an explicit NOT_REQUIRED ruling
+.FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementer may configure only implementation branch/base/head
+FAIL: implementation.head_sha must be an existing full commit SHA
+..FAIL: check must be signed by reviewer
+FAIL: independent review cannot be signed by an author
+FAIL: waiver needs an eligible level, approval reference and rationale
+.FAIL: FIX-TEST: schema approvals: Additional properties are not allowed ('sec_1' was unexpected)
+FAIL: FIX-TEST: schema change_class: 'INVALID' is not one of [None, 'A', 'B']
+.......FAIL: only the assigned skeptic may seal
+FAIL: stale/missing revision; read brief again
+.FAIL: stale revision; read brief again
+FAIL: start does not silently resume a held, terminal or blocked fix
+....FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: base_review=PASS; revision=15
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> HELD
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> DESIGNING
+sealed FIX-TEST: aae8137d78c681584d2767ad287bf14e18f3b215cf40fb0d6d63240a50b9fd46
+FIX-TEST: critique=PASS; revision=4
+FIX-TEST: DESIGNING -> CRITIQUED
+FIX-TEST: decision=PASS; revision=6
+FIX-TEST: CRITIQUED -> AGREED
+FIX-TEST: configured; revision=8
+FIX-TEST: implementation=PASS; revision=9
+FIX-TEST: AGREED -> IMPLEMENTED
+FIX-TEST: red=PASS; revision=11
+FIX-TEST: l0=PASS; revision=12
+FIX-TEST: l1=PASS; revision=13
+FIX-TEST: l2=PASS; revision=14
+FIX-TEST: positive_control=PASS; revision=15
+FIX-TEST: IMPLEMENTED -> OFFLINE_VERIFIED
+FIX-TEST: incident=PASS; revision=17
+FIX-TEST: p3=PASS; revision=18
+FIX-TEST: OFFLINE_VERIFIED -> DIFF_REVIEW_PASSED
+FIX-TEST: DIFF_REVIEW_PASSED -> PR_READY
+FIX-TEST: configured; revision=21
+FIX-TEST: PR_READY -> IN_PR
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: configured; revision=1
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: incident=PASS; revision=15
+FIX-TEST: p3=PASS; revision=16
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: configured; revision=1
+FIX-TEST: TRIAGED -> DESIGNING
+FIX-TEST: decision=PASS; revision=3
+FIX-TEST: DESIGNING -> AGREED
+FIX-TEST: configured; revision=5
+FIX-TEST: implementation=PASS; revision=6
+FIX-TEST: AGREED -> IMPLEMENTED
+FIX-TEST: red=PASS; revision=8
+FIX-TEST: l0=PASS; revision=9
+FIX-TEST: l1=PASS; revision=10
+FIX-TEST: l2=PASS; revision=11
+FIX-TEST: positive_control=PASS; revision=12
+FIX-TEST: IMPLEMENTED -> OFFLINE_VERIFIED
+FIX-TEST: incident=PASS; revision=14
+FIX-TEST: p3=PASS; revision=15
+FIX-TEST: OFFLINE_VERIFIED -> DIFF_REVIEW_PASSED
+FIX-TEST: DIFF_REVIEW_PASSED -> PR_READY
+FIX-TEST: configured; revision=18
+FIX-TEST: PR_READY -> IN_PR
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+sealed FIX-TEST: 247458c95b7e481af4c58572e493ed5f11fc927045ae6756b39ecd17e531efe0
+FIX-TEST: configured; revision=1
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FAIL: this command belongs to the assigned implementer
+FAIL: this command belongs to the assigned skeptic
+FAIL: handoff contains duplicate or unauthorized check types
+.FAIL: seal independent analysis before inspecting implementation deltas
+.FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: l2=NOT_REQUIRED; revision=15
+diff: PASS
+.FIX-TEST: OFFLINE_VERIFIED; revision=16; next=skeptic
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+.FIX-TEST: OFFLINE_VERIFIED; revision=15; next=skeptic
+FIX-TEST: IMPLEMENTED; revision=16; next=implementer
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FAIL: implementation: approve only current passing checks with complete declared inputs
+.FIX-TEST: OFFLINE_VERIFIED; revision=15; next=skeptic
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+.FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FAIL: state committed; notification unavailable
+.FIX-TEST: OFFLINE_VERIFIED; revision=15; next=skeptic
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FAIL: FAIL: artifact missing, outside fix, or unchanged template
+.FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FAIL: FAIL: artifact missing, outside fix, or unchanged template
+.FIX-TEST: OFFLINE_VERIFIED; revision=15; next=skeptic
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FIX-TEST: OFFLINE_VERIFIED; revision=15; next=skeptic
+FIX-TEST: PR_READY; revision=16; next=coordinator
+diff: PASS
+.FIX-TEST: IN_PR; revision=17; next=skeptic
+FIX-TEST: IN_PR; revision=18; next=coordinator
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: red=PASS; revision=15
+diff: PASS
+.FIX-TEST: OFFLINE_VERIFIED; revision=16; next=skeptic
+FIX-TEST: PR_READY; revision=17; next=coordinator
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+diff: PASS
+FAIL: stale revision; read brief again
+FAIL: run local preflight before submission
+..FAIL: changing an assigned fix loop requires the user instruction reference
+FAIL: change fix_loop only before agreement and implementation
+..FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: decision=PASS; revision=15
+from_reviewed_head: b2b50c9a9852700cbbad6eb6da20aaa8094dd0b4
+head: b2b50c9a9852700cbbad6eb6da20aaa8094dd0b4
+changed: []
+reusable_with_explicit_signoff: []
+always_review:
+- full delta
+- current incident/P3 verdict
+- changed packaging and deployment effects
+
+FIX-TEST: configured; revision=1
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: decision=PASS; revision=15
+diff: PASS
+FAIL: FAIL: transition prerequisites: decision: artifact changed after attestation
+.FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: decision=PASS; revision=15
+diff: PASS
+FAIL: this command belongs to the assigned skeptic
+FIX-TEST: OFFLINE_VERIFIED; revision=16; next=skeptic
+FIX-TEST: IMPLEMENTED; revision=17; next=implementer
+diff: PASS
+.FAIL: independent review cannot be signed by an author
+FAIL: independent review cannot be signed by an author
+FAIL: independent review cannot be signed by an author
+FAIL: independent review cannot be signed by an author
+FAIL: independent review cannot be signed by an author
+FAIL: independent review cannot be signed by an author
+FAIL: independent review cannot be signed by an author
+...................BUS_NOTIFY_UNAVAILABLE k3: inbox saved, but no healthy runner adapter; monitor/wait output alone does not resume an idle session.
+.FIX-TEST: OFFLINE_VERIFIED; revision=18; next=skeptic
+FIX-TEST: PR_READY; revision=19; next=coordinator
+FIX-TEST: critique=PASS; revision=1
+FIX-TEST: decision=PASS; revision=2
+FIX-TEST: base_review=PASS; revision=3
+FIX-TEST: implementation=PASS; revision=4
+FIX-TEST: red=PASS; revision=5
+FIX-TEST: l0=PASS; revision=6
+FIX-TEST: l1=PASS; revision=7
+FIX-TEST: l2=PASS; revision=8
+FIX-TEST: positive_control=PASS; revision=9
+FIX-TEST: incident=PASS; revision=10
+FIX-TEST: p3=PASS; revision=11
+FIX-TEST: l3=PASS; revision=12
+FIX-TEST: l4=NOT_REQUIRED; revision=13
+FIX-TEST: final=PASS; revision=14
+FIX-TEST: decision=PASS; revision=15
+created intake/RPT-20260907-000004-ambiguous
+created intake/RPT-20260907-000003-campaign-finding
+created campaigns/2026-09-07-cross-fix-study
+2026-09-07-cross-fix-study: DRAFT -> APPROVED
+published releases/MAIN-20260910-215227-386aae417b2c
+published releases/DEPLOY-20260910-215227-386aae417b2c; verification remains pending
+T1-M001: critique=PASS; revision=2
+T1-M001: decision=PASS; revision=3
+T1-M001: base_review=PASS; revision=4
+T1-M001: implementation=PASS; revision=5
+T1-M001: red=PASS; revision=6
+T1-M001: l0=PASS; revision=7
+T1-M001: l1=PASS; revision=8
+T1-M001: l2=PASS; revision=9
+T1-M001: positive_control=PASS; revision=10
+T1-M001: incident=PASS; revision=11
+T1-M001: p3=PASS; revision=12
+T1-M001: l3=PASS; revision=13
+T1-M001: l4=NOT_REQUIRED; revision=14
+T1-M001: final=PASS; revision=15
+DEPLOY-20260910-215227-386aae417b2c: RECONCILED
+created intake/RPT-20260907-000005-no-control
+operation: triage
+runbook: operations/TRIAGE.md
+authority: None
+mutating: False
+terminal_states: CLASSIFIED, NEEDS_HUMAN_DECISION
+created intake/RPT-20260907-000001-widget-signals
+RPT-20260907-000001-widget-signals: REPORTED -> TRIAGED
+RPT-20260907-000001-widget-signals: TRIAGED -> VERIFYING
+RPT-20260907-000001-widget-signals: VERIFYING -> VERIFIED
+M-1	score=11	Widget drops signals	terms=active,drops,signals,telemetry,widget
+recorded dedup candidates for RPT-20260907-000001-widget-signals
+RPT-20260907-000001-widget-signals: VERIFIED -> DEDUP_REVIEW
+RPT-20260907-000001-widget-signals: DEDUP_REVIEW -> DUPLICATE
+created intake/RPT-20260907-000002-new-root-cause
+RPT-20260907-000002-new-root-cause: FILED as M-2; started T1-M002
+/tmp/workflow-bus-test-ewisgqnv/inbox/k3/000001-claude-review-campaign.md
+fail: FAIL
+.diff: PASS
+..........usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: must be a finite number greater than 0 and at most 86400
+usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: must be a finite number greater than 0 and at most 86400
+usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: expected one argument
+usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: must be a finite number greater than 0 and at most 86400
+usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: must be a finite number greater than 0 and at most 86400
+usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: 'abc' is not a number
+usage: python -m unittest enqueue [-h] --worker WORKER --key KEY --prompt-file
+                                  PROMPT_FILE [--scope SCOPE]
+                                  [--timeout TIMEOUT] [--notify-lead]
+                                  [--to TO] [--subject-kind {fix,campaign}]
+                                  [--subject-id SUBJECT_ID]
+python -m unittest enqueue: error: argument --timeout: must be a finite number greater than 0 and at most 86400
+usage: python -m unittest run [-h] [--claude CLAUDE]
+                              [--concurrency CONCURRENCY]
+                              [--interval INTERVAL] [--once] [--drain]
+                              [--no-notices]
+python -m unittest run: error: argument --interval: must be a finite number greater than 0 and at most 60
+usage: python -m unittest run [-h] [--claude CLAUDE]
+                              [--concurrency CONCURRENCY]
+                              [--interval INTERVAL] [--once] [--drain]
+                              [--no-notices]
+python -m unittest run: error: argument --interval: must be a finite number greater than 0 and at most 60
+usage: python -m unittest run [-h] [--claude CLAUDE]
+                              [--concurrency CONCURRENCY]
+                              [--interval INTERVAL] [--once] [--drain]
+                              [--no-notices]
+python -m unittest run: error: argument --interval: must be a finite number greater than 0 and at most 60
+usage: python -m unittest run [-h] [--claude CLAUDE]
+                              [--concurrency CONCURRENCY]
+                              [--interval INTERVAL] [--once] [--drain]
+                              [--no-notices]
+python -m unittest run: error: argument --interval: must be a finite number greater than 0 and at most 60
+usage: python -m unittest run [-h] [--claude CLAUDE]
+                              [--concurrency CONCURRENCY]
+                              [--interval INTERVAL] [--once] [--drain]
+                              [--no-notices]
+python -m unittest run: error: argument --interval: must be a finite number greater than 0 and at most 60
+usage: python -m unittest run [-h] [--claude CLAUDE]
+                              [--concurrency CONCURRENCY]
+                              [--interval INTERVAL] [--once] [--drain]
+                              [--no-notices]
+python -m unittest run: error: argument --interval: 'abc' is not a number
+...............................{
+  "worker": "w1",
+  "worktree": "/tmp/tmp2xv8bqdk/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "5f89f9a57991",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpptdi44lp/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "804786b08b0f",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmprqd101vc/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "665849ada38f",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpjb58ubfl/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "c4beb116851d",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w3",
+  "worktree": "/tmp/tmp27d13stq/work tree with spaces",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "3a3c0e3a3e9c",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpsxgjpowu/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "d1004fbd7d27",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w2",
+  "worktree": "/tmp/tmpym1o8q4w/peer",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "448d2158a1ed",
+  "session_started": false
+}
+{
+  "job_id": "w2:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmphc4_7i86/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "9daba880032d",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmps9qcv5yh/repo",
+  "role": "investigator",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "cbdf7eda2cc0",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp8cbwueew/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "52d2f5f1cc9d",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpql7rdsgf/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "0652ce8425e0",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpo87d627b/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "7b4ea9982865",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpp3xlmgi_/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "0b229c669590",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp8lzo25am/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8fa5aa6b782d",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp2aj1rad7/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "f94aa66fdc30",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpi8jk2v7a/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "fd8920f9fab1",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp67waqq9m/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8b4b48aee4da",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp901u40rg/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "cc4d7335d413",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpozasf_w3/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "af4c245214c9",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp_eklxuic/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "7bcc2b180e05",
+  "session_started": false
+}
+{
+  "job_id": "w1:broken",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:fine",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp6zgr79an/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "736ede4c5178",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp9o2pl4y7/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8f54967ca11e",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp6egnqkqs/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "585d7fef3fbc",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp5w5e_jdr/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "0b50f4ab8f01",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpfzmfu_qz/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "d8813db09360",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp5lzv2nk6/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8c712a52c994",
+  "session_started": false
+}
+{
+  "job_id": "w1:slow",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:next",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpxk_ziw5u/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "122c354280cf",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp_fwrr8z8/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "3f3e1b22bbfc",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}........................
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpydk789_e/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8cf9a5ba8e1e",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmptezs6cl4/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "17109a2a4f11",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp425t_d56/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "825cfd1a4afd",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:j1",
+  "state": "interrupted",
+  "unresolved": true,
+  "signaled": [],
+  "problems": [
+    "1 owned process(es) remain in the process group of cli pid 1809149: [1809150]"
+  ],
+  "action": "still running; pass --terminate to end the owned process, or wait for it to finish"
+}
+{
+  "job": "w1:j1",
+  "state": "interrupted",
+  "unresolved": false,
+  "signaled": [],
+  "action": "worker released; queued jobs may dispatch again"
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmprhd030vf/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "a9794d8dc7d8",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp1ex49ypo/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8e54addd253a",
+  "session_started": false
+}
+{
+  "job_id": "w1:slow",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpn7qof2bj/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "6d1c0abf70a4",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp6sfn3vqu/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "abdfb54ff5cb",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpb2ffy3qd/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "b3393208205b",
+  "session_started": false
+}
+{
+  "job_id": "w1:a",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:b",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:a",
+  "state": "interrupted",
+  "unresolved": true,
+  "signaled": [],
+  "problems": [
+    "cli pid 1809703 is still running"
+  ],
+  "action": "still running; pass --terminate to end the owned process, or wait for it to finish"
+}
+{
+  "job": "w1:a",
+  "state": "interrupted",
+  "unresolved": false,
+  "signaled": [
+    {
+      "cli": 1809703
+    }
+  ],
+  "action": "worker released; queued jobs may dispatch again"
+}
+{
+  "job": "w1:b",
+  "state": "canceled",
+  "signaled": [
+    {
+      "cli": 1809708
+    },
+    {
+      "wrapper": 1809706
+    }
+  ],
+  "unresolved": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpi1j8hq1t/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "4b35d68dfa63",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmphnlam8q8/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "2772d62ff4e2",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp_mjru1py/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "7fac4b63876e",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:j1",
+  "state": "canceled",
+  "signaled": [
+    {
+      "cli": 1809765
+    },
+    {
+      "wrapper": 1809763
+    }
+  ],
+  "unresolved": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp743lgrkg/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "483f7a7f4d9b",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpjiki_h8x/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "4d7ef102d1a1",
+  "session_started": false
+}
+{
+  "job_id": "w1:a",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:b",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmptqa_1urg/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "b717a8de10c5",
+  "session_started": false
+}
+{
+  "job_id": "w1:dup",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:dup",
+  "state": "queued",
+  "duplicate": true
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp19d8v7yv/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "2e9713963ffd",
+  "session_started": false
+}
+{
+  "job_id": "w1:k",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w2",
+  "worktree": "/tmp/tmp19d8v7yv/peer",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "6f9e9a6bc031",
+  "session_started": false
+}
+{
+  "job_id": "w2:k",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:k",
+  "state": "canceled",
+  "signaled": [
+    {
+      "cli": 1809831
+    },
+    {
+      "wrapper": 1809829
+    }
+  ],
+  "unresolved": false
+}
+{
+  "worker": "w2",
+  "worktree": "/tmp/tmp_uh7rika/peer",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "c54ec4a0c4a0",
+  "session_started": false
+}
+{
+  "job_id": "w2:j",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpzkbffxv3/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "4723a0b7b42c",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+WORKERS_SUPERVISOR_READY claude=/tmp/tmpzkbffxv3/bin/claude concurrency=3
+.......usage: python -m unittest register [-h] --worker WORKER --worktree WORKTREE
+                                   --role ROLE [--model MODEL]
+                                   [--effort {low,medium,high,max}]
+                                   [--permission-mode {manual,auto,acceptEdits,dontAsk,plan}]
+                                   [--allow-tool ALLOW_TOOL]
+                                   [--deny-tool DENY_TOOL] [--update]
+python -m unittest register: error: argument --effort: invalid choice: 'maximum' (choose from 'low', 'medium', 'high', 'max')
+...usage: python -m unittest register [-h] --worker WORKER --worktree WORKTREE
+                                   --role ROLE [--model MODEL]
+                                   [--effort {low,medium,high,max}]
+                                   [--permission-mode {manual,auto,acceptEdits,dontAsk,plan}]
+                                   [--allow-tool ALLOW_TOOL]
+                                   [--deny-tool DENY_TOOL] [--update]
+python -m unittest register: error: argument --permission-mode: invalid choice: 'bypassPermissions' (choose from 'manual', 'auto', 'acceptEdits', 'dontAsk', 'plan')
+usage: python -m unittest register [-h] --worker WORKER --worktree WORKTREE
+                                   --role ROLE [--model MODEL]
+                                   [--effort {low,medium,high,max}]
+                                   [--permission-mode {manual,auto,acceptEdits,dontAsk,plan}]
+                                   [--allow-tool ALLOW_TOOL]
+                                   [--deny-tool DENY_TOOL] [--update]
+python -m unittest register: error: argument --permission-mode: invalid choice: 'default' (choose from 'manual', 'auto', 'acceptEdits', 'dontAsk', 'plan')
+..................{
+  "worker": "w1",
+  "worktree": "/tmp/tmputafk36a/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "f1af88025549",
+  "session_started": false
+}
+{
+  "worker": "w2",
+  "worktree": "/tmp/tmputafk36a/peer",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "14b24e71fb70",
+  "session_started": false
+}
+{
+  "job_id": "w1:a",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:b",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w2:c",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:a",
+  "state": "canceled",
+  "signaled": [
+    {
+      "cli": 1809899
+    },
+    {
+      "wrapper": 1809894
+    }
+  ],
+  "unresolved": false
+}
+{
+  "job": "w2:c",
+  "state": "canceled",
+  "signaled": [
+    {
+      "cli": 1809905
+    },
+    {
+      "wrapper": 1809897
+    }
+  ],
+  "unresolved": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpxmsjh16b/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "d53fdc4269fd",
+  "session_started": false
+}
+{
+  "worker": "w2",
+  "worktree": "/tmp/tmpxmsjh16b/peer",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "9786b96ae9ec",
+  "session_started": false
+}
+{
+  "job_id": "w1:a",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w2:b",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:a",
+  "state": "failed",
+  "unresolved": false,
+  "action": "nothing to resolve"
+}
+{
+  "job": "w2:b",
+  "state": "canceled",
+  "signaled": [
+    {
+      "cli": 1809938
+    },
+    {
+      "wrapper": 1809936
+    }
+  ],
+  "unresolved": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp840wvl9m/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "max",
+  "permission_mode": "manual",
+  "session_fingerprint": "b5481348d55b",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpgwevcbvy/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "a6b10302c515",
+  "session_started": false
+}
+{
+  "job_id": "w1:first",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:second",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmplgsicwfv/repo",
+  "role": "implementer",
+  "model": "claude-opus-5-20260501",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "c259e18678d7",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp3ytu5abn/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "850f87e9a6b9",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpio0ejm56/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "acceptEdits",
+  "session_fingerprint": "b84d12490146",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpi_6cpklu/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "6b7b803b30da",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp5c5hfnnp/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "42df127695db",
+  "session_started": false
+}
+{
+  "job_id": "w1:first",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:second",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpki76vm3a/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "a402c04c8f33",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpbo7ma6hr/repo",
+  "role": "reviewer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "58d110a2986e",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpmsij0zfa/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "7a25f895d7a9",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpl2oi9iic/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "834e22651b6c",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp74if9xzt/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "684f3354b586",
+  "session_started": false
+}
+{
+  "worker": "u1",
+  "worktree": "/tmp/tmphvcyhphy/umask-case/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "32eafbc42665",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp77htuct9/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "76a16f8e1e0e",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpt0938hpe/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "5f517aa361ef",
+  "session_started": false
+}
+{
+  "job_id": "w1:a",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job_id": "w1:b",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpfwistoji/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "079bc68d3f2b",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp6sc7uxzd/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "73ac746c9577",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:j1",
+  "state": "canceled"
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmphmb_hz3s/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "b249fa757a80",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmptc0ddshv/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "c13f69e3345e",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:j1",
+  "state": "done",
+  "action": "already finished",
+  "unresolved": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpq5d71nkp/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "b871dd716377",
+  "session_started": false
+}
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpgrek5u8l/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "5b02ae8fc665",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+{
+  "job": "w1:j1",
+  "state": "interrupted",
+  "signaled": [],
+  "unresolved": true
+}
+.....................
+----------------------------------------------------------------------
+Ran 216 tests in 79.250s
+
+OK
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmpmri_gdf3/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "8d114417ba4a",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}

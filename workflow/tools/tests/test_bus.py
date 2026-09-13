@@ -26,7 +26,14 @@ class BusTransportTests(unittest.TestCase):
             root=Path(raw);repo=root/'repo';peer=root/'peer';repo.mkdir()
             def git(*args):
                 return subprocess.run(['git','-C',str(repo),*args],check=True,capture_output=True,text=True)
-            git('init','-q');git('-c','user.name=Test','-c','user.email=test@example.invalid',
+            git('init','-q')
+            # Both worktrees share this configuration; no background writer may
+            # survive the temporary repository's cleanup.
+            git('config','--local','maintenance.auto','false')
+            git('config','--local','gc.auto','0')
+            self.assertEqual(git('config','--local','--bool','maintenance.auto').stdout.strip(), 'false')
+            self.assertEqual(git('config','--local','--int','gc.auto').stdout.strip(), '0')
+            git('-c','user.name=Test','-c','user.email=test@example.invalid',
                                 'commit','--allow-empty','-qm','fixture')
             git('worktree','add','--detach',str(peer),'HEAD')
             first=repo/'workflow/coordination';second=peer/'workflow/coordination'
@@ -263,13 +270,15 @@ class ClaudeSocketTests(unittest.TestCase):
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(self.server.close)
         self.server.bind(str(self.endpoint)); self.server.listen(1); self.server.settimeout(2)
+        # bind() and write_text() honour the host umask, so on a multi-user host the
+        # fixture would be group-writable and the adapter would rightly refuse it.
         self.endpoint.chmod(0o600)
         self.entry = {'sessionId': 'exact-session', 'pid': os.getpid(), 'peerProtocol': 1,
                       'procStart': claude_socket.process_start(os.getpid()),
                       'messagingSocketPath': str(self.endpoint)}
         self.record = self.root / f'{os.getpid()}.json'
         self.record.write_text(json.dumps(self.entry))
-        self.record.chmod(0o600)
+        self.record.chmod(0o600)  # Later write_text calls keep this mode.
 
     def test_posts_peer_protocol_to_exact_existing_session(self):
         frames = []

@@ -44,7 +44,30 @@ func NewStageClock() *StageClock {
 // exposureSec is the identity clock (monotonic within a UID epoch, resets to ~0 on a new UID).
 // The slot key is owner\x00namespace\x00name — identical shape to exposure.Clock, so the runner
 // prunes both with the same keep set.
+//
+// Only an ACTUAL production observation may fold: this is the origin of stage-entry time, so a
+// write here is the pod's real history.
 func (c *StageClock) Observe(owner, namespace, name, uid string, stage Stage, exposureSec float64) float64 {
+	return c.evaluate(owner, namespace, name, uid, stage, exposureSec, true)
+}
+
+// Peek returns the dwell a counterfactual stage WOULD read, without folding it (M-163).
+// It runs the identical arithmetic as Observe against the identical existing entry — new
+// slot / replaced UID falls back to exposureSec, a hypothetical stage change reads 0, an
+// unchanged stage reads the elapsed dwell, a negative exposure clamps at 0 and a nil tracker
+// returns exposureSec — so the shadow arm sees exactly the number production would compute
+// while the production entry (its uid, stage and entry reading) stays where it was.
+//
+// Peek is deliberately NOT idempotent-with-Observe in the other direction: peeking a
+// transition never establishes the new stage, so the next real Observe still sees the
+// transition it has to record.
+func (c *StageClock) Peek(owner, namespace, name, uid string, stage Stage, exposureSec float64) float64 {
+	return c.evaluate(owner, namespace, name, uid, stage, exposureSec, false)
+}
+
+// evaluate is the single dwell calculation shared by Observe and Peek. commit=false makes
+// every store below unreachable, so the read-only path cannot drift from the writing one.
+func (c *StageClock) evaluate(owner, namespace, name, uid string, stage Stage, exposureSec float64, commit bool) float64 {
 	if c == nil {
 		return exposureSec // no tracker => today's behaviour (dwell == identity age)
 	}
@@ -58,11 +81,15 @@ func (c *StageClock) Observe(owner, namespace, name, uid string, stage Stage, ex
 	switch {
 	case !ok || prev.uid != uid:
 		// new slot or recreated pod: entry = 0 so InStage = exposureSec (pod-age fallback).
-		c.state[key] = stageEntry{uid: uid, stage: stage, entryExpSec: 0}
+		if commit {
+			c.state[key] = stageEntry{uid: uid, stage: stage, entryExpSec: 0}
+		}
 		return exposureSec
 	case prev.stage != stage:
 		// stage transition: restart the dwell at this tick's exposure reading.
-		c.state[key] = stageEntry{uid: uid, stage: stage, entryExpSec: exposureSec}
+		if commit {
+			c.state[key] = stageEntry{uid: uid, stage: stage, entryExpSec: exposureSec}
+		}
 		return 0
 	default:
 		d := exposureSec - prev.entryExpSec

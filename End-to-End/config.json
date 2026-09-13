@@ -33,8 +33,29 @@
     "stream_seconds": 12,
     "post_attack_seconds": 45,
     "settle_seconds": 6,
-    "_max_bytes_comment": "Measured on EKS with 13 tenants (dev+prod): the unfiltered operator stream runs ~413 KB/s (~229 KB per decision, full DecisionTraceV2), so the 51s post-attack window plus the fire callback needs ~22 MB and 16 MB was exhausted at ~37s. The post-attack capture is now namespace-scoped (~13x smaller), but the cap must still cover an unfiltered stream against a console that predates ?namespace=. 64 MB = ~155s at the measured rate; still fail explicitly if exhausted.",
-    "max_bytes": 64000000
+    "_bounds_comment": [
+      "The stream is framed incrementally now, so these bound TRAFFIC and RETAINED RECORDS",
+      "rather than one buffer holding the whole window. Full decision traces exhausted 8 MB",
+      "in ~36s on EKS, which aborted the 51s live observation at the old 16 MB buffer cap.",
+      "",
+      "max_bytes is the total the reader will pull before declaring the window unobservable",
+      "within its budget; max_records bounds what is kept in memory after scope filtering;",
+      "max_frame_bytes bounds one unterminated frame. Reaching any of them is an explicit",
+      "failure — the run reports an incomplete observation, never a shorter successful one."
+    ],
+    "max_bytes": 64000000,
+    "max_records": 20000,
+    "max_frame_bytes": 1048576,
+    "_clock_skew_comment": "Record timestamps come from the operator's clock and the injection time from the pipeline's. Records within this many seconds before the injection are still considered part of the post window; what makes one attributable is A05's event/target UID binding, not its position in the window.",
+    "clock_skew_tolerance_sec": 2,
+    "_namespaces_comment": [
+      "\"target\": capture only the namespace this run took a baseline and a policy for, which",
+      "is the only namespace it can verify anything about. null makes the cluster-wide claim",
+      "(the default for an untargeted observe run). A list names namespaces explicitly.",
+      "Whichever it is, the run document records it and a scoped run is never reported as",
+      "cluster-wide coverage."
+    ],
+    "namespaces": "target"
   },
   "invariants": {
     "net_identity_tolerance": 0.005,
@@ -140,6 +161,21 @@
       "rotate",
       "quarantine"
     ],
+    "_action_log_evidence_comment": [
+      "Command-specific log patterns for the actions whose only independent evidence is the",
+      "workload's own log. Each is a Python regex, matched ONLY against lines the pod wrote",
+      "after the action started (kubectl --since-time) and only while the pod still carries",
+      "the UID observed before the action.",
+      "",
+      "kv-reset uses vLLM's own API name for the operation. adapter-rotate is deliberately",
+      "ABSENT: 'lora' matches vLLM's startup banner and its configuration dump, so it",
+      "confirmed an adapter rotation that never happened. Until someone reviews the exact",
+      "line the deployed vLLM writes on an adapter load/unload and adds it here, an",
+      "adapter-rotate is reported as unverifiable rather than confirmed by a generic word."
+    ],
+    "action_log_evidence": {
+      "kv-reset": "reset_prefix_cache"
+    },
     "max_controller_restarts": 10
   },
   "_targets_comment": "litellm, mock-rag-chatbot and phorvex-live-demo were removed from the cluster — ArgoCD now owns that capacity. voicebot replaces them as the stateless rotate target: it already carries r6th.io/rotation-target=true and a voice-defense PhorvexPolicy.",

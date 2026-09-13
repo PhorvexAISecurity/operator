@@ -171,6 +171,10 @@ def sandbox():
         )
 
         run(["git", "init", "-b", "main"], repo)
+        # Keep Git from starting a background writer that can outlive this
+        # temporary repository and race TemporaryDirectory cleanup.
+        run(["git", "config", "--local", "maintenance.auto", "false"], repo)
+        run(["git", "config", "--local", "gc.auto", "0"], repo)
         run(["git", "config", "user.name", "Workflow Test"], repo)
         run(["git", "config", "user.email", "workflow@example.invalid"], repo)
         run(["git", "add", "workflow"], repo)

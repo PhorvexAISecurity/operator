@@ -9,15 +9,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import checks
+import observation
+
+# phorvex.e2e/2 adds per-check `coverage`, the `capture` accounting and the `attribution`
+# record. Every field of /1 is still present and carries the same meaning, so a reader of
+# the old schema keeps working; summary.py accepts both.
+SCHEMA = 'phorvex.e2e/2'
+SCHEMA_ACCEPTED = ('phorvex.e2e/1', 'phorvex.e2e/2')
 
 
 def error_text(error):
     text = f"{type(error).__name__}: {error}"
     # Do not serialize config, environment, traceback locals or unbounded responses.
-    for key, value in os.environ.items():
-        if value and any(word in key.upper() for word in ('PASSWORD', 'TOKEN', 'SECRET')):
-            text = text.replace(value, '[REDACTED]')
-    return text[:2000]
+    # One redaction list, shared with every observation reason that reaches a report.
+    return observation.redact(text, limit=2000)
 
 
 class Cleanup(ExitStack):
@@ -52,13 +57,16 @@ class RunOutput:
         self.stage = 'initialization'
         self.results = []
         self.injection = None
+        # Capture accounting is attached as windows complete, so an abort can still report
+        # how much of the observation actually happened.
+        self.captures = {}
 
     def abort(self, error, cleanup_errors=()):
         evaluated = {c['id']: c for c in self.results}
         catalogue = [{k: v for k, v in c.items() if k != 'fn'} for c in checks.registry()]
-        results = [evaluated.get(c['id'], dict(c, status='skip',
+        results = [evaluated.get(c['id'], dict(c, status='skip', coverage='none',
                    summary='Not evaluated: run aborted.', evidence=[])) for c in catalogue]
-        return dict(self.identity, schema='phorvex.e2e/1',
+        return dict(self.identity, schema=SCHEMA,
                     startedAt=self.started.isoformat(), finishedAt=datetime.now(timezone.utc).isoformat(),
                     mode=self.mode, target={'name': self.target} if self.target else None,
                     verdict='ABORTED', status='aborted', exitCode=2,
@@ -66,6 +74,13 @@ class RunOutput:
                            'cleanupErrors': list(cleanup_errors)},
                     checks=results, tally={s: sum(c['status'] == s for c in results)
                                           for s in ('pass', 'fail', 'warn', 'skip')},
+                    coverage={c: sum(r.get('coverage') == c for r in results)
+                              for c in ('full', 'partial', 'none', 'not-applicable')},
+                    # An aborted run observed nothing it can vouch for, whatever it managed
+                    # to evaluate before the failure.
+                    capture={'complete': False, 'reason': 'the run aborted before the '
+                             'observation window completed', 'windows': dict(self.captures)},
+                    attribution=None,
                     # Abort is a harness failure, never eligible for a check baseline.
                     baselined=[], newFailures=['HARNESS_ABORT'], staleBaseline=[],
                     counts={}, groundTruth=[], injection=self.injection)
@@ -73,7 +88,8 @@ class RunOutput:
     @staticmethod
     def abort_html(doc):
         detail = html.escape(json.dumps({k: doc.get(k) for k in (
-            'runId', 'sourceCommit', 'githubRunId', 'githubRunAttempt', 'abort', 'injection', 'tally')},
+            'runId', 'sourceCommit', 'githubRunId', 'githubRunAttempt', 'abort', 'injection',
+            'tally', 'coverage', 'capture')},
             ensure_ascii=False, indent=2))
         return ('<!doctype html><html lang="en"><meta charset="utf-8">'
                 '<title>Phorvex E2E — ABORTED</title><h1>E2E run aborted</h1>'
