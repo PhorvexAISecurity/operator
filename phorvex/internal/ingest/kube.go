@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
@@ -493,15 +494,11 @@ func topOwner(p *corev1.Pod) (string, string) {
 
 func gpuInfo(p *corev1.Pod) (bool, string) {
 	hasGPU := false
-	mig := ""
 	scan := func(rl corev1.ResourceList) {
 		for name := range rl {
 			n := string(name)
 			if strings.HasPrefix(n, gpuPrefix) {
 				hasGPU = true
-				if strings.Contains(n, "mig") && mig == "" {
-					mig = n
-				}
 			}
 		}
 	}
@@ -509,7 +506,7 @@ func gpuInfo(p *corev1.Pod) (bool, string) {
 		scan(ct.Resources.Limits)
 		scan(ct.Resources.Requests)
 	}
-	return hasGPU, mig
+	return hasGPU, gpudevice.MIGResourceName(p)
 }
 
 func isStateful(p *corev1.Pod) bool {

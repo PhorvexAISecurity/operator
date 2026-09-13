@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -217,7 +218,7 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	}
 	// FAIL-CLOSED preconditions: a MIG device, a node, and a declared target profile (you never pick a
 	// MIG geometry blindly, and you never fabricate a rebind without a real device).
-	if !hasMIGDevice(pod) {
+	if gpudevice.MIGResourceName(pod) == "" {
 		return HandlerResult{}, fmt.Errorf("mig-rebind MIGUnavailable: pod %s/%s has no MIG device [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod)
 	}
 	node := pod.Spec.NodeName
@@ -256,17 +257,6 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod), objRef("Node", "", node)},
 		Note:           fmt.Sprintf("mig-rebind: pod evicted off GPU (%s, zero CUDA contexts), GPU %s repartitioned to %s off the co-resident slot [PENDING-GPU-VALIDATION]: VRAM/geometry magnitudes unvalidated", drainNote, gpuID, profile),
 	}, nil
-}
-
-func hasMIGDevice(p *corev1.Pod) bool {
-	for _, c := range p.Spec.Containers {
-		for name := range c.Resources.Requests {
-			if len(name) >= 12 && name[:12] == "nvidia.com/m" { // nvidia.com/mig-*
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // --- 10. kv-reset — REAL vLLM prefix/KV-cache flush; pod stays ALIVE -----------------------
