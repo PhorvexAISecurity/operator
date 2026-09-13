@@ -8,3 +8,28 @@ workflow/coordination/lead-runner-r4-tests.log -whitespace
 # Exact independent race and workflow validation output.
 workflow/coordination/lead-receipt-r5-*.log -whitespace
 workflow/coordination/lead-runner-r5-suite.log -whitespace
+
+# Sealed independent review output retains source blank lines and empty TSV cells.
+workflow/assessments/20260910-readiness/fresh-integration/r4/evidence/r4-integration-nodes.txt -whitespace
+workflow/assessments/20260910-readiness/fresh-integration/r4/evidence/r4-join-matrix.tsv -whitespace
+
+# Anatomy TSV schemas retain empty terminal cells; do not trim generated columns.
+workflow/assessments/20260910-readiness/anatomy-v3/pipeline/*.tsv -whitespace
+
+# Retained signed investigation output preserves original producer whitespace.
+workflow/assessments/20260910-readiness/evidence/REJECTED-falco-namespace.log -whitespace
+workflow/assessments/20260910-readiness/evidence/falco-delivery.log -whitespace
+workflow/assessments/20260910-readiness/fresh-integration/r2/evidence/render-eks/phorvex-stack/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml -whitespace
+workflow/assessments/20260910-readiness/reconciliation/actuation-r1/CURRENT-M001-M080.md -whitespace
+workflow/assessments/20260910-readiness/reconciliation/actuation-r1/parts/header.md -whitespace
+workflow/assessments/20260910-readiness/reconciliation/actuation-r2-reviewed/CURRENT-M081-M120.md -whitespace
+workflow/assessments/20260910-readiness/reconciliation/actuation-r2-reviewed/parts2/header2.md -whitespace
+
+# Raw preflight output, including retained failure diagnostics.
+workflow/assessments/20260910-readiness/evidence/run-1789076685233119136/diff.log -whitespace
+
+# Preserve exact combined workflow test output, including terminal spacing.
+workflow/assessments/20260910-readiness/evidence/tier1-composition/workflow-eight-package-r5.log -whitespace
+
+workflow/assessments/20260910-readiness/evidence/run-1789081493917758977/diff.log -whitespace
+workflow/assessments/20260910-readiness/evidence/run-1789081493917758977/workflow.log -whitespace

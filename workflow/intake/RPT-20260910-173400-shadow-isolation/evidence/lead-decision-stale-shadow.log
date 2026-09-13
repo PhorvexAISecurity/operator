@@ -1,0 +1,8 @@
+=== RUN   TestR205_ShadowDecideCorruptsProductionDwellThroughRealFlow
+    r2_shadow_stageclock_test.go:221: (A) control  : stage=gpu-side-channel inStage=  1200.0s hazard=1.000000 urgency=0.525000 preempt=0.000000 coverage=0.284667
+    r2_shadow_stageclock_test.go:223: (B) shadowed : stage=gpu-side-channel inStage=     0.0s hazard=0.000000 urgency=0.075000 preempt=1.000000 coverage=0.200667
+    r2_shadow_stageclock_test.go:229: R2-05 REPRODUCED THROUGH THE SHIPPED FLOW (ShadowViews -> DecideShadowChecked -> DecideChecked): inStage 1200.0 -> 0.0, hazard 1.000000 -> 0.000000, urgency 0.525000 -> 0.075000, coverage 0.284667 -> 0.200667
+    r2_shadow_stageclock_test.go:255: positive control PASSED: a shadow evaluation that derives the SAME stage leaves production inStage/hazard/coverage bit-identical
+--- PASS: TestR205_ShadowDecideCorruptsProductionDwellThroughRealFlow (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/auditrepro2	0.015s
