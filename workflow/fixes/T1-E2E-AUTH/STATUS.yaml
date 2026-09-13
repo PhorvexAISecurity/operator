@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 42
+revision: 43
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -87,13 +87,12 @@ checks:
     source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
     at: '2026-09-13T16:24:50+00:00'
   p3:
-    result: PASS
+    result: FAIL
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: b6f11c327034885ed1095e5dd9f0ea15338caa8bbb771c9868875767dbea68ad
+    sha256: 2a9de4c3e4b0bfefc6030e5f76c10f3ee8dbfdac9127cf8a0dc8405af82e97d8
     source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
-    at: '2026-09-13T16:26:57+00:00'
-    incident_sha256: 9e34fc93605c831da8c87b90464e819156b5ab87a373545996c79debc8b49679
+    at: '2026-09-13T17:10:46+00:00'
   base_review:
     result: PASS
     by: codex-lead
@@ -167,7 +166,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: PASS
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -183,11 +182,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: human_owner
-  action: PR187 is open. Owner/DevOps provision the documented known-hosts and console
-    access inputs, review/merge, then lead verifies the deployed caller and all Tier
-    1 live controls. No Tier 2 yet.
-updated_at: '2026-09-13T16:28:45+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-13T17:10:46+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -669,10 +667,18 @@ check_history:
   sha256: a25d0d4a1a6050dfaa08ec6577de0858e69905ae58abe3456d8af475b8bd895e
   source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
   at: '2026-09-13T16:04:13+00:00'
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: b6f11c327034885ed1095e5dd9f0ea15338caa8bbb771c9868875767dbea68ad
+  source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+  at: '2026-09-13T16:26:57+00:00'
+  incident_sha256: 9e34fc93605c831da8c87b90464e819156b5ab87a373545996c79debc8b49679
 handoff:
-  id: T1-E2E-AUTH:39:review
+  id: T1-E2E-AUTH:43:review
   from: codex-lead
-  to: codex-lead
-  role: coordinator
+  to: claude-tier1-e2e-auth
+  role: implementer
   kind: review
-  revision: 39
+  revision: 43
