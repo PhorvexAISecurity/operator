@@ -283,6 +283,17 @@ fixes:
     stacked_on: []
     branch: fix/v3-m152-vram-presence
     head_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+  V3-M163:
+    directory: fixes/V3-M163
+    aliases: []
+    issues:
+    - M-163
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m163-shadow-isolation
+    head_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
   V3-M094:
     directory: fixes/V3-M094
     aliases: []

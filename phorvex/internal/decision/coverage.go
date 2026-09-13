@@ -68,7 +68,36 @@ type CoverageEngine struct {
 	// Capability is the T1-E capability gate, set per tick by the runner (which holds the
 	// snapshot + actuator + SSAR checker to build the witness). nil = gate off (legacy /
 	// tests): the generator then falls back to the pre-T1-E empty-cover check only.
+	//
+	// [M-163] This collaborator is NOT assumed pure. The runtime one reaches a
+	// SelfSubjectAccessReview and writes the shared authorization cache, so a counterfactual
+	// evaluation that called it would spend apiserver budget and change what the NEXT real
+	// gate observes. Only an actual production evaluation may call it.
 	Capability func(*model.WorkloadView, model.Action, []string) *actionset.Eligibility
+
+	// ShadowCapability is the READ-ONLY counterpart used by a counterfactual evaluation. It
+	// must answer the same gate from state already observed: no apiserver review, no cache
+	// write, no timestamp refresh, no other externally visible effect. The runtime wires
+	// capability.Witness.EligibleObserved here beside Witness.Eligible above.
+	//
+	// It is required only when Capability is set. Leaving it nil is not a licence to skip the
+	// gate: the engine cannot prove an arbitrary Capability callback is side-effect free, so a
+	// shadow evaluation is reported UNAVAILABLE (ErrShadowCapabilityUnavailable) rather than
+	// run without a gate or run through the impure one. Production is unaffected either way.
+	ShadowCapability func(*model.WorkloadView, model.Action, []string) *actionset.Eligibility
+}
+
+// capabilityFor selects the gate collaborator an evaluation in this mode may call, and
+// reports whether the shadow contract above is satisfiable.
+func (e *CoverageEngine) capabilityFor(mode killchain.EvalMode) (func(*model.WorkloadView, model.Action, []string) *actionset.Eligibility, bool) {
+	if mode.Commits() {
+		return e.Capability, true
+	}
+	if e.ShadowCapability != nil {
+		return e.ShadowCapability, true
+	}
+	// No gate at all (legacy/offline producers) is the same substrate in both modes.
+	return nil, e.Capability == nil
 }
 
 // CalibrationState reports, per tenant, whether the RLS has left the shipped prior and how many
@@ -228,6 +257,64 @@ func (e *CoverageEngine) costFor(owner string, lambdaSeed ...float64) *cost.P1Co
 	return c
 }
 
+// costForMode resolves the cost bucket an evaluation should price against (M-163).
+//
+// Production is unchanged: costFor's lazy creation IS this owner's economic lifecycle —
+// it consumes the policy seed once, may claim the legacy e.Cost alias, mints the BucketMeta
+// the trace reports and advances the creation counter.
+//
+// A shadow evaluation must observe that lifecycle, never drive it. An owner that already has
+// a bucket is priced from that bucket, so the counterfactual reads the SAME trained RLS,
+// conformal window and runtime lambda production would use (substituting a fresh model here
+// would report a price the production tick never saw). An owner with no bucket yet — the
+// shadow arm runs BEFORE the production arm within a tick, so it can be first — is priced
+// from a TRANSIENT bucket that is never registered: no seed is consumed, the alias stays
+// unclaimed, no BucketMeta is minted and creationEvent does not move, so the first real
+// production tick still creates that owner's bucket itself.
+func (e *CoverageEngine) costForMode(owner string, mode killchain.EvalMode, lambdaSeed ...float64) *cost.P1Cost {
+	if mode.Commits() {
+		return e.costFor(owner, lambdaSeed...)
+	}
+	if c := e.costByOwner[owner]; c != nil {
+		return c // existing learned state, read as-is
+	}
+	// [M-140] A retired owner is rejected before allocation in either mode.
+	if e.ownerAbsent(owner) {
+		return nil
+	}
+	seed := cost.DefaultLambdaSeed
+	if len(lambdaSeed) > 0 {
+		seed = lambdaSeed[0]
+	}
+	if len(e.costByOwner) == 0 && e.Cost != nil && !e.aliasRetired {
+		// Production would hand this owner the legacy singleton, reseed only its dual, and then
+		// apply the PHVX-2 freeze switch to its RLS. Mirror that post-creation state, on private
+		// objects, so e.Cost.Dual, e.Cost.RLS and the alias itself are all left untouched.
+		//
+		// RLS.SetFrozen(true) does NOT merely gate Update: on an unfrozen learner it REVERTS
+		// theta to the shipped prior and clears primed. So under an enabled freeze the learned
+		// values still sitting in the singleton are values the next production creation is about
+		// to discard, and pricing a hypothetical against them would report a cost production
+		// could never produce. Under a freeze the shadow therefore reads the prior — the state
+		// production will actually price from — rather than the doomed learned one.
+		rls := e.Cost.RLS
+		if e.calibrationFrozen {
+			rls = cost.NewRLS()
+			rls.SetFrozen(true)
+		}
+		return &cost.P1Cost{RLS: rls, Conformal: e.Cost.Conformal, Dual: cost.NewDualSolverWithSeed(seed)}
+	}
+	// No learned state exists for this owner in either mode; a private bucket at the same seed
+	// and the same freeze state prices identically to the one production would create. Freezing
+	// here is safe precisely because the object is private — the shared calibrators above are
+	// never handed to SetFrozen, which would be a write.
+	c := cost.NewP1CostWithLambda(seed)
+	if c.RLS != nil {
+		c.RLS.SetFrozen(e.calibrationFrozen)
+	}
+	return c
+}
+
 // ObserveRotation implements RotationObserver and keeps the feedback in the same
 // per-tenant bucket used to price that tenant's decisions.
 func (e *CoverageEngine) ObserveRotation(owner string, view *model.WorkloadView, measuredFlow float64) {
@@ -315,16 +402,53 @@ type assetCtx struct {
 // AssembleSet builds the per-asset context + kill-chain assessment and GENERATES the
 // dynamic feasible action set (with fact weights). Shared by Decide and the ablation
 // so both arms run over identical substrate.
+//
+// This is the production entrypoint and keeps its signature and behaviour: it assesses in
+// EvalProduction, stamps the runner's shared views and counts the tick's gate exclusions.
 func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Policy) (actionset.ActionSet, map[string]assetCtx) {
 	// [M-140 R1.2] Same rejection as decideChecked: a retired owner must not be priced,
 	// and must not allocate a bucket by being asked for one.
 	if e.ownerAbsent(pol.Owner()) {
 		return actionset.ActionSet{}, map[string]assetCtx{}
 	}
+	// EvalProduction always satisfies the gate contract, so the error arm is unreachable here.
+	set, ctxByKey, _ := e.assembleSet(views, pol, e.costFor(pol.Owner(), pol.Lambda), killchain.EvalProduction)
+	return set, ctxByKey
+}
+
+// assembleSet is the common action-set path under an explicit evaluation mode (M-163).
+// tcost is the already-resolved bucket for this evaluation, so the assessment and the
+// selection that follows it are priced by ONE bucket rather than by two independent
+// resolutions (which, for a shadow's transient bucket, would be two different objects).
+func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Policy, tcost *cost.P1Cost,
+	mode killchain.EvalMode) (actionset.ActionSet, map[string]assetCtx, error) {
+	// [M-140 R1.2] A retired owner must not be priced, and must not allocate a bucket by
+	// being asked for one; costForMode reports that as a nil bucket in either mode.
+	if e.ownerAbsent(pol.Owner()) || tcost == nil {
+		return actionset.ActionSet{}, map[string]assetCtx{}, nil
+	}
+	// [M-163] Resolve the gate collaborator BEFORE any assessment: a shadow whose gate cannot
+	// be answered read-only is unavailable, and reporting that must not first have cost an
+	// SSAR or any other observable work.
+	eligible, gateAvailable := e.capabilityFor(mode)
+	if !gateAvailable {
+		return actionset.ActionSet{}, map[string]assetCtx{}, ErrShadowCapabilityUnavailable
+	}
 	floorSec := pol.ProactiveFloor.Seconds()
 
+	// M-163: the generator reads HasEventEvidence off the view (the proactive-cadence law
+	// sees no Assessment), so a shadow needs its OWN correctly-computed stamp without writing
+	// the caller's view. In production genViews IS views — same pointers, same stamp, zero
+	// change. In shadow it is a per-view local copy carrying the shadow's own verdict, so the
+	// hypothetical action set is generated from the hypothetical evidence while the runner's
+	// view keeps whatever the production pass put there.
+	genViews := views
+	if !mode.Commits() {
+		genViews = make([]*model.WorkloadView, len(views))
+	}
+
 	ctxByKey := make(map[string]assetCtx, len(views))
-	for _, v := range views {
+	for i, v := range views {
 		key := v.Pod.Namespace + "/" + v.Pod.Name
 		sig := model.ContextSignals{}
 		if e.Context != nil {
@@ -334,15 +458,22 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 		if d, ok := v.ExposureByVariable[model.VarPodIdentity]; ok {
 			exp = d.Seconds()
 		}
-		assess := e.Killchain.Assess(v, pol, exp, floorSec)
-		// M-28: mirror the EVENT-ONLY evidence verdict onto the shared view so the
-		// proactive-cadence feasibility law can read it (a hard law only sees view/move/pol, never
-		// the Assessment). HasEventEvidence (not the broad HasEvidence) so a physics-pinned,
-		// event-less pod — the churn pod — is still capped. The view pointers are shared with the
-		// runner, so generator/shadow/emit-boundary all see the same stamp.
-		v.HasEventEvidence = assess.HasEventEvidence
+		assess := e.Killchain.AssessMode(v, pol, exp, floorSec, mode)
+		if mode.Commits() {
+			// M-28: mirror the EVENT-ONLY evidence verdict onto the shared view so the
+			// proactive-cadence feasibility law can read it (a hard law only sees view/move/pol, never
+			// the Assessment). HasEventEvidence (not the broad HasEvidence) so a physics-pinned,
+			// event-less pod — the churn pod — is still capped. The view pointers are shared with the
+			// runner, so generator/shadow/emit-boundary all see the same stamp.
+			v.HasEventEvidence = assess.HasEventEvidence
+		} else {
+			local := *v
+			local.HasEventEvidence = assess.HasEventEvidence
+			genViews[i] = &local
+		}
 		ctxByKey[key] = assetCtx{sig: sig, assess: assess, exposure: exp}
 	}
+	views = genViews
 
 	factCtx := func(v *model.WorkloadView) recon.FactContext {
 		key := v.Pod.Namespace + "/" + v.Pod.Name
@@ -363,7 +494,6 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 		}
 	}
 
-	tcost := e.costFor(pol.Owner(), pol.Lambda)
 	costCeiling := cost.EffectiveCostCeiling(pol)
 	mayRelax := map[string]bool{}
 	if pol.MayBreachSLO {
@@ -382,22 +512,33 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 			return eval.Total, eval.CHi, eval.UnactionableCategory, eval.NaNFeature
 		},
 		CostCeiling: costCeiling,
-		Eligible:    e.Capability, // T1-E gate (nil when the runner has not wired it)
+		// T1-E gate (nil when the runner has not wired it). M-163: the SHADOW arm receives the
+		// read-only collaborator; it is never the reviewing one.
+		Eligible: eligible,
 	}
 	as := deps.Generate(views, pol)
 	// T1-E metrics: one per capability-gate exclusion (by reason), and the fail-open
 	// rbac-unknown flag on candidates that proceeded despite an SSAR error.
-	for _, ex := range as.Excluded {
-		if ex.EligibilityKind != "" {
-			metrics.RecordCandidateExcluded(pol.Tenant, string(ex.Action), ex.EligibilityKind)
+	//
+	// M-163: these count what the OPERATOR's cluster did this tick — how many real candidates
+	// the capability gate dropped, how many proceeded with unconfirmed RBAC. A counterfactual
+	// re-pricing of the same pods excluded nothing operationally, so counting it double-counts
+	// the tick and makes the series a function of how many shadows ran. The exclusions and
+	// the RBACUnknown flags themselves still travel in the returned ActionSet, so the shadow's
+	// own decision trace reports them (with Applied=false) without touching the counters.
+	if mode.Commits() {
+		for _, ex := range as.Excluded {
+			if ex.EligibilityKind != "" {
+				metrics.RecordCandidateExcluded(pol.Tenant, string(ex.Action), ex.EligibilityKind)
+			}
+		}
+		for _, cand := range as.Candidates {
+			if cand.RBACUnknown {
+				metrics.RecordCandidateRBACUnknown(pol.Tenant, string(cand.Action))
+			}
 		}
 	}
-	for _, cand := range as.Candidates {
-		if cand.RBACUnknown {
-			metrics.RecordCandidateRBACUnknown(pol.Tenant, string(cand.Action))
-		}
-	}
-	return as, ctxByKey
+	return as, ctxByKey, nil
 }
 
 // Decide runs the per-tick coverage optimization and returns one Decision per pod.
@@ -409,30 +550,40 @@ func (e *CoverageEngine) Decide(views []*model.WorkloadView, pol model.Policy) [
 // DecideChecked rejects a structurally invalid ActionSet before selection or learning.
 // The runner calls this checked seam and logs/counts the failure for the production tick.
 func (e *CoverageEngine) DecideChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
-	return e.decideChecked(views, pol, true)
+	return e.decideChecked(views, pol, killchain.EvalProduction)
 }
 
-// DecideShadowChecked evaluates a counterfactual without advancing any learned production state.
+// DecideShadowChecked evaluates a counterfactual against the engine's existing knowledge and
+// cost state without advancing any of it (M-163). Adding any number of shadow evaluations to
+// a tick must leave the next production decision identical to the same engine history with no
+// shadows at all: the shadow folds no stage entry, seeds no owner state, moves no dual price,
+// teaches no conjugate memory, stamps no caller-owned view and increments no operational
+// counter. Its own decisions carry the full trace, with the dual update marked Applied=false.
 func (e *CoverageEngine) DecideShadowChecked(views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
-	return e.decideChecked(views, pol, false)
+	return e.decideChecked(views, pol, killchain.EvalShadow)
 }
 
-func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Policy, persist bool) ([]model.Decision, error) {
+func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Policy, mode killchain.EvalMode) ([]model.Decision, error) {
 	// [M-140 R1.2] A tick captured before this owner was retired can still arrive here.
 	// Reject it BEFORE any owned-store read or write: costFor would otherwise return nil
 	// for the retired owner and the dereference below would panic, and an unguarded
-	// creation would resurrect the very state removal just destroyed.
+	// creation would resurrect the very state removal just destroyed. A shadow is rejected
+	// on the identical guard, so a counterfactual cannot resurrect a retired owner either.
 	if e.ownerAbsent(pol.Owner()) {
 		return nil, ErrOwnerRetired
 	}
+	persist := mode.Commits()
 	now := e.now()
-	tcost := e.costFor(pol.Owner(), pol.Lambda)
+	tcost := e.costForMode(pol.Owner(), mode, pol.Lambda)
 	if tcost == nil {
 		return nil, ErrOwnerRetired
 	}
 	lambda := tcost.Dual.Lambda()
 
-	set, ctxByKey := e.AssembleSet(views, pol)
+	set, ctxByKey, err := e.assembleSet(views, pol, tcost, mode)
+	if err != nil {
+		return nil, err
+	}
 	if err := set.CollisionError(); err != nil {
 		return nil, err
 	}
@@ -729,7 +880,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			decision.Trace = e.buildDecisionTrace(v, pol, now, set, ac, lambda, demand,
 				len(selectedAsset), selectedAsset[key], selectedAction[key], selectedRound[key],
 				attackBackedKey[key], infeasibleWhy, tcost.RLS != nil && tcost.RLS.Primed(), prov,
-				tcost, evaluatedMarginal, dualUpdate, coveredRound, evaluationRound)
+				tcost, evaluatedMarginal, dualUpdate, coveredRound, evaluationRound, mode)
 		}
 		decorateExistentialTrace(decision.Trace, decision.Existential)
 		decisions = append(decisions, decision)
@@ -824,6 +975,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	dualUpdate cost.DualUpdate,
 	coveredRound map[string]int,
 	evaluationRound int,
+	mode killchain.EvalMode,
 ) *model.DecisionTraceV2 {
 	assetKey := v.Pod.Namespace + "/" + v.Pod.Name
 	// [M-140] Ownership metadata comes from the bucket's CREATION record, so it is present
@@ -905,7 +1057,9 @@ func (e *CoverageEngine) buildDecisionTrace(
 		PCIe:              pcieRecord(v.Physics),
 		DispersionCap:     traceOptional(v.Physics.DispersionCap > 0, v.Physics.DispersionCap),
 		Primed:            primed,
-		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMean(pol.Owner())),
+		// M-163: reporting the learned prior must not be what CREATES it. The number is
+		// identical in both modes; only the shadow read declines to seed an unseen owner.
+		BetaMean:          traceOptional(true, e.Killchain.Memory.PriorMeanMode(pol.Owner(), mode)),
 		PHold:             traceOptional(true, ac.assess.PHold),
 		Stage:             ac.assess.StageName,
 		StageHazard:       traceOptional(true, ac.assess.Hazard),

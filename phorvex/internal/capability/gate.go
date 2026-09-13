@@ -184,7 +184,28 @@ func isCodeExecAction(a model.Action) bool {
 }
 
 // Eligible runs the full cheapest-first gate for one (asset, action). nil = eligible.
+// This is the REAL evaluation: its RBAC leg may issue the (cached) SelfSubjectAccessReview.
 func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys []string) *Reason {
+	return w.eligible(v, action, coverKeys, true)
+}
+
+// EligibleObserved is Eligible for a COUNTERFACTUAL evaluation (M-163). Every local leg is
+// the identical predicate on the identical per-tick witness — the gate is not skipped and is
+// not weakened — but the RBAC leg answers from authorization ALREADY REVIEWED instead of
+// issuing a review. A shadow therefore cannot spend apiserver budget, cannot cache an answer
+// the next production gate would otherwise have re-reviewed, and cannot extend the life of
+// one already cached.
+//
+// Where no current authorization evidence exists the verdict is the existing RBAC-UNKNOWN
+// fail-open (flagged, not excluded, P-NO-FREEZE) with a detail naming it unobserved — never
+// an invented allow. A cached deny still excludes. The shadow's comparison is therefore
+// weaker EVIDENCE than production's on exactly those (namespace, verb) pairs production has
+// not reviewed recently, and the record says so.
+func (w Witness) EligibleObserved(v *model.WorkloadView, action model.Action, coverKeys []string) *Reason {
+	return w.eligible(v, action, coverKeys, false)
+}
+
+func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys []string, review bool) *Reason {
 	if w.notInstall.Has(action) {
 		return &Reason{Excluded: true, Kind: ReasonNotInstallable, Detail: "action not in installed CRD action enum"}
 	}
@@ -204,9 +225,20 @@ func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys 
 		}
 	}
 	// RBAC is LAST: only a candidate that passed the free local checks reaches an SSAR.
+	// Both modes derive the verb set from the SAME actuator.RequiredVerbs, so a routing or
+	// permission change to that set lands on the reviewing and the observing path together.
 	if w.az != nil {
 		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
-			allowed, unknown, why := w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
+			var (
+				allowed bool
+				unknown bool
+				why     string
+			)
+			if review {
+				allowed, unknown, why = w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
+			} else {
+				allowed, unknown, why = w.az.Observed(v.Pod.Namespace, verbs)
+			}
 			if unknown {
 				return &Reason{RBACUnknown: true, Detail: why} // fail-open: NOT excluded, flagged
 			}
