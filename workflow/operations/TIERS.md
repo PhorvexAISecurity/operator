@@ -43,10 +43,23 @@ message is a submission, never self-approval. Automatic worker launch is allowed
 only within the user's delegation scope. Never add co-author or AI attribution
 to commits; convey this requirement in every worker assignment.
 
+## Campaign delivery packaging
+
+For the current readiness campaign, the user changed packaging on2026-09-13:
+Tier2 retains its existing issue PRs; from Tier3 onward publish one PR per tier,
+with one commit per issue. Workers may still implement in parallel, but do not
+open individual issue PRs for those later tiers. Independently accept each issue,
+assemble its changes into the tier branch and test the complete composition
+before publishing. Preserve original evidence/source provenance and verify
+consolidation equivalence; never rewrite attestations to invented source pins.
+Keep issue-specific live acceptance even though publication uses one shared PR.
+See assessments/20260913-tier2/TIER-DELIVERY-POLICY.md for the recorded instruction.
+
 ## Stop at the deployment barrier
 
-When every member has a reviewed PR with required checks passing (or explicitly
-identified infrastructure blockers), deliver the complete PR set and mark the
+When every member is independently reviewed and its issue PR or shared tier PR
+has required checks passing (or explicitly identified infrastructure blockers),
+deliver the complete tier publication and mark the
 tier WAITING_FOR_DEPLOYMENT. Open PRs with blocked required checks are not
 represented as merge-ready. Do not start the next tier's implementation.
 The user and DevOps retain merge/deployment ownership. Do not merge, deploy,
