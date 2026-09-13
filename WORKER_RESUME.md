@@ -1,0 +1,3 @@
+# M153 worker handoff
+
+Final composed source is `f6937358bf061e4d047c4ac601378019cb19cfe1`, stacked on T2-M042 `61b7fda47fa0c0c29aaed1d52e488b7152146cfa` and T2-M016 PR191 `1d2af1cbed06d017d58bedb9a04186a99ef425dd`. Core implementation commit remains `fcc808cfeefd81e71cab739e90787c6481151ba5`; `9ee1fbc` resolves the M42 session-gate overlap, and `f693735` regenerates/explains coverage. Full module, race, build/vet and source-pinned preflight pass. Baseline RED, controls, failed infrastructure attempts and isolated composition artifacts are retained. Submission is prepared for root review; no push, merge, deploy or live mutation occurred.
