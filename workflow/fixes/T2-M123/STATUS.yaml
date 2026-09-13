@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 19
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,13 +16,67 @@ checks:
     at: '2026-09-13T19:10:44+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: claude-v3-m123
+    artifact: evidence/red/RED.md
+    sha256: a05882e648401262ec95d1cc02f478c7eb6f02d1d225528d8fc8e52ce5b6ccbf
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T19:49:06+00:00'
+    rationale: 'Discriminating baseline executed at d296799 through the real registered
+      recon producers: the identical overlay probe fails at base (8 documented cover
+      claims the producers deny, 5 rows agree as controls, no generated map) and passes
+      at head; producer-only and history-retention controls pass at both ends; structural
+      go-test-json verdicts in verify.sh step 5'
+  implementation:
+    result: PASS
+    by: claude-v3-m123
+    artifact: 04-diff.patch
+    sha256: 0846b1cdd62f504f74207dacfedf34b23c954ed520ce8413d5094bf9957261ad
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T20:02:57+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m123
+    artifact: evidence/l0-phorvex-build-vet.log
+    sha256: 69c4eba94de72f09f77a631da1dae9326136c4e4bb92043407bc4678f24ecac5
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T20:02:57+00:00'
+  l1:
+    result: PASS
+    by: claude-v3-m123
+    artifact: evidence/l1-phorvex-suite.log
+    sha256: 061c79716c4e3657ad4771cd10e4cc674a1f3b418d0d074bfb2fe482b5d8389c
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T20:02:57+00:00'
+  l2:
+    result: PASS
+    by: claude-v3-m123
+    artifact: evidence/verify-sh-offline.log
+    sha256: 6fcbb98a27eef7b0ce1b836da776a75b81fe683744a15598ab52903e7d367dbd
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T20:02:58+00:00'
+  positive_control:
+    result: PASS
+    by: claude-v3-m123
+    artifact: evidence/red/head-green.log
+    sha256: a42fd7450ac340795e45ba9af7110aab647d9df00b6b1a70e631dfc6329b0015
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T20:02:58+00:00'
+  preflight:
+    result: PASS
+    by: claude-v3-m123
+    artifact: evidence/preflight/receipt.json
+    sha256: 0ec223176d18ea29d183d902b8e257cfef7a3a45342ad1442ebbce51747d8aa6
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T20:13:57+00:00'
 fix_id: T2-M123
 issues:
 - M-123
 title: Generate current recon coverage documentation and separate historical live
   results
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -46,7 +100,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m123-coverage-documentation
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
   stacked_on: []
 pull_request:
   url: null
@@ -68,12 +122,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -83,10 +137,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed coverage documentation/generation plan after supervisor
-    slot is available.
-updated_at: '2026-09-13T19:10:45+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T20:13:59+00:00'
 configuration_history:
 - at: '2026-09-13T19:10:43+00:00'
   by: codex-lead
@@ -99,6 +153,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-13T19:48:46+00:00'
+  by: claude-v3-m123
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T20:02:41+00:00'
+  by: claude-v3-m123
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T20:13:57+00:00'
+  by: claude-v3-m123
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -116,3 +185,69 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T20:13:57+00:00'
+  by: claude-v3-m123
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T20:13:58+00:00'
+  by: claude-v3-m123
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: l2
+  result: PASS
+  by: claude-v3-m123
+  artifact: evidence/verify-sh-offline.log
+  sha256: 786ab371bc8a5edb98d099d72236fcb73a3d4504b31e2b18bcd0accbbf0efd0f
+  source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
+  at: '2026-09-13T19:49:07+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m123
+  artifact: 04-diff.patch
+  sha256: 1b00a6bfaa2e3e0dfba1f1c9d0f0f41bc5f59d16b631d55acc06b48610e35840
+  source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
+  at: '2026-09-13T19:49:06+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m123
+  artifact: evidence/l0-phorvex-build-vet.log
+  sha256: 8d4028479831622512d505dbb192d134f786872b1dfaee545b4dd1e35ad9b8a5
+  source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
+  at: '2026-09-13T19:49:07+00:00'
+- check: l1
+  result: PASS
+  by: claude-v3-m123
+  artifact: evidence/l1-phorvex-suite.log
+  sha256: 2a39d44178abf7eb4368137d6d30820725d74bee570388f69d87f2ea4a51837d
+  source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
+  at: '2026-09-13T19:49:07+00:00'
+- check: l2
+  result: PASS
+  by: claude-v3-m123
+  artifact: evidence/verify-sh-offline.log
+  sha256: 43bb26000206512ad4370e124fd27d2c113aa4c0ca15361bf51b47b7fb35d723
+  source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
+  at: '2026-09-13T19:49:25+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-v3-m123
+  artifact: evidence/red/head-green.log
+  sha256: 8e1aa6acf8397e94d042ca344dcc41bb72e92ebcb9e7d18ad0380a3aa2e824ae
+  source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
+  at: '2026-09-13T19:49:07+00:00'
+handoff:
+  id: T2-M123:19:submit
+  from: claude-v3-m123
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 19
