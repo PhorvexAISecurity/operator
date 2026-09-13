@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 23
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -20,9 +20,9 @@ checks:
     result: PASS
     by: claude-v3-m166
     artifact: 04-diff.patch
-    sha256: 890eee64d2bc2c24a649281ef9829d619e069d554af177371bc3d1679d59b3e4
-    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:33:02+00:00'
+    sha256: 98d378c9af53d60b430fc9738740becb9f08c8f0b2d5ee7628a34d3373124597
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T19:58:57+00:00'
   red:
     result: PASS
     by: claude-v3-m166
@@ -39,50 +39,57 @@ checks:
   l0:
     result: PASS
     by: claude-v3-m166
-    artifact: evidence/l0/head-build.log
+    artifact: evidence/r2/head-build.log
     sha256: eebaab80b1d5a43142ef55ac3a918ad91ffaa8b3b15f9616382c64d9d405499a
-    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:33:17+00:00'
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T19:58:57+00:00'
     inputs:
     - phorvex
-    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+    inputs_sha256: ba2e7b6226eaceb8c610b2ac564a7479f643dcb37944f792c9738098caf15db5
   l1:
     result: PASS
     by: claude-v3-m166
-    artifact: evidence/l1/head-phorvex-suite.log
-    sha256: 80b1d6c6c43aec858860de785cdf2879255e01105da0fb9a1696435263cb0230
-    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:33:17+00:00'
+    artifact: evidence/r2/head-phorvex-suite.log
+    sha256: f5ad6e3007b690b0e77ba8bde88b39b18f14730b261e8d5b11446c4f2ff51788
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T19:58:58+00:00'
     inputs:
     - phorvex
-    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+    inputs_sha256: ba2e7b6226eaceb8c610b2ac564a7479f643dcb37944f792c9738098caf15db5
   l2:
     result: PASS
     by: claude-v3-m166
-    artifact: evidence/l2/verify-offline.log
-    sha256: 06d7ad9e5d0cb038673039ad5c13648ac3432079509fcf8d544c2d69534e2c91
-    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:33:17+00:00'
+    artifact: evidence/r2/verify-offline.log
+    sha256: 4ebcf41f138ca17c165809bd249d0b8a228ace3d281c1fa52b6169032f18abf7
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T19:58:58+00:00'
     inputs:
     - phorvex
-    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+    inputs_sha256: ba2e7b6226eaceb8c610b2ac564a7479f643dcb37944f792c9738098caf15db5
   positive_control:
     result: PASS
     by: claude-v3-m166
-    artifact: evidence/red/head-green-f5324f2.log
-    sha256: 3aa7b7151570ada7cc1af255bf796092f6ef86d6f3da611b1b4a9d97d9d2c7ef
-    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:33:18+00:00'
+    artifact: evidence/r2/head-green-ec8764a.log
+    sha256: bb6d5cbb1689fae6cad45ba0dfbdd78c3d638dc7527ff781ddaa8fe9b7ab7f2a
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T19:58:58+00:00'
     inputs:
     - phorvex
-    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+    inputs_sha256: ba2e7b6226eaceb8c610b2ac564a7479f643dcb37944f792c9738098caf15db5
   preflight:
     result: PASS
     by: claude-v3-m166
-    artifact: evidence/preflight/receipt.json
-    sha256: ad289e07983b63982ca0967376f0c3ff1e5092d1edec492e9d9739357e4f2007
+    artifact: evidence/preflight/receipt-r2.json
+    sha256: 6a54115f08fd1e3b40f7c307c9f5563162939fa236706e29471f388583d59972
+    source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+    at: '2026-09-13T20:09:58+00:00'
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: ee13ecd844b12e1339a2dd8b3eea56e28f6cf231d24a60cf46b8a0ad479896c1
     source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
-    at: '2026-09-13T19:37:37+00:00'
+    at: '2026-09-13T19:46:46+00:00'
 fix_id: T2-M166
 issues:
 - M-166
@@ -113,7 +120,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m166-approval-lifecycle
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  head_sha: ec8764a10e96a7d90757e058b2d1de948c024826
   stacked_on: []
 pull_request:
   url: null
@@ -134,7 +141,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -153,7 +160,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-13T19:37:39+00:00'
+updated_at: '2026-09-13T20:10:00+00:00'
 configuration_history:
 - at: '2026-09-13T18:58:13+00:00'
   by: codex-lead
@@ -172,6 +179,16 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-13T19:37:37+00:00'
+  by: claude-v3-m166
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T19:57:23+00:00'
+  by: claude-v3-m166
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T20:09:58+00:00'
   by: claude-v3-m166
   fields:
   - implementation
@@ -209,10 +226,111 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T19:46:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T20:09:59+00:00'
+  by: claude-v3-m166
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M166:12:submit
+  id: T2-M166:23:submit
   from: claude-v3-m166
   to: codex-lead
   role: skeptic
   kind: submit
-  revision: 12
+  revision: 23
+check_history:
+- check: implementation
+  result: PASS
+  by: claude-v3-m166
+  artifact: 04-diff.patch
+  sha256: 890eee64d2bc2c24a649281ef9829d619e069d554af177371bc3d1679d59b3e4
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:33:02+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/l0/head-build.log
+  sha256: eebaab80b1d5a43142ef55ac3a918ad91ffaa8b3b15f9616382c64d9d405499a
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:33:17+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+- check: l1
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/l1/head-phorvex-suite.log
+  sha256: 80b1d6c6c43aec858860de785cdf2879255e01105da0fb9a1696435263cb0230
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:33:17+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+- check: l2
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/l2/verify-offline.log
+  sha256: 06d7ad9e5d0cb038673039ad5c13648ac3432079509fcf8d544c2d69534e2c91
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:33:17+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+- check: positive_control
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/red/head-green-f5324f2.log
+  sha256: 3aa7b7151570ada7cc1af255bf796092f6ef86d6f3da611b1b4a9d97d9d2c7ef
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:33:18+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+- check: preflight
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/preflight/receipt.json
+  sha256: ad289e07983b63982ca0967376f0c3ff1e5092d1edec492e9d9739357e4f2007
+  source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+  at: '2026-09-13T19:37:37+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-v3-m166
+  artifact: evidence/preflight/receipt-r2.json
+  sha256: 961cec00730b63fcba6b90b8f9628393289f5dcfabcf2500a1db483e970964cd
+  source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+  at: '2026-09-13T20:01:58+00:00'
+  rationale: 'First preflight at ec8764a: every job PASS except workflow, whose doctor
+    step flagged the r1 preflight check as stale against the re-pinned head (self-referential);
+    recorded so the re-run can validate against a receipt bound to this source. Superseded
+    by the following PASS.'
+- check: preflight
+  result: FAIL
+  by: claude-v3-m166
+  artifact: evidence/preflight/receipt-r2.json
+  sha256: 37aed226f68975e14688b83460661df9b5cf83455195498c9fa9048cd2d7cbd0
+  source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+  at: '2026-09-13T20:07:33+00:00'
+  rationale: 'Run r2c at ec8764a: all jobs PASS except workflow, whose doctor compared
+    the previously recorded receipt hash with the receipt rewritten by run r2b (chart-8
+    timing failure and chart-9 helm timeout under host load 9.6; retained as receipt-r2b-failed.json
+    / run-r2b.log). Re-recorded against the current receipt so the next run''s doctor
+    sees a matching artifact; superseded by the following PASS.'
+- check: preflight
+  result: PASS
+  by: claude-v3-m166
+  artifact: evidence/preflight/receipt-r2.json
+  sha256: 6a54115f08fd1e3b40f7c307c9f5563162939fa236706e29471f388583d59972
+  source_sha: ec8764a10e96a7d90757e058b2d1de948c024826
+  at: '2026-09-13T20:09:58+00:00'
