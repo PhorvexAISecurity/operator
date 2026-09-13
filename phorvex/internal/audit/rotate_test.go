@@ -1,14 +1,16 @@
 package audit
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// TestRotatingWriterBoundsSize — the P4b audit-rotation fix: total bytes on disk stay bounded
-// by capBytes*(maxBackups+1), and rotated segments appear.
+// TestRotatingWriterBoundsSize checks the nominal segment budget plus one whole-record
+// allowance per retained segment. Rotation never splits a JSONL record.
 func TestRotatingWriterBoundsSize(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "audit.jsonl")
@@ -42,6 +44,92 @@ func TestRotatingWriterBoundsSize(t *testing.T) {
 	}
 	if total == 0 {
 		t.Error("nothing written")
+	}
+}
+
+func retainedLines(t *testing.T, path string, backups int) []string {
+	t.Helper()
+	var out []string
+	for i := backups; i >= 0; i-- {
+		p := path
+		if i > 0 {
+			p = fmt.Sprintf("%s.%d", path, i)
+		}
+		b, err := os.ReadFile(p)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(strings.TrimSuffix(string(b), "\n"), "\n") {
+			if line != "" {
+				out = append(out, line)
+			}
+		}
+	}
+	return out
+}
+
+func TestRotatingWriterLargerBudgetRetainsMoreCompleteOrderedRecords(t *testing.T) {
+	write := func(capBytes int64) []string {
+		path := filepath.Join(t.TempDir(), "audit.jsonl")
+		w, err := NewRotatingWriter(path, capBytes, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < 40; i++ {
+			if i == 20 {
+				if err := w.Close(); err != nil {
+					t.Fatal(err)
+				}
+				w, err = NewRotatingWriter(path, capBytes, 2)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := fmt.Fprintf(w, "{\"sequence\":%03d}\n", i); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return retainedLines(t, path, 2)
+	}
+	small, large := write(80), write(160)
+	if len(large) <= len(small) {
+		t.Fatalf("larger target retained %d records, small target retained %d", len(large), len(small))
+	}
+	for name, lines := range map[string][]string{"small": small, "large": large} {
+		for i, line := range lines {
+			want := fmt.Sprintf("{\"sequence\":%03d}", 40-len(lines)+i)
+			if line != want {
+				t.Fatalf("%s record %d=%q want %q", name, i, line, want)
+			}
+		}
+	}
+}
+
+func TestRotatingWriterPreservesOversizedWholeRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	w, err := NewRotatingWriter(path, 16, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oversized := []byte("{\"payload\":\"record-larger-than-cap\"}\n")
+	if _, err := w.Write(oversized); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("{}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path + ".1")
+	if err != nil || !bytes.Equal(got, oversized) {
+		t.Fatalf("oversized record not preserved whole: %q err=%v", got, err)
 	}
 }
 

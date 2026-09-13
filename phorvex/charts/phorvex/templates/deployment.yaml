@@ -78,11 +78,40 @@ spec:
         - --trusted-detectors={{ join "," . }}
         {{- end }}
         {{- if .Values.phorvex.audit.enabled }}
+        {{- $auditMaxBytesText := toString .Values.phorvex.audit.maxBytes }}
+        {{- if kindIs "float64" .Values.phorvex.audit.maxBytes }}
+        {{- if or (lt .Values.phorvex.audit.maxBytes 0.0) (ne .Values.phorvex.audit.maxBytes (floor .Values.phorvex.audit.maxBytes)) (gt .Values.phorvex.audit.maxBytes 9007199254740991.0) }}
+        {{- fail "phorvex.audit.maxBytes must be a non-negative whole number of bytes (quote values above 9007199254740991)" }}
+        {{- end }}
+        {{- $auditMaxBytesText = printf "%.0f" .Values.phorvex.audit.maxBytes }}
+        {{- end }}
+        {{- $auditMaxBackupsText := toString .Values.phorvex.audit.maxBackups }}
+        {{- if kindIs "float64" .Values.phorvex.audit.maxBackups }}
+        {{- if or (lt .Values.phorvex.audit.maxBackups 0.0) (ne .Values.phorvex.audit.maxBackups (floor .Values.phorvex.audit.maxBackups)) (gt .Values.phorvex.audit.maxBackups 9007199254740991.0) }}
+        {{- fail "phorvex.audit.maxBackups must be a non-negative whole number (quote values above 9007199254740991)" }}
+        {{- end }}
+        {{- $auditMaxBackupsText = printf "%.0f" .Values.phorvex.audit.maxBackups }}
+        {{- end }}
+        {{- if not (regexMatch "^[0-9]+$" $auditMaxBytesText) }}
+        {{- fail "phorvex.audit.maxBytes must be a non-negative whole number of bytes" }}
+        {{- end }}
+        {{- if not (regexMatch "^[0-9]+$" $auditMaxBackupsText) }}
+        {{- fail "phorvex.audit.maxBackups must be a non-negative whole number" }}
+        {{- end }}
+        {{- if or (gt (len $auditMaxBytesText) 19) (and (eq (len $auditMaxBytesText) 19) (gt $auditMaxBytesText "9223372036854775807")) }}
+        {{- fail "phorvex.audit.maxBytes must not exceed 9223372036854775807" }}
+        {{- end }}
+        {{- if or (gt (len $auditMaxBackupsText) 19) (and (eq (len $auditMaxBackupsText) 19) (gt $auditMaxBackupsText "9223372036854775807")) }}
+        {{- fail "phorvex.audit.maxBackups must not exceed 9223372036854775807" }}
+        {{- end }}
+        {{- $auditMaxBytes := int64 $auditMaxBytesText }}
+        {{- $auditMaxBackups := int64 $auditMaxBackupsText }}
+        {{- if and (gt $auditMaxBytes 0) (eq $auditMaxBackups 0) }}
+        {{- fail "phorvex.audit.maxBackups must be at least 1 when phorvex.audit.maxBytes is positive" }}
+        {{- end }}
         - --audit-json={{ .Values.phorvex.audit.path }}
-        # int64, because YAML parses 268435456 as a float and Helm would otherwise render
-        # it as 2.68435456e+08 — which flag.Int64Var rejects, so the operator would refuse
-        # to start with an error about an invalid flag value.
-        - --audit-max-bytes={{ .Values.phorvex.audit.maxBytes | int64 }}
+        - --audit-max-bytes={{ $auditMaxBytes }}
+        - --audit-max-backups={{ $auditMaxBackups }}
         {{- end }}
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true
