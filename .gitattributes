@@ -2,6 +2,13 @@
 # Retained patches are evidence; preserve context-line whitespace verbatim.
 workflow/**/*.patch -whitespace
 
+# Retain exact independent test output, including negative-control diagnostics.
+workflow/coordination/lead-runner-r4-tests.log -whitespace
+
+# Exact independent race and workflow validation output.
+workflow/coordination/lead-receipt-r5-*.log -whitespace
+workflow/coordination/lead-runner-r5-suite.log -whitespace
+
 # Sealed independent review output retains source blank lines and empty TSV cells.
 workflow/assessments/20260910-readiness/fresh-integration/r4/evidence/r4-integration-nodes.txt -whitespace
 workflow/assessments/20260910-readiness/fresh-integration/r4/evidence/r4-join-matrix.tsv -whitespace

@@ -1,0 +1,37 @@
+[
+  {
+    "case": "valid",
+    "problems": [],
+    "denials": []
+  },
+  {
+    "case": "list-subtype",
+    "problems": [
+      "result subtype [] is not a success subtype"
+    ],
+    "denials": []
+  },
+  {
+    "case": "dict-subtype",
+    "problems": [
+      "result subtype {} is not a success subtype"
+    ],
+    "denials": []
+  },
+  {
+    "case": "boolean-turns",
+    "problems": [],
+    "denials": []
+  },
+  {
+    "case": "malformed-denial-entry",
+    "problems": [],
+    "denials": [
+      {
+        "tool": null,
+        "tool_use_id": null,
+        "source": "result"
+      }
+    ]
+  }
+]
