@@ -21,7 +21,7 @@ grant-resolved one (`?tenant=` or body, both only as a selection among granted t
 | Response | Meaning |
 |---|---|
 | `200 {"status":"pending-approval","id","tenant","generation","existing":false,"note"}` | New record, awaiting a distinct approver. |
-| `200 {..., "existing":true, "status":<state>}` | An identical submission (same tenant/id/namespace/requester/reason/delta) already exists; its generation and current state are returned. Nothing is duplicated. |
+| `200 {..., "existing":true, "status":<state>}` | An identical submission (same tenant/id/namespace/requester/reason/delta) already exists; its generation and current state are returned. The stored request is consulted **before** the allowlist and the current gate — an accepted request is never re-judged, so a gate that later refuses (or is unavailable) cannot rewrite an accepted, possibly applied, outcome. Only a new record is gated. |
 | `409` | The tenant already has a record under this `id` with **different** content. Records are never overwritten; a finished record is a tombstone, so an id is never recycled for new content. |
 | `422` | Allowlist or safety-gate rejection (unchanged). |
 | `503` | The request store is at its finite limit (`DefaultMaxApplyFixRecords`, per console process, open and finished records together). Nothing is evicted; choose a new console or wait for a restart. |
@@ -42,7 +42,9 @@ and must differ from the requester (two-key).
 Under the manager lock, exactly one valid approval moves the record `pending → applying`. With
 that claim held — and outside the lock — the server checks that the tenant's base policy still
 derives the same candidate, re-runs the safety gate on the exact snapshot, and invokes the
-applier **once**. The attempt then ends in one terminal state that is never reopened.
+applier **once**. The attempt then ends in one terminal state that is never reopened. The gate
+and the applier each receive their own copy of the snapshot (at submit, preview and approval), so
+a gate callback cannot alter what is retained or what is applied.
 
 Every approve response carries `status` (what *this call* did), `state` (the record's lifecycle
 state afterwards), `id`, `tenant`, `generation`, `approver`, `retry` and, on failure, `error`.

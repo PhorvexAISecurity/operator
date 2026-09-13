@@ -8,6 +8,7 @@ package console
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -642,5 +643,204 @@ func TestApplyFixLifecycle_ViewsAreOrderedCopies(t *testing.T) {
 	trail[0].Fields["id"] = "tampered"
 	if again := m.AuditTrail("acme"); again[0].Fields["id"] != "z" {
 		t.Errorf("audit ring was mutated through a returned view: %v", again[0].Fields)
+	}
+}
+
+// R1.1 — an identical resubmission is answered from the stored immutable request, not from today's
+// gate: after the gate turns refusing (or unavailable), a byte-identical retry of a pending AND of an
+// already-applied request returns the retained generation and state, while a NEW request is still
+// refused by that gate. The retained record is never re-judged, so an accepted (possibly applied)
+// request cannot be reported as rejected.
+func TestApplyFixLifecycle_IdenticalResubmitIgnoresCurrentGate(t *testing.T) {
+	for _, terminal := range []bool{false, true} {
+		name := map[bool]string{false: "pending", true: "applied"}[terminal]
+		t.Run(name, func(t *testing.T) {
+			var calls, gateCalls int32
+			audit := newAuditCounter()
+			m := NewApplyFixManager(safeBase, func(_, _ string, _ model.Policy) error { atomic.AddInt32(&calls, 1); return nil }, audit.hook)
+			req := ApplyFixRequest{ID: "r1", Tenant: "acme", Namespace: "acme", Requester: "alice", Delta: ApplyFixDelta{NormSparsity: fptr(1.5)}, Reason: "tune"}
+			first, err := m.Submit(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if terminal {
+				if res, err := m.Approve("acme", "r1", first.Generation, "bob"); err != nil || res.State != ApplyFixApplied {
+					t.Fatalf("approve: %v / %+v", err, res)
+				}
+			}
+			m.Gate = func(model.Policy) error { atomic.AddInt32(&gateCalls, 1); return errors.New("safety gate unavailable") }
+			m.BasePol = func(string) model.Policy {
+				t.Error("BasePol must not be consulted for a stored request")
+				return safeBase("")
+			}
+			again, err := m.Submit(req)
+			if err != nil || !again.Existing || again.Generation != first.Generation {
+				t.Fatalf("identical retry must return the retained record: %v / %+v (first %+v)", err, again, first)
+			}
+			m.BasePol = safeBase // the positive-control NEW request below legitimately derives a candidate
+			wantState := ApplyFixPending
+			if terminal {
+				wantState = ApplyFixApplied
+			}
+			if again.State != wantState {
+				t.Errorf("retained state %q; want %q", again.State, wantState)
+			}
+			if atomic.LoadInt32(&gateCalls) != 0 || audit.n("apply-fix.rejected.gate") != 0 || audit.n("apply-fix.submitted") != 1 {
+				t.Errorf("stored request was re-judged: gateCalls=%d gate-audit=%d submitted-audit=%d", gateCalls, audit.n("apply-fix.rejected.gate"), audit.n("apply-fix.submitted"))
+			}
+			// Positive control: a NEW request under the same refusing gate is refused, and a same-id
+			// DIFFERENT request is a conflict — the store answers before the gate is consulted.
+			if _, err := m.Submit(ApplyFixRequest{ID: "fresh", Tenant: "acme", Namespace: "acme", Requester: "alice", Delta: ApplyFixDelta{NormSparsity: fptr(1.5)}}); err == nil || errors.Is(err, ErrApplyFixConflict) {
+				t.Errorf("new request must be refused by the current gate, got %v", err)
+			}
+			if _, err := m.Submit(ApplyFixRequest{ID: "r1", Tenant: "acme", Namespace: "acme", Requester: "alice", Delta: ApplyFixDelta{NormSparsity: fptr(1.6)}, Reason: "tune"}); !errors.Is(err, ErrApplyFixConflict) {
+				t.Errorf("different content under a stored id must conflict regardless of the gate, got %v", err)
+			}
+			if atomic.LoadInt32(&calls) != map[bool]int32{false: 0, true: 1}[terminal] {
+				t.Errorf("applier calls=%d", calls)
+			}
+		})
+	}
+}
+
+// R1.2 — the Gate callback judges its OWN copy of the candidate. A gate that mutates the maps it is
+// handed (at submit, at approval, or in preview) changes neither the retained snapshot, nor the
+// fingerprint the stale-base check relies on, nor the candidate the applier receives, nor BasePol's map.
+func TestApplyFixLifecycle_GateCannotMutateCandidateOrApplierInput(t *testing.T) {
+	baseMap := map[string]string{"crown": "original"}
+	base := func(s string) model.Policy {
+		p := safeBase(s)
+		p.DecisionAssets = baseMap
+		return p
+	}
+	var received model.Policy
+	m := NewApplyFixManager(base, func(_, _ string, p model.Policy) error { received = clonePolicyData(p); return nil }, nil)
+	var gateCalls int32
+	m.Gate = func(p model.Policy) error {
+		n := atomic.AddInt32(&gateCalls, 1)
+		p.DecisionAssets["crown"] = fmt.Sprintf("unapproved-%d", n) // every gate call tries to smuggle a value
+		p.DecisionAssets["extra"] = "x"
+		return nil
+	}
+	if pass, _ := m.GatePreview("acme", ApplyFixDelta{NormSparsity: fptr(1.5)}); !pass || baseMap["crown"] != "original" || len(baseMap) != 1 {
+		t.Fatalf("preview must not let the gate reach BasePol's map: pass=%v map=%v", pass, baseMap)
+	}
+	sub := mustSubmit(t, m, "immutable", "acme", "alice", ApplyFixDelta{NormSparsity: fptr(1.5)})
+	m.mu.Lock()
+	rec := m.records[applyKey{"acme", "immutable"}]
+	stored, fp := rec.candidate.DecisionAssets["crown"], rec.fingerprint
+	m.mu.Unlock()
+	if stored != "original" || fp != policyFingerprint(clonePolicyData(ApplyFixDelta{NormSparsity: fptr(1.5)}.applyTo(base("acme")))) {
+		t.Fatalf("submit-time gate mutation reached the retained snapshot: crown=%q", stored)
+	}
+	res, err := m.Approve("acme", "immutable", sub.Generation, "bob")
+	if err != nil || res.State != ApplyFixApplied {
+		t.Fatalf("approve: %v / %+v", err, res)
+	}
+	if received.DecisionAssets["crown"] != "original" || len(received.DecisionAssets) != 1 {
+		t.Errorf("approval-time gate mutation reached the applier input: %v", received.DecisionAssets)
+	}
+	m.mu.Lock()
+	after := rec.candidate.DecisionAssets["crown"]
+	m.mu.Unlock()
+	if after != "original" || baseMap["crown"] != "original" {
+		t.Errorf("retained snapshot or BasePol map mutated: snapshot=%q base=%q", after, baseMap["crown"])
+	}
+	if atomic.LoadInt32(&gateCalls) != 3 {
+		t.Errorf("gate must have run for preview, submit and approval: %d", gateCalls)
+	}
+}
+
+// Related concurrency review — identical submits, differing submits and approvals of ONE key race
+// under the race detector. Invariants: exactly one record is created, by either content; every
+// answer about it carries that record's generation and a real lifecycle state; every submit that
+// did not create it is Existing (identical content) or a conflict (different content); the applier
+// runs at most once.
+func TestApplyFixLifecycle_ConcurrentSubmitConflictAndApproveOneKey(t *testing.T) {
+	var calls int32
+	audit := newAuditCounter()
+	m := NewApplyFixManager(safeBase, func(_, _ string, _ model.Policy) error { atomic.AddInt32(&calls, 1); return nil }, audit.hook)
+	m.Gate = func(model.Policy) error { return nil }
+	same := ApplyFixRequest{ID: "hot", Tenant: "acme", Namespace: "acme", Requester: "alice", Delta: ApplyFixDelta{NormSparsity: fptr(1.5)}, Reason: "tune"}
+	const n = 12
+	var wg sync.WaitGroup
+	var created, existing, identConflict, diffConflict, approved, otherApprove int32
+	var mu sync.Mutex
+	generations := map[string]int{}
+	states := map[ApplyFixState]int{}
+	for i := 0; i < n; i++ {
+		wg.Add(3)
+		go func() { // identical submit
+			defer wg.Done()
+			res, err := m.Submit(same)
+			switch {
+			case errors.Is(err, ErrApplyFixConflict):
+				atomic.AddInt32(&identConflict, 1)
+			case err != nil:
+				t.Errorf("identical submit: %v", err)
+			case res.Existing:
+				atomic.AddInt32(&existing, 1)
+				mu.Lock()
+				generations[res.Generation]++
+				states[res.State]++
+				mu.Unlock()
+			default:
+				atomic.AddInt32(&created, 1)
+				mu.Lock()
+				generations[res.Generation]++
+				mu.Unlock()
+			}
+		}()
+		go func(i int) { // differing submit under the same key
+			defer wg.Done()
+			d := same
+			d.Delta = ApplyFixDelta{NormSparsity: fptr(2 + float64(i)*0.1)}
+			res, err := m.Submit(d)
+			switch {
+			case errors.Is(err, ErrApplyFixConflict):
+				atomic.AddInt32(&diffConflict, 1)
+			case err != nil:
+				t.Errorf("differing submit: unexpected %v", err)
+			case res.Existing:
+				t.Errorf("a differing submit can never be Existing: %+v", res)
+			default:
+				atomic.AddInt32(&created, 1)
+			}
+		}(i)
+		go func(i int) { // approval of whatever generation the listing shows
+			defer wg.Done()
+			for _, p := range m.Pending("acme") {
+				res, err := m.Approve("acme", "hot", p.Generation, "approver-"+string(rune('a'+i)))
+				switch {
+				case err == nil && res.State == ApplyFixApplied && !res.Retry:
+					atomic.AddInt32(&approved, 1)
+				case errors.Is(err, ErrApplyFixInProgress), errors.Is(err, ErrApplyFixTerminal), errors.Is(err, ErrApplyFixGeneration):
+					atomic.AddInt32(&otherApprove, 1)
+				default:
+					t.Errorf("approve: unexpected %v / %+v", err, res)
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("created=%d existing=%d identConflict=%d diffConflict=%d approved=%d otherApprove=%d applier=%d", created, existing, identConflict, diffConflict, approved, otherApprove, calls)
+	if created != 1 || audit.n("apply-fix.submitted") != 1 {
+		t.Errorf("created=%d submitted-audit=%d; want exactly one record", created, audit.n("apply-fix.submitted"))
+	}
+	identicalWon := identConflict == 0 && existing == n-1 && diffConflict == n
+	differingWon := identConflict == n && existing == 0 && diffConflict == n-1
+	if !identicalWon && !differingWon {
+		t.Errorf("submit outcomes are not one consistent winner: existing=%d identConflict=%d diffConflict=%d", existing, identConflict, diffConflict)
+	}
+	if len(generations) > 1 {
+		t.Errorf("answers about one record reported %d generations: %v", len(generations), generations)
+	}
+	for st := range states {
+		if st != ApplyFixPending && st != ApplyFixApplying && st != ApplyFixApplied {
+			t.Errorf("impossible state reported to a submitter: %q", st)
+		}
+	}
+	if atomic.LoadInt32(&calls) > 1 || approved > 1 || audit.n("apply-fix.applied") > 1 {
+		t.Errorf("applier calls=%d approved=%d applied-audit=%d; want at most 1", calls, approved, audit.n("apply-fix.applied"))
 	}
 }

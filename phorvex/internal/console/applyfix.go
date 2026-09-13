@@ -378,42 +378,46 @@ func (m *ApplyFixManager) GatePreview(tenant string, delta ApplyFixDelta) (bool,
 	if err := delta.validate(); err != nil {
 		return false, "allowlist: " + err.Error()
 	}
-	if err := m.Gate(delta.applyTo(m.BasePol(tenant))); err != nil {
+	if err := m.Gate(clonePolicyData(delta.applyTo(m.BasePol(tenant)))); err != nil { // the gate never sees BasePol's own maps
 		return false, err.Error()
 	}
 	return true, "passes the safety gate (efficacy 1.62×, proactivity P3, no-harm)"
 }
 
-// Submit validates the allowlist + bounds, runs the server-side gate-check, and stores an IMMUTABLE
-// record keyed by tenant + id under a fresh generation, PENDING a distinct approver. A delta that
-// fails the allowlist or the gate is REJECTED here. A repeat of an identical submission returns the
-// existing record; a same-id submission with different content is a conflict (nothing is overwritten,
-// and a terminal record is never recycled).
+// Submit stores an IMMUTABLE record keyed by tenant + id under a fresh generation, PENDING a distinct
+// approver. The stored request is consulted FIRST: a repeat of an identical submission returns the
+// existing record's generation and current state, whatever today's gate would say — that request was
+// accepted once and may already have applied, so re-judging it would rewrite an accepted outcome. A
+// same-id submission with different content is a conflict (nothing is overwritten, and a terminal
+// record is never recycled). Only a NEW record is validated against the allowlist and the current
+// safety gate; that happens outside the lock and the store is re-checked atomically afterwards so two
+// competing new submits still converge on one record.
 func (m *ApplyFixManager) Submit(req ApplyFixRequest) (SubmitResult, error) {
 	if req.Tenant == "" || req.Requester == "" || req.ID == "" {
 		return SubmitResult{}, fmt.Errorf("apply-fix: missing verified identity / id")
 	}
 	req.Delta = req.Delta.clone() // detach from the caller's pointers before anything reads them twice
+	key := applyKey{req.Tenant, req.ID}
+	if res, found, err := m.resolveExisting(key, req); found {
+		return res, err
+	}
 	if err := req.Delta.validate(); err != nil {
 		m.emit("apply-fix.rejected.allowlist", req, map[string]any{"error": err.Error()})
 		return SubmitResult{}, fmt.Errorf("apply-fix allowlist: %w", err)
 	}
 	candidate := clonePolicyData(req.Delta.applyTo(m.BasePol(req.Tenant)))
-	if err := m.Gate(candidate); err != nil {
+	// The gate judges its OWN copy: the stored snapshot is what the delta derived, untouched by anything
+	// the callback does to the maps it was handed.
+	if err := m.Gate(clonePolicyData(candidate)); err != nil {
 		m.emit("apply-fix.rejected.gate", req, map[string]any{"error": err.Error()})
 		return SubmitResult{}, fmt.Errorf("apply-fix REJECTED by safety gate: %w", err)
 	}
-	key := applyKey{req.Tenant, req.ID}
 	m.mu.Lock()
 	if existing := m.records[key]; existing != nil {
-		res := SubmitResult{ID: req.ID, Tenant: req.Tenant, Generation: existing.generation, State: existing.state, Existing: true}
-		same := existing.req.sameContent(req)
+		// A competing submit for this key landed while the gate ran: resolve against it, never overwrite.
 		m.mu.Unlock()
-		if same {
-			return res, nil
-		}
-		m.emit("apply-fix.rejected.conflict", req, map[string]any{"existingGeneration": existing.generation, "existingState": string(existing.state)})
-		return SubmitResult{}, fmt.Errorf("%w: id %q (generation %s, %s)", ErrApplyFixConflict, req.ID, existing.generation, existing.state)
+		res, _, err := m.resolveExisting(key, req)
+		return res, err
 	}
 	limit := m.MaxRecords
 	if limit <= 0 {
@@ -431,6 +435,26 @@ func (m *ApplyFixManager) Submit(req ApplyFixRequest) (SubmitResult, error) {
 	m.mu.Unlock()
 	m.emit("apply-fix.submitted", req, map[string]any{"generation": rec.generation})
 	return SubmitResult{ID: req.ID, Tenant: req.Tenant, Generation: rec.generation, State: ApplyFixPending}, nil
+}
+
+// resolveExisting answers a submit against the record already stored under key, if any. Every field
+// it reports is copied under the lock, so a concurrent claim or terminal transition cannot be observed
+// half-way; the conflict audit fires after the lock is released.
+func (m *ApplyFixManager) resolveExisting(key applyKey, req ApplyFixRequest) (SubmitResult, bool, error) {
+	m.mu.Lock()
+	existing := m.records[key]
+	if existing == nil {
+		m.mu.Unlock()
+		return SubmitResult{}, false, nil
+	}
+	res := SubmitResult{ID: req.ID, Tenant: req.Tenant, Generation: existing.generation, State: existing.state, Existing: true}
+	same := existing.req.sameContent(req)
+	m.mu.Unlock()
+	if same {
+		return res, true, nil
+	}
+	m.emit("apply-fix.rejected.conflict", req, map[string]any{"existingGeneration": res.Generation, "existingState": string(res.State)})
+	return SubmitResult{}, true, fmt.Errorf("%w: id %q (generation %s, %s)", ErrApplyFixConflict, req.ID, res.Generation, res.State)
 }
 
 // Approve is ONE apply attempt for the exact tenant/id/generation, by a DISTINCT verified approver
@@ -486,7 +510,11 @@ func (m *ApplyFixManager) Approve(tenant, requestID, generation, approver string
 	}
 	// The claim: exactly one approver moves pending -> applying. Everything below runs unlocked.
 	rec.state, rec.approver = ApplyFixApplying, approver
-	req, candidate, fingerprint := rec.req, clonePolicyData(rec.candidate), rec.fingerprint
+	req, fingerprint := rec.req, rec.fingerprint
+	// Two independent copies of the immutable snapshot: the gate judges one, the applier receives the
+	// other. Neither callback can reach the retained record, and nothing the gate does to its copy can
+	// change what is applied.
+	gateCandidate, applyCandidate := clonePolicyData(rec.candidate), clonePolicyData(rec.candidate)
 	m.mu.Unlock()
 	res.Approver, res.State = approver, ApplyFixApplying
 	m.emit("apply-fix.applying", req, map[string]any{"approver": approver, "generation": rec.generation})
@@ -497,10 +525,10 @@ func (m *ApplyFixManager) Approve(tenant, requestID, generation, approver string
 		return m.finish(rec, res, ApplyFixStale, "base policy changed since submit", "apply-fix.rejected.stale")
 	}
 	// Re-check the gate on the EXACT immutable candidate, immediately before the write.
-	if err := m.Gate(candidate); err != nil {
+	if err := m.Gate(gateCandidate); err != nil {
 		return m.finish(rec, res, ApplyFixRejected, err.Error(), "apply-fix.rejected.gate")
 	}
-	if err := m.invokeApply(req.Tenant, req.Namespace, candidate); err != nil {
+	if err := m.invokeApply(req.Tenant, req.Namespace, applyCandidate); err != nil {
 		return m.finish(rec, res, ApplyFixFailed, err.Error(), "apply-fix.apply.error")
 	}
 	return m.finish(rec, res, ApplyFixApplied, "", "apply-fix.applied")
