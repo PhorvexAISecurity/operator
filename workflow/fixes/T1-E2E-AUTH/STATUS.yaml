@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 59
+revision: 61
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -90,9 +90,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: f756666187ac741f661fe0523c9995815a3d08272de93cefe39838539d750589
+    sha256: a24995a821ea11a7521a5527954e5825c9c2945821a0b48da30f9db8d5463b33
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T18:13:55+00:00'
+    at: '2026-09-13T18:21:57+00:00'
     incident_sha256: 319d1d06acad63dde5ce10a1937c71fdcb3f59b97ecd2162b5ced1df141e1e5d
   base_review:
     result: PASS
@@ -108,7 +108,7 @@ checks:
     artifact: evidence/incident.md
     sha256: 319d1d06acad63dde5ce10a1937c71fdcb3f59b97ecd2162b5ced1df141e1e5d
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T18:13:55+00:00'
+    at: '2026-09-13T18:21:57+00:00'
     baseline_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
   patch_equivalence:
     result: PASS
@@ -122,7 +122,7 @@ issues:
 - M-136
 title: Authenticate E2E console calls after the Tier 1 identity boundary rollout
 profile: standard
-state: OFFLINE_VERIFIED
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -183,10 +183,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T18:18:44+00:00'
+  owner: coordinator
+  action: Publish reviewed CI correction at source418ea35 and monitor PR187; DevOps
+    provisioning and L3 remain pending.
+updated_at: '2026-09-13T18:22:00+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -364,6 +364,30 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T18:21:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T18:21:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T18:22:00+00:00'
+  by: codex-lead
+  artifact: PR_BODY.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: preflight
@@ -882,10 +906,26 @@ check_history:
   at: '2026-09-13T17:23:36+00:00'
   rationale: 'Same probe as the red check at head: HEAD_FIXED; the repaired TLS fixture
     passes 301 tests under Python 3.11 and 3.14 (evidence/r4).'
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 319d1d06acad63dde5ce10a1937c71fdcb3f59b97ecd2162b5ced1df141e1e5d
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T18:13:55+00:00'
+  baseline_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: f756666187ac741f661fe0523c9995815a3d08272de93cefe39838539d750589
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T18:13:55+00:00'
+  incident_sha256: 319d1d06acad63dde5ce10a1937c71fdcb3f59b97ecd2162b5ced1df141e1e5d
 handoff:
-  id: T1-E2E-AUTH:59:submit
-  from: claude-tier1-e2e-auth
+  id: T1-E2E-AUTH:60:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 59
+  role: coordinator
+  kind: review
+  revision: 60
