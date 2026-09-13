@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 14
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -18,12 +18,77 @@ checks:
     approval_ref: AUTHORIZATION.md
     rationale: Existing campaign authorizes Tier 1 caller repair; preserve actual
       verifier and separate DevOps provisioning. Evidence retained in evidence/baseline.
+  red:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: evidence/red/incident-probe-base.log
+    sha256: 95878986642672d76b9b57469f351e80cb7a1e540ffec52d2c5f22ed3ed1669c
+    source_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
+    at: '2026-09-13T15:27:06+00:00'
+    rationale: 'Baseline executed against the base pipeline with real Transport/curl
+      and a verifying loopback console: VERDICT BASE_REPRODUCED (health reached, no
+      credential carried although configured, 401 parsed as a document, preflight
+      looped to its deadline). Positive control: the identical probe at head reports
+      HEAD_FIXED (evidence/red/incident-probe-head.log).'
+  positive_control:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: evidence/red/incident-probe-head.log
+    sha256: e320db3672117409b942fda6c7dd7be4b1a54ea84352ce897ce8cbb52f2c8d9d
+    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+    at: '2026-09-13T15:32:22+00:00'
+  implementation:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: 04-diff.patch
+    sha256: 6734193191a5783936d1bc224626bc9f9941a53eedb1b1a8a1ac8a53b4fe07b6
+    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+    at: '2026-09-13T15:32:22+00:00'
+  l0:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: evidence/head/l0-build-vet.log
+    sha256: 55efd557577122a15aba73ae8a424b042b8cb55f617c21d283c2f625efe6d3eb
+    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+    at: '2026-09-13T15:32:22+00:00'
+    inputs:
+    - End-to-End
+    - phorvex
+    inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+  l1:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: evidence/head/python-pipeline-suite.log
+    sha256: 96550cb514802ac6641bc8388e23d226a7feb85162dcc6f168a59bbeb7968aca
+    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+    at: '2026-09-13T15:32:22+00:00'
+    inputs:
+    - End-to-End
+    inputs_sha256: a9347339d1c068da96eec60c84084a614171ca243eb9ab08eb5525545ce2e1bd
+  l2:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: evidence/head/go-console-suite.log
+    sha256: 4662c846212d91afc74a672adddfcad2b66f89bcc4784c03bd54fdc5235c4086
+    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+    at: '2026-09-13T15:32:22+00:00'
+    inputs:
+    - End-to-End
+    - phorvex
+    inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+  preflight:
+    result: PASS
+    by: claude-tier1-e2e-auth
+    artifact: evidence/preflight/receipt.json
+    sha256: 01ebe795baea4591bc737cfc6854aeb147b9064c650f9225ac896144a62352ba
+    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+    at: '2026-09-13T15:32:22+00:00'
 fix_id: T1-E2E-AUTH
 issues:
 - M-136
 title: Authenticate E2E console calls after the Tier 1 identity boundary rollout
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -47,7 +112,7 @@ blind_derivation:
 implementation:
   branch: fix/tier1-e2e-console-auth
   base_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
-  head_sha: null
+  head_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
   stacked_on: []
 pull_request:
   url: null
@@ -69,12 +134,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -84,10 +149,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: claude-tier1-e2e-auth
-  action: Implement signed decision; produce real transport regressions and submit
-    for independent lead review
-updated_at: '2026-09-13T14:51:32+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T15:32:24+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -104,6 +169,16 @@ configuration_history:
   fields:
   - approvals
   approval_ref: operations/AUTONOMY.md
+- at: '2026-09-13T15:20:05+00:00'
+  by: claude-tier1-e2e-auth
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T15:32:22+00:00'
+  by: claude-tier1-e2e-auth
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -121,3 +196,83 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T15:32:22+00:00'
+  by: claude-tier1-e2e-auth
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T15:32:23+00:00'
+  by: claude-tier1-e2e-auth
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: preflight
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/preflight/receipt.json
+  sha256: 01ebe795baea4591bc737cfc6854aeb147b9064c650f9225ac896144a62352ba
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:31:59+00:00'
+- check: implementation
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: 04-diff.patch
+  sha256: 6734193191a5783936d1bc224626bc9f9941a53eedb1b1a8a1ac8a53b4fe07b6
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:27:15+00:00'
+- check: l0
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/l0-build-vet.log
+  sha256: 55efd557577122a15aba73ae8a424b042b8cb55f617c21d283c2f625efe6d3eb
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:27:15+00:00'
+  inputs:
+  - End-to-End
+  - phorvex
+  inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+- check: l1
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/python-pipeline-suite.log
+  sha256: 96550cb514802ac6641bc8388e23d226a7feb85162dcc6f168a59bbeb7968aca
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:27:22+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: a9347339d1c068da96eec60c84084a614171ca243eb9ab08eb5525545ce2e1bd
+- check: l2
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/go-console-suite.log
+  sha256: 4662c846212d91afc74a672adddfcad2b66f89bcc4784c03bd54fdc5235c4086
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:27:22+00:00'
+  inputs:
+  - End-to-End
+  - phorvex
+  inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+- check: positive_control
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/red/incident-probe-head.log
+  sha256: e320db3672117409b942fda6c7dd7be4b1a54ea84352ce897ce8cbb52f2c8d9d
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:27:15+00:00'
+  rationale: 'Same probe as the red check at head: health control succeeds, credential
+    carried, preflight passes, authenticated stream fires once with only the granted
+    tenant''s record: VERDICT HEAD_FIXED.'
+handoff:
+  id: T1-E2E-AUTH:14:submit
+  from: claude-tier1-e2e-auth
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 14
