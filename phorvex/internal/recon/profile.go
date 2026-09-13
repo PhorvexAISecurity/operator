@@ -71,14 +71,14 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// pod, i.e. it could be selected INSTEAD of a rotate that really would have. Only actions that truly
 	// invalidate the fact may claim it.
 	addRotate(FactInMemory, base*urg)
-	// Session/KV-cache fact matters most for GPU/LLM + stateful agents.
+	// Session/KV-cache fact is always modeled; GPU/stateful only affects exposure weight.
 	sessionW := base * urg * 0.6
 	if fctx.HasGPU || fctx.Stateful {
 		sessionW = base * urg
 	}
 	// FALSIFIABILITY-GATE CROSSING (deliberate, opt-in): the KV-cache/session fact is
-	// invalidated by ROTATE and — on an inference workload with a REACHABLE serving
-	// control plane — also by KV-RESET (the in-process prefix/KV flush genuinely evicts
+	// invalidated by ROTATE and — when ingestion produced the structural Ready serving
+	// endpoint prerequisite — also by KV-RESET (the in-process prefix/KV flush evicts
 	// injected session/cache state WITHOUT killing the pod). The gate held these AI
 	// reset actions audit-only "until those actions ship + are validated"; kv-reset is
 	// now validated end-to-end on the real vLLM-shaped control plane, so we let the
@@ -86,7 +86,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	sessFact := Fact{Scope: ScopePod, Asset: asset, Kind: FactSession, Weight: sessionW}
 	facts = append(facts, sessFact)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], sessFact.Key())
-	if fctx.HasGPU || fctx.Stateful {
+	if view.Pod.ServingEndpointReady {
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
 	}
 
