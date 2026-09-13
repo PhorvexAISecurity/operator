@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,95 @@ checks:
     at: '2026-09-13T18:21:00+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  implementation:
+    result: PASS
+    by: claude-v3-m087
+    artifact: 04-diff.patch
+    sha256: 06cd4302b1af1284263e9b761b5d719d95531ba5f20dfcf21a6f69cdd74c8c04
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:41:41+00:00'
+  red:
+    result: PASS
+    by: claude-v3-m087
+    artifact: evidence/red/baseline-red-d296799.log
+    sha256: 2d3b754e23e1659b94e83dace0286aee9db58c66ac504f42fcbe29128688017a
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T18:33:53+00:00'
+    rationale: 'Executed baseline: the permanent test file m087_rollback_boundary_test.go
+      run unchanged with the base d296799 native.go injected by go test -overlay (evidence/red/overlay.json;
+      base file retained byte-identical as evidence/red/native.go.base-d296799). The
+      four refused-at-head boundary cases, both handler-lookup cases and the serving-call
+      case FAIL at base with ''got err=<nil>; effects: reads=2 writes=1; target labels=map[app:orig]
+      snapshot-present=false'' — the dry-run / cross-tenant / strict-unbound rollback
+      actually wrote the Pod. The legacy-unbound, same-tenant restore and quarantine
+      direct dry-run controls PASS at both sources, so the probe discriminates. Same
+      file at head: 12/12 PASS (evidence/red/head-green.log). Lead''s retained seed
+      run unmodified: reproduces at base (baseline-seed-reproduces-d296799.log), ''no
+      longer reproduces'' at head (head-seed-no-longer-reproduces.log). verify.sh
+      --offline re-derives both ends from a git archive of the base with named verdicts
+      (evidence/verify-sh-offline.log).'
+  l0:
+    result: PASS
+    by: claude-v3-m087
+    artifact: evidence/l0-build.log
+    sha256: d296ba8c40bc0c675c29b2a8dc8081688c9baf99f43b41b4fb3f10495419bc9e
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:41:41+00:00'
+    inputs:
+    - build/metricvalidity
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
+  l1:
+    result: PASS
+    by: claude-v3-m087
+    artifact: evidence/l1-phorvex-module-suite.log
+    sha256: 79a9f7111e32142c085f07f13239776a0bd6eb0f657d9f0c7485311d37e07894
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:41:41+00:00'
+    inputs:
+    - build/metricvalidity
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
+  l2:
+    result: PASS
+    by: claude-v3-m087
+    artifact: evidence/verify-sh-offline.log
+    sha256: d5f67e92ba7aa90e26896d2964f6ec1ddc8cda45ba4c9efec6432c13b55e1afc
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:41:41+00:00'
+    inputs:
+    - build/metricvalidity
+    - build/phoenix-extended
+    - phorvex
+    - workflow/fixes/T2-M087/verify.sh
+    inputs_sha256: 8c83b1a727d06809e230be1ed15ae211ccb232f06e539112fc0dbda964eae25d
+  positive_control:
+    result: PASS
+    by: claude-v3-m087
+    artifact: evidence/red/head-green.log
+    sha256: a4155641287b9c42671302ee9c7dbfbedce48b6b418bcd0b33cd173d2b8f2b4e
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:41:41+00:00'
+    inputs:
+    - build/metricvalidity
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
+  preflight:
+    result: PASS
+    by: claude-v3-m087
+    artifact: evidence/preflight/receipt.json
+    sha256: 92a34fa0dad87289088f40e1e0d9a554650ee42475e44531c7073004bfe14b06
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:41:40+00:00'
 fix_id: T2-M087
 issues:
 - M-87
 title: Enforce dry-run and tenant bounds before native rollback
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +128,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m087-rollback-boundary
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +150,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +165,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement the signed lead plan; no additional proposal round.
-updated_at: '2026-09-13T18:21:00+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T18:41:43+00:00'
 configuration_history:
 - at: '2026-09-13T18:20:59+00:00'
   by: codex-lead
@@ -97,6 +181,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-13T18:29:14+00:00'
+  by: claude-v3-m087
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T18:41:40+00:00'
+  by: claude-v3-m087
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -114,3 +208,90 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T18:41:41+00:00'
+  by: claude-v3-m087
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T18:41:42+00:00'
+  by: claude-v3-m087
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: preflight
+  result: PASS
+  by: claude-v3-m087
+  artifact: evidence/preflight/receipt.json
+  sha256: 92a34fa0dad87289088f40e1e0d9a554650ee42475e44531c7073004bfe14b06
+  source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  at: '2026-09-13T18:41:40+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m087
+  artifact: 04-diff.patch
+  sha256: 06cd4302b1af1284263e9b761b5d719d95531ba5f20dfcf21a6f69cdd74c8c04
+  source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  at: '2026-09-13T18:33:53+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m087
+  artifact: evidence/l0-build.log
+  sha256: d296ba8c40bc0c675c29b2a8dc8081688c9baf99f43b41b4fb3f10495419bc9e
+  source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  at: '2026-09-13T18:34:12+00:00'
+  inputs:
+  - build/metricvalidity
+  - build/phoenix-extended
+  - phorvex
+  inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
+- check: l1
+  result: PASS
+  by: claude-v3-m087
+  artifact: evidence/l1-phorvex-module-suite.log
+  sha256: 79a9f7111e32142c085f07f13239776a0bd6eb0f657d9f0c7485311d37e07894
+  source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  at: '2026-09-13T18:34:12+00:00'
+  inputs:
+  - build/metricvalidity
+  - build/phoenix-extended
+  - phorvex
+  inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
+- check: l2
+  result: PASS
+  by: claude-v3-m087
+  artifact: evidence/verify-sh-offline.log
+  sha256: d5f67e92ba7aa90e26896d2964f6ec1ddc8cda45ba4c9efec6432c13b55e1afc
+  source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  at: '2026-09-13T18:34:12+00:00'
+  inputs:
+  - build/metricvalidity
+  - build/phoenix-extended
+  - phorvex
+  - workflow/fixes/T2-M087/verify.sh
+  inputs_sha256: 8c83b1a727d06809e230be1ed15ae211ccb232f06e539112fc0dbda964eae25d
+- check: positive_control
+  result: PASS
+  by: claude-v3-m087
+  artifact: evidence/red/head-green.log
+  sha256: a4155641287b9c42671302ee9c7dbfbedce48b6b418bcd0b33cd173d2b8f2b4e
+  source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  at: '2026-09-13T18:34:13+00:00'
+  inputs:
+  - build/metricvalidity
+  - build/phoenix-extended
+  - phorvex
+  inputs_sha256: 98c8994089c66ce0dce8422b1a2d71aab330ada8310484cc0f06c2673b6490e8
+handoff:
+  id: T2-M087:13:submit
+  from: claude-v3-m087
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 13

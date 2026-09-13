@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-87
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m087-rollback-boundary
-    head_sha: null
+    head_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
