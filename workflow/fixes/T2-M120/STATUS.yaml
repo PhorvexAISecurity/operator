@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 67
+revision: 76
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,18 +11,21 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 305bc488b90328c42238aa812a9ea4a10515f656b2a26255af822b900c766a8f
+    sha256: 48aed55776707ca34f378b0329202da94728462c567bd4da217086bf3448f5cc
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T21:54:41+00:00'
+    at: '2026-09-13T23:00:13+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
-    approval_ref: workflow/fixes/T2-M120/AUTHORIZATION.md
+    approval_ref: workflow/operations/AUTONOMY.md
+    rationale: Existing user delegation permits lead in-scope design amendments for
+      reviewed PR delivery; this fixes observed CI producer-read failure and changes
+      no pins or live scope.
   implementation:
     result: PASS
     by: sol-m120
     artifact: 04-diff.patch
-    sha256: 76fa035ebb964d0d45153301c48dbaf26bc55322f08f2954b46c0522b697c6d8
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:29:34+00:00'
+    sha256: 16bd34aab7054413c11706d5c0a1067b5c9ee487d2ec10fffdad87b0a04dee78
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:24:56+00:00'
   red:
     result: PASS
     by: sol-m120
@@ -33,86 +36,84 @@ checks:
   l0:
     result: PASS
     by: sol-m120
-    artifact: evidence/sol-r6/m013-race.log
-    sha256: c48dbee9800f95f832582f187b55e25d2012f3555ec110571f36f7fa614b0569
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:29:34+00:00'
+    artifact: evidence/sol-r7/affected-tools-r2.log
+    sha256: c9af8f0d27d949f09ff1c841aefaf83d32211530f0b4a3c65cfd5ae44182a247
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:24:56+00:00'
     inputs:
-    - phorvex/go.mod
-    - phorvex/go.sum
-    - phorvex/internal/runner/m013_apiserver_test.go
-    inputs_sha256: e4c5445536a6911adabfd75f1d5c0fc9680ddb72aeeda120158c114c9ab88feb
+    - tools/provision-envtest.sh
+    - tools/test_envtest_gate.py
+    - tools/test_pr_validation.py
+    - tools/test_provision_envtest.py
+    inputs_sha256: 778f6503e39ce7283691ad0fda067e5b4ca3ff9f785e55b62c246c9722c1c93f
   l1:
     result: PASS
     by: sol-m120
-    artifact: evidence/sol-r6/head-full-gate.log
-    sha256: d07fbbc602f0fa4ff316cda5e6c7ad8a0a9b49288bdb1877cd87af2eac18bfba
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:29:34+00:00'
+    artifact: evidence/sol-r7/real-provision.stderr
+    sha256: e3d9f25848f12df501c2fa20ec60f1c634ea76bca8081b29304d03c1bd2bb4e0
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:24:56+00:00'
     inputs:
-    - phorvex
-    - tools/envtest_gate.py
-    inputs_sha256: 427c2aff560ee2ec9018679f30bf9adaf36e38d7825bc45a32cdacd0074ecb90
+    - tools/provision-envtest.sh
+    inputs_sha256: 66bc2db37c56ae20a38d2b9865c8ecf44710e51a98f951d9c02e4d218d01c3b1
   l2:
     result: PASS
     by: sol-m120
-    artifact: evidence/sol-r6/head-full-gate.log
-    sha256: d07fbbc602f0fa4ff316cda5e6c7ad8a0a9b49288bdb1877cd87af2eac18bfba
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:29:35+00:00'
+    artifact: evidence/sol-r7/affected-tools-r2.log
+    sha256: c9af8f0d27d949f09ff1c841aefaf83d32211530f0b4a3c65cfd5ae44182a247
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:24:56+00:00'
     inputs:
-    - phorvex/internal/runner/actuation_events.go
-    - phorvex/internal/runner/m013_apiserver_test.go
-    - tools/envtest_gate.py
-    inputs_sha256: 8af0fad4cd2823607190ab5d3a210e09fd77dbe412132fca2d3a1fe9d1d6dc6c
+    - tools/provision-envtest.sh
+    - tools/test_provision_envtest.py
+    inputs_sha256: ab089db06f17d27e0f61cb57c1e431e36ae077bbd2180fb73c0c113e8fd2f6d6
   positive_control:
     result: PASS
     by: sol-m120
-    artifact: evidence/sol-r6/composed-m69-gate.log
-    sha256: 5feb7fd37e5c1b2893105a402fe9d77bf906acd71547a2379eb18710d6543e00
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:29:35+00:00'
+    artifact: evidence/sol-r7/real-provision.result
+    sha256: bde294368bfed77c2cddf8cec271d398aee9cdbab3b26e1059281bd33adb0120
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:24:56+00:00'
     inputs:
-    - phorvex
-    - tools
-    inputs_sha256: 76e6902f0f1f38efefc0a74334dee18ff5b26a9e0a02564f32a98c9345c32f21
+    - tools/provision-envtest.sh
+    inputs_sha256: 66bc2db37c56ae20a38d2b9865c8ecf44710e51a98f951d9c02e4d218d01c3b1
   preflight:
     result: PASS
     by: sol-m120
-    artifact: evidence/preflight/receipt.json
-    sha256: f7ed042f0e36871c78057e592d213194c7094ebde9ddbb691d3c21c69ddf0bf2
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:34:04+00:00'
+    artifact: evidence/preflight-r10/receipt.json
+    sha256: 48db64ef1bb7a05dd90c972a0d3fcffe951498152ca7f1185861aa4e661cde64
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:24:55+00:00'
   p3:
     result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 798f63d520dc5b7d246b137a5390e1fa50f4b5007e8acd2ba904d8b912d8751b
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:35:28+00:00'
-    incident_sha256: 06eff43d2f833da9bc4b47385031e8344e1c596d4c45c07050d140fa829c6939
+    sha256: 002c89a3d3a5cf0c4d6286e6f36a4f7b181b4ccb43feb4f4f88def355baec50b
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:26:05+00:00'
+    incident_sha256: 76f8b9f06ace8d07469d07538e1a08b2bee5c5e39ce6ffaed8e4c27bf8a57bab
   incident:
     result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 06eff43d2f833da9bc4b47385031e8344e1c596d4c45c07050d140fa829c6939
-    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:35:27+00:00'
+    sha256: 76f8b9f06ace8d07469d07538e1a08b2bee5c5e39ce6ffaed8e4c27bf8a57bab
+    source_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+    at: '2026-09-13T23:26:04+00:00'
     baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
   patch_equivalence:
-    result: PASS
+    result: FAIL
     by: codex-lead
     artifact: evidence/patch-equivalence.json
     sha256: 680eb23051262f615ba372aa4ca053a19bfb00c97d2a1bac2505fd58a8bb12b3
     source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
-    at: '2026-09-13T22:35:42+00:00'
+    at: '2026-09-13T23:18:12+00:00'
 fix_id: T2-M120
 issues:
 - M-120
 title: Execute required local API-server tests and assert feasibility verdicts in
   CI
 profile: standard
-state: IN_PR
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +137,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m120-ci-execution
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  head_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/198
@@ -173,10 +174,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: human_owner
-  action: Review repaired PR198 and fresh CI; owner merges/deploys, root verifies
-    live controls
-updated_at: '2026-09-13T22:36:52+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T23:26:08+00:00'
 configuration_history:
 - at: '2026-09-13T18:54:06+00:00'
   by: codex-lead
@@ -253,6 +254,21 @@ configuration_history:
   by: codex-lead
   fields:
   - pull_request
+  approval_ref: null
+- at: '2026-09-13T23:12:27+00:00'
+  by: sol-m120
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:15:18+00:00'
+  by: sol-m120
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:24:55+00:00'
+  by: sol-m120
+  fields:
+  - implementation
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -400,13 +416,45 @@ transitions:
   note: null
   approval_ref: operations/AUTONOMY.md
   forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-13T23:18:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T23:24:57+00:00'
+  by: sol-m120
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T23:26:06+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T23:26:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M120:64:review
+  id: T2-M120:76:review
   from: codex-lead
   to: codex-lead
   role: coordinator
   kind: review
-  revision: 64
+  revision: 76
 check_history:
 - check: implementation
   result: PASS
@@ -844,3 +892,110 @@ check_history:
   sha256: 1773075c818b1242bd1d6ecb9cdbd943d61b2980ba38a5025a03f06c96702a1a
   source_sha: 81355f9705e9adaac226586852490c08ddc73015
   at: '2026-09-13T22:15:24+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 305bc488b90328c42238aa812a9ea4a10515f656b2a26255af822b900c766a8f
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T21:54:41+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: workflow/fixes/T2-M120/AUTHORIZATION.md
+- check: p3
+  result: PASS
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 798f63d520dc5b7d246b137a5390e1fa50f4b5007e8acd2ba904d8b912d8751b
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:35:28+00:00'
+  incident_sha256: 06eff43d2f833da9bc4b47385031e8344e1c596d4c45c07050d140fa829c6939
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 06eff43d2f833da9bc4b47385031e8344e1c596d4c45c07050d140fa829c6939
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:35:27+00:00'
+  baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/patch-equivalence.json
+  sha256: 680eb23051262f615ba372aa4ca053a19bfb00c97d2a1bac2505fd58a8bb12b3
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:35:42+00:00'
+- check: preflight
+  result: PASS
+  by: sol-m120
+  artifact: evidence/preflight/receipt.json
+  sha256: f7ed042f0e36871c78057e592d213194c7094ebde9ddbb691d3c21c69ddf0bf2
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:34:04+00:00'
+- check: implementation
+  result: PASS
+  by: sol-m120
+  artifact: 04-diff.patch
+  sha256: 76fa035ebb964d0d45153301c48dbaf26bc55322f08f2954b46c0522b697c6d8
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:29:34+00:00'
+- check: l0
+  result: PASS
+  by: sol-m120
+  artifact: evidence/sol-r6/m013-race.log
+  sha256: c48dbee9800f95f832582f187b55e25d2012f3555ec110571f36f7fa614b0569
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:29:34+00:00'
+  inputs:
+  - phorvex/go.mod
+  - phorvex/go.sum
+  - phorvex/internal/runner/m013_apiserver_test.go
+  inputs_sha256: e4c5445536a6911adabfd75f1d5c0fc9680ddb72aeeda120158c114c9ab88feb
+- check: l1
+  result: PASS
+  by: sol-m120
+  artifact: evidence/sol-r6/head-full-gate.log
+  sha256: d07fbbc602f0fa4ff316cda5e6c7ad8a0a9b49288bdb1877cd87af2eac18bfba
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:29:34+00:00'
+  inputs:
+  - phorvex
+  - tools/envtest_gate.py
+  inputs_sha256: 427c2aff560ee2ec9018679f30bf9adaf36e38d7825bc45a32cdacd0074ecb90
+- check: l2
+  result: PASS
+  by: sol-m120
+  artifact: evidence/sol-r6/head-full-gate.log
+  sha256: d07fbbc602f0fa4ff316cda5e6c7ad8a0a9b49288bdb1877cd87af2eac18bfba
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:29:35+00:00'
+  inputs:
+  - phorvex/internal/runner/actuation_events.go
+  - phorvex/internal/runner/m013_apiserver_test.go
+  - tools/envtest_gate.py
+  inputs_sha256: 8af0fad4cd2823607190ab5d3a210e09fd77dbe412132fca2d3a1fe9d1d6dc6c
+- check: positive_control
+  result: PASS
+  by: sol-m120
+  artifact: evidence/sol-r6/composed-m69-gate.log
+  sha256: 5feb7fd37e5c1b2893105a402fe9d77bf906acd71547a2379eb18710d6543e00
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T22:29:35+00:00'
+  inputs:
+  - phorvex
+  - tools
+  inputs_sha256: 76e6902f0f1f38efefc0a74334dee18ff5b26a9e0a02564f32a98c9345c32f21
+- check: incident
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 06eff43d2f833da9bc4b47385031e8344e1c596d4c45c07050d140fa829c6939
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T23:18:12+00:00'
+  baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 207531576d131d63ca500362be10804ae494991171cddf1145187db38d11abdb
+  source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+  at: '2026-09-13T23:00:29+00:00'

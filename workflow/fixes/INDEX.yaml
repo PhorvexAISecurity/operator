@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-120
     related_issues: []
-    state: IN_PR
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/v3-m120-ci-execution
-    head_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+    head_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
