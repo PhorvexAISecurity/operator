@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -44,7 +44,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m153-steering-trace
   base_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
-  head_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+  head_sha: 88966d8242923acebacdd4ac006b5935516eb249
   stacked_on:
   - T2-M042
   - T2-M016
@@ -87,7 +87,7 @@ residuals: []
 next_action:
   owner: implementer
   action: Implement signed producer-carried steering attribution
-updated_at: '2026-09-13T22:54:35+00:00'
+updated_at: '2026-09-13T23:06:08+00:00'
 configuration_history:
 - at: '2026-09-13T22:19:20+00:00'
   by: codex-lead
@@ -107,6 +107,11 @@ configuration_history:
   - implementation
   approval_ref: workflow/fixes/T2-M153/AUTHORIZATION.md
 - at: '2026-09-13T22:54:35+00:00'
+  by: sol-m153
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:06:08+00:00'
   by: sol-m153
   fields:
   - implementation

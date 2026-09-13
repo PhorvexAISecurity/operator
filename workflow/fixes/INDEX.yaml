@@ -353,7 +353,7 @@ fixes:
     - T2-M042
     - T2-M016
     branch: fix/v3-m153-steering-trace
-    head_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    head_sha: 88966d8242923acebacdd4ac006b5935516eb249
   T2-M042:
     directory: fixes/T2-M042
     aliases: []
