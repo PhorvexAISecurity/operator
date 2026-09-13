@@ -47,8 +47,10 @@ The August text said the engine "literally optimizes coverage-per-dollar". It do
     podIdentity exposure has reached the proactive floor **or** the kill-chain assessment has
     evidence; otherwise scaled down so a fresh, evidence-less decoy cannot displace a real
     asset.
-  - `lambdaRuntimeLegacy` is the per-tenant runtime dual (`cost.P1Cost.Dual`), updated from
-    move-count demand; `ECost` is the calibrated expected cost of the move.
+  - `lambdaRuntimeLegacy` is the per-tenant runtime dual (`cost.DualSolver`, seeded once
+    from the policy's `lambda` when the tenant bucket is created, then stepped from
+    demand vs. selected count vs. `MaxMovesPerTick`; `coverage.go:581`); `ECost` is the
+    calibrated expected cost of the move. It is not certified as an exact dual.
 - Constraint: one move per asset (partition) and at most `MaxMovesPerTick` picks per tick
   (`coverage.go:684`). A pick needs **strictly positive** gain (`strictPositiveGain`,
   `coverage.go:390`; `existential.go:204`) unless the M-99 existential path holds an
