@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,7 +89,7 @@ func TestRotatingWriterLargerBudgetRetainsMoreCompleteOrderedRecords(t *testing.
 					t.Fatal(err)
 				}
 			}
-			if _, err := fmt.Fprintf(w, "{\"sequence\":%03d}\n", i); err != nil {
+			if _, err := fmt.Fprintf(w, "{\"sequence\":%3d}\n", i); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -103,9 +104,15 @@ func TestRotatingWriterLargerBudgetRetainsMoreCompleteOrderedRecords(t *testing.
 	}
 	for name, lines := range map[string][]string{"small": small, "large": large} {
 		for i, line := range lines {
-			want := fmt.Sprintf("{\"sequence\":%03d}", 40-len(lines)+i)
+			want := fmt.Sprintf("{\"sequence\":%3d}", 40-len(lines)+i)
 			if line != want {
 				t.Fatalf("%s record %d=%q want %q", name, i, line, want)
+			}
+			var decoded struct {
+				Sequence int `json:"sequence"`
+			}
+			if err := json.Unmarshal([]byte(line), &decoded); err != nil || decoded.Sequence != 40-len(lines)+i {
+				t.Fatalf("%s record %d is not the expected valid JSON: decoded=%+v err=%v", name, i, decoded, err)
 			}
 		}
 	}
