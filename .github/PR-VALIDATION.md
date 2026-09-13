@@ -14,15 +14,18 @@ There is no paths filter or draft guard on these source checks:
   fixtures; `KUBEBUILDER_ASSETS` is deliberately blank, so the eight API-server tests
   skip here and no existing cluster is used.
 - `go-envtest`: local API-server proof. `tools/provision-envtest.sh` downloads the pinned
-  envtest v1.34.0 binaries (SHA256-verified, `kube-apiserver --version` checked) and
-  `tools/envtest_gate.py` runs exactly the eight `KUBEBUILDER_ASSETS`-guarded tests
-  (`internal/actuator`: M47 preconditions, M038 conditional detach, M048 lifecycle and
-  restricted role, M007 restricted requests, M032 coverage readback; `internal/runner`:
-  M005 two-manager handoff, M013 real event sink) with `go test -json`. Every one must
-  run and pass: a skip, failure, missing test, missing terminal event, malformed or
-  empty report, or non-zero `go test` exit fails the job even when the output looks
-  green; every observed parent/subtest must run and reach a terminal event. The verbatim
-  JSON stream and the full `go test` stderr are uploaded as the `envtest-evidence` artifact. envtest
+  envtest v1.34.0 binaries (SHA256-verified, `kube-apiserver --version` checked), Helm
+  v3.16.4 is installed for the actuator chart tests, and `tools/envtest_gate.py` runs the
+  complete `internal/actuator` and `internal/runner` suites with `go test -json` and no
+  `-run` filter, so every envtest-backed test in those packages executes whatever helper
+  performs its setup. Eight tests are required as a minimum (`internal/actuator`: M47
+  preconditions, M038 conditional detach, M048 lifecycle and restricted role, M007
+  restricted requests, M032 coverage readback; `internal/runner`: M005 two-manager handoff,
+  M013 real event sink). Every observed test/subtest must run and reach a passing terminal
+  event: a skip (including a prerequisite skip), failure, missing required test, missing
+  terminal event, package outside the selection, malformed or empty report, or non-zero
+  `go test` exit fails the job even when the output looks green. The verbatim JSON stream
+  and the full `go test` stderr are uploaded as the `envtest-evidence` artifact. envtest
   is a local kube-apiserver/etcd only — no kubelet, CNI, garbage collector, cloud API or
   AI serving backend — so this job proves API semantics, not deployed behaviour.
 - `frontend`: locked npm install, TypeScript checking, and the full static Next build.

@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""Run the required local API-server (envtest) tests and fail unless every one really ran and passed.
+"""Run the local API-server (envtest) test packages and fail unless everything really ran and passed.
 
 The plain `go -C phorvex test ./...` job deliberately runs with KUBEBUILDER_ASSETS
-blank, so the tests below `t.Skip` there and `go test` still exits 0. This gate is
-the CI proof that they were executed against local kube-apiserver/etcd binaries:
+blank, so envtest-backed tests `t.Skip` there and `go test` still exits 0. This gate
+is the CI proof that the two packages carrying those tests were executed in full
+against local kube-apiserver/etcd binaries:
 
-  * only these exact package/test names are accepted (a rename or removal fails);
-  * every expected test must emit a `run` event and terminate with `pass`;
-  * every observed selected parent or subtest is tracked to completion: a `run`
-    without a terminal event, a terminal event without a preceding `run`, or a
-    repeated `run`/terminal for the same test is a stream-integrity failure;
-  * any `skip`, `fail` or `build-fail` event, any unexpected package/test, any
+  * the COMPLETE test suites of the selected packages run, with no `-run` filter,
+    so a new envtest test (whatever helper performs its setup) runs automatically;
+  * the eight REQUIRED tests are a minimum: each must emit a `run` event and
+    terminate with `pass`; a rename or removal fails;
+  * every observed parent or subtest in those packages is tracked to completion:
+    a `run` without a terminal event, a terminal event without a preceding `run`,
+    or a repeated `run`/terminal for the same test is a stream-integrity failure;
+  * any `skip` (including a unit test skipping for a missing prerequisite such as
+    helm), `fail` or `build-fail` event, any package outside the selection, any
     malformed line and any non-zero `go test` exit fails the gate even when the
     output otherwise looks green;
-  * every expected package must itself terminate with `pass`;
+  * every selected package must itself terminate with `pass`;
   * an empty report is never accepted.
 
 `go test` is started directly (no shell pipe). Its stdout is streamed into the
@@ -39,7 +43,9 @@ import sys
 from pathlib import Path
 
 MODULE = 'phorvex'
-EXPECTED = {
+# Minimum required tests per selected package. The packages run in full; these names
+# must additionally be observed running and passing.
+REQUIRED = {
     'github.com/phorvex/phorvex/internal/actuator': (
         'TestM47APIServerPreconditions',
         'TestM038APIServerConditionalDetach',
@@ -53,37 +59,32 @@ EXPECTED = {
         'TestM013RealEventSink',
     ),
 }
+EXPECTED = REQUIRED  # retained name for earlier review probes
+# Import paths run in full; each must be a key of REQUIRED.
 PACKAGES = ('./internal/actuator', './internal/runner')
 TERMINAL = ('pass', 'fail', 'skip')
 REQUIRED_BINARIES = ('kube-apiserver', 'etcd')
 
 
-def run_pattern() -> str:
-    names = [t for tests in EXPECTED.values() for t in tests]
-    return '^(' + '|'.join(names) + ')$'
-
-
 def go_command(go: str, timeout: str) -> list[str]:
+    # No -run filter: the whole selected packages execute.
     return [go, '-C', MODULE, 'test', '-json', '-mod=readonly', '-count=1',
-            f'-timeout={timeout}', '-run', run_pattern(), *PACKAGES]
-
-
-def parent(test: str) -> str:
-    return test.split('/', 1)[0]
+            f'-timeout={timeout}', *PACKAGES]
 
 
 def evaluate(lines, returncode):
     """Return (problems, verdicts, packages) for a retained `go test -json` stream.
 
-    `verdicts` maps every expected test to its terminal action or 'missing';
-    `packages` maps every expected package to its terminal action or 'missing'.
-    An empty `problems` list is the only PASS.
+    `verdicts` maps every observed test in the selected packages (parents and
+    subtests, the REQUIRED eight always present) to its terminal action, or 'missing'
+    for a required test that never terminated; `packages` maps every selected package
+    to its terminal action or 'missing'. An empty `problems` list is the only PASS.
     """
     problems = []
-    verdicts = {t: 'missing' for tests in EXPECTED.values() for t in tests}
+    verdicts = {t: 'missing' for tests in REQUIRED.values() for t in tests}
     # Every observed selected parent/subtest: 'run' until its terminal action arrives.
     observed = {}
-    packages = {p: 'missing' for p in EXPECTED}
+    packages = {p: 'missing' for p in REQUIRED}
     events = 0
     for number, raw in enumerate(lines, 1):
         line = raw.rstrip('\n')
@@ -104,14 +105,11 @@ def evaluate(lines, returncode):
         if action == 'build-fail':
             problems.append(f'build failed for {package}')
             continue
-        if package not in EXPECTED:
+        if package not in REQUIRED:
             if action in TERMINAL or test:
                 problems.append(f'unexpected package {package!r} in report')
             continue
         if test:
-            if parent(test) not in EXPECTED[package]:
-                problems.append(f'unexpected test {package} {test}')
-                continue
             key = (package, test)
             if action == 'run':
                 if key in observed:
@@ -125,8 +123,7 @@ def evaluate(lines, returncode):
                 observed[key] = action
                 if action != 'pass':
                     problems.append(f'{package} {test}: {action}')
-                if test in EXPECTED[package]:
-                    verdicts[test] = action
+                verdicts[test] = action
         elif action in TERMINAL:
             packages[package] = action
             if action != 'pass':
@@ -136,10 +133,10 @@ def evaluate(lines, returncode):
     for (package, test), state in observed.items():
         if state == 'run':
             problems.append(f'{package} {test}: no terminal event')
-    for package, tests in EXPECTED.items():
+    for package, tests in REQUIRED.items():
         for test in tests:
             if (package, test) not in observed:
-                problems.append(f'{package} {test}: never ran')
+                problems.append(f'{package} {test}: required test never ran')
         if packages[package] == 'missing':
             problems.append(f'package {package}: no terminal event')
     if returncode != 0:
@@ -167,8 +164,14 @@ def write_summary(path: Path, summary: dict):
 
 
 def report(summary: dict, problems):
+    required = {t for tests in REQUIRED.values() for t in tests}
+    others = 0
     for test, verdict in sorted(summary['verdicts'].items()):
-        print(f'{verdict:>8}  {test}')
+        if test in required:
+            print(f'{verdict:>8}  {test}  (required)')
+        else:
+            others += 1
+    print(f'{others:>8}  other tests/subtests observed in the selected packages (verdicts in the summary file)')
     for package, verdict in sorted(summary['packages'].items()):
         print(f'{verdict:>8}  package {package}')
     if problems:
@@ -176,7 +179,9 @@ def report(summary: dict, problems):
         for problem in problems:
             print(f'  - {problem}', file=sys.stderr)
         return 1
-    print(f'envtest gate: PASS ({len(summary["verdicts"])} required tests ran and passed)')
+    observed = len(summary['verdicts'])
+    print(f'envtest gate: PASS ({observed} tests/subtests observed and passed in {len(REQUIRED)} packages, '
+          f'including the {len(required)} required)')
     return 0
 
 
@@ -186,7 +191,8 @@ def cmd_run(args) -> int:
     raw = Path(args.raw_output)
     raw.parent.mkdir(parents=True, exist_ok=True)
     summary = {
-        'expected': {p: list(t) for p, t in EXPECTED.items()},
+        'required': {p: list(t) for p, t in REQUIRED.items()},
+        'packages_run': list(PACKAGES),
         'assets': env.get('KUBEBUILDER_ASSETS', ''),
         'raw_output': str(raw),
         'scope': 'local isolated envtest API servers only; not a shared cluster and not live acceptance',
@@ -241,7 +247,7 @@ def cmd_check(args) -> int:
     with raw.open() as retained:
         problems, verdicts, packages = evaluate(retained, args.exit_code)
     summary = {
-        'expected': {p: list(t) for p, t in EXPECTED.items()},
+        'required': {p: list(t) for p, t in REQUIRED.items()},
         'raw_input': str(raw), 'exit': args.exit_code, 'problems': problems,
         'verdicts': verdicts, 'packages': packages, 'result': 'FAIL' if problems else 'PASS',
         'scope': 'verdict recomputed from a retained report; not a new execution',

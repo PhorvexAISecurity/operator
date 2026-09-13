@@ -105,14 +105,19 @@ jobs:
       - name: Prometheus integrator module unit tests (fake clients, no live webhook)
         run: go -C build/prometheus-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
 
-  # Local API-server proof. The eight tests named in tools/envtest_gate.py start
-  # real kube-apiserver/etcd processes (controller-runtime envtest) and exercise
-  # actuator preconditions, conditional detach, quarantine lifecycle/RBAC,
-  # restricted-role authorization, coverage readback, leader handoff and the
-  # real event sink against genuine API semantics: admission, RBAC, conflicts,
-  # owner references. They are NOT a cluster: envtest has no kubelet, CNI,
-  # garbage collector, cloud API or AI serving backend, and nothing here mitigates
-  # a physical attack. Everything else in go-unit is a unit test with mocks.
+  # Local API-server proof. tools/envtest_gate.py runs the COMPLETE test suites of
+  # phorvex/internal/actuator and phorvex/internal/runner (no -run filter) with
+  # local kube-apiserver/etcd binaries, so every envtest-backed test in those
+  # packages executes whatever helper performs its setup, and requires at least
+  # the eight named there: actuator preconditions, conditional detach, quarantine
+  # lifecycle/RBAC, restricted-role authorization, coverage readback, leader
+  # handoff and the real event sink, against genuine API semantics (admission,
+  # RBAC, conflicts, owner references). Every observed test/subtest must run and
+  # pass; any skip fails, so every prerequisite those packages need (envtest
+  # assets, helm for the chart tests) is provisioned here. They are NOT a cluster:
+  # envtest has no kubelet, CNI, garbage collector, cloud API or AI serving
+  # backend, and nothing here mitigates a physical attack. Everything else in
+  # go-unit is a unit test with mocks.
   go-envtest:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -138,6 +143,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      # The actuator package's chart tests render the real Helm chart and skip
+      # without helm; a skip fails the gate, so the same pinned Helm as go-unit.
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
       # envtest-v1.34.0 linux-amd64 from kubernetes-sigs/controller-tools, matching
       # k8s.io/api v0.34.0. The script pins URL and SHA256, verifies the digest
       # before extraction and proves `kube-apiserver --version` is v1.34.0.
@@ -148,7 +158,7 @@ jobs:
       # go test -json is started directly by the gate (no shell pipe, exit
       # preserved); the verbatim stream is retained and the verdict is computed
       # from it. Skipped, missing, failed, malformed or empty output fails.
-      - name: Required local API-server tests (all eight must run and pass)
+      - name: Local API-server test packages (full actuator+runner suites; eight required)
         run: python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl --summary envtest-evidence/summary.json --timeout 10m
       - name: Retain raw envtest JSON evidence
         if: always()

@@ -59,6 +59,11 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"', runs)
         self.assertIn('python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl '
                       '--summary envtest-evidence/summary.json --timeout 10m', runs)
+        # The full actuator suite renders the Helm chart; without helm those tests skip and
+        # the gate fails, so the job pins the same Helm as go-unit.
+        self.assertTrue(any(s.get('uses') == 'azure/setup-helm@v4'
+                            and s.get('with', {}).get('version') == 'v3.16.4'
+                            for s in job['steps']))
         uploads = [s for s in job['steps'] if s.get('uses', '').startswith('actions/upload-artifact@')]
         self.assertEqual(len(uploads), 1)
         self.assertEqual(uploads[0]['if'], 'always()')

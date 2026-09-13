@@ -24,12 +24,16 @@ def event(action, package, test=None, **extra):
     return json.dumps(e)
 
 
-def passing_stream(subtests=()):
-    """A well-formed report: every expected test runs and passes, both packages pass."""
+def passing_stream(subtests=(), extra=()):
+    """A well-formed report: every required test runs and passes, both packages pass.
+
+    `extra` names additional (package, test) parents that also run and pass, standing in
+    for the rest of the full package suites (unit tests and newly added envtest tests).
+    """
     lines = []
-    for package, tests in gate.EXPECTED.items():
+    for package, tests in gate.REQUIRED.items():
         lines.append(event('start', package))
-        for test in tests:
+        for test in tests + tuple(t for p, t in extra if p == package):
             lines.append(event('run', package, test))
             lines.append(event('output', package, test, Output=f'=== RUN   {test}\n'))
             for sub in subtests:
@@ -50,8 +54,40 @@ class EvaluateTests(unittest.TestCase):
         found, verdicts, packages = gate.evaluate(passing_stream(subtests=('case-a', 'case-b')), 0)
         self.assertEqual(found, [])
         self.assertEqual(set(verdicts.values()), {'pass'})
-        self.assertEqual(set(verdicts), {t for ts in gate.EXPECTED.values() for t in ts})
+        required = {t for ts in gate.REQUIRED.values() for t in ts}
+        self.assertTrue(required <= set(verdicts))
+        self.assertEqual(len(verdicts), 3 * len(required))  # parents + two subtests each
         self.assertEqual(packages, {ACTUATOR: 'pass', RUNNER: 'pass'})
+
+    # Full-package composition (review R2): the whole selected packages run, so tests the
+    # required list does not name — unit tests and any newly added envtest test, whatever
+    # helper performs its setup — are observed and must pass too.
+    def test_additional_tests_in_selected_packages_are_accepted_when_they_pass(self):
+        extra = ((ACTUATOR, 'TestM069APIServerNameReuse'), (ACTUATOR, 'TestChartDefaultRendersNoSelector'),
+                 (RUNNER, 'TestSomeUnitTest'))
+        found, verdicts, _ = gate.evaluate(passing_stream(subtests=('warm-swap',), extra=extra), 0)
+        self.assertEqual(found, [])
+        self.assertEqual(verdicts['TestM069APIServerNameReuse'], 'pass')
+        self.assertEqual(verdicts['TestM069APIServerNameReuse/warm-swap'], 'pass')
+
+    def test_additional_test_skip_or_failure_is_rejected(self):
+        extra = ((ACTUATOR, 'TestM069APIServerNameReuse'), (ACTUATOR, 'TestChartDefaultRendersNoSelector'))
+        for name, action in (('TestM069APIServerNameReuse', 'skip'), ('TestChartDefaultRendersNoSelector', 'skip'),
+                             ('TestM069APIServerNameReuse', 'fail')):
+            lines = passing_stream(extra=extra)
+            at = lines.index(event('pass', ACTUATOR, name, Elapsed=1.5))
+            lines[at] = event(action, ACTUATOR, name, Elapsed=0)
+            with self.subTest(name=name, action=action):
+                self.assertEqual(problems(lines), [f'{ACTUATOR} {name}: {action}'])
+        # A helper-guarded envtest test skipping in a blank-assets environment (the R2 shape).
+        lines = passing_stream(subtests=('warm-swap',), extra=extra)
+        at = lines.index(event('pass', ACTUATOR, 'TestM069APIServerNameReuse', Elapsed=1.5))
+        lines[at] = event('skip', ACTUATOR, 'TestM069APIServerNameReuse', Elapsed=0)
+        self.assertIn(f'{ACTUATOR} TestM069APIServerNameReuse: skip', problems(lines))
+
+    def test_additional_test_lost_terminal_is_rejected(self):
+        lines = passing_stream() + [event('run', RUNNER, 'TestSomeUnitTest')]
+        self.assertEqual(problems(lines), [f'{RUNNER} TestSomeUnitTest: no terminal event'])
 
     def test_empty_report_is_rejected(self):
         found = problems([], 0)
@@ -61,7 +97,11 @@ class EvaluateTests(unittest.TestCase):
     def test_missing_expected_test_is_rejected(self):
         lines = [l for l in passing_stream() if '"TestM013RealEventSink"' not in l]
         found = problems(lines)
-        self.assertTrue(any('TestM013RealEventSink: never ran' in p for p in found), found)
+        self.assertTrue(any('TestM013RealEventSink: required test never ran' in p for p in found), found)
+        # Extra passing tests never substitute for a required one.
+        lines = [l for l in passing_stream(extra=((RUNNER, 'TestSomethingElse'),))
+                 if '"TestM013RealEventSink"' not in l]
+        self.assertEqual(problems(lines), [f'{RUNNER} TestM013RealEventSink: required test never ran'])
 
     def test_skipped_test_is_rejected_even_with_green_exit(self):
         # The baseline CI shape: blank KUBEBUILDER_ASSETS, 8 skips, package pass, exit 0.
@@ -161,15 +201,13 @@ class EvaluateTests(unittest.TestCase):
         lines.insert(0, json.dumps({'ImportPath': ACTUATOR, 'Action': 'build-fail'}))
         self.assertIn(f'build failed for {ACTUATOR}', problems(lines))
 
-    def test_unexpected_package_and_test_are_rejected(self):
+    def test_unexpected_package_is_rejected(self):
         lines = passing_stream()
         lines += [event('run', 'github.com/phorvex/phorvex/internal/other', 'TestSomething'),
                   event('pass', 'github.com/phorvex/phorvex/internal/other', 'TestSomething'),
                   event('pass', 'github.com/phorvex/phorvex/internal/other')]
         found = problems(lines)
         self.assertTrue(all('unexpected package' in p for p in found) and found, found)
-        lines = passing_stream() + [event('run', RUNNER, 'TestSomethingElse'), event('pass', RUNNER, 'TestSomethingElse')]
-        self.assertEqual(problems(lines), [f'unexpected test {RUNNER} TestSomethingElse'] * 2)
 
     def test_blank_lines_are_tolerated_but_carry_no_evidence(self):
         self.assertEqual(problems(passing_stream() + ['', '   \n']), [])
@@ -177,28 +215,46 @@ class EvaluateTests(unittest.TestCase):
 
 
 class SourceBindingTests(unittest.TestCase):
-    """The expected names must be the real envtest-guarded tests, and only those."""
+    """Bind the gate to the source tree without claiming a Go call graph from text.
 
-    def test_expected_tests_are_exactly_the_envtest_guarded_tests_in_phorvex(self):
-        guard = re.compile(r'func (Test\w+)\(t \*testing\.T\) \{\n\tif os\.Getenv\("KUBEBUILDER_ASSETS"\) == "" \{')
-        guarded = {}
-        for path in (ROOT / 'phorvex').rglob('*_test.go'):
-            package = 'github.com/phorvex/phorvex/' + path.parent.relative_to(ROOT / 'phorvex').as_posix()
-            for name in guard.findall(path.read_text()):
-                guarded.setdefault(package, set()).add(name)
-        expected = {p: set(t) for p, t in gate.EXPECTED.items()}
-        self.assertEqual(guarded, expected,
-                         'every KUBEBUILDER_ASSETS-guarded test must be listed in envtest_gate.EXPECTED '
-                         '(otherwise it silently skips in CI) and nothing else may be listed')
+    The full-package command is what makes a new envtest test run regardless of which
+    helper performs its setup; these checks only pin that command, the minimum eight,
+    and that no envtest-importing test file lives outside the selected packages.
+    """
 
-    def test_run_pattern_is_anchored_and_exact(self):
-        pattern = gate.run_pattern()
-        self.assertTrue(pattern.startswith('^(') and pattern.endswith(')$'))
-        self.assertEqual(pattern.count('|'), 7)
-        for tests in gate.EXPECTED.values():
+    def test_command_runs_the_selected_packages_in_full_without_a_run_filter(self):
+        command = gate.go_command('go', '10m')
+        self.assertEqual(command[:4], ['go', '-C', 'phorvex', 'test'])
+        self.assertIn('-json', command)
+        self.assertIn('-count=1', command)
+        self.assertIn('-mod=readonly', command)
+        self.assertNotIn('-run', command)
+        self.assertTrue(all(not arg.startswith('-run') for arg in command))
+        self.assertEqual(command[-2:], ['./internal/actuator', './internal/runner'])
+        self.assertEqual(set(gate.REQUIRED), {'github.com/phorvex/phorvex/' + p[2:] for p in gate.PACKAGES})
+
+    def test_required_tests_exist_in_their_packages(self):
+        for package, tests in gate.REQUIRED.items():
+            directory = ROOT / 'phorvex' / package.removeprefix('github.com/phorvex/phorvex/')
+            declared = set()
+            for path in directory.glob('*_test.go'):
+                declared.update(re.findall(r'^func (Test\w+)\(t \*testing\.T\)', path.read_text(), re.M))
             for test in tests:
-                self.assertRegex(test, pattern)
-        self.assertNotRegex('TestM013RealEventSinkExtra', pattern)
+                self.assertIn(test, declared, f'{test} is no longer declared in {package}')
+        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 8)
+
+    def test_envtest_importing_test_files_are_all_inside_the_selected_packages(self):
+        # Textual import scan only: it flags an envtest-bearing test file the full-package
+        # run would not reach. It does not (and cannot) prove how a test reaches envtest.
+        selected = {ROOT / 'phorvex' / p[2:] for p in gate.PACKAGES}
+        outside = sorted(str(path.relative_to(ROOT)) for path in (ROOT / 'phorvex').rglob('*_test.go')
+                         if 'sigs.k8s.io/controller-runtime/pkg/envtest' in path.read_text()
+                         and path.parent not in selected)
+        self.assertEqual(outside, [], 'envtest-importing test files outside the gated packages would '
+                                      'skip in every CI job; extend PACKAGES/REQUIRED')
+        inside = [path for path in (ROOT / 'phorvex').rglob('*_test.go')
+                  if 'sigs.k8s.io/controller-runtime/pkg/envtest' in path.read_text()]
+        self.assertGreaterEqual(len(inside), 8)
 
 
 class CommandLineTests(unittest.TestCase):
