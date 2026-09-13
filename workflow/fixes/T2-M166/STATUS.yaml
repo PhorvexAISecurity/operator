@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,13 +16,80 @@ checks:
     at: '2026-09-13T18:58:14+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  implementation:
+    result: PASS
+    by: claude-v3-m166
+    artifact: 04-diff.patch
+    sha256: 890eee64d2bc2c24a649281ef9829d619e069d554af177371bc3d1679d59b3e4
+    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+    at: '2026-09-13T19:33:02+00:00'
+  red:
+    result: PASS
+    by: claude-v3-m166
+    artifact: evidence/incident.md
+    sha256: b8bf389d715810bdf9364346942abd2774a794ac273fa82d641d990ea58c6662
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T19:33:02+00:00'
+    rationale: 'Executed baseline at d296799 through the real signed router and real
+      ApplyFixManager: the retained probe evidence/red/m166_probe_test.go gives 3
+      FAIL (concurrent approvers enter Apply twice; cross-tenant same-id overwrite
+      + acme-only approver applies globex''s record; nil applier answers 200 applied)
+      plus the positive control PASS (evidence/red/baseline-red-d296799.log); the
+      identical file gives 4 PASS at head f5324f2 under -race (evidence/red/head-green-f5324f2.log).'
+  l0:
+    result: PASS
+    by: claude-v3-m166
+    artifact: evidence/l0/head-build.log
+    sha256: eebaab80b1d5a43142ef55ac3a918ad91ffaa8b3b15f9616382c64d9d405499a
+    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+    at: '2026-09-13T19:33:17+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+  l1:
+    result: PASS
+    by: claude-v3-m166
+    artifact: evidence/l1/head-phorvex-suite.log
+    sha256: 80b1d6c6c43aec858860de785cdf2879255e01105da0fb9a1696435263cb0230
+    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+    at: '2026-09-13T19:33:17+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+  l2:
+    result: PASS
+    by: claude-v3-m166
+    artifact: evidence/l2/verify-offline.log
+    sha256: 06d7ad9e5d0cb038673039ad5c13648ac3432079509fcf8d544c2d69534e2c91
+    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+    at: '2026-09-13T19:33:17+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+  positive_control:
+    result: PASS
+    by: claude-v3-m166
+    artifact: evidence/red/head-green-f5324f2.log
+    sha256: 3aa7b7151570ada7cc1af255bf796092f6ef86d6f3da611b1b4a9d97d9d2c7ef
+    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+    at: '2026-09-13T19:33:18+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 9df3df83b4550c1f2cefac5ebd9a0e8cd70a1704a0903f225a92282489279534
+  preflight:
+    result: PASS
+    by: claude-v3-m166
+    artifact: evidence/preflight/receipt.json
+    sha256: ad289e07983b63982ca0967376f0c3ff1e5092d1edec492e9d9739357e4f2007
+    source_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
+    at: '2026-09-13T19:37:37+00:00'
 fix_id: T2-M166
 issues:
 - M-166
 title: Bind console approvals to immutable tenant requests and claim each apply attempt
   once
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -46,7 +113,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m166-approval-lifecycle
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: f5324f29625c46c5b463720705e374bc1b52a8e6
   stacked_on: []
 pull_request:
   url: null
@@ -68,12 +135,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -83,9 +150,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed plan and submit source-pinned independent-review package.
-updated_at: '2026-09-13T18:58:15+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T19:37:39+00:00'
 configuration_history:
 - at: '2026-09-13T18:58:13+00:00'
   by: codex-lead
@@ -98,6 +166,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-13T19:30:40+00:00'
+  by: claude-v3-m166
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T19:37:37+00:00'
+  by: claude-v3-m166
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +193,26 @@ transitions:
   note: null
   approval_ref: AUTHORIZATION.md
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T19:37:37+00:00'
+  by: claude-v3-m166
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T19:37:38+00:00'
+  by: claude-v3-m166
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T2-M166:12:submit
+  from: claude-v3-m166
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 12
