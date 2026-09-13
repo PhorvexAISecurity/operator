@@ -360,7 +360,7 @@ if _samepass:
     W('')
 W('## The map')
 W('')
-_mmd_path = str(paths.GENERATED_DIR / 'ANATOMY.mmd')
+_mmd_path = str(paths.MMD_PATH)
 if os.path.exists(_mmd_path):
     W('```mermaid')
     W(open(_mmd_path).read().rstrip())

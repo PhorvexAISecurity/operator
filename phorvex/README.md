@@ -118,6 +118,71 @@ phorvex:
 This renders a Role/RoleBinding per listed namespace. Service permission is exactly
 `get,update`; it grants no Service create/delete/patch and no Secret or EndpointSlice access.
 
+### SecurityEvent creator-identity trust boundary (M-94) — deployment contract
+
+`spec.rule.source` is a string the event's creator writes, so it decides nothing. Phorvex
+believes an event only when the `phorvex.ai/creator-identity` annotation names an identity in
+`phorvex.trustedDetectors`. Two cluster-side objects are required for that annotation to mean
+anything, and **the operator binary alone provides neither**:
+
+| Object | Rendered by | Role |
+|---|---|---|
+| `MutatingWebhookConfiguration …-securityevent-stamp` | `templates/admission-webhook.yaml` | **Writes** the annotation from the admission request's authenticated `userInfo`, overwriting whatever the client sent. `failurePolicy: Ignore` — Phorvex must never be able to block the cluster's security-event flow. |
+| `ValidatingAdmissionPolicy` + `ValidatingAdmissionPolicyBinding` (label `phorvex.ai/policy: securityevent-identity`) | `templates/securityevent-identity-policy.yaml` | **Guarantees** that a present annotation is the requester's own identity. Evaluated in-process by the API server, `failurePolicy: Fail`, `validationActions: ["Deny"]`. |
+
+Only the second one is unconditional. `Ignore` means that while the stamp webhook's endpoint
+has no ready backend, the API server stores the object **unchanged** — a creator annotation the
+client wrote survives, and without the policy an allowlisted detector's identity can simply be
+asserted. The policy has no endpoint, so it cannot fail open the same way.
+
+Contract, in one line each:
+
+- A **present, non-empty** `phorvex.ai/creator-identity` must equal `request.userInfo.username`
+  on every SecurityEvent CREATE and UPDATE. Asserting your own identity is fine; it grants
+  nothing your username did not already grant.
+- **No annotation is not an error.** An honest detector emitting while the stamp endpoint is
+  down is still admitted — its event is recorded `unstamped` and simply supplies no belief
+  evidence. Ingestion stays open, belief stays closed.
+- There is **no exemption for an unchanged annotation on UPDATE**. Carrying another principal's
+  stamp forward while rewriting the event's targets, rule, score or annotations is the same
+  forgery through a different door, so an updater that does not own the stamp must clear it.
+- Only the **full resource** is matched, never `securityevents/status`. Status writes cannot
+  change `metadata`, so legitimate status updates by Phoenix or any other controller are
+  unaffected.
+- Requires **Kubernetes ≥ 1.30** (stable `admissionregistration.k8s.io/v1`
+  `ValidatingAdmissionPolicy`). On an older cluster the chart **fails the render with an explicit
+  message** rather than quietly installing without the guard.
+
+The guard is **on by default** and the chart refuses to render a configuration that trusts
+detectors without it:
+
+```yaml
+phorvex:
+  eventIdentityPolicy:
+    enabled: true          # default; disabling it requires trustedDetectors: []
+  trustedDetectors:
+    - vllm/detector-kv-canary
+```
+
+**Non-Helm installs.** If you apply manifests by hand, with Kustomize, or from the vendored
+`deploy/helm/phorvex-stack/charts/phorvex-*.tgz`, the policy and its binding are not optional
+extras — render and apply them with everything else:
+
+```sh
+helm template phorvex phorvex/charts/phorvex -n phorvex-system \
+  --show-only templates/securityevent-identity-policy.yaml | kubectl apply -f -
+kubectl get validatingadmissionpolicybinding -l phorvex.ai/policy=securityevent-identity
+```
+
+Both objects are cluster-scoped and their name is derived from the release namespace and name,
+so several releases coexist and repeated renders of one release produce the same name.
+
+**Scope limit — this is not retroactive.** The guard binds future CREATE and UPDATE requests
+only. SecurityEvents that already exist keep whatever annotation they carry; installing the
+policy neither authenticates them nor removes or disproves a historical forgery. Before relying
+on stored events, inventory the pre-guard ones that read as trusted and reconcile them from
+their actual age and provenance (authorized re-emission by the detector, or retirement).
+
 ## Honest scope limits (P0)
 
 - The optimizer is the **greedy top-B** the PRD calls the MVP form; the offline

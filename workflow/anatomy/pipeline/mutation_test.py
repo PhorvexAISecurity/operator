@@ -16,6 +16,8 @@ A self-test at the end proves the harness itself reports CRASH rather than CAUGH
 """
 import csv, subprocess, shutil, sys, os, tempfile, json
 
+import guard  # noqa: F401 — import-time containment guard; this file rewrites inventories in place
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILES = ['NODES.tsv','RELATIONS.tsv','SEAMS.tsv','INTENTIONAL_BOUNDARIES.tsv',
          'EFFECT_MATRIX.tsv','ANCHOR_FINGERPRINTS.tsv','SURFACES.tsv',

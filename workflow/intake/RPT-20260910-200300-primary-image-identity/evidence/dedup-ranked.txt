@@ -1,0 +1,7 @@
+M-141	score=17	EPSS cache drifts stale against running digests — the highest-value entry silently matches nothing	terms=cache,epss,evidence,exact,image,live,miss,not,running,shows,vllm
+M-31	score=16	`ImageRarity` (and the EPSS cache) keyed on un-normalized imageID	terms=cache,epss,image,imageid,live,miss,raw,running,status,vllm
+M-146	score=16	`omitempty` on eleven numeric audit fields erases measured zeros — the audit record cannot distinguish "0" from "not computed"	terms=any,but,claim,evidence,here,inputs,live,not,raw,record,status,wrong
+M-142	score=15	`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`'s conservative Warm fallback is dead past the first scrape interval — the fleet is priced Idle under arbitrary load	terms=any,control,evidence,first,here,hypothetical,ingest,live,not,observed,real,record,vllm
+M-2	score=14	CRD enum drift — the API server rejects four actuators TODAY	terms=any,but,contract,evidence,first,invariant,live,not,observed,order,passes,spec,status,vllm
+M-136	score=14	The console's authentication is optional and fails OPEN — with mutation endpoints that shell out to kubectl	terms=any,but,container,control,evidence,live,logs,mutation,not,real,status,vllm
+recorded dedup candidates for RPT-20260910-200300-primary-image-identity

@@ -155,6 +155,11 @@ delivery pass without installing a persistent adapter.
 At setup, test a peer challenge/reply through the runner, including resumption
 after a turn ends. Report idle resumption as unverified until actually observed.
 
+For queued implementation work that must not depend on waking an idle session,
+`WORKERS.md` describes `workers.py`: bounded jobs run on the Claude CLI in print
+mode with one persistent session per registered worker. It launches its own
+noninteractive invocations and leaves existing sessions and this adapter alone.
+
 The migrated legacy bus and its historical agent-specific instructions are
 retained under `archive/coordination-v1/`.
 
