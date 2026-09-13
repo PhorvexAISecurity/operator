@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 19
+revision: 20
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -70,13 +70,29 @@ checks:
     sha256: 0ec223176d18ea29d183d902b8e257cfef7a3a45342ad1442ebbce51747d8aa6
     source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
     at: '2026-09-13T20:13:57+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 239f60edb5b6d450a7d350838931e6e720afe7c357d43ed62d84c49e789fffd6
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T21:16:07+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: acb378e508fceb11dddd12e76c7552272701585a4e962b21b6d5131f0893e98f
+    source_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+    at: '2026-09-13T21:16:07+00:00'
+    incident_sha256: 239f60edb5b6d450a7d350838931e6e720afe7c357d43ed62d84c49e789fffd6
 fix_id: T2-M123
 issues:
 - M-123
 title: Generate current recon coverage documentation and separate historical live
   results
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -121,7 +137,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -137,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T20:13:59+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T21:16:09+00:00'
 configuration_history:
 - at: '2026-09-13T19:10:43+00:00'
   by: codex-lead
@@ -201,6 +217,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T21:16:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T21:16:09+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: l2
   result: PASS
@@ -245,9 +277,9 @@ check_history:
   source_sha: 477b9fdc53ea2ab5774bf412dd0a9c55a2608dd6
   at: '2026-09-13T19:49:07+00:00'
 handoff:
-  id: T2-M123:19:submit
-  from: claude-v3-m123
+  id: T2-M123:20:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 19
+  role: coordinator
+  kind: review
+  revision: 20
