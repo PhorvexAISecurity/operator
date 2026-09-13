@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 17
+revision: 18
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -64,12 +64,28 @@ checks:
     sha256: e7d63f6fba1116dc89672e7f62088d119e4fa07544aecb2a6a63a7a42e5c8753
     source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
     at: '2026-09-13T23:09:38+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 0d7d7b7d10de3afe894fa77d17163b1b6c5533dc7ae878bf7eafbef19f97ac3a
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:10:36+00:00'
+    baseline_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 09f5139bd36af1f88cd9b75171e1baa58f2d55086b1414d204b1392a827c5ebe
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:10:36+00:00'
+    incident_sha256: 0d7d7b7d10de3afe894fa77d17163b1b6c5533dc7ae878bf7eafbef19f97ac3a
 fix_id: T2-M154
 issues:
 - M-154
 title: Increase and expose audit retention budgets with explicit limits
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -114,7 +130,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -130,10 +146,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T23:09:39+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T23:10:39+00:00'
 configuration_history:
 - at: '2026-09-13T22:22:15+00:00'
   by: codex-lead
@@ -199,6 +215,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T23:10:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T23:10:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: implementation
   result: PASS
@@ -257,9 +289,9 @@ check_history:
   source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
   at: '2026-09-13T23:05:39+00:00'
 handoff:
-  id: T2-M154:17:submit
-  from: sol-m154
+  id: T2-M154:18:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 17
+  role: coordinator
+  kind: review
+  revision: 18
