@@ -234,13 +234,14 @@ The load-bearing ones:
 | `PH01` `PH02` | residual in `[0,1]`; **no non-finite number in any field** | the NaN class that silently collapsed selection to noop |
 | `C06` | `nextStage` is a legal successor of `stage` | catches a broken kill-chain classifier, including the lateral jump |
 | `C08` | `margin < 0 ⟺ hazard > 0.5` | both come from the same Weibull, so at `exposure = median` the hazard is exactly `0.5` — an exact identity, not a tuned threshold |
-| `B01` | `net == risk − λ·cost` | the identity the whole decision rests on |
-| `B05` | selected ⟹ feasible | the brain must never pick a move safety vetoed |
-| `B07` `B08` | tick budget respected; one action per asset per tick | the greedy loop's two hard constraints |
+| `B01` | `net == coverageValue − λ·cost` | the identity the whole decision rests on. `risk` was retired to `coverageValue` in `phorvex.audit.v2`, so reading the old name skipped this check on every run |
+| `B05` | selected ⟹ feasible, **as the record states it** | the brain must never pick a move safety vetoed. This reads the record's two fields; it does not re-run the laws |
+| `B07` `B08` | tick budget respected **for the policy that owns it**; one action per asset per tick | the greedy loop's two hard constraints. A budget is per PhorvexPolicy, so it is only checked where that policy was actually observed |
 | `F02` | no infeasible action was actuated | fail-closed actually holds at the emit boundary |
 | `F03` | no rotate on a stateful pod — **verified with kubectl**, not the record | `stateful-integrity` in reality, not in claim |
-| `A01` `A04` | actuated ⟹ selected ∧ feasible ∧ ¬dryRun | the authorisation chain |
-| `A03` | the cluster confirms the change | pod UID, AMTD ownership, or the workload's own log |
+| `A01` `A04` | actuated ⟹ selected ∧ feasible ∧ ¬dryRun | the authorisation chain, as the record records it |
+| `A03` | the cluster confirms the change | Pod UID plus a Ready same-owner successor, a deny-all policy selecting that exact UID, or the workload's own log. A mix of confirmed and unverifiable is not a pass |
+| `A05` | the reaction is bound to the event we injected | an actuation that merely happened in the namespace afterwards is the operator's own schedule, not a defended attack |
 | `P05` | expected controllers are present, Running and Ready, within restart limits | follows configured Deployment ownership; namespace helpers cannot satisfy or fail controller health |
 | `A06` | absence of actuation matches the writer's real state | "selected but never actuated" has two very different causes — a deliberate kill switch, or a broken actuator. Read from the operator's own `phorvex_kill_switch_engaged` gauge rather than inferred from an absence |
 | `A07` | the dashboard's source identifies itself | a kill-switched mirror whose records don't say so is indistinguishable from a broken actuator |
@@ -249,17 +250,66 @@ A check that cannot be evaluated returns **skip** with the reason. It never retu
 for something it did not look at — a green board built on unrun checks is worse than a
 red one.
 
+Every result also carries a **coverage** field: `full`, `partial`, `none` or
+`not-applicable`. Status says whether a contract held; coverage says over how much. A
+critical check at `none` is an unanswered question, and a run with one cannot report PASS.
+`CHECKS.md` is the full table: every check, the inputs its verdict rests on, and what it
+does when one of them is absent.
+
 ## Ground truth
 
-`groundtruth.py` reads no Phorvex field at all:
+`groundtruth.py` reads no Phorvex field at all. It answers two separate questions and never
+lets one stand in for the other:
 
-| action | how it is confirmed |
-|--------|---------------------|
-| `rotate` | the pod's UID changed, or the name is gone |
-| `quarantine` | `ownerReferences[0].kind == AdaptiveMovingTargetDefense` |
-| `kv-reset` | vLLM logged `reset_prefix_cache` itself |
-| `adapter-rotate` | vLLM logged the adapter unload/load itself |
+**Did the claimed effect happen?** Each verdict is about the Pod instance *that decision*
+was made on — `decisionTrace.assetUID`, not whatever carries the pod's name now. After one
+rotation the name denotes a different object, so a decision whose target the pre-action
+snapshot never held is `unverifiable` rather than checked against another instance. The
+observation interval starts at the decision's own recorded `time`, not the run's: a
+successor created before a decision cannot be its replacement, however early the run began.
+
+| action | what confirms it |
+|--------|------------------|
+| `rotate` | the original Pod UID is gone **and** a Ready pod under the same controller UID, absent from the baseline and created after this decision, is observed. Mere disappearance is not replacement — a deleted Deployment looks identical — and a surviving replica of a two-replica Deployment is not a successor |
+| `quarantine` | a deny-all NetworkPolicy selects that exact Pod UID (matchExpressions included) and no other policy in the namespace additively allows its traffic. This is *configuration* evidence: nothing here probes a packet, and whether the CNI enforces policy at all is outside what kubectl can answer |
+| `kv-reset` | vLLM logged a reviewed, command-specific line, in this Pod instance's own log, after the action started |
+| `adapter-rotate` | the same, once a reviewed pattern is configured. `lora` alone is not one — it appears in the startup banner |
 | anything else | reported **unverifiable** — deliberately not confirmed |
+
+A read that failed is `unverifiable`, never `confirmed`. A Forbidden pod list is not an
+absent pod, and one namespace's baseline says nothing about another's.
+
+Each verdict also carries `evidenceLevel` and `effectObserved`, because "confirmed" is not
+one thing:
+
+| Level | Means |
+|:--|:--|
+| `object-identity` | observed cluster state — UIDs, readiness, ownership. A measured effect |
+| `workload-log` | the attacked service reported doing it in its own log. A measured effect |
+| `configuration` | a resource is configured to have the effect. **Not** measured — this is what a quarantine gets |
+| `observed-enforcement` | a measured enforcement effect. Nothing in this suite produces it |
+
+It is a field rather than prose so that A03, the dashboard and the PR comment all have to
+carry it. A quarantine is `confirmed` at `configuration`, and A03 reports it as resting on
+configuration that was observed to be in place — not as measured isolation.
+
+**Was it caused by what we injected?** Separately, as `attribution`. Binding a decision to
+our signal needs the identity of the SecurityEvent that *caused* it, plus the target Pod's
+UID. Read against the producers, here is what exists:
+
+| Field | What it actually identifies |
+|:--|:--|
+| `decisionTrace.assetUID` | the target Pod. Real, and present today (`model/decision_trace.go:354`) |
+| `events[].name` | names of the events that fed this asset's evidence. `model.EventEvidence` has no UID field, and a name cannot survive recreation |
+| `phoenix.eventUID` | M-18 `PhoenixForensics`: the SecurityEvent **the actuator emitted**. Its own doc comment says it "establishes CORRELATION only" — to the Phoenix resources an investigator inspects |
+
+`phoenix.eventUID` is the trap. It is an *output* identity: the event Phorvex created, not
+the event our detector injected as the cause. They are different objects with different
+UIDs, and equating them would let a rotation triggered by anything at all correlate to our
+injection. So **no inspected schema records the causing event**, attribution is reported
+`unsupported`, and `A05` cannot pass. Support is feature-detected from the records rather
+than assumed, and the correlation path is exercised by a fixture that is labelled
+hypothetical because nothing writes it.
 
 ## The dashboard
 
@@ -284,14 +334,19 @@ Absence is drawn differently from zero throughout — a missing field is an em d
 
 ```
 config.json               targets, endpoints, thresholds, and the law→reason map
+CHECKS.md                 all 39 checks: inputs, assumptions, and what absence means
 pipeline/
   e2e.py                  orchestrator + CLI
+  observation.py          explicit validity for every read: ok / partial / unavailable / malformed
+  capture.py              incremental SSE framing, declared scope, bounded and counted
   transport.py            local | ssh; console API and kubectl access
+  attribution.py          binding a reaction to the injected event (feature-detected)
   trace.py                record → six-stage trace, with per-field provenance
   checks.py               the assertion catalogue
   groundtruth.py          independent verification of actuator claims
   report.py               the dashboard renderer
   notify.py               the Telegram progress board
+  fixtures.py             realistic API objects and a kubectl-shaped fake, for the tests
 summary.py                run-<ts>.json → the Markdown that lands on the pull request
 publish-report.sh         runner → jump host → ci-report.phorvex.ai
 runs/                     run-<ts>.json, run-<ts>.html, latest.html
@@ -305,8 +360,31 @@ check means one decorated function in `checks.py`.
 - The SSE endpoint replays the audit file, so a capture window includes recent history,
   not only new records. The pipeline de-duplicates and separates pre/post by key, but a
   very long window will pull in older ticks.
+- Captures are **scoped**. With a target, a run reads one namespace's baseline, policy and
+  pods, so it captures that namespace only and says so in `capture.scope`. Checks worded as
+  claims about "every record" report `partial` coverage on a scoped run. An untargeted
+  observe run makes the cluster-wide claim.
+- A capture that hits its traffic or record cap, or loses the stream, is an **incomplete
+  observation** — reported as such and never as a shorter successful one. There is no
+  reconnect: nothing here can prove a resumed stream had no hole in it.
+- The console emits `event: notice` frames when the audit file rotates or is truncated, a
+  read fails, an oversized record is omitted, or a replay/scan budget cuts the history
+  short (`internal/console/live.go`). Every one of them means records did not reach the
+  reader, so any notice marks the window incomplete. An unrecognised notice does too — a
+  notice this reader does not know is not evidence of a full window.
+- `A05` cannot pass against any inspected audit schema, because none records the event that
+  *caused* a decision. A reaction is reported as an observed reaction with attribution
+  unavailable. This is a declared coverage gap, not a failure, and it must not be closed by
+  matching on the namespace, the event name, or `phoenix.eventUID` — that last one
+  identifies the event Phorvex emitted, not the one we injected.
+- Log evidence is bounded by `--tail`. A read that fills its tail cap is `partial`: a match
+  in it still confirms, but an *absent* match over it cannot contradict, because earlier
+  lines in the window were never seen.
 - `A03` can only confirm four action types. Everything else is reported `unverifiable`
-  rather than assumed good.
+  rather than assumed good. `adapter-rotate` additionally needs a reviewed vLLM log pattern
+  in `invariants.action_log_evidence`; none is shipped, so it reports `unverifiable`.
+- A confirmed quarantine is configuration evidence. Proving packets actually stop would
+  need a connectivity probe, which this suite deliberately does not perform.
 - `A07` stays red until the operator is **rebuilt and deployed**. The `killSwitch` stamp
   exists in `model.Decision` / `audit.Record` / `runner.processTenant` in this repo, but the
   running binary predates it, so a kill-switched mirror is still indistinguishable in the

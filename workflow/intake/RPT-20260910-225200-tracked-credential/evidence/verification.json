@@ -1,0 +1,12 @@
+{
+  "source": "418cf2005a45c80c15b93f86d5548f73836bc7d7",
+  "audited_product_source": "dbf5fa4321b35651e8142cb2c13d4f28f8c6dcca",
+  "path": ".claude/settings.json",
+  "tracked_at_baseline": true,
+  "exact_private_credential_present": true,
+  "present_at_audited_source": true,
+  "redacted_copy_control_absent": true,
+  "unrelated_file_control_absent": true,
+  "secret_value_or_digest_recorded": false,
+  "new_live_login_attempted": false
+}

@@ -1,8 +1,9 @@
 /*
  * Phorvex — P-VCLUSTER O6: cross-tenant READ denial on the owner stream. The owner SSE streams ONLY the
- * caller's tenant; another tenant's records never appear. (PASS-1 proves the data-level filter; binding
- * the ?tenant= to a VERIFIED identity so an attacker cannot self-assert ?tenant=B is the deferred Pass-2
- * OIDC work — disclosed residual R3.)
+ * caller's tenant; another tenant's records never appear. The data-level filter proven here is now
+ * paired with the identity binding under M-136: the ?tenant= must name a tenant the verified subject
+ * is granted, so residual R3 (self-asserting ?tenant=B) is closed rather than disclosed.
+ * The grant-level refusal is asserted in auth_boundary_test.go.
  */
 
 package console
@@ -38,7 +39,9 @@ func TestO6_OwnerStreamCrossTenantReadDenied(t *testing.T) {
 
 	s := NewServer(Config{AuditPath: path})
 	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest("GET", "/live?lens=owner&tenant=acme", nil).WithContext(ctx)
+	// [M-136] The ?tenant= is now BOUND to a verified grant: this principal is granted acme and
+	// nothing else, so the residual R3 this test disclosed (a self-asserted ?tenant=B) is closed.
+	req := withTestPrincipal(httptest.NewRequest("GET", "/live?lens=owner&tenant=acme", nil).WithContext(ctx), testOwnerPrincipal("acme"))
 	w := httptest.NewRecorder()
 	go func() { time.Sleep(250 * time.Millisecond); cancel() }()
 	s.live(w, req)

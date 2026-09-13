@@ -12,12 +12,12 @@ import (
 // liveBody streams /api/live with the given query until the first live-tail tick has run,
 // then returns the SSE body. Records are pre-written so replay (tail) covers them and the
 // tick has nothing new; ctx is bounded so the handler's tail loop returns.
-func liveBody(t *testing.T, path, query string) string {
+func liveBody(t *testing.T, path, query string, p *Principal) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	w := httptest.NewRecorder()
-	NewServer(Config{AuditPath: path}).live(w, httptest.NewRequest("GET", "/api/live?"+query, nil).WithContext(ctx))
+	NewServer(Config{AuditPath: path}).live(w, withTestPrincipal(httptest.NewRequest("GET", "/api/live?"+query, nil).WithContext(ctx), p))
 	return w.Body.String()
 }
 
@@ -48,7 +48,7 @@ func TestLiveNamespaceFilterScopesOperatorStream(t *testing.T) {
 			writeHistory(t, path, other, appended)
 		}
 	}
-	NewServer(Config{AuditPath: path}).live(rec, httptest.NewRequest("GET", "/api/live?lens=operator&tail=0&namespace=voice-prod", nil).WithContext(ctx))
+	NewServer(Config{AuditPath: path}).live(rec, withTestPrincipal(httptest.NewRequest("GET", "/api/live?lens=operator&tail=0&namespace=voice-prod", nil).WithContext(ctx), testOperatorPrincipal()))
 	body := rec.Body.String()
 	if !strings.Contains(body, `"pod":"voice-a"`) || !strings.Contains(body, `"pod":"voice-b"`) {
 		t.Fatalf("target-namespace records missing from filtered stream: %s", body)
@@ -58,7 +58,7 @@ func TestLiveNamespaceFilterScopesOperatorStream(t *testing.T) {
 	}
 
 	// No filter: everything streams, as before.
-	all := liveBody(t, path, "lens=operator&tail=0")
+	all := liveBody(t, path, "lens=operator&tail=0", testOperatorPrincipal())
 	for _, pod := range []string{"voice-a", "litellm-a", "voice-b"} {
 		if !strings.Contains(all, `"pod":"`+pod+`"`) {
 			t.Fatalf("unfiltered stream lost %s: %s", pod, all)
@@ -73,12 +73,12 @@ func TestLiveNamespaceFilterNeverWidensOwnerLens(t *testing.T) {
 	writeHistory(t, path, acted)
 
 	// Owner without ?tenant= streams nothing, and ?namespace= must not stand in for it.
-	if body := liveBody(t, path, "lens=owner&tail=0&namespace=voice-prod"); strings.Contains(body, `"voice-a"`) {
+	if body := liveBody(t, path, "lens=owner&tail=0&namespace=voice-prod", testOwnerPrincipal("acme")); strings.Contains(body, `"voice-a"`) {
 		t.Fatalf("owner stream opened by ?namespace= without a tenant: %s", body)
 	}
 	// Owner with the right tenant still sees its action even when ?namespace= names
 	// another namespace: the owner projection is tenant-scoped, the filter is ignored.
-	if body := liveBody(t, path, "lens=owner&tail=0&tenant=acme&namespace=elsewhere"); !strings.Contains(body, `"voice-a"`) {
+	if body := liveBody(t, path, "lens=owner&tail=0&tenant=acme&namespace=elsewhere", testOwnerPrincipal("acme")); !strings.Contains(body, `"voice-a"`) {
 		t.Fatalf("owner lost its own tenant's action because of an unrelated ?namespace=: %s", body)
 	}
 }

@@ -1,0 +1,244 @@
+schema_version: 1
+intake_id: RPT-20260910-184000-catalogue-technique-realism
+kind: BUG
+title: APT catalogue labels technique-specific attacks that execute the same generic
+  marker routine
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T18:39:18+00:00'
+updated_at: '2026-09-10T18:39:51+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline current-source audit with local real-function reproductions;
+    no live mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 17
+    overlap:
+    - any
+    - claim
+    - every
+    - evidence
+    - file
+    - first
+    - identical
+    - mechanism
+    - not
+    - observation
+    - observed
+    - retained
+    - same
+    - separate
+    - source
+    - that
+    - valid
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-136
+    score: 15
+    overlap:
+    - any
+    - every
+    - evidence
+    - execute
+    - logs
+    - map
+    - mutation
+    - not
+    - same
+    - that
+    - while
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-146
+    score: 15
+    overlap:
+    - any
+    - claim
+    - every
+    - evidence
+    - file
+    - here
+    - inputs
+    - not
+    - raw
+    - record
+    - that
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-140
+    score: 14
+    overlap:
+    - any
+    - behavior
+    - evidence
+    - first
+    - identical
+    - map
+    - mechanism
+    - not
+    - observation
+    - raw
+    - same
+    - that
+    - whether
+    - while
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-25
+    score: 13
+    overlap:
+    - behavior
+    - every
+    - evidence
+    - generic
+    - identical
+    - mechanism
+    - not
+    - raw
+    - same
+    - separate
+    - that
+    title: The AI stage classifier overrides — and can downgrade — real detector evidence
+  - issue_id: M-143
+    score: 13
+    overlap:
+    - any
+    - every
+    - evidence
+    - file
+    - gpu
+    - not
+    - reproduction
+    - same
+    - scope
+    - that
+    - while
+    title: pHold is algebraically pinned to 1 by pod age — the Bayesian belief layer
+      is annihilated, not outweighed
+  - issue_id: M-2
+    score: 12
+    overlap:
+    - any
+    - contract
+    - every
+    - evidence
+    - first
+    - invariant
+    - marker
+    - not
+    - observed
+    - same
+    - source
+    - that
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-21
+    score: 12
+    overlap:
+    - any
+    - behavior
+    - contract
+    - every
+    - execution
+    - gpu
+    - that
+    - while
+    title: 'The default actuator rejects every AI-native move while reporting `ActionsSupported:
+      True`'
+  - issue_id: M-23
+    score: 12
+    overlap:
+    - every
+    - evidence
+    - execution
+    - first
+    - here
+    - map
+    - marker
+    - not
+    - observed
+    - record
+    - that
+    - variants
+    title: Anti-over-rotation is mis-clocked for all pod-alive actions
+  - issue_id: M-149
+    score: 12
+    overlap:
+    - evidence
+    - first
+    - gpu
+    - not
+    - required
+    - source
+    - that
+    - without
+    title: Post-T1-A, the `model-theft` stage is unreachable on GPU fleets without
+      DCGM profiling — the leakage gate's only activity input is honest-absent
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-170
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-170.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T18:39:18+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T18:39:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T18:39:19+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T18:39:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T18:39:51+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-170.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

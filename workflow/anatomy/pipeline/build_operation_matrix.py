@@ -18,6 +18,8 @@ declared-unwired target is declared-unwired however real the call site looks —
 stops `mig.Repartition` reading as a working effect.
 """
 import csv, os
+
+import guard  # noqa: F401 — import-time containment guard; this file writes by relative name
 from findings import Findings
 
 HERE = os.path.dirname(os.path.abspath(__file__))

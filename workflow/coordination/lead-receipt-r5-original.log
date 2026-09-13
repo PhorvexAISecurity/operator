@@ -1,0 +1,33 @@
+test_real_completed_wrapper_receipt_arrives_after_initial_read (__main__.ReceiptRace.test_real_completed_wrapper_receipt_arrives_after_initial_read) ... FAIL
+
+======================================================================
+FAIL: test_real_completed_wrapper_receipt_arrives_after_initial_read (__main__.ReceiptRace.test_real_completed_wrapper_receipt_arrives_after_initial_read)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/mehrdad/operator/.git/phorvex-workflow/tier1-composition-20260910/lead_receipt_race.py", line 28, in test_real_completed_wrapper_receipt_arrives_after_initial_read
+    self.assertEqual(job['state'],'done',job.get('reason'))
+AssertionError: 'interrupted' != 'done'
+- interrupted
++ done
+ : child exited without a receipt (killed or crashed mid-invocation)
+
+----------------------------------------------------------------------
+Ran 1 test in 0.188s
+
+FAILED (failures=1)
+{
+  "worker": "w1",
+  "worktree": "/tmp/tmp9otq0xyr/repo",
+  "role": "implementer",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "permission_mode": "manual",
+  "session_fingerprint": "174bc280c943",
+  "session_started": false
+}
+{
+  "job_id": "w1:j1",
+  "state": "queued",
+  "duplicate": false
+}
+ACTUAL_JOB interrupted child exited without a receipt (killed or crashed mid-invocation)

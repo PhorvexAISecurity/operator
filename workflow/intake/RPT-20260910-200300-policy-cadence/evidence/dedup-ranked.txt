@@ -1,0 +1,7 @@
+M-144	score=18	λ decays to its floor and is structurally trapped there — after a brief seed-decay, the cost stack becomes inert	terms=any,cadence,canonical,claim,decision,defect,evidence,exceeds,first,not,observation,observed,policies,policy,retained,separate,sustained,tick
+M-146	score=16	`omitempty` on eleven numeric audit fields erases measured zeros — the audit record cannot distinguish "0" from "not computed"	terms=any,claim,decision,defect,evidence,here,inputs,not,observations,producer,raw,record
+M-140	score=15	Tenant-state resurrection: a recreated policy inherits the old tenant's λ, cost model, and belief prior	terms=any,behavior,decisions,defect,evidence,first,not,observation,policies,policy,raw,tick,whether
+M-167	score=15	Shipped console storage configuration silently drops mutation and experiment records	terms=actual,artifacts,claim,configuration,decision,evidence,mutation,not,policy,required,separate
+M-142	score=14	`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`'s conservative Warm fallback is dead past the first scrape interval — the fleet is priced Idle under arbitrary load	terms=any,boundary,decision,evidence,first,here,interval,not,observed,record
+M-155	score=13	The A05 e2e attack gate is a two-operator race: Phoenix's SecurityEvent controller can delete the redteam target before the brain's next tick — the attack DID react, just not in the decision stream, and the gate fails spuriously	terms=any,decision,evidence,not,observed,skips,tick
+recorded dedup candidates for RPT-20260910-200300-policy-cadence

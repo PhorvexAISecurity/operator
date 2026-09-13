@@ -168,15 +168,30 @@ func admission(t *testing.T, policy object, p object, namespace string) (matched
 	return true, rejected
 }
 
+// The audit volume guard is opt-in. M-94's SecurityEvent creator-identity policy is NOT:
+// it is the only thing that makes a phorvex.ai/creator-identity annotation trustworthy while
+// the mutating stamp endpoint is down, so the default chart (which ships a non-empty
+// trustedDetectors allowlist) must install it. That policy requires Kubernetes >=1.30, which
+// is why the default render is exercised at 1.30 rather than 1.29 here.
 func TestAuditVolumeGuardDisabledByDefault(t *testing.T) {
-	docs, err := render(t, "portable", "anywhere", "1.29.0", filepath.Join(repository(t), "phorvex/charts/phorvex"))
+	docs, err := render(t, "portable", "anywhere", "1.30.0", filepath.Join(repository(t), "phorvex/charts/phorvex"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	identityPolicies := 0
 	for _, doc := range docs {
-		if strings.HasPrefix(doc["kind"].(string), "ValidatingAdmissionPolicy") {
-			t.Fatal("default chart must not install admission guard")
+		if !strings.HasPrefix(doc["kind"].(string), "ValidatingAdmissionPolicy") {
+			continue
 		}
+		labels, _ := doc["metadata"].(object)["labels"].(object)
+		if labels["phorvex.ai/policy"] == "securityevent-identity" {
+			identityPolicies++
+			continue
+		}
+		t.Fatalf("default chart must not install admission guard %v", doc["metadata"].(object)["name"])
+	}
+	if identityPolicies != 2 {
+		t.Fatalf("default chart must install the M-94 identity policy AND its binding, got %d", identityPolicies)
 	}
 	p := resource(t, docs, "Deployment", false)["spec"].(object)["template"].(object)["spec"].(object)
 	if selector, present := p["nodeSelector"]; present && len(selector.(object)) > 0 {

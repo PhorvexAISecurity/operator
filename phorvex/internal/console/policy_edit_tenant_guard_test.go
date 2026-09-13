@@ -38,10 +38,14 @@ func guardServer(t *testing.T, out string, err error) (*Server, *[]execCall, str
 	return s, calls, auditPath
 }
 
+// postEdit drives the handler as a verified operator with cross-tenant scope. [M-136] The audit
+// actor is now that VERIFIED subject rather than the request's lens header.
 func postEdit(t *testing.T, s *Server, body string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/api/policy/edit", strings.NewReader(body))
-	req.Header.Set("X-Phorvex-Lens", "operator")
+	req := withTestPrincipal(
+		httptest.NewRequest(http.MethodPost, "/api/policy/edit", strings.NewReader(body)),
+		testOperatorPrincipal(),
+	)
 	w := httptest.NewRecorder()
 	s.policyEdit(w, req)
 	var resp map[string]any
@@ -95,7 +99,8 @@ func TestPolicyEditRefusesTenantKeyWrite(t *testing.T) {
 		}
 		entries := auditEntries(t, auditPath)
 		if len(entries) != 1 || entries[0].Verdict != "rejected-tenant-key-write" || entries[0].Field != "spec.tenant" ||
-			entries[0].Policy != "vllm-defense" || entries[0].Namespace != "vllm" || entries[0].Actor != "operator" || entries[0].Kind != "phorvex.console.mutation" {
+			entries[0].Policy != "vllm-defense" || entries[0].Namespace != "vllm" ||
+			entries[0].Actor != testALBIssuer+"#direct-handler-subject" || entries[0].Kind != "phorvex.console.mutation" {
 			t.Fatalf("%s: audit entries = %+v", body, entries)
 		}
 	}

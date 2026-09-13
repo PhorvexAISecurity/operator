@@ -27,11 +27,35 @@ fail the run. SIGKILL/host loss cannot execute cleanup: inspect leftover
 `phorvex-e2e-*` events after an interrupted runner, and delete only the recorded
 event for that run. GitHub's `phorvex-e2e-live` concurrency group must remain intact.
 
+The run keeps every identity the API server assigned: the event's UID, name and
+creationTimestamp, and the namespace, name and UID of the Pod chosen at fire time.
+A CREATE response carrying no event UID fails the run rather than producing an
+injection nothing can be attributed to. These identities are what `A05` needs, and
+they cannot be reconstructed afterwards.
+
+Attribution is a separate claim from effect. Binding a decision to this event
+requires the identity of the event that CAUSED it, plus the target Pod UID. The
+target UID exists today at `decisionTrace.assetUID`. The causing event's identity
+does not exist anywhere: `events[].name` is a name, and M-18's `phoenix.eventUID`
+identifies the SecurityEvent the **actuator emitted** — its own doc comment scopes
+it to correlation with Phoenix resources. That is an output, not our injected
+cause; the two are different objects with different UIDs.
+
+So `A05` reports `unsupported` and cannot pass, and support is feature-detected
+from the records rather than assumed. Do not close this gap by matching the
+namespace, the pod name, the event name, or `phoenix.eventUID`: a reaction in the
+target namespace is something the operator also produces on its own schedule.
+Recording the causing event would be a product schema change, and it needs its own
+issue rather than a harness workaround.
+
 The audit stream must acknowledge its readiness heartbeat **before** injection.
 Capture stays open through the injection and observation window; a new post-fire
 connection can miss an immediate reaction because the deployed console's replay
-window is byte-limited. Reaching the capture byte cap now fails explicitly instead
-of silently dropping evidence. Pre-injection replay is excluded from post records.
+window is byte-limited. The stream is framed incrementally and bounded by explicit
+traffic and record caps; reaching one, or losing the stream, is reported as an
+incomplete observation and never as a shorter successful one. There is no
+reconnect — nothing available proves a resumed stream had no hole in it.
+Pre-injection replay is excluded from post records.
 
 Before a live run, verify operator/console readiness, the admission policy's
 type-check status, denied out-of-namespace server-side dry-run probes, and the
