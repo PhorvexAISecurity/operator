@@ -14,6 +14,18 @@ This integration is responsible to provide an entry point for Prometheus and to 
 
 For more details about the Phoenix AMTD operator please visit its [repository](https://github.com/r6security/phoenix/).
 
+### Delivery acknowledgement
+
+The webhook validates the whole Alertmanager batch before its first write and replies
+`200` only when every alert's SecurityEvent was persisted by the API in that request
+or read back as a proven identical retry (per-item outcomes and counts are returned); downstream failures are `503`,
+unverified name collisions `409`, and invalid input `400`/`405`/`413` — always with a
+JSON body. Event names are deterministic (`prometheus-<40 hex>` of the canonical alert),
+so a resent or reordered batch never creates a second event while distinct alerts in the same
+pod and second never collide. The per-call API deadline is `SECURITYEVENT_API_TIMEOUT`
+(default `10s`). The ServiceAccount needs `get` and `create` on `securityevents`.
+See [docs/DELIVERY.md](docs/DELIVERY.md).
+
 ## Caveats
 
 * The project is in an early stage where the current focus is to be able to provide a proof-of-concept implementation that a wider range of potential users can try out. We are welcome all feedbacks and ideas as we continuously improve the project and introduc new features.
