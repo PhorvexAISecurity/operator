@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-42
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m042-session-cover
-    head_sha: null
+    head_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
