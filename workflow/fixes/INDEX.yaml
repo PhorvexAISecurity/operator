@@ -344,7 +344,7 @@ fixes:
     aliases: []
     issues: []
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/workflow-diff-portability
