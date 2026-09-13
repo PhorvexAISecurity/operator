@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-16
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m016-counterfactual-note
-    head_sha: null
+    head_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
