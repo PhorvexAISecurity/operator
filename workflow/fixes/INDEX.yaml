@@ -345,7 +345,7 @@ fixes:
     issues:
     - M-162
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/v3-m162-real-credential-replay

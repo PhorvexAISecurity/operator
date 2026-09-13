@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 21
+revision: 24
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -93,12 +93,19 @@ checks:
     source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
     at: '2026-09-13T21:27:42+00:00'
     baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: b10293fa82ad6ce967c62198eea9c96e90a0c6e8c8289342bcc4381a72013e6a
+    source_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+    at: '2026-09-13T21:27:45+00:00'
 fix_id: T2-M162
 issues:
 - M-162
 title: Replay the actual captured per-trial credential and classify invalid measurements
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -125,11 +132,11 @@ implementation:
   head_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/201
+  reviewed_head: 91a4592895aa6046f475c069f7d2f5d61fcd96e9
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -159,10 +166,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T21:27:44+00:00'
+  owner: human_owner
+  action: Review https://github.com/PhorvexSecurity/operator/pull/201; owner merges/deploys,
+    lead verifies authorized live acceptance
+updated_at: '2026-09-13T21:27:50+00:00'
 configuration_history:
 - at: '2026-09-13T18:30:40+00:00'
   by: codex-lead
@@ -204,6 +211,11 @@ configuration_history:
   by: sol-m162
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T21:27:49+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -301,6 +313,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T21:27:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: T2-M162:21:review
