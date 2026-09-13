@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 14
+revision: 17
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -115,12 +115,19 @@ checks:
     source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
     at: '2026-09-13T18:51:37+00:00'
     incident_sha256: a862c3445a0cdc38f405967668d0eca02df7cf66ab1cab83493e1b0643936a98
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/pr-equivalence.json
+    sha256: 1b5b9035d7b8a9cb77b2d56c821f35ddbc126fef9ab51e41a7532044611f8a8e
+    source_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+    at: '2026-09-13T18:52:54+00:00'
 fix_id: T2-M087
 issues:
 - M-87
 title: Enforce dry-run and tenant bounds before native rollback
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -147,11 +154,11 @@ implementation:
   head_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/192
+  reviewed_head: 8fe9fce8164f174fd984dd570e3cff8bab618bc8
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -181,10 +188,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T18:51:39+00:00'
+  owner: human_owner
+  action: Review PR192; merge and deploy through owner/DevOps; lead then verifies
+    actual deployed rollback controls.
+updated_at: '2026-09-13T18:54:05+00:00'
 configuration_history:
 - at: '2026-09-13T18:20:59+00:00'
   by: codex-lead
@@ -206,6 +213,11 @@ configuration_history:
   by: claude-v3-m087
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T18:52:55+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -255,6 +267,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T18:54:05+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: preflight
