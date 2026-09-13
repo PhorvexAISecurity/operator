@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,80 @@ checks:
     at: '2026-09-13T18:30:42+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: claude-v3-m162
+    artifact: evidence/preflight/receipt.json
+    sha256: ffea457e7b99b281dfe3e623ebaeded9a96484310a96daff9730223c5050f163
+    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+    at: '2026-09-13T19:20:06+00:00'
+  implementation:
+    result: PASS
+    by: claude-v3-m162
+    artifact: 04-diff.patch
+    sha256: 1a26dd97a826d5b709f829d0df7482e9fd2ffa15fac8a1b8a8c7b34d95ed49f3
+    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+    at: '2026-09-13T19:20:06+00:00'
+  red:
+    result: PASS
+    by: claude-v3-m162
+    artifact: evidence/incident.md
+    sha256: 065b1a91a33b87ae626a03d56db6984b91ddbd14c80b5b75f7e39746bc867c4e
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T19:20:06+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m162
+    artifact: evidence/impl-r2/l0-build.log
+    sha256: 97016f90901b51275c9e7a97c08a031cf18e3132d4f031776df68b93abe7fc66
+    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+    at: '2026-09-13T19:20:06+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: c4b257684c81567a941fdc9884831eebca68b57745a36967b71d2b0acbe5ddb3
+  l1:
+    result: PASS
+    by: claude-v3-m162
+    artifact: evidence/impl-r2/l1-module-tests.log
+    sha256: 441c9e623d1d59439b5ae79b02dd3be3ab7003882aa642c482c6411361a2d557
+    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+    at: '2026-09-13T19:20:06+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: c4b257684c81567a941fdc9884831eebca68b57745a36967b71d2b0acbe5ddb3
+  l2:
+    result: PASS
+    by: claude-v3-m162
+    artifact: evidence/impl-r2/green-l1-l2-scenarios.log
+    sha256: cd7dc2f28bf3b3ae9162c79c9a28f0d8633983ba6cf13e36bbfbeed12ee782f6
+    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+    at: '2026-09-13T19:20:06+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: c4b257684c81567a941fdc9884831eebca68b57745a36967b71d2b0acbe5ddb3
+  positive_control:
+    result: PASS
+    by: claude-v3-m162
+    artifact: evidence/impl-r2/positive-control.log
+    sha256: 89a6700a703e54f34cfc473c54e4ed6e8a71dad6d87c3cf5e0cbc33f80191338
+    source_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
+    at: '2026-09-13T19:20:06+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: c4b257684c81567a941fdc9884831eebca68b57745a36967b71d2b0acbe5ddb3
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: c1b155d57ba6a599f657c61dd96e8b41f2165b07367b47298089cbd0d84cdd00
+    source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+    at: '2026-09-13T19:04:52+00:00'
 fix_id: T2-M162
 issues:
 - M-162
 title: Replay the actual captured per-trial credential and classify invalid measurements
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +113,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m162-real-credential-replay
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +134,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: FAIL
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +150,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed same-credential replay plan and complete real offline validation.
-updated_at: '2026-09-13T18:30:43+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T19:20:07+00:00'
 configuration_history:
 - at: '2026-09-13T18:30:40+00:00'
   by: codex-lead
@@ -97,6 +166,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-13T19:02:00+00:00'
+  by: claude-v3-m162
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T19:20:06+00:00'
+  by: claude-v3-m162
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -114,3 +193,104 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T19:02:00+00:00'
+  by: claude-v3-m162
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T19:02:01+00:00'
+  by: claude-v3-m162
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T19:04:52+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T19:20:06+00:00'
+  by: claude-v3-m162
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T2-M162:7:submit
+  from: claude-v3-m162
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 7
+check_history:
+- check: preflight
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/preflight/receipt.json
+  sha256: cc04dc65a34697c2a06e14daa85187b2735626b2ea86974584e686fed07ae559
+  source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+  at: '2026-09-13T19:02:00+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m162
+  artifact: 04-diff.patch
+  sha256: 65b79a62cd810dc8e8b8518f5dc8daed4a136ba9f2261c94244f12fb9347d9e3
+  source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+  at: '2026-09-13T19:02:00+00:00'
+- check: red
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/incident.md
+  sha256: c18103f27e888dac8543508dcf6c3e1bf765dfe4a1781f231f62e54aaa2078e0
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T19:02:00+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r1/l0-build.log
+  sha256: 218146251f0669b592a2a7117a38829a5302d7727c6ac85c8e06c7f8135a9c5b
+  source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+  at: '2026-09-13T19:02:00+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 55ef9a6fb9fd440d1a885bc6c284199ed20699f99a860953cb825de8ee783888
+- check: l1
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r1/l1-module-tests.log
+  sha256: a8c5c16bbcff5650373f459c38cb1bdf3f4d5463a673f897cc2ea587bd266e7a
+  source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+  at: '2026-09-13T19:02:00+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 55ef9a6fb9fd440d1a885bc6c284199ed20699f99a860953cb825de8ee783888
+- check: l2
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r1/green-l1-l2-scenarios.log
+  sha256: db3c61f6ee397b8bbf0748fa7ec04e28258fb153639abde38cf341f7490bee21
+  source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+  at: '2026-09-13T19:02:00+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 55ef9a6fb9fd440d1a885bc6c284199ed20699f99a860953cb825de8ee783888
+- check: positive_control
+  result: PASS
+  by: claude-v3-m162
+  artifact: evidence/impl-r1/positive-control.log
+  sha256: 3fc7ba86f04f57baeaa4a4c5935662604e36dfd030988b0638c78580b62083af
+  source_sha: 353c653dcab8a7b2dfbfb79f06a487be44eae3f1
+  at: '2026-09-13T19:02:00+00:00'
+  inputs:
+  - build/test-harness
+  inputs_sha256: 55ef9a6fb9fd440d1a885bc6c284199ed20699f99a860953cb825de8ee783888

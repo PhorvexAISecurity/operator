@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-162
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m162-real-credential-replay
-    head_sha: null
+    head_sha: 82b2d4a14c751028c8d106b63804e1395ae6f06e
