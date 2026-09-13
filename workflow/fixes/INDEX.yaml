@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-120
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m120-ci-execution
-    head_sha: null
+    head_sha: a68876bd709d404f88d10392272d71c0844a1f7c
