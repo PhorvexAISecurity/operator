@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,12 +15,33 @@ checks:
     source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
     at: '2026-09-13T22:22:17+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  implementation:
+    result: PASS
+    by: sol-m154
+    artifact: 04-diff.patch
+    sha256: 4ae1d7adbd3aa35bb0415c605136f49d64e712b466ba108cf19486c82c16d180
+    source_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
+    at: '2026-09-13T22:50:24+00:00'
+  red:
+    result: PASS
+    by: sol-m154
+    artifact: evidence/baseline-red/probe.log
+    sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
+    source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+    at: '2026-09-13T22:50:36+00:00'
+  positive_control:
+    result: PASS
+    by: sol-m154
+    artifact: evidence/baseline-red/probe.log
+    sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
+    source_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
+    at: '2026-09-13T22:50:36+00:00'
 fix_id: T2-M154
 issues:
 - M-154
 title: Increase and expose audit retention budgets with explicit limits
 profile: standard
-state: AGREED
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -44,7 +65,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m154-retention-budget
   base_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
-  head_sha: null
+  head_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
   stacked_on: []
 pull_request:
   url: null
@@ -71,7 +92,7 @@ verification:
   l2: pending
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -81,9 +102,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed retention budget and truthful controls
-updated_at: '2026-09-13T22:22:17+00:00'
+  owner: sol-m154
+  action: Run exact source-pinned offline preflight and submit for lead review
+updated_at: '2026-09-13T22:50:41+00:00'
 configuration_history:
 - at: '2026-09-13T22:22:15+00:00'
   by: codex-lead
@@ -96,6 +117,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: workflow/fixes/T2-M154/AUTHORIZATION.md
+- at: '2026-09-13T22:50:06+00:00'
+  by: sol-m154
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -110,6 +136,14 @@ transitions:
   at: '2026-09-13T22:22:17+00:00'
   by: codex-lead
   artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T22:50:41+00:00'
+  by: sol-m154
+  artifact: 04-diff.patch
   note: null
   approval_ref: null
   forced: false
