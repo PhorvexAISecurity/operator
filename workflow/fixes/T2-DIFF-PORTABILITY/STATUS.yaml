@@ -2,16 +2,25 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 4
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: ec8ee5398d03162480257134592255efd25f0f413e2f719c9fa4238dd4142ace
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T19:55:51+00:00'
+    contract_sha256: 4bc178a5e90287ce559e2c5e7b39fc7b5016f72ce1e6543505b29e662af1af75
+    approval_ref: AUTHORIZATION.md
 fix_id: T2-DIFF-PORTABILITY
 issues: []
 title: Make reviewed patch comparison portable across Git object abbreviation lengths
 profile: standard
-state: TRIAGED
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -71,10 +80,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Assign participants and pins; deliver independently reviewed PR under standing
-    scope.
-updated_at: '2026-09-13T19:55:25+00:00'
+  owner: implementer
+  action: Implement signed plan and submit source-pinned evidence for independent
+    review
+updated_at: '2026-09-13T19:55:51+00:00'
 configuration_history:
 - at: '2026-09-13T19:55:25+00:00'
   by: codex-lead
@@ -87,3 +96,20 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-13T19:55:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-13T19:55:51+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
