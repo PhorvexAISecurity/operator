@@ -355,7 +355,7 @@ fixes:
     issues:
     - M-175
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies:
     - T2-DIFF-PORTABILITY
     stacked_on:
