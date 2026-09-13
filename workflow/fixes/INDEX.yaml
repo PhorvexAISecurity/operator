@@ -349,4 +349,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/v3-m134-adoption-retry
-    head_sha: null
+    head_sha: f4da38d87e558c35e465d30874719fff14a3098f
