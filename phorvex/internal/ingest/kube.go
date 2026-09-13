@@ -392,17 +392,25 @@ func distinctGuardrailVariants(current, alternatives string) int {
 	return len(seen)
 }
 
-// primaryImageID returns the running image digest of the first container (image-rarity
-// + CVE/EPSS keying). Falls back to the spec image ref when the digest is not yet
-// reported. "" when nothing is known.
+// primaryImageID returns the running image digest of the primary container — spec
+// container 0 — resolved in Status.ContainerStatuses by exact Name (image-rarity +
+// CVE/EPSS keying). The kubelet does not keep the status slice in spec order, so a
+// positional read handed a sidecar digest to those consumers (M-173). "" when the
+// primary has no spec name, no matching status or no reported ImageID yet: the running
+// identity is unknown until observed — never another container's digest and never the
+// declared spec tag. Runtime prefixes/digest normalization stay with the consumers.
 func primaryImageID(p *corev1.Pod) string {
-	for i := range p.Status.ContainerStatuses {
-		if id := p.Status.ContainerStatuses[i].ImageID; id != "" {
-			return id
-		}
+	if len(p.Spec.Containers) == 0 {
+		return ""
 	}
-	if len(p.Spec.Containers) > 0 {
-		return p.Spec.Containers[0].Image
+	name := p.Spec.Containers[0].Name
+	if name == "" {
+		return ""
+	}
+	for i := range p.Status.ContainerStatuses {
+		if cs := &p.Status.ContainerStatuses[i]; cs.Name == name {
+			return cs.ImageID
+		}
 	}
 	return ""
 }
