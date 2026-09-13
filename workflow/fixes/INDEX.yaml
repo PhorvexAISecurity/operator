@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-69
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m069-ai-delete-identity
-    head_sha: null
+    head_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
