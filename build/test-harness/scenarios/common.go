@@ -10,7 +10,11 @@ package scenarios
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -27,36 +31,250 @@ import (
 	"github.com/r6security/phoenix-test-harness/internal/mocks"
 )
 
-// useStolenToken clones the live rest.Config but swaps in the stolen bearer token
-// (clearing other auth), builds a fresh clientset, and exercises the RBAC-
-// permitted call (list pods in the sandbox). It returns whether the call was
-// AUTHORIZED and a short detail. This is the concrete cred-theft oracle: a stolen
-// token used SUCCESSFULLY against the API from a fresh client (outside the pod).
-func useStolenToken(ctx context.Context, env *core.Env, token string) (bool, string) {
-	if env.Rest == nil {
-		return false, "no live rest config (non-live env)"
+// ---- credential-replay boundary (c1-credtheft-rbac) ----
+//
+// The credential-theft scenario replays the ACTUAL bytes it exfiltrated from the
+// pod against the SAME guarded API. These helpers build a replay client that
+// carries ONLY the captured bearer (no fallback identity), classify the API's
+// response into the arms the oracle must treat differently, and describe the
+// captured credential's binding/expiry WITHOUT ever logging or emitting the
+// credential itself.
+
+// replayReqTimeout bounds a single replay API call so a hung or slow endpoint
+// cannot stall a trial. It is per-call and independent of the observation window.
+const replayReqTimeout = 20 * time.Second
+
+// tokenServiceAccountPath is the in-pod path of the projected ServiceAccount
+// token the attack exfiltrates.
+const tokenServiceAccountPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+// replayClass classifies the outcome of replaying a captured bearer against the
+// guarded API. It distinguishes an authenticated success and an authenticated
+// refusal (401/403 — a real API decision) from every transport/protocol fault
+// (which makes the measurement invalid rather than a defensive win).
+type replayClass int
+
+const (
+	replayAuthorized   replayClass = iota // 2xx with a decodable PodList
+	replayUnauthorized                    // 401
+	replayForbidden                       // 403
+	replayOtherHTTP                       // other API status (5xx, 429, ...)
+	replayMalformed                       // 2xx whose body is not a valid PodList
+	replayTimeout                         // deadline exceeded
+	replayCancelled                       // context cancelled
+	replayTransport                       // dial/TLS/connection error
+	replayRefused                         // refused to build a clean replay client
+)
+
+// authorized reports an authenticated success (a usable credential).
+func (c replayClass) authorized() bool { return c == replayAuthorized }
+
+// denied reports an authenticated-but-refused outcome (401/403): a genuine API
+// decision, which is a measured failure, NOT an invalid measurement.
+func (c replayClass) denied() bool { return c == replayUnauthorized || c == replayForbidden }
+
+// String is a short, safe label for evidence (never a token or a response body).
+func (c replayClass) String() string {
+	switch c {
+	case replayAuthorized:
+		return "authorized"
+	case replayUnauthorized:
+		return "unauthorized-401"
+	case replayForbidden:
+		return "forbidden-403"
+	case replayOtherHTTP:
+		return "other-http-error"
+	case replayMalformed:
+		return "malformed-2xx"
+	case replayTimeout:
+		return "timeout"
+	case replayCancelled:
+		return "cancelled"
+	case replayTransport:
+		return "transport-error"
+	case replayRefused:
+		return "replay-refused"
+	default:
+		return "unknown"
 	}
-	cfg := rest.CopyConfig(env.Rest)
-	cfg.BearerToken = token
-	cfg.BearerTokenFile = ""
-	cfg.Username = ""
-	cfg.Password = ""
-	cfg.CertData = nil
-	cfg.KeyData = nil
-	cfg.CertFile = ""
-	cfg.KeyFile = ""
-	cfg.AuthProvider = nil
-	cfg.ExecProvider = nil
-	cs, err := kubernetes.NewForConfig(cfg)
+}
+
+// replayOutcome is the sanitized result of one replay. It NEVER carries the token
+// or a response body; detail is a short, safe reason.
+type replayOutcome struct {
+	class    replayClass
+	podCount int
+	detail   string
+}
+
+// sanitizedReplayConfig builds a fresh rest.Config carrying ONLY the captured
+// bearer plus the connectivity/trust settings needed to reach the SAME endpoint:
+// host, TLS server verification (CA/ServerName/Insecure) and ALPN. It drops every
+// other identity (bearer file, client cert/key, basic auth, auth/exec provider,
+// impersonation) so a failure to authenticate can never be masked by the
+// harness's own admin caller. An opaque custom transport or credential-injecting
+// wrapper cannot be cleanly stripped, so it is REFUSED rather than silently
+// reused with a non-captured identity.
+func sanitizedReplayConfig(base *rest.Config, token string) (*rest.Config, error) {
+	if base == nil {
+		return nil, errors.New("no live rest config (non-live env)")
+	}
+	if base.AuthProvider != nil || base.ExecProvider != nil {
+		return nil, errors.New("base client uses an auth/exec credential provider that cannot be separated from the captured credential")
+	}
+	if base.Transport != nil || base.WrapTransport != nil {
+		return nil, errors.New("base client uses an opaque custom transport that may inject a non-captured identity")
+	}
+	if base.Impersonate.UserName != "" || base.Impersonate.UID != "" ||
+		len(base.Impersonate.Groups) > 0 || len(base.Impersonate.Extra) > 0 {
+		return nil, errors.New("base client sets impersonation")
+	}
+	cfg := &rest.Config{
+		Host:      base.Host,
+		APIPath:   base.APIPath,
+		UserAgent: base.UserAgent,
+		QPS:       base.QPS,
+		Burst:     base.Burst,
+		Timeout:   replayReqTimeout,
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure:   base.TLSClientConfig.Insecure,
+			ServerName: base.TLSClientConfig.ServerName,
+			CAFile:     base.TLSClientConfig.CAFile,
+			CAData:     base.TLSClientConfig.CAData,
+			NextProtos: base.TLSClientConfig.NextProtos,
+		},
+		BearerToken: token,
+	}
+	return cfg, nil
+}
+
+// replayCapturedCredential replays the captured bearer against the sandbox
+// list-pods operation with a freshly built client that follows NO redirects (so
+// the credential is never forwarded to another host). It records the operation
+// for provenance but never the token or a response body, and returns a sanitized,
+// classified outcome.
+func replayCapturedCredential(ctx context.Context, env *core.Env, token string) replayOutcome {
+	cfg, err := sanitizedReplayConfig(env.Rest, token)
 	if err != nil {
-		return false, "build client: " + err.Error()
+		return replayOutcome{class: replayRefused, detail: err.Error()}
 	}
-	env.Log.Command(fmt.Sprintf("kubectl --token=<stolen> get pods -n %s  # replay exfiltrated token", env.Config.Namespace))
-	pods, err := cs.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{})
+	httpClient, err := rest.HTTPClientFor(cfg)
 	if err != nil {
-		return false, "list pods denied/error: " + err.Error()
+		return replayOutcome{class: replayTransport, detail: "could not build replay HTTP client"}
 	}
-	return true, fmt.Sprintf("HTTP 200, listed %d pods with stolen identity", len(pods.Items))
+	// Refuse to follow redirects: a 3xx to another host must never carry the
+	// captured credential onward.
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	cs, err := kubernetes.NewForConfigAndClient(cfg, httpClient)
+	if err != nil {
+		return replayOutcome{class: replayTransport, detail: "could not build replay client"}
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, replayReqTimeout)
+	defer cancel()
+	env.Log.Command(fmt.Sprintf("kubectl --token=<captured> get pods -n %s  # replay the exfiltrated credential", env.Config.Namespace))
+	var code int
+	raw, err := cs.CoreV1().RESTClient().Get().
+		Namespace(env.Config.Namespace).Resource("pods").
+		Do(reqCtx).StatusCode(&code).Raw()
+	if err != nil {
+		return classifyReplayError(ctx, reqCtx, err, code)
+	}
+	// A 2xx whose body does not decode to a PodList is a malformed response, not a
+	// usable success. Distinguishing this from a real list keeps a proxy error page
+	// or truncated body from being read as attacker capability.
+	var pods corev1.PodList
+	if derr := json.Unmarshal(raw, &pods); derr != nil {
+		return replayOutcome{class: replayMalformed, detail: "2xx response did not decode to a PodList"}
+	}
+	return replayOutcome{class: replayAuthorized, podCount: len(pods.Items),
+		detail: fmt.Sprintf("HTTP 200, listed %d pods", len(pods.Items))}
+}
+
+// classifyReplayError maps a failed replay into its sanitized class. It never
+// includes the server's message or body in the detail, only the class of fault.
+func classifyReplayError(parent, reqCtx context.Context, err error, code int) replayOutcome {
+	switch {
+	case parent.Err() == context.Canceled, errors.Is(err, context.Canceled):
+		return replayOutcome{class: replayCancelled, detail: "replay cancelled"}
+	case errors.Is(err, context.DeadlineExceeded), reqCtx.Err() == context.DeadlineExceeded:
+		return replayOutcome{class: replayTimeout, detail: "replay timed out"}
+	case apierrors.IsUnauthorized(err):
+		return replayOutcome{class: replayUnauthorized, detail: "API returned 401 Unauthorized"}
+	case apierrors.IsForbidden(err):
+		return replayOutcome{class: replayForbidden, detail: "API returned 403 Forbidden"}
+	}
+	if code >= 400 {
+		return replayOutcome{class: replayOtherHTTP, detail: fmt.Sprintf("API returned HTTP %d", code)}
+	}
+	return replayOutcome{class: replayTransport, detail: "transport/TLS error reaching the API"}
+}
+
+// capturedCredMeta is the best-effort, NON-AUTHORITATIVE metadata decoded from a
+// captured credential. Decoding a JWT's unverified claims is not cryptographic
+// proof of anything; it is used ONLY to describe binding for the report and to
+// guard against crediting a defender for a token's own natural expiry. An opaque
+// or malformed credential yields decoded=false and binding "unknown".
+type capturedCredMeta struct {
+	decoded   bool
+	binding   string // "pod-bound" | "unbound" | "unknown"
+	boundName string
+	expUnix   int64 // 0 = no/unknown expiry
+}
+
+// parseCapturedCredMeta decodes a projected ServiceAccount JWT's claims WITHOUT
+// verifying its signature. A three-segment JWT with a kubernetes.io pod claim is
+// reported pod-bound; a JWT without one is unbound; anything that is not a decodable
+// JWT (opaque or malformed) stays "unknown". The result is descriptive only and is
+// never treated as authority for attack success.
+func parseCapturedCredMeta(token string) capturedCredMeta {
+	meta := capturedCredMeta{binding: "unknown"}
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return meta // opaque, not a JWT
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return meta // malformed base64url payload
+	}
+	var claims struct {
+		Exp        int64 `json:"exp"`
+		Kubernetes struct {
+			Pod *struct {
+				Name string `json:"name"`
+				UID  string `json:"uid"`
+			} `json:"pod"`
+		} `json:"kubernetes.io"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return meta // malformed claims
+	}
+	meta.decoded = true
+	meta.expUnix = claims.Exp
+	if claims.Kubernetes.Pod != nil && claims.Kubernetes.Pod.Name != "" {
+		meta.binding = "pod-bound"
+		meta.boundName = claims.Kubernetes.Pod.Name
+	} else {
+		meta.binding = "unbound"
+	}
+	return meta
+}
+
+// credObservationSleep is the observation-window wait seam. Production waits the
+// real, context-cancellable interval; tests replace it so they exercise the real
+// request order without sleeping. It returns a non-nil error only when the context
+// ends first (cancellation), which the oracle treats as an invalid measurement.
+var credObservationSleep = func(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // ensureSAWithRBAC creates a ServiceAccount + a (namespaced) Role granting
