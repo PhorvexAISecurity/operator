@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 64
+revision: 67
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -100,19 +100,19 @@ checks:
     at: '2026-09-13T22:35:27+00:00'
     baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
   patch_equivalence:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/patch-equivalence.json
-    sha256: 1773075c818b1242bd1d6ecb9cdbd943d61b2980ba38a5025a03f06c96702a1a
-    source_sha: 81355f9705e9adaac226586852490c08ddc73015
-    at: '2026-09-13T22:15:24+00:00'
+    sha256: 680eb23051262f615ba372aa4ca053a19bfb00c97d2a1bac2505fd58a8bb12b3
+    source_sha: 30273b2bbe7814ec542aee10f2e7c685dad2bcdb
+    at: '2026-09-13T22:35:42+00:00'
 fix_id: T2-M120
 issues:
 - M-120
 title: Execute required local API-server tests and assert feasibility verdicts in
   CI
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -140,7 +140,7 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/198
-  reviewed_head: 0758d3ed63e38f7bb0bd197895c44d3ff1c00511
+  reviewed_head: ecc5448a72a1445364265a7a3b54379773bb3043
   merge_sha: null
   checks: pending
   patch_equivalence: PASS
@@ -173,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T22:35:36+00:00'
+  owner: human_owner
+  action: Review repaired PR198 and fresh CI; owner merges/deploys, root verifies
+    live controls
+updated_at: '2026-09-13T22:36:52+00:00'
 configuration_history:
 - at: '2026-09-13T18:54:06+00:00'
   by: codex-lead
@@ -248,6 +248,11 @@ configuration_history:
   by: sol-m120
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T22:36:48+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -386,6 +391,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T22:36:52+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: T2-M120:64:review
@@ -824,3 +837,10 @@ check_history:
   sha256: eb43cb4ba5ef378a8ec111f551ccd785a7c80f02de77c365cc96b9c0415c772d
   source_sha: 81355f9705e9adaac226586852490c08ddc73015
   at: '2026-09-13T22:28:13+00:00'
+- check: patch_equivalence
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/patch-equivalence.json
+  sha256: 1773075c818b1242bd1d6ecb9cdbd943d61b2980ba38a5025a03f06c96702a1a
+  source_sha: 81355f9705e9adaac226586852490c08ddc73015
+  at: '2026-09-13T22:15:24+00:00'
