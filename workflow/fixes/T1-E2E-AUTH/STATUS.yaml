@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 38
+revision: 39
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -87,12 +87,13 @@ checks:
     source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
     at: '2026-09-13T16:24:50+00:00'
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: a25d0d4a1a6050dfaa08ec6577de0858e69905ae58abe3456d8af475b8bd895e
-    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
-    at: '2026-09-13T16:04:13+00:00'
+    sha256: b6f11c327034885ed1095e5dd9f0ea15338caa8bbb771c9868875767dbea68ad
+    source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+    at: '2026-09-13T16:26:57+00:00'
+    incident_sha256: 9e34fc93605c831da8c87b90464e819156b5ab87a373545996c79debc8b49679
   base_review:
     result: PASS
     by: codex-lead
@@ -101,12 +102,20 @@ checks:
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
     at: '2026-09-13T16:12:10+00:00'
     baseline_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 9e34fc93605c831da8c87b90464e819156b5ab87a373545996c79debc8b49679
+    source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+    at: '2026-09-13T16:26:56+00:00'
+    baseline_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
 fix_id: T1-E2E-AUTH
 issues:
 - M-136
 title: Authenticate E2E console calls after the Tier 1 identity boundary rollout
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -151,7 +160,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -167,10 +176,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T16:24:52+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T16:26:59+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -283,6 +292,22 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-13T16:24:51+00:00'
   by: claude-tier1-e2e-auth
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T16:26:57+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T16:26:58+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -616,10 +641,17 @@ check_history:
   sha256: da0636f947737bcf06fdecbe31220b8eba239169d9ee53c87e35d93513248cc0
   source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
   at: '2026-09-13T16:15:47+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: a25d0d4a1a6050dfaa08ec6577de0858e69905ae58abe3456d8af475b8bd895e
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T16:04:13+00:00'
 handoff:
-  id: T1-E2E-AUTH:38:submit
-  from: claude-tier1-e2e-auth
+  id: T1-E2E-AUTH:39:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 38
+  role: coordinator
+  kind: review
+  revision: 39
