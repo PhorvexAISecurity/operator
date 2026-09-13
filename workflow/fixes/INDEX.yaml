@@ -349,4 +349,4 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/tier1-e2e-console-auth
-    head_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+    head_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
