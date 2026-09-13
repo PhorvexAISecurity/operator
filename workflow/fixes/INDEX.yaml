@@ -345,7 +345,7 @@ fixes:
     issues:
     - M-153
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies:
     - T2-M042
     - T2-M016

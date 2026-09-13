@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -76,12 +76,28 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: 7569444c882ec671f8417332a808d94127288b471ff985bec1fd97e268280cdd
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1fcb808ec3fe8f54ccc5a2022c78720fd97d45580b11abbc23e72e398db3af8f
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:13:12+00:00'
+    baseline_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 92314ca9d443f30730b6b08df39da80f2aa49cf3894dfec04f0753758699e02f
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:13:12+00:00'
+    incident_sha256: 1fcb808ec3fe8f54ccc5a2022c78720fd97d45580b11abbc23e72e398db3af8f
 fix_id: T2-M153
 issues:
 - M-153
 title: Record the actual vector steering cause on decision facts
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -128,7 +144,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -146,10 +162,10 @@ dependencies:
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T23:12:30+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T23:13:14+00:00'
 configuration_history:
 - at: '2026-09-13T22:19:20+00:00'
   by: codex-lead
@@ -226,10 +242,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T23:13:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T23:13:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M153:11:submit
-  from: sol-m153
+  id: T2-M153:12:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 11
+  role: coordinator
+  kind: review
+  revision: 12
