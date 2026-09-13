@@ -345,11 +345,13 @@ fixes:
     issues:
     - M-42
     related_issues: []
-    state: OFFLINE_VERIFIED
-    dependencies: []
-    stacked_on: []
+    state: PR_READY
+    dependencies:
+    - T2-M123
+    stacked_on:
+    - T2-M123
     branch: fix/v3-m042-session-cover
-    head_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+    head_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
   T2-M123:
     directory: fixes/T2-M123
     aliases: []
