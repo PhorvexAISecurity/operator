@@ -954,6 +954,15 @@ func traceDualUpdate(update cost.DualUpdate) model.DecisionDualUpdateV2 {
 // buildDecisionTrace runs only after the current optimizer has completed its
 // selection. It reads the already-generated ActionSet and cannot affect scoring,
 // eligibility, feasibility, learning or tie-breaking.
+func cloneVectorSteering(in *model.VectorSteeringAttribution) *model.VectorSteeringAttribution {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Events = append([]model.VectorSteeringEvent(nil), in.Events...)
+	return &out
+}
+
 func (e *CoverageEngine) buildDecisionTrace(
 	v *model.WorkloadView,
 	pol model.Policy,
@@ -1131,6 +1140,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 			CoveringActions:        coveringActions(fact.Key()),
 			DecompositionAvailable: false,
 			CoveredRound:           traceOptionalInt(factCovered, factCoveredRound),
+			SteeredBy:              cloneVectorSteering(fact.SteeredBy),
 		})
 	}
 

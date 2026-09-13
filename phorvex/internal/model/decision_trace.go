@@ -265,9 +265,10 @@ type DecisionFactV2 struct {
 	// (coveredRound < evaluationRound), recorded computed, not asserted.
 	// DecompositionAvailable names the honest absence of the four decomposition
 	// terms above instead of leaving their absence unexplained.
-	CoveringActions        []string    `json:"coveringActions"`
-	DecompositionAvailable bool        `json:"decompositionAvailable"`
-	CoveredRound           OptionalInt `json:"coveredRound"`
+	CoveringActions        []string                   `json:"coveringActions"`
+	DecompositionAvailable bool                       `json:"decompositionAvailable"`
+	CoveredRound           OptionalInt                `json:"coveredRound"`
+	SteeredBy              *VectorSteeringAttribution `json:"steeredBy,omitempty"`
 }
 
 // DecisionCandidateV2 records either a generated feasible candidate or an
@@ -505,6 +506,32 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		f.UrgencyContribution = cleanOptional(f.UrgencyContribution)
 		f.DispersionContribution = cleanOptional(f.DispersionContribution)
 		f.RelativeWeight = cleanOptional(f.RelativeWeight)
+		if f.SteeredBy != nil {
+			steering := *f.SteeredBy
+			steering.RuleType = redactTraceString(steering.RuleType)
+			steering.Events = append([]VectorSteeringEvent(nil), steering.Events...)
+			for j := range steering.Events {
+				e := &steering.Events[j]
+				e.EventName = redactTraceString(e.EventName)
+				e.EventUID = redactTraceString(e.EventUID)
+				e.RuleType = redactTraceString(e.RuleType)
+				e.DeclaredSource = redactTraceString(e.DeclaredSource)
+				e.TrustVerdict = redactTraceString(e.TrustVerdict)
+				e.CreatorIdentity = redactTraceString(e.CreatorIdentity)
+			}
+			sort.Slice(steering.Events, func(i, j int) bool {
+				a, b := steering.Events[i], steering.Events[j]
+				return vectorSteeringEventKey(a) < vectorSteeringEventKey(b)
+			})
+			unique := steering.Events[:0]
+			for _, event := range steering.Events {
+				if len(unique) == 0 || vectorSteeringEventKey(unique[len(unique)-1]) != vectorSteeringEventKey(event) {
+					unique = append(unique, event)
+				}
+			}
+			steering.Events = unique
+			f.SteeredBy = &steering
+		}
 		f.CoveringActions = append([]string(nil), f.CoveringActions...)
 		for j := range f.CoveringActions {
 			f.CoveringActions[j] = redactTraceString(f.CoveringActions[j])
@@ -571,6 +598,10 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	return out
 }
 
+func vectorSteeringEventKey(e VectorSteeringEvent) string {
+	return e.EventName + "\x00" + e.EventUID + "\x00" + e.RuleType + "\x00" + e.DeclaredSource + "\x00" + e.TrustVerdict + "\x00" + e.CreatorIdentity
+}
+
 func canonicalActionRank(action string) int {
 	for i, a := range MutatingActions {
 		if string(a) == action {
@@ -617,6 +648,20 @@ func (t DecisionTraceV2) Validate() error {
 		for _, value := range values {
 			if value.Present && !finite(value.Value) {
 				return fmt.Errorf("candidate %q contains a non-finite value", candidate.CandidateKey)
+			}
+		}
+	}
+	for _, fact := range t.Facts {
+		if fact.SteeredBy == nil {
+			continue
+		}
+		if !finite(fact.SteeredBy.AppliedMultiplier) || fact.SteeredBy.AppliedMultiplier <= 0 ||
+			fact.SteeredBy.RuleType == "" || len(fact.SteeredBy.Events) == 0 {
+			return fmt.Errorf("fact %q contains invalid steering attribution", fact.FactKey)
+		}
+		for _, event := range fact.SteeredBy.Events {
+			if event.RuleType != fact.SteeredBy.RuleType {
+				return fmt.Errorf("fact %q steering event rule %q disagrees with %q", fact.FactKey, event.RuleType, fact.SteeredBy.RuleType)
 			}
 		}
 	}
