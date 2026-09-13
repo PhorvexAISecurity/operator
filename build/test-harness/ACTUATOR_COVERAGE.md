@@ -168,16 +168,16 @@ Facts the boost does not touch, and what it does not do:
   trusted (fail-closed). M-94's live acceptance is still open; this guide does not close it.
 - **Aging.** The kill-chain evidence weight of an event decays linearly to 0 at
   `EventAgeHorizon` (default `ProactiveFloor`; `hazard.go:372`, `model.EventAgeWeight`).
-  The recon boost reads only `Type` and `TargetsPod` (`hasVectorEvent`, `ucw.go:300`): the
-  `gpu-vector-kv-aged` fixture (10 h old) is still ×3. The comment in `ucw.go` that the boost
-  is "gone once the event ages out" holds only in the sense that the event stops being
-  ingested when its CR is deleted: ingest applies no age cutoff (`events.go`), the
+  The recon boost reads `Type` and `TargetsPod` (`vectorEvents`, `ucw.go`): the
+  `gpu-vector-kv-aged` fixture (10 h old) is still ×3. The boost stops only when the event
+  stops being ingested, such as when its CR is deleted: ingest applies no age cutoff (`events.go`), the
   operator's ingest/decision path deletes nothing, and only the console's red-team
   clear/restore paths delete the events they themselves fired. Detectors own their signal
   lifecycle.
 - The same event types are promoted to `StagePersist` in `hazard.go:236`.
-- Trace attribution of the boost (a `steeredBy` field) is M-153's proposal and is **not**
-  implemented; the ×3 is invisible in `finalWeight`.
+- Each boosted decision fact carries optional `steeredBy` attribution beside `finalWeight`: the
+  applied multiplier and the sorted, deduplicated matching event identities, including the
+  actual SecurityEvent UID when ingestion supplied one. Unboosted facts omit the field.
 
 ## 5. Historical trials: what they were, and why they do not reproduce
 
@@ -199,7 +199,8 @@ under test, so their pins are unknown. Summary:
 - **M-94** trust boundary: source enforcement is in; live acceptance of the deployed
   composition remains open (`workflow/fixes/T2-M123/AUTHORIZATION.md`: Tier 1 live
   acceptance and PR #187 are explicitly open).
-- **M-153** vector-steering attribution and scoping: pending.
+- **M-153 L3**: correlate the new vector-steering trace attribution with deployed trusted events;
+  local source and integration coverage does not establish a deployed observation.
 - **T2-M123 L3**: correlating this guide's source/config assumptions with the deployed tier
   is a lead live-verification step; it has not happened.
 
