@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 26
+revision: 27
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -88,15 +88,15 @@ checks:
     result: FAIL
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: cf730b829096878425bace51c4210bb4bbe949b159ba13988ec5c2051b4d9e51
-    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:36:11+00:00'
+    sha256: a25d0d4a1a6050dfaa08ec6577de0858e69905ae58abe3456d8af475b8bd895e
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:04:13+00:00'
 fix_id: T1-E2E-AUTH
 issues:
 - M-136
 title: Authenticate E2E console calls after the Tier 1 identity boundary rollout
 profile: standard
-state: OFFLINE_VERIFIED
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -157,10 +157,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T16:03:02+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-13T16:04:14+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -247,6 +247,14 @@ transitions:
   to: OFFLINE_VERIFIED
   at: '2026-09-13T16:03:01+00:00'
   by: claude-tier1-e2e-auth
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T16:04:13+00:00'
+  by: codex-lead
   artifact: null
   note: Validated role handoff
   approval_ref: null
@@ -439,10 +447,17 @@ check_history:
   at: '2026-09-13T15:56:38+00:00'
   rationale: 'Same probe as the red check at head: HEAD_FIXED. The lead''s unchanged
     probe and stdin control also pass at head (evidence/lead-probe/*-r2-*).'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: cf730b829096878425bace51c4210bb4bbe949b159ba13988ec5c2051b4d9e51
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:36:11+00:00'
 handoff:
-  id: T1-E2E-AUTH:26:submit
-  from: claude-tier1-e2e-auth
-  to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 26
+  id: T1-E2E-AUTH:27:review
+  from: codex-lead
+  to: claude-tier1-e2e-auth
+  role: implementer
+  kind: review
+  revision: 27
