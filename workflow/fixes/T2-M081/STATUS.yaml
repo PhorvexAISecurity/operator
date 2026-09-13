@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,6 +15,13 @@ checks:
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
     at: '2026-09-13T21:18:27+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: sol-m081
+    artifact: evidence/red/baseline.log
+    sha256: 5e469354f05f8d8c42bb826fab6da178f35d85b7eb0f1c6ed15b8ba6f2e3effd
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T21:35:00+00:00'
 fix_id: T2-M081
 issues:
 - M-81
@@ -83,7 +90,7 @@ residuals: []
 next_action:
   owner: implementer
   action: Implement explicit trusted agent preparation without production wiring
-updated_at: '2026-09-13T21:18:27+00:00'
+updated_at: '2026-09-13T21:35:00+00:00'
 configuration_history:
 - at: '2026-09-13T21:18:26+00:00'
   by: codex-lead

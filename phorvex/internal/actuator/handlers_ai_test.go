@@ -50,14 +50,21 @@ func (m *mockVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, err
 type mockMIG struct {
 	repErr, availErr error
 	calls            [][3]string
+	node             string
 }
 
-func (m *mockMIG) Available(_ context.Context, _ string) error { return m.availErr }
+func (m *mockMIG) Prepare(_ context.Context, node string) (preparedMIG, error) {
+	if m.availErr != nil {
+		return nil, m.availErr
+	}
+	m.node = node
+	return m, nil
+}
 func (m *mockMIG) CurrentProfile(_ context.Context, _, _ string) (string, error) {
 	return "1g.10gb", nil
 }
-func (m *mockMIG) Repartition(_ context.Context, node, gpu, profile string) error {
-	m.calls = append(m.calls, [3]string{node, gpu, profile})
+func (m *mockMIG) Repartition(_ context.Context, gpu, profile string) error {
+	m.calls = append(m.calls, [3]string{m.node, gpu, profile})
 	return m.repErr
 }
 
