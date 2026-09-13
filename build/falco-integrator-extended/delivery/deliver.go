@@ -53,9 +53,11 @@ const (
 	// Duplicate: Create hit AlreadyExists and the stored object was read back with
 	// the same name, fingerprint and spec — a proven identical retry.
 	Duplicate Outcome = "duplicate"
-	// Conflict: an object with this name exists but its fingerprint or spec differ
-	// (or it was replaced). Nothing was written; a retry with the same payload will
-	// not succeed until the stored object is removed.
+	// Conflict: the object stored under this name is not this payload — its
+	// fingerprint or spec differ, it was replaced, or the server pruned fields
+	// (readback_mismatch after AlreadyExists, create_mismatch after a 2xx Create).
+	// Nothing is adopted or overwritten; a retry with the same payload will not
+	// succeed until the stored object is removed or the schema accepts the fields.
 	Conflict Outcome = "conflict"
 	// Failed: Create was rejected, timed out, could not be verified after
 	// AlreadyExists, or was not attempted because the request was cancelled. The
@@ -71,7 +73,9 @@ type Result struct {
 	// DeliveryFingerprint is the full payload digest ("sha256:<64 hex>").
 	DeliveryFingerprint string `json:"deliveryFingerprint"`
 	// Reason is a stable machine token (e.g. "api:Forbidden", "timeout",
-	// "readback_failed", "readback_mismatch", "canceled", "transport").
+	// "readback_failed", "readback_mismatch", "create_unverified",
+	// "create_mismatch", "canceled", "transport"; "readback_verified" on an
+	// accepted event whose Create response had to be confirmed by Get).
 	Reason string `json:"reason,omitempty"`
 	// Message is a bounded, credential-free description for operators.
 	Message string `json:"message,omitempty"`
@@ -122,20 +126,28 @@ func Stamp(event *amtdapi.SecurityEvent, prefix string, id Identity) {
 	event.Annotations[IdentityAnnotation] = prefix + "/" + IdentityVersion
 }
 
-// Deliver creates the event once with a bounded deadline. On AlreadyExists it
-// reads the stored object back and accepts only an exact match. There is no
-// retry loop here: the caller's upstream (Falco, Alertmanager) owns retries and
-// receives a non-2xx status for anything that is not accepted or proven identical.
+// Deliver creates the event once with a bounded deadline and accepts only when
+// the returned object is exactly this event. On AlreadyExists, or on a 2xx whose
+// body is not this event, it reads the stored object back once and accepts only
+// an exact match. Worst case per event is two bounded API calls (Create + Get);
+// there is no retry loop here: the caller's upstream (Falco, Alertmanager) owns
+// retries and receives a non-2xx status for anything not accepted or proven identical.
 func (d Deliverer) Deliver(ctx context.Context, event *amtdapi.SecurityEvent) Result {
 	res := Result{Event: event.Name, DeliveryFingerprint: event.Annotations[FingerprintAnnotation]}
 	if err := ctx.Err(); err != nil {
 		return fail(res, "canceled", "not attempted: request context is done")
 	}
 	cctx, cancel := context.WithTimeout(ctx, d.timeout())
-	_, err := d.Client.Create(cctx, event)
+	created, err := d.Client.Create(cctx, event)
 	cancel()
 	switch {
 	case err == nil:
+		// A nil error is not proof: the decoded response must be THIS event. An
+		// empty body, another object's name, or a spec the server pruned (a legacy
+		// CRD without the optional fields) is not a full delivery.
+		if why := mismatch(created, event); why != "" {
+			return d.verifyCreated(ctx, event, res, why)
+		}
 		res.Outcome = Accepted
 		return res
 	case apierrors.IsAlreadyExists(err):
@@ -144,6 +156,31 @@ func (d Deliverer) Deliver(ctx context.Context, event *amtdapi.SecurityEvent) Re
 		reason, msg := classify(ctx, err)
 		return fail(res, reason, "create rejected: "+msg)
 	}
+}
+
+// verifyCreated handles a 2xx Create whose returned object is not this event:
+// at most one bounded exact-name Get decides. An identical authoritative
+// readback is success (the response was merely unusable); a readback that
+// differs is a conflict (the object stored under this name is not this payload,
+// e.g. a pruning schema); a failed readback is an explicit non-success.
+func (d Deliverer) verifyCreated(ctx context.Context, event *amtdapi.SecurityEvent, res Result, why string) Result {
+	gctx, cancel := context.WithTimeout(ctx, d.timeout())
+	existing, err := d.Client.Get(gctx, event.Name)
+	cancel()
+	if err != nil {
+		reason, msg := classify(ctx, err)
+		return fail(res, "create_unverified", "create response was not this event ("+why+") and readback failed ("+reason+"): "+msg)
+	}
+	if stored := mismatch(existing, event); stored != "" {
+		res.Outcome = Conflict
+		res.Reason = "create_mismatch"
+		res.Message = bound("create response was not this event (" + why + ") and the object stored under this name is not this payload: " + stored)
+		return res
+	}
+	res.Outcome = Accepted
+	res.Reason = "readback_verified"
+	res.Message = bound("create response was not this event (" + why + "); the stored object was read back and matches")
+	return res
 }
 
 func (d Deliverer) verifyExisting(ctx context.Context, event *amtdapi.SecurityEvent, res Result) Result {
@@ -167,7 +204,13 @@ func (d Deliverer) verifyExisting(ctx context.Context, event *amtdapi.SecurityEv
 // mismatch returns "" when the stored object is exactly this delivery: same name,
 // same fingerprint annotation, and byte-identical serialized spec (targets, rule,
 // description, score, metrics, evidence). Anything else names the first difference.
+// It is deliberately strict about the optional spec fields: a server that prunes
+// them (a CRD schema without anomalyScore/metrics/evidence) has not stored what
+// the detector delivered, and that must surface instead of being acknowledged.
 func mismatch(existing, event *amtdapi.SecurityEvent) string {
+	if existing == nil {
+		return "no object returned"
+	}
 	if existing.Name != event.Name {
 		return "name differs"
 	}

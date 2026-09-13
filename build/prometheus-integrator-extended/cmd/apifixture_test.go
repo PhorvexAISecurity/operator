@@ -60,6 +60,16 @@ type apiFixture struct {
 	GetStatus int
 	// HangCreate/HangGet block the response until the client gives up.
 	HangCreate, HangGet bool
+	// CreateReply, when set, replaces a successful Create's status/body after the
+	// object was stored: "empty-200" (200 {}), "foreign-name" (201 with another
+	// object's name), "drop-fingerprint" (201 without the fingerprint annotation),
+	// "other-targets" (201 whose spec.targets differ). The store is untouched, so
+	// a readback still sees the real object.
+	CreateReply string
+	// PruneOptionalSpec models a legacy CRD schema without spec.anomalyScore,
+	// spec.metrics and spec.evidence: they are dropped from what is stored AND
+	// from every response, exactly like an API server pruning unknown fields.
+	PruneOptionalSpec bool
 
 	creates int
 }
@@ -129,10 +139,27 @@ func (f *apiFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.writeStatus(w, 409, `securityevents.amtd.r6security.com "`+obj.Metadata.Name+`" already exists`)
 			return
 		}
-		f.Store[obj.Metadata.Name] = json.RawMessage(body)
+		stored := body
+		if f.PruneOptionalSpec {
+			stored = pruneOptionalSpec(stored)
+		}
+		f.Store[obj.Metadata.Name] = json.RawMessage(stored)
+		status, reply := http.StatusCreated, stored
+		switch f.CreateReply {
+		case "empty-200":
+			status, reply = http.StatusOK, []byte(`{}`)
+		case "foreign-name":
+			reply = rewriteJSON(stored, func(m map[string]any) { m["metadata"].(map[string]any)["name"] = "not-this-one" })
+		case "drop-fingerprint":
+			reply = rewriteJSON(stored, func(m map[string]any) {
+				delete(m["metadata"].(map[string]any)["annotations"].(map[string]any), "amtd.r6security.com/delivery-fingerprint")
+			})
+		case "other-targets":
+			reply = rewriteJSON(stored, func(m map[string]any) { m["spec"].(map[string]any)["targets"] = []any{"elsewhere/other"} })
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		w.Write(body)
+		w.WriteHeader(status)
+		w.Write(reply)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, securityEventsPath+"/"):
 		name := strings.TrimPrefix(r.URL.Path, securityEventsPath+"/")
 		if f.GetStatus != 0 {
@@ -210,4 +237,30 @@ func decodeStored(t *testing.T, raw json.RawMessage) storedEvent {
 		t.Fatalf("stored object is not a SecurityEvent: %v", err)
 	}
 	return ev
+}
+
+// rewriteJSON applies an in-place edit to a decoded JSON object and re-encodes it.
+func rewriteJSON(raw []byte, edit func(map[string]any)) []byte {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		panic(err)
+	}
+	edit(m)
+	out, err := json.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+// pruneOptionalSpec drops the fields a pre-anomalyScore SecurityEvent CRD does
+// not declare (the chart shipped them missing until V3-M164 synchronized it).
+func pruneOptionalSpec(raw []byte) []byte {
+	return rewriteJSON(raw, func(m map[string]any) {
+		if spec, ok := m["spec"].(map[string]any); ok {
+			delete(spec, "anomalyScore")
+			delete(spec, "metrics")
+			delete(spec, "evidence")
+		}
+	})
 }

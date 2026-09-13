@@ -45,15 +45,43 @@ fingerprint= "sha256:" + hex(digest)              # annotation amtd.r6security.c
 1. `POST /apis/amtd.r6security.com/v1beta1/securityevents` with the request context
    bounded by `SECURITYEVENT_API_TIMEOUT` (Go duration, default `10s`). One attempt;
    no retry loop.
-2. `201` → **accepted**.
-3. `409 AlreadyExists` → `GET .../securityevents/<name>` (same bound). The stored
-   object is accepted as a **duplicate** only if its name, both delivery annotations
-   and its serialized `spec` are exactly this delivery. Otherwise it is a **conflict**:
-   nothing is adopted, overwritten or patched.
-4. Any other rejection, a deadline, a transport error, or a readback that fails
+2. `2xx` whose returned object **is this event** (same name, both delivery
+   annotations, byte-identical serialized `spec` including `anomalyScore`, `metrics`
+   and `evidence`) → **accepted**. A nil error alone is not proof.
+3. `2xx` whose returned object is not this event (empty body, another object's
+   name, a missing annotation, a pruned or different spec) → at most **one**
+   bounded `GET .../securityevents/<name>`:
+   * readback identical → **accepted** with `reason: readback_verified`;
+   * readback differs → **conflict** (`reason: create_mismatch`) — the object stored
+     under this name is not what was delivered (e.g. a schema that prunes the
+     optional fields); nothing is adopted or rewritten;
+   * readback fails → **failed** (`reason: create_unverified`).
+4. `409 AlreadyExists` → the same bounded `GET`. The stored object is accepted as a
+   **duplicate** only if its name, both delivery annotations and its serialized
+   `spec` are exactly this delivery. Otherwise it is a **conflict**
+   (`readback_mismatch`): nothing is adopted, overwritten or patched.
+5. Any other rejection, a deadline, a transport error, or a readback that fails
    (forbidden, not found, timeout) → **failed**. Cancelled requests are failed as
    `canceled`; if the Create had actually landed, the next retry resolves it via the
    readback path.
+
+Bounds: at most two API calls per event, so one request takes at most
+2 × `SECURITYEVENT_API_TIMEOUT` of downstream time (plus body read). The caller's
+disconnect cancels in-flight calls (`canceled`). Falco's `http_output` has no
+retry queue; a non-2xx is an honest refusal, not a guarantee of redelivery.
+
+### Schema prerequisite
+
+The strict comparison is intentional: a SecurityEvent CRD that does not declare
+`spec.anomalyScore`, `spec.metrics` and `spec.evidence` (the Phoenix chart copy did
+not until V3-M164 synchronized `charts/phoenix/templates/crds/securityevents_crd.yaml`
+with `config/crd/bases`) makes the API server prune what the detector wrote. Such a
+server is never acknowledged as full delivery: the first request is a `409 conflict`
+(`create_mismatch`) and retries stay `409` (`readback_mismatch`). Install the
+synchronized CRD; do not expect the integrator to drop fields to match a stale
+schema. The regression `TestSecurityEventChartCRDMatchesGeneratedSchema` in
+`build/phoenix-extended/api/v1beta1` keeps chart, vendored archive and generated
+schema identical.
 
 ## Response contract
 
@@ -67,10 +95,10 @@ Every reply is `application/json`:
 
 | HTTP | `status` | Meaning |
 |---|---|---|
-| 200 | `accepted` | persisted in this request |
+| 200 | `accepted` | persisted in this request and the returned object is this event (`reason: readback_verified` when the Create response was unusable and a readback confirmed it) |
 | 200 | `duplicate` | already stored and verified identical by readback |
-| 409 | `conflict` | name exists with different content (`reason: readback_mismatch`); retrying the same payload will not succeed until the stored object is removed |
-| 503 | `failed` | `api:<Reason>` (Forbidden, TooManyRequests, InternalError, …), `timeout`, `transport`, `readback_failed`, `canceled`, `shutting_down` |
+| 409 | `conflict` | the object stored under this name is not this payload (`reason: readback_mismatch` after AlreadyExists, `create_mismatch` after a 2xx whose readback differs, e.g. a pruning schema); retrying the same payload will not succeed until the stored object is removed or the schema is fixed |
+| 503 | `failed` | `api:<Reason>` (Forbidden, TooManyRequests, InternalError, …), `timeout`, `transport`, `readback_failed`, `create_unverified`, `canceled`, `shutting_down` |
 | 400 | `invalid` | `invalid_input`, `unreadable_body` |
 | 405 / 413 | `invalid` | `method_not_allowed` / `body_too_large` |
 

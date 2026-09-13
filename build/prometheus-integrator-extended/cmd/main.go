@@ -48,6 +48,14 @@ const DetectorPrefix = "prometheus"
 // maxReportedProblems bounds how many per-alert validation problems one 400 lists.
 const maxReportedProblems = 10
 
+// identityExclusions are the TOP-LEVEL alert members left out of the delivery
+// identity: Alertmanager rewrites them over an alert's lifecycle (repeat
+// notifications advance endsAt; resolution flips status) without the alert being a
+// new episode. Everything else in the alert — labels, annotations, startsAt with
+// its full precision, generatorURL, fingerprint — stays identity-bearing. The
+// normalizer never reads these two members, so the spec is unaffected either way.
+var identityExclusions = []string{"status", "endsAt"}
+
 func getServerPort() string {
 	port := os.Getenv("SERVER_PORT")
 	if port != "" {
@@ -103,8 +111,8 @@ type Alert struct {
 }
 
 // rawBatch re-reads the same body keeping each alert as raw JSON so the per-alert
-// identity is derived from the alert's complete canonical content, not from the
-// typed subset or its batch position.
+// identity is derived from the alert's canonical content (minus identityExclusions),
+// not from the typed subset or its batch position.
 type rawBatch struct {
 	Alerts []json.RawMessage `json:"alerts"`
 }
@@ -207,7 +215,7 @@ func prepareBatch(body []byte) ([]preparedAlert, string, string) {
 			problems = append(problems, fmt.Sprintf("alerts[%d]: %s", i, strings.Join(p, ", ")))
 			continue
 		}
-		canonical, err := delivery.CanonicalJSON(raw.Alerts[i])
+		canonical, err := delivery.CanonicalJSONWithout(raw.Alerts[i], identityExclusions...)
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("alerts[%d]: malformed JSON: %s", i, jsonErr(err)))
 			continue

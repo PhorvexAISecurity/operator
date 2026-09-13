@@ -387,3 +387,97 @@ func TestGetAPITimeout(t *testing.T) {
 		}
 	}
 }
+
+// R1.3: a 2xx Create is acknowledged only when the returned object is this event;
+// otherwise one bounded exact-name Get decides, and nothing is adopted.
+func TestFalcoDelivery_CreateResponseIsValidatedNotTrusted(t *testing.T) {
+	for _, tc := range []struct {
+		reply string
+		why   string
+	}{
+		{"empty-200", "name differs"},
+		{"foreign-name", "name differs"},
+		{"drop-fingerprint", "delivery fingerprint differs"},
+		{"other-targets", "spec differs"},
+	} {
+		t.Run(tc.reply+" with matching stored object -> accepted via readback", func(t *testing.T) {
+			api := newAPIFixture(t)
+			api.CreateReply = tc.reply
+			fb := newFalcoBackend(t, api, 0)
+			reply := expect(t, do(fb, http.MethodPost, falcoJSON(falcoOpts{})), 200, "accepted", "readback_verified")
+			if !strings.Contains(reply.Message, tc.why) {
+				t.Errorf("message=%q should name the response problem %q", reply.Message, tc.why)
+			}
+			if got := api.methods(); !reflect.DeepEqual(got, []string{"POST ", "GET /" + reply.Event}) {
+				t.Fatalf("requests=%v; want exactly one Create and one exact-name readback", got)
+			}
+			if len(api.stored()) != 1 {
+				t.Fatalf("store=%d", len(api.stored()))
+			}
+		})
+		t.Run(tc.reply+" with readback denied -> failed create_unverified", func(t *testing.T) {
+			api := newAPIFixture(t)
+			api.CreateReply, api.GetStatus = tc.reply, 403
+			fb := newFalcoBackend(t, api, 0)
+			reply := expect(t, do(fb, http.MethodPost, falcoJSON(falcoOpts{})), 503, "failed", "create_unverified")
+			if !strings.Contains(reply.Message, tc.why) || !strings.Contains(reply.Message, "api:Forbidden") {
+				t.Errorf("message=%q", reply.Message)
+			}
+			if got := api.methods(); !reflect.DeepEqual(got, []string{"POST ", "GET /" + reply.Event}) {
+				t.Fatalf("requests=%v; at most one readback, no retry loop", got)
+			}
+		})
+	}
+	t.Run("zero-length 200 is a transport failure", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+		defer srv.Close()
+		client, err := amtdv1beta1client.NewClient(&rest.Config{Host: srv.URL})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := client.SecurityEvents()
+		fb := FalcoBackend{client: &c, ctx: context.Background()}
+		expect(t, do(fb, http.MethodPost, falcoJSON(falcoOpts{})), 503, "failed", "transport")
+	})
+}
+
+// R1.1: a server whose schema prunes the optional spec fields (the Phoenix chart
+// CRD before it was synchronized) has not stored what the detector delivered. The
+// first request must fail honestly instead of being acknowledged, the retry must
+// stay a conflict, and the strict comparison must not be relaxed to hide it.
+func TestFalcoDelivery_PruningSchemaIsNotAcknowledgedAsFullDelivery(t *testing.T) {
+	api := newAPIFixture(t)
+	api.PruneOptionalSpec = true
+	fb := newFalcoBackend(t, api, 0)
+
+	first := expect(t, do(fb, http.MethodPost, falcoJSON(falcoOpts{})), 409, "conflict", "create_mismatch")
+	if !strings.Contains(first.Message, "spec differs") {
+		t.Errorf("message=%q", first.Message)
+	}
+	if got := api.methods(); !reflect.DeepEqual(got, []string{"POST ", "GET /" + first.Event}) {
+		t.Fatalf("requests=%v; want Create, one readback, no adoption or rewrite", got)
+	}
+	stored := decodeStored(t, api.stored()[first.Event])
+	if stored.Spec.Score != "" || stored.Spec.Metrics != nil {
+		t.Fatalf("fixture did not prune: %+v", stored.Spec)
+	}
+	if stored.Spec.Rule["type"] != "drift" || !reflect.DeepEqual(stored.Spec.Targets, []string{"prod/web-1"}) {
+		t.Fatalf("fixture pruned more than the optional fields: %+v", stored.Spec)
+	}
+
+	retry := expect(t, do(fb, http.MethodPost, falcoJSON(falcoOpts{})), 409, "conflict", "readback_mismatch")
+	if retry.Event != first.Event || len(api.stored()) != 1 {
+		t.Fatalf("retry=%+v store=%d", retry, len(api.stored()))
+	}
+	for _, m := range api.methods() {
+		if !strings.HasPrefix(m, "POST ") && !strings.HasPrefix(m, "GET ") {
+			t.Fatalf("unexpected mutation request %q", m)
+		}
+	}
+
+	// Positive control: the same payload against a schema that keeps the fields.
+	full := newAPIFixture(t)
+	fbFull := newFalcoBackend(t, full, 0)
+	expect(t, do(fbFull, http.MethodPost, falcoJSON(falcoOpts{})), 200, "accepted", "")
+	expect(t, do(fbFull, http.MethodPost, falcoJSON(falcoOpts{})), 200, "duplicate", "")
+}

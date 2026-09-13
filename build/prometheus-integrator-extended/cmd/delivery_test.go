@@ -51,8 +51,8 @@ func newPrometheusBackend(t *testing.T, api *apiFixture, timeout time.Duration) 
 }
 
 type alertOpts struct {
-	pod, ns, alertname, fingerprint, startsAt, status string
-	extraLabels                                       string // raw JSON members appended to labels, e.g. `,"anomaly_score":"0.7"`
+	pod, ns, alertname, fingerprint, startsAt, status, endsAt, summary, generatorURL string
+	extraLabels                                                                      string // raw JSON members appended to labels, e.g. `,"anomaly_score":"0.7"`
 }
 
 func alertJSON(o alertOpts) string {
@@ -74,9 +74,18 @@ func alertJSON(o alertOpts) string {
 	if o.status == "" {
 		o.status = "firing"
 	}
+	if o.endsAt == "" {
+		o.endsAt = "0001-01-01T00:00:00Z"
+	}
+	if o.summary == "" {
+		o.summary = o.alertname + " on " + o.pod
+	}
+	if o.generatorURL == "" {
+		o.generatorURL = "http://prometheus:9090/graph?g0.expr=up"
+	}
 	return `{"status":"` + o.status + `","labels":{"alertname":"` + o.alertname + `","namespace":"` + o.ns + `","pod":"` + o.pod +
-		`","severity":"critical","type":"drift","threatlevel":"high"` + o.extraLabels + `},"annotations":{"summary":"` + o.alertname + ` on ` + o.pod +
-		`"},"startsAt":"` + o.startsAt + `","endsAt":"0001-01-01T00:00:00Z","generatorURL":"http://prometheus:9090/graph?g0.expr=up","fingerprint":"` + o.fingerprint + `"}`
+		`","severity":"critical","type":"drift","threatlevel":"high"` + o.extraLabels + `},"annotations":{"summary":"` + o.summary +
+		`"},"startsAt":"` + o.startsAt + `","endsAt":"` + o.endsAt + `","generatorURL":"` + o.generatorURL + `","fingerprint":"` + o.fingerprint + `"}`
 }
 
 func batchJSON(truncated int, alerts ...string) string {
@@ -387,8 +396,10 @@ func TestPrometheusDelivery_DistinctContentSamePodSecondIsDistinct(t *testing.T)
 		alertJSON(alertOpts{alertname: "CacheMissSpike"}),
 		alertJSON(alertOpts{startsAt: "2026-09-10T16:00:00.123456788Z"}), // same second, one nanosecond earlier
 		alertJSON(alertOpts{ns: "staging"}),                              // same pod name, different logical namespace
-		alertJSON(alertOpts{status: "resolved"}),
 		alertJSON(alertOpts{fingerprint: "other"}),
+		alertJSON(alertOpts{summary: "different annotation"}),
+		alertJSON(alertOpts{generatorURL: "http://prometheus:9090/graph?g0.expr=other"}),
+		alertJSON(alertOpts{extraLabels: `,"instance":"node-2"`}),
 	}
 	reply := expect(t, do(pb, http.MethodPost, batchJSON(0, variants...)), 200, "accepted", &batchCounts{Total: len(variants), Accepted: len(variants)})
 	seen := map[string]bool{}
@@ -462,4 +473,134 @@ func TestGetAPITimeout(t *testing.T) {
 			t.Errorf("%q accepted", bad)
 		}
 	}
+}
+
+// R1.2: per-alert status and endsAt are notification lifecycle metadata, not a
+// new episode. Replays that differ only there are verified duplicates; anything
+// substantive stays distinct. No resolution semantics are added: a resolved
+// notification whose firing event was never stored is delivered by the unchanged
+// normalizer like any other alert.
+func TestPrometheusDelivery_LifecycleMetadataDoesNotChangeIdentity(t *testing.T) {
+	api := newAPIFixture(t)
+	pb := newPrometheusBackend(t, api, 0)
+	firing := alertJSON(alertOpts{})
+	first := expect(t, do(pb, http.MethodPost, batchJSON(0, firing)), 200, "accepted", &batchCounts{Total: 1, Accepted: 1})
+
+	replays := map[string]string{
+		"repeat notification with advanced endsAt": alertJSON(alertOpts{endsAt: "2026-09-10T16:05:00.5Z"}),
+		"resolved notification":                    alertJSON(alertOpts{status: "resolved", endsAt: "2026-09-10T16:07:31.123456789Z"}),
+		"byte-identical resend":                    firing,
+	}
+	for name, alert := range replays {
+		t.Run(name, func(t *testing.T) {
+			reply := expect(t, do(pb, http.MethodPost, batchJSON(0, alert)), 200, "accepted", &batchCounts{Total: 1, Duplicate: 1})
+			if reply.Items[0].Event != first.Items[0].Event || len(api.stored()) != 1 {
+				t.Fatalf("event=%q (want %q) store=%d", reply.Items[0].Event, first.Items[0].Event, len(api.stored()))
+			}
+		})
+	}
+	// The stored object is the firing event's normalized spec; a duplicate never rewrites it.
+	ev := decodeStored(t, api.stored()[first.Items[0].Event])
+	if ev.Spec.Rule["type"] != "drift" || ev.Spec.Metrics["alertname"] != "HighGPU" {
+		t.Fatalf("stored spec changed: %+v", ev.Spec)
+	}
+
+	t.Run("substantive changes stay distinct", func(t *testing.T) {
+		distinct := []string{
+			alertJSON(alertOpts{startsAt: "2026-09-10T16:00:00.123456788Z"}),
+			alertJSON(alertOpts{extraLabels: `,"severity_override":"page"`}),
+			alertJSON(alertOpts{summary: "other text"}),
+			alertJSON(alertOpts{generatorURL: "http://prometheus:9090/graph?g0.expr=other"}),
+			alertJSON(alertOpts{fingerprint: "f-other"}),
+		}
+		reply := expect(t, do(pb, http.MethodPost, batchJSON(0, distinct...)), 200, "accepted", &batchCounts{Total: len(distinct), Accepted: len(distinct)})
+		for _, it := range reply.Items {
+			if it.Event == first.Items[0].Event {
+				t.Fatalf("substantive change collapsed onto the firing event: %+v", it)
+			}
+		}
+	})
+
+	t.Run("first notification already resolved is delivered by the unchanged normalizer", func(t *testing.T) {
+		fresh := newAPIFixture(t)
+		pbFresh := newPrometheusBackend(t, fresh, 0)
+		resolved := alertJSON(alertOpts{pod: "web-9", status: "resolved", endsAt: "2026-09-10T16:07:31Z"})
+		reply := expect(t, do(pbFresh, http.MethodPost, batchJSON(0, resolved)), 200, "accepted", &batchCounts{Total: 1, Accepted: 1})
+		ev := decodeStored(t, fresh.stored()[reply.Items[0].Event])
+		if ev.Spec.Rule["type"] != "drift" || ev.Spec.Rule["threatLevel"] != "high" || !reflect.DeepEqual(ev.Spec.Targets, []string{"prod/web-9"}) {
+			t.Fatalf("resolved alert was not normalized like any other: %+v", ev.Spec)
+		}
+		// Its later "firing" counterpart with identical content is the same event.
+		expect(t, do(pbFresh, http.MethodPost, batchJSON(0, alertJSON(alertOpts{pod: "web-9"}))), 200, "accepted", &batchCounts{Total: 1, Duplicate: 1})
+	})
+}
+
+// R1.3: a 2xx Create is acknowledged only when the returned object is this event;
+// otherwise one bounded exact-name Get decides the item, and nothing is adopted.
+func TestPrometheusDelivery_CreateResponseIsValidatedNotTrusted(t *testing.T) {
+	batch := batchJSON(0, alertJSON(alertOpts{pod: "web-1"}), alertJSON(alertOpts{pod: "web-2"}))
+	for _, reply := range []string{"empty-200", "foreign-name", "drop-fingerprint", "other-targets"} {
+		t.Run(reply+" verified by readback", func(t *testing.T) {
+			api := newAPIFixture(t)
+			api.CreateReply = reply
+			pb := newPrometheusBackend(t, api, 0)
+			res := expect(t, do(pb, http.MethodPost, batch), 200, "accepted", &batchCounts{Total: 2, Accepted: 2})
+			if got := outcomes(res); !reflect.DeepEqual(got, []string{"accepted:readback_verified", "accepted:readback_verified"}) {
+				t.Fatalf("outcomes=%v", got)
+			}
+			want := []string{"POST ", "GET /" + res.Items[0].Event, "POST ", "GET /" + res.Items[1].Event}
+			if got := api.methods(); !reflect.DeepEqual(got, want) {
+				t.Fatalf("requests=%v want %v", got, want)
+			}
+		})
+		t.Run(reply+" readback denied", func(t *testing.T) {
+			api := newAPIFixture(t)
+			api.CreateReply, api.GetStatus = reply, 403
+			pb := newPrometheusBackend(t, api, 0)
+			res := expect(t, do(pb, http.MethodPost, batch), 503, "failed", &batchCounts{Total: 2, Failed: 2})
+			if got := outcomes(res); !reflect.DeepEqual(got, []string{"failed:create_unverified", "failed:create_unverified"}) {
+				t.Fatalf("outcomes=%v", got)
+			}
+			if len(api.methods()) != 4 {
+				t.Fatalf("requests=%v; one Create and at most one readback per alert", api.methods())
+			}
+		})
+	}
+}
+
+// R1.1: a pruning schema is refused honestly on the first request, stays a
+// conflict on retry, and is never hidden by relaxing the spec comparison.
+func TestPrometheusDelivery_PruningSchemaIsNotAcknowledgedAsFullDelivery(t *testing.T) {
+	api := newAPIFixture(t)
+	api.PruneOptionalSpec = true
+	pb := newPrometheusBackend(t, api, 0)
+	batch := batchJSON(0, alertJSON(alertOpts{pod: "web-1"}), alertJSON(alertOpts{pod: "web-2"}))
+
+	first := expect(t, do(pb, http.MethodPost, batch), 409, "conflict", &batchCounts{Total: 2, Conflict: 2})
+	if got := outcomes(first); !reflect.DeepEqual(got, []string{"conflict:create_mismatch", "conflict:create_mismatch"}) {
+		t.Fatalf("outcomes=%v", got)
+	}
+	for _, it := range first.Items {
+		ev := decodeStored(t, api.stored()[it.Event])
+		if ev.Spec.Score != "" || ev.Spec.Metrics != nil || ev.Spec.Rule["type"] != "drift" {
+			t.Fatalf("fixture pruning is wrong: %+v", ev.Spec)
+		}
+	}
+	retry := expect(t, do(pb, http.MethodPost, batch), 409, "conflict", &batchCounts{Total: 2, Conflict: 2})
+	if got := outcomes(retry); !reflect.DeepEqual(got, []string{"conflict:readback_mismatch", "conflict:readback_mismatch"}) {
+		t.Fatalf("outcomes=%v", got)
+	}
+	for _, m := range api.methods() {
+		if !strings.HasPrefix(m, "POST ") && !strings.HasPrefix(m, "GET ") {
+			t.Fatalf("unexpected mutation request %q", m)
+		}
+	}
+	if len(api.stored()) != 2 {
+		t.Fatalf("store=%d", len(api.stored()))
+	}
+	// Positive control: same batch against a schema that keeps the fields.
+	full := newAPIFixture(t)
+	pbFull := newPrometheusBackend(t, full, 0)
+	expect(t, do(pbFull, http.MethodPost, batch), 200, "accepted", &batchCounts{Total: 2, Accepted: 2})
+	expect(t, do(pbFull, http.MethodPost, batch), 200, "accepted", &batchCounts{Total: 2, Duplicate: 2})
 }

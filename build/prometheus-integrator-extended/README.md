@@ -21,9 +21,13 @@ The webhook validates the whole Alertmanager batch before its first write and re
 or read back as a proven identical retry (per-item outcomes and counts are returned); downstream failures are `503`,
 unverified name collisions `409`, and invalid input `400`/`405`/`413` — always with a
 JSON body. Event names are deterministic (`prometheus-<40 hex>` of the canonical alert),
-so a resent or reordered batch never creates a second event while distinct alerts in the same
-pod and second never collide. The per-call API deadline is `SECURITYEVENT_API_TIMEOUT`
-(default `10s`). The ServiceAccount needs `get` and `create` on `securityevents`.
+so a resent or reordered batch — and a repeat/resolved notification of the same alert,
+whose top-level `status`/`endsAt` are excluded from identity — never creates a second
+event while distinct alerts in the same pod and second never collide. The per-call API deadline is `SECURITYEVENT_API_TIMEOUT`
+(default `10s`; at most two calls per event). The ServiceAccount needs `get` and
+`create` on `securityevents`, and the installed SecurityEvent CRD must declare
+`spec.anomalyScore`/`metrics`/`evidence` (the synchronized Phoenix chart does) — a
+pruning schema is reported as `409 conflict`, never as delivered.
 See [docs/DELIVERY.md](docs/DELIVERY.md).
 
 ## Caveats

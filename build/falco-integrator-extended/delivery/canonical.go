@@ -38,6 +38,15 @@ import (
 // value is an error. Two payloads that differ only in key order or whitespace
 // therefore canonicalize identically; any difference in content does not.
 func CanonicalJSON(raw []byte) ([]byte, error) {
+	return CanonicalJSONWithout(raw)
+}
+
+// CanonicalJSONWithout is CanonicalJSON with the named TOP-LEVEL object members
+// removed from the preimage. It is how a detector declares lifecycle metadata
+// that must not change an event's identity (e.g. Alertmanager's per-alert
+// status/endsAt); nested members are never touched. With no keys it is exactly
+// CanonicalJSON. A non-object value with keys to exclude is an error.
+func CanonicalJSONWithout(raw []byte, topLevelKeys ...string) ([]byte, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	var value any
@@ -46,6 +55,15 @@ func CanonicalJSON(raw []byte) ([]byte, error) {
 	}
 	if _, err := dec.Token(); err != io.EOF {
 		return nil, errors.New("trailing data after JSON value")
+	}
+	if len(topLevelKeys) > 0 {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return nil, errors.New("top-level value is not a JSON object")
+		}
+		for _, key := range topLevelKeys {
+			delete(object, key)
+		}
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

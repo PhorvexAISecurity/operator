@@ -192,3 +192,68 @@ func TestClassify(t *testing.T) {
 		t.Errorf("bound did not bound: %d bytes", len(got))
 	}
 }
+
+func TestCanonicalJSONWithout(t *testing.T) {
+	alert := `{"status":"firing","labels":{"alertname":"HighGPU","status":"keep"},"annotations":{"endsAt":"nested-keep"},"startsAt":"2026-09-10T16:00:00.123456789Z","endsAt":"0001-01-01T00:00:00Z","fingerprint":"f1"}`
+	got, err := CanonicalJSONWithout([]byte(alert), "status", "endsAt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"annotations":{"endsAt":"nested-keep"},"fingerprint":"f1","labels":{"alertname":"HighGPU","status":"keep"},"startsAt":"2026-09-10T16:00:00.123456789Z"}`
+	if string(got) != want {
+		t.Fatalf("got %s\nwant %s", got, want)
+	}
+	// Only top-level members are excluded; nested same-named members stay identity-bearing.
+	changedNested, _ := CanonicalJSONWithout([]byte(strings.Replace(alert, `"status":"keep"`, `"status":"other"`, 1)), "status", "endsAt")
+	if string(changedNested) == string(got) {
+		t.Fatal("nested member was wrongly excluded")
+	}
+	// Lifecycle changes do not alter the preimage; substantive changes do.
+	resolved, _ := CanonicalJSONWithout([]byte(strings.NewReplacer(`"status":"firing"`, `"status":"resolved"`, `"endsAt":"0001-01-01T00:00:00Z"`, `"endsAt":"2026-09-10T17:00:00Z"`).Replace(alert)), "status", "endsAt")
+	if string(resolved) != string(got) {
+		t.Fatalf("lifecycle-only change altered the preimage: %s", resolved)
+	}
+	later, _ := CanonicalJSONWithout([]byte(strings.Replace(alert, "123456789Z", "123456788Z", 1)), "status", "endsAt")
+	if string(later) == string(got) {
+		t.Fatal("startsAt precision was lost")
+	}
+	if plain, _ := CanonicalJSON([]byte(alert)); string(plain) == string(got) {
+		t.Fatal("CanonicalJSON must keep the members that CanonicalJSONWithout drops")
+	}
+	if same, _ := CanonicalJSONWithout([]byte(alert)); string(same) != string(mustCanonical(t, alert)) {
+		t.Fatal("no keys must equal CanonicalJSON")
+	}
+	if _, err := CanonicalJSONWithout([]byte(`[1,2]`), "status"); err == nil {
+		t.Fatal("excluding keys from a non-object must fail")
+	}
+	if missing, _ := CanonicalJSONWithout([]byte(`{"a":1}`), "absent"); string(missing) != `{"a":1}` {
+		t.Fatalf("absent key changed output: %s", missing)
+	}
+}
+
+func mustCanonical(t *testing.T, raw string) []byte {
+	t.Helper()
+	out, err := CanonicalJSON([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestMismatchRejectsAbsentOrEmptyResponse(t *testing.T) {
+	ev := &amtdapi.SecurityEvent{}
+	Stamp(ev, "prometheus", Derive("prometheus", []byte(`{"x":1}`)))
+	if why := mismatch(nil, ev); why != "no object returned" {
+		t.Errorf("nil -> %q", why)
+	}
+	if why := mismatch(&amtdapi.SecurityEvent{}, ev); why != "name differs" {
+		t.Errorf("empty object -> %q", why)
+	}
+	pruned := ev.DeepCopy()
+	score := "0.95"
+	ev.Spec.AnomalyScore = &score
+	ev.Spec.Metrics = map[string]string{"k": "v"}
+	if why := mismatch(pruned, ev); why != "spec differs" {
+		t.Errorf("pruned optional fields must not compare equal: %q", why)
+	}
+}
