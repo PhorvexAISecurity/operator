@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 22
+revision: 33
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,18 +11,18 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: fe5affa957b236adf7333d124d2e9fc69adecf5b0bc443a2324911dc61231982
+    sha256: bf20cd146d9fe8e84768954cc5150e0a935c73731a2d61fa03c9cd592687943a
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T18:54:07+00:00'
+    at: '2026-09-13T20:01:27+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   implementation:
     result: PASS
     by: claude-v3-m120
     artifact: 04-diff.patch
-    sha256: 9107c5a425ced6a3340646fdc569441bc31ec1da65c0b30ca9fc67d1434f5dcd
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T19:50:00+00:00'
+    sha256: e830c300b34de143c58190dd24605e56bbd69e6ec937e945be58913d9237e905
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T20:15:29+00:00'
   red:
     result: PASS
     by: claude-v3-m120
@@ -42,10 +42,10 @@ checks:
   l0:
     result: PASS
     by: claude-v3-m120
-    artifact: evidence/r2/l0/head-phorvex-go-unit-recipe.log
-    sha256: 13d99c961fc2effc2bc4b61cf4b87015cfefb66dfcab5f1fa675ba715777dc73
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T19:50:00+00:00'
+    artifact: evidence/r3/l0/head-phorvex-go-unit-recipe.log
+    sha256: 977f72ba9ec20dbd40b2017db81209539188ae3379fc9d198fc994fe894ac1f7
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T20:15:29+00:00'
     inputs:
     - build/falco-integrator-extended
     - build/metricvalidity
@@ -57,10 +57,10 @@ checks:
   l1:
     result: PASS
     by: claude-v3-m120
-    artifact: evidence/r2/l1/head-tools-unittest-py3.14.log
-    sha256: 325cc1a58c5a3f23396c570363bdb0582d215c761e4068c70874d4ef8f5c7021
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T19:50:00+00:00'
+    artifact: evidence/r3/l1/head-tools-unittest-py3.14.log
+    sha256: aa53ef2d28998f7c163cf03ee1c5c3af2b46817fd3829a1044d05ae985dbe962
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T20:15:29+00:00'
     inputs:
     - .github/PR-VALIDATION.md
     - .github/workflows/pr-validation.yml
@@ -70,45 +70,45 @@ checks:
     - build/prometheus-integrator-extended
     - phorvex
     - tools
-    inputs_sha256: 7dfd54bba3c4cb873b039dfd5bc9d672f7f44eeced21e332d13586b71afa54c2
+    inputs_sha256: 6ed150b809cca11ff6f4463310d6f31222022ff9d776422487abfa3b153362a4
   l2:
     result: PASS
     by: claude-v3-m120
-    artifact: evidence/r2/l2/head-envtest-gate-run.log
-    sha256: fe15096683a63e7905f2dc8f97f70427932c811d235a2d9f43623361747139f0
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T19:50:01+00:00'
+    artifact: evidence/r3/l2/head-envtest-gate-run.log
+    sha256: 808bdb7e06e9c50ca7bd8e6ac26a6cf10653d9701e64a3a16e4f287cad406fc0
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T20:15:30+00:00'
     inputs:
     - build/metricvalidity
     - build/phoenix-extended
     - phorvex
     - tools/envtest_gate.py
-    inputs_sha256: a98929e7bff253350f9a2bd036e4aa8d30324837fa7b5ccbee1842428b69ea6d
+    inputs_sha256: 66b90a96e7d28eefe848240946730b1303c8eb355d5f1885b93016d9b788fd9f
   positive_control:
     result: PASS
     by: claude-v3-m120
-    artifact: evidence/r2/probes/lead-probes-rerun.log
-    sha256: 68e73ec9c3755854d7ef187bb6bb55a5764c11b2ff27c55aef1f62c19e0b1f56
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T19:50:01+00:00'
+    artifact: evidence/r3/composition/composed-m69-new-gate-run.log
+    sha256: e1be1b38abcb82a548520cf73a52d182a02e9ac17e8360a7165f799681573e93
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T20:15:30+00:00'
     inputs:
     - phorvex
     - tools
-    inputs_sha256: f4685d4ead8b88e66a85677e9cdcfb6d89e9a863f9a1d776843d45fa28835b18
+    inputs_sha256: 2f421e74279b6bbca5335c4b49eb9473b849bf2a4f8402c6b5957dc74785689d
   preflight:
     result: PASS
     by: claude-v3-m120
     artifact: evidence/preflight/receipt.json
-    sha256: bbb3f45f7c58dfba6a4267e8e827383570d500cc6a18bbceeb4744af75a6b83a
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T19:54:56+00:00'
+    sha256: f5af904f491db4696386d4d6f366a1301ec0dd7c3af7e34287a5ca3e208142cf
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T20:19:50+00:00'
   p3:
     result: FAIL
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 64ce49cd8ad0da373940049ca7b8b868edd460298b2e7e27f293d7606762efa8
-    source_sha: a68876bd709d404f88d10392272d71c0844a1f7c
-    at: '2026-09-13T19:41:49+00:00'
+    sha256: 53ba59db2ff7da7fc0cbd7e02652c5e5af7cce021fcaeb0ad7bb653443bd8a73
+    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+    at: '2026-09-13T20:02:13+00:00'
 fix_id: T2-M120
 issues:
 - M-120
@@ -139,7 +139,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m120-ci-execution
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  head_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
   stacked_on: []
 pull_request:
   url: null
@@ -179,7 +179,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-13T19:54:58+00:00'
+updated_at: '2026-09-13T20:19:52+00:00'
 configuration_history:
 - at: '2026-09-13T18:54:06+00:00'
   by: codex-lead
@@ -208,6 +208,16 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-13T19:54:56+00:00'
+  by: claude-v3-m120
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T20:15:05+00:00'
+  by: claude-v3-m120
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T20:19:50+00:00'
   by: claude-v3-m120
   fields:
   - implementation
@@ -261,13 +271,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T20:02:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T20:19:51+00:00'
+  by: claude-v3-m120
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M120:22:submit
+  id: T2-M120:33:submit
   from: claude-v3-m120
   to: codex-lead
   role: skeptic
   kind: submit
-  revision: 22
+  revision: 33
 check_history:
 - check: implementation
   result: PASS
@@ -358,3 +384,106 @@ check_history:
   sha256: bbb3f45f7c58dfba6a4267e8e827383570d500cc6a18bbceeb4744af75a6b83a
   source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
   at: '2026-09-13T19:54:32+00:00'
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: fe5affa957b236adf7333d124d2e9fc69adecf5b0bc443a2324911dc61231982
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T18:54:07+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 64ce49cd8ad0da373940049ca7b8b868edd460298b2e7e27f293d7606762efa8
+  source_sha: a68876bd709d404f88d10392272d71c0844a1f7c
+  at: '2026-09-13T19:41:49+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m120
+  artifact: 04-diff.patch
+  sha256: 9107c5a425ced6a3340646fdc569441bc31ec1da65c0b30ca9fc67d1434f5dcd
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T19:50:00+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m120
+  artifact: evidence/r2/l0/head-phorvex-go-unit-recipe.log
+  sha256: 13d99c961fc2effc2bc4b61cf4b87015cfefb66dfcab5f1fa675ba715777dc73
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T19:50:00+00:00'
+  inputs:
+  - build/falco-integrator-extended
+  - build/metricvalidity
+  - build/phoenix-extended
+  - build/prometheus-integrator-extended
+  - build/test-harness
+  - phorvex
+  inputs_sha256: 70f13a1961dad394f5b1f33d60845c4ee8cebb7ccb8e04f133171284964d9ebb
+- check: l1
+  result: PASS
+  by: claude-v3-m120
+  artifact: evidence/r2/l1/head-tools-unittest-py3.14.log
+  sha256: 325cc1a58c5a3f23396c570363bdb0582d215c761e4068c70874d4ef8f5c7021
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T19:50:00+00:00'
+  inputs:
+  - .github/PR-VALIDATION.md
+  - .github/workflows/pr-validation.yml
+  - build/falco-integrator-extended
+  - build/metricvalidity
+  - build/phoenix-extended
+  - build/prometheus-integrator-extended
+  - phorvex
+  - tools
+  inputs_sha256: 7dfd54bba3c4cb873b039dfd5bc9d672f7f44eeced21e332d13586b71afa54c2
+- check: l2
+  result: PASS
+  by: claude-v3-m120
+  artifact: evidence/r2/l2/head-envtest-gate-run.log
+  sha256: fe15096683a63e7905f2dc8f97f70427932c811d235a2d9f43623361747139f0
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T19:50:01+00:00'
+  inputs:
+  - build/metricvalidity
+  - build/phoenix-extended
+  - phorvex
+  - tools/envtest_gate.py
+  inputs_sha256: a98929e7bff253350f9a2bd036e4aa8d30324837fa7b5ccbee1842428b69ea6d
+- check: positive_control
+  result: PASS
+  by: claude-v3-m120
+  artifact: evidence/r2/probes/lead-probes-rerun.log
+  sha256: 68e73ec9c3755854d7ef187bb6bb55a5764c11b2ff27c55aef1f62c19e0b1f56
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T19:50:01+00:00'
+  inputs:
+  - phorvex
+  - tools
+  inputs_sha256: f4685d4ead8b88e66a85677e9cdcfb6d89e9a863f9a1d776843d45fa28835b18
+- check: preflight
+  result: PASS
+  by: claude-v3-m120
+  artifact: evidence/preflight/receipt.json
+  sha256: bbb3f45f7c58dfba6a4267e8e827383570d500cc6a18bbceeb4744af75a6b83a
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T19:54:56+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-v3-m120
+  artifact: evidence/preflight/receipt.json
+  sha256: 44d370034ddadaaaded9125bf9e51cc9d0a5f77179a6d1e4918c36dff21da0c8
+  source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+  at: '2026-09-13T20:17:37+00:00'
+  rationale: 'Receipt at eaaf037: every job PASS except workflow, whose doctor rejects
+    the r2 preflight attestation (source 974accc) as stale after the re-pin. Honest
+    interim record; superseded by the PASS below.'
+- check: preflight
+  result: PASS
+  by: claude-v3-m120
+  artifact: evidence/preflight/receipt.json
+  sha256: f5af904f491db4696386d4d6f366a1301ec0dd7c3af7e34287a5ca3e208142cf
+  source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+  at: '2026-09-13T20:19:49+00:00'
