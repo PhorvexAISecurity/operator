@@ -1,5 +1,7 @@
 # Tier 1 deployment assessment
 
+> **15:52 UTC update:** PR179 has since merged; the observed Pod still runs0.4.112. See [the timestamped update](UPDATE-1552.md). The original-window findings below retain their original pins and timing.
+
 Status: REPORTED_WITH_GAPS; Tier 1 remains open for repair and acceptance.
 
 This is a bounded continuation of the September 10 readiness assessment after
