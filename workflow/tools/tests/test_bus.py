@@ -26,7 +26,14 @@ class BusTransportTests(unittest.TestCase):
             root=Path(raw);repo=root/'repo';peer=root/'peer';repo.mkdir()
             def git(*args):
                 return subprocess.run(['git','-C',str(repo),*args],check=True,capture_output=True,text=True)
-            git('init','-q');git('-c','user.name=Test','-c','user.email=test@example.invalid',
+            git('init','-q')
+            # Both worktrees share this configuration; no background writer may
+            # survive the temporary repository's cleanup.
+            git('config','--local','maintenance.auto','false')
+            git('config','--local','gc.auto','0')
+            self.assertEqual(git('config','--local','--bool','maintenance.auto').stdout.strip(), 'false')
+            self.assertEqual(git('config','--local','--int','gc.auto').stdout.strip(), '0')
+            git('-c','user.name=Test','-c','user.email=test@example.invalid',
                                 'commit','--allow-empty','-qm','fixture')
             git('worktree','add','--detach',str(peer),'HEAD')
             first=repo/'workflow/coordination';second=peer/'workflow/coordination'
