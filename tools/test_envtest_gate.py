@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -88,9 +89,53 @@ class EvaluateTests(unittest.TestCase):
 
     def test_subtest_failure_under_passing_parent_is_rejected(self):
         lines = passing_stream(subtests=('ok',))
-        lines.insert(lines.index(event('pass', ACTUATOR, 'TestM048APIServerLifecycle', Elapsed=1.5)),
-                     event('fail', ACTUATOR, 'TestM048APIServerLifecycle/other-namespace', Elapsed=0.1))
+        at = lines.index(event('pass', ACTUATOR, 'TestM048APIServerLifecycle', Elapsed=1.5))
+        lines[at:at] = [event('run', ACTUATOR, 'TestM048APIServerLifecycle/other-namespace'),
+                        event('fail', ACTUATOR, 'TestM048APIServerLifecycle/other-namespace', Elapsed=0.1)]
         self.assertEqual(problems(lines), [f'{ACTUATOR} TestM048APIServerLifecycle/other-namespace: fail'])
+
+    # Stream integrity (review R1.1): every observed selected parent/subtest is tracked to
+    # completion. A normal Go run emits run-then-terminal for each; a stream that does not
+    # carries no evidence for that test and must fail.
+    def test_complete_subtest_run_and_terminal_is_accepted(self):
+        lines = passing_stream(subtests=('long-pod-name', 'pod-patch'))
+        self.assertEqual(problems(lines), [])
+
+    def test_started_subtest_without_terminal_is_rejected(self):
+        lines = passing_stream()
+        lines.insert(2, event('run', ACTUATOR, 'TestM47APIServerPreconditions/lost-terminal'))
+        self.assertEqual(problems(lines),
+                         [f'{ACTUATOR} TestM47APIServerPreconditions/lost-terminal: no terminal event'])
+
+    def test_terminal_without_run_is_rejected(self):
+        lines = passing_stream()
+        lines.insert(2, event('pass', ACTUATOR, 'TestM47APIServerPreconditions/orphan-pass', Elapsed=0))
+        self.assertEqual(problems(lines),
+                         [f'{ACTUATOR} TestM47APIServerPreconditions/orphan-pass: pass without a preceding run event'])
+        # The same for an expected parent whose run event was lost.
+        lines = [l for l in passing_stream() if l != event('run', RUNNER, 'TestM013RealEventSink')]
+        self.assertEqual(problems(lines),
+                         [f'{RUNNER} TestM013RealEventSink: pass without a preceding run event'])
+
+    def test_terminal_before_run_is_rejected(self):
+        lines = passing_stream()
+        run_at = lines.index(event('run', RUNNER, 'TestM005TwoManagersAndHandoff'))
+        pass_at = lines.index(event('pass', RUNNER, 'TestM005TwoManagersAndHandoff', Elapsed=1.5))
+        lines[run_at], lines[pass_at] = lines[pass_at], lines[run_at]
+        found = problems(lines)
+        self.assertIn(f'{RUNNER} TestM005TwoManagersAndHandoff: pass without a preceding run event', found)
+        self.assertIn(f'{RUNNER} TestM005TwoManagersAndHandoff: no terminal event', found)
+
+    def test_repeated_run_or_terminal_is_rejected(self):
+        lines = passing_stream()
+        lines.insert(lines.index(event('run', ACTUATOR, 'TestM007RestrictedRequests')) + 1,
+                     event('run', ACTUATOR, 'TestM007RestrictedRequests'))
+        self.assertEqual(problems(lines), [f'{ACTUATOR} TestM007RestrictedRequests: repeated run event'])
+        lines = passing_stream()
+        lines.insert(lines.index(event('pass', ACTUATOR, 'TestM007RestrictedRequests', Elapsed=1.5)) + 1,
+                     event('pass', ACTUATOR, 'TestM007RestrictedRequests', Elapsed=1.5))
+        self.assertEqual(problems(lines),
+                         [f'{ACTUATOR} TestM007RestrictedRequests: repeated terminal event (pass then pass)'])
 
     def test_missing_terminal_event_is_rejected(self):
         lines = [l for l in passing_stream()
@@ -183,6 +228,78 @@ class CommandLineTests(unittest.TestCase):
         proc, summary = self.run_check(passing_stream(), 1)
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(summary['problems'], ['go test exited 1'])
+
+    # Transport (review R1.2): the runner must drain stdout and stderr concurrently. A
+    # synthetic `go` executable substitutes only the subprocess byte streams and exit code;
+    # dummy executables stand in for the asset presence check. Nothing here starts an API server.
+    def synthetic_go(self, tmp, stderr_bytes, exit_code, lines=None):
+        lines = passing_stream() if lines is None else lines
+        go = Path(tmp) / 'go'
+        go.write_text('#!' + sys.executable + '\n'
+                      'import sys\n'
+                      'if sys.argv[1:2] == ["version"]:\n'
+                      '    print("go version synthetic transport fixture"); sys.exit(0)\n'
+                      f'sys.stderr.write("e" * {stderr_bytes}); sys.stderr.flush()\n'
+                      f'sys.stdout.write({"".join(l + chr(10) for l in lines)!r}); sys.stdout.flush()\n'
+                      f'sys.exit({exit_code})\n')
+        go.chmod(0o700)
+        assets = Path(tmp) / 'assets'
+        assets.mkdir()
+        for name in gate.REQUIRED_BINARIES:
+            (assets / name).write_text('#!/bin/sh\nexit 0\n')
+            (assets / name).chmod(0o700)
+        return go, assets
+
+    def run_transport(self, stderr_bytes, exit_code, lines=None, timeout=30):
+        with tempfile.TemporaryDirectory() as tmp:
+            go, assets = self.synthetic_go(tmp, stderr_bytes, exit_code, lines)
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets), 'USE_EXISTING_CLUSTER': 'false'}
+            started = time.monotonic()
+            proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run', '--go', str(go),
+                                   '--raw-output', f'{tmp}/out/go-test.jsonl', '--summary', f'{tmp}/out/summary.json'],
+                                  cwd=ROOT, env=env, capture_output=True, text=True, timeout=timeout)
+            elapsed = time.monotonic() - started
+            summary = json.loads(Path(tmp, 'out/summary.json').read_text())
+            stderr_file = Path(summary['stderr_output'])
+            retained = stderr_file.stat().st_size if stderr_file.exists() else None
+            raw = Path(tmp, 'out/go-test.jsonl').read_text()
+            return proc, summary, elapsed, retained, raw
+
+    def test_small_stderr_positive_completes_and_passes(self):
+        proc, summary, _, retained, raw = self.run_transport(16, 0)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(summary['result'], 'PASS')
+        self.assertEqual(summary['exit'], 0)
+        self.assertEqual((retained, summary['stderr_bytes'], summary['stderr']), (16, 16, 'e' * 16))
+        self.assertEqual(raw, ''.join(l + '\n' for l in passing_stream()))
+
+    def test_large_stderr_before_stdout_completes(self):
+        # 1 MiB written to stderr before any stdout: far beyond a pipe buffer. Serial
+        # draining deadlocked here (lead probe: killed after 3 s); it must now finish.
+        proc, summary, elapsed, retained, _ = self.run_transport(1024 * 1024, 0, timeout=20)
+        self.assertEqual(proc.returncode, 0, proc.stderr[-500:])
+        self.assertEqual(summary['result'], 'PASS')
+        self.assertLess(elapsed, 10)
+        self.assertEqual(retained, 1024 * 1024)
+        self.assertEqual(summary['stderr_bytes'], 1024 * 1024)
+        self.assertEqual(summary['stderr'], 'e' * 4096)  # bounded excerpt in the summary
+        self.assertIn('e' * 1024, proc.stderr)  # diagnostics still echoed to the job log
+
+    def test_nonzero_exit_with_normal_output_fails(self):
+        proc, summary, _, retained, _ = self.run_transport(16, 3)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(summary['result'], 'FAIL')
+        self.assertEqual(summary['exit'], 3)
+        self.assertEqual(summary['problems'], ['go test exited 3'])
+        self.assertEqual(retained, 16)
+
+    def test_incomplete_stream_from_process_fails(self):
+        lines = passing_stream()
+        lines.insert(2, event('run', ACTUATOR, 'TestM47APIServerPreconditions/lost-terminal'))
+        proc, summary, _, _, _ = self.run_transport(0, 0, lines=lines)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(summary['problems'],
+                         [f'{ACTUATOR} TestM47APIServerPreconditions/lost-terminal: no terminal event'])
 
     def test_run_mode_refuses_without_local_binaries(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -7,17 +7,22 @@ the CI proof that they were executed against local kube-apiserver/etcd binaries:
 
   * only these exact package/test names are accepted (a rename or removal fails);
   * every expected test must emit a `run` event and terminate with `pass`;
-  * any `skip`, `fail` or `build-fail` event, any missing terminal event, any
-    unexpected package/test, any malformed line and any non-zero `go test` exit
-    fails the gate even when the output otherwise looks green;
+  * every observed selected parent or subtest is tracked to completion: a `run`
+    without a terminal event, a terminal event without a preceding `run`, or a
+    repeated `run`/terminal for the same test is a stream-integrity failure;
+  * any `skip`, `fail` or `build-fail` event, any unexpected package/test, any
+    malformed line and any non-zero `go test` exit fails the gate even when the
+    output otherwise looks green;
   * every expected package must itself terminate with `pass`;
   * an empty report is never accepted.
 
-`go test` is started directly (no shell pipe), its stdout is retained verbatim as
-the raw JSON evidence and the verdict is computed from that retained file.
+`go test` is started directly (no shell pipe). Its stdout is streamed into the
+raw JSON evidence file while its stderr is written to a sibling file by the OS
+(both pipes are drained concurrently, so a large stderr can never stall the
+run); the verdict is computed from the retained stdout file and the real exit.
 
 Usage:
-  envtest_gate.py run   --raw-output FILE --summary FILE [--go GO] [--timeout 10m]
+  envtest_gate.py run   --raw-output FILE --summary FILE [--stderr-output FILE] [--go GO] [--timeout 10m]
   envtest_gate.py check --raw-input FILE --exit-code N --summary FILE
 
 Scope: local isolated API servers only. envtest has no kubelet, CNI, garbage
@@ -76,7 +81,8 @@ def evaluate(lines, returncode):
     """
     problems = []
     verdicts = {t: 'missing' for tests in EXPECTED.values() for t in tests}
-    started = set()
+    # Every observed selected parent/subtest: 'run' until its terminal action arrives.
+    observed = {}
     packages = {p: 'missing' for p in EXPECTED}
     events = 0
     for number, raw in enumerate(lines, 1):
@@ -106,24 +112,34 @@ def evaluate(lines, returncode):
             if parent(test) not in EXPECTED[package]:
                 problems.append(f'unexpected test {package} {test}')
                 continue
+            key = (package, test)
             if action == 'run':
-                started.add((package, test))
-            if action in ('fail', 'skip'):
-                problems.append(f'{package} {test}: {action}')
-            if action in TERMINAL and test in EXPECTED[package]:
-                verdicts[test] = action
+                if key in observed:
+                    problems.append(f'{package} {test}: repeated run event')
+                observed[key] = 'run'
+            elif action in TERMINAL:
+                if key not in observed:
+                    problems.append(f'{package} {test}: {action} without a preceding run event')
+                elif observed[key] != 'run':
+                    problems.append(f'{package} {test}: repeated terminal event ({observed[key]} then {action})')
+                observed[key] = action
+                if action != 'pass':
+                    problems.append(f'{package} {test}: {action}')
+                if test in EXPECTED[package]:
+                    verdicts[test] = action
         elif action in TERMINAL:
             packages[package] = action
             if action != 'pass':
                 problems.append(f'package {package}: {action}')
     if events == 0:
         problems.append('empty report: no test events observed')
+    for (package, test), state in observed.items():
+        if state == 'run':
+            problems.append(f'{package} {test}: no terminal event')
     for package, tests in EXPECTED.items():
         for test in tests:
-            if (package, test) not in started:
+            if (package, test) not in observed:
                 problems.append(f'{package} {test}: never ran')
-            elif verdicts[test] == 'missing':
-                problems.append(f'{package} {test}: no terminal event')
         if packages[package] == 'missing':
             problems.append(f'package {package}: no terminal event')
     if returncode != 0:
@@ -191,8 +207,13 @@ def cmd_run(args) -> int:
     command = go_command(go, args.timeout)
     summary['command'] = command
     summary['go_version'] = subprocess.run([go, 'version'], capture_output=True, text=True).stdout.strip()
-    with raw.open('w') as out:
-        proc = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    stderr_path = Path(args.stderr_output) if args.stderr_output else raw.with_name(raw.name + '.stderr.txt')
+    stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    summary['stderr_output'] = str(stderr_path)
+    # stderr goes straight to its file (no pipe to drain), so streaming stdout here
+    # cannot deadlock against a process that fills stderr first.
+    with raw.open('w') as out, stderr_path.open('w') as err:
+        proc = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=err, text=True)
         for line in proc.stdout:
             out.write(line)
             try:
@@ -201,11 +222,12 @@ def cmd_run(args) -> int:
                 event = None
             if isinstance(event, dict) and event.get('Test') and event.get('Action') in ('run', *TERMINAL):
                 print(f'{event["Action"]:>5} {event.get("Package")} {event["Test"]}', flush=True)
-        stderr = proc.stderr.read()
         returncode = proc.wait()
+    stderr = stderr_path.read_text(errors='replace')
     if stderr.strip():
         print(stderr, file=sys.stderr, end='' if stderr.endswith('\n') else '\n')
-    summary['stderr'] = stderr
+    summary['stderr_bytes'] = stderr_path.stat().st_size
+    summary['stderr'] = stderr[:4096]
     with raw.open() as retained:
         problems, verdicts, packages = evaluate(retained, returncode)
     summary.update(exit=returncode, problems=problems, verdicts=verdicts, packages=packages,
@@ -234,6 +256,8 @@ def main(argv=None) -> int:
     run = sub.add_parser('run', help='execute the required tests and gate on the retained report')
     run.add_argument('--raw-output', required=True, help='where the verbatim go test -json stream is retained')
     run.add_argument('--summary', required=True, help='where the machine-readable verdict is written')
+    run.add_argument('--stderr-output', default=None,
+                     help='where go test stderr is retained in full (default: <raw-output>.stderr.txt)')
     run.add_argument('--go', default=None, help='go binary (default: PATH)')
     run.add_argument('--timeout', default='10m', help='go test -timeout (default 10m)')
     run.set_defaults(func=cmd_run)

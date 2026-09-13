@@ -21,7 +21,8 @@ There is no paths filter or draft guard on these source checks:
   M005 two-manager handoff, M013 real event sink) with `go test -json`. Every one must
   run and pass: a skip, failure, missing test, missing terminal event, malformed or
   empty report, or non-zero `go test` exit fails the job even when the output looks
-  green. The verbatim JSON stream is uploaded as the `envtest-evidence` artifact. envtest
+  green; every observed parent/subtest must run and reach a terminal event. The verbatim
+  JSON stream and the full `go test` stderr are uploaded as the `envtest-evidence` artifact. envtest
   is a local kube-apiserver/etcd only — no kubelet, CNI, garbage collector, cloud API or
   AI serving backend — so this job proves API semantics, not deployed behaviour.
 - `frontend`: locked npm install, TypeScript checking, and the full static Next build.
