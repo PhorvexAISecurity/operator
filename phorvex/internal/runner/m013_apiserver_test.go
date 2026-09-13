@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-logr/logr/funcr"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/model"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +25,67 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
+
+func waitM013EventAuthorization(ctx context.Context, interval time.Duration, want bool, review func(context.Context, string) (bool, error)) error {
+	verbs := []string{"create", "patch"}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		matched := true
+		statuses := make(map[string]bool, len(verbs))
+		for _, verb := range verbs {
+			allowed, err := review(ctx, verb)
+			if err != nil {
+				return fmt.Errorf("review events %s: %w", verb, err)
+			}
+			statuses[verb] = allowed
+			matched = matched && allowed == want
+		}
+		if matched {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("waiting for events create/patch allowed=%t (last=%v): %w", want, statuses, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestM013AuthorizationWaitsForBothVerbTransitions(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		want     bool
+		sequence [][2]bool
+	}{
+		{name: "delayed allow", want: true, sequence: [][2]bool{{false, false}, {true, false}, {true, true}}},
+		{name: "delayed deny", want: false, sequence: [][2]bool{{true, true}, {false, true}, {false, false}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			review := func(_ context.Context, verb string) (bool, error) {
+				round := calls / 2
+				if round >= len(tc.sequence) {
+					round = len(tc.sequence) - 1
+				}
+				index := 0
+				if verb == "patch" {
+					index = 1
+				}
+				calls++
+				return tc.sequence[round][index], nil
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := waitM013EventAuthorization(ctx, time.Millisecond, tc.want, review); err != nil {
+				t.Fatal(err)
+			}
+			if calls != len(tc.sequence)*2 {
+				t.Fatalf("reviews=%d want=%d", calls, len(tc.sequence)*2)
+			}
+		})
+	}
+}
 
 func TestM013RealEventSink(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
@@ -42,6 +105,7 @@ func TestM013RealEventSink(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = rbacv1.AddToScheme(scheme)
+	_ = authv1.AddToScheme(scheme)
 	admin, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +128,25 @@ func TestM013RealEventSink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	review := func(reviewCtx context.Context, verb string) (bool, error) {
+		sar := &authv1.SubjectAccessReview{Spec: authv1.SubjectAccessReviewSpec{
+			User: rc.Impersonate.UserName, Groups: rc.Impersonate.Groups,
+			ResourceAttributes: &authv1.ResourceAttributes{Namespace: "m013", Verb: verb, Resource: "events"},
+		}}
+		if err := admin.Create(reviewCtx, sar); err != nil {
+			return false, err
+		}
+		return sar.Status.Allowed, nil
+	}
+	waitAuthorization := func(label string, want bool) {
+		t.Helper()
+		waitCtx, waitCancel := context.WithTimeout(ctx, 8*time.Second)
+		defer waitCancel()
+		if err := waitM013EventAuthorization(waitCtx, 30*time.Millisecond, want, review); err != nil {
+			t.Fatalf("%s: %v", label, err)
+		}
+	}
+	waitAuthorization("initial event permission did not propagate", true)
 	var mu sync.Mutex
 	logs := ""
 	log := funcr.New(func(_, msg string) { mu.Lock(); logs += msg + "\n"; mu.Unlock() }, funcr.Options{})
@@ -109,7 +192,7 @@ func TestM013RealEventSink(t *testing.T) {
 	if err := admin.Delete(ctx, binding); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(150 * time.Millisecond)
+	waitAuthorization("event permission revocation did not propagate", false)
 	start := time.Now()
 	m.notifyActuation(target, model.ActionQuarantine, actuator.Result{Emitted: true}, nil)
 	if time.Since(start) > 500*time.Millisecond {
@@ -120,6 +203,7 @@ func TestM013RealEventSink(t *testing.T) {
 	restored.ResourceVersion = ""
 	restored.UID = ""
 	create(restored)
+	waitAuthorization("restored event permission did not propagate", true)
 	m.notifyActuation(target, model.ActionIdentityRotate, actuator.Result{Emitted: true}, nil)
 	wait("restored permission did not recover", func() bool {
 		_ = admin.List(ctx, &events, client.InNamespace("m013"))
