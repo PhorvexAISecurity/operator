@@ -2282,7 +2282,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-154 · Audit retention is size-capped, not time-capped — decision-trace.v3's larger records halved the observable history depth, and the pre-v3 corpus rotated out unremarked · **OPEN** · `AUDIT`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: T2-M154
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
