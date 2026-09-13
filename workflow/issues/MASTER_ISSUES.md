@@ -1709,7 +1709,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-126 · Tenant identity can overflow the 63-char label-value cap · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M126
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
