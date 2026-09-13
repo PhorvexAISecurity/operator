@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -100,12 +100,19 @@ checks:
     source_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
     at: '2026-09-13T18:44:27+00:00'
     incident_sha256: 4679310f7a8c7f59a78f58b7d9127c26dcee3675cb94bae7c45305e2e3179582
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/pr-equivalence.json
+    sha256: c862766ca10ac623bdde3415cf8365d70074b503c1706c306b61dbbab814db14
+    source_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
+    at: '2026-09-13T18:45:30+00:00'
 fix_id: T2-M016
 issues:
 - M-16
 title: Keep counterfactual audit notes honest about selection
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -132,11 +139,11 @@ implementation:
   head_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/191
+  reviewed_head: 324ea6ed12ae53e1808987d1399408d72f946abe
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -167,9 +174,8 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T18:44:29+00:00'
+  action: Monitor PR191 CI and await owner merge and DevOps deployment; L3 pending.
+updated_at: '2026-09-13T18:45:31+00:00'
 configuration_history:
 - at: '2026-09-13T18:20:54+00:00'
   by: codex-lead
@@ -191,6 +197,11 @@ configuration_history:
   by: claude-v3-m016
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T18:45:31+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -240,6 +251,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T18:45:31+00:00'
+  by: codex-lead
+  artifact: PR_BODY.md
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: T2-M016:9:review
