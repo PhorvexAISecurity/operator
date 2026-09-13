@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 10
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -22,12 +22,70 @@ checks:
     sha256: 5e469354f05f8d8c42bb826fab6da178f35d85b7eb0f1c6ed15b8ba6f2e3effd
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
     at: '2026-09-13T21:35:00+00:00'
+  preflight:
+    result: PASS
+    by: sol-m081
+    artifact: evidence/preflight/receipt.json
+    sha256: ed5a9ea09750ae8297910f3d0793a024b52e8b53a9baa406f9839f8b8b230a23
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:09:04+00:00'
+  implementation:
+    result: PASS
+    by: sol-m081
+    artifact: 04-diff.patch
+    sha256: 8d2c26b9133eff8b6a4954106d12adfe367f753b984876c6442b84d17f85b7cf
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:09:04+00:00'
+  l0:
+    result: PASS
+    by: sol-m081
+    artifact: evidence/worker-r1-verify.log
+    sha256: a2acafc56ae4cdb1f0d7564a5629644898d23ff3423aced1e9fbf2a76f0b5ad7
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:09:04+00:00'
+  l1:
+    result: PASS
+    by: sol-m081
+    artifact: evidence/worker-final-focused.log
+    sha256: 862f9284b19a9ff798270976e728d2a36204076b372c1f9469c22d7fae54d198
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:09:04+00:00'
+  l2:
+    result: PASS
+    by: sol-m081
+    artifact: evidence/worker-final-root-overlay.log
+    sha256: 3e683a3777f21b13945e9596e014b81cd3a71fb16df89bb6cf58feec94d1ba00
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:09:04+00:00'
+  positive_control:
+    result: PASS
+    by: sol-m081
+    artifact: evidence/worker-final-root-overlay.log
+    sha256: 3e683a3777f21b13945e9596e014b81cd3a71fb16df89bb6cf58feec94d1ba00
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:09:04+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 8f05189b38b7898ed632b592ae827cb950f26d536e7d50246215566915855516
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:13:30+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: db31e7e5666625e91ca1cdc09f1520fbd97d33b122198fafc2d234a5658d4ca1
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:13:30+00:00'
+    incident_sha256: 8f05189b38b7898ed632b592ae827cb950f26d536e7d50246215566915855516
 fix_id: T2-M081
 issues:
 - M-81
 title: Bind privileged MIG commands to one explicitly trusted node agent
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -51,7 +109,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m081-bound-node-agent
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: null
+  head_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
   stacked_on: []
 pull_request:
   url: null
@@ -72,13 +130,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -88,9 +146,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement explicit trusted agent preparation without production wiring
-updated_at: '2026-09-13T21:35:00+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T22:13:32+00:00'
 configuration_history:
 - at: '2026-09-13T21:18:26+00:00'
   by: codex-lead
@@ -103,6 +162,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: /home/mehrdad/operator-v3-m081/workflow/fixes/T2-M081/AUTHORIZATION.md
+- at: '2026-09-13T21:49:12+00:00'
+  by: sol-m081
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T21:51:49+00:00'
+  by: sol-m081
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:04:00+00:00'
+  by: sol-m081
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -120,3 +194,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T22:09:04+00:00'
+  by: sol-m081
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T22:09:05+00:00'
+  by: sol-m081
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T22:13:30+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T22:13:31+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T2-M081:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10
