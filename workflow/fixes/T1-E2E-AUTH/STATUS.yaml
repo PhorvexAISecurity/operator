@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 14
+revision: 26
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -24,65 +24,73 @@ checks:
     artifact: evidence/red/incident-probe-base.log
     sha256: 95878986642672d76b9b57469f351e80cb7a1e540ffec52d2c5f22ed3ed1669c
     source_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
-    at: '2026-09-13T15:27:06+00:00'
+    at: '2026-09-13T15:56:54+00:00'
     rationale: 'Baseline executed against the base pipeline with real Transport/curl
-      and a verifying loopback console: VERDICT BASE_REPRODUCED (health reached, no
-      credential carried although configured, 401 parsed as a document, preflight
-      looped to its deadline). Positive control: the identical probe at head reports
-      HEAD_FIXED (evidence/red/incident-probe-head.log).'
+      and a verifying loopback console: VERDICT BASE_REPRODUCED. Positive control:
+      the identical probe at head reports HEAD_FIXED. The lead''s r1 counterexamples
+      (evidence/lead-probe, evidence/red/r2-counterexamples-ddc6b29.log) are the additional
+      executed RED at ddc6b29.'
   positive_control:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/red/incident-probe-head.log
-    sha256: e320db3672117409b942fda6c7dd7be4b1a54ea84352ce897ce8cbb52f2c8d9d
-    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:32:22+00:00'
+    sha256: 253a21a913810c7512bcd6b89aaf6475759c810d394e1d616f208a61b54465ac
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:03:00+00:00'
   implementation:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: 04-diff.patch
-    sha256: 6734193191a5783936d1bc224626bc9f9941a53eedb1b1a8a1ac8a53b4fe07b6
-    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:32:22+00:00'
+    sha256: 46e9f0fef725fe5296d870c6c0868b492d8e964dd7c25fae3fab144d88a9f39a
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:03:00+00:00'
   l0:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/head/l0-build-vet.log
-    sha256: 55efd557577122a15aba73ae8a424b042b8cb55f617c21d283c2f625efe6d3eb
-    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:32:22+00:00'
+    sha256: c83fe2274e0faa92385c0fadfc303dc2d4048a3ee245e9c3ee9f03165eb3f847
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:03:00+00:00'
     inputs:
     - End-to-End
     - phorvex
-    inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+    - tools
+    inputs_sha256: a82de9b6b486e5e9c43f66a7c19d24fc420b82df3f311dd4796def4b104a25b9
   l1:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/head/python-pipeline-suite.log
-    sha256: 96550cb514802ac6641bc8388e23d226a7feb85162dcc6f168a59bbeb7968aca
-    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:32:22+00:00'
+    sha256: 00931f2c58593168af3c0321bac10476e6541630acbe0f7be3ed192879df56a0
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:03:00+00:00'
     inputs:
     - End-to-End
-    inputs_sha256: a9347339d1c068da96eec60c84084a614171ca243eb9ab08eb5525545ce2e1bd
+    inputs_sha256: 9f701400ef781e4c57f2fc5af9b6f515c7f5c793dfbeabdf49933978ad0afe9d
   l2:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/head/go-console-suite.log
-    sha256: 4662c846212d91afc74a672adddfcad2b66f89bcc4784c03bd54fdc5235c4086
-    source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:32:22+00:00'
+    sha256: f389720567387896431d82d7660cef77ebc71ddac23009a1ff5e15b5bf58cb56
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:03:00+00:00'
     inputs:
     - End-to-End
     - phorvex
-    inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+    inputs_sha256: 2faf68a4cdf610ea9bf5a86c012bab1fa87777b8d560b3e1097ae0b4ef1ef78a
   preflight:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/preflight/receipt.json
-    sha256: 01ebe795baea4591bc737cfc6854aeb147b9064c650f9225ac896144a62352ba
+    sha256: 61d93185022c683de426436393eaa8a11e757794401fdd93a3486517c3b4045d
+    source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+    at: '2026-09-13T16:03:00+00:00'
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: cf730b829096878425bace51c4210bb4bbe949b159ba13988ec5c2051b4d9e51
     source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
-    at: '2026-09-13T15:32:22+00:00'
+    at: '2026-09-13T15:36:11+00:00'
 fix_id: T1-E2E-AUTH
 issues:
 - M-136
@@ -112,7 +120,7 @@ blind_derivation:
 implementation:
   branch: fix/tier1-e2e-console-auth
   base_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
-  head_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  head_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
   stacked_on: []
 pull_request:
   url: null
@@ -133,7 +141,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,7 +160,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-13T15:32:24+00:00'
+updated_at: '2026-09-13T16:03:02+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -175,6 +183,21 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-13T15:32:22+00:00'
+  by: claude-tier1-e2e-auth
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T15:51:41+00:00'
+  by: claude-tier1-e2e-auth
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T15:53:11+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-13T16:03:00+00:00'
   by: claude-tier1-e2e-auth
   fields:
   - implementation
@@ -207,6 +230,22 @@ transitions:
 - from: IMPLEMENTED
   to: OFFLINE_VERIFIED
   at: '2026-09-13T15:32:23+00:00'
+  by: claude-tier1-e2e-auth
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T15:36:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T16:03:01+00:00'
   by: claude-tier1-e2e-auth
   artifact: null
   note: Validated role handoff
@@ -269,10 +308,141 @@ check_history:
   rationale: 'Same probe as the red check at head: health control succeeds, credential
     carried, preflight passes, authenticated stream fires once with only the granted
     tenant''s record: VERDICT HEAD_FIXED.'
+- check: positive_control
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/red/incident-probe-head.log
+  sha256: e320db3672117409b942fda6c7dd7be4b1a54ea84352ce897ce8cbb52f2c8d9d
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:32:22+00:00'
+- check: implementation
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: 04-diff.patch
+  sha256: 6734193191a5783936d1bc224626bc9f9941a53eedb1b1a8a1ac8a53b4fe07b6
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:32:22+00:00'
+- check: l0
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/l0-build-vet.log
+  sha256: 55efd557577122a15aba73ae8a424b042b8cb55f617c21d283c2f625efe6d3eb
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:32:22+00:00'
+  inputs:
+  - End-to-End
+  - phorvex
+  inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+- check: l1
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/python-pipeline-suite.log
+  sha256: 96550cb514802ac6641bc8388e23d226a7feb85162dcc6f168a59bbeb7968aca
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:32:22+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: a9347339d1c068da96eec60c84084a614171ca243eb9ab08eb5525545ce2e1bd
+- check: l2
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/go-console-suite.log
+  sha256: 4662c846212d91afc74a672adddfcad2b66f89bcc4784c03bd54fdc5235c4086
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:32:22+00:00'
+  inputs:
+  - End-to-End
+  - phorvex
+  inputs_sha256: 33986e5488702b62b76b52426ab3f70813720e2a77a35d8b087b26055a2e7e70
+- check: red
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/red/incident-probe-base.log
+  sha256: 95878986642672d76b9b57469f351e80cb7a1e540ffec52d2c5f22ed3ed1669c
+  source_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
+  at: '2026-09-13T15:27:06+00:00'
+  rationale: 'Baseline executed against the base pipeline with real Transport/curl
+    and a verifying loopback console: VERDICT BASE_REPRODUCED (health reached, no
+    credential carried although configured, 401 parsed as a document, preflight looped
+    to its deadline). Positive control: the identical probe at head reports HEAD_FIXED
+    (evidence/red/incident-probe-head.log).'
+- check: preflight
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/preflight/receipt.json
+  sha256: 01ebe795baea4591bc737cfc6854aeb147b9064c650f9225ac896144a62352ba
+  source_sha: ddc6b293173571d9ff7273132a662a5ebe2cb036
+  at: '2026-09-13T15:32:22+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-tier1-e2e-auth
+  artifact: evidence/preflight/receipt.json
+  sha256: 92a380e986e304d341249931b094d4bd998e464ee2a2957061b45a71d8aa7bd2
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T16:00:15+00:00'
+  rationale: 'First run at the re-pinned head 76bb3c4: every job PASS except the self-referential
+    workflow job, whose doctor --deep-evidence saw the previous (ddc6b29) preflight
+    attestation as stale. Recorded to break the cycle; superseded by the rerun below.'
+- check: preflight
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/preflight/receipt.json
+  sha256: 61d93185022c683de426436393eaa8a11e757794401fdd93a3486517c3b4045d
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T16:02:54+00:00'
+- check: implementation
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: 04-diff.patch
+  sha256: 46e9f0fef725fe5296d870c6c0868b492d8e964dd7c25fae3fab144d88a9f39a
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T15:56:38+00:00'
+- check: l0
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/l0-build-vet.log
+  sha256: c83fe2274e0faa92385c0fadfc303dc2d4048a3ee245e9c3ee9f03165eb3f847
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T15:56:39+00:00'
+  inputs:
+  - End-to-End
+  - phorvex
+  - tools
+  inputs_sha256: a82de9b6b486e5e9c43f66a7c19d24fc420b82df3f311dd4796def4b104a25b9
+- check: l1
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/python-pipeline-suite.log
+  sha256: 00931f2c58593168af3c0321bac10476e6541630acbe0f7be3ed192879df56a0
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T15:56:39+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: 9f701400ef781e4c57f2fc5af9b6f515c7f5c793dfbeabdf49933978ad0afe9d
+- check: l2
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/go-console-suite.log
+  sha256: f389720567387896431d82d7660cef77ebc71ddac23009a1ff5e15b5bf58cb56
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T15:56:39+00:00'
+  inputs:
+  - End-to-End
+  - phorvex
+  inputs_sha256: 2faf68a4cdf610ea9bf5a86c012bab1fa87777b8d560b3e1097ae0b4ef1ef78a
+- check: positive_control
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/red/incident-probe-head.log
+  sha256: 253a21a913810c7512bcd6b89aaf6475759c810d394e1d616f208a61b54465ac
+  source_sha: 76bb3c4a6da57b87c2fdfdb1db5f0c424d2b6bcc
+  at: '2026-09-13T15:56:38+00:00'
+  rationale: 'Same probe as the red check at head: HEAD_FIXED. The lead''s unchanged
+    probe and stdin control also pass at head (evidence/lead-probe/*-r2-*).'
 handoff:
-  id: T1-E2E-AUTH:14:submit
+  id: T1-E2E-AUTH:26:submit
   from: claude-tier1-e2e-auth
   to: codex-lead
   role: skeptic
   kind: submit
-  revision: 14
+  revision: 26
