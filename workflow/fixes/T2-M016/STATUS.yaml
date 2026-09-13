@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -18,16 +18,14 @@ checks:
     approval_ref: AUTHORIZATION.md
   red:
     result: PASS
-    by: claude-v3-m016
-    artifact: evidence/incident.md
-    sha256: 9bc6f6281c7b5c452482352350de3e95bb45a2323a2d1405066b0168f5c4e220
+    by: codex-lead
+    artifact: evidence/lead-baseline/red-with-controls.log
+    sha256: 6502fc9ac0d573f8fc351a48e88e0948ea22ca3cad47b3d56759980641072e14
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T18:33:34+00:00'
-    rationale: 'Discriminating baseline control executed and behaved as intended:
-      at d296799 the selected=false fallback records (b, c, db2, q2) carry ''Phorvex
-      chose quarantine'' / ''Phorvex quarantined'' notes through the real CoverageEngine.Decide
-      -> audit.Logger.Record -> JSON path while every structural precondition held;
-      at b000aad the same test passes.'
+    at: '2026-09-13T18:44:27+00:00'
+    rationale: Root independently executed this baseline. Worker originally attested
+      its incident preparation; that immutable version is retained as evidence/p3/r1/worker-preparation.md
+      while canonical incident now contains the independent review.
   preflight:
     result: PASS
     by: claude-v3-m016
@@ -86,12 +84,28 @@ checks:
     - build/phoenix-extended
     - phorvex
     inputs_sha256: 01358205faf724cd5cb832979d3b48464f1d346008381bb0dcc519ce24a645aa
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4679310f7a8c7f59a78f58b7d9127c26dcee3675cb94bae7c45305e2e3179582
+    source_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
+    at: '2026-09-13T18:44:27+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d6dc6e946f9457a8394af914058702725049822f7120a84e23d20069e11e272f
+    source_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
+    at: '2026-09-13T18:44:27+00:00'
+    incident_sha256: 4679310f7a8c7f59a78f58b7d9127c26dcee3675cb94bae7c45305e2e3179582
 fix_id: T2-M016
 issues:
 - M-16
 title: Keep counterfactual audit notes honest about selection
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +150,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +166,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T18:41:03+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T18:44:29+00:00'
 configuration_history:
 - at: '2026-09-13T18:20:54+00:00'
   by: codex-lead
@@ -211,10 +225,39 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T18:44:28+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T18:44:29+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M016:7:submit
-  from: claude-v3-m016
+  id: T2-M016:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 9
+check_history:
+- check: red
+  result: PASS
+  by: claude-v3-m016
+  artifact: evidence/incident.md
+  sha256: 9bc6f6281c7b5c452482352350de3e95bb45a2323a2d1405066b0168f5c4e220
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T18:33:34+00:00'
+  rationale: 'Discriminating baseline control executed and behaved as intended: at
+    d296799 the selected=false fallback records (b, c, db2, q2) carry ''Phorvex chose
+    quarantine'' / ''Phorvex quarantined'' notes through the real CoverageEngine.Decide
+    -> audit.Logger.Record -> JSON path while every structural precondition held;
+    at b000aad the same test passes.'
