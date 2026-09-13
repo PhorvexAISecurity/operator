@@ -59,7 +59,8 @@ type streamMetricRow struct {
 var stageLineRe = regexp.MustCompile(`scenario=([a-z0-9-]+)\s+defender=([a-z0-9-]+)\s+trial=(\d+)`)
 
 func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+	// The id the boundary resolved and authorized — never re-read from the request.
+	id := runIDOf(r)
 	outDir, ok := s.runs.streamRef(id)
 	if !ok {
 		writeJSON(w, 404, map[string]string{"error": "run not found"})

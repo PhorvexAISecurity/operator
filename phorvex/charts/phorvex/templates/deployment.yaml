@@ -181,12 +181,58 @@ spec:
         # GPU/DCGM scan)" even though dcgm-exporter is scraping. host[:port], scheme stripped.
         - -metrics-allow={{ .Values.phorvex.prometheusUrl | trimPrefix "https://" | trimPrefix "http://" }}
         {{- end }}
-        {{- if .Values.phorvex.prometheusUrl }}
+        {{- if .Values.phorvex.console.auth.grants.enabled }}
+        # M-136: the DevOps-supplied subject grant table. Without it the console still starts and
+        # still authenticates callers, but authorizes NOBODY — the fail-closed rollout state.
+        - -auth-grants={{ .Values.phorvex.console.auth.grants.mountPath }}/{{ .Values.phorvex.console.auth.grants.fileName }}
+        {{- end }}
+        {{- if or .Values.phorvex.prometheusUrl .Values.phorvex.console.auth.alb.signerArn .Values.phorvex.console.auth.oidc.issuer .Values.phorvex.console.auth.trustedOrigins }}
         env:
+        {{- if .Values.phorvex.prometheusUrl }}
         # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
         # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
         - name: PHORVEX_PROM_URL
           value: {{ .Values.phorvex.prometheusUrl | quote }}
+        {{- end }}
+        # ── M-136 console identity ─────────────────────────────────────────────
+        # The console refuses to start unless at least one credential path is configured. These
+        # are CONFIGURATION IDENTIFIERS (a load-balancer ARN, a user-pool issuer, an app-client
+        # id) — not secrets — and they are per-deployment: never reuse one environment's signer
+        # in another, or that environment's ALB becomes a trusted issuer for this one.
+        {{- with .Values.phorvex.console.auth.alb }}
+        {{- if .signerArn }}
+        - name: PHORVEX_CONSOLE_ALB_SIGNER_ARN
+          value: {{ .signerArn | quote }}
+        - name: PHORVEX_CONSOLE_ALB_ISSUER
+          value: {{ required "console.auth.alb.issuer is required when signerArn is set" .issuer | quote }}
+        - name: PHORVEX_CONSOLE_ALB_CLIENT_ID
+          value: {{ required "console.auth.alb.clientId is required when signerArn is set" .clientId | quote }}
+        {{- if .region }}
+        - name: PHORVEX_CONSOLE_ALB_REGION
+          value: {{ .region | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.phorvex.console.auth.oidc }}
+        {{- if .issuer }}
+        - name: PHORVEX_CONSOLE_OIDC_ISSUER
+          value: {{ .issuer | quote }}
+        - name: PHORVEX_CONSOLE_OIDC_AUDIENCE
+          value: {{ required "console.auth.oidc.audience is required when issuer is set" .audience | quote }}
+        - name: PHORVEX_CONSOLE_OIDC_JWKS_URL
+          value: {{ required "console.auth.oidc.jwksUrl is required when issuer is set" .jwksUrl | quote }}
+        {{- if .algorithms }}
+        - name: PHORVEX_CONSOLE_OIDC_ALGS
+          value: {{ join "," .algorithms | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.phorvex.console.auth.trustedOrigins }}
+        # The same-origin/CSRF boundary for browser-driven state changes. Exact origins only;
+        # there is no wildcard, and an unlisted origin gets no CORS grant either.
+        - name: PHORVEX_CONSOLE_TRUSTED_ORIGINS
+          value: {{ join "," .Values.phorvex.console.auth.trustedOrigins | quote }}
+        {{- end }}
         {{- end }}
         ports:
         - name: http
@@ -217,6 +263,11 @@ spec:
         # an emptyDir keeps the root filesystem read-only while allowing it.
         - name: console-tmp
           mountPath: /tmp
+        {{- if .Values.phorvex.console.auth.grants.enabled }}
+        - name: console-grants
+          mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
+          readOnly: true
+        {{- end }}
 {{- end }}
       {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
       volumes:
@@ -237,6 +288,11 @@ spec:
       {{- if .Values.phorvex.console.enabled }}
       - name: console-tmp
         emptyDir: {}
+      {{- if .Values.phorvex.console.auth.grants.enabled }}
+      - name: console-grants
+        configMap:
+          name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
+      {{- end }}
       {{- end }}
       {{- if .Values.phorvex.calibration.enabled }}
       - name: calibration-evidence

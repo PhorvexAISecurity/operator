@@ -99,6 +99,51 @@ phorvex:
         tag: "0.4.111"          # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
+      # ── console identity and authorization (M-136) ────────────────────────
+      # The ALB below already forces Cognito login, but until this fix the POD accepted whatever
+      # the request asserted: a self-declared `X-Phorvex-Lens: operator` header reached the
+      # mutation endpoints that shell out to kubectl. The console now verifies the ALB's own
+      # ES256 signature on x-amzn-oidc-data and authorizes the verified subject from an explicit
+      # grant table.
+      #
+      # These three values are read back from the LIVE ingress annotations further down this
+      # file — the same load balancer, user pool and app client. They are configuration
+      # identifiers, not secrets. They are also specific to THIS cluster: another environment
+      # must configure its own, never reuse these.
+      auth:
+        alb:
+          signerArn: arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-phorvexc-a8e81988e6/46c1992f6311801f
+          issuer: https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB
+          clientId: 2ms9uge9hm4uap1h0ida3it9on
+          region: us-east-2
+        # The public console origin, for the same-origin/CSRF boundary on browser mutations.
+        trustedOrigins:
+          - https://console.phorvex.ai
+        # ── ROLLOUT PREREQUISITE — READ BEFORE DEPLOYING ────────────────────
+        # `subjects` is EMPTY on purpose. Nobody here knows which Cognito users should be
+        # operators of this cluster, and guessing is the failure mode this fix exists to remove:
+        # a wrong entry hands cluster-wide kubectl exec (through the operator ServiceAccount)
+        # to whoever it names.
+        #
+        # DevOps must fill this in before the console is useful:
+        #   1. list the pool's users and their `sub` UUIDs
+        #        aws cognito-idp list-users --user-pool-id us-east-2_JfwlBPRbB \
+        #          --query 'Users[].{sub:Attributes[?Name==`sub`].Value|[0],user:Username}'
+        #   2. add one entry per person, with the NARROWEST role and tenant scope that works;
+        #   3. redeploy.
+        #
+        # Until then the console starts, authenticates every logged-in user, and authorizes none
+        # of them: reads return 403 with "no authorization grant for this identity", the startup
+        # log says the grant table is empty, and /api/session reports grantsConfigured: false.
+        # That is the intended fail-closed state, not a regression.
+        grants:
+          enabled: true
+          create: true
+          data: |
+            {
+              "version": 1,
+              "subjects": []
+            }
     epss:
       enabled: true
       configMapName: phorvex-epss

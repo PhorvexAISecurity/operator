@@ -215,6 +215,68 @@ phorvex:
     resources:
       limits: { cpu: 500m, memory: 256Mi }
       requests: { cpu: 10m, memory: 64Mi }
+    # ── identity and authorization (M-136) ────────────────────────────────────
+    # The console REFUSES TO START unless at least one credential path below is configured. There
+    # is no demo-trust mode: the previous build treated "no IdP" and "IdP failed to load" as
+    # permission to serve cluster controls to whoever asked.
+    #
+    # Everything here is a configuration identifier, not a secret. It is also per-environment:
+    # copying one cluster's signer ARN into another makes that cluster's load balancer a trusted
+    # issuer here, which is exactly the trust relationship you do not want to share.
+    auth:
+      # ALB Cognito — the path the browser actually uses when the ingress carries
+      # alb.ingress.kubernetes.io/auth-type: cognito. The console verifies the ES256 signature on
+      # x-amzn-oidc-data against this exact load balancer, user pool and app client.
+      alb:
+        signerArn: ""   # arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>
+        issuer: ""      # https://cognito-idp.<region>.amazonaws.com/<user-pool-id>
+        clientId: ""    # the user-pool app-client id
+        region: ""      # optional; defaults to the region inside signerArn
+      # Bearer OIDC — for CLI and automation callers. All three fields are required together.
+      oidc:
+        issuer: ""
+        audience: ""
+        jwksUrl: ""
+        algorithms: []  # default ["RS256"]; RS256/384/512 and ES256/384/512 are supported
+      # Exact browser origins allowed to drive state changes (the same-origin/CSRF boundary).
+      # There is no wildcard: an unlisted origin gets neither a CORS grant nor a mutation.
+      trustedOrigins: []
+      # The subject grant table. DevOps supplies it; the console never derives one.
+      #
+      # ROLLOUT PREREQUISITE: with no bindings the console authenticates callers and authorizes
+      # NOBODY. That is deliberate and visible (the startup log says so, and /api/session reports
+      # grantsConfigured: false). Bind the specific Cognito subjects who should be operators
+      # before rollout — do not grant a role because someone can log in.
+      grants:
+        enabled: false
+        create: false
+        configMapName: ""
+        mountPath: /etc/phorvex-console
+        fileName: grants.json
+        # data is the literal grant document. Example:
+        #   {
+        #     "version": 1,
+        #     "subjects": [
+        #       {"issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_XXXX",
+        #        "subject": "<cognito-sub-uuid>",
+        #        "roles": ["operator"],
+        #        "tenants": ["vllm", "litellm"],
+        #        "targets": ["default"],
+        #        "note": "platform on-call"}
+        #     ]
+        #   }
+        # "tenants": ["*"] is cross-tenant admin. Write it out only when that is the intent — and
+        # note that some surfaces REQUIRE it because they cannot be confined to one tenant:
+        # clearing the shared decision audit, the global red-team controls and artifacts, the
+        # unscoped (namespace-omitted) forms of /api/scan and /api/ablation, and the private
+        # evidence corpus (benchmarks, effectiveness, frontier, posture, matrix, ai-surface,
+        # reports, raw logs). A vendor-side identity that needs those holds the wildcard; a
+        # customer-facing operator scoped to specific tenants deliberately does not.
+        #
+        # "targets" must likewise list every cluster the identity may reach. "default" is this
+        # console's own cluster AND the host that runs harness subprocesses; a run whose config
+        # names another context needs that context listed too.
+        data: ""
 
   # Escape hatches, so a flag added to the operator does not require a chart release
   # before it can be deployed — and, more importantly, so a live deployment never has to be

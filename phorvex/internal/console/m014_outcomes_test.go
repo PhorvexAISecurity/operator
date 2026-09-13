@@ -2,7 +2,6 @@ package console
 
 import (
 	"encoding/json"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,11 +77,10 @@ func TestM014OwnerHTTPReplay(t *testing.T) {
 	if err := os.WriteFile(path, body, 0600); err != nil {
 		t.Fatal(err)
 	}
-	server := NewServer(Config{AuditPath: path}).Handler()
-	req := httptest.NewRequest("GET", "/api/owner/events?tenant=acme", nil)
-	req.Header.Set("X-Phorvex-Lens", "owner")
-	w := httptest.NewRecorder()
-	server.ServeHTTP(w, req)
+	// Driven through the real router as a verified owner principal granted acme (M-136): the
+	// lens header no longer decides anything, so the fixture has to be authorized.
+	f := newAuthFixture(t, Config{AuditPath: path}, ownerGrant("own", []string{"acme"}))
+	w := f.do(f.albReqAs(t, "GET", "/api/owner/events?tenant=acme", "", "own"))
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}

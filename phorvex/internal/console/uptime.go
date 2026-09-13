@@ -266,12 +266,19 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3) summarize + keep only workloads Phorvex actually acted on (the "actuator impact" view).
+	// 3) summarize + keep only workloads Phorvex actually acted on (the "actuator impact" view),
+	//    confined to the namespaces this identity is granted. [M-136] The samples file is
+	//    cluster-wide, so without this filter any read grant could see every customer's
+	//    availability and actuation history regardless of its tenant scope.
+	p := principalOf(r)
 	out := make([]uptimeWorkload, 0, len(order))
 	for _, k := range order {
 		wl := series[k]
 		if wl.Actuations == 0 {
 			continue // not a defended/acted workload — not part of the actuator-impact story
+		}
+		if !p.TenantWildcard() && !p.AllowsTenant(wl.NS) {
+			continue
 		}
 		var sum float64
 		for _, p := range wl.Series {

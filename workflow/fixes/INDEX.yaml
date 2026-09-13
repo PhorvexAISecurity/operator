@@ -283,6 +283,17 @@ fixes:
     stacked_on: []
     branch: fix/v3-m152-vram-presence
     head_sha: fac41c3aa10e3892b3f90aefb4ab1f190008eb88
+  V3-M136:
+    directory: fixes/V3-M136
+    aliases: []
+    issues:
+    - M-136
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m136-console-auth
+    head_sha: b8a245ae6a04ac471ce97f2c3447c67cd604c646
   V3-E2E:
     directory: fixes/V3-E2E
     aliases: []

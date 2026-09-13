@@ -22,7 +22,7 @@ import (
 type consoleMutation struct {
 	Kind      string `json:"kind"` // "phorvex.console.mutation"
 	Time      string `json:"time"`
-	Actor     string `json:"actor"` // the request lens (owner/investor/operator); OIDC subject when available
+	Actor     string `json:"actor"` // the VERIFIED principal "<issuer>#<subject>" (M-136), never a self-asserted lens
 	Endpoint  string `json:"endpoint"`
 	Namespace string `json:"namespace"`
 	Policy    string `json:"policy"`

@@ -1,7 +1,43 @@
 // Phorvex Console — typed client for the Go data backend (proxied at /api).
-// The lens header is sent server-side; the owner lens is gated by the backend.
+//
+// [M-136] Authentication is the ALB Cognito session (the browser already carries it) or a bearer
+// token for CLI callers. The console sends NO credential of its own: there is no ?user=, no
+// ?tenant= identity and no token in a URL. The lens below is a PRESENTATION hint only — the
+// server narrows it to the caller's grant and can never be widened by it. Read /api/session to
+// learn what the signed-in identity may actually do; the server enforces it regardless.
 
 export type Lens = "investor" | "operator" | "owner";
+
+// Session is the effective grant for the signed-in identity (GET /api/session).
+export interface Session {
+  subject: string;
+  issuer: string;
+  source: "alb" | "bearer";
+  roles: Lens[];
+  tenants: string[];
+  targets: string[];
+  lens: Lens;
+  canRead: boolean;
+  canEdit: boolean;
+  authModes: string[];
+  grantsConfigured: boolean;
+  trustedOrigins: string[];
+  note: string;
+}
+
+// ApiError carries the HTTP status so the UI can tell "not signed in" from "not allowed".
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** unauthenticated: the session is missing or expired — the ALB login has to run again. */
+export const isUnauthenticated = (e: unknown) => e instanceof ApiError && e.status === 401;
+/** unauthorized: signed in, but the server-side grant does not cover this. */
+export const isUnauthorized = (e: unknown) => e instanceof ApiError && e.status === 403;
 
 export interface CI { mean: number; lo: number; hi: number; n: number }
 export interface Stat {
@@ -34,14 +70,17 @@ export interface Suite { Name: string; Desc: string }
 // For `next dev`, set NEXT_PUBLIC_API_BASE=http://localhost:8090 (CORS is allowed).
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
+// credentials: "include" carries the ALB session cookie. It is not a credential this client
+// creates — the browser already holds it, and the server treats Origin as a CSRF boundary rather
+// than as an authentication factor.
 async function get<T>(path: string, lens: Lens, signal?: AbortSignal): Promise<T> {
   let r: Response;
   try {
-    r = await fetch(API_BASE + path, { headers: { "X-Phorvex-Lens": lens }, cache: "no-store", signal });
+    r = await fetch(API_BASE + path, { headers: { "X-Phorvex-Lens": lens }, cache: "no-store", credentials: "include", signal });
   } catch {
     throw new Error("BACKEND_UNREACHABLE");
   }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+  if (!r.ok) throw new ApiError((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`, r.status);
   return r.json();
 }
 async function post<T>(path: string, body: unknown, lens: Lens): Promise<T> {
@@ -49,12 +88,12 @@ async function post<T>(path: string, body: unknown, lens: Lens): Promise<T> {
   try {
     r = await fetch(API_BASE + path, {
       method: "POST", headers: { "X-Phorvex-Lens": lens, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body), credentials: "include",
     });
   } catch {
     throw new Error("BACKEND_UNREACHABLE");
   }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+  if (!r.ok) throw new ApiError((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`, r.status);
   return r.json();
 }
 
@@ -73,49 +112,54 @@ export interface ApplyFixDelta {
   maxMovesPerTick?: number;
   proactiveFloorSec?: number;
 }
-// AFIdentity: OIDC token (Bearer) when configured; else demo-trust ?user=&tenant= for local click-through.
-export interface AFIdentity { user: string; tenant: string; token?: string }
+// AFScope is the TENANT SELECTION for the apply-fix flows — not an identity. The acting subject
+// is the verified session; a caller granted several tenants names which one it is acting on, and
+// the server refuses any tenant outside that grant.
+export interface AFScope { tenant?: string }
 export interface GatePreview { pass: boolean; reason: string }
 export interface AFPending { id: string; tenant: string; namespace: string; requester: string; reason: string; deltaHash: string }
 export interface AFAuditEntry { event: string; fields: Record<string, any> }
 
-function withIdentity(path: string, id: AFIdentity): string {
-  if (id.token) return path; // OIDC: identity is in the Authorization header, never the URL
-  const q = new URLSearchParams();
-  if (id.user) q.set("user", id.user);
-  if (id.tenant) q.set("tenant", id.tenant);
-  const s = q.toString();
-  return path + (s ? (path.includes("?") ? "&" : "?") + s : "");
+function withTenant(path: string, scope: AFScope): string {
+  if (!scope.tenant) return path;
+  const q = new URLSearchParams({ tenant: scope.tenant }).toString();
+  return path + (path.includes("?") ? "&" : "?") + q;
 }
-async function afFetch<T>(method: string, path: string, id: AFIdentity, lens: Lens, body?: unknown): Promise<T> {
+async function afFetch<T>(method: string, path: string, scope: AFScope, lens: Lens, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "X-Phorvex-Lens": lens };
   if (body) headers["Content-Type"] = "application/json";
-  if (id.token) headers["Authorization"] = "Bearer " + id.token; // OIDC verified identity
   let r: Response;
   try {
-    r = await fetch(API_BASE + withIdentity(path, id), { method, headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    r = await fetch(API_BASE + withTenant(path, scope), {
+      method, headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store", credentials: "include",
+    });
   } catch { throw new Error("BACKEND_UNREACHABLE"); }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e: any = new Error(data.error || `HTTP ${r.status}`); e.status = r.status; throw e; }
+  if (!r.ok) throw new ApiError(data.error || `HTTP ${r.status}`, r.status);
   return data as T;
 }
 export const applyFixApi = {
-  gatePreview: (delta: ApplyFixDelta, id: AFIdentity, lens: Lens) =>
-    afFetch<GatePreview>("POST", "/api/apply-fix/gate-preview", id, lens, { delta }),
-  submit: (reqId: string, delta: ApplyFixDelta, reason: string, id: AFIdentity, lens: Lens) =>
-    afFetch<{ status: string; id: string; note: string }>("POST", "/api/apply-fix/submit", id, lens, { id: reqId, delta, reason }),
-  approve: (reqId: string, id: AFIdentity, lens: Lens) =>
-    afFetch<{ status: string; id: string }>("POST", "/api/apply-fix/approve", id, lens, { id: reqId }),
-  pending: (id: AFIdentity, lens: Lens) =>
-    afFetch<{ pending: AFPending[]; applierMode: string }>("GET", "/api/apply-fix/pending", id, lens),
-  audit: (id: AFIdentity, lens: Lens) =>
-    afFetch<{ audit: AFAuditEntry[] }>("GET", "/api/apply-fix/audit", id, lens),
+  gatePreview: (delta: ApplyFixDelta, scope: AFScope, lens: Lens) =>
+    afFetch<GatePreview>("POST", "/api/apply-fix/gate-preview", scope, lens, { delta }),
+  submit: (reqId: string, delta: ApplyFixDelta, reason: string, scope: AFScope, lens: Lens) =>
+    afFetch<{ status: string; id: string; note: string }>("POST", "/api/apply-fix/submit", scope, lens, { id: reqId, delta, reason }),
+  approve: (reqId: string, scope: AFScope, lens: Lens) =>
+    afFetch<{ status: string; id: string }>("POST", "/api/apply-fix/approve", scope, lens, { id: reqId }),
+  pending: (scope: AFScope, lens: Lens) =>
+    afFetch<{ pending: AFPending[]; applierMode: string }>("GET", "/api/apply-fix/pending", scope, lens),
+  audit: (scope: AFScope, lens: Lens) =>
+    afFetch<{ audit: AFAuditEntry[] }>("GET", "/api/apply-fix/audit", scope, lens),
 };
 
 export const api = {
+  // session reports what the signed-in identity may actually do, so the UI can offer only the
+  // lenses and controls the grant supports. The server re-checks every request regardless.
+  session: (lens: Lens = "operator") => get<Session>("/api/session", lens),
   liveHistory: (lens: Lens, filters: Record<string, string>, signal?: AbortSignal) =>
     get<LiveHistoryPage>(`/api/live/history?${new URLSearchParams(filters)}`, lens, signal),
   health: (lens: Lens = "operator") => get<any>("/api/health", lens),
+  // diagnostics is the authenticated form of what /api/health used to disclose.
+  diagnostics: (lens: Lens = "operator") => get<any>("/api/diagnostics", lens),
   effectiveness: (lens: Lens) => get<{ stats: Stat[] }>("/api/effectiveness", lens),
   frontier: (lens: Lens) => get<{ rows: FrontierRow[] }>("/api/frontier", lens),
   suites: (lens: Lens) => get<{ suites: Suite[] }>("/api/suites", lens),
@@ -357,9 +401,16 @@ export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: st
   // tail=N: replay only the last N decisions on connect (avoids the "fast train" flood after the
   // operator has run for hours), then tail live. tail=0 replays the whole audit (opt-in).
   // context=<kubeconfig context>: SCOPE the stream to that provider's operator audit (EKS vs vCluster).
-  const es = new EventSource(`${API_BASE}/api/live?lens=${lens}&tail=${tail}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}${context ? `&context=${encodeURIComponent(context)}` : ""}`);
-  // NOTE: EventSource cannot send headers; the lens is passed as a query param the backend
-  // also honors. (Demo-trust; real authn is [PENDING-P-VCLUSTER].)
+  //
+  // [M-136] EventSource cannot set headers, so the browser authenticates this stream the same way
+  // it authenticates every other request: with the ALB session it already carries
+  // (withCredentials). No token is ever put in this URL. ?lens= and ?tenant= are a projection
+  // hint and a tenant SELECTION — the server narrows both to the caller's grant, so an unscoped
+  // or mismatched value streams nothing rather than everything.
+  const es = new EventSource(
+    `${API_BASE}/api/live?lens=${lens}&tail=${tail}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}${context ? `&context=${encodeURIComponent(context)}` : ""}`,
+    { withCredentials: true },
+  );
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
   return () => es.close();
 }
@@ -367,7 +418,7 @@ export function liveStream(lens: Lens, onEvent: (data: any) => void, tenant?: st
 // runStream opens the per-run attack-timeline SSE: stage headers, completed trials (with the
 // attacker's command steps + outcome), and a final "end" event. Returns a cleanup fn.
 export function runStream(id: string, lens: Lens, onEvent: (e: TimelineEvent) => void): () => void {
-  const es = new EventSource(`${API_BASE}/api/runs/stream?id=${encodeURIComponent(id)}&lens=${lens}`);
+  const es = new EventSource(`${API_BASE}/api/runs/stream?id=${encodeURIComponent(id)}&lens=${lens}`, { withCredentials: true });
   es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch {} };
   return () => es.close();
 }

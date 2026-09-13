@@ -96,6 +96,10 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."})
 		return
 	}
+	// [M-136] The experiment log spans every app that has been run. An explicit ?ns= is already
+	// checked against the grant by the boundary; an omitted one is filtered here rather than
+	// returning every tenant's experiments.
+	p := principalOf(r)
 	var exps []armExperiment
 	for _, ln := range strings.Split(string(b), "\n") {
 		if strings.TrimSpace(ln) == "" {
@@ -103,6 +107,9 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		}
 		var e armExperiment
 		if json.Unmarshal([]byte(ln), &e) == nil {
+			if !p.TenantWildcard() && !p.AllowsTenant(e.Namespace) {
+				continue
+			}
 			if nsFilter == "" || e.Namespace == nsFilter {
 				exps = append(exps, e)
 			}

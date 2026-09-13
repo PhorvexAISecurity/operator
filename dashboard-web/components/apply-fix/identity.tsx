@@ -1,71 +1,110 @@
 "use client";
 import * as React from "react";
-import { AFIdentity } from "@/lib/api";
+import { AFScope, Session, api, isUnauthenticated } from "@/lib/api";
 import { Badge } from "@/components/ui/primitives";
-import { ShieldCheck, UserCog } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Lock } from "lucide-react";
 
-const KEY = "phorvex-af-identity";
-
-// useApplyFixIdentity resolves the acting principal for the apply-fix flows. With OIDC configured the
-// token is authoritative (tenant/subject from verified claims); without it, the demo-trust user/tenant
-// inputs drive a local click-through of the two-key flow. Persisted so submit + approve share it.
+// [M-136] The acting principal is the VERIFIED session — there are no editable user/tenant
+// inputs any more, because those were the demo-trust identity this fix removed. What remains
+// selectable is which of the caller's GRANTED tenants it is acting on, and the server refuses
+// anything outside that grant regardless of what is selected here.
 export function useApplyFixIdentity() {
-  const [id, setId] = React.useState<AFIdentity>({ user: "", tenant: "" });
+  const [session, setSession] = React.useState<Session | null>(null);
+  const [error, setError] = React.useState<string>("");
+  const [scope, setScope] = React.useState<AFScope>({});
+
   React.useEffect(() => {
-    try {
-      const s = localStorage.getItem(KEY);
-      if (s) setId(JSON.parse(s));
-    } catch {}
+    let live = true;
+    api
+      .session()
+      .then((s) => {
+        if (!live) return;
+        setSession(s);
+        // Pre-select when there is exactly one granted tenant; never guess otherwise.
+        const concrete = s.tenants.filter((t) => t !== "*");
+        setScope(concrete.length === 1 ? { tenant: concrete[0] } : {});
+      })
+      .catch((e) => {
+        if (!live) return;
+        setError(isUnauthenticated(e) ? "Your console session has expired — reload to sign in again." : String(e.message || e));
+      });
+    return () => {
+      live = false;
+    };
   }, []);
-  const update = (next: Partial<AFIdentity>) =>
-    setId((p) => {
-      const v = { ...p, ...next };
-      try {
-        localStorage.setItem(KEY, JSON.stringify(v));
-      } catch {}
-      return v;
-    });
-  return { id, update };
+
+  const update = (next: Partial<AFScope>) => setScope((p) => ({ ...p, ...next }));
+  return { session, scope, update, error };
 }
 
 const field =
-  "w-40 rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none";
+  "rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none";
 
-// IdentityBar — the verified-identity panel. OIDC mode (a token present) is shown read-only; demo-trust
-// mode exposes editable user/tenant so an operator can switch principals to exercise the two-key flow.
-export function IdentityBar({ id, update }: { id: AFIdentity; update: (n: Partial<AFIdentity>) => void }) {
-  const oidc = !!id.token;
+// IdentityBar shows WHO the server says you are and WHAT it has granted you. It is a readout of
+// server state, not an input to it.
+export function IdentityBar({
+  session, scope, update, error,
+}: {
+  session: Session | null;
+  scope: AFScope;
+  update: (n: Partial<AFScope>) => void;
+  error: string;
+}) {
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+        <ShieldAlert className="h-4 w-4 text-amber-400" />
+        <span className="text-muted-foreground">{error}</span>
+      </div>
+    );
+  }
+  if (!session) {
+    return <div className="rounded-lg border border-border bg-panel/50 px-4 py-3 text-sm text-muted-foreground">Resolving your console session…</div>;
+  }
+  const selectable = session.tenants.filter((t) => t !== "*");
+  const wildcard = session.tenants.includes("*");
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-panel/50 px-4 py-3">
-      {oidc ? (
-        <span className="flex items-center gap-2 text-sm">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
-          <span className="text-muted-foreground">Verified identity (OIDC):</span>
-          <span className="font-medium text-foreground">{id.user || "subject"}</span>
-          <Badge variant="neutral">tenant {id.tenant || "?"}</Badge>
-        </span>
-      ) : (
-        <>
-          <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <UserCog className="h-4 w-4 text-amber-400" />
-            Acting as (demo-trust)
-          </span>
+      <span className="flex items-center gap-2 text-sm">
+        <ShieldCheck className="h-4 w-4 text-emerald-400" />
+        <span className="text-muted-foreground">Signed in as</span>
+        <span className="font-medium text-foreground">{session.subject}</span>
+        <Badge variant="neutral">{session.roles.join(" · ") || "no role"}</Badge>
+        <Badge variant="neutral">{session.source === "alb" ? "ALB Cognito" : "bearer"}</Badge>
+      </span>
+
+      {wildcard ? (
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          acting on tenant
           <input
             className={field}
-            placeholder="user (e.g. alice)"
-            value={id.user}
-            onChange={(e) => update({ user: e.target.value.trim() })}
-          />
-          <input
-            className={field}
-            placeholder="tenant (e.g. acme)"
-            value={id.tenant}
+            placeholder="tenant"
+            value={scope.tenant ?? ""}
             onChange={(e) => update({ tenant: e.target.value.trim() })}
           />
-          <Badge variant="pending">
-            demo-trust · OIDC supersedes in prod
-          </Badge>
-        </>
+          <span className="text-[11px]">cross-tenant grant — name the tenant explicitly</span>
+        </label>
+      ) : selectable.length > 1 ? (
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          acting on tenant
+          <select className={field} value={scope.tenant ?? ""} onChange={(e) => update({ tenant: e.target.value })}>
+            <option value="">select…</option>
+            {selectable.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <Badge variant="neutral">tenant {selectable[0] ?? "none granted"}</Badge>
+      )}
+
+      {!session.canEdit && (
+        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Lock className="h-3 w-3" /> read-only grant — submitting and approving require the operator role
+        </span>
+      )}
+      {!session.grantsConfigured && (
+        <Badge variant="pending">no subject grants configured on this deployment</Badge>
       )}
     </div>
   );
