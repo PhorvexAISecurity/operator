@@ -49,7 +49,13 @@ env:
 # TELEGRAM_BOT_TOKEN     bot that posts the per-stage board
 # TELEGRAM_CHAT_ID       channel id, e.g. -1001234567890
 #
-# Required repository variable for the E2E job:
+# Required repository variables for BOTH End-to-End jobs (e2e, e2e-main):
+#   PHORVEX_SSH_KNOWN_HOSTS — the jump host's SSH host key line(s) as `ssh-keyscan -p PORT
+#                             HOST` prints them, verified out of band against the host's
+#                             own `ssh-keygen -lf` fingerprint. Written to a runner-local
+#                             0600 file before any ssh; the password and the console bearer
+#                             configuration go only to a host presenting that key. Unknown
+#                             or changed keys fail; there is no accept-new fallback.
 #   PHORVEX_CONSOLE_BASE    — the console endpoint the E2E credential is sent to: an HTTPS
 #                             URL that reaches the console verifier (NOT the Cognito ALB,
 #                             which redirects to a login), or http://127.0.0.1:<port> for a
@@ -361,6 +367,22 @@ jobs:
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
+
+      # The pinned jump-host identity every ssh in this job verifies against (pipeline and
+      # publish alike). Provisioned by DevOps as a repository variable; an empty variable
+      # means "not provisioned" and every ssh in this job then fails closed.
+      - name: Provision the SSH host identity
+        env:
+          PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
+        run: |
+          KH="$RUNNER_TEMP/phorvex-known-hosts"
+          umask 077
+          printf '%s\n' "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" > "$KH"
+          if [ ! -s "$KH" ] || [ -z "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" ]; then
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; ssh to the jump host is refused without a verified host key."
+            exit 1
+          fi
+          echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
 
       - name: Run End-to-End
         id: e2e
@@ -704,12 +726,33 @@ jobs:
             exit 1
           }
 
+      # The pinned jump-host identity every ssh in this job verifies against (pipeline and
+      # publish alike). Provisioned by DevOps as a repository variable; an empty variable
+      # means "not provisioned" and every ssh in this job then fails closed.
+      - name: Provision the SSH host identity
+        env:
+          PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
+        run: |
+          KH="$RUNNER_TEMP/phorvex-known-hosts"
+          umask 077
+          printf '%s\n' "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" > "$KH"
+          if [ ! -s "$KH" ] || [ -z "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" ]; then
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; ssh to the jump host is refused without a verified host key."
+            exit 1
+          fi
+          echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
+
       - name: Run End-to-End against the deployed version
         id: e2e
         env:
           PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          # The console credential and endpoint (see the secrets block at the top); the same
+          # inputs as the PR-time job. Unset inputs fail preflight closed.
+          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE }}
+          PHORVEX_CONSOLE_CA_FILE: ${{ vars.PHORVEX_CONSOLE_CA_FILE }}
+          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
           V:                    ${{ needs.deploy.outputs.version }}

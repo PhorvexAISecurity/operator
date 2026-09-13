@@ -207,7 +207,10 @@ class FixtureConsole:
     replays (then it keeps the stream open until the client goes away)."""
 
     def __init__(self, key=None, grants=None, records=(), tls_dir=None, redirect_to=None,
-                 version=None):
+                 version=None, reflect_credentials=False):
+        # reflect_credentials: a misbehaving endpoint that echoes the Authorization header
+        # into its 401 body — what the client must never retain.
+        self.reflect_credentials = reflect_credentials
         self.key = key or RSAKey()
         self.verifier = Verifier([self.key])
         self.grants = dict(grants or {})
@@ -308,7 +311,10 @@ class FixtureConsole:
         if auth and auth.startswith("Bearer "):
             identity = self.verifier.verify(auth[len("Bearer "):].strip())
         if identity is None:
-            return reply(401, {"error": "authentication required"},
+            error = "authentication required"
+            if self.reflect_credentials:
+                error += " (rejected credential: " + (auth or "none") + ")"
+            return reply(401, {"error": error},
                          [("WWW-Authenticate", 'Bearer realm="phorvex-console"')])
         grant = self.grants.get(identity[1])
         if grant is None:

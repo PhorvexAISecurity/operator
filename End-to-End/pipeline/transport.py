@@ -59,9 +59,9 @@ CONSOLE_CA_FILE_ENV = "PHORVEX_CONSOLE_CA_FILE"
 # Bounds on what is accepted as a credential. A bearer token is opaque here — the deployed
 # verifier decides what it means — but it must be ONE line of the RFC 6750 token charset,
 # which is also exactly what can be placed in a curl configuration line without escaping.
-# The byte bound keeps that line under the 4 KiB configuration-line limit of older curl
-# builds on a jump host, where a silently truncated header would surface as a puzzling 401.
-MAX_TOKEN_BYTES = 4000
+# curl on the transport host must be 7.64 or newer (2019): older builds capped a configuration
+# line at 4 KiB and would silently truncate a long header into a puzzling 401.
+MAX_TOKEN_BYTES = 8192
 MIN_TOKEN_CHARS = 16
 _BEARER_TOKEN = re.compile(r"^[A-Za-z0-9._~+/-]+=*$")
 # curl exit codes that name a contract failure rather than a transient one.
@@ -73,6 +73,41 @@ CURL_TLS_EXITS = (35, 51, 53, 54, 58, 59, 60, 66, 77, 80, 82, 83, 90, 91)
 # with 124, `curl -m` gives up with 28, and a shell reports a SIGTERM'd child as 143. Any
 # other non-zero exit means the read failed and the window was not observed.
 EXPECTED_STREAM_EXITS = (0, 28, 124, 143)
+
+
+SSH_KNOWN_HOSTS_ENV = "PHORVEX_SSH_KNOWN_HOSTS"
+
+
+def _known_hosts(cfg):
+    """The provisioned SSH host identity file on THIS machine (the SSH client).
+
+    A password and, now, a console bearer travel to whatever answers the SSH port; without a
+    verified host key that can be anyone on the path. So the transport refuses to start
+    without an explicitly provisioned known_hosts file, and ssh is run with strict checking
+    against it and nothing else: an unknown or changed key fails non-interactively. There is
+    no accept-new, no `no`, no temporary acceptance. DevOps provisions the file from a
+    fingerprint verified out of band (`ssh-keyscan -p PORT HOST`, compared against the host's
+    own `ssh-keygen -lf`), and CI writes it to a runner-local 0600 file.
+    """
+    path = os.environ.get(SSH_KNOWN_HOSTS_ENV) or cfg.get("known_hosts")
+    if not path:
+        raise TransportError(
+            f"ssh transport needs a provisioned known_hosts file: set {SSH_KNOWN_HOSTS_ENV} "
+            "or transport.known_hosts to a file holding the jump host's verified host key "
+            "(ssh-keyscan output checked against the host's fingerprint out of band); the "
+            "transport never accepts an unknown or changed host key")
+    expanded = os.path.expanduser(path)
+    try:
+        st = os.stat(expanded)
+    except OSError as e:
+        raise TransportError(f"ssh known_hosts file {path} is not readable: {e}") from e
+    if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
+        raise TransportError(f"ssh known_hosts file {path} must be a non-empty regular file")
+    if st.st_mode & 0o022:
+        raise TransportError(
+            f"ssh known_hosts file {path} is writable by other users (mode "
+            f"{stat.S_IMODE(st.st_mode):04o}); a host identity anyone can edit verifies nothing")
+    return expanded
 
 
 def _password():
@@ -108,19 +143,28 @@ class Transport:
         self.port = int(os.environ.get("PHORVEX_SSH_PORT") or cfg.get("port", 22))
         self.connect_timeout = int(cfg.get("connect_timeout_sec", 10))
         if self.kind == "ssh":
+            self.known_hosts = _known_hosts(cfg)
             self._pw = _password()
 
     def describe(self):
-        return "local shell" if self.kind == "local" else f"ssh {self.user}@{self.host}:{self.port}"
+        if self.kind == "local":
+            return "local shell"
+        return f"ssh {self.user}@{self.host}:{self.port} (host key pinned by {self.known_hosts})"
 
     def _command(self, command):
         if self.kind == "local":
             argv, env = ["/bin/sh", "-c", command], None
         else:
+            # Every ssh this transport runs — the console calls that carry the bearer and
+            # the kubectl reads beside them — verifies the host against the provisioned file
+            # only. `BatchMode` stays off because sshpass answers the password prompt; the
+            # host-key prompt never appears because strict checking fails instead of asking.
             argv = [
                 "sshpass", "-e", "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "StrictHostKeyChecking=yes",
+                "-o", f"UserKnownHostsFile={self.known_hosts}",
+                "-o", "GlobalKnownHostsFile=/dev/null",
+                "-o", "UpdateHostKeys=no",
                 "-o", "LogLevel=ERROR",
                 "-o", f"ConnectTimeout={self.connect_timeout}",
                 "-p", str(self.port), f"{self.user}@{self.host}", command,
@@ -170,28 +214,39 @@ class Transport:
         if not live:
             deadline = time.monotonic() + seconds
         closed_early = False
+        # Whatever the command needs on stdin (the curl credential configuration) is delivered
+        # through the same selector loop that reads the stream, in chunks the child actually
+        # drains, under the same deadline. A blocking write here would let a child that never
+        # reads its input — or a pipe smaller than the input — hold the capture past its
+        # window, and a child that exits first would raise instead of being reported.
+        pending = memoryview(stdin.encode()) if stdin else memoryview(b"")
         p = subprocess.Popen(argv, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, start_new_session=True)
+        os.set_blocking(p.stdin.fileno(), False)
         try:
-            # Whatever the command needs on stdin (the curl credential configuration) is
-            # written and closed up front; the stream itself only ever flows back.
-            try:
-                if stdin:
-                    p.stdin.write(stdin.encode())
-                p.stdin.close()
-            except BrokenPipeError:
-                pass    # the child already exited; its exit and stderr say why below
-            finally:
-                if not p.stdin.closed:
-                    try:
-                        p.stdin.close()
-                    except BrokenPipeError:
-                        pass
             with selectors.DefaultSelector() as selector:
                 selector.register(p.stdout, selectors.EVENT_READ, "stdout")
                 selector.register(p.stderr, selectors.EVENT_READ, "stderr")
+                if pending:
+                    selector.register(p.stdin, selectors.EVENT_WRITE, "stdin")
+                else:
+                    p.stdin.close()
                 while time.monotonic() < deadline:
                     for key, _ in selector.select(min(0.5, max(0, deadline - time.monotonic()))):
+                        if key.data == "stdin":
+                            try:
+                                written = os.write(key.fileobj.fileno(), pending[:65536])
+                            except BlockingIOError:
+                                continue
+                            except BrokenPipeError:
+                                # The child went away before reading its input; its exit code
+                                # and stderr, collected below, say why. Nothing more to write.
+                                written = len(pending)
+                            pending = pending[written:]
+                            if not pending:
+                                selector.unregister(key.fileobj)
+                                key.fileobj.close()
+                            continue
                         chunk = os.read(key.fileobj.fileno(), 65536)
                         if not chunk:
                             selector.unregister(key.fileobj)
@@ -217,9 +272,16 @@ class Transport:
                     # the stream dropped — and the reaction we fired for may be in the hole.
                     raise TransportError(
                         "audit stream closed before observation completed: "
-                        + obs.redact(errors.decode(errors="replace")[-500:]))
+                        + _tail(errors.decode(errors="replace"), 500))
                 if on_connected is not None:
                     raise TransportError("audit stream never acknowledged readiness; no signal fired")
+                if pending:
+                    # The window elapsed while the child had still not drained its input, so
+                    # the request it was configured for was never made. Not an empty window.
+                    return stream.finish(
+                        complete=False,
+                        reason=f"the stream command never consumed its input ({len(pending)} "
+                               "bytes undelivered); no request was made")
                 if closed_early:
                     # Without a callback the remote command bounds the window itself, so it
                     # ending is the normal path — but only with an exit code that means
@@ -229,9 +291,11 @@ class Transport:
                         return stream.finish(
                             complete=False,
                             reason=f"the stream command exited {code}: "
-                                   + obs.redact(errors.decode(errors="replace")[-300:]))
+                                   + _tail(errors.decode(errors="replace"), 300))
                 return stream.finish()
         finally:
+            if not p.stdin.closed:
+                p.stdin.close()
             # Own process group only; also stops local shell pipeline children.
             if p.poll() is None:
                 try:
@@ -254,11 +318,14 @@ def _tail(text, n):
 
 
 def _is_loopback_host(hostname):
-    """Loopback as the transport host's curl will resolve it: localhost, 127/8 or ::1."""
+    """A literal loopback address: 127/8 or ::1. Never a name.
+
+    `localhost` is a DNS lookup on the transport host — /etc/hosts, a resolver or a proxy
+    decide what it means — and the loopback exception exists precisely to send a credential
+    over plain HTTP to nothing but that host's own kernel.
+    """
     if not hostname:
         return False
-    if hostname.lower() == "localhost":
-        return True
     try:
         return ipaddress.ip_address(hostname).is_loopback
     except ValueError:
@@ -331,21 +398,23 @@ def _read_token_file(path):
 
 
 def _console_token(cfg):
-    """The bearer credential from exactly one configured source.
+    """The bearer credential from exactly one CONFIGURED source.
 
     `PHORVEX_CONSOLE_TOKEN` carries the value itself (a CI secret); `PHORVEX_CONSOLE_TOKEN_FILE`
-    or `console.token_file` names a private file. Both present is refused rather than
-    resolved: two credentials configured at once means nobody can say which identity a run
-    used. The loaded value is registered for redaction before it is returned.
+    or `console.token_file` names a private file. Configuring both is refused whether or not
+    the file exists: which identity a run uses must be decided by its configuration, not by
+    whether a path happens to be present on this machine. (An empty environment variable is
+    an unset one — that is how CI passes an unprovisioned secret.) The loaded value is
+    registered for redaction before it is returned.
     """
     env_value = os.environ.get(CONSOLE_TOKEN_ENV)
     file_path = os.environ.get(CONSOLE_TOKEN_FILE_ENV) or cfg.get("token_file")
-    file_present = bool(file_path) and os.path.lexists(os.path.expanduser(file_path))
+    if env_value and file_path:
+        raise ConsoleAccessError(
+            f"console credential is configured twice: {CONSOLE_TOKEN_ENV} is set and a token "
+            f"file is configured ({file_path}); keep exactly one source, independent of "
+            "whether that file exists")
     if env_value:
-        if file_present:
-            raise ConsoleAccessError(
-                f"console credential is configured twice: {CONSOLE_TOKEN_ENV} is set and "
-                f"the token file {file_path} exists; keep exactly one")
         token = _validate_bearer_token(env_value, f"${CONSOLE_TOKEN_ENV}")
         source = f"${CONSOLE_TOKEN_ENV}"
     elif file_path:
@@ -389,8 +458,9 @@ def _validate_console_base(base, auth, transport_kind):
     if auth == "bearer" and parts.scheme == "http" and not _is_loopback_host(parts.hostname):
         raise ConsoleAccessError(
             f"console base URL {base!r} is plain HTTP to a non-loopback host; a bearer "
-            "credential is only sent over HTTPS, or over HTTP to a loopback address on the "
-            f"{transport_kind} transport host")
+            "credential is only sent over HTTPS, or over HTTP to a literal loopback address "
+            f"(127.0.0.0/8 or [::1], not a name such as localhost) on the {transport_kind} "
+            "transport host")
     return base.rstrip("/")
 
 
@@ -454,11 +524,21 @@ class Console:
     def _curl(self, seconds, *extra):
         """curl argv for one console request. Never `-k`, never `-L` past zero redirects.
 
-        `-L --max-redirs 0` makes any redirect an explicit failure (exit 47) after exactly one
-        request: the credential is never re-sent to a `Location` the console did not serve.
-        `-K -` reads the credential header from stdin; nothing secret is in this argv.
+        `-q` is the FIRST option: curl otherwise reads `~/.curlrc` (or `$CURL_HOME`), where a
+        stray `url =` adds an unconfigured recipient for the credential header, `insecure`
+        disables certificate verification and `trace =` persists the request to a file. The
+        transport host's default configuration must not be able to change where or how a
+        credential is sent. `-L --max-redirs 0` makes any redirect an explicit failure (exit
+        47) after exactly one request: the credential is never re-sent to a `Location` the
+        console did not serve. The literal-loopback exception is pinned to a direct connection
+        with `--noproxy '*'`: an inherited `http_proxy` would otherwise carry the plain-HTTP
+        request — and its bearer — to whatever the proxy variable names instead of the
+        transport host's own kernel. `-K -` reads the credential header from stdin; nothing
+        secret is in this argv.
         """
-        argv = ["curl", "-sS", "-m", str(max(1, int(seconds))), "-L", "--max-redirs", "0"]
+        argv = ["curl", "-q", "-sS", "-m", str(max(1, int(seconds))), "-L", "--max-redirs", "0"]
+        if self.base.startswith("http://"):
+            argv += ["--noproxy", "*"]
         if self.ca_file and self.base.startswith("https://"):
             argv += ["--cacert", self.ca_file]
         if self.auth == "bearer":
@@ -475,8 +555,10 @@ class Console:
 
     def _auth_hint(self):
         if self.auth == "bearer":
-            return (f"the bearer credential from {self.token_source} was not accepted (absent, "
-                    "malformed, expired, or from an issuer/audience this console does not verify)")
+            return (f"the bearer credential from {self.token_source} was not accepted by "
+                    f"{self.base}: if that endpoint is the console, the token is absent, "
+                    "malformed, expired or from an issuer/audience it does not verify; an "
+                    "intermediary (proxy, ALB, WAF) on the path can also answer 401")
         return ("this client sent no console credential (console.auth=none); the lens is a "
                 "presentation hint, not an authorization — configure auth=bearer")
 
@@ -514,15 +596,19 @@ class Console:
         if not status.isdigit():
             raise TransportError(f"{what} returned no HTTP status: {obs.redact(out, limit=200)!r}")
         status = int(status)
+        # The status code and the body are what the endpoint SAID; neither proves which
+        # component answered nor that any identity was verified. The messages name the
+        # possible causes and keep the (redacted, bounded) server text as provenance.
         if status == 401:
             raise ConsoleAccessError(
-                f"{what}: console rejected the request as unauthenticated (HTTP 401: "
-                f"{self._server_error(body)}); {self._auth_hint()}")
+                f"{what}: HTTP 401 from {self.base} (endpoint said: {self._server_error(body)}); "
+                f"{self._auth_hint()}")
         if status == 403:
             raise ConsoleAccessError(
-                f"{what}: console authenticated the caller but refused it (HTTP 403: "
-                f"{self._server_error(body)}); the verified subject needs an explicit console "
-                "grant covering this route's role, tenant and target (docs/CONSOLE-AUTH.md)")
+                f"{what}: HTTP 403 from {self.base} (endpoint said: {self._server_error(body)}); "
+                "if the console answered, the credential was verified but no grant covers this "
+                "route's role, tenant and target (docs/CONSOLE-AUTH.md) — an intermediary can "
+                "also refuse with 403, so a 403 alone is not proof the console saw an identity")
         if 300 <= status < 400:
             raise ConsoleAccessError(
                 f"{what}: console endpoint answered HTTP {status} (a redirect); the credential "
@@ -532,22 +618,51 @@ class Console:
     # ── kubectl-proxy mode ───────────────────────────────────────────────────
 
     def _kubectl_raw(self, cmd, what, timeout):
+        """One `kubectl --raw` call through the API-server proxy, with honest refusals.
+
+        kubectl prints the same "You must be logged in" for a 401 from the API server (the
+        kubeconfig credentials) and for a 401 the proxied console answered; "Forbidden" is
+        likewise either RBAC on services/proxy or the console. The only discriminator this
+        client has is the public health route through the SAME path: if it answers, the
+        API-server hop authenticated the kubectl user and the refusal came from behind the
+        proxy. That reading is performed and reported as provenance, never as a verified
+        identity — the proxy carries no console credential either way.
+        """
         rc, out, err = self.t.run(cmd, timeout=timeout)
         text = (err or "") + (out if rc != 0 else "")
-        if rc != 0 and ("must be logged in" in text or "Unauthorized" in text or "401" in text):
+        unauthenticated = rc != 0 and ("must be logged in" in text or "Unauthorized" in text
+                                       or "401" in text)
+        forbidden = rc != 0 and ("Forbidden" in text or "403" in text)
+        if unauthenticated or forbidden:
+            status = "401" if unauthenticated else "403"
             raise ConsoleAccessError(
-                f"{what}: console rejected the request as unauthenticated (HTTP 401 through "
-                "kubectl-proxy): the API-server proxy authenticates the kubectl user to the API "
-                "server and carries NO console credential. Configure console.mode=http with an "
-                "HTTPS or loopback base URL and a bearer credential (docs/CONSOLE-AUTH.md)")
-        if rc != 0 and ("Forbidden" in text or "403" in text):
-            raise ConsoleAccessError(
-                f"{what}: refused (HTTP 403 through kubectl-proxy): either the kubectl user may "
-                "not reach services/proxy, or the console refused this caller; the proxy path "
-                f"carries no console credential: {_tail(text, 300)}")
+                f"{what}: refused with HTTP {status} on the kubectl-proxy path "
+                f"({self._proxy_provenance(what)}); kubectl said: {_tail(text, 200)}. The "
+                "API-server proxy carries NO console credential; configure console.mode=http "
+                "with an HTTPS or literal-loopback base URL and a bearer (docs/CONSOLE-AUTH.md)")
         if rc != 0 and not out:
             raise TransportError(f"{what} failed (rc={rc}): {_tail(err, 300) or 'no output'}")
         return out
+
+    def _proxy_provenance(self, what):
+        """Where a proxied refusal came from, as far as one same-path health read can tell."""
+        if what == "GET /api/health":
+            return ("public health itself was refused, so the API server rejected the kubectl "
+                    "credentials or the services/proxy access; the console was not reached")
+        rc, out, err = self.t.run(
+            f"kubectl get --raw {shlex.quote(self.proxy + '/api/health')}", timeout=15)
+        health_ok = False
+        try:
+            health_ok = rc == 0 and json.loads(out).get("ok") is True
+        except (ValueError, AttributeError):
+            pass
+        if health_ok:
+            return ("same-path public /api/health succeeded, so the API-server hop accepted the "
+                    "kubectl credentials and the refusal came from behind the proxy — the "
+                    "console refusing an anonymous proxied request is consistent with that")
+        return ("same-path public /api/health also failed, so the kubectl credentials or the "
+                "services/proxy access are refused by the API server; the console's own "
+                "answer is unknown")
 
     def _lens_q(self, path):
         return path + ("&" if "?" in path else "?") + "lens=" + self.lens
@@ -679,12 +794,12 @@ class Console:
         status = int(match.group(1))
         if status == 401:
             raise ConsoleAccessError(
-                "GET /api/live: console rejected the stream as unauthenticated (HTTP 401); "
-                + self._auth_hint())
+                f"GET /api/live: HTTP 401 from {self.base}; " + self._auth_hint())
         if status == 403:
             raise ConsoleAccessError(
-                "GET /api/live: console authenticated the caller but refused the stream (HTTP "
-                "403); the verified subject needs a grant covering the audit's tenants")
+                f"GET /api/live: HTTP 403 from {self.base}; if the console answered, the "
+                "credential was verified but no grant covers the audit's tenants — an "
+                "intermediary can also refuse with 403")
 
 
 class Metrics:

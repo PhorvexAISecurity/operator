@@ -65,17 +65,45 @@ protected route is `401` and preflight stops. The suite now runs `console.mode: 
 
 | Input | Source | Meaning |
 |---|---|---|
-| `PHORVEX_CONSOLE_BASE` | repo variable / env (or `console.base`) | `https://…` endpoint that reaches the console verifier with normal certificate verification, **or** `http://127.0.0.1:<port>` — loopback *on the transport host* (the SSH jump host in `ssh` mode), i.e. a tunnel DevOps owns there |
+| `PHORVEX_CONSOLE_BASE` | repo variable / env (or `console.base`) | `https://…` endpoint that reaches the console verifier with normal certificate verification, **or** `http://127.0.0.1:<port>` — a *literal* loopback address (127.0.0.0/8 or `[::1]`, never a name such as `localhost`) *on the transport host* (the SSH jump host in `ssh` mode), i.e. a tunnel DevOps owns there |
 | `PHORVEX_CONSOLE_TOKEN` | repo secret / env | the bearer token itself; one line, never written to disk by the pipeline |
-| `PHORVEX_CONSOLE_TOKEN_FILE` / `console.token_file` | env / config | a private `0600` regular file holding that one line (`~/.phorvex-e2e/console-token` by default) |
-| `PHORVEX_CONSOLE_CA_FILE` / `console.ca_file` | env / config | a CA bundle on the transport host for a private CA; there is no way to disable verification |
+| `PHORVEX_CONSOLE_TOKEN_FILE` / `console.token_file` | env / config | a private `0600` regular file holding that one line |
+| `PHORVEX_CONSOLE_CA_FILE` / `console.ca_file` | env / config | a CA bundle **on the transport host** (where curl runs) for a private CA; there is no way to disable verification |
+| `PHORVEX_SSH_KNOWN_HOSTS` / `transport.known_hosts` | repo variable → runner file / env / config | a `known_hosts` file **on this machine** (the SSH client) pinning the jump host's key; required for `ssh` mode |
 
-Exactly one credential source may be present. The token goes to curl as a `-K -`
-configuration on stdin — never argv, never a URL, never the environment of a child, never a
-retained error — and the client never decodes it: the deployed verifier decides what it
-means. Redirects are refused (a Cognito login redirect is a configuration error, not a
-place to send a credential), `401` is reported as "no accepted credential", `403` as "no
-grant for this identity", and either stops preflight immediately.
+Exactly one credential source may be *configured*; configuring both is refused whether or
+not the file exists, so a run's identity is decided by its configuration and not by what
+happens to be on disk. The token goes to curl as a `-K -` configuration on stdin — never
+argv, never a URL, never the environment of a child, never a retained error — and the client
+never decodes it: the deployed verifier decides what it means. curl runs with `-q`, so the
+transport host's `.curlrc` cannot add recipients, disable verification or trace the request;
+the loopback exception connects directly (`--noproxy '*'`), so an inherited `http_proxy`
+cannot divert it. Redirects are refused (a Cognito login redirect is a configuration error,
+not a place to send a credential). A `401` or `403` stops preflight immediately; the
+message keeps what the endpoint said as provenance and names the possible causes — an
+intermediary can answer either — without claiming that the console verified an identity.
+
+**Who receives the credential.** A loopback tunnel delivers the bearer to whatever listens on
+that port *on the transport host*. DevOps must control that listener; on a host shared with
+other users a port can be squatted, so the tunnel's port must not be one another account can
+bind. An HTTPS endpoint elsewhere is not automatically new public exposure — the endpoint
+choice, and any change to it, stays with DevOps.
+
+**Who receives the password.** In `ssh` mode the password and the bearer configuration go to
+whatever answers the jump host's SSH port, so the transport verifies that host against a
+provisioned `known_hosts` file and nothing else (`StrictHostKeyChecking=yes`; unknown or
+changed keys fail without prompting; no accept-new). Provision it out of band:
+
+```bash
+ssh-keyscan -p 22 87.106.63.105 > ~/.phorvex-e2e/known_hosts      # then COMPARE the fingerprint
+ssh-keygen -lf ~/.phorvex-e2e/known_hosts                          # against `ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub` ON the host
+export PHORVEX_SSH_KNOWN_HOSTS=~/.phorvex-e2e/known_hosts
+```
+
+In CI the same lines live in the `PHORVEX_SSH_KNOWN_HOSTS` repository variable and are
+written to a runner-local `0600` file before any ssh. Note the two sides: `known_hosts` is
+read by ssh on the **client** (runner/workstation); `ca_file` is read by curl on the **SSH
+host**. `publish-report.sh` uses the same pinned identity.
 
 Who issues the token, which subject it names, what grant that subject holds and which
 endpoint reaches the verifier are DevOps decisions recorded next to the deployment; the
@@ -87,8 +115,9 @@ it fires at and nothing wider.
 
 ```bash
 export PHORVEX_SSH_PASSWORD='…'          # or write it to ~/.phorvex-e2e/secret (chmod 600)
+export PHORVEX_SSH_KNOWN_HOSTS=~/.phorvex-e2e/known_hosts   # the jump host's verified key (see above)
 export PHORVEX_CONSOLE_BASE='https://…'   # the endpoint DevOps provisioned (see above)
-export PHORVEX_CONSOLE_TOKEN='…'          # or write it to ~/.phorvex-e2e/console-token (chmod 600)
+export PHORVEX_CONSOLE_TOKEN='…'          # OR PHORVEX_CONSOLE_TOKEN_FILE=~/.phorvex-e2e/console-token (chmod 600), never both
 
 python3 pipeline/e2e.py --list-targets
 python3 pipeline/e2e.py --mode observe                    # read-only, no target

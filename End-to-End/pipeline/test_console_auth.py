@@ -15,7 +15,10 @@ import contextlib
 import io
 import json
 import os
+import re
 import shlex
+import shutil
+import signal
 import stat
 import subprocess
 import tempfile
@@ -29,8 +32,8 @@ import fixtures as F
 import observation as obs
 from capture import CaptureLimits
 from transport import (CONSOLE_TOKEN_ENV, CONSOLE_TOKEN_FILE_ENV, CONSOLE_BASE_ENV,
-                       CONSOLE_CA_FILE_ENV, Console, ConsoleAccessError, Transport,
-                       TransportError)
+                       CONSOLE_CA_FILE_ENV, SSH_KNOWN_HOSTS_ENV, MAX_TOKEN_BYTES, Console,
+                       ConsoleAccessError, Transport, TransportError)
 
 LIMITS = CaptureLimits(max_total_bytes=200_000, max_records=1_000)
 CI_SUBJECT = "e2e-ci-subject"
@@ -158,6 +161,9 @@ class IncidentBaselineTests(FixtureCase):
             console.wait_preflight(timeout=5)
         self.assertIn("carries NO console credential", str(caught.exception))
         self.assertIn("mode=http", str(caught.exception))
+        # Health itself was the refused route, so nothing beyond the API server is claimed.
+        self.assertIn("public health itself was refused", str(caught.exception))
+        self.assertNotIn("console refusing", str(caught.exception))
 
     def test_kubectl_proxy_cannot_be_told_to_carry_a_bearer(self):
         with self.assertRaisesRegex(ConsoleAccessError, "cannot be combined"):
@@ -273,7 +279,8 @@ class RejectedCredentialTests(FixtureCase):
         message = str(caught.exception)
         self.assertIn("HTTP 403", message)
         self.assertIn("no authorization grant", message)
-        self.assertIn("explicit console grant", message)
+        self.assertIn("no grant covers", message)
+        self.assertIn("not proof", message)          # a 403 is not evidence of a verified identity
         self.assertEqual(len(self.requests("/api/version")), 1)
 
     def test_wrong_tenant_on_a_control_is_403_and_issued_once(self):
@@ -330,11 +337,15 @@ class EndpointSafetyTests(FixtureCase):
                 self.console(base=base)
         self.assertEqual(self.transport.commands, [])
 
-    def test_loopback_http_is_the_explicit_exception(self):
-        for host in ("127.0.0.1", "localhost", "127.1.2.3"):
+    def test_loopback_http_is_the_explicit_exception_for_literal_addresses_only(self):
+        for host in ("127.0.0.1", "127.1.2.3", "[::1]"):
             with self.subTest(host=host):
                 console = self.console(base=f"http://{host}:{self.server.port}/")
                 self.assertEqual(console.base, f"http://{host}:{self.server.port}")
+        # A name is a lookup on the transport host — hosts file, resolver or proxy decide it.
+        for host in ("localhost", "localhost.localdomain", "loopback.example"):
+            with self.subTest(host=host), self.assertRaisesRegex(ConsoleAccessError, "literal loopback"):
+                self.console(base=f"http://{host}:{self.server.port}")
         console = self.console(base="https://console.internal.example:8443/prefix/")
         self.assertEqual(console.base, "https://console.internal.example:8443/prefix")
         self.assertEqual(self.transport.commands, [])       # configuration makes no request
@@ -390,8 +401,11 @@ class EndpointSafetyTests(FixtureCase):
         def fake_run(argv, **kwargs):
             captured["argv"], captured["kwargs"] = argv, kwargs
             return subprocess.CompletedProcess(argv, 0, '{"ok":true}200', "")
+        known_hosts = token_file(self.tmp.name, "[jump.example]:22 ssh-ed25519 AAAAfixture\n",
+                                 name="known_hosts", mode=0o600)
         with clean_env(PHORVEX_SSH_PASSWORD="hunter2-fixture"):
-            transport = Transport({"kind": "ssh", "host": "jump.example", "user": "ci"})
+            transport = Transport({"kind": "ssh", "host": "jump.example", "user": "ci",
+                                   "known_hosts": known_hosts})
             console = Console(transport, {"mode": "http", "base": "http://127.0.0.1:8095",
                                           "token_file": token_file(self.tmp.name, "a" * 40)})
             with patch("transport.subprocess.run", side_effect=fake_run):
@@ -399,6 +413,8 @@ class EndpointSafetyTests(FixtureCase):
         argv, kwargs = captured["argv"], captured["kwargs"]
         self.assertEqual(argv[:3], ["sshpass", "-e", "ssh"])
         self.assertIn("-K -", argv[-1])
+        self.assertEqual(argv[argv.index("-o") + 1], "StrictHostKeyChecking=yes")
+        self.assertIn(f"UserKnownHostsFile={known_hosts}", argv)
         self.assertFalse(any("a" * 40 in word for word in argv))
         self.assertEqual(kwargs["input"], 'header = "Authorization: Bearer ' + "a" * 40 + '"\n')
         self.assertEqual(kwargs["env"]["SSHPASS"], "hunter2-fixture")
@@ -500,7 +516,7 @@ class CredentialSourceTests(unittest.TestCase):
     def test_empty_multiline_oversized_short_and_malformed_values_are_refused(self):
         for value, why in (("", "is empty"), ("\n", "is empty"),
                            (self.good + "\n" + self.good + "\n", "several lines"),
-                           ("x" * 4500, "exceeds"), ("short", "shorter than"),
+                           ("x" * (MAX_TOKEN_BYTES + 800), "exceeds"), ("short", "shorter than"),
                            ("bad token with spaces" + "a" * 20, "charset"),
                            ('quoted"' + "a" * 20, "charset"), ("back\\slash" + "a" * 20, "charset"),
                            ("Bearer " + self.good, "charset"), ("é" * 20, "ASCII|charset")):
@@ -530,17 +546,25 @@ class CredentialSourceTests(unittest.TestCase):
         if Path("/dev/null").exists():
             self.refuse("not a regular file|readable by other users", token_file="/dev/null")
 
-    def test_both_sources_present_is_a_conflict(self):
-        path = token_file(self.tmp.name, self.good)
-        self.refuse("configured twice", env={CONSOLE_TOKEN_ENV: "f" * 64}, token_file=path)
-        # The file variable and the config key name the same kind of source; the environment
-        # value wins only when no file is present at all.
-        console = self.console(env={CONSOLE_TOKEN_ENV: "f" * 64},
-                               token_file=str(Path(self.tmp.name) / "absent"))
-        self.assertEqual(console.token, "f" * 64)
-        console = self.console(env={CONSOLE_TOKEN_FILE_ENV: path})
+    def test_two_configured_sources_conflict_whether_or_not_the_file_exists(self):
+        present = token_file(self.tmp.name, self.good)
+        absent = str(Path(self.tmp.name) / "absent")
+        # Which identity a run uses is decided by its configuration, never by whether a path
+        # happens to exist on this machine: the same configuration answers the same way.
+        for path in (present, absent):
+            with self.subTest(path=path):
+                self.refuse("configured twice", env={CONSOLE_TOKEN_ENV: "f" * 64}, token_file=path)
+                self.refuse("configured twice",
+                            env={CONSOLE_TOKEN_ENV: "f" * 64, CONSOLE_TOKEN_FILE_ENV: path})
+        # Exactly one configured source is unambiguous, from either direction.
+        self.assertEqual(self.console(env={CONSOLE_TOKEN_ENV: "f" * 64}).token, "f" * 64)
+        console = self.console(env={CONSOLE_TOKEN_FILE_ENV: present})
         self.assertEqual(console.token, self.good)
-        self.assertEqual(console.token_source, f"file {path}")
+        self.assertEqual(console.token_source, f"file {present}")
+        self.assertEqual(self.console(token_file=present).token, self.good)
+        # An empty environment value is an unset one, so a configured file is not a conflict.
+        self.assertEqual(self.console(env={CONSOLE_TOKEN_ENV: ""}, token_file=present).token, self.good)
+        self.refuse("does not exist", env={CONSOLE_TOKEN_ENV: ""}, token_file=absent)
 
     def test_the_loaded_token_is_registered_for_redaction_and_absent_from_describe(self):
         console = self.console(token_file=token_file(self.tmp.name, self.good))
@@ -554,9 +578,12 @@ class CredentialSourceTests(unittest.TestCase):
         self.assertEqual(console_cfg["auth"], "bearer")
         self.assertNotIn("token", console_cfg)
         self.assertIsNone(console_cfg.get("base"))
-        self.assertTrue(console_cfg["token_file"].startswith("~/"))
+        # No implicit file path: with one, the CI secret would conflict by construction.
+        self.assertIsNone(console_cfg.get("token_file"))
         # The old proxy path stays reachable only by explicit choice.
         self.assertEqual(console_cfg["service"]["name"], "phorvex-console")
+        self.assertIn("known_hosts", cfg["transport"])
+        self.assertIsNone(cfg["transport"]["known_hosts"])
 
 
 # ───────────────────────── the whole pipeline through the real client ─────────────────────────
@@ -638,6 +665,405 @@ class FullRunTests(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn(CONSOLE_BASE_ENV, doc["abort"]["error"])
         self.assertEqual(self.server.requests, [])
+
+
+# ─────────────────── lead review r1: transport-host and runner-side hazards ───────────────────
+
+def fragments(secret, width=12):
+    """Every window of a secret; a retained message may contain none of them."""
+    return {secret[i:i + width] for i in range(0, len(secret) - width + 1, 7)}
+
+
+class DefaultCurlConfigurationTests(FixtureCase):
+    """R1: the transport host's `.curlrc` must not be able to redirect, weaken or persist
+    the credential-carrying request. `-q` is the first curl option."""
+
+    def curlrc(self, text):
+        Path(self.tmp.name, ".curlrc").write_text(text)
+        return self.tmp.name
+
+    def test_a_curlrc_url_recipient_receives_nothing(self):
+        sink = CF.FixtureConsole(key=self.key, grants={})
+        self.addCleanup(sink.close)
+        home = self.curlrc(f'url = "{sink.base}/unconfigured-recipient"\n')
+        with clean_env(CURL_HOME=home):
+            console = Console(self.transport, {"mode": "http", "base": self.server.base,
+                                               "token_file": token_file(self.tmp.name, self.server.token(CI_SUBJECT))})
+            self.assertEqual(console.get_json("/api/version")["operator"], "fixture-operator")
+            console.post_json("/api/workload/attack", {"namespace": "voice", "action": "foothold"})
+            console.stream_decisions(0.2, LIMITS)
+        self.assertEqual(sink.requests, [])
+        self.assertEqual([r["path"] for r in self.server.requests],
+                         ["/api/version", "/api/workload/attack", "/api/live"])
+        for command in self.transport.commands:
+            words = shlex.split(command)
+            self.assertEqual(words[:2], ["curl", "-q"], words)
+
+    def test_curlrc_proxy_and_trace_settings_do_not_apply(self):
+        sink = CF.FixtureConsole(key=self.key, grants={})
+        self.addCleanup(sink.close)
+        trace = Path(self.tmp.name, "trace.txt")
+        home = self.curlrc(f'proxy = "{sink.base}"\ntrace = "{trace}"\nverbose\n')
+        with clean_env(CURL_HOME=home):
+            console = Console(self.transport, {"mode": "http", "base": self.server.base,
+                                               "token_file": token_file(self.tmp.name, self.server.token(CI_SUBJECT))})
+            self.assertEqual(console.get_json("/api/version")["operator"], "fixture-operator")
+        self.assertEqual(sink.requests, [])
+        self.assertFalse(trace.exists(), "the default configuration persisted the request")
+        self.assertEqual(self.server.requests[-1]["authorization"], "Bearer " + console.token)
+
+
+class InheritedProxyTests(FixtureCase):
+    """R2: the loopback exception is a direct connection to the transport host's kernel, not a
+    request handed to whatever proxy the environment names."""
+
+    def test_proxy_variables_do_not_divert_the_loopback_request(self):
+        sink = CF.FixtureConsole(key=self.key, grants={})
+        self.addCleanup(sink.close)
+        for variables in ({"http_proxy": sink.base}, {"HTTP_PROXY": sink.base},
+                          {"ALL_PROXY": sink.base, "all_proxy": sink.base},
+                          {"http_proxy": sink.base, "no_proxy": "example.com"}):
+            with self.subTest(variables=variables):
+                sink.requests.clear()
+                self.server.requests.clear()
+                with clean_env(**variables):
+                    console = Console(self.transport, {"mode": "http", "base": self.server.base,
+                                                       "token_file": token_file(self.tmp.name, self.server.token(CI_SUBJECT))})
+                    self.assertEqual(console.get_json("/api/version")["operator"], "fixture-operator")
+                    got = console.stream_decisions(0.2, LIMITS)
+                self.assertEqual(sink.requests, [])
+                self.assertEqual([r["path"] for r in self.server.requests], ["/api/version", "/api/live"])
+                self.assertEqual(self.server.requests[0]["authorization"], "Bearer " + console.token)
+                self.assertEqual(len(got.records), 1)
+                words = shlex.split(self.transport.commands[-1])
+                self.assertEqual(words[words.index("--noproxy") + 1], "*")
+
+
+class StdinDeliveryTests(unittest.TestCase):
+    """R4: the credential configuration is delivered inside the capture's own deadline — a
+    child that never drains stdin, a pipe smaller than the input, or a child that exits
+    first, are reported, never waited for or raised as BrokenPipeError."""
+
+    PAYLOAD = 'header = "X-Fixture: ' + "x" * MAX_TOKEN_BYTES + '"\n'
+
+    def small_pipe(self):
+        original = subprocess.Popen
+
+        def popen(*args, **kwargs):
+            kwargs["pipesize"] = 4096
+            return original(*args, **kwargs)
+        return patch("transport.subprocess.Popen", side_effect=popen)
+
+    def test_a_child_that_never_reads_cannot_hold_the_window_open(self):
+        started = time.monotonic()
+        with self.small_pipe():
+            got = Transport({"kind": "local"}).capture_live(
+                "exec sleep 0.8123", 0.1, CaptureLimits(65536, 100), stdin=self.PAYLOAD)
+        elapsed = time.monotonic() - started
+        self.assertLess(elapsed, 0.5, elapsed)
+        self.assertFalse(got.complete)
+        self.assertIn("never consumed its input", got.reason)
+        self.assertEqual(subprocess.run(["pgrep", "-f", "sleep 0.8123"], capture_output=True,
+                                        text=True).stdout.strip(), "")
+
+    def test_the_whole_input_reaches_a_child_that_drains_it_through_a_small_pipe(self):
+        code = ("import sys, time; d = sys.stdin.read(); print(': connected\\n', flush=True); "
+                "print('data: {\"n\": %d}\\n' % len(d), flush=True); time.sleep(5)")
+        fired = []
+        with self.small_pipe():
+            got = Transport({"kind": "local"}).capture_live(
+                shlex.join(["python3", "-c", code]), 0.2, CaptureLimits(65536, 100),
+                on_connected=lambda: fired.append(True), stdin=self.PAYLOAD)
+        self.assertEqual(fired, [True])
+        self.assertEqual([r["n"] for r in got.records], [len(self.PAYLOAD.encode())])
+        self.assertTrue(got.complete, got.reason)
+
+    def test_a_child_that_exits_before_reading_is_reported_not_raised(self):
+        with self.small_pipe():
+            got = Transport({"kind": "local"}).capture_live(
+                "exit 22", 0.3, CaptureLimits(65536, 100), stdin=self.PAYLOAD)
+        self.assertFalse(got.complete)
+        self.assertIn("exited 22", got.reason)
+        with self.small_pipe(), self.assertRaisesRegex(TransportError, "closed before observation"):
+            Transport({"kind": "local"}).capture_live(
+                "exit 22", 0.3, CaptureLimits(65536, 100), on_connected=lambda: None,
+                stdin=self.PAYLOAD)
+
+    def test_run_delivers_the_input_and_never_inherits_this_terminal(self):
+        rc, out, _ = Transport({"kind": "local"}).run("wc -c", stdin=self.PAYLOAD)
+        self.assertEqual((rc, out.strip()), (0, str(len(self.PAYLOAD.encode()))))
+        rc, out, _ = Transport({"kind": "local"}).run("wc -c")
+        self.assertEqual((rc, out.strip()), (0, "0"))
+
+
+class SSHHostVerificationTests(unittest.TestCase):
+    """R3: a password and a bearer go to whatever answers the SSH port, so that endpoint is
+    verified against a provisioned host key on THIS machine — for every command the
+    transport runs, and with no unknown/changed-key fallback."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def known_hosts(self, text="[jump.example]:22 ssh-ed25519 AAAAfixture\n", mode=0o600):
+        return token_file(self.tmp.name, text, name="known_hosts", mode=mode)
+
+    def transport(self, env=None, **cfg):
+        config = {"kind": "ssh", "host": "jump.example", "user": "ci", "port": 2222}
+        config.update(cfg)
+        with clean_env(PHORVEX_SSH_PASSWORD="hunter2-fixture", **(env or {})):
+            return Transport(config)
+
+    def test_every_ssh_command_pins_the_host_and_verifies_strictly(self):
+        path = self.known_hosts()
+        transport = self.transport(known_hosts=path)
+        for command in ("kubectl get pod -o json", "curl -q -sS -K - http://127.0.0.1:8095/api/version"):
+            argv, env = transport._command(command)
+            options = [argv[i + 1] for i, word in enumerate(argv) if word == "-o"]
+            self.assertIn("StrictHostKeyChecking=yes", options)
+            self.assertIn(f"UserKnownHostsFile={path}", options)
+            self.assertIn("GlobalKnownHostsFile=/dev/null", options)
+            self.assertIn("UpdateHostKeys=no", options)
+            for option in options:
+                self.assertNotIn("StrictHostKeyChecking=no", option)
+                self.assertNotIn("accept-new", option)
+                self.assertNotEqual(option, "UserKnownHostsFile=/dev/null")
+            self.assertEqual(env["SSHPASS"], "hunter2-fixture")
+            self.assertEqual(argv[-1], command)
+        self.assertIn("host key pinned by", transport.describe())
+
+    def test_the_known_hosts_file_comes_from_the_environment_or_config_and_is_required(self):
+        path = self.known_hosts()
+        self.assertEqual(self.transport(env={SSH_KNOWN_HOSTS_ENV: path}).known_hosts, path)
+        with self.assertRaisesRegex(TransportError, "provisioned known_hosts"):
+            self.transport()
+        for text, mode, why in (("", 0o600, "non-empty"), ("x\n", 0o666, "writable by other users"),
+                                ("x\n", 0o622, "writable by other users")):
+            with self.subTest(mode=oct(mode), text=text), self.assertRaisesRegex(TransportError, why):
+                self.transport(known_hosts=self.known_hosts(text, mode))
+        with self.assertRaisesRegex(TransportError, "not readable"):
+            self.transport(known_hosts=str(Path(self.tmp.name) / "absent"))
+        with self.assertRaisesRegex(TransportError, "regular file"):
+            self.transport(known_hosts=self.tmp.name)
+
+    def test_publish_report_uses_the_same_pinned_host_identity(self):
+        script = (Path(__file__).resolve().parents[1] / "publish-report.sh").read_text()
+        self.assertNotIn("StrictHostKeyChecking=no", script)
+        self.assertNotIn("UserKnownHostsFile=/dev/null", script)
+        self.assertIn("StrictHostKeyChecking=yes", script)
+        self.assertIn(SSH_KNOWN_HOSTS_ENV, script)
+
+
+def sshd_binary():
+    return shutil.which("sshd") or next((p for p in ("/usr/sbin/sshd", "/usr/local/sbin/sshd")
+                                         if os.access(p, os.X_OK)), None)
+
+
+def sshd_available():
+    return sshd_binary() and all(shutil.which(tool) for tool in ("ssh", "ssh-keygen", "sshpass"))
+
+
+@unittest.skipUnless(sshd_available(), "a local sshd, ssh, ssh-keygen and sshpass are needed")
+class RealSSHHostKeyControlTests(unittest.TestCase):
+    """The transport's ssh against an actual sshd on loopback: an unknown key fails before any
+    authentication, a changed key fails, and only the provisioned key lets the credential
+    configuration through — on stdin, end to end."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        d = Path(self.tmp.name)
+        d.chmod(0o700)
+        for name in ("hostkey", "clientkey", "otherkey"):
+            subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(d / name)],
+                           check=True, capture_output=True)
+        (d / "authorized_keys").write_bytes((d / "clientkey.pub").read_bytes())
+        # ssh resolves `~/.ssh` from the passwd entry, not $HOME, so the client key is offered
+        # through a private agent instead; the transport's argv is exactly the production one.
+        agent = subprocess.run(["ssh-agent", "-s", "-a", str(d / "agent.sock")],
+                               check=True, capture_output=True, text=True).stdout
+        self.agent_pid = int(re.search(r"SSH_AGENT_PID=(\d+)", agent).group(1))
+        self.addCleanup(os.kill, self.agent_pid, signal.SIGTERM)
+        self.agent_env = {"SSH_AUTH_SOCK": str(d / "agent.sock")}
+        subprocess.run(["ssh-add", "-q", str(d / "clientkey")], check=True, capture_output=True,
+                       env=dict(os.environ, **self.agent_env))
+        import socket
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            self.port = probe.getsockname()[1]
+        self.log = d / "sshd.log"
+        log = self.log.open("wb")
+        self.addCleanup(log.close)
+        self.sshd = subprocess.Popen(
+            [sshd_binary(), "-D", "-e", "-f", "/dev/null", "-h", str(d / "hostkey"), "-p", str(self.port),
+             "-o", "ListenAddress=127.0.0.1", "-o", "PidFile=none", "-o", "UsePAM=no",
+             "-o", "PasswordAuthentication=no", "-o", "StrictModes=no",
+             "-o", f"AuthorizedKeysFile={d / 'authorized_keys'}", "-o", "LogLevel=VERBOSE"],
+            stdout=subprocess.DEVNULL, stderr=log)
+        self.addCleanup(self.sshd.wait, 5)
+        self.addCleanup(self.sshd.terminate)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            with socket.socket() as probe:
+                if probe.connect_ex(("127.0.0.1", self.port)) == 0:
+                    break
+            time.sleep(0.05)
+        else:
+            self.skipTest("local sshd did not start: " + self.log.read_text()[-300:])
+        self.hostline = "[127.0.0.1]:%d %s\n" % (
+            self.port, " ".join((d / "hostkey.pub").read_text().split()[:2]))
+
+    def transport(self, known_hosts_text):
+        path = token_file(self.tmp.name, known_hosts_text, name="known_hosts")
+        with clean_env(PHORVEX_SSH_PASSWORD="unused-fixture-password"):
+            transport = Transport({"kind": "ssh", "host": "127.0.0.1",
+                                   "user": os.environ.get("USER") or os.getlogin(),
+                                   "port": self.port, "known_hosts": path, "connect_timeout_sec": 5})
+        return transport
+
+    def run_with_home(self, transport, command, stdin=None):
+        with patch.dict(os.environ, self.agent_env):
+            return transport.run(command, timeout=20, stdin=stdin)
+
+    def test_unknown_host_key_fails_before_any_authentication(self):
+        # A provisioned file that names some other host: this host's key is unknown to it.
+        rc, out, err = self.run_with_home(self.transport("[jump.example]:22 ssh-ed25519 AAAAfixture\n"),
+                                          "echo reached")
+        self.assertEqual(rc, 255, err)
+        self.assertIn("Host key verification failed", err)
+        self.assertNotIn("reached", out)
+        self.assertNotIn("Accepted", self.log.read_text())
+
+    def test_changed_host_key_fails(self):
+        other = "[127.0.0.1]:%d %s\n" % (
+            self.port, " ".join((Path(self.tmp.name) / "otherkey.pub").read_text().split()[:2]))
+        rc, out, err = self.run_with_home(self.transport(other), "echo reached")
+        self.assertEqual(rc, 255, err)
+        self.assertIn("Host key verification failed", err)
+        self.assertNotIn("reached", out)
+
+    def test_the_provisioned_key_admits_the_command_and_its_stdin(self):
+        transport = self.transport(self.hostline)
+        rc, out, err = self.run_with_home(transport, "cat", stdin='header = "X: fixture"\n')
+        self.assertEqual((rc, out), (0, 'header = "X: fixture"\n'), err)
+        self.assertIn("Accepted publickey", self.log.read_text())
+
+
+class RefusalProvenanceTests(FixtureCase):
+    """R6: a refusal names what answered and what that does and does not prove."""
+
+    class Proxy:
+        kind = "local"
+
+        def __init__(self, answers):
+            self.answers, self.commands = answers, []
+
+        def run(self, command, timeout=60, stdin=None):
+            self.commands.append(command)
+            for path, answer in self.answers.items():
+                if path in command:
+                    return answer
+            raise AssertionError(command)
+
+    LOGIN = (1, "", "error: You must be logged in to the server (the server has asked for "
+                    "the client to provide credentials)\n")
+
+    def test_a_proxied_401_is_attributed_by_the_same_path_health_read(self):
+        proxy = self.Proxy({"/api/version": self.LOGIN, "/api/health": (0, '{"ok":true}\n', "")})
+        with self.assertRaises(ConsoleAccessError) as caught:
+            Console(proxy, {"mode": "kubectl-proxy"}).get_json("/api/version")
+        message = str(caught.exception)
+        self.assertIn("same-path public /api/health succeeded", message)
+        self.assertIn("came from behind the proxy", message)
+        self.assertIn("kubectl said: error: You must be logged in", message)
+        self.assertNotIn("console authenticated", message)
+        self.assertEqual(len([c for c in proxy.commands if "/api/health" in c]), 1)
+
+    def test_a_proxied_401_with_failing_health_is_attributed_to_the_api_server_hop(self):
+        proxy = self.Proxy({"/api/version": self.LOGIN, "/api/health": self.LOGIN})
+        with self.assertRaises(ConsoleAccessError) as caught:
+            Console(proxy, {"mode": "kubectl-proxy"}).get_json("/api/version")
+        message = str(caught.exception)
+        self.assertIn("also failed", message)
+        self.assertIn("console's own answer is unknown", message)
+        forbidden = (1, "", "Error from server (Forbidden): services \"phorvex-console:80\" is forbidden\n")
+        proxy = self.Proxy({"/api/version": forbidden, "/api/health": forbidden})
+        with self.assertRaisesRegex(ConsoleAccessError, "HTTP 403 on the kubectl-proxy path"):
+            Console(proxy, {"mode": "kubectl-proxy"}).get_json("/api/version")
+
+    def test_http_refusals_keep_endpoint_text_as_provenance_without_claiming_identity(self):
+        console = self.console(token=self.server.token(CI_SUBJECT, ttl=-100))
+        with self.assertRaises(ConsoleAccessError) as caught:
+            console.get_json("/api/version")
+        message = str(caught.exception)
+        self.assertIn(f"HTTP 401 from {self.server.base}", message)
+        self.assertIn("endpoint said: authentication required", message)
+        self.assertIn("intermediary", message)
+        console = self.console(subject="nobody-bound-me")
+        with self.assertRaises(ConsoleAccessError) as caught:
+            console.post_json("/api/workload/attack", {"namespace": "voice", "action": "foothold"})
+        message = str(caught.exception)
+        self.assertIn("HTTP 403", message)
+        self.assertIn("not proof", message)
+        self.assertNotIn("authenticated the caller", message)
+
+
+class LongCredentialRedactionTests(unittest.TestCase):
+    """R8: a credential reflected into any diagnostic is redacted BEFORE the text is bounded,
+    so neither a prefix nor a suffix of it survives in what is retained."""
+
+    def setUp(self):
+        self.key = CF.RSAKey()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.transport = RecordingTransport()
+        # Near the accepted maximum, and syntactically a token — never a real one.
+        self.long_token = ("L" * 40 + ".") * (MAX_TOKEN_BYTES // 41 - 1)
+
+    def console(self, server):
+        with clean_env():
+            return Console(self.transport, {"mode": "http", "base": server.base,
+                                            "token_file": token_file(self.tmp.name, self.long_token)})
+
+    def assert_no_fragment(self, text):
+        self.assertNotIn(self.long_token, text)
+        for fragment in fragments(self.long_token):
+            self.assertNotIn(fragment, text)
+        self.assertIn("[REDACTED]", text)
+
+    def test_reflected_401_and_500_bodies_are_bounded_and_carry_no_fragment(self):
+        server = CF.FixtureConsole(key=self.key, grants={}, reflect_credentials=True)
+        self.addCleanup(server.close)
+        console = self.console(server)
+        with self.assertRaises(ConsoleAccessError) as caught:
+            console.get_json("/api/version")               # a 401 whose body echoes the header
+        self.assert_no_fragment(str(caught.exception))
+        self.assertLess(len(str(caught.exception)), 900)
+        server.grants = {CI_SUBJECT: CF.Grant(["operator"], ["voice"])}
+        token_file(self.tmp.name, server.token(CI_SUBJECT))
+        with self.assertRaises(TransportError) as caught:
+            self.console(server).get_json("/api/echo-error")   # a 500 that reflects it
+        self.assertNotIn(server.token(CI_SUBJECT)[:12], str(caught.exception))
+
+    def test_reflected_stderr_carries_no_fragment(self):
+        server = CF.FixtureConsole(key=self.key, grants={})
+        self.addCleanup(server.close)
+        console = self.console(server)
+        noisy = ("x" * 400 + " " + self.long_token + " tail")
+        with patch.object(self.transport, "run", return_value=(7, "", noisy)):
+            with self.assertRaises(TransportError) as caught:
+                console.get_json("/api/version")
+        self.assert_no_fragment(str(caught.exception))
+        # The stream path: a child that echoes its stdin configuration to stderr and dies.
+        code = "import sys; sys.stderr.write('x' * 600 + sys.stdin.read() + ' tail'); sys.exit(22)"
+        with self.assertRaises(TransportError) as caught:
+            self.transport.capture_live(shlex.join(["python3", "-c", code]), 1, LIMITS,
+                                        on_connected=lambda: None, stdin=console._stdin())
+        self.assert_no_fragment(str(caught.exception))
+        got = self.transport.capture_live(shlex.join(["python3", "-c", code]), 0.5, LIMITS,
+                                          stdin=console._stdin())
+        self.assertFalse(got.complete)
+        self.assert_no_fragment(got.reason)
 
 
 if __name__ == "__main__":

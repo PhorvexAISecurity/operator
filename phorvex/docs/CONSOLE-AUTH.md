@@ -275,16 +275,25 @@ The pipeline now has an explicitly configured authenticated mode (`console.mode:
 - it sends `Authorization: Bearer <token>` on every GET, POST and SSE request, delivered to
   curl as a `-K -` configuration on stdin — never argv, a URL, a query string, a child's
   environment, a log or a retained error;
-- the token comes from exactly one of `PHORVEX_CONSOLE_TOKEN` (CI secret) or a private `0600`
-  file; empty, multi-line, oversized, malformed or world-readable inputs are refused, and the
-  client never decodes the token — the verifier here is the authority;
+- the token comes from exactly one *configured* source — `PHORVEX_CONSOLE_TOKEN` (CI secret)
+  or a private `0600` file — and configuring both is refused whether or not the file exists;
+  empty, multi-line, oversized, malformed or world-readable inputs are refused, and the client
+  never decodes the token — the verifier here is the authority;
+- curl runs with its default configuration disabled (`-q`), so a `.curlrc` on the transport
+  host cannot add a recipient, disable verification or trace the request;
 - the endpoint must be HTTPS with normal certificate verification (a private CA can be named,
-  verification cannot be disabled) or plain HTTP to a loopback address **on the transport
-  host**; URL userinfo and non-loopback HTTP are refused, redirects are never followed and a
-  credential is never re-sent to a `Location`;
-- `401` is reported as "no accepted credential", `403` as "no grant for this identity"; both
-  stop preflight at once, a failed POST is never retried, and an unsuccessful stream response
-  never fires the attack stimulus;
+  verification cannot be disabled) or plain HTTP to a *literal* loopback address (127.0.0.0/8
+  or `[::1]`, never a name) **on the transport host**, connected to directly so an inherited
+  `http_proxy` cannot divert it; URL userinfo and non-loopback HTTP are refused, redirects are
+  never followed and a credential is never re-sent to a `Location`;
+- in `ssh` mode the jump host that receives the password and the bearer configuration is
+  verified against a provisioned `known_hosts` file on the client with strict checking; an
+  unknown or changed key fails non-interactively, with no accept-new fallback, for every
+  command the transport (and `publish-report.sh`) runs;
+- a `401` or `403` stops preflight at once, keeps the endpoint's (redacted, bounded) message as
+  provenance and names the possible causes — an intermediary can answer either, and a `403`
+  alone is not proof the console verified an identity; a failed POST is never retried, and an
+  unsuccessful stream response never fires the attack stimulus;
 - the old proxy mode remains available only by explicit choice, and its `401` now says that
   the proxy carries no console credential rather than "the console did not become ready".
 
@@ -318,11 +327,21 @@ deployment, not defaults in this repository.
 4. **An endpoint that reaches the verifier**, set as the `PHORVEX_CONSOLE_BASE` repository
    variable: an HTTPS URL served by the console (or an in-front proxy that passes the
    `Authorization` header through unchanged and does not itself redirect to a login), or a
-   loopback `http://127.0.0.1:<port>` tunnel/port-forward terminated **on the SSH jump host**
-   the pipeline's `ssh` transport uses. A private CA is named with `PHORVEX_CONSOLE_CA_FILE`
-   (a path on that host). The pipeline does not start a port-forward, expose a Service, create
-   a ServiceAccount or change RBAC.
-5. **A controlled acceptance run** after 1–4: `observe` first, then `attack` on the
+   literal-loopback `http://127.0.0.1:<port>` tunnel/port-forward terminated **on the SSH jump
+   host** the pipeline's `ssh` transport uses. Whoever can bind that port on that host receives
+   the credential: DevOps must control the listener, and on a shared host the port must not be
+   one another account can squat. A private CA is named with `PHORVEX_CONSOLE_CA_FILE` (a path
+   on that host — where curl runs). An HTTPS endpoint elsewhere is not by itself new public
+   exposure; the choice and any change of endpoint stay with DevOps. The pipeline does not
+   start a port-forward, expose a Service, create a ServiceAccount or change RBAC.
+5. **The jump host's SSH host key**, as the `PHORVEX_SSH_KNOWN_HOSTS` repository variable:
+   the `ssh-keyscan -p PORT HOST` line(s), compared out of band against the fingerprint the
+   host itself reports (`ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub` on the host). CI writes it
+   to a runner-local `0600` file before any ssh; the pipeline and `publish-report.sh` verify
+   the host against that file only. This is read on the SSH **client** (the runner), unlike
+   the CA file, which curl reads on the SSH **host**. Rotating the host key means updating
+   this variable first; until then every ssh fails closed rather than trusting a new key.
+6. **A controlled acceptance run** after 1–5: `observe` first, then `attack` on the
    authorized target only. Until the real authenticated preflight, session and stream
    succeed against the deployed console, the Tier 1 caller repair is not verified live.
 
