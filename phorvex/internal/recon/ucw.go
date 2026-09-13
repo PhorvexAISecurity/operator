@@ -174,11 +174,10 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
 		// jailbreak, request-drain for a request hijack) over other eligible moves.
 		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
-// only the weight is lifted. There is deliberately no age predicate here: an event
+		// only the weight is lifted. There is deliberately no age predicate here: an event
 		// retained in the workload view remains an observation until ingestion removes it.
 		if refs := vectorEvents(view.Events, model.AttackVectorKV); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactSession, model.AttackVectorKV, vectorDominance, refs) // -> kv-reset
-		}
 		}
 		if refs := vectorEvents(view.Events, model.AttackVectorGuardrail); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactGuardrailBypass, model.AttackVectorGuardrail, vectorDominance, refs) // -> guardrail-rotate
