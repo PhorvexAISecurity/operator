@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 20
+revision: 23
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -110,12 +110,19 @@ checks:
     source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
     at: '2026-09-13T19:03:12+00:00'
     baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/pr-equivalence.json
+    sha256: 448f65646009930366eca3fb99f3d2a29286582462a74f0b0750fbf01cefb6a0
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T19:04:53+00:00'
 fix_id: V3-M164
 issues:
 - M-164
 title: Acknowledge detector delivery only after SecurityEvent acceptance
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -142,11 +149,11 @@ implementation:
   head_sha: 61cf35760851a98bd17a12487033c4763ef7990c
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/193
+  reviewed_head: 4675bfa3c1a5ccd63905e49114c7c3e1c0d27c2f
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -176,10 +183,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T19:03:14+00:00'
+  owner: human_owner
+  action: Review PR193 and coordinate merge/deployment of both detector images and
+    CRD; lead verifies source-pinned live delivery controls afterward.
+updated_at: '2026-09-13T19:04:54+00:00'
 configuration_history:
 - at: '2026-09-13T17:16:06+00:00'
   by: codex-lead
@@ -214,6 +221,11 @@ configuration_history:
   by: claude-v3-m164
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T19:04:53+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -279,6 +291,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T19:04:54+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: V3-M164:20:review
