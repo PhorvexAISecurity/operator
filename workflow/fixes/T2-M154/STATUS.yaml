@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 17
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -19,29 +19,57 @@ checks:
     result: PASS
     by: sol-m154
     artifact: 04-diff.patch
-    sha256: 4ae1d7adbd3aa35bb0415c605136f49d64e712b466ba108cf19486c82c16d180
-    source_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
-    at: '2026-09-13T22:50:24+00:00'
+    sha256: 153ba36a3a2e27dce9a79ec137536e89bb5d5e0a1c0599c2821974303070578a
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:09:38+00:00'
   red:
     result: PASS
     by: sol-m154
     artifact: evidence/baseline-red/probe.log
     sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
     source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
-    at: '2026-09-13T22:50:36+00:00'
+    at: '2026-09-13T23:09:38+00:00'
   positive_control:
     result: PASS
     by: sol-m154
     artifact: evidence/baseline-red/probe.log
     sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
-    source_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
-    at: '2026-09-13T22:50:36+00:00'
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:09:38+00:00'
+  preflight:
+    result: PASS
+    by: sol-m154
+    artifact: evidence/head/preflight.yaml
+    sha256: e7d63f6fba1116dc89672e7f62088d119e4fa07544aecb2a6a63a7a42e5c8753
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:09:38+00:00'
+  l0:
+    result: PASS
+    by: sol-m154
+    artifact: evidence/head/focused-final.log
+    sha256: 10df73fcff25743921add0fcee2a8f4dc2dbab5e2b617d9b032d875876d2363d
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:09:38+00:00'
+  l1:
+    result: PASS
+    by: sol-m154
+    artifact: evidence/head/preflight.yaml
+    sha256: e7d63f6fba1116dc89672e7f62088d119e4fa07544aecb2a6a63a7a42e5c8753
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:09:38+00:00'
+  l2:
+    result: PASS
+    by: sol-m154
+    artifact: evidence/head/preflight.yaml
+    sha256: e7d63f6fba1116dc89672e7f62088d119e4fa07544aecb2a6a63a7a42e5c8753
+    source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+    at: '2026-09-13T23:09:38+00:00'
 fix_id: T2-M154
 issues:
 - M-154
 title: Increase and expose audit retention budgets with explicit limits
 profile: standard
-state: IMPLEMENTED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -65,7 +93,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m154-retention-budget
   base_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
-  head_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
+  head_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
   stacked_on: []
 pull_request:
   url: null
@@ -87,9 +115,9 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
   positive_control: PASS
@@ -102,9 +130,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-m154
-  action: Run exact source-pinned offline preflight and submit for lead review
-updated_at: '2026-09-13T22:50:41+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T23:09:39+00:00'
 configuration_history:
 - at: '2026-09-13T22:22:15+00:00'
   by: codex-lead
@@ -118,6 +147,21 @@ configuration_history:
   - verification
   approval_ref: workflow/fixes/T2-M154/AUTHORIZATION.md
 - at: '2026-09-13T22:50:06+00:00'
+  by: sol-m154
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:54:53+00:00'
+  by: sol-m154
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:05:19+00:00'
+  by: sol-m154
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:09:38+00:00'
   by: sol-m154
   fields:
   - implementation
@@ -147,3 +191,75 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T23:09:38+00:00'
+  by: sol-m154
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: implementation
+  result: PASS
+  by: sol-m154
+  artifact: 04-diff.patch
+  sha256: 4ae1d7adbd3aa35bb0415c605136f49d64e712b466ba108cf19486c82c16d180
+  source_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
+  at: '2026-09-13T22:50:24+00:00'
+- check: implementation
+  result: PASS
+  by: sol-m154
+  artifact: 04-diff.patch
+  sha256: 3647e34a0b6d0ea6eb2acef4f17a19c4b50e28597e432cabebaafd1397927dda
+  source_sha: 712601396f2e285e373490f1a8868fcd8cae7f74
+  at: '2026-09-13T22:55:00+00:00'
+- check: implementation
+  result: PASS
+  by: sol-m154
+  artifact: 04-diff.patch
+  sha256: 153ba36a3a2e27dce9a79ec137536e89bb5d5e0a1c0599c2821974303070578a
+  source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+  at: '2026-09-13T23:05:31+00:00'
+- check: positive_control
+  result: PASS
+  by: sol-m154
+  artifact: evidence/baseline-red/probe.log
+  sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
+  source_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
+  at: '2026-09-13T22:50:36+00:00'
+- check: preflight
+  result: PASS
+  by: sol-m154
+  artifact: evidence/head/preflight.yaml
+  sha256: e7d63f6fba1116dc89672e7f62088d119e4fa07544aecb2a6a63a7a42e5c8753
+  source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+  at: '2026-09-13T23:08:32+00:00'
+- check: implementation
+  result: PASS
+  by: sol-m154
+  artifact: 04-diff.patch
+  sha256: 153ba36a3a2e27dce9a79ec137536e89bb5d5e0a1c0599c2821974303070578a
+  source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+  at: '2026-09-13T23:05:38+00:00'
+- check: red
+  result: PASS
+  by: sol-m154
+  artifact: evidence/baseline-red/probe.log
+  sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
+  source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+  at: '2026-09-13T22:50:36+00:00'
+- check: positive_control
+  result: PASS
+  by: sol-m154
+  artifact: evidence/baseline-red/probe.log
+  sha256: 562a8fe44d2f57711847195e2dbaf9020a6f707f2ef13f33b1d0711b1d378689
+  source_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+  at: '2026-09-13T23:05:39+00:00'
+handoff:
+  id: T2-M154:17:submit
+  from: sol-m154
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 17

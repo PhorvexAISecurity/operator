@@ -345,8 +345,8 @@ fixes:
     issues:
     - M-154
     related_issues: []
-    state: IMPLEMENTED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/v3-m154-retention-budget
-    head_sha: 215930cdc1817fdb3e60093297ac7e90769ddb27
+    head_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
