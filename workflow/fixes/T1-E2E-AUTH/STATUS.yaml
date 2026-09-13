@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 52
+revision: 59
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -34,23 +34,21 @@ checks:
     artifact: evidence/red/incident-probe-head.log
     sha256: 01510d28d63e8f482967428ebce0b9a70fafe9ec021380479f0d98441c5dc07e
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T17:23:36+00:00'
-    rationale: 'Same probe as the red check at head: HEAD_FIXED; the repaired TLS
-      fixture passes 301 tests under Python 3.11 and 3.14 (evidence/r4).'
+    at: '2026-09-13T18:18:42+00:00'
   implementation:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: 04-diff.patch
     sha256: 94a6eb5273c7af0327bd36b06cb08bee4942679179cc20a736998931fd6660a9
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T17:23:36+00:00'
+    at: '2026-09-13T18:18:41+00:00'
   l0:
     result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/head/l0-build-vet.log
     sha256: 81e7805a013061a1c178f6eb45d933fe57fed0ff332c9c82ce7d2a6e05b4e141
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T17:23:37+00:00'
+    at: '2026-09-13T18:18:41+00:00'
     inputs:
     - .github/workflows
     - End-to-End
@@ -64,7 +62,7 @@ checks:
     artifact: evidence/head/python-pipeline-suite.log
     sha256: b71434c6fdb007a993ee2c11bf6e125c92732ab4b81a2bf9d8c763110a1ff70f
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T17:23:37+00:00'
+    at: '2026-09-13T18:18:42+00:00'
     inputs:
     - End-to-End
     inputs_sha256: 36ba1ad53ccb3358e682c006a8f2b0c50fff1037125e45a2d94e174ce36254aa
@@ -74,7 +72,7 @@ checks:
     artifact: evidence/head/go-console-suite.log
     sha256: 376ccbdf540eaf5ea32b80af06ab71af3f82e23bb21baf894c9dfb2cd88b2dbe
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T17:23:37+00:00'
+    at: '2026-09-13T18:18:42+00:00'
     inputs:
     - End-to-End
     - build/metricvalidity
@@ -82,23 +80,20 @@ checks:
     - phorvex
     inputs_sha256: 440dc8b0eec329f85a930af702ce10649f93abb57dea7b1dce49cb3894d742e2
   preflight:
-    result: FAIL
+    result: PASS
     by: claude-tier1-e2e-auth
     artifact: evidence/preflight/receipt.json
-    sha256: 722dbdfb3aca3f8fd2aaa97760cb7c0674bc2cd52d9e00b776350ce54f0401db
+    sha256: ef7d6dc31069d4dc0c13c6f4e7041102a158fa2df5a208b4eaf9bf43a7203f87
     source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
-    at: '2026-09-13T17:27:19+00:00'
-    rationale: 'At the r4 head 418ea35 every job PASSes (diff, chart-1..9, go-phorvex)
-      except the workflow job, whose doctor fails only on lead-owned checks: incident
-      and patch_equivalence are pinned to 6eb799b and p3 is the lead''s r4 FAIL. The
-      implementer cannot sign those; the receipt is retained as-is.'
+    at: '2026-09-13T18:18:41+00:00'
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 2a9de4c3e4b0bfefc6030e5f76c10f3ee8dbfdac9127cf8a0dc8405af82e97d8
-    source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
-    at: '2026-09-13T17:10:46+00:00'
+    sha256: f756666187ac741f661fe0523c9995815a3d08272de93cefe39838539d750589
+    source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+    at: '2026-09-13T18:13:55+00:00'
+    incident_sha256: 319d1d06acad63dde5ce10a1937c71fdcb3f59b97ecd2162b5ced1df141e1e5d
   base_review:
     result: PASS
     by: codex-lead
@@ -111,23 +106,23 @@ checks:
     result: PASS
     by: codex-lead
     artifact: evidence/incident.md
-    sha256: 9e34fc93605c831da8c87b90464e819156b5ab87a373545996c79debc8b49679
-    source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
-    at: '2026-09-13T16:26:56+00:00'
+    sha256: 319d1d06acad63dde5ce10a1937c71fdcb3f59b97ecd2162b5ced1df141e1e5d
+    source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+    at: '2026-09-13T18:13:55+00:00'
     baseline_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
   patch_equivalence:
     result: PASS
     by: codex-lead
     artifact: evidence/pr-equivalence.json
-    sha256: 8486b155b8c71cdae0c8c5e2a483ece22db14906d0637652b1509ebda4c8cab4
-    source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
-    at: '2026-09-13T16:28:24+00:00'
+    sha256: e55521ac59bf1ecf31fadc9cc05a7af797da6580b925bdf972684755d3b506f0
+    source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+    at: '2026-09-13T18:13:55+00:00'
 fix_id: T1-E2E-AUTH
 issues:
 - M-136
 title: Authenticate E2E console calls after the Tier 1 identity boundary rollout
 profile: standard
-state: IN_PR
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -155,7 +150,7 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/187
-  reviewed_head: ea73f2b19d039194429936508270d9ca69dbe4a9
+  reviewed_head: bef00ae1c9ec91986ee4525f4ef7aad328042331
   merge_sha: null
   checks: pending
   patch_equivalence: PASS
@@ -172,7 +167,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -188,10 +183,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
-    prior evidence.
-updated_at: '2026-09-13T17:27:19+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T18:18:44+00:00'
 follow_up_to: V3-M136
 configuration_history:
 - at: '2026-09-13T14:50:28+00:00'
@@ -249,6 +244,16 @@ configuration_history:
   - pull_request
   approval_ref: null
 - at: '2026-09-13T17:18:34+00:00'
+  by: claude-tier1-e2e-auth
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T18:13:55+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-09-13T18:18:41+00:00'
   by: claude-tier1-e2e-auth
   fields:
   - implementation
@@ -341,6 +346,24 @@ transitions:
   artifact: null
   note: null
   approval_ref: operations/AUTONOMY.md
+  forced: false
+- from: IN_PR
+  to: IMPLEMENTED
+  at: '2026-09-13T18:16:11+00:00'
+  by: codex-lead
+  artifact: evidence/p3/r4/correction-verdict.md
+  note: 'Return the changed PR source to IMPLEMENTED for validation: IN_PR requires
+    a passing preflight and made its own workflow check circular. This normal backward
+    transition retains PR URL and every failed receipt; no evidence waived.'
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T18:18:42+00:00'
+  by: claude-tier1-e2e-auth
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
   forced: false
 check_history:
 - check: preflight
@@ -763,10 +786,106 @@ check_history:
   at: '2026-09-13T17:23:48+00:00'
   rationale: Recorded against the previous head's receipt to break the self-referential
     stale check after re-pinning to the r4 head; superseded by the rerun below.
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: 9e34fc93605c831da8c87b90464e819156b5ab87a373545996c79debc8b49679
+  source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+  at: '2026-09-13T16:26:56+00:00'
+  baseline_sha: 6ed7d3135e97de68eaf8ebb607ddab4833d22d20
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 2a9de4c3e4b0bfefc6030e5f76c10f3ee8dbfdac9127cf8a0dc8405af82e97d8
+  source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+  at: '2026-09-13T17:10:46+00:00'
+- check: patch_equivalence
+  result: PASS
+  by: codex-lead
+  artifact: evidence/pr-equivalence.json
+  sha256: 8486b155b8c71cdae0c8c5e2a483ece22db14906d0637652b1509ebda4c8cab4
+  source_sha: 6eb799bf63e9eccc4d3b97ebc31828555eb0e42f
+  at: '2026-09-13T16:28:24+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-tier1-e2e-auth
+  artifact: evidence/preflight/receipt.json
+  sha256: 722dbdfb3aca3f8fd2aaa97760cb7c0674bc2cd52d9e00b776350ce54f0401db
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T17:27:19+00:00'
+  rationale: 'At the r4 head 418ea35 every job PASSes (diff, chart-1..9, go-phorvex)
+    except the workflow job, whose doctor fails only on lead-owned checks: incident
+    and patch_equivalence are pinned to 6eb799b and p3 is the lead''s r4 FAIL. The
+    implementer cannot sign those; the receipt is retained as-is.'
+- check: preflight
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/preflight/receipt.json
+  sha256: ef7d6dc31069d4dc0c13c6f4e7041102a158fa2df5a208b4eaf9bf43a7203f87
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T18:18:26+00:00'
+  rationale: 'Final preflight at 418ea35 after the root signed incident, P3 and patch
+    equivalence: diff, workflow, chart-1..9 and go-phorvex all PASS. The earlier FAIL
+    receipt/history at this head is retained (check_history, evidence/preflight/run-*).'
+- check: implementation
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: 04-diff.patch
+  sha256: 94a6eb5273c7af0327bd36b06cb08bee4942679179cc20a736998931fd6660a9
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T17:23:36+00:00'
+- check: l0
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/l0-build-vet.log
+  sha256: 81e7805a013061a1c178f6eb45d933fe57fed0ff332c9c82ce7d2a6e05b4e141
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T17:23:37+00:00'
+  inputs:
+  - .github/workflows
+  - End-to-End
+  - deploy/argocd
+  - phorvex
+  - tools
+  inputs_sha256: bb98d1dc076023923a13a729450df5000d8fa55f1784b0c40438dfd6ec1820cf
+- check: l1
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/python-pipeline-suite.log
+  sha256: b71434c6fdb007a993ee2c11bf6e125c92732ab4b81a2bf9d8c763110a1ff70f
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T17:23:37+00:00'
+  inputs:
+  - End-to-End
+  inputs_sha256: 36ba1ad53ccb3358e682c006a8f2b0c50fff1037125e45a2d94e174ce36254aa
+- check: l2
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/head/go-console-suite.log
+  sha256: 376ccbdf540eaf5ea32b80af06ab71af3f82e23bb21baf894c9dfb2cd88b2dbe
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T17:23:37+00:00'
+  inputs:
+  - End-to-End
+  - build/metricvalidity
+  - build/test-harness
+  - phorvex
+  inputs_sha256: 440dc8b0eec329f85a930af702ce10649f93abb57dea7b1dce49cb3894d742e2
+- check: positive_control
+  result: PASS
+  by: claude-tier1-e2e-auth
+  artifact: evidence/red/incident-probe-head.log
+  sha256: 01510d28d63e8f482967428ebce0b9a70fafe9ec021380479f0d98441c5dc07e
+  source_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  at: '2026-09-13T17:23:36+00:00'
+  rationale: 'Same probe as the red check at head: HEAD_FIXED; the repaired TLS fixture
+    passes 301 tests under Python 3.11 and 3.14 (evidence/r4).'
 handoff:
-  id: T1-E2E-AUTH:43:review
-  from: codex-lead
-  to: claude-tier1-e2e-auth
-  role: implementer
-  kind: review
-  revision: 43
+  id: T1-E2E-AUTH:59:submit
+  from: claude-tier1-e2e-auth
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 59

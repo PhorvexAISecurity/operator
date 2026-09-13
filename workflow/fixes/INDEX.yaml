@@ -345,7 +345,7 @@ fixes:
     issues:
     - M-136
     related_issues: []
-    state: IN_PR
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/tier1-e2e-console-auth
