@@ -453,9 +453,60 @@ class TLSTests(unittest.TestCase):
             self.console().get_json("/api/version")
         self.assertIn("TLS", str(caught.exception))
         self.assertIn(CONSOLE_CA_FILE_ENV, str(caught.exception))
-        self.assertEqual(self.server.requests, [])
-        self.assertGreaterEqual(self.server.connection_errors, 1)
         self.assertNotIn("-k", shlex.split(self.transport.commands[-1]))
+        # The server observes the refusal from its own thread, possibly after curl has already
+        # exited, and — depending on the OpenSSL/Python pair — inside the handshake, as a
+        # reset on the first read, or as a bare EOF. Wait (bounded) for its record rather than
+        # reading a counter that may not have been written yet.
+        self.assertGreaterEqual(self.server.wait_for_connection_failures(1, timeout=5), 1,
+                                self.server.connection_failures)
+        self.assertEqual(self.server.requests, [])
+        failure = self.server.connection_failures[0]
+        self.assertIn(failure["stage"], ("handshake", "request"))
+        self.assertIn(failure["error"], ("SSLError", "SSLEOFError", "ConnectionResetError",
+                                         "EOFError", "OSError", "BrokenPipeError"))
+
+    def refusing_peer(self, verify, after_handshake=None):
+        """A raw TLS client that mirrors one refusal ordering the CI runner can produce."""
+        import socket
+        import ssl
+        context = ssl.create_default_context()
+        if not verify:
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+        raw = socket.create_connection(("127.0.0.1", self.server.port), timeout=5)
+        try:
+            tls = context.wrap_socket(raw, server_hostname="127.0.0.1")
+        except ssl.SSLCertVerificationError:
+            raw.close()
+            return "refused-in-handshake"
+        if after_handshake == "reset":
+            import struct
+            tls.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        tls.close()
+        return "closed-after-handshake"
+
+    def test_a_refusal_inside_the_handshake_is_recorded(self):
+        # The runner ordering that the earlier counter missed entirely: the peer verifies the
+        # certificate during the handshake and aborts with an alert; on some OpenSSL/Python
+        # pairs the server sees that inside accept(), which socketserver swallows silently.
+        self.assertEqual(self.refusing_peer(verify=True), "refused-in-handshake")
+        self.assertGreaterEqual(self.server.wait_for_connection_failures(1, timeout=5), 1)
+        self.assertEqual(self.server.requests, [])
+        self.assertEqual(self.server.handshakes_completed + len(self.server.connection_failures), 1)
+
+    def test_a_silent_close_or_reset_after_the_handshake_is_recorded(self):
+        # The other orderings: the peer completes the handshake (TLS 1.3 lets the server finish
+        # first) and then goes away — cleanly (a bare EOF) or with a reset.
+        for ordering in (None, "reset"):
+            with self.subTest(ordering=ordering or "close"):
+                before = self.server.connection_errors
+                self.assertEqual(self.refusing_peer(verify=False, after_handshake=ordering),
+                                 "closed-after-handshake")
+                self.assertGreaterEqual(self.server.wait_for_connection_failures(before + 1, timeout=5),
+                                        before + 1, self.server.connection_failures)
+                self.assertEqual(self.server.connection_failures[-1]["stage"], "request")
+        self.assertEqual(self.server.requests, [])
 
     def test_a_configured_ca_bundle_is_normal_verification(self):
         console = self.console(ca_file=self.server.ca_file)

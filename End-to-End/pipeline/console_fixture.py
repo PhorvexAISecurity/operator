@@ -29,6 +29,7 @@ import secrets
 import shutil
 import ssl
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -228,6 +229,19 @@ class FixtureConsole:
             def log_message(self, *_):
                 pass
 
+            def handle_one_request(self):
+                # A peer that refuses the certificate may deliver its alert only after the
+                # server's TLS 1.3 handshake has already completed; depending on the OpenSSL
+                # and Python versions that shows up here as a reset (an exception, counted by
+                # handle_error) or as a bare EOF that BaseHTTPRequestHandler would swallow
+                # silently. Either way it is a connection that carried no request.
+                self.raw_requestline = b""
+                super().handle_one_request()
+                if not self.raw_requestline:
+                    fixture._connection_failure(
+                        "request", EOFError("connection closed before any request line"),
+                        self.client_address)
+
             def do_GET(self):
                 fixture.handle(self, "GET")
 
@@ -237,20 +251,50 @@ class FixtureConsole:
         class Server(ThreadingHTTPServer):
             daemon_threads = True
 
-            def handle_error(self, request, client_address):
-                # A client that refuses this certificate resets during the handshake; that is
-                # the expected outcome of the TLS tests, counted rather than printed.
-                with fixture._lock:
-                    fixture.connection_errors += 1
+            def get_request(self):
+                """Accept, then perform the TLS handshake HERE, explicitly and bounded.
 
-        self.connection_errors = 0
+                A client that refuses this certificate aborts the handshake with an alert.
+                With `do_handshake_on_connect` that failure would surface inside `accept()`,
+                which socketserver swallows as an OSError without calling `handle_error` —
+                so the refusal would leave no trace at all (observed on the CI runner with
+                Python 3.11/3.12 and OpenSSL 3.0). Doing the handshake ourselves lets the
+                fixture record the outcome of every connection, whichever side of the
+                handshake the client goes away on.
+                """
+                conn, address = self.socket.accept()
+                if not isinstance(conn, ssl.SSLSocket):
+                    return conn, address
+                conn.settimeout(fixture.handshake_timeout)
+                try:
+                    conn.do_handshake()
+                except (ssl.SSLError, OSError) as error:
+                    conn.close()
+                    fixture._connection_failure("handshake", error, address)
+                    raise OSError("TLS handshake refused by the peer") from error
+                conn.settimeout(None)
+                with fixture._cond:
+                    fixture.handshakes_completed += 1
+                return conn, address
+
+            def handle_error(self, request, client_address):
+                # The peer went away after the handshake (a reset while the request line was
+                # being read): still a connection that never carried a request.
+                fixture._connection_failure("request", sys.exc_info()[1], client_address)
+
+        self.handshake_timeout = 5.0
+        self.handshakes_completed = 0
+        self.connection_failures = []
+        self._cond = threading.Condition(self._lock)
         self.server = Server(("127.0.0.1", 0), Handler)
         self.scheme = "http"
         if tls_dir is not None:
             cert, key_file = self_signed_cert(tls_dir)
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ctx.load_cert_chain(cert, key_file)
-            self.server.socket = ctx.wrap_socket(self.server.socket, server_side=True)
+            # The handshake is driven in Server.get_request, not inside accept().
+            self.server.socket = ctx.wrap_socket(self.server.socket, server_side=True,
+                                                 do_handshake_on_connect=False)
             self.scheme = "https"
             self.ca_file = cert
         self.port = self.server.server_address[1]
@@ -260,6 +304,33 @@ class FixtureConsole:
     @property
     def base(self):
         return f"{self.scheme}://127.0.0.1:{self.port}"
+
+    # ── TLS outcome accounting ──
+
+    def _connection_failure(self, stage, error, address):
+        with self._cond:
+            self.connection_failures.append({"stage": stage, "error": type(error).__name__,
+                                      "detail": str(error)[:200], "peer": address,
+                                      "at": time.monotonic()})
+            self._cond.notify_all()
+
+    @property
+    def connection_errors(self):
+        """Connections that ended without ever carrying an HTTP request."""
+        with self._lock:
+            return len(self.connection_failures)
+
+    def wait_for_connection_failures(self, count=1, timeout=5.0):
+        """Block until `count` refused connections have been recorded, or `timeout` elapses.
+
+        The server side observes a refusal from its own thread, which can lag the client
+        process's exit by a scheduling quantum. A test that asserts on the server's view
+        waits for that view here — bounded, and woken by the event, never by sleeping.
+        Returns the number recorded, whether or not the count was reached.
+        """
+        with self._cond:
+            self._cond.wait_for(lambda: len(self.connection_failures) >= count, timeout=timeout)
+            return len(self.connection_failures)
 
     def close(self):
         self.server.shutdown()
