@@ -152,6 +152,25 @@ func newCredEnv(t *testing.T, srvURL, adminToken string, window int) (*core.Env,
 	return env, log
 }
 
+// startTLS starts a trusted local HTTPS fixture for the API stand-in. The replay
+// contract requires an explicit https:// endpoint, so every normal replay test
+// uses this rather than a cleartext server.
+func startTLS(t *testing.T, api *ctAPI) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewTLSServer(http.HandlerFunc(api.handler))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// credEnvTLS wires an Env at the trusted HTTPS fixture, trusting only that
+// fixture's CA — the honest way to exercise a real verified-TLS replay.
+func credEnvTLS(t *testing.T, srv *httptest.Server, adminToken string, window int) (*core.Env, *ctLogger) {
+	t.Helper()
+	env, log := newCredEnv(t, srv.URL, adminToken, window)
+	env.Rest.TLSClientConfig.CAData = caPEM(t, srv)
+	return env, log
+}
+
 func seedRunningPod(t *testing.T, env *core.Env, name, app string) {
 	t.Helper()
 	pod := &corev1.Pod{
@@ -216,11 +235,10 @@ func newScenario() *c1CredTheftRBAC { return &c1CredTheftRBAC{app: "c1ct-target"
 // post-window observation, and NO substitute token is ever minted.
 func TestCredReplayReplaysTheCapturedCredentialTwice(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
+	srv := startTLS(t, api)
 
 	tok := podBoundToken(t, time.Hour)
-	env, log := newCredEnv(t, srv.URL, "ADMIN-SUPER-SECRET", 2)
+	env, log := credEnvTLS(t, srv, "ADMIN-SUPER-SECRET", 2)
 	installExecer(t, tok, 0)
 	window := noSleepWindow(t)
 
@@ -265,9 +283,8 @@ func TestCredReplayReplaysTheCapturedCredentialTwice(t *testing.T) {
 // an INVALID measurement — never a scored success off a minted substitute.
 func TestCredReplayFailedTheftIsExecuteError(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, "" /* nothing stolen */, 1 /* exec failed */)
 	noSleepWindow(t)
 
@@ -283,9 +300,8 @@ func TestCredReplayFailedTheftIsExecuteError(t *testing.T) {
 // An empty (but exit-0) read is still no credential and must fail the stimulus.
 func TestCredReplayEmptyReadIsExecuteError(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, "   \n", 0)
 	s := newScenario()
 	if _, err := s.Execute(context.Background(), env); err == nil {
@@ -297,9 +313,8 @@ func TestCredReplayEmptyReadIsExecuteError(t *testing.T) {
 // capability to observe surviving: an Execute error (invalid), not a defense win.
 func TestCredReplayUnusableBaselineIsExecuteError(t *testing.T) {
 	api := &ctAPI{behavior: func(w http.ResponseWriter, _ int) { writeStatus(w, http.StatusUnauthorized, metav1.StatusReasonUnauthorized) }}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	s := newScenario()
 	if _, err := s.Execute(context.Background(), env); err == nil {
@@ -317,9 +332,8 @@ func TestCredReplayPostWindowDenialIsObservedFailure(t *testing.T) {
 		}
 		writeStatus(w, http.StatusForbidden, metav1.StatusReasonForbidden)
 	}}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 
@@ -349,9 +363,8 @@ func TestCredReplayFinalTransportFaultIsOracleError(t *testing.T) {
 		}
 		writeStatus(w, http.StatusInternalServerError, metav1.StatusReasonInternalError)
 	}}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 
@@ -375,9 +388,8 @@ func TestCredReplayMalformedFinalIsOracleError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("this is not a pod list"))
 	}}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 
@@ -393,9 +405,8 @@ func TestCredReplayMalformedFinalIsOracleError(t *testing.T) {
 // A cancelled observation wait is an invalid measurement, not a denial.
 func TestCredReplayCancelledWindowIsOracleError(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 
 	// A wait seam that blocks until the context ends, exercising real cancellation.
@@ -419,9 +430,8 @@ func TestCredReplayCancelledWindowIsOracleError(t *testing.T) {
 // natural expiry.
 func TestCredReplayNaturalExpiryGuard(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 60) // 60s window
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 60) // 60s window
 	installExecer(t, podBoundToken(t, 1*time.Second), 0)
 	noSleepWindow(t)
 
@@ -438,9 +448,8 @@ func TestCredReplayNaturalExpiryGuard(t *testing.T) {
 // The oracle refuses to score with no captured state from this trial's Execute.
 func TestCredReplayNoCaptureIsOracleError(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	s := newScenario()
 	if _, err := s.SuccessOracle(context.Background(), env); err == nil {
@@ -452,9 +461,8 @@ func TestCredReplayNoCaptureIsOracleError(t *testing.T) {
 // stale one; an oracle run after that clearing is invalid, not a stale success.
 func TestCredReplayTeardownClearsCapturedState(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 
@@ -480,9 +488,8 @@ func TestCredReplayTeardownClearsCapturedState(t *testing.T) {
 // inherited admin identity can never produce a false success.
 func TestCredReplayRefusesOpaqueTransport(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	env.Rest.WrapTransport = func(rt http.RoundTripper) http.RoundTripper { return rt }
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	s := newScenario()
@@ -497,14 +504,15 @@ func TestCredReplayRefusesOpaqueTransport(t *testing.T) {
 // The captured credential is never forwarded across a redirect to another host.
 func TestCredReplayDoesNotFollowRedirectToAnotherHost(t *testing.T) {
 	other := &ctAPI{}
-	otherSrv := httptest.NewServer(http.HandlerFunc(other.handler))
+	otherSrv := httptest.NewTLSServer(http.HandlerFunc(other.handler))
 	defer otherSrv.Close()
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	primary := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Redirect(w, &http.Request{}, otherSrv.URL+"/api/v1/namespaces/sandbox/pods", http.StatusFound)
 	}))
 	defer primary.Close()
 
 	env, _ := newCredEnv(t, primary.URL, "", 2)
+	env.Rest.TLSClientConfig.CAData = caPEM(t, primary)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	s := newScenario()
 	if _, err := s.Execute(context.Background(), env); err == nil {
@@ -519,9 +527,8 @@ func TestCredReplayDoesNotFollowRedirectToAnotherHost(t *testing.T) {
 // window yields Achieved=true — the pipeline can and does produce a real success.
 func TestCredReplayPositiveControlSurvives(t *testing.T) {
 	api := &ctAPI{} // default: always 200 PodList
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 
@@ -609,8 +616,9 @@ func TestParseCapturedCredMeta(t *testing.T) {
 // the real Setup/deployTarget path resolves against the fake clientset.
 func runCredMatrix(t *testing.T, api *ctAPI, execToken string, execExit int) core.Metric {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
+	srv := httptest.NewTLSServer(http.HandlerFunc(api.handler))
 	t.Cleanup(srv.Close)
+	caData := caPEM(t, srv)
 
 	installExecer(t, execToken, execExit)
 	noSleepWindow(t)
@@ -633,7 +641,7 @@ func runCredMatrix(t *testing.T, api *ctAPI, execToken string, execExit int) cor
 		})
 		env := &core.Env{
 			Kube: kube,
-			Rest: &rest.Config{Host: srv.URL},
+			Rest: &rest.Config{Host: srv.URL, TLSClientConfig: rest.TLSClientConfig{CAData: caData}},
 			Config: config.TargetConfig{
 				Namespace: "sandbox", Context: "rv", OwnedAck: true,
 				CredentialObservationWindowSeconds: 2,
@@ -735,9 +743,8 @@ func TestCredReplayRejectsNonPodListResponses(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(b))
 			}}
-			srv := httptest.NewServer(http.HandlerFunc(api.handler))
-			defer srv.Close()
-			env, _ := newCredEnv(t, srv.URL, "", 2)
+			srv := startTLS(t, api)
+			env, _ := credEnvTLS(t, srv, "", 2)
 			installExecer(t, podBoundToken(t, time.Hour), 0)
 			s := newScenario()
 			if _, err := s.Execute(context.Background(), env); err == nil {
@@ -755,9 +762,8 @@ func TestCredReplayRejectsNonPodListResponses(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(body))
 			}}
-			srv := httptest.NewServer(http.HandlerFunc(api.handler))
-			defer srv.Close()
-			env, _ := newCredEnv(t, srv.URL, "", 2)
+			srv := startTLS(t, api)
+			env, _ := credEnvTLS(t, srv, "", 2)
 			installExecer(t, podBoundToken(t, time.Hour), 0)
 			s := newScenario()
 			if _, err := s.Execute(context.Background(), env); err != nil {
@@ -772,9 +778,8 @@ func TestCredReplayRejectsNonPodListResponses(t *testing.T) {
 // scheduling/transport delay cannot award a defender credit for natural expiry.
 func TestCredReplayNaturalExpiryReachedAtFinalObservation(t *testing.T) {
 	api := &ctAPI{} // 200 PodList on both calls; the guard, not the API, decides
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 1) // planned window 1s
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 1) // planned window 1s
 	// Expiry is 3s out — beyond the planned 1s window, so the pre-wait guard does
 	// NOT fire; only the actual-final guard can catch it.
 	installExecer(t, podBoundToken(t, 3*time.Second), 0)
@@ -798,9 +803,8 @@ func TestCredReplayNaturalExpiryReachedAtFinalObservation(t *testing.T) {
 // normal valid measurement (no expiry invalidation).
 func TestCredReplayNonExpiredSurvivesControl(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
-	env, _ := newCredEnv(t, srv.URL, "", 1)
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 1)
 	installExecer(t, podBoundToken(t, time.Hour), 0)
 	noSleepWindow(t)
 	s := newScenario()
@@ -883,10 +887,9 @@ func TestCredReplayVerifiesServerTLS(t *testing.T) {
 // provider (a bogus provider name would fail the build if it were used).
 func TestCredReplayOmitsAuthProviderWithoutInvoking(t *testing.T) {
 	api := &ctAPI{}
-	srv := httptest.NewServer(http.HandlerFunc(api.handler))
-	defer srv.Close()
+	srv := startTLS(t, api)
 	tok := podBoundToken(t, time.Hour)
-	env, _ := newCredEnv(t, srv.URL, "", 2)
+	env, _ := credEnvTLS(t, srv, "", 2)
 	env.Rest.AuthProvider = &clientcmdapi.AuthProviderConfig{Name: "nonexistent-oidc-provider"}
 	installExecer(t, tok, 0)
 	noSleepWindow(t)
@@ -898,5 +901,76 @@ func TestCredReplayOmitsAuthProviderWithoutInvoking(t *testing.T) {
 		if a != "Bearer "+tok {
 			t.Fatalf("replay used %q, not the captured bearer", a)
 		}
+	}
+}
+
+// -------------------------------------------------- R2 review repairs (P3 r2)
+
+// R2.1: a cleartext (http) endpoint is refused before any request — the captured
+// credential is never sent over an unverified transport.
+func TestCredReplayRefusesCleartextEndpoint(t *testing.T) {
+	api := &ctAPI{}
+	srv := httptest.NewServer(http.HandlerFunc(api.handler)) // cleartext http
+	defer srv.Close()
+	env, _ := newCredEnv(t, srv.URL, "", 2) // http host, no CA
+	installExecer(t, podBoundToken(t, time.Hour), 0)
+	s := newScenario()
+	if _, err := s.Execute(context.Background(), env); err == nil {
+		t.Fatal("Execute replayed over a cleartext http endpoint; want a refusal")
+	}
+	if got := api.sawAuth(); len(got) != 0 {
+		t.Fatalf("captured credential was sent to a cleartext endpoint: %v", got)
+	}
+}
+
+// R2.1: a userinfo-bearing endpoint is refused before any request.
+func TestCredReplayRefusesUserinfoEndpoint(t *testing.T) {
+	api := &ctAPI{}
+	srv := startTLS(t, api)
+	env, _ := credEnvTLS(t, srv, "", 2)
+	env.Rest.Host = strings.Replace(srv.URL, "https://", "https://user:pass@", 1)
+	installExecer(t, podBoundToken(t, time.Hour), 0)
+	s := newScenario()
+	if _, err := s.Execute(context.Background(), env); err == nil {
+		t.Fatal("Execute replayed to a userinfo-bearing endpoint; want a refusal")
+	}
+	if got := api.sawAuth(); len(got) != 0 {
+		t.Fatalf("captured credential reached a userinfo endpoint: %v", got)
+	}
+}
+
+// R2.2: a 200 v1 PodList whose members are not Pod objects is malformed, not
+// usable capability; valid empty and populated lists remain accepted.
+func TestCredReplayRejectsMalformedPodItems(t *testing.T) {
+	cases := map[string]struct {
+		items string
+		valid bool
+	}{
+		"number-member":  {`[1]`, false},
+		"string-member":  {`["not-a-pod"]`, false},
+		"object-not-list": {`{"foo":"bar"}`, false},
+		"empty-list":     {`[]`, true},
+		"populated-list": {`[{"metadata":{"name":"p1"}}]`, true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			items := tc.items
+			api := &ctAPI{behavior: func(w http.ResponseWriter, _ int) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"kind":"PodList","apiVersion":"v1","items":` + items + `}`))
+			}}
+			srv := startTLS(t, api)
+			env, _ := credEnvTLS(t, srv, "", 2)
+			installExecer(t, podBoundToken(t, time.Hour), 0)
+			s := newScenario()
+			_, err := s.Execute(context.Background(), env)
+			switch {
+			case tc.valid && err != nil:
+				t.Fatalf("valid PodList members (%s) rejected: %v", items, err)
+			case !tc.valid && err == nil:
+				t.Fatalf("malformed PodList members (%s) accepted as usable credential", items)
+			}
+		})
 	}
 }

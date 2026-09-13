@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -129,6 +130,23 @@ func sanitizedReplayConfig(base *rest.Config, token string) (*rest.Config, error
 	if base.TLSClientConfig.Insecure {
 		return nil, errors.New("insecure TLS (skip-verify) is refused for credential replay; the server's identity must be verified")
 	}
+	// Require an EXPLICIT https:// endpoint before any transport is built: a
+	// cleartext (http), scheme-relative/implicit, or userinfo-bearing host would
+	// send the captured bearer without a verified TLS peer. Insecure=false only
+	// governs verification once TLS is in use; it does not reject a cleartext host.
+	u, err := url.Parse(base.Host)
+	if err != nil {
+		return nil, errors.New("replay endpoint is not a parseable URL")
+	}
+	if u.Scheme != "https" {
+		return nil, fmt.Errorf("replay endpoint must be an explicit https:// URL, not %q; cleartext/implicit transport is refused", u.Scheme)
+	}
+	if u.User != nil {
+		return nil, errors.New("replay endpoint must not carry userinfo credentials")
+	}
+	if u.Host == "" {
+		return nil, errors.New("replay endpoint has no host")
+	}
 	cfg := &rest.Config{
 		Host:      base.Host,
 		APIPath:   base.APIPath,
@@ -188,19 +206,22 @@ func replayCapturedCredential(ctx context.Context, env *core.Env, token string) 
 
 // classifyReplayBody accepts a replay ONLY when the API answered the exact
 // list-pods protocol: HTTP 200 with a body that is structurally a v1 PodList
-// (kind "PodList", apiVersion "v1", and an "items" array present — an empty list
-// is valid). Any other 2xx status, or a body that is empty, null, a bare object,
-// a success Status, or a different collection kind, is a MALFORMED response, not
-// evidence of credential usability: a proxy/frontend generic 200 must never be
-// read as attacker capability.
+// (kind "PodList", apiVersion "v1", an "items" array present — empty is valid —
+// AND every member decodes as an actual Pod object). Any other 2xx status, or a
+// body that is empty, null, a bare object, a success Status, a different
+// collection kind, or a PodList whose items are not Pod objects (e.g. numbers or
+// strings), is a MALFORMED response, not evidence of credential usability: a
+// proxy/frontend generic 200 must never be read as attacker capability. This is a
+// protocol-shape check, not an attempt to authenticate the (trusted) server's
+// claims.
 func classifyReplayBody(code int, raw []byte) replayOutcome {
 	if code != 200 {
 		return replayOutcome{class: replayMalformed, detail: fmt.Sprintf("non-200 success status %d", code)}
 	}
 	var probe struct {
-		Kind       string             `json:"kind"`
-		APIVersion string             `json:"apiVersion"`
-		Items      *[]json.RawMessage `json:"items"`
+		Kind       string           `json:"kind"`
+		APIVersion string           `json:"apiVersion"`
+		Items      *json.RawMessage `json:"items"`
 	}
 	if err := json.Unmarshal(raw, &probe); err != nil {
 		return replayOutcome{class: replayMalformed, detail: "200 body did not decode as JSON"}
@@ -212,7 +233,13 @@ func classifyReplayBody(code int, raw []byte) replayOutcome {
 	if probe.Items == nil {
 		return replayOutcome{class: replayMalformed, detail: "200 PodList body has no items list"}
 	}
-	n := len(*probe.Items)
+	// Decode the actual PodList structure so items whose members are not Pod
+	// objects (numbers, strings, wrong shape) are rejected rather than counted.
+	var pods corev1.PodList
+	if err := json.Unmarshal(raw, &pods); err != nil {
+		return replayOutcome{class: replayMalformed, detail: "200 v1 PodList had malformed item member(s)"}
+	}
+	n := len(pods.Items)
 	return replayOutcome{class: replayAuthorized, podCount: n, detail: fmt.Sprintf("HTTP 200, listed %d pods", n)}
 }
 

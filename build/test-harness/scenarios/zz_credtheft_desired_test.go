@@ -49,7 +49,7 @@ type dpGuard struct{}
 
 func (dpGuard) AssertMutationAllowed(string) error { return nil }
 
-func dpEnv(t *testing.T, srvURL string) *core.Env {
+func dpEnv(t *testing.T, srv *httptest.Server) *core.Env {
 	t.Helper()
 	kube := fake.NewSimpleClientset()
 	pod := &corev1.Pod{
@@ -60,9 +60,16 @@ func dpEnv(t *testing.T, srvURL string) *core.Env {
 	if _, err := kube.CoreV1().Pods("sandbox").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+	rc := &rest.Config{Host: srv.URL}
+	// The replay contract requires an explicit verified-TLS endpoint; trust the
+	// fixture's own CA. (At the baseline pin Execute performs no replay, so this
+	// is simply ignored there — the probe still discriminates.)
+	if strings.HasPrefix(srv.URL, "https") {
+		rc.TLSClientConfig.CAData = caPEM(t, srv)
+	}
 	env := &core.Env{
 		Kube:   kube,
-		Rest:   &rest.Config{Host: srvURL},
+		Rest:   rc,
 		Config: config.TargetConfig{Namespace: "sandbox", Context: "rv", OwnedAck: true},
 		Log:    &dpLogger{},
 		Guard:  dpGuard{},
@@ -80,12 +87,12 @@ func dpExecer(t *testing.T, stdout string, exit int) {
 // DESIRED: a failed in-pod theft must make Execute return an error. RED on the
 // baseline (Execute ignores exit code), GREEN on the fix.
 func TestDesiredFailedTheftMakesExecuteError(t *testing.T) {
-	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	api := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, Items: []corev1.Pod{}})
 	}))
 	defer api.Close()
-	env := dpEnv(t, api.URL)
+	env := dpEnv(t, api)
 	dpExecer(t, "" /* empty */, 1 /* failed */)
 
 	s := &c1CredTheftRBAC{app: "c1ct-target", sa: "c1ct-sa"}
@@ -100,7 +107,7 @@ func TestDesiredFailedTheftMakesExecuteError(t *testing.T) {
 func TestDesiredExecuteReplaysCapturedCredential(t *testing.T) {
 	var mu sync.Mutex
 	var auths []string
-	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	api := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		auths = append(auths, r.Header.Get("Authorization"))
 		mu.Unlock()
@@ -108,7 +115,7 @@ func TestDesiredExecuteReplaysCapturedCredential(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, Items: []corev1.Pod{}})
 	}))
 	defer api.Close()
-	env := dpEnv(t, api.URL)
+	env := dpEnv(t, api)
 	dpExecer(t, dpStolenToken, 0)
 
 	s := &c1CredTheftRBAC{app: "c1ct-target", sa: "c1ct-sa"}
