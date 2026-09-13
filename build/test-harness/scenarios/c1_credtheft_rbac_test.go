@@ -946,11 +946,12 @@ func TestCredReplayRejectsMalformedPodItems(t *testing.T) {
 		items string
 		valid bool
 	}{
-		"number-member":  {`[1]`, false},
-		"string-member":  {`["not-a-pod"]`, false},
+		"null-member":     {`[null]`, false},
+		"number-member":   {`[1]`, false},
+		"string-member":   {`["not-a-pod"]`, false},
 		"object-not-list": {`{"foo":"bar"}`, false},
-		"empty-list":     {`[]`, true},
-		"populated-list": {`[{"metadata":{"name":"p1"}}]`, true},
+		"empty-list":      {`[]`, true},
+		"populated-list":  {`[{"metadata":{"name":"p1"}}]`, true},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

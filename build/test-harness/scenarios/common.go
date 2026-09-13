@@ -233,8 +233,22 @@ func classifyReplayBody(code int, raw []byte) replayOutcome {
 	if probe.Items == nil {
 		return replayOutcome{class: replayMalformed, detail: "200 PodList body has no items list"}
 	}
+	// Go's typed JSON decoder accepts null as the zero value of a Pod. Inspect
+	// each raw member first so every list entry is actually a JSON object; this
+	// rejects null without attempting full Kubernetes schema validation.
+	var members []json.RawMessage
+	if err := json.Unmarshal(*probe.Items, &members); err != nil {
+		return replayOutcome{class: replayMalformed, detail: "200 v1 PodList had malformed item member(s)"}
+	}
+	for _, rawMember := range members {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(rawMember, &object); err != nil || object == nil {
+			return replayOutcome{class: replayMalformed, detail: "200 v1 PodList had non-object item member(s)"}
+		}
+	}
 	// Decode the actual PodList structure so items whose members are not Pod
-	// objects (numbers, strings, wrong shape) are rejected rather than counted.
+	// objects (numbers, strings, null, or wrong shape) are rejected rather than
+	// counted.
 	var pods corev1.PodList
 	if err := json.Unmarshal(raw, &pods); err != nil {
 		return replayOutcome{class: replayMalformed, detail: "200 v1 PodList had malformed item member(s)"}
