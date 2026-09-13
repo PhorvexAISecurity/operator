@@ -30,13 +30,24 @@ const securityEventStampPath = "/stamp-amtd-r6security-com-v1beta1-securityevent
 // `source: K3Detector`). The authenticated identity exists in exactly one place — the admission
 // request's UserInfo — so this handler copies it onto the object and ingest allowlists THAT.
 //
-// The stamp is authoritative: whatever the client put in the annotation is OVERWRITTEN on every
-// CREATE and UPDATE, so an identity cannot self-declare a trusted creator, and cannot keep a
-// stale stamp by editing an event it did not create.
+// The stamp is authoritative WHEN THIS HANDLER RUNS: whatever the client put in the annotation
+// is OVERWRITTEN on every CREATE and UPDATE, so an identity cannot self-declare a trusted
+// creator, and cannot keep a stale stamp by editing an event it did not create.
 //
 // The webhook is registered failurePolicy=Ignore on purpose: it must never be able to block the
-// cluster's security-event flow. An event that misses the stamp is not trusted by ingest, so the
-// failure direction is closed on the belief side, not on the API server.
+// cluster's security-event flow. That availability choice is NOT self-securing, and the earlier
+// claim that a missed stamp simply leaves the event unstamped was wrong (M-94 outage residual):
+// `Ignore` means the API server stores the object UNCHANGED, so an annotation the CLIENT wrote
+// survives untouched and ingest reads it as an authenticated creator. What actually closes that
+// is a separate, server-side ValidatingAdmissionPolicy + Deny binding
+// (charts/phorvex/templates/securityevent-identity-policy.yaml): it is evaluated in-process by
+// the API server, after mutation, so it has no endpoint that can be down, and it rejects any
+// present creator-identity that does not equal the authenticated requester. An event with NO
+// claim is still admitted and is untrusted at ingest — open on ingestion, closed on belief.
+//
+// So: this handler WRITES the identity, the policy GUARANTEES that a written identity is real.
+// Neither alone is the trust boundary, and a binary-only deployment (no chart, no policy) does
+// not have the guarantee.
 type SecurityEventStamper struct{}
 
 // Handle implements admission.Handler.
@@ -56,7 +67,9 @@ func (SecurityEventStamper) Handle(_ context.Context, req admission.Request) adm
 		annotations[ingest.CreatorIdentityAnnotation] = user
 	} else {
 		// No authenticated user on the request: remove any client-supplied claim rather than
-		// leave one standing. The event is then unstamped, i.e. untrusted at ingest.
+		// leave one standing. The event is then unstamped, i.e. untrusted at ingest. The
+		// admission policy makes the same call independently — a missing username never
+		// authorises a non-empty claim.
 		delete(annotations, ingest.CreatorIdentityAnnotation)
 	}
 	obj.SetAnnotations(annotations)

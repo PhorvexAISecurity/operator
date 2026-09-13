@@ -1,0 +1,41 @@
+[
+  {
+    "case": "clean",
+    "problems": [],
+    "denials": []
+  },
+  {
+    "case": "boolean-turns",
+    "problems": [
+      "final num_turns is a bool, not a int"
+    ],
+    "denials": []
+  },
+  {
+    "case": "malformed-denial",
+    "problems": [
+      "final permission_denials[0] is a str, not an object; the denial is kept without tool attribution"
+    ],
+    "denials": [
+      {
+        "tool": null,
+        "tool_use_id": null,
+        "source": "result",
+        "index": 0,
+        "malformed": "str"
+      }
+    ]
+  },
+  {
+    "case": "quota",
+    "problems": [
+      "synthetic error attribution: the CLI reported <synthetic> for at least one turn, which marks its own error output (for example a quota error) and is not a model substitution; this run is not a clean success",
+      "result.is_error is True, not an explicit false",
+      "final event reports api_error_status 429, terminal_reason 'api_error'"
+    ],
+    "model_mismatch": false,
+    "synthetic_models": [
+      "<synthetic>"
+    ]
+  }
+]

@@ -3347,6 +3347,205 @@ def cmd_new_campaign_round(args: argparse.Namespace) -> int:
     return 0
 
 
+STAGE_STEPS = (
+    ("bash", "run_full_suite.sh"),
+    ("python", "build_diagram_v2.py"),
+    ("python", "build_svg.py"),
+    ("python", "build_anatomy_doc.py"),
+)
+
+
+def safe_output_name(value: str) -> bool:
+    """One path COMPONENT. `--stage-doc ../../anatomy/ANATOMY.md` is not one."""
+    return bool(value) and value not in (".", "..") and not os.path.isabs(value) and (
+        value == os.path.basename(value)
+    ) and "/" not in value and "\\" not in value
+
+
+def escaping_descendants(root: Path) -> list[tuple[str, str]]:
+    """Every symlink under `root` whose target leaves it.
+
+    Deliberately a separate implementation from the pipeline's `paths.escaping_descendants`.
+    They guard different layers, and a staged pipeline is a COPY that a reviewer may edit —
+    the CLI's own safety must not depend on the thing being staged.
+
+    Walks without following links, so a directory link is reported rather than descended into
+    and a link cycle cannot hang the walk.
+    """
+    root = root.resolve()
+    out: list[tuple[str, str]] = []
+    if not root.is_dir():
+        return out
+    for base, dirs, files in os.walk(root, followlinks=False):
+        for name in list(dirs) + list(files):
+            here = Path(base) / name
+            if not here.is_symlink():
+                continue
+            there = here.resolve()
+            if there != root and root not in there.parents:
+                out.append((str(here), str(there)))
+    return sorted(out)
+
+
+def stage_destination_problem(stage: Path, doc: str, stem: str) -> str | None:
+    """Why this staging destination may not be written, or None.
+
+    `--stage` promises it never touches anything outside the staging directory. Two earlier
+    versions of this check did not keep that promise:
+
+      R1: `--stage-doc` and `--stage-stem` are joined onto the staging directory, so an
+      absolute or traversing value wrote wherever it liked, and a symlinked `stage/generated`
+      redirected the diagram.
+
+      R2: checking a FIXED LIST of destinations still missed everything else the run writes.
+      `stage/pipeline/SOURCE_PIN.json` as a symlink to an outside file passed — `stage/pipeline`
+      itself is a real directory — and the pin update then wrote straight through it. The same
+      applies to every generated TSV and to any directory nested inside `pipeline/`.
+
+      R3: the containment test was one-directional. `stage` was refused for being INSIDE the
+      canonical directory, but not for CONTAINING it — so `--stage workflow` passed every check
+      while enclosing `workflow/anatomy`, and the promise cannot hold for a stage tree that
+      encloses the thing it promises not to touch.
+
+    So the whole staging tree is scanned for symlinks that leave it, and that scan runs before
+    ANY write: before seeding, and again afterwards because `pipeline/` and `generated/` do not
+    exist on the first pass. Nothing is deleted or replaced to make room — an escaping link is
+    refused, not repaired, so a planted link cannot be laundered into a clean run.
+    """
+    canonical = (ROOT / "anatomy").resolve()
+    if stage.exists() and not stage.is_dir():
+        return f"--stage {stage} is not a directory"
+    if stage == canonical or canonical in stage.parents:
+        return f"refusing to stage inside the canonical anatomy directory: {stage}"
+    if stage in canonical.parents:
+        return (
+            f"refusing to stage into {stage}, which CONTAINS the canonical anatomy directory "
+            f"{canonical}: --stage promises never to write inside it, and that promise cannot "
+            f"be kept for a stage tree that encloses it"
+        )
+    for flag, value in (("--stage-doc", doc), ("--stage-stem", stem)):
+        if not safe_output_name(value):
+            return f"{flag}={value!r} must be a single file name, not a path"
+    outputs = {
+        "reader": stage / doc,
+        "diagram": stage / "generated" / f"{stem}.mmd",
+        "rendered diagram": stage / "generated" / f"{stem}.svg",
+        "pipeline": stage / "pipeline",
+        "generated directory": stage / "generated",
+        "source pin": stage / "pipeline" / "SOURCE_PIN.json",
+    }
+    for what, path in outputs.items():
+        resolved = path.resolve()
+        if resolved != stage and stage not in resolved.parents:
+            return f"the {what} would be written to {resolved}, outside --stage {stage}"
+        if resolved == canonical or canonical in resolved.parents:
+            return f"the {what} would be written into the canonical anatomy directory: {resolved}"
+    escapes = escaping_descendants(stage)
+    if escapes:
+        first, target = escapes[0]
+        return (
+            f"{len(escapes)} symlink(s) under --stage {stage} point outside it; refusing "
+            f"because the generators write by relative name and would follow them "
+            f"(first: {first} -> {target})"
+        )
+    return None
+
+
+def _stage_anatomy(
+    args: argparse.Namespace, stage: Path, source: Path, target: str
+) -> int:
+    """Generate a candidate anatomy edition into `stage`, leaving the canonical one alone.
+
+    The pipeline runs from `stage/pipeline`, seeded from the canonical pipeline the first
+    time. Later runs use whatever is there, so a repair made for the candidate source is
+    reviewable as a diff against `workflow/anatomy/pipeline/` instead of being applied to
+    the frozen edition.
+    """
+    pipeline = stage / "pipeline"
+    # BEFORE ANY WRITE, including the seeding copytree: an escaping link already present in a
+    # partially built stage must stop the run, not be copied around.
+    problem = stage_destination_problem(stage, args.stage_doc, args.stage_stem)
+    if problem:
+        print(f"FAIL: {problem}", file=sys.stderr)
+        return 1
+    seeded = not pipeline.exists()
+    if seeded:
+        shutil.copytree(
+            ROOT / "anatomy" / "pipeline",
+            pipeline,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            symlinks=True,   # copy links AS links so the re-check below can see and refuse them
+        )
+    (stage / "generated").mkdir(parents=True, exist_ok=True)
+    # Re-check AFTER seeding: `pipeline/` and `generated/` exist only now, so a link planted at
+    # either — or anywhere beneath them — resolved to nothing on the first pass.
+    problem = stage_destination_problem(stage, args.stage_doc, args.stage_stem)
+    if problem:
+        print(f"FAIL: {problem}", file=sys.stderr)
+        return 1
+
+    pin_path = pipeline / "SOURCE_PIN.json"
+    pin = json.loads(pin_path.read_text(encoding="utf-8"))
+    if not pins_match(str(pin.get("commit", "")), target):
+        tag = subprocess.run(
+            ["git", "-C", str(source), "describe", "--tags", "--exact-match", target],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        pin["commit"] = target
+        # A staged candidate usually has no tag. Repeating the SHA in the release field reads
+        # like a release name that does not exist; say what is true instead.
+        pin["release"] = tag.stdout.strip() if tag.returncode == 0 else "unreleased"
+        pin["frozen_at"] = "staged-candidate"
+        pin["edition"] = "candidate"
+        pin_path.write_text(json.dumps(pin, indent=2) + "\n", encoding="utf-8")
+    # The edition LABEL is separate from the candidate STATUS: a reader has to be told which
+    # edition it is holding, not only that it is unpublished. Written on every run so a label
+    # change does not need the commit to move.
+    if getattr(args, "stage_edition", None):
+        pin = json.loads(pin_path.read_text(encoding="utf-8"))
+        if pin.get("edition_label") != args.stage_edition:
+            pin["edition_label"] = args.stage_edition
+            pin_path.write_text(json.dumps(pin, indent=2) + "\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PHORVEX_CODE_REPO"] = str(source)
+    env["PHORVEX_ANATOMY_DIR"] = str(stage)
+    env["PHORVEX_ANATOMY_DOC"] = args.stage_doc
+    env["PHORVEX_ANATOMY_STEM"] = args.stage_stem
+    # A staged edition is a CANDIDATE. The reader reads this and stops calling itself the
+    # published anatomy; the canonical run leaves it unset and is unchanged.
+    env["PHORVEX_ANATOMY_EDITION"] = "candidate"
+    steps = list(STAGE_STEPS)
+    if getattr(args, "stage_regen_anchors", False):
+        # Re-pinning fingerprints is a REVIEWED act, so it is opt-in and never implied by a
+        # normal staged run. It also has to happen against the pinned source: run it here, in
+        # the temporary worktree at --source-ref, not against a working copy whose HEAD has
+        # moved for unrelated reasons.
+        steps.insert(0, ("python-regen", "audit_anchors.py"))
+    # A staged pipeline may carry builders the canonical one does not; run them if they are
+    # there, and never require them, so a freshly seeded stage still works.
+    for extra in ("build_graph_json.py",):
+        if (pipeline / extra).is_file():
+            steps.append(("python", extra))
+    for kind, script in steps:
+        command = [sys.executable if kind.startswith("python") else "bash", str(pipeline / script)]
+        if kind == "python-regen":
+            command.append("--regen")
+        result = run_checked(command, cwd=pipeline, env=env)
+        if result.stdout:
+            print(result.stdout, end="")
+
+    print(f"anatomy candidate staged at {target}" + (" (pipeline seeded)" if seeded else ""))
+    print(f"  reader   {stage / args.stage_doc}")
+    print(f"  diagram  {stage / 'generated' / (args.stage_stem + '.mmd')}")
+    print(f"  svg      {stage / 'generated' / (args.stage_stem + '.svg')}")
+    print(f"  pipeline {pipeline}")
+    print("canonical anatomy/PIN.yaml and anatomy/ANATOMY.md are unchanged by --stage")
+    return 0
+
+
 @serialized
 def cmd_anatomy_refresh(args: argparse.Namespace) -> int:
     repo = Path(args.repo or ROOT.parent).resolve()
@@ -3358,6 +3557,17 @@ def cmd_anatomy_refresh(args: argparse.Namespace) -> int:
     except subprocess.CalledProcessError as exc:
         print(exc.stdout, file=sys.stderr)
         return 1
+    stage = Path(args.stage).resolve() if getattr(args, "stage", None) else None
+    if stage is not None:
+        # A candidate edition for an UNSHIPPED source. `--check` is the right tool for the
+        # deployed SHA and fails on any drift; there was no way to produce a reviewable
+        # candidate at a source the canonical pin must not move to. Staging writes the whole
+        # edition — pipeline, inventories, reader, diagram — under `stage`, and touches
+        # nothing in `workflow/anatomy/`.
+        problem = stage_destination_problem(stage, args.stage_doc, args.stage_stem)
+        if problem:
+            print(f"FAIL: {problem}", file=sys.stderr)
+            return 1
     if args.publish:
         current_path = ROOT / "releases" / "CURRENT.yaml"
         current = load_yaml(current_path)
@@ -3385,6 +3595,8 @@ def cmd_anatomy_refresh(args: argparse.Namespace) -> int:
         workflow = temp / "workflow"
         try:
             run_checked(["git", "-C", str(repo), "worktree", "add", "--detach", str(source), target])
+            if stage is not None:
+                return _stage_anatomy(args, stage, source, target)
             shutil.copytree(
                 ROOT,
                 workflow,
@@ -4567,6 +4779,21 @@ def build_parser() -> argparse.ArgumentParser:
     anatomy_mode = anatomy.add_mutually_exclusive_group()
     anatomy_mode.add_argument("--check", action="store_true", help="audit without publishing (default)")
     anatomy_mode.add_argument("--publish", action="store_true", help="publish only after the suite passes")
+    anatomy_mode.add_argument(
+        "--stage",
+        help="generate a candidate edition into this directory; never touches anatomy/",
+    )
+    anatomy.add_argument("--stage-doc", default="ANATOMY.md", help="reader filename inside --stage")
+    anatomy.add_argument("--stage-stem", default="ANATOMY", help="diagram basename inside --stage/generated")
+    anatomy.add_argument(
+        "--stage-edition",
+        help="edition label the staged reader titles itself with, e.g. V3; status stays candidate",
+    )
+    anatomy.add_argument(
+        "--stage-regen-anchors",
+        action="store_true",
+        help="re-pin anchor fingerprints at --source-ref before generating; reviewed act, not routine",
+    )
     anatomy.set_defaults(func=cmd_anatomy_refresh)
     return parser
 

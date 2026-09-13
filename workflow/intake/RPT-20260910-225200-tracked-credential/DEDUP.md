@@ -1,0 +1,3 @@
+# Root-cause comparison
+
+NEW. M136 concerns console request authentication and grants, not versioned development-access configuration. M162 concerns a scenario oracle replacing stolen credentials, not disclosure of a real operational credential. M92 concerns a product SSRF/token-forwarding path; M7 concerns unused Kubernetes RBAC verbs. None removes or revokes the credential in `.claude/settings.json`. Search of the reconciled master entries found no existing tracked-credential root cause. This is a confirmed repository hygiene and external access-remediation issue, with no claim that the credential has been abused.

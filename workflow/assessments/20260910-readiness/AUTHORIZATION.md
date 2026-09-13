@@ -7,7 +7,7 @@ before stopping to await deployment. This authorizes investigation, deduplicated
 issue filing/reconciliation, lead-approved implementation, tests, branch pushes
 and reviewed PR delivery. Routine work requires no renewed permission.
 
-Use Claude Opus5 with max reasoning for every new worker invocation and resume.
+Latest user update at19:45UTC: use Claude Opus5 with HIGH reasoning for every new worker invocation and resume. This supersedes the earlier max instruction; preserve historical provenance. Private SSH access file is documented in MODEL-POLICY.md and may be handed to assigned workers when live work requires it.
 Codex leads/plans/reviews; Claude implements. No implementation author may approve
 their own implementation. Never add co-author or AI/assistant commit attribution.
 

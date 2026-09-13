@@ -334,7 +334,19 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 
 // Assess computes the kill-chain assessment for an asset. exposureSec is the
 // pod-identity exposure clock; proactiveFloorSec is the policy's proactive floor.
+//
+// This is the production entrypoint and keeps its signature: it is the real evaluation of
+// the tick, so it folds the stage clock, seeds the owner's prior and counts aged-out events.
 func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, proactiveFloorSec float64) Assessment {
+	return m.AssessMode(view, pol, exposureSec, proactiveFloorSec, EvalProduction)
+}
+
+// AssessMode computes the same assessment under an explicit evaluation mode (M-163). Every
+// input — the events, the AI/topology classification, the learned prior, the dwell the stage
+// clock already holds — is read identically in both modes, so the shadow arm's belief is the
+// belief production would form from that hypothetical stage. Under EvalShadow no stage entry
+// is folded, no owner prior is seeded and no operational counter moves.
+func (m *Model) AssessMode(view *model.WorkloadView, pol model.Policy, exposureSec, proactiveFloorSec float64, mode EvalMode) Assessment {
 	// --- stage belief from events (this pod) + neighbor pressure ---
 	//
 	// PHORVEXSEC-186 / M-27: every event is weighted by its age, w = 1 − clamp01(age/τ_ev)
@@ -364,7 +376,11 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 			TargetsPod: e.TargetsPod, AgeSec: e.Age.Seconds(), Weight: w, TimestampPresent: !e.TimestampMissing,
 		})
 		if w <= 0 {
-			metrics.RecordEventAgedOut(pol.Tenant)
+			// M-163: an aged-out event is an operational observation of the REAL tick. A
+			// counterfactual re-reading of the same event stream must not count it again.
+			if mode.Commits() {
+				metrics.RecordEventAgedOut(pol.Tenant)
+			}
 			continue
 		}
 		if e.TargetsPod {
@@ -398,7 +414,19 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 
 	// T1-B: the Weibull dwell family reads time-IN-STAGE, not the pod identity clock. On a
 	// non-transitioning pod dwellSec == exposureSec (byte-identical); it restarts on a stage change.
-	dwellSec := m.StageClock.Observe(pol.Owner(), view.Pod.Namespace, view.Pod.Name, view.Pod.UID, stage, exposureSec)
+	//
+	// M-163: the stage clock is the ONLY origin of stage-entry time, so only the real
+	// evaluation may fold into it. A shadow arm whose physics witness lands on the other side
+	// of a stage predicate (a stale calibration snapshot against a fresher platform witness)
+	// used to record its hypothetical transition here and hand the following production pass a
+	// dwell of 0 — losing the pod's accrued dwell and, with it, hazard, urgency, preempt margin
+	// and coverage. Peek returns the same hypothetical dwell without taking the entry.
+	var dwellSec float64
+	if mode.Commits() {
+		dwellSec = m.StageClock.Observe(pol.Owner(), view.Pod.Namespace, view.Pod.Name, view.Pod.UID, stage, exposureSec)
+	} else {
+		dwellSec = m.StageClock.Peek(pol.Owner(), view.Pod.Namespace, view.Pod.Name, view.Pod.UID, stage, exposureSec)
+	}
 
 	// --- predictive belief horizon: hazard of imminent next-stage transition ---
 	scale := m.SojournScale[stage]
@@ -448,7 +476,10 @@ func (m *Model) Assess(view *model.WorkloadView, pol model.Policy, exposureSec, 
 	// betaMean does. cap is INSUFFICIENT EVIDENCE — provisional 0.5, fit in T3-D. T_exp is the
 	// policy proactive floor today; T1-B substitutes its dedicated constant without changing
 	// this formula.
-	betaMean := m.Memory.PHoldUCBWithEvidence(pol.Owner(), eventAlpha, m.ConfidenceK)
+	// M-163: the SAME learned conjugate prior feeds both modes — a shadow must never be
+	// priced against a fresh belief model — but a shadow read does not seed an owner the
+	// memory has not learned about yet.
+	betaMean := m.Memory.PHoldUCBWithEvidenceMode(pol.Owner(), eventAlpha, m.ConfidenceK, mode)
 	cap := pol.ExposurePressureCap
 	if cap <= 0 || cap >= 1 {
 		cap = DefaultExposurePressureCap

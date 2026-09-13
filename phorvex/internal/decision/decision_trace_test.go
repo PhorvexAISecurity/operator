@@ -230,6 +230,16 @@ func TestDecisionTraceSeparatesLambdaRolesAndReconstructsCost(t *testing.T) {
 	policy := decisionTracePolicy(1, true)
 	policy.Lambda = 0.2
 
+	// [M-163] The owner's economic unit is created by its PRODUCTION tick — that is the
+	// event that consumes the configured seed. This tick is exactly binding (demand 1,
+	// spent 1, budget 1), so the runtime lambda stays at the consumed seed and the frozen-
+	// runtime assertions below still measure what they always measured. Seeding it here
+	// rather than through the first shadow call is the point: a counterfactual must not be
+	// the thing that decides which lambda an owner's bucket is born with.
+	if _, err := engine.DecideChecked([]*model.WorkloadView{view}, policy); err != nil {
+		t.Fatal(err)
+	}
+
 	first, err := engine.DecideShadowChecked([]*model.WorkloadView{view}, policy)
 	if err != nil {
 		t.Fatal(err)

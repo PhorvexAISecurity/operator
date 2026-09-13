@@ -1,0 +1,273 @@
+schema_version: 1
+intake_id: RPT-20260910-184000-catalogue-harness-repair
+kind: BUG
+title: AI scenario harness performs the defense it later attributes to the defender
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T18:39:19+00:00'
+updated_at: '2026-09-10T18:39:52+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline current-source audit with local real-function reproductions;
+    no live mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-144
+    score: 20
+    overlap:
+    - after
+    - any
+    - cannot
+    - claim
+    - code
+    - does
+    - evidence
+    - first
+    - not
+    - observation
+    - observed
+    - phorvex
+    - retained
+    - same
+    - selected
+    - separate
+    - that
+    - this
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-146
+    score: 20
+    overlap:
+    - after
+    - any
+    - cannot
+    - claim
+    - evidence
+    - here
+    - inputs
+    - not
+    - phorvex
+    - raw
+    - record
+    - that
+    - this
+    - three
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-136
+    score: 19
+    overlap:
+    - any
+    - defense
+    - different
+    - evidence
+    - get
+    - logs
+    - mutation
+    - not
+    - phorvex
+    - real
+    - same
+    - selected
+    - that
+    - this
+    - while
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-140
+    score: 18
+    overlap:
+    - after
+    - any
+    - behavior
+    - code
+    - different
+    - does
+    - evidence
+    - first
+    - not
+    - observation
+    - raw
+    - same
+    - selected
+    - that
+    - this
+    - three
+    - whether
+    - while
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-155
+    score: 18
+    overlap:
+    - after
+    - any
+    - code
+    - different
+    - does
+    - events
+    - evidence
+    - harness
+    - not
+    - observed
+    - phorvex
+    - same
+    - selected
+    - that
+    - this
+    - while
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-25
+    score: 15
+    overlap:
+    - arm
+    - behavior
+    - evidence
+    - fixture
+    - not
+    - raw
+    - real
+    - same
+    - separate
+    - that
+    - this
+    title: The AI stage classifier overrides — and can downgrade — real detector evidence
+  - issue_id: M-147
+    score: 15
+    overlap:
+    - after
+    - claim
+    - does
+    - mutation
+    - not
+    - outcome
+    - phorvex
+    - real
+    - record
+    - runner
+    - same
+    - that
+    - this
+    title: '`route-rotate` is priced as zero-disruption after the handler started
+      changing Service selectors'
+  - issue_id: M-157
+    score: 15
+    overlap:
+    - any
+    - call
+    - cannot
+    - code
+    - does
+    - evidence
+    - not
+    - reproduction
+    - scope
+    - that
+    - this
+    title: '`recon/nonfinite_guard_test.go` does not compile on main — the M-104 EPSS
+      field rename left the NaN-guard test referencing a deleted field, darkening
+      the whole recon test package'
+  - issue_id: M-2
+    score: 14
+    overlap:
+    - any
+    - cannot
+    - contract
+    - does
+    - evidence
+    - first
+    - get
+    - invariant
+    - not
+    - observed
+    - phorvex
+    - same
+    - that
+    - this
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-143
+    score: 14
+    overlap:
+    - after
+    - any
+    - cannot
+    - evidence
+    - not
+    - phorvex
+    - reproduction
+    - same
+    - scope
+    - that
+    - this
+    - while
+    title: pHold is algebraically pinned to 1 by pod age — the Bayesian belief layer
+      is annihilated, not outweighed
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-171
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-171.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T18:39:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T18:39:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T18:39:20+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T18:39:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T18:39:52+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-171.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

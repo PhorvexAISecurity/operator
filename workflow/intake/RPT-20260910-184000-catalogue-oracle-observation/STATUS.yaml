@@ -1,0 +1,241 @@
+schema_version: 1
+intake_id: RPT-20260910-184000-catalogue-oracle-observation
+kind: BUG
+title: Scenario oracles conflate missing targets and failed observations with attack
+  disruption
+state: FILED
+reporter: codex-lead
+approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+created_at: '2026-09-10T18:39:21+00:00'
+updated_at: '2026-09-10T18:39:53+00:00'
+pins:
+  source_main_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  source_release: null
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: Offline current-source audit with local real-function reproductions;
+    no live mutation
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-146
+    score: 19
+    overlap:
+    - absent
+    - any
+    - cannot
+    - claim
+    - evidence
+    - here
+    - inputs
+    - missing
+    - not
+    - observations
+    - producer
+    - raw
+    - record
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-168
+    score: 16
+    overlap:
+    - absent
+    - attack
+    - cannot
+    - contract
+    - evidence
+    - failed
+    - not
+    - observation
+    - observations
+    - outcome
+    - required
+    - source
+    title: Console availability experiment claims attack results despite failed stimulus
+      and unsafe restart recovery
+  - issue_id: M-144
+    score: 15
+    overlap:
+    - absent
+    - any
+    - attack
+    - cannot
+    - census
+    - claim
+    - evidence
+    - first
+    - not
+    - observation
+    - observed
+    - retained
+    - separate
+    - source
+    - two
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  - issue_id: M-155
+    score: 15
+    overlap:
+    - any
+    - attack
+    - evidence
+    - failed
+    - failure
+    - not
+    - observed
+    - source
+    - target
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-165
+    score: 15
+    overlap:
+    - absent
+    - evidence
+    - failed
+    - inputs
+    - logs
+    - missing
+    - observations
+    - required
+    - scope
+    title: E2E verification reports success from failed or absent observations
+  - issue_id: M-142
+    score: 13
+    overlap:
+    - any
+    - control
+    - evidence
+    - first
+    - here
+    - lateral
+    - not
+    - observed
+    - real
+    - record
+    - two
+    title: '`Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`''s conservative
+      Warm fallback is dead past the first scrape interval — the fleet is priced Idle
+      under arbitrary load'
+  - issue_id: M-136
+    score: 12
+    overlap:
+    - absent
+    - any
+    - attack
+    - control
+    - evidence
+    - logs
+    - mutation
+    - not
+    - paths
+    - real
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-167
+    score: 12
+    overlap:
+    - artifacts
+    - attack
+    - cannot
+    - claim
+    - evidence
+    - lost
+    - mutation
+    - not
+    - required
+    - separate
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+  - issue_id: M-2
+    score: 11
+    overlap:
+    - any
+    - cannot
+    - contract
+    - evidence
+    - first
+    - invariant
+    - missing
+    - not
+    - observed
+    - source
+    - two
+    title: CRD enum drift — the API server rejects four actuators TODAY
+  - issue_id: M-9
+    score: 11
+    overlap:
+    - cannot
+    - failure
+    - first
+    - lost
+    - not
+    - record
+    - target
+    - two
+    - whether
+    title: '`Emitted` is a request-ack, not an effect — the brain never learns what
+      Phoenix did'
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-172
+  fix_id: null
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: codex-lead
+  coordinator: codex-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-172.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-10T18:39:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-10T18:39:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-10T18:39:22+00:00'
+  by: codex-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-10T18:39:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-10T18:39:53+00:00'
+  by: codex-lead
+  artifact: issues/entries/M-172.md
+  approval_ref: assessments/20260910-readiness/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

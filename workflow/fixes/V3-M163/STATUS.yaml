@@ -1,0 +1,482 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 29
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a0b74e2a10ea87aa798812442235ef996ec8eabdd0aabcc929ad8055658dd077
+    source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+    at: '2026-09-10T17:51:26+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: claude-v3-m163
+    artifact: evidence/red-probe.log
+    sha256: d7f02967599714240e7269a715ce71a99189f09fad31a60d110814d7084cbc56
+    source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+    at: '2026-09-10T21:54:51+00:00'
+    rationale: 'Baseline RED/GREEN executed as intended at this head, decided structurally
+      rather than by exit status: the pinned base 418cf2005a45 fails each production-integrity
+      invariant with its own intended counterexample while this head passes both,
+      and the denied-no-shadow and allowed-production controls pass on BOTH sources.
+      evidence/discrimination.log shows the checker rejects the twelve ways an unrelated
+      fault could otherwise have been read as the base reproducing.'
+  preflight:
+    result: PASS
+    by: claude-v3-m163
+    artifact: evidence/preflight/receipt.json
+    sha256: 9dc70d87e6bcb7c0cb5f52ea7d718fe67ce8bf91b5e3f90e654f294188db6261
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:56:09+00:00'
+  implementation:
+    result: PASS
+    by: claude-v3-m163
+    artifact: 04-diff.patch
+    sha256: 19d58b37e4cf382714fc7a7fb62a4e1b3abac0a02e318a32de8651f2d84d4263
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:56:09+00:00'
+  l0:
+    result: PASS
+    by: claude-v3-m163
+    artifact: evidence/head-vet.log
+    sha256: 75b0aea77f4ffd0450eaea1edfe6e546c2198c1d9237a77f6b7f38573f5305fd
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:56:09+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 56a39079f009081e7d0132659d988bbae1349041e499c9f65aab3c9a7c5c0d57
+  l1:
+    result: PASS
+    by: claude-v3-m163
+    artifact: evidence/head-m163-tests.log
+    sha256: 2a5a0b907c347abd64811e8fda132aeb45a2ffe34ba8a26d163008b1709b2a16
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:56:09+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 9f16db212402768eb646af5038e3cf348d3e00db9b298850a3cbadb1bcb4e227
+  l2:
+    result: PASS
+    by: claude-v3-m163
+    artifact: evidence/head-full-suite.log
+    sha256: b761b48db2a6ef7cc6d88776b7e43fcad42a26d049dee923e6fe3ef2d28a2af3
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:56:09+00:00'
+    inputs:
+    - build/phoenix-extended
+    - deploy
+    - phorvex
+    inputs_sha256: 359891c0d5474031f559244fc107b685dc52e58cdabfc7ecaec23415ca786830
+  positive_control:
+    result: PASS
+    by: claude-v3-m163
+    artifact: evidence/head-ssar-shadow.log
+    sha256: c872266a3303d77325fa81a253dcf6aba107cd39e4642c4c8fa22e31f4b59271
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:56:09+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 9f16db212402768eb646af5038e3cf348d3e00db9b298850a3cbadb1bcb4e227
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: aa575ae336a64c941f2a384a05e6d0585380af5fb79077bce55b258e1f5edc20
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:58:27+00:00'
+    incident_sha256: 692cd3fbef4f4325f44931134f63cdf4e9fbe4ec0152ef3cf06db3667151d745
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 692cd3fbef4f4325f44931134f63cdf4e9fbe4ec0152ef3cf06db3667151d745
+    source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+    at: '2026-09-10T21:58:27+00:00'
+    baseline_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+fix_id: V3-M163
+issues:
+- M-163
+title: Keep shadow evaluation isolated from production state and metrics
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: claude-v3-m163
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: origin/main
+  code_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/v3-m163-shadow-isolation
+  base_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  head_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/176
+  reviewed_head: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Check PR176 CI, await owner and DevOps merge/deployment, then verify registered
+    live controls.
+updated_at: '2026-09-10T21:59:52+00:00'
+configuration_history:
+- at: '2026-09-10T17:50:53+00:00'
+  by: codex-lead
+  fields:
+  - baseline
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-10T21:09:52+00:00'
+  by: claude-v3-m163
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T21:15:39+00:00'
+  by: claude-v3-m163
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T21:43:22+00:00'
+  by: claude-v3-m163
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T21:54:29+00:00'
+  by: claude-v3-m163
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T21:56:08+00:00'
+  by: claude-v3-m163
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-10T21:59:51+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-10T17:51:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-10T17:51:26+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-10T21:15:40+00:00'
+  by: claude-v3-m163
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T21:15:41+00:00'
+  by: claude-v3-m163
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-10T21:24:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-10T21:56:09+00:00'
+  by: claude-v3-m163
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-10T21:58:28+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-10T21:58:29+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-10T21:59:52+00:00'
+  by: codex-lead
+  artifact: https://github.com/PhorvexSecurity/operator/pull/176
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: red
+  result: FAIL
+  by: claude-v3-m163
+  artifact: evidence/red-probe.log
+  sha256: 7957a94f2c28b6b763a18d4040811cedd64d749dcb456287c0d9d7653da08275
+  source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  at: '2026-09-10T21:14:54+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m163
+  artifact: 04-diff.patch
+  sha256: f25ddeaad5589b4cddcb6b65fa1ed4976f66c0e0bcaece6bc1b8ea8cb5fe25ae
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:15:39+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-vet.log
+  sha256: 75b0aea77f4ffd0450eaea1edfe6e546c2198c1d9237a77f6b7f38573f5305fd
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:15:40+00:00'
+  inputs:
+  - build/phoenix-extended
+  - phorvex
+  inputs_sha256: 37850963e2a7ee2fd1defa1256c2b6803a27cca7d405ace8545b5b97bcd2114a
+- check: l1
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-m163-tests.log
+  sha256: 47d7d6d7793b0ea1d31c1d25820c6e302d530f7364c8eefde35991d725e7f20b
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:15:40+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 7fdf748ea4f8d21c0c131b1e34792b1b9a16afd7c3006df9fcf18b0e8cf37792
+- check: l2
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-full-suite.log
+  sha256: 0dc9e933fdec363e504e5a4ad45c1eb3eaa67a1bc1849a10d357badc6dfd71db
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:15:40+00:00'
+  inputs:
+  - build/phoenix-extended
+  - deploy
+  - phorvex
+  inputs_sha256: 17daaf669878cf9993c041797fe25174bde8ed08bbbeb156e2aca4faa2f6b8e3
+- check: positive_control
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-ssar-shadow.log
+  sha256: 83933ae1e01ceb36c87f1361fa5589199785c2e3075591a0a3fb7baa495e992e
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:15:40+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 7fdf748ea4f8d21c0c131b1e34792b1b9a16afd7c3006df9fcf18b0e8cf37792
+- check: red
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/red-probe.log
+  sha256: 7957a94f2c28b6b763a18d4040811cedd64d749dcb456287c0d9d7653da08275
+  source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  at: '2026-09-10T21:15:37+00:00'
+  rationale: 'Baseline RED/GREEN executed as intended: the pinned base 418cf2005a45
+    FAILS both production-integrity invariants (stale-cadence shadow drives inStage
+    1200.0->0.0, hazard 1.000000->0.000000, coverage 0.284667->0.200667; and a shadow-issued
+    SSAR makes production select a revoked rotate) while this head passes both. The
+    denied-no-shadow and allowed-production positive controls pass on BOTH sources.
+    The runner exits 0 only when the base reproduces and the head does not.'
+- check: implementation
+  result: PASS
+  by: claude-v3-m163
+  artifact: 04-diff.patch
+  sha256: 9cad0080c933162531e6f958ee002e820558acb035d1e8fd18e75f77b9568e38
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:45:09+00:00'
+- check: preflight
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/preflight/receipt.json
+  sha256: b85e217bb566ed314a0fbca67c546ca4b5e487c5602e2e66c619be259d024a6c
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:15:39+00:00'
+- check: implementation
+  result: PASS
+  by: claude-v3-m163
+  artifact: 04-diff.patch
+  sha256: 1b0a046802db16d483cc37fc1cfd97fa38a92a6e510a8799640521432fc71cf6
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:47:44+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-vet.log
+  sha256: 75b0aea77f4ffd0450eaea1edfe6e546c2198c1d9237a77f6b7f38573f5305fd
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:45:09+00:00'
+- check: l1
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-m163-tests.log
+  sha256: 2a5a0b907c347abd64811e8fda132aeb45a2ffe34ba8a26d163008b1709b2a16
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:45:09+00:00'
+- check: l2
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-full-suite.log
+  sha256: b761b48db2a6ef7cc6d88776b7e43fcad42a26d049dee923e6fe3ef2d28a2af3
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:45:09+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-ssar-shadow.log
+  sha256: c872266a3303d77325fa81a253dcf6aba107cd39e4642c4c8fa22e31f4b59271
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:45:09+00:00'
+- check: red
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/red-probe.log
+  sha256: 7f8d431b0f376b2da06e94a102d8433d813e8db7b2c14b03da8f4880154671f1
+  source_sha: 418cf2005a45c80c15b93f86d5548f73836bc7d7
+  at: '2026-09-10T21:45:10+00:00'
+  rationale: 'Baseline RED/GREEN executed as intended at this head: the pinned base
+    418cf2005a45 FAILS both production-integrity invariants while this head passes
+    both, and the denied-no-shadow and allowed-production positive controls pass on
+    BOTH sources. The runner exits 0 only when the base reproduces and the head does
+    not.'
+- check: preflight
+  result: FAIL
+  by: claude-v3-m163
+  artifact: evidence/preflight/receipt.json
+  sha256: cb24ab64075cc021572afd4d92514d6a08365af7ac26b887a21f9104eff292c9
+  source_sha: 448f681178ff1602b1dc1c2e5ea4668f47591380
+  at: '2026-09-10T21:48:53+00:00'
+  rationale: 'Honest intermediate attestation at head 448f681: this run is FAIL solely
+    because the previously recorded preflight check still pointed at the receipt from
+    head a69446a, and doctor reports that staleness from inside the workflow job.
+    Every other job (diff, chart-1..8, go-phorvex) passes and the go suite is green.
+    Superseded by the passing receipt recorded at submission.'
+- check: implementation
+  result: PASS
+  by: claude-v3-m163
+  artifact: 04-diff.patch
+  sha256: 19d58b37e4cf382714fc7a7fb62a4e1b3abac0a02e318a32de8651f2d84d4263
+  source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  at: '2026-09-10T21:54:50+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-vet.log
+  sha256: 75b0aea77f4ffd0450eaea1edfe6e546c2198c1d9237a77f6b7f38573f5305fd
+  source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  at: '2026-09-10T21:54:50+00:00'
+- check: l1
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-m163-tests.log
+  sha256: 2a5a0b907c347abd64811e8fda132aeb45a2ffe34ba8a26d163008b1709b2a16
+  source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  at: '2026-09-10T21:54:50+00:00'
+- check: l2
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-full-suite.log
+  sha256: b761b48db2a6ef7cc6d88776b7e43fcad42a26d049dee923e6fe3ef2d28a2af3
+  source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  at: '2026-09-10T21:54:50+00:00'
+- check: positive_control
+  result: PASS
+  by: claude-v3-m163
+  artifact: evidence/head-ssar-shadow.log
+  sha256: c872266a3303d77325fa81a253dcf6aba107cd39e4642c4c8fa22e31f4b59271
+  source_sha: 9c83a9f5a1c5fd61f044372371fbf546f68bc6a3
+  at: '2026-09-10T21:54:51+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 2a88775468117e68e5cf503b1af028cd27f6cdac8d3e9677b8595818519cd33e
+  source_sha: a69446a6f6a62baa7a9db23ac9d0352c35aa8f22
+  at: '2026-09-10T21:24:32+00:00'
+handoff:
+  id: V3-M163:27:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 27

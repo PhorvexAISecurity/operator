@@ -69,14 +69,27 @@ func docsByKind(rendered, kind string) []string {
 	return got
 }
 
+// codeexecDocsByKind is docsByKind restricted to THIS feature's objects. The chart also ships
+// M-94's default-on SecurityEvent creator-identity policy + binding, which are the same kinds
+// and are not what these tests are about; every code-exec object carries the policy label.
+func codeexecDocsByKind(rendered, kind string) []string {
+	var got []string
+	for _, d := range docsByKind(rendered, kind) {
+		if strings.Contains(d, "phorvex.ai/policy: codeexec-ephemeral") {
+			got = append(got, d)
+		}
+	}
+	return got
+}
+
 func TestHelmRenderEnabledProducesEnforcementAndReadGrant(t *testing.T) {
 	rendered := render(t, "true")
 
-	vaps := docsByKind(rendered, "ValidatingAdmissionPolicy")
+	vaps := codeexecDocsByKind(rendered, "ValidatingAdmissionPolicy")
 	if len(vaps) != 1 {
 		t.Fatalf("enabled render must contain exactly one ValidatingAdmissionPolicy, got %d", len(vaps))
 	}
-	bindings := docsByKind(rendered, "ValidatingAdmissionPolicyBinding")
+	bindings := codeexecDocsByKind(rendered, "ValidatingAdmissionPolicyBinding")
 	if len(bindings) != 1 {
 		t.Fatalf("enabled render must contain exactly one Binding, got %d", len(bindings))
 	}
@@ -115,10 +128,10 @@ func TestHelmRenderEnabledProducesEnforcementAndReadGrant(t *testing.T) {
 
 func TestHelmRenderDisabledProducesNothing(t *testing.T) {
 	rendered := render(t, "false")
-	if len(docsByKind(rendered, "ValidatingAdmissionPolicy")) != 0 {
+	if len(codeexecDocsByKind(rendered, "ValidatingAdmissionPolicy")) != 0 {
 		t.Fatal("disabled render must not contain a ValidatingAdmissionPolicy")
 	}
-	if len(docsByKind(rendered, "ValidatingAdmissionPolicyBinding")) != 0 {
+	if len(codeexecDocsByKind(rendered, "ValidatingAdmissionPolicyBinding")) != 0 {
 		t.Fatal("disabled render must not contain a Binding")
 	}
 	if strings.Contains(rendered, "codeexec-managed") || strings.Contains(rendered, `resourceNames: ["phorvex-codeexec-ephemeral"]`) {
