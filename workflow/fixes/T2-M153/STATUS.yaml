@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -15,12 +15,73 @@ checks:
     source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
     at: '2026-09-13T22:19:44+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: sol-m153
+    artifact: evidence/baseline-red/desired-red.txt
+    sha256: ce1f935e2a2fb25ca75b1987825d6167bb13cb879338d8c4358866fb3721bf92
+    source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+    at: '2026-09-13T23:12:23+00:00'
+  preflight:
+    result: PASS
+    by: sol-m153
+    artifact: evidence/preflight-valid
+    sha256: b907b7e1bdb294a5da25b254f7243b959056b77c3f7a8ae74e7d396c1a62247e
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:12:28+00:00'
+  implementation:
+    result: PASS
+    by: sol-m153
+    artifact: 04-diff.patch
+    sha256: 78a0d22a82cecb006020ae1fa6c4f1f7661ea86f751ce99a651f9452040bbf47
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:12:28+00:00'
+  l0:
+    result: PASS
+    by: sol-m153
+    artifact: evidence/head/final-race.txt
+    sha256: 313325304de16ea638da6a91a0b8306d69e3732c53ba33926c3cd35fd765ba6f
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:12:28+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 7569444c882ec671f8417332a808d94127288b471ff985bec1fd97e268280cdd
+  l1:
+    result: PASS
+    by: sol-m153
+    artifact: evidence/head/focused.txt
+    sha256: d5900aa721a5bd41e265f6a06c735ccc6471b652f3b257abdfa20978470f6aee
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:12:28+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 7569444c882ec671f8417332a808d94127288b471ff985bec1fd97e268280cdd
+  l2:
+    result: PASS
+    by: sol-m153
+    artifact: evidence/head/final-all-tests.txt
+    sha256: 50c4e8c6ede697bd43371104d19c50ccdfbf5a6ae5e75e77ff8d3c06bd8c486c
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:12:28+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 7569444c882ec671f8417332a808d94127288b471ff985bec1fd97e268280cdd
+  positive_control:
+    result: PASS
+    by: sol-m153
+    artifact: evidence/baseline-red/positive-control.txt
+    sha256: d971b3d51d58857e78009bf06afa6be148fd99a635b5cf100ef4abf34adbe8a2
+    source_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+    at: '2026-09-13T23:12:28+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 7569444c882ec671f8417332a808d94127288b471ff985bec1fd97e268280cdd
 fix_id: T2-M153
 issues:
 - M-153
 title: Record the actual vector steering cause on decision facts
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -44,7 +105,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m153-steering-trace
   base_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
-  head_sha: 88966d8242923acebacdd4ac006b5935516eb249
+  head_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
   stacked_on:
   - T2-M042
   - T2-M016
@@ -68,12 +129,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -85,9 +146,10 @@ dependencies:
 blockers: []
 residuals: []
 next_action:
-  owner: implementer
-  action: Implement signed producer-carried steering attribution
-updated_at: '2026-09-13T23:06:08+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-13T23:12:30+00:00'
 configuration_history:
 - at: '2026-09-13T22:19:20+00:00'
   by: codex-lead
@@ -116,6 +178,21 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-13T23:06:23+00:00'
+  by: sol-m153
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:09:15+00:00'
+  by: sol-m153
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:12:28+00:00'
+  by: sol-m153
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -133,3 +210,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T23:12:28+00:00'
+  by: sol-m153
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T23:12:29+00:00'
+  by: sol-m153
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T2-M153:11:submit
+  from: sol-m153
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 11
