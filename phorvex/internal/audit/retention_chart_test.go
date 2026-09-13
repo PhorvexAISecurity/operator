@@ -55,10 +55,12 @@ func TestAuditRetentionChartRejectsInvalidBudgets(t *testing.T) {
 		{name: "fractional backups", sets: []string{"phorvex.audit.maxBackups=1.5"}, want: "non-negative whole number"},
 		{name: "negative backups", sets: []string{"phorvex.audit.maxBackups=-1"}, want: "non-negative whole number"},
 		{name: "overflow backups", sets: []string{"string:phorvex.audit.maxBackups=9223372036854775808"}, want: "must not exceed"},
+		{name: "leading-zero backups", sets: []string{"string:phorvex.audit.maxBackups=08"}, want: "non-negative whole number"},
 		{name: "positive cap without backups", sets: []string{"phorvex.audit.maxBackups=0"}, want: "must be at least 1"},
 		{name: "fractional bytes", sets: []string{"phorvex.audit.maxBytes=1.5"}, want: "whole number of bytes"},
 		{name: "negative bytes", sets: []string{"phorvex.audit.maxBytes=-1"}, want: "whole number of bytes"},
 		{name: "overflow bytes", sets: []string{"string:phorvex.audit.maxBytes=9223372036854775808"}, want: "must not exceed"},
+		{name: "leading-zero bytes", sets: []string{"string:phorvex.audit.maxBytes=08"}, want: "whole number of bytes"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := renderAuditChart(t, tc.sets...)

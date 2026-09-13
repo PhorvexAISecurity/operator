@@ -92,10 +92,10 @@ spec:
         {{- end }}
         {{- $auditMaxBackupsText = printf "%.0f" .Values.phorvex.audit.maxBackups }}
         {{- end }}
-        {{- if not (regexMatch "^[0-9]+$" $auditMaxBytesText) }}
+        {{- if not (regexMatch "^(0|[1-9][0-9]*)$" $auditMaxBytesText) }}
         {{- fail "phorvex.audit.maxBytes must be a non-negative whole number of bytes" }}
         {{- end }}
-        {{- if not (regexMatch "^[0-9]+$" $auditMaxBackupsText) }}
+        {{- if not (regexMatch "^(0|[1-9][0-9]*)$" $auditMaxBackupsText) }}
         {{- fail "phorvex.audit.maxBackups must be a non-negative whole number" }}
         {{- end }}
         {{- if or (gt (len $auditMaxBytesText) 19) (and (eq (len $auditMaxBytesText) 19) (gt $auditMaxBytesText "9223372036854775807")) }}
