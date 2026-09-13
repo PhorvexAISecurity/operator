@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 19
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 2d95015211d6155854cd96ae4e1f6fb24f3dc056c264df20fc6bd47f1211bc81
+    sha256: 5659b88171d5fff7356544f44c993e9327f661c0ff44194169d2684bfe1a030d
     source_sha: d296799dd59a909b149eec06802b5152f67a036f
-    at: '2026-09-13T17:16:08+00:00'
+    at: '2026-09-13T18:25:20+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
   red:
@@ -32,64 +32,75 @@ checks:
     result: PASS
     by: claude-v3-m164
     artifact: evidence/preflight/receipt.json
-    sha256: 1e4bfe7ba9876740ab4f7b6737c69df75fd032de6d24e0b055085d7649572c63
-    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
-    at: '2026-09-13T17:48:33+00:00'
+    sha256: 1f7482dec2bb4b9d2a908c767d4071a8a499ba7284539a8b666e30ba1f69fff5
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T18:46:54+00:00'
   implementation:
     result: PASS
     by: claude-v3-m164
     artifact: 04-diff.patch
-    sha256: 6c00648ef5ccbed73e8efce557cad7b527f72ee204694e9a4e9dbfefc0f245e7
-    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
-    at: '2026-09-13T17:48:33+00:00'
+    sha256: 4534ca39417ac44faaa4d98252291ae0a878495158937312c629ae6379cee885
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T18:44:49+00:00'
   l0:
     result: PASS
     by: claude-v3-m164
-    artifact: evidence/l0/falco-build-vet.log
-    sha256: 30fdbde291a6e5337824f5a38741e2b816f5d0a2d78645a11bd3049a539b650a
-    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
-    at: '2026-09-13T17:48:33+00:00'
+    artifact: evidence/r2/l0/falco-build-vet.log
+    sha256: 8a5309c9c2d73639378406dc4648fc46980c4ae2b8e11441b87b66d3f14674b2
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T18:44:49+00:00'
     inputs:
     - build/falco-integrator-extended
     - build/phoenix-extended
     - build/prometheus-integrator-extended
-    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+    - deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz
+    inputs_sha256: e403ffba5e05e3e2cb440fe9e981eb160b1296893fdd969d2e642cfbbc1493e6
   l1:
     result: PASS
     by: claude-v3-m164
-    artifact: evidence/l1/falco-delivery-unit.log
-    sha256: e2b5a6d767c5529ec1a0cffc871ce73a1d06f943fe54e72c4fd16621d7886be2
-    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
-    at: '2026-09-13T17:48:33+00:00'
+    artifact: evidence/r2/l1/falco-delivery-unit.log
+    sha256: c034e9005b034719c5f60fa11e338485a4bc5da5e47d86c755ec35bdd8a86d07
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T18:44:49+00:00'
     inputs:
     - build/falco-integrator-extended
     - build/phoenix-extended
     - build/prometheus-integrator-extended
-    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+    - deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz
+    inputs_sha256: e403ffba5e05e3e2cb440fe9e981eb160b1296893fdd969d2e642cfbbc1493e6
   l2:
     result: PASS
     by: claude-v3-m164
-    artifact: evidence/l2/falco-cmd-delivery.log
-    sha256: 243df59b8a3a7f2ab01d7d2edb9243a2aa53fee1abc7a8a89c7d65f1962277b8
-    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
-    at: '2026-09-13T17:48:33+00:00'
+    artifact: evidence/r2/l2/falco-cmd-delivery.log
+    sha256: 2f13041017b476168618f4faeeace1e0a63afaeef0420bf0f7600fffd3e5f36e
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T18:44:49+00:00'
     inputs:
     - build/falco-integrator-extended
     - build/phoenix-extended
     - build/prometheus-integrator-extended
-    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+    - deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz
+    inputs_sha256: e403ffba5e05e3e2cb440fe9e981eb160b1296893fdd969d2e642cfbbc1493e6
   positive_control:
     result: PASS
     by: claude-v3-m164
-    artifact: evidence/control/falco-positive-control-head.log
-    sha256: bf1de55f6b947f53f691ad1f1157eda6deadadd369e628e401d661f5a49ba82d
-    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
-    at: '2026-09-13T17:48:33+00:00'
+    artifact: evidence/r2/control/falco-positive-control-head.log
+    sha256: 85e11914aec89ae025daf8324c750533cbeb7413d4b8844591f931f6d9533c00
+    source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+    at: '2026-09-13T18:44:50+00:00'
     inputs:
     - build/falco-integrator-extended
     - build/phoenix-extended
     - build/prometheus-integrator-extended
-    inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+    - deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz
+    inputs_sha256: e403ffba5e05e3e2cb440fe9e981eb160b1296893fdd969d2e642cfbbc1493e6
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 521af5f443f7c2c97f48691cd32b1d4a2259c6c6b013ffd557acf1959e731814
+    source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+    at: '2026-09-13T18:25:20+00:00'
 fix_id: V3-M164
 issues:
 - M-164
@@ -119,7 +130,7 @@ blind_derivation:
 implementation:
   branch: fix/v3-m164-detector-delivery
   base_sha: d296799dd59a909b149eec06802b5152f67a036f
-  head_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  head_sha: 61cf35760851a98bd17a12487033c4763ef7990c
   stacked_on: []
 pull_request:
   url: null
@@ -140,7 +151,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -159,7 +170,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-13T17:48:35+00:00'
+updated_at: '2026-09-13T18:46:55+00:00'
 configuration_history:
 - at: '2026-09-13T17:16:06+00:00'
   by: codex-lead
@@ -181,6 +192,16 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-13T17:48:33+00:00'
+  by: claude-v3-m164
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T18:42:06+00:00'
+  by: claude-v3-m164
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T18:46:53+00:00'
   by: claude-v3-m164
   fields:
   - implementation
@@ -218,10 +239,116 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-13T18:25:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T18:46:54+00:00'
+  by: claude-v3-m164
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: V3-M164:8:submit
+  id: V3-M164:19:submit
   from: claude-v3-m164
   to: codex-lead
   role: skeptic
   kind: submit
-  revision: 8
+  revision: 19
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 2d95015211d6155854cd96ae4e1f6fb24f3dc056c264df20fc6bd47f1211bc81
+  source_sha: d296799dd59a909b149eec06802b5152f67a036f
+  at: '2026-09-13T17:16:08+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: implementation
+  result: PASS
+  by: claude-v3-m164
+  artifact: 04-diff.patch
+  sha256: 6c00648ef5ccbed73e8efce557cad7b527f72ee204694e9a4e9dbfefc0f245e7
+  source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  at: '2026-09-13T17:48:33+00:00'
+- check: l0
+  result: PASS
+  by: claude-v3-m164
+  artifact: evidence/l0/falco-build-vet.log
+  sha256: 30fdbde291a6e5337824f5a38741e2b816f5d0a2d78645a11bd3049a539b650a
+  source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  at: '2026-09-13T17:48:33+00:00'
+  inputs:
+  - build/falco-integrator-extended
+  - build/phoenix-extended
+  - build/prometheus-integrator-extended
+  inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+- check: l1
+  result: PASS
+  by: claude-v3-m164
+  artifact: evidence/l1/falco-delivery-unit.log
+  sha256: e2b5a6d767c5529ec1a0cffc871ce73a1d06f943fe54e72c4fd16621d7886be2
+  source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  at: '2026-09-13T17:48:33+00:00'
+  inputs:
+  - build/falco-integrator-extended
+  - build/phoenix-extended
+  - build/prometheus-integrator-extended
+  inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+- check: l2
+  result: PASS
+  by: claude-v3-m164
+  artifact: evidence/l2/falco-cmd-delivery.log
+  sha256: 243df59b8a3a7f2ab01d7d2edb9243a2aa53fee1abc7a8a89c7d65f1962277b8
+  source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  at: '2026-09-13T17:48:33+00:00'
+  inputs:
+  - build/falco-integrator-extended
+  - build/phoenix-extended
+  - build/prometheus-integrator-extended
+  inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+- check: positive_control
+  result: PASS
+  by: claude-v3-m164
+  artifact: evidence/control/falco-positive-control-head.log
+  sha256: bf1de55f6b947f53f691ad1f1157eda6deadadd369e628e401d661f5a49ba82d
+  source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  at: '2026-09-13T17:48:33+00:00'
+  inputs:
+  - build/falco-integrator-extended
+  - build/phoenix-extended
+  - build/prometheus-integrator-extended
+  inputs_sha256: a79ef8b6c1ebf6158184c512d72310d18a428680175eeb3a5ec9329097293f47
+- check: preflight
+  result: PASS
+  by: claude-v3-m164
+  artifact: evidence/preflight/receipt.json
+  sha256: 1e4bfe7ba9876740ab4f7b6737c69df75fd032de6d24e0b055085d7649572c63
+  source_sha: 84b9f8ce1ac1f7ae376bfc6db1ba11bc60d903f5
+  at: '2026-09-13T17:48:33+00:00'
+- check: preflight
+  result: FAIL
+  by: claude-v3-m164
+  artifact: evidence/preflight/receipt.json
+  sha256: e3fa2b06a913099541a3ec3e95d58a0b359b3e78a6ed818ecfd54a2f7751984b
+  source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+  at: '2026-09-13T18:44:57+00:00'
+  rationale: 'First run after re-pinning head to 61cf357: every local job (diff, chart-1..9,
+    go-build-phoenix-extended) PASSed but the workflow job''s doctor reported the
+    r1 checks stale against the new head; recorded honestly, superseded by the rerun
+    after re-recording the checks.'
+- check: preflight
+  result: PASS
+  by: claude-v3-m164
+  artifact: evidence/preflight/receipt.json
+  sha256: 1f7482dec2bb4b9d2a908c767d4071a8a499ba7284539a8b666e30ba1f69fff5
+  source_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+  at: '2026-09-13T18:46:53+00:00'
