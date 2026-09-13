@@ -119,6 +119,10 @@ func WireRemoteNodeExec(cfg RemoteExecConfig) error {
 	if cfg.Config == nil || cfg.Clientset == nil {
 		return fmt.Errorf("remote node-exec: nil clientset/config")
 	}
+	host, err := url.Parse(strings.TrimSpace(cfg.Config.Host))
+	if err != nil || host.Host == "" || (host.Scheme != "https" && host.Scheme != "http") {
+		return fmt.Errorf("remote node-exec: REST config host must be an absolute HTTP(S) URL")
+	}
 	if err := cfg.Agent.validate(); err != nil {
 		return err
 	}

@@ -251,6 +251,9 @@ func (r execNodeRunner) Prepare(ctx context.Context, node string) (preparedNodeR
 	if err != nil {
 		return nil, fmt.Errorf("get configured MIG agent DaemonSet %s/%s: %w", r.policy.Namespace, r.policy.DaemonSet, err)
 	}
+	if ds.UID == "" || ds.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("configured MIG agent DaemonSet %s/%s has no stable live identity", r.policy.Namespace, r.policy.DaemonSet)
+	}
 	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
 	if err != nil {
 		return nil, fmt.Errorf("configured MIG agent DaemonSet selector: %w", err)
@@ -320,7 +323,7 @@ func migAgentReady(p *corev1.Pod) bool {
 
 func (r *boundNodeRunner) Run(ctx context.Context, argv ...string) (string, error) {
 	ds, err := r.client.AppsV1().DaemonSets(r.ref.namespace).Get(ctx, r.policy.DaemonSet, metav1.GetOptions{})
-	if err != nil || ds.UID != r.ref.daemonSetUID {
+	if err != nil || ds.UID != r.ref.daemonSetUID || ds.DeletionTimestamp != nil {
 		return "", fmt.Errorf("revalidate MIG agent DaemonSet identity: uid=%q err=%v", daemonSetUID(ds), err)
 	}
 	pod, err := r.client.CoreV1().Pods(r.ref.namespace).Get(ctx, r.ref.name, metav1.GetOptions{})

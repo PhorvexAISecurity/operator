@@ -52,7 +52,15 @@ func TestWireRemoteNodeExecPublishesOnlyCompleteConfiguration(t *testing.T) {
 	pkgNodeRunner = nil
 	t.Cleanup(func() { pkgNodeRunner = old })
 	valid := RemoteExecConfig{Config: &rest.Config{Host: "https://unused.invalid"}, Clientset: fake.NewSimpleClientset(), Agent: testAgentPolicy()}
-	bad := []RemoteExecConfig{{}, {Config: valid.Config, Clientset: valid.Clientset}, {Config: valid.Config, Agent: valid.Agent}, {Clientset: valid.Clientset, Agent: valid.Agent}}
+	bad := []RemoteExecConfig{
+		{},
+		{Config: valid.Config, Clientset: valid.Clientset},
+		{Config: valid.Config, Agent: valid.Agent},
+		{Clientset: valid.Clientset, Agent: valid.Agent},
+		{Config: &rest.Config{}, Clientset: valid.Clientset, Agent: valid.Agent},
+		{Config: &rest.Config{Host: "gpu-api.internal"}, Clientset: valid.Clientset, Agent: valid.Agent},
+		{Config: &rest.Config{Host: "ftp://gpu-api.internal"}, Clientset: valid.Clientset, Agent: valid.Agent},
+	}
 	for i, cfg := range bad {
 		if err := WireRemoteNodeExec(cfg); err == nil {
 			t.Fatalf("partial config %d accepted", i)
@@ -66,6 +74,16 @@ func TestWireRemoteNodeExecPublishesOnlyCompleteConfiguration(t *testing.T) {
 	}
 	if !NodeExecWired() {
 		t.Fatal("valid config was not published")
+	}
+}
+
+func TestExecNodeRunnerRejectsDeletingDaemonSet(t *testing.T) {
+	ds, pod := testAgentObjects("agent-a")
+	now := metav1.Now()
+	ds.DeletionTimestamp = &now
+	r := execNodeRunner{client: fake.NewSimpleClientset(ds, pod), exec: noopExec, policy: testAgentPolicy()}
+	if _, err := r.Prepare(context.Background(), "node-1"); err == nil {
+		t.Fatal("deleting DaemonSet admitted during preparation")
 	}
 }
 
@@ -170,6 +188,12 @@ func TestPreparedMIGAbortsWhenBoundIdentityChangesBetweenSteps(t *testing.T) {
 		},
 		"daemonset replacement": func(ctx context.Context, c *fake.Clientset, ds *appsv1.DaemonSet, _ *corev1.Pod) error {
 			ds.UID = "replacement"
+			_, err := c.AppsV1().DaemonSets(ds.Namespace).Update(ctx, ds, metav1.UpdateOptions{})
+			return err
+		},
+		"daemonset deletion": func(ctx context.Context, c *fake.Clientset, ds *appsv1.DaemonSet, _ *corev1.Pod) error {
+			now := metav1.Now()
+			ds.DeletionTimestamp = &now
 			_, err := c.AppsV1().DaemonSets(ds.Namespace).Update(ctx, ds, metav1.UpdateOptions{})
 			return err
 		},
