@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 33
+revision: 34
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -103,19 +103,28 @@ checks:
     source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
     at: '2026-09-13T20:19:50+00:00'
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 53ba59db2ff7da7fc0cbd7e02652c5e5af7cce021fcaeb0ad7bb653443bd8a73
-    source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
-    at: '2026-09-13T20:02:13+00:00'
+    sha256: 04e8735b11a1776d0d353c520ec2a7e0b1c356dbd1c682439c6ec3beb766d53c
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T21:14:40+00:00'
+    incident_sha256: 1efce1955b95c8db0898f2d1c11eef74606bcf77acc7f43ee1b3af6dd57875e3
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1efce1955b95c8db0898f2d1c11eef74606bcf77acc7f43ee1b3af6dd57875e3
+    source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
+    at: '2026-09-13T21:14:40+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
 fix_id: T2-M120
 issues:
 - M-120
 title: Execute required local API-server tests and assert feasibility verdicts in
   CI
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -160,7 +169,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -176,10 +185,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T20:19:52+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T21:14:43+00:00'
 configuration_history:
 - at: '2026-09-13T18:54:06+00:00'
   by: codex-lead
@@ -287,13 +296,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T21:14:41+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T21:14:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M120:33:submit
-  from: claude-v3-m120
+  id: T2-M120:34:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 33
+  role: coordinator
+  kind: review
+  revision: 34
 check_history:
 - check: implementation
   result: PASS
@@ -487,3 +512,10 @@ check_history:
   sha256: f5af904f491db4696386d4d6f366a1301ec0dd7c3af7e34287a5ca3e208142cf
   source_sha: eaaf03733f92f51d01566b8493ae1b7ec49d50dc
   at: '2026-09-13T20:19:49+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 53ba59db2ff7da7fc0cbd7e02652c5e5af7cce021fcaeb0ad7bb653443bd8a73
+  source_sha: 974acccf7c437048a71d10704701dcd63ecff6b9
+  at: '2026-09-13T20:02:13+00:00'
