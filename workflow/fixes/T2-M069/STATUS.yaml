@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -83,12 +83,28 @@ checks:
     sha256: 5bb8ffd9ad90e315e7def0896784de875edcdb9843c0657fbbfa13c2d141419f
     source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
     at: '2026-09-13T19:41:15+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 59317cbd8caff87fc10b5a0d5e30edde515d0aea74fa5eee8cddeac679ba098a
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:48:58+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 677cbfaf8e8b5992df65ee40bef560b39f72cbafd84f3db2b049b55879de9869
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:48:58+00:00'
+    incident_sha256: 59317cbd8caff87fc10b5a0d5e30edde515d0aea74fa5eee8cddeac679ba098a
 fix_id: T2-M069
 issues:
 - M-69
 title: Pin AI retire and eviction deletes to the observed Pod identity
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -133,7 +149,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -149,10 +165,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-13T19:41:17+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-13T19:49:00+00:00'
 configuration_history:
 - at: '2026-09-13T19:07:13+00:00'
   by: codex-lead
@@ -208,10 +224,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T19:48:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T19:48:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T2-M069:12:submit
-  from: claude-v3-m069
+  id: T2-M069:13:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 12
+  role: coordinator
+  kind: review
+  revision: 13
