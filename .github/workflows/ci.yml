@@ -49,7 +49,8 @@ env:
 # TELEGRAM_BOT_TOKEN     bot that posts the per-stage board
 # TELEGRAM_CHAT_ID       channel id, e.g. -1001234567890
 #
-# Required repository variables for BOTH End-to-End jobs (e2e, e2e-main):
+# Required repository variables for every job that logs in to the jump host (e2e,
+# e2e-main, and the deploy job's rollout waiter):
 #   PHORVEX_SSH_KNOWN_HOSTS — the jump host's SSH host key line(s) as `ssh-keyscan -p PORT
 #                             HOST` prints them, verified out of band against the host's
 #                             own `ssh-keygen -lf` fingerprint. Written to a runner-local
@@ -678,6 +679,23 @@ jobs:
           # with no tag, which wedged every later deploy (see "Compute the next version").
           git push --atomic origin HEAD:main "v$V"
 
+      # The waiter below logs into the jump host with the same password the E2E jobs use,
+      # so it verifies the same pinned host identity (see the secrets block at the top).
+      # Gated exactly like the waiter: a merge that deploys nothing needs no ssh.
+      - name: Provision the SSH host identity
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
+        run: |
+          KH="$RUNNER_TEMP/phorvex-known-hosts"
+          umask 077
+          printf '%s\n' "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" > "$KH"
+          if [ ! -s "$KH" ] || [ -z "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" ]; then
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; ssh to the jump host is refused without a verified host key."
+            exit 1
+          fi
+          echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
+
       - name: Wait for ArgoCD to roll it out
         # Only wait for a rollout that was actually requested. Without this guard a merge
         # that pushed nothing still polled for 15 minutes and then failed, pointing at
@@ -693,6 +711,10 @@ jobs:
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
+          [ -s "${PHORVEX_SSH_KNOWN_HOSTS:-}" ] || {
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; the rollout waiter will not log in to an unverified host."
+            exit 1
+          }
           # Validate before interpolating this tag into the remote shell command.
           [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
             echo "::error::Invalid release image tag"
@@ -700,8 +722,11 @@ jobs:
           }
           # The real read-only waiter diagnoses disabled auto-sync immediately and
           # requires the exact released image plus rollout readiness. It never resumes
-          # an intentionally paused application or initiates a sync itself.
-          sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          # an intentionally paused application or initiates a sync itself. The host it
+          # logs into is verified strictly against the provisioned key: unknown or
+          # changed keys fail here rather than being accepted.
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS" \
+            -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no \
             -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V bash -s" \
             < deploy/argocd/wait-for-rollout.sh

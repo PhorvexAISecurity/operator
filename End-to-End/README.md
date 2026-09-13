@@ -101,7 +101,8 @@ export PHORVEX_SSH_KNOWN_HOSTS=~/.phorvex-e2e/known_hosts
 ```
 
 In CI the same lines live in the `PHORVEX_SSH_KNOWN_HOSTS` repository variable and are
-written to a runner-local `0600` file before any ssh. Note the two sides: `known_hosts` is
+written to a runner-local `0600` file before any ssh — in both E2E jobs and in the deploy
+job's ArgoCD rollout waiter, which logs in with the same password. Note the two sides: `known_hosts` is
 read by ssh on the **client** (runner/workstation); `ca_file` is read by curl on the **SSH
 host**. `publish-report.sh` uses the same pinned identity.
 

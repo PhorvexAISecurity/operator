@@ -263,8 +263,10 @@ client already posts to all three.
 `End-to-End/pipeline/transport.py` used to reach the console through the API-server proxy to
 the in-cluster Service (`mode: kubectl-proxy`) and "authorize" itself with `?lens=operator`.
 That is exactly the self-asserted identity this fix removed, so after the rollout the
-pipeline reached `/api/health` (public) and got `401` on everything else — PR179 aborted at
-preflight. The proxy path was never a credential: `kubectl get --raw` authenticates the
+pipeline reached `/api/health` (public) and got `401` on everything else — PR179's E2E run
+aborted at preflight (2026-09-13 14:24 UTC). PR179 itself has since merged (15:35 UTC,
+v0.4.113); the deployment observed at 15:52 UTC still ran v0.4.112 without it, and merging
+changes nothing about the caller's need for a provisioned identity. The proxy path was never a credential: `kubectl get --raw` authenticates the
 kubectl user to the **API server**, and nothing about arriving through that proxy says who is
 calling the console. No "in-cluster callers are trusted" exception was added; it would restore
 the defect in a narrower shape.
