@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -80,12 +80,19 @@ checks:
     source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
     at: '2026-09-13T22:13:30+00:00'
     incident_sha256: 8f05189b38b7898ed632b592ae827cb950f26d536e7d50246215566915855516
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: 279e35c4fb989b10b2d060356fb13e35ed996202e7c81ac307ebed16840da8e3
+    source_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+    at: '2026-09-13T22:13:41+00:00'
 fix_id: T2-M081
 issues:
 - M-81
 title: Bind privileged MIG commands to one explicitly trusted node agent
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -112,11 +119,11 @@ implementation:
   head_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/203
+  reviewed_head: 86edace71a7b232f4eb682e42f8149266cedc194
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -146,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-13T22:13:32+00:00'
+  owner: human_owner
+  action: Review https://github.com/PhorvexSecurity/operator/pull/203; owner merges/deploys,
+    lead verifies authorized live acceptance
+updated_at: '2026-09-13T22:13:46+00:00'
 configuration_history:
 - at: '2026-09-13T21:18:26+00:00'
   by: codex-lead
@@ -176,6 +183,11 @@ configuration_history:
   by: sol-m081
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-13T22:13:45+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -225,6 +237,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T22:13:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
   forced: false
 handoff:
   id: T2-M081:10:review
