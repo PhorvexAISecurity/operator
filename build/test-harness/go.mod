@@ -3,6 +3,7 @@ module github.com/r6security/phoenix-test-harness
 go 1.26.3
 
 require (
+	github.com/phorvex/metricvalidity v0.0.0-00010101000000-000000000000
 	github.com/r6security/phoenix v0.0.0-20231012172129-45300802270b
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
@@ -56,3 +57,5 @@ require (
 )
 
 replace github.com/r6security/phoenix => ../phoenix-extended
+
+replace github.com/phorvex/metricvalidity => ../metricvalidity

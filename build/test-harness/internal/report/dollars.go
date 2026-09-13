@@ -12,41 +12,82 @@ import (
 	"github.com/r6security/phoenix-test-harness/internal/core"
 )
 
-// ReadMetricsJSONL reads a metrics.jsonl file into the extended Metric schema.
-// Because every Pass-B field is omitempty, the existing 1980-row Pass-A file
-// decodes UNCHANGED (the new fields stay zero) — which is exactly what lets the
-// Pass-A-with-dollars view recompute economics over it with no re-run.
-func ReadMetricsJSONL(path string) ([]core.Metric, error) {
+// LineError records a metrics line that could not be decoded, so a corrupt or
+// truncated row is retained as a known unknown instead of vanishing.
+type LineError struct {
+	Line  int    `json:"line"`
+	Error string `json:"error"`
+}
+
+// MetricsRead is the result of reading a metrics JSONL file with the
+// measurement-validity distinction preserved: how many rows predate the validity
+// contract, and which lines could not be decoded at all.
+type MetricsRead struct {
+	Metrics     []core.Metric
+	Legacy      int
+	Undecodable []LineError
+}
+
+// ReadMetricsFile reads a metrics.jsonl file TOLERANTLY: every decodable row is
+// returned, undecodable lines are retained by line number, and rows written
+// before the measurement-validity contract are counted as legacy/unverified.
+// Nothing is inferred for a legacy row and no file is ever rewritten.
+func ReadMetricsFile(path string) (MetricsRead, error) {
+	var out MetricsRead
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	defer f.Close()
-	var out []core.Metric
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1024*1024), 8*1024*1024) // large lines (command lists)
-	for sc.Scan() {
+	for n := 1; sc.Scan(); n++ {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" {
 			continue
 		}
 		var m core.Metric
 		if err := json.Unmarshal([]byte(line), &m); err != nil {
-			return nil, fmt.Errorf("parse metric line: %w", err)
+			out.Undecodable = append(out.Undecodable, LineError{Line: n, Error: err.Error()})
+			continue
 		}
-		out = append(out, m)
+		if m.IsLegacy() {
+			out.Legacy++
+		}
+		out.Metrics = append(out.Metrics, m)
 	}
 	return out, sc.Err()
+}
+
+// ReadMetricsJSONL reads a metrics.jsonl file STRICTLY: any undecodable line is
+// an error, so an accumulating (-resume) run never appends onto a file it could
+// not fully parse. Because every Pass-B field is omitempty, the existing
+// 1980-row Pass-A file still decodes — its rows simply decode with no validity
+// block and are reported as LEGACY / UNVERIFIED.
+func ReadMetricsJSONL(path string) ([]core.Metric, error) {
+	read, err := ReadMetricsFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(read.Undecodable) > 0 {
+		first := read.Undecodable[0]
+		return nil, fmt.Errorf("parse metric line %d: %s (%d undecodable line(s) in %s)", first.Line, first.Error, len(read.Undecodable), path)
+	}
+	return read.Metrics, nil
 }
 
 // dollars.go is the PASS-A-WITH-DOLLARS view + the Pass-B economics renderer. It
 // is pure post-processing over the ONE extended Metric schema: it RE-COMPUTES
 // ROI($), Schwartau (P from each arm's rotation interval, D/R from the measured
-// time-to-action), and attack-reusability for EVERY metric row, then renders the
-// $ / Schwartau / reusability columns and an H1/H2/H3 hypothesis section with the
-// Phorvex column left TO-BE-FILLED. ZERO core change, ZERO re-execution — so the
-// existing 1980-row Pass-A matrix and a fresh Pass-B run are comparable on the
-// SAME schema.
+// time-to-action), and attack-reusability for every SCORED metric row, then
+// renders the $ / Schwartau / reusability columns and an H1/H2/H3 hypothesis
+// section with the Phorvex column left TO-BE-FILLED. ZERO core change, ZERO
+// re-execution.
+//
+// Validity rule (identical to the main report): invalid, skipped, unanchored and
+// legacy/unverified rows never enter a denominator, and an arm with an observed
+// cost of "unobserved" yields no ROI or efficiency figure at all — an unmeasured
+// arm is rendered `n/a`, never $0 or 0%.
 
 // DollarInputs carries the swappable ROI knobs + the per-arm rotation intervals so
 // the renderer recomputes economics for rows that did not have them stamped (e.g.
@@ -73,7 +114,7 @@ func DefaultRotationIntervals() map[string]float64 {
 }
 
 // dollarRow is one (scenario, defender) aggregate enriched with recomputed
-// economics over the arm's NON-control trials.
+// economics over the arm's SCORED, cost-observed trials.
 type dollarRow struct {
 	Scenario           string
 	Defender           string
@@ -90,11 +131,36 @@ type dollarRow struct {
 	TriggerAttribution string
 	CapabilityPending  bool
 	DetectorAbsent     bool
+	// Economics is true only when the arm has at least one scored, cost-observed
+	// trial; otherwise every dollar/Schwartau figure below is NOT MEASURED.
+	Economics bool
+	Validity  ArmValidity
+	// NegControlState / Total / Usable disclose the arm's negative-control census
+	// so a hypothesis verdict never implies a clean arm on a partial control.
+	NegControlState  string
+	NegControlTotal  int
+	NegControlUsable int
+}
+
+// negStateOf derives the negative-control state from a complete census. Any
+// unusable control demotes a fully-observed claim to `partial`.
+func negStateOf(total, usable, unusable int) string {
+	switch {
+	case total == 0:
+		return NegControlNotRun
+	case usable == 0:
+		return NegControlUnobserved
+	case unusable > 0:
+		return NegControlPartial
+	default:
+		return NegControlObserved
+	}
 }
 
 // recomputeEconomics builds the per-arm dollar rows from the metric stream. For
-// every row it RE-COMPUTES ROI/Schwartau/reuse from the measured fields (it does
-// NOT trust any pre-stamped nested struct — that keeps Pass-A and Pass-B identical).
+// every SCORED row it RE-COMPUTES ROI/Schwartau/reuse from the measured fields
+// (it does NOT trust any pre-stamped nested struct — that keeps Pass-A and
+// Pass-B identical), and it excludes every row that was not a measurement.
 func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 	type acc struct {
 		disruption []float64
@@ -106,15 +172,21 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		split      string
 		trigger    string
 		replaySucc []int
+		validity   ArmValidity
+		// Negative-control census, carried so a hypothesis verdict can disclose a
+		// partial or failed control instead of implying a clean arm.
+		negTotal, negUsable, negUnusable int
+		negFalseMax                      int
 	}
 	byArm := map[ArmKey]*acc{}
 	order := []ArmKey{}
-	// First pass: gather the static-baseline replay-success per scenario for reuse.
-	baselineReplay := map[string]int{} // scenario -> static baseline mean replay-success
+	// First pass: the static-baseline replay-success per scenario, over SCORED
+	// baseline rows only.
+	baselineReplay := map[string]int{}
 	baselineSeen := map[string]int{}
 	for i := range metrics {
 		m := metrics[i]
-		if m.NegativeControl || m.AnchorOnly || m.Skipped {
+		if m.AnchorOnly || m.Kind() != core.TrialOrdinary || !m.IsScored() {
 			continue
 		}
 		if m.Defender == in.BaselineDefender && m.Reuse != nil {
@@ -130,23 +202,92 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 
 	for i := range metrics {
 		m := metrics[i]
-		if m.NegativeControl || m.AnchorOnly {
+		if m.AnchorOnly {
 			continue
+		}
+		// The SAME validated interpretation the main report uses: a row's own
+		// `scored` claim never reaches a dollar figure on its own.
+		val := m.Validated()
+		v := val.Claim
+		rowKind := val.Kind()
+		if m.IsLegacy() && m.NegativeControl {
+			rowKind = core.TrialNegativeControl
 		}
 		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender}
 		a, ok := byArm[k]
 		if !ok {
-			a = &acc{}
+			a = &acc{negFalseMax: -1}
 			byArm[k] = a
 			order = append(order, k)
 		}
-		if m.Skipped {
-			a.capPending = a.capPending || m.CapabilityPending
-			if m.TriggerAttribution != "" {
-				a.trigger = m.TriggerAttribution
+
+		// The negative-control census travels with the economics view so a
+		// hypothesis verdict can disclose a partial or failed control.
+		if rowKind == core.TrialNegativeControl {
+			a.negTotal++
+			// The SHARED contract's verdict, identical to the main report's:
+			// interpretable, valid, cleanup-sound, cost observed, no sentinel.
+			if !val.NegControlUsable {
+				a.negUnusable++
+				if !v.Cleanup.Sound() {
+					a.validity.addReason("negative control did not verify its cleanup: a dirty trial cannot establish a clean arm")
+				} else {
+					a.validity.addReason("negative control was not observed: its false-move count is UNOBSERVED, not zero")
+				}
+				continue
+			}
+			a.negUsable++
+			if m.FalseDefensiveActions > a.negFalseMax {
+				a.negFalseMax = m.FalseDefensiveActions
 			}
 			continue
 		}
+		if rowKind != core.TrialOrdinary {
+			continue
+		}
+		a.validity.Emitted++
+
+		// Attribution notes are raw stamps and survive an unscored row; numbers
+		// do not.
+		a.capPending = a.capPending || m.CapabilityPending
+		if m.TriggerAttribution != "" {
+			a.trigger = m.TriggerAttribution
+		}
+
+		switch {
+		case val.Legacy:
+			a.validity.Legacy++
+			a.validity.addReason("legacy/unverified row: excluded from every $ and Schwartau denominator")
+			continue
+		case val.Unverified:
+			a.validity.Unverified++
+			a.validity.addReason(val.Rejections...)
+			continue
+		case val.Status() == core.MeasurementInvalid:
+			a.validity.Invalid++
+			a.validity.addReason(val.Reasons()...)
+			continue
+		case val.Status() == core.MeasurementSkipped:
+			a.validity.Skipped++
+			a.validity.addReason(val.Reasons()...)
+			continue
+		case !val.Scorable:
+			a.validity.UnscoredValid++
+			a.validity.addReason(v.UnscoredReason)
+			a.validity.addReason(val.Rejections...)
+			continue
+		}
+		if !v.Cleanup.Complete {
+			a.validity.CleanupFailed++
+		}
+		if !val.CostUsable {
+			// A scored disruption with an UNOBSERVED cost cannot produce an ROI or
+			// efficiency number; the row is retained as a counted exclusion.
+			a.validity.CostUnobserved++
+			a.validity.addReason("defensive cost UNOBSERVED: excluded from ROI/Schwartau (unknown cost must not produce a favorable ratio)")
+			continue
+		}
+		a.validity.Scored++
 		a.disruption = append(a.disruption, m.DisruptionVsOracle)
 		a.acts = append(a.acts, float64(m.DefensiveActions))
 		a.tta = append(a.tta, m.TimeToActionSeconds)
@@ -156,10 +297,6 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		if m.SplitOracle != "" {
 			a.split = m.SplitOracle
 		}
-		if m.TriggerAttribution != "" {
-			a.trigger = m.TriggerAttribution
-		}
-		a.capPending = a.capPending || m.CapabilityPending
 		if m.Schwartau != nil && m.Schwartau.DetectionAbsent {
 			a.detAbsent = true
 		}
@@ -179,16 +316,26 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			Scenario:           k.Scenario,
 			Defender:           k.Defender,
 			Trials:             len(a.disruption),
-			MeanDisruption:     core.Mean(a.disruption),
-			MeanDefensiveActs:  core.Mean(a.acts),
-			MeanTimeToAction:   core.Mean(a.tta),
 			RotationInterval:   in.RotationIntervals[k.Defender],
 			MTDEffect:          a.mtd,
 			SplitOracle:        a.split,
 			TriggerAttribution: a.trigger,
 			CapabilityPending:  a.capPending,
 			DetectorAbsent:     a.detAbsent,
+			Economics:          len(a.disruption) > 0,
+			Validity:           a.validity,
+			NegControlState:    negStateOf(a.negTotal, a.negUsable, a.negUnusable),
+			NegControlTotal:    a.negTotal,
+			NegControlUsable:   a.negUsable,
 		}
+		if !row.Economics {
+			// Nothing was measured for this arm: publish no dollar figure at all.
+			rows = append(rows, row)
+			continue
+		}
+		row.MeanDisruption = core.Mean(a.disruption)
+		row.MeanDefensiveActs = core.Mean(a.acts)
+		row.MeanTimeToAction = core.Mean(a.tta)
 		// ROI($): recomputed from the measured mean disruption + mean defensive acts.
 		row.ROI = core.ComputeROI(in.ROI, row.MeanDisruption, int(round(row.MeanDefensiveActs)))
 		// Schwartau: P = rotation interval; D/R from the measured time-to-action.
@@ -223,6 +370,7 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	var b strings.Builder
 	b.WriteString("# Phoenix / Phorvex -- Dollars, Schwartau & Attack-Reusability View\n\n")
 	b.WriteString("Pure post-processing over the SAME extended Metric schema (ZERO re-execution). ROI($) is recomputed from the swappable knobs; Schwartau P = the arm's rotation interval, D/R = measured time-to-action; attack-reusability anchors replay-success to the static baseline.\n\n")
+	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only SCORED trials with an OBSERVED defensive cost enter these figures. Invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
 
 	b.WriteString("## Swappable $ inputs (clearly-labeled defaults)\n\n")
 	b.WriteString(fmt.Sprintf("- **gpuCount** = %d (a single DGX-class node)\n", in.ROI.GpuCount))
@@ -234,17 +382,22 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString(fmt.Sprintf("- Derived **GPU-overhead $/yr saved** = gpuCount*$/hr*8760*overhead = **$%.0f**\n\n", gpuSaved))
 
 	b.WriteString("## Per-arm dollars / Schwartau / reusability\n\n")
-	b.WriteString("| Scenario | Defender | Disrupt% | MTDEffect | Trigger | SecPerCost($) | DefenseCost$/yr | Schwartau P/D/R (s) | P>D+R | Replay succ | ReuseRedux% | CapPending |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Scenario | Defender | ScoredTrials | Disrupt% | MTDEffect | Trigger | SecPerCost($) | DefenseCost$/yr | Schwartau P/D/R (s) | P>D+R | Replay succ | ReuseRedux% | CapPending |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rows {
-		sch := "n/a"
+		if !r.Economics {
+			b.WriteString(fmt.Sprintf("| %s | %s | 0 | n/a | %s | %s | n/a | n/a | n/a | n/a | n/a | n/a | %v |\n",
+				r.Scenario, r.Defender, dash(r.MTDEffect), dash(r.TriggerAttribution), r.CapabilityPending))
+			continue
+		}
+		sch := ""
 		if r.Schwartau.DetectionAbsent {
 			sch = fmt.Sprintf("%.0f/ABSENT/%.1f", r.Schwartau.ProtectionTimeSeconds, r.Schwartau.ReactionTimeSeconds)
 		} else {
 			sch = fmt.Sprintf("%.0f/%.1f/%.1f", r.Schwartau.ProtectionTimeSeconds, r.Schwartau.DetectionTimeSeconds, r.Schwartau.ReactionTimeSeconds)
 		}
-		b.WriteString(fmt.Sprintf("| %s | %s | %.0f%% | %s | %s | $%.0f | $%.0f | %s | %v | %d | %.0f%% | %v |\n",
-			r.Scenario, r.Defender, r.MeanDisruption*100,
+		b.WriteString(fmt.Sprintf("| %s | %s | %d | %.0f%% | %s | %s | $%.0f | $%.0f | %s | %v | %d | %.0f%% | %v |\n",
+			r.Scenario, r.Defender, r.Trials, r.MeanDisruption*100,
 			dash(r.MTDEffect), dash(r.TriggerAttribution),
 			r.ROI.SecurityPerCostDollars, r.ROI.AnnualDefenseCostDollars,
 			sch, r.Schwartau.SchwartauPositive,
@@ -252,23 +405,43 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	}
 	b.WriteString("\n")
 
+	b.WriteString("## Economics measurement validity\n\n")
+	b.WriteString("| Scenario | Defender | Accounting | Reasons |\n|---|---|---|---|\n")
+	for _, r := range rows {
+		v := r.Validity
+		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+			r.NegControlState, r.NegControlUsable, r.NegControlTotal)
+		if !v.Complete() {
+			acct = "INCOMPLETE " + acct
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", r.Scenario, r.Defender, acct, truncate(strings.Join(v.Reasons, " · "), 260)))
+	}
+	b.WriteString("\n")
+
 	b.WriteString(renderHypotheses(rows, in, ciLevel))
-	b.WriteString("\nEvery number above is recomputed from the raw metrics (DisruptionVsOracle, TimeToActionSeconds, DefensiveActions) + the swappable $ knobs -- no re-run.\n")
+	b.WriteString("\nEvery number above is recomputed from the raw metrics (DisruptionVsOracle, TimeToActionSeconds, DefensiveActions) of SCORED trials + the swappable $ knobs -- no re-run.\n")
 	return b.String()
 }
 
 // renderHypotheses evaluates H1/H2/H3 (defined transparently from the rotation-vs-
 // static thesis; no pre-registered Part 9 doc exists in the repo) and leaves the
-// Phorvex (d-phorvex-slot) column TO-BE-FILLED.
+// Phorvex (d-phorvex-slot) column TO-BE-FILLED. A hypothesis with no measured
+// data is UNSCORED, never FAIL and never PASS.
 func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string {
 	var b strings.Builder
 	b.WriteString("## Hypotheses H1 / H2 / H3 (PHORVEX Part 9 -- defined transparently from the rotation-vs-static thesis; no pre-registered doc exists in the repo)\n\n")
+	b.WriteString("Each verdict is evaluated over SCORED, cost-observed arms only. UNSCORED means no valid measurement existed — it is neither a pass nor a measured failure.\n\n")
+	b.WriteString(renderNegControlCaveat(rows))
 
 	rotating := map[string]bool{"d-r6blindtimer": true, "d-randomequal": true, "d-fullphoenix": true}
 
 	// H1 (Dwell-bound): rotating arms bound PERSISTENCE-oracle success below static.
 	var rotDisrupt, staticDisrupt []float64
 	for _, r := range rows {
+		if !r.Economics {
+			continue
+		}
 		if rotating[r.Defender] {
 			rotDisrupt = append(rotDisrupt, r.MeanDisruption)
 		}
@@ -277,24 +450,23 @@ func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string
 		}
 	}
 	h1 := core.ConfidenceInterval(rotDisrupt, ciLevel)
-	h1Pass := h1.N > 0 && h1.CILow > 0
-	b.WriteString(fmt.Sprintf("- **H1 (Dwell-bound)**: rotating arms' mean persistence-disruption = %.0f%% (95%% CI [%.0f, %.0f]) vs static %.0f%%. PASS iff CI lower-bound > 0 -> **%s**.\n",
-		h1.Mean*100, clamp01(h1.CILow)*100, clamp01(h1.CIHigh)*100, core.Mean(staticDisrupt)*100, passFail(h1Pass)))
+	b.WriteString(fmt.Sprintf("- **H1 (Dwell-bound)**: rotating arms' mean persistence-disruption = %s (CI %s) over %d scored arm(s) vs static %s. PASS iff CI lower-bound > 0 -> **%s**.\n",
+		pctOrNA(h1), pctBandOrNA(h1), h1.N, meanPctOrNA(staticDisrupt), verdict(h1.N, h1.N > 0 && h1.CILow > 0)))
 
 	// H2 (In-request invariance): in-request disruption CI brackets 0 for MTD arms
 	// AND attributed detector-absent/receiver-only/capability-pending.
 	absentCount, total := 0, 0
 	for _, r := range rows {
-		if rotating[r.Defender] && r.DetectorAbsent {
+		if !r.Economics || !rotating[r.Defender] {
+			continue
+		}
+		total++
+		if r.DetectorAbsent {
 			absentCount++
 		}
-		if rotating[r.Defender] {
-			total++
-		}
 	}
-	h2Pass := total > 0 && absentCount > 0 // honest negative: in-request defeated by ABSENT detectors
-	b.WriteString(fmt.Sprintf("- **H2 (In-request invariance)**: %d/%d rotating-arm rows are attributed detector-absent/receiver-only (MTD-CANNOT-HELP in-request). PASS iff in-request disruption brackets 0 AND attribution is detector-absent/receiver-only/capability-pending -> **%s** (the honest negative the AI-MTD-AUDIT predicts).\n",
-		absentCount, total, passFail(h2Pass)))
+	b.WriteString(fmt.Sprintf("- **H2 (In-request invariance)**: %d/%d SCORED rotating-arm rows are attributed detector-absent/receiver-only (MTD-CANNOT-HELP in-request). PASS iff in-request disruption brackets 0 AND attribution is detector-absent/receiver-only/capability-pending -> **%s** (the honest negative the AI-MTD-AUDIT predicts).\n",
+		absentCount, total, verdict(total, total > 0 && absentCount > 0)))
 
 	// H3 (Trigger-gated neutralization + reuse): for trigger-supplied scenarios,
 	// d-fullphoenix persistence-disruption > 0 AND rotating arms reduce reuse.
@@ -304,6 +476,9 @@ func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string
 	// stays agnostic to which scenarios are plugged in (generic-core invariant).
 	var fpDisrupt, reuseRedux []float64
 	for _, r := range rows {
+		if !r.Economics {
+			continue
+		}
 		if r.TriggerAttribution == core.TriggerHarnessInjected && r.Defender == "d-fullphoenix" {
 			fpDisrupt = append(fpDisrupt, r.MeanDisruption)
 		}
@@ -313,11 +488,44 @@ func renderHypotheses(rows []dollarRow, in DollarInputs, ciLevel float64) string
 	}
 	fpCI := core.ConfidenceInterval(fpDisrupt, ciLevel)
 	reuseCI := core.ConfidenceInterval(reuseRedux, ciLevel)
-	h3Pass := fpCI.N > 0 && fpCI.CILow > 0
-	b.WriteString(fmt.Sprintf("- **H3 (Trigger-gated neutralization + reuse)**: for trigger-supplied scenarios, d-fullphoenix persistence-disruption = %.0f%% (CI [%.0f, %.0f]); rotating-arm reuse-reduction mean = %.0f%%. PASS iff fullphoenix CI>0 AND reuse-reduction>0 -> **%s**.\n",
-		fpCI.Mean*100, clamp01(fpCI.CILow)*100, clamp01(fpCI.CIHigh)*100, clamp01(reuseCI.Mean)*100, passFail(h3Pass)))
+	b.WriteString(fmt.Sprintf("- **H3 (Trigger-gated neutralization + reuse)**: for trigger-supplied scenarios, d-fullphoenix persistence-disruption = %s (CI %s) over %d scored arm(s); rotating-arm reuse-reduction mean = %s. PASS iff fullphoenix CI>0 AND reuse-reduction>0 -> **%s**.\n",
+		pctOrNA(fpCI), pctBandOrNA(fpCI), fpCI.N, pctOrNA(reuseCI), verdict(fpCI.N, fpCI.N > 0 && fpCI.CILow > 0)))
 
 	b.WriteString("\n**Phorvex column (d-phorvex-slot): TO-BE-FILLED** -- the slot arm currently skips-with-note; the real Phorvex defender drops in later as one file and these H1/H2/H3 rows fill its comparison column with zero harness changes.\n")
+	return b.String()
+}
+
+// renderNegControlCaveat states, before any verdict, which scored arms lack a
+// fully observed negative control. A hypothesis about defensive value rests on
+// the false-move rate being measured; where it is not, the verdict below is a
+// disruption claim only and must not be read as "no false positives".
+func renderNegControlCaveat(rows []dollarRow) string {
+	var partial, missing []string
+	for _, r := range rows {
+		if !r.Economics {
+			continue
+		}
+		arm := r.Scenario + "/" + r.Defender
+		switch r.NegControlState {
+		case NegControlObserved:
+		case NegControlPartial:
+			partial = append(partial, fmt.Sprintf("%s (%d of %d observed)", arm, r.NegControlUsable, r.NegControlTotal))
+		default:
+			missing = append(missing, fmt.Sprintf("%s (%s)", arm, r.NegControlState))
+		}
+	}
+	if len(partial) == 0 && len(missing) == 0 {
+		return "**Negative controls**: every scored arm below has a fully observed negative control.\n\n"
+	}
+	var b strings.Builder
+	b.WriteString("**Negative controls (verdict caveat)**: the false-move rate is NOT fully measured for every scored arm, so no verdict below establishes an absence of false defensive moves.\n")
+	if len(partial) > 0 {
+		b.WriteString(fmt.Sprintf("- PARTIALLY observed: %s\n", strings.Join(partial, "; ")))
+	}
+	if len(missing) > 0 {
+		b.WriteString(fmt.Sprintf("- NOT observed: %s\n", strings.Join(missing, "; ")))
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -342,11 +550,37 @@ func dash(s string) string {
 	return s
 }
 
-func passFail(ok bool) string {
+// verdict is the three-state hypothesis verdict: an empty sample is UNSCORED,
+// never a measured PASS or FAIL.
+func verdict(n int, ok bool) string {
+	if n == 0 {
+		return "UNSCORED (no valid measurement)"
+	}
 	if ok {
 		return "PASS"
 	}
 	return "FAIL"
+}
+
+func pctOrNA(a core.Aggregate) string {
+	if a.N == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.0f%%", clamp01(a.Mean)*100)
+}
+
+func pctBandOrNA(a core.Aggregate) string {
+	if a.N == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("[%.0f, %.0f]", clamp01(a.CILow)*100, clamp01(a.CIHigh)*100)
+}
+
+func meanPctOrNA(xs []float64) string {
+	if len(xs) == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.0f%%", core.Mean(xs)*100)
 }
 
 func round(x float64) float64 {

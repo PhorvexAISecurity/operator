@@ -20,6 +20,11 @@ ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /workspace
 COPY build/phoenix-extended/ build/phoenix-extended/
+# The console reads the harness metrics stream, so the phorvex module replaces
+# github.com/phorvex/metricvalidity with ../build/metricvalidity — the shared,
+# dependency-free measurement-validity contract. A replace target missing from
+# the build context fails `go mod download` outright.
+COPY build/metricvalidity/ build/metricvalidity/
 COPY phorvex/go.mod phorvex/go.mod
 COPY phorvex/go.sum phorvex/go.sum
 WORKDIR /workspace/phorvex
@@ -54,11 +59,13 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 # (evidence.go Catalog() runs `harness -config <cfg> -list`). Without it the handler returns
 # {"items":null} and the per-app attack launcher can only offer the live attacks, never the
 # scenario catalogue. The harness is its OWN Go module (github.com/r6security/phoenix-test-harness)
-# with `replace github.com/r6security/phoenix => ../phoenix-extended`, so both directories must
-# sit side by side for that relative replace to resolve.
+# with `replace github.com/r6security/phoenix => ../phoenix-extended` AND
+# `replace github.com/phorvex/metricvalidity => ../metricvalidity`, so all three directories must
+# sit side by side for those relative replaces to resolve.
 FROM golang:1.26 AS harnessbuild
 WORKDIR /workspace
 COPY build/phoenix-extended/ build/phoenix-extended/
+COPY build/metricvalidity/ build/metricvalidity/
 COPY build/test-harness/ build/test-harness/
 WORKDIR /workspace/build/test-harness
 # CGO-free + static so it runs on the distroless/static final base next to the console binary.

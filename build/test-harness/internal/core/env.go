@@ -181,10 +181,36 @@ func (e *Env) EnsureNamespace(ctx context.Context) error {
 	return nil
 }
 
+// CleanupResidue names owned objects still present after the deletes were
+// accepted. Background deletion is asynchronous, and a finalizer can hold an
+// object indefinitely, so "the API accepted my delete" is NOT proof of absence.
+type CleanupResidue struct {
+	Kind string
+	Name string
+	// Terminating is true when the object has a deletion timestamp but is still
+	// held (typically by a finalizer).
+	Terminating bool
+}
+
+func (r CleanupResidue) String() string {
+	state := "present"
+	if r.Terminating {
+		state = "terminating (held, likely by a finalizer)"
+	}
+	return fmt.Sprintf("%s/%s %s", r.Kind, r.Name, state)
+}
+
 // CleanupOwned deletes every harness-owned object of the common kinds in the
-// sandbox namespace by label selector. Idempotent and safe to re-run. It does
-// NOT delete the namespace itself (so a re-run can reuse it cheaply); pass
-// deleteNamespace=true at final teardown to remove it.
+// sandbox namespace by label selector, then VERIFIES they are gone. Idempotent
+// and safe to re-run. It does NOT delete the namespace itself (so a re-run can
+// reuse it cheaply); pass deleteNamespace=true at final teardown to remove it.
+//
+// It never returns nil on a failure it observed. Every API error across every
+// kind is aggregated (one failing kind does not mask the others), and residue
+// that survives the deletes is reported as an error too, because a later trial
+// must not reuse a namespace whose previous contents are still there. It only
+// ever touches objects carrying this harness's owned label in the configured
+// sandbox namespace.
 func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	if err := e.Guard.AssertMutationAllowed(e.Config.Namespace); err != nil {
 		return err
@@ -192,10 +218,16 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	ns := e.Config.Namespace
 	sel := OwnedSelector()
 	lo := metav1.ListOptions{LabelSelector: sel}
+	var problems []string
+	record := func(format string, args ...any) {
+		msg := fmt.Sprintf(format, args...)
+		e.Log.Logf("cleanup: %s", msg)
+		problems = append(problems, msg)
+	}
 	delColl := func(kind string, fn func() error) {
 		e.Log.Command(fmt.Sprintf("kubectl delete %s -n %s -l %s", kind, ns, sel))
 		if err := fn(); err != nil && !apierrors.IsNotFound(err) {
-			e.Log.Logf("cleanup %s: %v", kind, err)
+			record("delete %s: %v", kind, err)
 		}
 	}
 	dp := metav1.DeletePropagationBackground
@@ -207,11 +239,19 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 	delColl("deployments", func() error {
 		return e.Kube.AppsV1().Deployments(ns).DeleteCollection(ctx, dopts, lo)
 	})
-	// Services do not support DeleteCollection; list+delete.
-	if svcs, err := e.Kube.CoreV1().Services(ns).List(ctx, lo); err == nil {
+	// Services do not support DeleteCollection; list+delete. BOTH the list and
+	// each delete are failures worth reporting: a list error means we do not even
+	// know what is left.
+	if svcs, err := e.Kube.CoreV1().Services(ns).List(ctx, lo); err != nil {
+		if !apierrors.IsNotFound(err) {
+			record("list services: %v", err)
+		}
+	} else {
 		for i := range svcs.Items {
 			e.Log.Command(fmt.Sprintf("kubectl delete service %s -n %s", svcs.Items[i].Name, ns))
-			_ = e.Kube.CoreV1().Services(ns).Delete(ctx, svcs.Items[i].Name, dopts)
+			if err := e.Kube.CoreV1().Services(ns).Delete(ctx, svcs.Items[i].Name, dopts); err != nil && !apierrors.IsNotFound(err) {
+				record("delete service %s: %v", svcs.Items[i].Name, err)
+			}
 		}
 	}
 	delColl("configmaps", func() error {
@@ -231,13 +271,163 @@ func (e *Env) CleanupOwned(ctx context.Context, deleteNamespace bool) error {
 		return e.Kube.RbacV1().Roles(ns).DeleteCollection(ctx, dopts, lo)
 	})
 
+	// Verify absence rather than trusting the accepted deletes — but WAIT for it.
+	// Kubernetes deletion is asynchronous by design: a Pod that the API accepted
+	// a delete for is normally still listed, terminating, for a short grace
+	// period. A one-shot check right after the delete would call that ordinary,
+	// successful deletion a failure. So poll until the residue clears or the
+	// budget runs out; only what is STILL there at the deadline is a problem, and
+	// its terminating/finalizer state is reported rather than guessed at.
+	residue, verifyErrs := e.awaitOwnedResidueGone(ctx, lo)
+	problems = append(problems, verifyErrs...)
+	for _, r := range residue {
+		record("owned object still present when the cleanup budget expired: %s", r)
+	}
+
 	if deleteNamespace {
 		e.Log.Command(fmt.Sprintf("kubectl delete namespace %s", ns))
 		if err := e.Kube.CoreV1().Namespaces().Delete(ctx, ns, dopts); err != nil && !apierrors.IsNotFound(err) {
-			return err
+			record("delete namespace %s: %v", ns, err)
+		} else if gone, state, err := e.awaitNamespaceGone(ctx, ns); err != nil {
+			// Absence that cannot be observed must not be claimed.
+			record("verify namespace %s: %v", ns, err)
+		} else if !gone {
+			record("namespace %s still present when the cleanup budget expired: %s", ns, state)
 		}
 	}
+
+	if len(problems) > 0 {
+		return fmt.Errorf("cleanup of owned objects in namespace %s did not verify (%d problem(s)): %s",
+			ns, len(problems), strings.Join(problems, "; "))
+	}
 	return nil
+}
+
+// residuePollInterval is how often the verification re-lists while waiting for
+// an accepted deletion to actually complete.
+const residuePollInterval = 25 * time.Millisecond
+
+// DefaultResidueWait bounds the wait for accepted deletions to complete when the
+// caller supplied a context with no deadline of its own.
+const DefaultResidueWait = 30 * time.Second
+
+// residueDeadline is the instant the verification stops waiting: the caller's
+// deadline when it has one, otherwise DefaultResidueWait from now. Either way it
+// is BOUNDED — the harness never waits forever for a finalizer to release.
+func residueDeadline(ctx context.Context) time.Time {
+	if d, ok := ctx.Deadline(); ok {
+		return d
+	}
+	return time.Now().Add(DefaultResidueWait)
+}
+
+// awaitOwnedResidueGone polls until no owned object remains, the budget expires
+// or the context ends. It returns whatever is still there at that point, plus
+// any error that prevented the check.
+//
+// This preserves the asynchronous-deletion and finalizer uncertainty the review
+// asked for: a normal terminating Pod that disappears well within the budget is
+// a SUCCESS, while an object a finalizer still holds at the deadline is reported
+// with that state and never treated as absent.
+func (e *Env) awaitOwnedResidueGone(ctx context.Context, lo metav1.ListOptions) ([]CleanupResidue, []string) {
+	deadline := residueDeadline(ctx)
+	for {
+		residue, errs := e.ownedResidue(ctx, lo)
+		if len(errs) > 0 {
+			// The check itself failed; retrying cannot turn an unreadable kind
+			// into an observation of absence.
+			return residue, errs
+		}
+		if len(residue) == 0 {
+			return nil, nil
+		}
+		if !time.Now().Before(deadline) {
+			return residue, nil
+		}
+		select {
+		case <-ctx.Done():
+			return residue, nil
+		case <-time.After(residuePollInterval):
+		}
+	}
+}
+
+// awaitNamespaceGone polls until the sandbox namespace is actually gone, the
+// budget expires or the context ends. An accepted namespace delete is not
+// absence: a namespace routinely sits in Terminating while its contents drain,
+// and a finalizer can hold it indefinitely.
+func (e *Env) awaitNamespaceGone(ctx context.Context, ns string) (bool, string, error) {
+	deadline := residueDeadline(ctx)
+	for {
+		got, err := e.Kube.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
+		switch {
+		case apierrors.IsNotFound(err):
+			return true, "", nil
+		case err != nil:
+			return false, "", err
+		}
+		state := "present"
+		if got.DeletionTimestamp != nil {
+			state = fmt.Sprintf("terminating since %s (held, likely by a finalizer: %v)",
+				got.DeletionTimestamp.Time.UTC().Format(time.RFC3339), got.Finalizers)
+		}
+		if !time.Now().Before(deadline) {
+			return false, state, nil
+		}
+		select {
+		case <-ctx.Done():
+			return false, state, nil
+		case <-time.After(residuePollInterval):
+		}
+	}
+}
+
+// ownedResidue lists the owned objects that are still present, and any error
+// that prevented the check. An unreadable kind is itself a problem: absence that
+// cannot be observed must not be claimed.
+func (e *Env) ownedResidue(ctx context.Context, lo metav1.ListOptions) ([]CleanupResidue, []string) {
+	ns := e.Config.Namespace
+	var out []CleanupResidue
+	var errs []string
+	add := func(kind, name string, deletionTS *metav1.Time) {
+		out = append(out, CleanupResidue{Kind: kind, Name: name, Terminating: deletionTS != nil})
+	}
+	check := func(kind string, fn func() error) {
+		if err := fn(); err != nil && !apierrors.IsNotFound(err) {
+			errs = append(errs, fmt.Sprintf("verify %s: %v", kind, err))
+		}
+	}
+	check("pods", func() error {
+		l, err := e.Kube.CoreV1().Pods(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("pod", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("deployments", func() error {
+		l, err := e.Kube.AppsV1().Deployments(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("deployment", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	check("services", func() error {
+		l, err := e.Kube.CoreV1().Services(ns).List(ctx, lo)
+		if err != nil {
+			return err
+		}
+		for i := range l.Items {
+			add("service", l.Items[i].Name, l.Items[i].DeletionTimestamp)
+		}
+		return nil
+	})
+	return out, errs
 }
 
 // ExecResult mirrors safety.ExecResult so callers can use it without importing

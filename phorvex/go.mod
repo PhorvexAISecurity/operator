@@ -9,6 +9,7 @@ go 1.26.1
 // modify that module (a consumer-side replace never mutates the dependency).
 require (
 	github.com/go-logr/logr v1.4.3
+	github.com/phorvex/metricvalidity v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.22.0
 	github.com/r6security/phoenix v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.34.0
@@ -88,3 +89,5 @@ require (
 )
 
 replace github.com/r6security/phoenix => ../build/phoenix-extended
+
+replace github.com/phorvex/metricvalidity => ../build/metricvalidity

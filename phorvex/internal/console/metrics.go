@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/phorvex/metricvalidity"
 )
 
 // metricRow mirrors the harness core.Metric fields the console needs (a permissive subset;
@@ -35,6 +37,10 @@ type metricRow struct {
 	ObservedState        string   `json:"observedState"`
 	MeanRotationInterval float64  `json:"meanRotationIntervalSeconds"`
 	AttackerDwellSeconds float64  `json:"attackerDwellSeconds"`
+	// TimeToActionSeconds is decoded because the shared contract corroborates a
+	// claimed cost observation against it: a "measured" cost with a non-finite
+	// time-to-action is a contradiction, not a measurement.
+	TimeToActionSeconds float64 `json:"timeToActionSeconds"`
 	// AI attack-surface decode (attack-surface, NOT PX defense efficacy):
 	AtlasIDs    []string `json:"atlasIds"`
 	OwaspIDs    []string `json:"owaspIds"`
@@ -50,6 +56,90 @@ type metricRow struct {
 		ReplayAttempts             int `json:"replayAttempts"`
 		StaticBaselineReplaySuccess int `json:"staticBaselineReplaySuccess"`
 	} `json:"reuse"`
+	// Validity is the SHARED harness measurement-validity contract, decoded whole.
+	// It is nil for rows written before the contract existed (LEGACY/UNVERIFIED).
+	//
+	// This is the real type, not a local mirror of it. A hand-written mirror
+	// silently omitted the fields the producer had begun checking — the baseline
+	// evidence, the retained cleanup steps — and certified rows the harness
+	// refuses. There is nothing left to keep in sync.
+	Validity *metricvalidity.Validity `json:"validity"`
+}
+
+// verdict is THE validated interpretation, identical to the one the harness and
+// every other reader apply, corroborated against this row's own numbers.
+func (m metricRow) verdict() metricvalidity.Verdict {
+	return metricvalidity.Evaluate(m.Validity, metricvalidity.Observations{
+		Trial:                 m.Trial,
+		Disruption:            m.DisruptionVsOracle,
+		DefensiveActions:      m.DefensiveActions,
+		FalseDefensiveActions: m.FalseDefensiveActions,
+		TimeToActionSeconds:   m.TimeToActionSeconds,
+		AttackerDwellSeconds:  m.AttackerDwellSeconds,
+	})
+}
+
+// legacy reports a row written before the validity contract.
+func (m metricRow) legacy() bool { return m.Validity == nil }
+
+// scorable reports whether this row's comparison may be published.
+func (m metricRow) scorable() bool { return m.verdict().Scorable }
+
+// excluded reports a row that must not reach a CERTIFIED aggregate. That is
+// every row the contract refuses AND every legacy row: a pre-contract row
+// carries no evidence that it measured anything, so blending it into a current
+// score or efficiency mean would launder unverified history into a fresh
+// measurement. Legacy rows stay readable and counted (see legacy()); they are
+// simply not certified.
+func (m metricRow) excluded() bool { return !m.scorable() }
+
+// costUsable reports whether DefensiveActions is an observation. `-1` is the
+// harness's UNOBSERVED sentinel and must never be averaged as a cost.
+func (m metricRow) costUsable() bool { return m.verdict().CostUsable }
+
+// negControlUsable reports whether this negative-control row establishes a
+// MEASURED false-move count.
+func (m metricRow) negControlUsable() bool { return m.verdict().NegControlUsable }
+
+// NegControlCensus is the complete negative-control accounting for one arm, so a
+// panel can report `partial` rather than implying a clean arm from a subset.
+type NegControlCensus struct {
+	Total  int    `json:"total"`
+	Usable int    `json:"usable"`
+	State  string `json:"state"` // not-run | unobserved | partial | observed
+	// MaxFalseMoves is -1 unless State == "observed".
+	MaxFalseMoves int `json:"maxFalseMoves"`
+}
+
+// negControlCensus builds the census for one (scenario, defender) arm.
+func negControlCensus(rows []metricRow, scenario, defender string) NegControlCensus {
+	c := NegControlCensus{MaxFalseMoves: -1}
+	best := -1
+	for _, m := range rows {
+		if m.Scenario != scenario || m.Defender != defender || !m.NegativeControl {
+			continue
+		}
+		c.Total++
+		if !m.negControlUsable() {
+			continue
+		}
+		c.Usable++
+		if m.FalseDefensiveActions > best {
+			best = m.FalseDefensiveActions
+		}
+	}
+	switch {
+	case c.Total == 0:
+		c.State = "not-run"
+	case c.Usable == 0:
+		c.State = "unobserved"
+	case c.Usable < c.Total:
+		c.State = "partial"
+	default:
+		c.State = "observed"
+		c.MaxFalseMoves = best
+	}
+	return c
 }
 
 var markerRe = regexp.MustCompile(`\[([a-z0-9-]+)=?([^\]]*)\]`)
@@ -85,7 +175,12 @@ func readMetrics(path string) ([]metricRow, bool) {
 	return out, true
 }
 
-// fixedTrials drops negative-control + adaptive rows, keeping the headline trials per arm.
+// fixedTrials drops negative-control + adaptive rows, keeping the headline
+// trials per arm, and drops every row that is not a CERTIFIED measurement. A
+// refused row is an infrastructure failure, an unanchored comparison or an
+// unresolved cleanup; a legacy row predates the contract entirely. Publishing
+// either as a current score would present something that was never measured as
+// a defensive result.
 func fixedTrials(rows []metricRow, scenario, defender string) []metricRow {
 	maxFixed := -1
 	for _, m := range rows {
@@ -101,7 +196,23 @@ func fixedTrials(rows []metricRow, scenario, defender string) []metricRow {
 		if maxFixed >= 0 && m.Trial > maxFixed {
 			continue // adaptive row
 		}
+		if m.excluded() {
+			continue // refused by the validity contract
+		}
 		out = append(out, m)
+	}
+	return out
+}
+
+// costObservedTrials narrows a trial set to the rows whose defensive-action
+// count is an OBSERVATION, so an unobserved cost never enters a cost mean or a
+// favorable efficiency ratio.
+func costObservedTrials(rows []metricRow) []metricRow {
+	var out []metricRow
+	for _, m := range rows {
+		if m.costUsable() {
+			out = append(out, m)
+		}
 	}
 	return out
 }

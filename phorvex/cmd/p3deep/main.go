@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/phorvex/metricvalidity"
 )
 
 type Metric struct {
@@ -34,7 +36,55 @@ type Metric struct {
 	Skipped              bool    `json:"skipped"`
 	ObservedState        string  `json:"observedState"`
 	MeanRotationInterval float64 `json:"meanRotationIntervalSeconds"`
+	// FalseDefensiveActions / TimeToActionSeconds / AttackerDwellSeconds are
+	// decoded because the shared contract corroborates the validity claim
+	// against them.
+	FalseDefensiveActions int     `json:"falseDefensiveActions"`
+	TimeToActionSeconds   float64 `json:"timeToActionSeconds"`
+	AttackerDwellSeconds  float64 `json:"attackerDwellSeconds"`
+	// Validity is the SHARED harness measurement-validity contract, decoded
+	// whole; nil for rows written before it existed (LEGACY/UNVERIFIED).
+	//
+	// This is the real type, not a local mirror: a mirror omitted the very
+	// fields the producer checks and certified rows the harness refuses.
+	Validity *metricvalidity.Validity `json:"validity"`
 }
+
+// verdict is THE validated interpretation, identical to the one the harness and
+// every other reader apply, corroborated against this row's own numbers.
+func (m Metric) verdict() metricvalidity.Verdict {
+	return metricvalidity.Evaluate(m.Validity, metricvalidity.Observations{
+		Trial:                 m.Trial,
+		Disruption:            m.DisruptionVsOracle,
+		DefensiveActions:      m.DefensiveActions,
+		FalseDefensiveActions: m.FalseDefensiveActions,
+		TimeToActionSeconds:   m.TimeToActionSeconds,
+		AttackerDwellSeconds:  m.AttackerDwellSeconds,
+	})
+}
+
+// legacy reports a row written before the validity contract.
+func (m Metric) legacy() bool { return m.Validity == nil }
+
+// scorable reports whether this row's comparison may enter a score.
+func (m Metric) scorable() bool { return m.verdict().Scorable }
+
+// excluded reports a row that must not reach a CERTIFIED aggregate: every row
+// the contract refuses AND every legacy row. Legacy rows predate the contract
+// and carry no evidence that they measured anything, so they are counted and
+// disclosed but never blended into a current score.
+func (m Metric) excluded() bool { return !m.scorable() }
+
+// costUsable reports whether DefensiveActions is an observation. `-1` is the
+// harness's UNOBSERVED sentinel and must never be averaged as a cost.
+func (m Metric) costUsable() bool { return m.verdict().CostUsable }
+
+// negControlUsable reports whether this negative-control row establishes a
+// MEASURED false-move result. A negative control is never "scorable" (it has no
+// disruption comparison), so scorability is the wrong question for it: the
+// shared contract asks instead whether its cost was observed on an
+// interpretable, valid, cleanup-sound row.
+func (m Metric) negControlUsable() bool { return m.verdict().NegControlUsable }
 
 var markerRe = regexp.MustCompile(`\[([a-z0-9-]+)=([^\]]*)\]`)
 
@@ -135,12 +185,35 @@ func render(rows []Metric, src string) string {
 	}
 	defsSeen := map[string]bool{}
 	scsSeen := map[string]bool{}
+	// Measurement-validity census, disclosed with the tables below.
+	var excludedRows, legacyRows, costUnobserved, negTotal, negUsable int
 	for _, m := range rows {
-		if m.Skipped || m.NegativeControl {
+		if m.NegativeControl {
+			// Count every control trial; only MEASURED ones can establish that an
+			// arm made no false defensive moves.
+			negTotal++
+			if m.negControlUsable() {
+				negUsable++
+			}
+			continue
+		}
+		if m.Skipped {
 			continue
 		}
 		if n, ok := trialsN[aggKey{m.Scenario, m.Defender}]; ok && m.Trial > n {
 			continue // adaptive row
+		}
+		// Legacy rows are COUNTED and disclosed, then excluded like any other
+		// uncertified row: a pre-contract row is readable history, never a
+		// current measurement.
+		if m.legacy() {
+			legacyRows++
+			continue
+		}
+		// A row the validity contract refuses never reaches a published number.
+		if m.excluded() {
+			excludedRows++
+			continue
 		}
 		defsSeen[m.Defender] = true
 		scsSeen[m.Scenario] = true
@@ -148,7 +221,12 @@ func render(rows []Metric, src string) string {
 		c.interval, _ = armInterval(m.Defender, m.MeanRotationInterval)
 		mk := markers(m.ObservedState)
 		c.prevent = append(c.prevent, m.DisruptionVsOracle)
-		c.cost = append(c.cost, float64(m.DefensiveActions))
+		// An UNOBSERVED cost is not a zero cost.
+		if m.costUsable() {
+			c.cost = append(c.cost, float64(m.DefensiveActions))
+		} else {
+			costUnobserved++
+		}
 		c.harm = append(c.harm, b2f(mk["harm"] != "" && mk["harm"] != "none"))
 		c.infeas = append(c.infeas, b2f(mk["infeasible-rotate"] == "true"))
 		if v, ok := mk["recon-valid"]; ok {
@@ -159,6 +237,24 @@ func render(rows []Metric, src string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f, a...); b.WriteByte('\n') }
 	w("# P3-DEEP — the structural zero-day proof (interval-sweep + recon-validity + dilution)")
+	w("")
+	// Measurement validity, stated BEFORE any number that rests on it.
+	negState := "not-run"
+	switch {
+	case negTotal == 0:
+	case negUsable == 0:
+		negState = "UNOBSERVED"
+	case negUsable < negTotal:
+		negState = "PARTIAL"
+	default:
+		negState = "observed"
+	}
+	w("> **Measurement validity:** %d attack row(s) REFUSED by the harness validity contract and excluded; %d LEGACY/UNVERIFIED row(s) (written before the contract — counted and readable, EXCLUDED from every certified mean, never blended into a current score); %d row(s) with an UNOBSERVED defensive cost excluded from every cost mean. Negative controls: %s (%d of %d observed) — an unobserved or partial control does NOT establish an absence of false defensive moves.",
+		excludedRows, legacyRows, costUnobserved, negState, negUsable, negTotal)
+	if legacyRows > 0 && len(scsSeen) == 0 {
+		w(">")
+		w("> **NO CERTIFIED OBSERVATIONS REMAIN.** Every attack row in this corpus predates the measurement-validity contract or was refused by it, so the tables below have no measured data. Re-run the benchmark on a current harness to certify these numbers. This is UNAVAILABLE, not zero.")
+	}
 	w("")
 	w("> **HONEST VERDICT: STRONGLY EVIDENCES the structural claim; does NOT fully prove it.**")
 	w("> The harm / learnability / dilution / prediction-presence legs are T-INVARIANT (proven);")

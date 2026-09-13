@@ -63,14 +63,23 @@ jobs:
         id: filter
         with:
           filters: |
+            # build/metricvalidity is the shared measurement-validity contract that
+            # the phorvex module (operator + console) and the harness both replace
+            # locally. A change confined to it compiles into BOTH images, so it has
+            # to trigger their rebuilds — otherwise the running images keep an older
+            # copy of the rules that decide what counts as a measurement.
             operator:
               - 'phorvex/**'
               - 'build/phoenix-extended/**'
+              - 'build/metricvalidity/**'
               - 'deploy/docker/operator.Dockerfile'
             console:
               - 'dashboard-web/**'
               - 'phorvex/**'
               - 'build/phoenix-extended/**'
+              - 'build/metricvalidity/**'
+              # The console image also builds the harness binary for /api/catalog.
+              - 'build/test-harness/**'
               - 'deploy/docker/console.Dockerfile'
             phoenix:
               - 'build/phoenix-extended/**'
