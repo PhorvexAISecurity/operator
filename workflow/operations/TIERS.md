@@ -47,7 +47,9 @@ to commits; convey this requirement in every worker assignment.
 
 For the current readiness campaign, the user changed packaging on2026-09-13:
 Tier2 retains its existing issue PRs; from Tier3 onward publish one PR per tier,
-with one commit per issue. Workers may still implement in parallel, but do not
+with local issue branches merged into a local tierN branch after all issue fixes
+are complete. Commit count is unrestricted; preserve reviewed branch history.
+Workers may still implement in parallel, but do not
 open individual issue PRs for those later tiers. Independently accept each issue,
 assemble its changes into the tier branch and test the complete composition
 before publishing. Preserve original evidence/source provenance and verify
