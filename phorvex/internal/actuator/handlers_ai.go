@@ -250,7 +250,8 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	// [P-ACTUATOR-SET-COMPLETE] AVAILABLE PROBE (non-mutating): fail-closed BEFORE the destructive
 	// GPU-context eviction if the node-exec transport is not wired (no agent pod / no exec) — never
 	// delete a pod we then cannot repartition. On kind this fail-closes here, untouched.
-	if err := ec.mig().Available(ctx, node); err != nil {
+	mig, err := ec.mig().Prepare(ctx, node)
+	if err != nil {
 		return HandlerResult{}, fmt.Errorf("mig-rebind transport unavailable (no eviction performed): %w", err)
 	}
 	// DRAIN + GPU-CONTEXT EVICTION: MIG reconfiguration requires ZERO active CUDA contexts on the GPU —
@@ -268,9 +269,9 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 			fmt.Errorf("mig-rebind GPU-context eviction (delete %s/%s, observed uid %s) rejected; repartition NOT attempted (pod name relabeled %s): %w", req.Namespace, req.Pod, pod.UID, roleRetiring, delErr)
 	}
 	// REAL nvidia-smi repartition on the now-idle GPU (destroy CI/GI, create the new geometry) via the
-	// execNodeRunner transport. The exec syscall is [PENDING-GPU-VALIDATION]; Available() already
-	// confirmed the transport is wired, so reaching here means the pod was evicted for a real attempt.
-	if err := ec.mig().Repartition(ctx, node, gpuID, profile); err != nil {
+	// prepared execNodeRunner transport. Preparation already bound one validated agent identity, so
+	// reaching here means the pod was evicted for a real attempt through that same session.
+	if err := mig.Repartition(ctx, gpuID, profile); err != nil {
 		return HandlerResult{}, fmt.Errorf("mig-rebind repartition gpu %s -> %s (pod evicted; owner reschedules onto new geometry): %w", gpuID, profile, err)
 	}
 	drainNote := "drained"

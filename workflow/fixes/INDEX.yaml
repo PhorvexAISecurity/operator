@@ -481,3 +481,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m126-bounded-metadata
     head_sha: 73b30805f8036cdf420a97d213d64ad082515477
+  T2-M081:
+    directory: fixes/T2-M081
+    aliases: []
+    issues:
+    - M-81
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m081-bound-node-agent
+    head_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
