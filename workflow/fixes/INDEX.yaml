@@ -470,3 +470,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m162-real-credential-replay
     head_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  T2-M126:
+    directory: fixes/T2-M126
+    aliases: []
+    issues:
+    - M-126
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m126-bounded-metadata
+    head_sha: 73b30805f8036cdf420a97d213d64ad082515477
