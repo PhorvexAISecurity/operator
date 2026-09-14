@@ -39,7 +39,7 @@ The **in-cluster** stack — the one ArgoCD deploys:
 
 | | |
 |---|---|
-| console | `https://console.phorvex.ai`, a container inside the operator's pod |
+| console | a container inside the operator's pod, reached over the authenticated endpoint DevOps provisions (`PHORVEX_CONSOLE_BASE`); `console.phorvex.ai` itself sits behind a Cognito login and is not that endpoint |
 | audit | `/audit/live.jsonl` on a PVC the operator writes and the console streams |
 | kill-switch gauge | the operator's `:8080/metrics`, read through the API server's pod proxy |
 | ground truth | `kubectl` over SSH to the jump host — deliberately independent of all of the above |
@@ -51,12 +51,74 @@ an RWX filesystem would mean provisioning EFS for one append-only file.
 Earlier this suite drove a console on the jump host instead. That console was a systemd
 service running a binary built from a loose copy of the source — never built by CI, never
 deployed by ArgoCD — so the contracts were being asserted against code that could not be
-traced to a commit. The jump host is now only the SSH route to `kubectl`.
+traced to a commit. The jump host is now only the SSH route to `kubectl` — and, when
+DevOps terminates a loopback tunnel there, to the console.
+
+### Console authentication
+
+Since the identity boundary (M-136, `phorvex/docs/CONSOLE-AUTH.md`) every console route
+except `/api/health` requires a verified identity **and** an explicit server-side grant. The
+pipeline's `lens` is a presentation hint that authenticates nobody; the old API-server proxy
+path (`mode: kubectl-proxy`) carries no console credential at all, so through it every
+protected route is `401` and preflight stops. The suite now runs `console.mode: http` with
+`auth: bearer`:
+
+| Input | Source | Meaning |
+|---|---|---|
+| `PHORVEX_CONSOLE_BASE` | repo variable / env (or `console.base`) | `https://…` endpoint that reaches the console verifier with normal certificate verification, **or** `http://127.0.0.1:<port>` — a *literal* loopback address (127.0.0.0/8 or `[::1]`, never a name such as `localhost`) *on the transport host* (the SSH jump host in `ssh` mode), i.e. a tunnel DevOps owns there |
+| `PHORVEX_CONSOLE_TOKEN` | repo secret / env | the bearer token itself; one line, never written to disk by the pipeline |
+| `PHORVEX_CONSOLE_TOKEN_FILE` / `console.token_file` | env / config | a private `0600` regular file holding that one line |
+| `PHORVEX_CONSOLE_CA_FILE` / `console.ca_file` | env / config | a CA bundle **on the transport host** (where curl runs) for a private CA; there is no way to disable verification |
+| `PHORVEX_SSH_KNOWN_HOSTS` / `transport.known_hosts` | repo variable → runner file / env / config | a `known_hosts` file **on this machine** (the SSH client) pinning the jump host's key; required for `ssh` mode |
+
+Exactly one credential source may be *configured*; configuring both is refused whether or
+not the file exists, so a run's identity is decided by its configuration and not by what
+happens to be on disk. The token goes to curl as a `-K -` configuration on stdin — never
+argv, never a URL, never the environment of a child, never a retained error — and the client
+never decodes it: the deployed verifier decides what it means. curl runs with `-q`, so the
+transport host's `.curlrc` cannot add recipients, disable verification or trace the request;
+the loopback exception connects directly (`--noproxy '*'`), so an inherited `http_proxy`
+cannot divert it. Redirects are refused (a Cognito login redirect is a configuration error,
+not a place to send a credential). A `401` or `403` stops preflight immediately; the
+message keeps what the endpoint said as provenance and names the possible causes — an
+intermediary can answer either — without claiming that the console verified an identity.
+
+**Who receives the credential.** A loopback tunnel delivers the bearer to whatever listens on
+that port *on the transport host*. DevOps must control that listener; on a host shared with
+other users a port can be squatted, so the tunnel's port must not be one another account can
+bind. An HTTPS endpoint elsewhere is not automatically new public exposure — the endpoint
+choice, and any change to it, stays with DevOps.
+
+**Who receives the password.** In `ssh` mode the password and the bearer configuration go to
+whatever answers the jump host's SSH port, so the transport verifies that host against a
+provisioned `known_hosts` file and nothing else (`StrictHostKeyChecking=yes`; unknown or
+changed keys fail without prompting; no accept-new). Provision it out of band:
+
+```bash
+ssh-keyscan -p 22 87.106.63.105 > ~/.phorvex-e2e/known_hosts      # then COMPARE the fingerprint
+ssh-keygen -lf ~/.phorvex-e2e/known_hosts                          # against `ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub` ON the host
+export PHORVEX_SSH_KNOWN_HOSTS=~/.phorvex-e2e/known_hosts
+```
+
+In CI the same lines live in the `PHORVEX_SSH_KNOWN_HOSTS` repository variable and are
+written to a runner-local `0600` file before any ssh — in both E2E jobs and in the deploy
+job's ArgoCD rollout waiter, which logs in with the same password. Note the two sides: `known_hosts` is
+read by ssh on the **client** (runner/workstation); `ca_file` is read by curl on the **SSH
+host**. `publish-report.sh` uses the same pinned identity.
+
+Who issues the token, which subject it names, what grant that subject holds and which
+endpoint reaches the verifier are DevOps decisions recorded next to the deployment; the
+pipeline provisions none of them. An observe-only caller needs `investor` (read) on the
+namespaces it captures; the `attack` mode needs `operator` scoped to the target namespaces
+it fires at and nothing wider.
 
 ## Running it
 
 ```bash
 export PHORVEX_SSH_PASSWORD='…'          # or write it to ~/.phorvex-e2e/secret (chmod 600)
+export PHORVEX_SSH_KNOWN_HOSTS=~/.phorvex-e2e/known_hosts   # the jump host's verified key (see above)
+export PHORVEX_CONSOLE_BASE='https://…'   # the endpoint DevOps provisioned (see above)
+export PHORVEX_CONSOLE_TOKEN='…'          # OR PHORVEX_CONSOLE_TOKEN_FILE=~/.phorvex-e2e/console-token (chmod 600), never both
 
 python3 pipeline/e2e.py --list-targets
 python3 pipeline/e2e.py --mode observe                    # read-only, no target
@@ -339,7 +401,8 @@ pipeline/
   e2e.py                  orchestrator + CLI
   observation.py          explicit validity for every read: ok / partial / unavailable / malformed
   capture.py              incremental SSE framing, declared scope, bounded and counted
-  transport.py            local | ssh; console API and kubectl access
+  transport.py            local | ssh; authenticated console API and kubectl access
+  console_fixture.py      a loopback console with a real RS256 verifier and grant table, for the tests
   attribution.py          binding a reaction to the injected event (feature-detected)
   trace.py                record → six-stage trace, with per-field provenance
   checks.py               the assertion catalogue

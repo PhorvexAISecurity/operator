@@ -33,6 +33,23 @@ var (
 	ErrNoGrant = errors.New("no authorization grant for this identity")
 )
 
+// NoGrantError is ErrNoGrant carrying the VERIFIED identity that has no binding. The boundary
+// shows it back to that caller — and only to that caller, it is their own identity — because
+// the grant table is keyed on the exact `sub`, and without seeing it nobody can write the
+// entry: the first rollout of M-136 left every signed-in user staring at a bare 403 with no
+// way to learn the UUID an administrator needed. Nothing here is a credential.
+type NoGrantError struct {
+	Issuer  string
+	Subject string
+}
+
+func (e *NoGrantError) Error() string {
+	return ErrNoGrant.Error() + " (verified subject " + e.Subject + " from " + e.Issuer + ")"
+}
+
+// Unwrap keeps errors.Is(err, ErrNoGrant) true for callers that only care about the class.
+func (*NoGrantError) Unwrap() error { return ErrNoGrant }
+
 // AuthConfig is the console's complete identity/authorization configuration.
 type AuthConfig struct {
 	ALB    *ALBConfig    // nil = the ALB browser path is not configured
@@ -190,7 +207,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, r *http.Request) (*Pri
 	}
 	granted, ok := a.grants.Lookup(issuer, subject)
 	if !ok {
-		return nil, ErrNoGrant
+		return nil, &NoGrantError{Issuer: issuer, Subject: subject}
 	}
 	granted.Source = source
 	granted.Lens = granted.effectiveLens(requestedLens(r))
