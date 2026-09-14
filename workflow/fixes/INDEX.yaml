@@ -350,6 +350,17 @@ fixes:
     stacked_on: []
     branch: fix/tier1-e2e-console-auth
     head_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  V3-M173:
+    directory: fixes/V3-M173
+    aliases: []
+    issues:
+    - M-173
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m173-primary-image
+    head_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
   T2-M166:
     directory: fixes/T2-M166
     aliases: []
