@@ -361,7 +361,7 @@ func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true, drained: 2}
-	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "leader", Action: model.ActionWarmSwap})
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err != nil {
 		t.Fatalf("warm-swap: %v", err)
 	}
@@ -393,7 +393,7 @@ func TestShardReplaceTPGroupFlipsCoherently(t *testing.T) {
 	}
 	c := fakeC(objs...)
 	// readyErr=unreachable => shadowModelReady falls back to the labelModelLoaded gate (true here).
-	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "l0", Action: model.ActionModelShardReplace})
+	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace))
 	if err != nil {
 		t.Fatalf("shard-replace TP/PP: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestShardReplaceTPFailClosedIncompleteGroup(t *testing.T) {
 		tpPod("ns", "s1", "g", "1", roleShadow, false, 2), // rank 1 NOT ready
 	}
 	c := fakeC(objs...)
-	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "l0", Action: model.ActionModelShardReplace})
+	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{readyErr: errStackUnreachable}}, boundReq(objs[0].(*corev1.Pod), model.ActionModelShardReplace))
 	if err == nil {
 		t.Fatal("shard-replace TP/PP must FAIL-CLOSED on an incomplete replacement group")
 	}

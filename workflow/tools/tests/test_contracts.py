@@ -262,6 +262,28 @@ class HarnessContracts(unittest.TestCase):
             (fix/'04-diff.patch').write_text('not the reviewed diff\n')
             self.assertTrue(any('git diff --binary' in x for x in w.gates.prerequisites(root,fix,status,'PR_READY')))
 
+    def test_patch_gate_accepts_abbreviated_index_headers_and_nothing_else(self):
+        import subprocess
+        with sandbox() as (repo,root,baseline):
+            fix,status=ready_snapshot(repo,baseline)
+            impl=status['implementation']
+            gate=lambda: [x for x in w.gates.prerequisites(root,fix,status,'IMPLEMENTED') if '04-diff.patch' in x]
+            canonical=subprocess.check_output(['git','diff','--binary','--full-index',impl['base_sha'],impl['head_sha']],cwd=repo)
+            for abbrev in ('7','8','40'):
+                rendered=subprocess.check_output(['git','-c','core.abbrev='+abbrev,'diff','--binary',impl['base_sha'],impl['head_sha']],cwd=repo)
+                self.assertIn(b'\nindex ',rendered)
+                (fix/'04-diff.patch').write_bytes(rendered)
+                self.assertEqual(gate(),[],abbrev)
+            self.assertNotEqual(subprocess.check_output(['git','-c','core.abbrev=8','diff','--binary',impl['base_sha'],impl['head_sha']],cwd=repo),canonical)
+            (fix/'04-diff.patch').write_bytes(canonical.replace(b'+fixed',b'+fixed ',1))
+            self.assertTrue(any('differs' in x for x in gate()))
+            import re
+            (fix/'04-diff.patch').write_bytes(re.sub(rb'\nindex ([0-9a-f]{40})\.\.([0-9a-f])',
+                lambda m: b'\nindex '+m[1]+b'..'+(b'0' if m[2]!=b'0' else b'1'),canonical,count=1))
+            self.assertTrue(any('not a prefix' in x for x in gate()))
+            (fix/'04-diff.patch').write_bytes(b'')
+            self.assertTrue(any('recorded patch is empty' in x for x in gate()))
+
     def test_configure_cannot_forge_state_or_checks(self):
         with sandbox() as (_,root,_):
             w.create_fix_record('FIX-TEST',['M-1']);assign('FIX-TEST')
