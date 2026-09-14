@@ -310,7 +310,7 @@ def run_offline(directory, records=(), mode="observe", cluster=None, config=None
                        "known_phases": ["Warm"], "known_stages": ["recon", "exploit"],
                        "net_identity_tolerance": 0.005, "phoenix_actions": ["rotate"],
                        "law_reason_prefixes": {}, "max_controller_restarts": 10},
-        "transport": {"kind": "local"}, "console": {},
+        "transport": {"kind": "local"}, "console": {"mode": "kubectl-proxy"},
         "capture": {"stream_seconds": 1, "post_attack_seconds": 1, "settle_seconds": 0,
                     "max_bytes": 1_000_000, "max_records": 500,
                     "namespaces": scope_namespaces},
