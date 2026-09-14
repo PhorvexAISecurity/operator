@@ -6,7 +6,7 @@ from transport import Console, TransportError
 class ReadinessTests(unittest.TestCase):
     def run_probe(self, responses, timeout=8):
         clock = [0.0]
-        console = Console(None, {})
+        console = Console(None, {'mode': 'kubectl-proxy'})
         console.get_json = Mock(side_effect=responses)
         def sleep(seconds):
             clock[0] += seconds
