@@ -2417,7 +2417,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M161
 
 ### M-162 · Credential-theft oracle replaces the captured credential with a new unbound token · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M162
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

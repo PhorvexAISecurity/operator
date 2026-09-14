@@ -459,3 +459,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m134-adoption-retry
     head_sha: f4da38d87e558c35e465d30874719fff14a3098f
+  T2-M162:
+    directory: fixes/T2-M162
+    aliases: []
+    issues:
+    - M-162
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m162-real-credential-replay
+    head_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
