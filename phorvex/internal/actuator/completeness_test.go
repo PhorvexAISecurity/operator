@@ -2,17 +2,36 @@
  * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD. (P-ACTUATOR)
  *
  * THE COMPLETENESS INVARIANT — the CI teeth (the binary-startup teeth are the package-level
- * mustCoverAllActions() init-panic in handler.go). This test FAILS `go test` (= fails CI) if
+ * mustCoverAllActions() init-panic in handler.go). This file fails `go test` (= fails CI) if
  * any generatable action lacks a native handler, if a handler is an orphan, if the action
- * order drifts, or if the feasibility gate does not evaluate every action. Full real-time
- * coverage is thus a build/CI-enforced theorem, not an assumption. (HONEST: this is not a
- * compile error — `go build` still produces a binary; the init-panic makes it die on start.)
+ * order drifts, or if the feasibility gate returns an unexpected verdict for any action.
+ *
+ * WHAT THIS PROVES, AND WHAT IT DOES NOT (M-120). These are registry-membership and
+ * bounded-verdict unit tests with in-memory fixtures. They prove that every generatable
+ * action is dispatchable, that the registry has no dead hands, that the tie-break order is
+ * stable, and that the REAL registered feasibility laws (not a mocked verdict or an injected
+ * registry) return the expected verdict family for every action under a small, fixed set of
+ * fixtures. They do NOT prove that a handler mutates a cluster correctly, that the laws are
+ * complete for every runtime input, or "full real-time safety": registry presence is not
+ * runtime coverage, and a handler that returns success while doing nothing still satisfies
+ * the registration tier. Handler behaviour against genuine API semantics is covered by the
+ * local API-server (envtest) tests in this package and internal/runner — TestM47APIServer-
+ * Preconditions, TestM038APIServerConditionalDetach, TestM048APIServerLifecycle,
+ * TestM048APIServerRestrictedRole, TestM007RestrictedRequests,
+ * TestM032CoverageAPIServerReadback, TestM005TwoManagersAndHandoff, TestM013RealEventSink —
+ * which the plain unit job skips (KUBEBUILDER_ASSETS blank) and the required go-envtest job
+ * executes through tools/envtest_gate.py. envtest is still only a local kube-apiserver/etcd:
+ * no kubelet, CNI, garbage collector, cloud API, AI serving backend or physical mitigation.
+ * (HONEST: none of this is a compile error — `go build` still produces a binary; the
+ * init-panic makes it die on start.)
  */
 
 package actuator
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/feasibility"
@@ -62,13 +81,164 @@ func TestActionOrderDeterminism(t *testing.T) {
 	}
 }
 
-// TestFeasibilityReachability — the feasibility gate evaluates EVERY generatable action
-// (returns a verdict without panicking), so "real-time safety for every action type" is
-// reachable per action (the emit-boundary re-gate keys on Move{Action} uniformly).
-func TestFeasibilityReachability(t *testing.T) {
-	view := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p"}}
+// feasibilityExpectation is the verdict family one action must receive from the real
+// registered laws. "" means feasible; otherwise the Reason must start with the family.
+// Exactly one law is meant to decide each row, so every fixture below is otherwise
+// unconstrained: a bare pod (DesiredReplicas 0 => availability-floor neutral), no telemetry
+// (slo-headroom/tokens-floor neutral), no exposure clocks (anti-over-rotation and
+// proactive-cadence fail-open), not stateful, no physics witness (vram/mig-validity
+// neutral), a non-system namespace (code-exec-guard neutral) and a zero policy
+// (NativeRotate false => native-rotation-owner neutral).
+type feasibilityExpectation struct {
+	plain string // no GPU, no model id, no MIG device: the kind/plain-workload posture
+}
+
+// feasibilityTable is the exact expected verdict per generatable action. It MUST be total:
+// TestFeasibilityVerdictsPerAction fails when a GeneratableActions member is missing here
+// (a new action needs an explicit expectation) or when a row names an action that is not
+// generatable (a stale or misspelled row proves nothing).
+var feasibilityTable = map[model.Action]feasibilityExpectation{
+	model.ActionRotate:              {},
+	model.ActionQuarantine:          {},
+	model.ActionDebugger:            {},
+	model.ActionCustomInject:        {},
+	model.ActionIdentityRotate:      {},
+	model.ActionRouteRotate:         {},
+	model.ActionWarmSwap:            {plain: "ai-context-required:"},
+	model.ActionMIGRebind:           {plain: "ai-context-required:"},
+	model.ActionKVReset:             {plain: "ai-context-required:"},
+	model.ActionEndpointRotate:      {plain: "ai-context-required:"},
+	model.ActionModelShardReplace:   {plain: "ai-context-required:"},
+	model.ActionAdapterRotate:       {plain: "ai-context-required:"},
+	model.ActionRequestDrain:        {plain: "ai-context-required:"},
+	model.ActionGuardrailRotate:     {plain: "ai-context-required:"},
+	model.ActionKVMigrateInvalidate: {plain: "ai-context-required:"},
+}
+
+// plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
+func plainView() *model.WorkloadView {
+	return &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p", UID: "u1"}}
+}
+
+// aiView is the same pod with the positive AI context every AI move requires, including the
+// MIG device mig-rebind additionally requires.
+func aiView() *model.WorkloadView {
+	v := plainView()
+	v.Pod.HasGPU = true
+	v.Pod.ModelID = "llama-3-8b"
+	v.Pod.MIGDevice = "MIG-GPU-0/1g.5gb"
+	return v
+}
+
+// assertVerdict checks the verdict family for one (fixture, action) pair.
+func assertVerdict(t *testing.T, fixture string, a model.Action, got feasibility.Verdict, family string) {
+	t.Helper()
+	switch {
+	case family == "" && !got.Feasible:
+		t.Errorf("%s: %q must be FEASIBLE under the real laws, got veto %q", fixture, a, got.Reason)
+	case family != "" && got.Feasible:
+		t.Errorf("%s: %q must be INFEASIBLE (%s...), got feasible", fixture, a, family)
+	case family != "" && !strings.HasPrefix(got.Reason, family):
+		t.Errorf("%s: %q vetoed by the wrong law: want reason family %q, got %q", fixture, a, family, got.Reason)
+	}
+}
+
+// TestFeasibilityVerdictsPerAction — the feasibility gate returns the EXPECTED verdict for
+// EVERY generatable action, decided by the real registered laws (feasibility.Registry as
+// shipped, not an injected registry and not a mocked final flag). The reachability test this
+// replaces discarded the verdict (`_ = feasibility.Evaluate(...)`), so an always-feasible or
+// always-infeasible gate passed it; every fixture here catches both stubs: "plain" and
+// "fresh clock" fail an always-feasible gate, "ai", "stale clock" and noop fail an
+// always-infeasible one (retained as test-only overlays in the T2-M120 fix record).
+func TestFeasibilityVerdictsPerAction(t *testing.T) {
+	generatable := actionset.GeneratableActions()
+	if len(generatable) == 0 {
+		t.Fatal("no generatable actions: the invariant would be vacuous")
+	}
+	seen := map[model.Action]bool{}
+	for _, a := range generatable {
+		if _, ok := feasibilityTable[a]; !ok {
+			t.Errorf("TABLE INCOMPLETE: generatable action %q has no expected verdict; add a row deciding its plain-workload feasibility", a)
+		}
+		seen[a] = true
+	}
+	for a := range feasibilityTable {
+		if !seen[a] {
+			t.Errorf("TABLE STALE: row %q is not a generatable action", a)
+		}
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	pol := model.Policy{}
+	window := 15 * time.Minute
+	fresh := model.Policy{AntiOverRotationWindow: window}
+	for _, a := range generatable {
+		move := model.Move{Action: a}
+		want := feasibilityTable[a]
+		// Plain workload: AI moves are refused for lack of an inference context; the rest are
+		// feasible (nothing else constrains a bare pod under a zero policy).
+		assertVerdict(t, "plain workload", a, feasibility.Evaluate(plainView(), move, pol), want.plain)
+		// Positive AI context (GPU + model id + MIG device): every action is feasible.
+		assertVerdict(t, "ai context", a, feasibility.Evaluate(aiView(), move, pol), "")
+		// AI context WITHOUT a MIG device: only mig-rebind loses, on the MIG law specifically.
+		noMIG := aiView()
+		noMIG.Pod.MIGDevice = ""
+		family := ""
+		if a == model.ActionMIGRebind {
+			family = "mig-device-required:"
+		}
+		assertVerdict(t, "ai context without MIG device", a, feasibility.Evaluate(noMIG, move, pol), family)
+		// Anti-over-rotation reads each action's OWN exposure clock: a fresh reset inside the
+		// window vetoes, a stale one allows. The clock variable must be mapped (M-23 tripwire).
+		clock := feasibility.ExposureVarFor(a)
+		if clock == "" {
+			t.Errorf("%q has no exposure clock; anti-over-rotation could never govern it", a)
+			continue
+		}
+		vetoed := aiView()
+		vetoed.ExposureByVariable = map[string]time.Duration{clock: time.Second}
+		got := feasibility.Evaluate(vetoed, move, fresh)
+		assertVerdict(t, "fresh clock", a, got, "anti-over-rotation:")
+		if !got.Feasible && !strings.Contains(got.Reason, clock) {
+			t.Errorf("fresh clock: %q veto %q does not name its own clock %q", a, got.Reason, clock)
+		}
+		stale := aiView()
+		stale.ExposureByVariable = map[string]time.Duration{clock: window + time.Minute}
+		assertVerdict(t, "stale clock", a, feasibility.Evaluate(stale, move, fresh), "")
+	}
+	// noop is always feasible: no context, no clock and no window can veto it.
+	allFresh := aiView()
+	allFresh.ExposureByVariable = map[string]time.Duration{}
+	for _, v := range model.LiveExposureVariables {
+		allFresh.ExposureByVariable[v] = time.Second
+	}
+	noop := model.Move{Action: model.ActionNoop}
+	for name, view := range map[string]*model.WorkloadView{"plain": plainView(), "ai": aiView(), "all clocks fresh": allFresh} {
+		assertVerdict(t, "noop/"+name, model.ActionNoop, feasibility.Evaluate(view, noop, fresh), "")
+	}
+}
+
+// TestFeasibilityActionSpecificLaws — the two remaining action-specific laws decide exactly
+// their own actions and nothing else: code-exec injection is denied in a system namespace,
+// and rotate (only) is refused on a stateful pod.
+func TestFeasibilityActionSpecificLaws(t *testing.T) {
 	pol := model.Policy{}
 	for _, a := range actionset.GeneratableActions() {
-		_ = feasibility.Evaluate(view, model.Move{Action: a}, pol) // must not panic
+		move := model.Move{Action: a}
+		system := aiView()
+		system.Pod.Namespace = "kube-system"
+		family := ""
+		if a == model.ActionDebugger || a == model.ActionCustomInject {
+			family = "code-exec-guard:"
+		}
+		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
+		stateful := aiView()
+		stateful.Pod.Stateful = true
+		family = ""
+		if a == model.ActionRotate {
+			family = "stateful-integrity:"
+		}
+		assertVerdict(t, "stateful pod", a, feasibility.Evaluate(stateful, move, pol), family)
 	}
 }
