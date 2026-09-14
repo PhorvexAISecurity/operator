@@ -9,6 +9,17 @@
 
 _Last updated: 2026-08-11 (T45 — guardrail tier built; B1 full E2E 🟢; F17 surfaced)._
 
+> **Current-reader annotation (2026-09-13, source `d296799`).** This ledger is a dated record
+> of trials run on 2026-08-09..11 against builds whose source SHA and image were not recorded
+> here (pins unknown). Rows and entries are preserved as written and are not re-run. Four
+> entries — T10, T11, T16, T46 — describe selection paths that the current producers no
+> longer offer; each carries a `Current-source annotation` block below its entry. Mechanics
+> are described in [`ACTUATOR_COVERAGE.md`](ACTUATOR_COVERAGE.md) and the producer-generated
+> [`recon-cover-map.generated.md`](../../phorvex/docs/recon-cover-map.generated.md); the
+> August mechanics text is archived verbatim in
+> [`ACTUATOR_COVERAGE.historical-2026-08-09.md`](ACTUATOR_COVERAGE.historical-2026-08-09.md).
+> A 🟢/🟡/🔴 here certifies nothing about today's deployment.
+
 ---
 
 ## Results table
@@ -151,10 +162,14 @@ _Last updated: 2026-08-11 (T45 — guardrail tier built; B1 full E2E 🟢; F17 s
 - **Date:** 2026-08-09. **Class:** static-cred / actuator efficacy (= finding F4a).
 - **Result:** Phorvex *chose & enacted* identity-rotate on the `victim` pod, **but the stolen SA token stays `authenticated=true`, pod UID unchanged**. Code: SA-token rotation is an explicit no-op (`handlers_k8s.go:287`, *"legacy secret rotation is best-effort/no-op on modern K8s"*). The handler only adds a `phorvex.ai/identity-epoch` label. Enabling the actuator does **not** flip GP9.
 
+> **Current-source annotation (2026-09-13, `d296799`).** Pin of the build under test: unknown (not recorded). *Observed then:* identity-rotate was selected because recon granted it the `podIdentity` fact; enactment relabelled the pod; the token stayed valid. *Now:* that grant was removed in `992a52c` (2026-08-09, PHVX-9e). At `d296799` identity-rotate has an empty cover set in both profiles (`internal/recon/profile.go`, `NO COVER for identity-rotate`) and is excluded as `no-cover` by the capability gate before scoring, so the selection observed here cannot recur. The handler is still a label write only (`internal/actuator/handlers_k8s.go`, `identityRotateHandler`), so the *effect* finding remains a correct description of the handler. Not a current-source reproduction; no fresh live run.
+
 ### T11 · S2 — route-rotate (stale a learned route / Service-DNS crux)  ⚙️🔴 NO EFFECT
 - **Date:** 2026-08-09. **Class:** actuator efficacy (= finding F4b).
 - **Result:** Phorvex selected route-rotate on the pod behind the `backendx` Service, **but Service selector + EndpointSlice unchanged** (pinned pod IPs still serve). Code: only relabels the pod (`route-epoch`), never touches the Service (`handlers_k8s.go:310`). Does **not** stale Service-DNS reach. *(The real route-staling move is **endpoint-rotate**, which does restitch the Service selector — see ATTACKS.md B3.)*
 - **Fair-framing note:** the epoch-label design presumably intends a companion mechanism — a Service that selects on the epoch label, or a token-invalidation step — to consume these labels; none is wired up on this cluster, so the labels are inert.
+
+> **Current-source annotation (2026-09-13, `d296799`).** Pin of the build under test: unknown (not recorded). *Observed then:* route-rotate was selected on the `networkIdentity` grant and only relabelled the pod. *Now:* the grant was removed in `992a52c` (2026-08-09) and restored in `ca50e82` (2026-08-26, PHORVEXSEC-129) together with a rewritten handler (`routeRotateHandler`, `internal/actuator/handlers_k8s.go`) that re-keys `phorvex.ai/route-key` **and** restitches the selector of the pod's declared `phorvex.ai/route-service`, compensates the pod label if the Service write fails, returns `Emitted=false` when the annotation is absent, and refuses when the Service has exactly one Ready backend. The "never touches the Service" finding therefore no longer describes the code, and the `backendx` setup used here (no `route-service` annotation) would today produce `Emitted=false`, not a relabel. The current handler has **not** been live-verified by this documentation fix.
 
 ### T12 · K1 — the kv-reset flagship (the existence test)  🟢 DEFENDED
 - **Date:** 2026-08-10. **Class:** served-model session/KV state (`R6Covers`, ATTACKS.md K1). **The first surgical actuator proven end-to-end — selection AND effect.**
@@ -194,6 +209,8 @@ _Last updated: 2026-08-11 (T45 — guardrail tier built; B1 full E2E 🟢; F17 s
 - **Date:** 2026-08-10. **Class:** agentic B5 (shared-GPU economics). **Policy:** `enabled=[rotate,warm-swap]`, `minAvailableReplicas:2`. **Trigger:** `SecurityEvent{GPUEviction, critical, redteam}`.
 - **Result:** 18:50:31Z: `action:"warm-swap", selected:true, coveredFacts:2, attribution: gpuColocation 1.4564 + sideChannel 0.7282, perDollar:3.1662, net:1.4947, λ:1.00` — the STRONGEST bundle selection of the day, because `gpuColocation` carries the **CoResidency=2** physics multiplier (1.4564 = 2×0.7282 — the physics layer verifiably sees both replicas time-sharing the T4). Enactment honestly blocked: `warm-swap blocked: pod ... has no phorvex.ai/swap-group (no warm pool); old leader keeps serving` — fail-closed, leader kept serving.
 - **Verdict 🟡:** selection proven; effect pending a warm-pool provisioner (cluster-autoscaler/Karpenter warm shadow — the multi-hundred-$/mo tradeoff already flagged in the audit).
+
+> **Current-source annotation (2026-09-13, `d296799`).** Pin of the build under test: unknown (not recorded). *Observed then:* warm-swap was selected on the cover pair `gpuColocation`+`sideChannel` (cov 2.18, CoResidency=2). *Now:* both grants were withdrawn in `5f0eea8` (2026-08-16, PHVX-26a: `rewarmShadow` expresses no anti-affinity, so relocation is not guaranteed and a binary grant is unsound) and `FactSideChannel` was renamed `gpuContentionChannel` in `caaff6c` (2026-08-16). At `d296799` warm-swap is coverless in every fixture of the generated map and is excluded `no-cover` before scoring; `gpuColocation` is audit-only and `gpuContentionChannel` is covered only by mig-rebind on a MIG-device pod. The "selection proven" half of this verdict is a dated observation of that build, not current source.
 
 ### T17 · B3 — endpoint pinning → endpoint-rotate  🟢 SELECTION + FULL K8s EFFECT (2nd surgical actuator E2E)
 - **Date:** 2026-08-10. **Class:** agentic B3 (endpoint pinning behind extraction/SSRF). Three attempts — each taught something real.
@@ -389,6 +406,8 @@ Boss directive stood: run the misses too. This sweep closes every attack that wa
 - **How Phorvex reacted (verbatim decision line):** `decision {"tenant":"vllm","pod":"vllm/vllm-9bf84b5f6-qw6n7","action":"warm-swap","selected":true,"feasible":true,"perDollar":7.247,"coveredFacts":2,"stage":"model-theft","nextStage":"impact","hazard":1,"lambda":0,"cost":0.36,"net":2.6089,"asset":0.973,"blast":0.973,"attribution":[{"source":"cover:gpuColocation","contribution":1.6602},{"source":"cover:sideChannel","contribution":0.9487},{"source":"cost:-lambda*C","contribution":0}],"r6Would":"rotate","r6Note":"R6's blind timer would DELETE this pod on schedule; Phorvex used warm-swap instead — the workload keeps serving (R6 has no non-destructive equivalent).","why":"warm-swap: selected (cov=2.61/$0.36=7.25 per-$ > λ=0.00); stage=model-theft→impact hazard=1.00 pHold=1.00"}`.
 - **Why this matters for the demo:** warm-swap is the *availability-preserving* answer to GPU co-tenant pressure — the attacker (or a hostile neighbor) makes the leader's GPU untrustworthy, and instead of eating a 5–10 min 7B cold-start (rotate) Phorvex flips to an already-warm shadow in seconds, drains in-flight, and retires the compromised leader. Zero downtime, zero cold-load — the two things rotate can't promise on a GPU pod.
 - **Nuance / honesty:** (i) the stand-in is a **smaller model** (0.5B vs 7B) — failover here is *degraded-but-clean-and-instant*, a real production pattern (emergency capacity tier); on a multi-GPU node the warm pool would be same-model 7Bs and there'd be no quality trade. (ii) The handler's **rewarm-to-N clone never appeared** (it clones the old leader's 7B spec — the full card can't hold it; no clone pod observed). On this rig the pool is maintained by the stand-in Deployment instead — documented, not hidden. (iii) The in-flight abort surfaces to the client as an HTTP 500 (task cancel), not a graceful stream-close — the request genuinely dies; the UX of the abort is a stack-shim detail. (iv) **Harness self-inflicted wound (fixed live):** the svc selector was first patched with `--type merge`, which *merged* `{app:vllm}` with `{role:leader}` instead of replacing — endpoints went empty at the flip until corrected with a json-patch replace. Not a Phorvex bug; script corrected. (v) The restore surfaced **F18** (below) — the reconciler fights Deployment-managed leaders. (vi) The warm pool + role-based svc STAY as the new demo state.
+
+> **Current-source annotation (2026-09-13, `d296799`).** Pin of the build under test: unknown (not recorded; the decision line quotes `perDollar`/`per-$` in its `why`, a reporting form the current engine no longer uses for selection). *Observed then:* warm-swap selected in 4 s on `gpuColocation` 1.66 + `sideChannel` 0.95; shadow promoted, in-flight drained, leader retired; F18 surfaced on restore. *Now:* as for T16, warm-swap carries no cover at `d296799` (`5f0eea8`, PHVX-26a) and cannot be selected by the optimizer on any fixture, so this selection path is not current source. The dispatch/effect observations (role flip, `/v1/drain` abort, retire, F18) were real for that build and topology and are retained as such; they are not evidence about the current source or the current deployment, and no fresh run has been made.
 
 ### T47 · B2 (re-run) — denial-of-wallet flood → request-drain with a REAL drain route  🟢 DEFENDED — full E2E
 - **Date:** 2026-08-11. **Class:** served-model availability (`inflightRequests`).

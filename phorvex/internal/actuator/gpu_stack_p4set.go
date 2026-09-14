@@ -19,8 +19,13 @@ import (
 	"net/http"
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 // Configurable serving-stack routes (per-pod annotations override; defaults are vLLM-shaped and
@@ -198,62 +203,149 @@ func (k httpKVTransfer) MigrateRemote(_ context.Context, _ servingEndpoint, _ []
 
 // ---- REAL MIG node-exec transport (completes mig-rebind) ----
 
-const (
-	migAgentLabelKey = "phorvex.ai/mig-agent"
-	migAgentContaine = "agent"
-)
+const migAgentLabelKey = "phorvex.ai/mig-agent"
 
 // execInPodFunc runs argv inside a container of a pod and returns stdout. The real implementation is
 // a remotecommand SPDY exec (needs the clientset + REST config) injected by the deployment; the
-// DEFAULT (pkgNodeExec == nil) makes execNodeRunner fail-closed [PENDING-GPU-VALIDATION] rather than
+// DEFAULT (pkgNodeRunner == nil) makes execNodeRunner fail-closed [PENDING-GPU-VALIDATION] rather than
 // fabricate a node exec.
 type execInPodFunc func(ctx context.Context, ns, pod, container string, argv []string) (string, error)
 
-var pkgNodeExec execInPodFunc // nil by default => mig node-exec fail-closed until a deployment wires it
+var pkgNodeRunner *execNodeRunner // nil by default; no production caller wires it
+
+type unwiredNodeRunner struct{}
+
+func (unwiredNodeRunner) Prepare(context.Context, string) (preparedNodeRunner, error) {
+	return nil, fmt.Errorf("MIG node-exec not wired [PENDING-GPU-VALIDATION]: no validated transport and agent policy")
+}
 
 // execNodeRunner is the GPU-Operator-mig-manager / privileged-node-agent transport: it resolves a
 // privileged MIG node-agent DaemonSet pod ON the target node (REAL K8s) and execs argv into it. The
 // agent-pod resolution is real + unit-tested; the exec syscall is injected ([PENDING-GPU-VALIDATION]).
 type execNodeRunner struct {
-	c     client.Client
-	exec  execInPodFunc
-	label string
+	client kubernetes.Interface
+	exec   execInPodFunc
+	policy MIGAgentPolicy
 }
 
-// Available is the non-mutating readiness probe: the exec transport must be wired AND a node-agent pod
-// must be Running on the target node. On kind / no GPU this returns an error so mig-rebind fail-closes
-// BEFORE the destructive GPU-context eviction (never delete a pod we then cannot repartition).
-func (r execNodeRunner) Available(ctx context.Context, node string) error {
-	if r.exec == nil {
-		return fmt.Errorf("MIG node-exec not wired [PENDING-GPU-VALIDATION]: no execInPod transport (needs clientset+remotecommand / GPU-Operator mig-manager)")
-	}
-	if pod, _ := r.agentPodOnNode(ctx, node); pod == "" {
-		return fmt.Errorf("no MIG node-agent pod (label %s) Running on node %q [PENDING-GPU-VALIDATION]", r.label, node)
-	}
-	return nil
+type agentRef struct {
+	namespace, name, container, node string
+	uid, daemonSetUID                types.UID
 }
 
-func (r execNodeRunner) Run(ctx context.Context, node string, argv ...string) (string, error) {
-	if err := r.Available(ctx, node); err != nil {
-		return "", err
-	}
-	pod, ns := r.agentPodOnNode(ctx, node)
-	return r.exec(ctx, ns, pod, migAgentContaine, argv)
+type boundNodeRunner struct {
+	client kubernetes.Interface
+	exec   execInPodFunc
+	policy MIGAgentPolicy
+	ref    agentRef
 }
 
-// agentPodOnNode finds a Running privileged MIG node-agent pod scheduled on `node`.
-func (r execNodeRunner) agentPodOnNode(ctx context.Context, node string) (pod, ns string) {
-	var pods corev1.PodList
-	if err := r.c.List(ctx, &pods, client.MatchingLabels{r.label: "true"}); err != nil {
-		return "", ""
+// Prepare resolves exactly one trusted pod through direct API reads and binds its identity for the
+// complete MIG operation. Namespace is an administrative trust boundary; pod fields alone do not
+// authenticate a creator with unrestricted write access inside that namespace.
+func (r execNodeRunner) Prepare(ctx context.Context, node string) (preparedNodeRunner, error) {
+	if r.client == nil || r.exec == nil {
+		return nil, fmt.Errorf("MIG node-exec not wired [PENDING-GPU-VALIDATION]: no validated transport")
 	}
+	ds, err := r.client.AppsV1().DaemonSets(r.policy.Namespace).Get(ctx, r.policy.DaemonSet, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get configured MIG agent DaemonSet %s/%s: %w", r.policy.Namespace, r.policy.DaemonSet, err)
+	}
+	if ds.UID == "" || ds.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("configured MIG agent DaemonSet %s/%s has no stable live identity", r.policy.Namespace, r.policy.DaemonSet)
+	}
+	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
+	if err != nil {
+		return nil, fmt.Errorf("configured MIG agent DaemonSet selector: %w", err)
+	}
+	pods, err := r.client.CoreV1().Pods(r.policy.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: migAgentLabelKey + "=true",
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", node).String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list MIG node agents in namespace %s: %w", r.policy.Namespace, err)
+	}
+	var matches []agentRef
 	for i := range pods.Items {
 		p := &pods.Items[i]
-		if p.Spec.NodeName == node && p.Status.Phase == corev1.PodRunning && p.DeletionTimestamp == nil {
-			return p.Name, p.Namespace
+		if r.validPod(p, ds, selector, node, "") == nil {
+			matches = append(matches, agentRef{namespace: p.Namespace, name: p.Name, uid: p.UID, container: r.policy.Container, node: node, daemonSetUID: ds.UID})
 		}
 	}
-	return "", ""
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("MIG node-agent selection on node %q: require exactly one trusted candidate, got %d", node, len(matches))
+	}
+	return &boundNodeRunner{client: r.client, exec: r.exec, policy: r.policy, ref: matches[0]}, nil
+}
+
+func (r execNodeRunner) validPod(p *corev1.Pod, ds *appsv1.DaemonSet, selector labels.Selector, node string, uid types.UID) error {
+	if p.Namespace != r.policy.Namespace || p.Spec.NodeName != node || p.Status.Phase != corev1.PodRunning || p.DeletionTimestamp != nil || p.UID == "" || (uid != "" && p.UID != uid) {
+		return fmt.Errorf("pod identity or lifecycle mismatch")
+	}
+	if p.Labels[migAgentLabelKey] != "true" || !selector.Matches(labels.Set(p.Labels)) {
+		return fmt.Errorf("pod labels do not match configured agent")
+	}
+	allowed := false
+	for _, sa := range r.policy.ServiceAccounts {
+		if p.Spec.ServiceAccountName == sa {
+			allowed = true
+			break
+		}
+	}
+	if !allowed || !podHasContainer(p, r.policy.Container) || !migAgentReady(p) {
+		return fmt.Errorf("pod service account, container, or readiness mismatch")
+	}
+	for _, owner := range p.OwnerReferences {
+		if owner.Controller != nil && *owner.Controller && owner.APIVersion == "apps/v1" && owner.Kind == "DaemonSet" && owner.Name == r.policy.DaemonSet && owner.UID == ds.UID && ds.UID != "" {
+			return nil
+		}
+	}
+	return fmt.Errorf("pod is not controlled by configured DaemonSet UID")
+}
+
+func podHasContainer(p *corev1.Pod, name string) bool {
+	for i := range p.Spec.Containers {
+		if p.Spec.Containers[i].Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func migAgentReady(p *corev1.Pod) bool {
+	for _, condition := range p.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *boundNodeRunner) Run(ctx context.Context, argv ...string) (string, error) {
+	ds, err := r.client.AppsV1().DaemonSets(r.ref.namespace).Get(ctx, r.policy.DaemonSet, metav1.GetOptions{})
+	if err != nil || ds.UID != r.ref.daemonSetUID || ds.DeletionTimestamp != nil {
+		return "", fmt.Errorf("revalidate MIG agent DaemonSet identity: uid=%q err=%v", daemonSetUID(ds), err)
+	}
+	pod, err := r.client.CoreV1().Pods(r.ref.namespace).Get(ctx, r.ref.name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("revalidate MIG agent pod %s/%s: %w", r.ref.namespace, r.ref.name, err)
+	}
+	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
+	if err != nil || (execNodeRunner{policy: r.policy}).validPod(pod, ds, selector, r.ref.node, r.ref.uid) != nil {
+		return "", fmt.Errorf("revalidate MIG agent pod %s/%s: bound identity or readiness changed", r.ref.namespace, r.ref.name)
+	}
+	execCtx, cancel := context.WithTimeout(ctx, r.policy.ExecTimeout)
+	defer cancel()
+	// pods/exec is name-addressed and has no UID precondition. This direct GET narrows but cannot
+	// eliminate the GET-to-POST replacement race; the configured namespace must be protected.
+	return r.exec(execCtx, r.ref.namespace, r.ref.name, r.ref.container, argv)
+}
+
+func daemonSetUID(ds *appsv1.DaemonSet) types.UID {
+	if ds == nil {
+		return ""
+	}
+	return ds.UID
 }
 
 // ---- EnactCtx resolvers (injected client or real default) ----

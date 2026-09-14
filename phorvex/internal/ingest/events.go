@@ -68,6 +68,7 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 		base := model.SecurityEventInfo{
 			CreatedAt:        se.CreationTimestamp.Time,
 			Name:             se.Name,
+			UID:              string(se.UID),
 			Trust:            trust,
 			CreatorIdentity:  identity,
 			TimestampMissing: missing,

@@ -45,12 +45,25 @@ _SECRET_WORDS = ("PASSWORD", "TOKEN", "SECRET", "SSHPASS", "APIKEY", "API_KEY")
 _REASON_LIMIT = 400
 
 
+# Secrets that did not arrive through the environment — a console token read from a file —
+# register here so the same redaction covers them. The list only ever grows within a run.
+_REGISTERED_SECRETS = []
+
+
+def register_secret(value):
+    """Make a loaded credential subject to `redact` wherever a message is retained."""
+    if value and len(value) >= 4 and value not in _REGISTERED_SECRETS:
+        _REGISTERED_SECRETS.append(value)
+
+
 def redact(text, limit=_REASON_LIMIT):
     """Strip credential-looking environment values out of a message we are about to keep."""
     text = str(text)
     for key, value in os.environ.items():
         if value and len(value) >= 4 and any(word in key.upper() for word in _SECRET_WORDS):
             text = text.replace(value, "[REDACTED]")
+    for value in _REGISTERED_SECRETS:
+        text = text.replace(value, "[REDACTED]")
     return text[:limit]
 
 

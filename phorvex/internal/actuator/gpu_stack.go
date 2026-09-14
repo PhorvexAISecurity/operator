@@ -190,33 +190,43 @@ func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) err
 // in production). [PENDING-GPU-VALIDATION] — the default runner is UNCONFIGURED so MIG ops fail-closed
 // rather than fabricate a reconfiguration; a deployment injects the real node-exec.
 type nodeRunner interface {
-	Run(ctx context.Context, node string, argv ...string) (stdout string, err error)
-	// Available is a non-mutating readiness probe (nil only if Run can actually execute on node).
-	Available(ctx context.Context, node string) error
+	Prepare(ctx context.Context, node string) (preparedNodeRunner, error)
+}
+
+type preparedNodeRunner interface {
+	Run(ctx context.Context, argv ...string) (stdout string, err error)
 }
 
 // migController abstracts the NVML/nvidia-smi MIG reconfiguration. Default impl = nvidiaSMIMIG.
 type migController interface {
-	// Available is a NON-mutating readiness probe: nil only if the node-exec transport can actually run
-	// (agent pod present + exec wired). mig-rebind calls it BEFORE the destructive GPU-context eviction
-	// so a non-GPU / unwired cluster fail-closes WITHOUT deleting the pod.
-	Available(ctx context.Context, node string) error
+	// Prepare binds one node-agent identity before the caller mutates the workload.
+	Prepare(ctx context.Context, node string) (preparedMIG, error)
 	// CurrentProfile reads the MIG profile currently configured on the GPU (e.g. "1g.10gb").
 	CurrentProfile(ctx context.Context, node, gpuID string) (string, error)
-	// Repartition reconfigures the GPU to targetProfile (the caller MUST evict CUDA contexts first).
-	Repartition(ctx context.Context, node, gpuID, targetProfile string) error
+}
+
+type preparedMIG interface {
+	Repartition(ctx context.Context, gpuID, targetProfile string) error
 }
 
 // nvidiaSMIMIG is the REAL nvidia-smi MIG controller. The command sequence + ordering is implemented
 // and unit-tested via a mock nodeRunner; the live node-exec + GPU are [PENDING-GPU-VALIDATION].
 type nvidiaSMIMIG struct{ run nodeRunner }
 
-func (m *nvidiaSMIMIG) Available(ctx context.Context, node string) error {
-	return m.run.Available(ctx, node)
+func (m *nvidiaSMIMIG) Prepare(ctx context.Context, node string) (preparedMIG, error) {
+	run, err := m.run.Prepare(ctx, node)
+	if err != nil {
+		return nil, err
+	}
+	return &preparedNVIDIASMIMIG{run: run}, nil
 }
 
 func (m *nvidiaSMIMIG) CurrentProfile(ctx context.Context, node, gpuID string) (string, error) {
-	out, err := m.run.Run(ctx, node, "nvidia-smi", "mig", "-i", gpuID, "-lgi")
+	run, err := m.run.Prepare(ctx, node)
+	if err != nil {
+		return "", err
+	}
+	out, err := run.Run(ctx, "nvidia-smi", "mig", "-i", gpuID, "-lgi")
 	if err != nil {
 		return "", err
 	}
@@ -232,7 +242,9 @@ func (m *nvidiaSMIMIG) CurrentProfile(ctx context.Context, node, gpuID string) (
 	return "", nil
 }
 
-func (m *nvidiaSMIMIG) Repartition(ctx context.Context, node, gpuID, targetProfile string) error {
+type preparedNVIDIASMIMIG struct{ run preparedNodeRunner }
+
+func (m *preparedNVIDIASMIMIG) Repartition(ctx context.Context, gpuID, targetProfile string) error {
 	if targetProfile == "" {
 		return fmt.Errorf("mig repartition: empty target profile")
 	}
@@ -243,7 +255,7 @@ func (m *nvidiaSMIMIG) Repartition(ctx context.Context, node, gpuID, targetProfi
 		{"nvidia-smi", "mig", "-i", gpuID, "-dgi"},
 		{"nvidia-smi", "mig", "-i", gpuID, "-cgi", targetProfile, "-C"},
 	} {
-		if _, err := m.run.Run(ctx, node, argv...); err != nil {
+		if _, err := m.run.Run(ctx, argv...); err != nil {
 			return fmt.Errorf("mig repartition step %v: %w", argv[3:], err)
 		}
 	}
@@ -260,13 +272,16 @@ func (ec EnactCtx) vllm() vLLMClient {
 	}
 	return pkgVLLM
 }
+
 // mig resolves the GPU MIG controller: an injected mock, else the REAL client-aware controller whose
-// nvidia-smi commands run through the execNodeRunner transport (resolves a privileged MIG node-agent
-// pod on the target node via ec.Client; the exec syscall is pkgNodeExec, [PENDING-GPU-VALIDATION] /
-// fail-closed until a deployment wires it).
+// nvidia-smi commands run through an operation-scoped prepared runner. pkgNodeRunner remains nil and
+// fail-closed until a deployment supplies an explicit policy and wires it.
 func (ec EnactCtx) mig() migController {
 	if ec.MIG != nil {
 		return ec.MIG
 	}
-	return &nvidiaSMIMIG{run: execNodeRunner{c: ec.Client, exec: pkgNodeExec, label: migAgentLabelKey}}
+	if pkgNodeRunner == nil {
+		return &nvidiaSMIMIG{run: unwiredNodeRunner{}}
+	}
+	return &nvidiaSMIMIG{run: *pkgNodeRunner}
 }

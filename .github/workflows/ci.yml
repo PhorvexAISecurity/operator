@@ -41,11 +41,30 @@ env:
 # PHORVEX_SSH_HOST       jump host that can reach the console and the EKS API
 # PHORVEX_SSH_USER       ssh user on that host
 # PHORVEX_SSH_PASSWORD   its password (passed to sshpass via env, never argv)
+# PHORVEX_CONSOLE_TOKEN  bearer token for the console's E2E identity (M-136). Provisioned by
+#                        DevOps against the console's configured OIDC issuer/audience, with
+#                        an explicit grant for its subject. Reaches curl on stdin only; the
+#                        pipeline never decodes, logs or forwards it. Empty = not provisioned,
+#                        and preflight fails closed with that message (docs/CONSOLE-AUTH.md).
 # TELEGRAM_BOT_TOKEN     bot that posts the per-stage board
 # TELEGRAM_CHAT_ID       channel id, e.g. -1001234567890
 #
-# Optional repository variable:
-#   BUILD_PHOENIX = true   — enable the extended Phoenix operator build job.
+# Required repository variables for every job that logs in to the jump host (e2e,
+# e2e-main, and the deploy job's rollout waiter):
+#   PHORVEX_SSH_KNOWN_HOSTS — the jump host's SSH host key line(s) as `ssh-keyscan -p PORT
+#                             HOST` prints them, verified out of band against the host's
+#                             own `ssh-keygen -lf` fingerprint. Written to a runner-local
+#                             0600 file before any ssh; the password and the console bearer
+#                             configuration go only to a host presenting that key. Unknown
+#                             or changed keys fail; there is no accept-new fallback.
+#   PHORVEX_CONSOLE_BASE    — the console endpoint the E2E credential is sent to: an HTTPS
+#                             URL that reaches the console verifier (NOT the Cognito ALB,
+#                             which redirects to a login), or http://127.0.0.1:<port> for a
+#                             loopback tunnel DevOps terminates on the SSH jump host.
+# Optional repository variables:
+#   PHORVEX_CONSOLE_CA_FILE — CA bundle path ON THE JUMP HOST when that endpoint uses a
+#                             private CA; certificate verification is never disabled.
+#   BUILD_PHOENIX = true    — enable the extended Phoenix operator build job.
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -136,7 +155,10 @@ jobs:
       - name: Release image provenance regressions
         run: |
           bash -n deploy/ci/retag-images.sh
+          bash -n deploy/ci/check-release-head.sh
+          bash -n deploy/ci/publish-release.sh
           python3 tools/test_deploy_image_manifest.py
+          python3 tools/test_deploy_release_race.py
 
   # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
@@ -359,12 +381,34 @@ jobs:
             exit 1
           }
 
+      # The pinned jump-host identity every ssh in this job verifies against (pipeline and
+      # publish alike). Provisioned by DevOps as a repository variable; an empty variable
+      # means "not provisioned" and every ssh in this job then fails closed.
+      - name: Provision the SSH host identity
+        env:
+          PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
+        run: |
+          KH="$RUNNER_TEMP/phorvex-known-hosts"
+          umask 077
+          printf '%s\n' "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" > "$KH"
+          if [ ! -s "$KH" ] || [ -z "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" ]; then
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; ssh to the jump host is refused without a verified host key."
+            exit 1
+          fi
+          echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
+
       - name: Run End-to-End
         id: e2e
         env:
           PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          # The console credential and endpoint (see the secrets block at the top). The
+          # pipeline scrubs the token from every child environment and sends it to curl on
+          # stdin; it is never an argument. Unset inputs fail preflight closed.
+          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE }}
+          PHORVEX_CONSOLE_CA_FILE: ${{ vars.PHORVEX_CONSOLE_CA_FILE }}
+          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
         working-directory: End-to-End
@@ -485,14 +529,22 @@ jobs:
       cancel-in-progress: false
     outputs:
       version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.publish.outputs.released }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0          # the version is derived from the tag history
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify this run still owns main
+        id: freshness
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: bash deploy/ci/check-release-head.sh
+
       - name: Compute the next version
         id: version
+        if: steps.freshness.outputs.current == 'true'
         run: |
           # Semver from the tag history. A commit whose message contains [major] or [minor]
           # bumps that component; everything else is a patch. Deliberately boring — the
@@ -525,11 +577,13 @@ jobs:
           echo "Next version: $NEXT (previous: ${LAST:-none})"
 
       - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.freshness.outputs.current == 'true'
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region:     ${{ env.AWS_REGION }}
 
       - uses: aws-actions/amazon-ecr-login@v2
+        if: steps.freshness.outputs.current == 'true'
         id: ecr
 
       # Which images exist is decided from the BUILD JOBS' results, not by asking ECR.
@@ -545,6 +599,7 @@ jobs:
       # IAM permission, and cannot silently answer "no".
       - name: Decide what was built
         id: built
+        if: steps.freshness.outputs.current == 'true'
         env:
           OPERATOR: ${{ needs.build-operator.result }}
           CONSOLE:  ${{ needs.build-console.result }}
@@ -572,7 +627,7 @@ jobs:
           fi
 
       - name: Tag the built images with the version
-        if: steps.built.outputs.any == 'true'
+        if: steps.freshness.outputs.current == 'true' && steps.built.outputs.any == 'true'
         env:
           REG:                ${{ steps.ecr.outputs.registry }}
           V:                  ${{ steps.version.outputs.version }}
@@ -585,7 +640,7 @@ jobs:
 
       - name: Write the version into the GitOps values
         id: bump
-        if: steps.built.outputs.any == 'true'
+        if: steps.freshness.outputs.current == 'true' && steps.built.outputs.any == 'true'
         env:
           V:       ${{ steps.version.outputs.version }}
           MARKERS: ${{ steps.built.outputs.markers }}
@@ -622,27 +677,35 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit, tag and push
-        if: steps.bump.outputs.changed == 'true'
+        id: publish
+        if: steps.freshness.outputs.current == 'true' && steps.bump.outputs.changed == 'true'
         env:
-          V: ${{ steps.version.outputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+          V:          ${{ steps.version.outputs.version }}
+        run: bash deploy/ci/publish-release.sh
+
+      # The waiter below logs into the jump host with the same password the E2E jobs use,
+      # so it verifies the same pinned host identity (see the secrets block at the top).
+      # Gated exactly like the waiter: a merge that deploys nothing needs no ssh.
+      - name: Provision the SSH host identity
+        if: steps.publish.outputs.released == 'true'
+        env:
+          PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
         run: |
-          git config user.name  "phorvex-ci[bot]"
-          git config user.email "ci@phorvex.ai"
-          git add deploy/helm/phorvex-stack/values-eks.yaml
-          # [skip ci] stops the version commit from re-triggering this workflow, which
-          # would otherwise version every version commit, forever.
-          git commit -m "release: v$V [skip ci]" -m "Deployed by ArgoCD from deploy/helm/phorvex-stack/values-eks.yaml."
-          git tag -a "v$V" -m "v$V"
-          # One atomic push: the release commit and its tag land together or not at all.
-          # Pushed separately, a rejected tag push left main carrying a release commit
-          # with no tag, which wedged every later deploy (see "Compute the next version").
-          git push --atomic origin HEAD:main "v$V"
+          KH="$RUNNER_TEMP/phorvex-known-hosts"
+          umask 077
+          printf '%s\n' "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" > "$KH"
+          if [ ! -s "$KH" ] || [ -z "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" ]; then
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; ssh to the jump host is refused without a verified host key."
+            exit 1
+          fi
+          echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
 
       - name: Wait for ArgoCD to roll it out
         # Only wait for a rollout that was actually requested. Without this guard a merge
         # that pushed nothing still polled for 15 minutes and then failed, pointing at
         # ArgoCD instead of at the step that had quietly done nothing.
-        if: steps.bump.outputs.changed == 'true'
+        if: steps.publish.outputs.released == 'true'
         env:
           SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
@@ -653,6 +716,10 @@ jobs:
             echo "::error::sshpass is missing. Install it on the self-hosted runner before running CI."
             exit 1
           }
+          [ -s "${PHORVEX_SSH_KNOWN_HOSTS:-}" ] || {
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; the rollout waiter will not log in to an unverified host."
+            exit 1
+          }
           # Validate before interpolating this tag into the remote shell command.
           [[ "$V" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
             echo "::error::Invalid release image tag"
@@ -660,8 +727,11 @@ jobs:
           }
           # The real read-only waiter diagnoses disabled auto-sync immediately and
           # requires the exact released image plus rollout readiness. It never resumes
-          # an intentionally paused application or initiates a sync itself.
-          sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          # an intentionally paused application or initiates a sync itself. The host it
+          # logs into is verified strictly against the provisioned key: unknown or
+          # changed keys fail here rather than being accepted.
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS" \
+            -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no \
             -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 "$USER_@$HOST" "V=$V bash -s" \
             < deploy/argocd/wait-for-rollout.sh
@@ -674,6 +744,7 @@ jobs:
     # Runs after any real deploy, however it was triggered.
     if: |
       !cancelled() && needs.deploy.result == 'success'
+      && needs.deploy.outputs.released == 'true'
       && (
         (github.event_name == 'push' && github.ref == 'refs/heads/main')
         || (github.event_name == 'workflow_dispatch' && inputs.force_release)
@@ -695,12 +766,33 @@ jobs:
             exit 1
           }
 
+      # The pinned jump-host identity every ssh in this job verifies against (pipeline and
+      # publish alike). Provisioned by DevOps as a repository variable; an empty variable
+      # means "not provisioned" and every ssh in this job then fails closed.
+      - name: Provision the SSH host identity
+        env:
+          PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
+        run: |
+          KH="$RUNNER_TEMP/phorvex-known-hosts"
+          umask 077
+          printf '%s\n' "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" > "$KH"
+          if [ ! -s "$KH" ] || [ -z "$PHORVEX_SSH_KNOWN_HOSTS_CONTENT" ]; then
+            echo "::error::PHORVEX_SSH_KNOWN_HOSTS is not provisioned; ssh to the jump host is refused without a verified host key."
+            exit 1
+          fi
+          echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
+
       - name: Run End-to-End against the deployed version
         id: e2e
         env:
           PHORVEX_SSH_HOST:     ${{ secrets.PHORVEX_SSH_HOST }}
           PHORVEX_SSH_USER:     ${{ secrets.PHORVEX_SSH_USER }}
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          # The console credential and endpoint (see the secrets block at the top); the same
+          # inputs as the PR-time job. Unset inputs fail preflight closed.
+          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE }}
+          PHORVEX_CONSOLE_CA_FILE: ${{ vars.PHORVEX_CONSOLE_CA_FILE }}
+          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
           V:                    ${{ needs.deploy.outputs.version }}

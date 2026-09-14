@@ -10,6 +10,7 @@ import subprocess
 import sys
 import yaml
 import evidence_scope
+import patches
 import preflight
 
 
@@ -146,7 +147,11 @@ def transaction(w, args, mode):
                     impl = status['implementation']
                     if not all(isinstance(impl.get(k), str) and impl[k] for k in ('base_sha','head_sha','branch')):
                         raise ValueError('provide source branch/base_sha/head_sha before submission')
-                    (fix/'04-diff.patch').write_bytes(preflight.git(w.ROOT.parent,'diff','--binary',impl['base_sha'],impl['head_sha']))
+                    # Keep an artifact that already matches the pins (modulo index abbreviation) byte-for-byte so
+                    # its signed hash survives; otherwise render the canonical full-index patch.
+                    diff_format = impl.get('diff_format')
+                    if patches.verify(w.ROOT.parent,w.gates.local_file(fix,'04-diff.patch'),impl['base_sha'],impl['head_sha'],diff_format):
+                        (fix/'04-diff.patch').write_bytes(patches.render(w.ROOT.parent,impl['base_sha'],impl['head_sha'],diff_format))
                     receipt = w.gates.local_file(fix, data.get('preflight',''))
                     if not receipt: raise ValueError('run local preflight before submission')
                     preflight.validate_receipt(w.ROOT.parent,receipt,impl['base_sha'],impl['head_sha'])

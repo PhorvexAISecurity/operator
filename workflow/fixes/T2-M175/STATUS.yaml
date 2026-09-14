@@ -1,0 +1,312 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 14
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 0348c4962ec8db397a5186c8d7b7095c66025ac93ca74443c6ffa19017028791
+    source_sha: ba86b4b3d0d70842b2ff325bdd448f2bdb2bd147
+    at: '2026-09-13T22:26:17+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  preflight:
+    result: PASS
+    by: sol-m175
+    artifact: evidence/preflight/receipt.json
+    sha256: 3d88f1dd32d37b44c59f80da6b6c5c7f689dd2e3c75422b8c69595fc818dfe4b
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:08:30+00:00'
+  implementation:
+    result: PASS
+    by: sol-m175
+    artifact: 04-diff.patch
+    sha256: 18f3d161da7f2d714c93fc72e02ce19e81286519ffa53a16c3d4e20abb279ba6
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:08:30+00:00'
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/r1/baseline-probe.log
+    sha256: 2d2464f63a9d71d8b5e887c37ca7efa35a51768d17a9b66e372984028c1fa89e
+    source_sha: ba86b4b3d0d70842b2ff325bdd448f2bdb2bd147
+    at: '2026-09-13T23:11:00+00:00'
+  l0:
+    result: PASS
+    by: sol-m175
+    artifact: evidence/test/focused-r2.log
+    sha256: 77fc3f950e17848416043999da37d912d34629f8a4e5a325999a595c2e34f2cd
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:08:30+00:00'
+    inputs:
+    - workflow/schemas/fix-status.schema.json
+    - workflow/tools
+    inputs_sha256: 4304988eaad492431ba2624b71cd6496e1d47e594905247277a45608190f2116
+  l1:
+    result: PASS
+    by: sol-m175
+    artifact: evidence/test/focused.log
+    sha256: 1a8c1956f1af5e4f5920708942673fe75ae2a68f0b49a8184e6a130ba795ef1a
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:09:47+00:00'
+    inputs:
+    - workflow/tools
+    inputs_sha256: 85974fb2a36d1ebd3e5e783755e915358815fadf1131c8640fb18de251e92f19
+  l2:
+    result: PASS
+    by: sol-m175
+    artifact: evidence/test/focused-r2.log
+    sha256: 77fc3f950e17848416043999da37d912d34629f8a4e5a325999a595c2e34f2cd
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:10:02+00:00'
+    inputs:
+    - workflow/tools/check.sh
+    - workflow/tools/check_private_settings.py
+    inputs_sha256: e6b85bab1585d93171d6bf6b6c214e45248a160370bf00bbd72e81b955f5aff2
+  positive_control:
+    result: PASS
+    by: sol-m175
+    artifact: evidence/test/focused-r2.log
+    sha256: 77fc3f950e17848416043999da37d912d34629f8a4e5a325999a595c2e34f2cd
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:10:02+00:00'
+    inputs:
+    - workflow/tools/check_private_settings.py
+    - workflow/tools/patches.py
+    inputs_sha256: 00779e5b7fce6887518c627ddaf76c21e612c97354c80049e4dd06dd9bc89f50
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 310b480e1c982c8ab96ca58e9dd74d06a3848232c43140dd21b3d321badb720d
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:11:00+00:00'
+    baseline_sha: ba86b4b3d0d70842b2ff325bdd448f2bdb2bd147
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f17643f52de47f184fc57c9345ccc637c782be106d6dc58100e292945640c655
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:11:00+00:00'
+    incident_sha256: 310b480e1c982c8ab96ca58e9dd74d06a3848232c43140dd21b3d321badb720d
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: d26f2a73cdd3c3666afc8e4346d4afaad5a535473ce9e60533aef5942dfcd1e9
+    source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+    at: '2026-09-13T23:11:35+00:00'
+fix_id: T2-M175
+issues:
+- M-175
+title: Remove local credential configuration and prevent tracked recurrence
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-m175
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: isolated PR196 plus main341c68f
+  code_sha: ba86b4b3d0d70842b2ff325bdd448f2bdb2bd147
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.113
+  deployed_git_sha: dea7b123aa7d5a1224cd648d3346c6bd8356bd63
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/v3-m175-local-credentials
+  base_sha: ba86b4b3d0d70842b2ff325bdd448f2bdb2bd147
+  head_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+  stacked_on:
+  - T2-DIFF-PORTABILITY
+  diff_format: git-diff-digest-v1
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/207
+  reviewed_head: 98d240ca12aeb3fe0427ef236e67825a33f3c220
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies:
+- T2-DIFF-PORTABILITY
+blockers: []
+residuals:
+- Owner credential rotation/revocation and historical Git exposure remediation remain
+  outstanding; source deletion is insufficient.
+next_action:
+  owner: human_owner
+  action: Review https://github.com/PhorvexSecurity/operator/pull/207; owner merges/deploys,
+    lead verifies authorized live acceptance
+updated_at: '2026-09-13T23:11:39+00:00'
+configuration_history:
+- at: '2026-09-13T22:26:15+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - dependencies
+  - implementation
+  - residuals
+  - roles
+  - verification
+  approval_ref: workflow/fixes/T2-M175/AUTHORIZATION.md
+- at: '2026-09-13T23:01:38+00:00'
+  by: sol-m175
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:08:29+00:00'
+  by: sol-m175
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T23:11:39+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-13T22:26:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-13T22:26:18+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T23:08:30+00:00'
+  by: sol-m175
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T23:08:31+00:00'
+  by: sol-m175
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T23:11:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T23:11:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T23:11:39+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: T2-M175:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11
+check_history:
+- check: l1
+  result: PASS
+  by: sol-m175
+  artifact: evidence/p3/r1/head-probe.log
+  sha256: 6ff5a49616fd37d61fda84321afd7a1723a9205f07cc2f0b76325cccce4ff861
+  source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+  at: '2026-09-13T23:08:30+00:00'
+  inputs:
+  - workflow/tools/patches.py
+  inputs_sha256: 344c82d366b4401a117969f81d092f3497ea33eb6ea00a8c29b409f261d1e303
+- check: l2
+  result: PASS
+  by: sol-m175
+  artifact: evidence/p3/r1/index-guard-probe.json
+  sha256: fd0cf7f5bc3c503b55fa4f4ae2401a228d9816a8345a463d6a34ac0532c858ed
+  source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+  at: '2026-09-13T23:08:30+00:00'
+  inputs:
+  - workflow/tools/check.sh
+  - workflow/tools/check_private_settings.py
+  inputs_sha256: e6b85bab1585d93171d6bf6b6c214e45248a160370bf00bbd72e81b955f5aff2
+- check: positive_control
+  result: PASS
+  by: sol-m175
+  artifact: evidence/p3/r1/head-probe.json
+  sha256: e65f7aac2768d4a96bb6bdf7ebe07a7c501f465e1c9e78c9e72816a0c4e7cd42
+  source_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
+  at: '2026-09-13T23:08:30+00:00'
+  inputs:
+  - workflow/tools/check_private_settings.py
+  - workflow/tools/patches.py
+  inputs_sha256: 00779e5b7fce6887518c627ddaf76c21e612c97354c80049e4dd06dd9bc89f50
+- check: red
+  result: PASS
+  by: sol-m175
+  artifact: evidence/p3/r1/baseline-probe.log
+  sha256: 2d2464f63a9d71d8b5e887c37ca7efa35a51768d17a9b66e372984028c1fa89e
+  source_sha: ba86b4b3d0d70842b2ff325bdd448f2bdb2bd147
+  at: '2026-09-13T23:08:30+00:00'

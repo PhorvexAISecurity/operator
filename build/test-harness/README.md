@@ -430,9 +430,40 @@ kind / EKS / CoreWeave / vcluster purely by swapping a per-target config
 | `phoenixSrcDir` | phoenix-extended source tree for the FullPhoenix arm (empty = that arm skips-with-note) |
 | `outDir` | where `metrics.jsonl`, `raw/`, `provenance.json`, `report.md`, `mitre_matrix.md` are written |
 | `defenderFilter` / `scenarioFilter` | optional subset filters (empty = run every registered plugin) |
+| `credentialObservationWindowSeconds` | how long the `c1-credtheft-rbac` scenario holds an exfiltrated credential before re-using it (see below). Omitted/`0` = **90s** default; valid range `1..1800` (30 min max). Larger values lengthen each credential-theft trial by that much. |
 
 See `config.kind.yaml` (live smoke) and `internal/config/config.example.yaml`. The
 metric schema is **identical** on every environment.
+
+#### `c1-credtheft-rbac` — same-credential replay and its observation window
+
+This scenario steals the **actual** projected ServiceAccount token from the
+compromised pod (via the in-pod exec seam) and replays **those exact bytes**
+against the API — it never mints a substitute credential. Measurement semantics:
+
+- **Same-credential, twice.** Execute captures the token and immediately replays
+  it once to prove initial usability; the oracle waits
+  `credentialObservationWindowSeconds` and replays the **same** bytes again. It
+  never re-reads a fresh token from a replacement pod. This initial replay is a
+  post-capture usability check while the defender is **already running** — it is
+  not a claim that observation predates `Defender.Start`.
+- **Invalid vs failed measurements.** A failed/empty theft, an initially unusable
+  credential, or any transport/TLS/5xx/malformed/timeout/cancelled observation is
+  an **invalid measurement** under the M161 validity contract — never a defensive
+  success. A genuine `401`/`403` *after* an accepted baseline is a real observed
+  denial (`Achieved=false`); it does **not** prove which actuator caused it.
+- **Natural-expiry exclusion.** If the captured credential's own decoded expiry is
+  reached by the (actual) final observation, the measurement is marked invalid
+  rather than crediting the defender for the token expiring on its own. Do not use
+  a short window to work around this.
+- **Binding limits.** Decoded JWT binding (`pod-bound` / `unbound` / `unknown`) is
+  **descriptive metadata only**, not independent cryptographic proof; opaque
+  credentials are `unknown`. Whether pod rotation invalidates an exfiltrated
+  credential is binding-dependent and measured, not assumed.
+- **Safe evidence.** Results record capture success, source pod name/UID, binding,
+  observation window, actual elapsed seconds and capture/final timestamps —
+  **never** token bytes, prefixes, digests, raw claims or credential-bearing
+  errors.
 
 ### Capability detection + skip-with-note
 

@@ -146,10 +146,20 @@ func (s *Server) guard(rt route) http.HandlerFunc {
 			switch {
 			case errors.Is(err, ErrNoGrant):
 				// Authenticated, but the deployment has bound this subject to nothing. This is the
-				// visible fail-closed state when the grant table has not been supplied yet.
-				writeJSON(w, http.StatusForbidden, map[string]string{
+				// visible fail-closed state when the grant table has not been supplied yet. The
+				// caller's own verified issuer+subject is echoed so the administrator can write
+				// the grant entry from what the screen shows — the exact `sub` is the key, and it
+				// is not otherwise discoverable without IdP console access.
+				body := map[string]string{
 					"error": "no authorization grant for this identity; a console administrator must bind this subject to a role and tenant scope",
-				})
+				}
+				var ng *NoGrantError
+				if errors.As(err, &ng) {
+					body["subject"] = ng.Subject
+					body["issuer"] = ng.Issuer
+					body["error"] += " — verified subject " + ng.Subject + " from " + ng.Issuer
+				}
+				writeJSON(w, http.StatusForbidden, body)
 			case errors.Is(err, ErrAmbiguousCredentials):
 				s.unauthorized(w, ErrAmbiguousCredentials.Error())
 			default:

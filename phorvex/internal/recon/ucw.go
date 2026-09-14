@@ -4,7 +4,11 @@
 
 package recon
 
-import "github.com/phorvex/phorvex/internal/model"
+import (
+	"sort"
+
+	"github.com/phorvex/phorvex/internal/model"
+)
 
 // ucwRecon is the DISCOVERED-physics recon profile that COMPLETES the PRD's Layer-C EMR
 // (Expected Reconnaissance Invalidated per Move) for BOTH products. It is the existing
@@ -132,24 +136,11 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
 		}
 
-		// The session fact is produced by standardRecon above; look it up by kind rather than
-		// re-minting one, so there is exactly one session fact per asset and the key cannot drift.
-		sessKey := ""
-		for _, f := range af.Facts {
-			if f.Kind == FactSession {
-				sessKey = f.Key()
-				break
-			}
-		}
-
 		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
 		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
 		// route they learned, which is what the audit-only endpointPath represents.
 		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
 		// class as PHVX-9e.
-		if sessKey != "" {
-			af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], sessKey)
-		}
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
 		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
 		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
@@ -183,15 +174,26 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
 		// jailbreak, request-drain for a request hijack) over other eligible moves.
 		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
-		// only the weight is lifted. Self-limiting: the boost is gone once the event ages out.
-		if hasVectorEvent(view.Events, model.AttackVectorKV) && sessKey != "" {
-			boostFactWeight(af.Facts, FactSession, vectorDominance) // -> kv-reset
+		// only the weight is lifted. There is deliberately no age predicate here: an event
+		// retained in the workload view remains an observation until ingestion removes it.
+		if refs := vectorEvents(view.Events, model.AttackVectorKV); len(refs) > 0 {
+			boostFactWeight(af.Facts, FactSession, model.AttackVectorKV, vectorDominance, refs) // -> kv-reset
 		}
-		if hasVectorEvent(view.Events, model.AttackVectorGuardrail) {
-			boostFactWeight(af.Facts, FactGuardrailBypass, vectorDominance) // -> guardrail-rotate
+		if refs := vectorEvents(view.Events, model.AttackVectorGuardrail); len(refs) > 0 {
+			boostFactWeight(af.Facts, FactGuardrailBypass, model.AttackVectorGuardrail, vectorDominance, refs) // -> guardrail-rotate
 		}
-		if hasVectorEvent(view.Events, model.AttackVectorInflight) {
-			boostFactWeight(af.Facts, FactInflightRequests, vectorDominance) // -> request-drain
+		if refs := vectorEvents(view.Events, model.AttackVectorInflight); len(refs) > 0 {
+			boostFactWeight(af.Facts, FactInflightRequests, model.AttackVectorInflight, vectorDominance, refs) // -> request-drain
+		}
+	}
+	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
+	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
+	if view.Pod.ServingEndpointReady {
+		for _, f := range af.Facts {
+			if f.Kind == FactSession {
+				af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], f.Key())
+				break
+			}
 		}
 	}
 
@@ -295,23 +297,43 @@ func boundMultAt(m, cap float64) (float64, bool) {
 // structural ×3 dominance adapter-integrity uses, so the surgical actuator outranks the cheap cover.
 const vectorDominance = 3.0
 
-// hasVectorEvent reports whether a pod-targeting SecurityEvent of the given attack-vector rule type
-// is active on this workload (the signal a red-team fire raises to name its attack).
-func hasVectorEvent(events []model.SecurityEventInfo, vectorType string) bool {
+// vectorEvents returns every pod-targeting observation that jointly causes the one
+// multiplier for vectorType. Trust remains an ingestion responsibility (M-94).
+func vectorEvents(events []model.SecurityEventInfo, vectorType string) []model.VectorSteeringEvent {
+	refs := make([]model.VectorSteeringEvent, 0)
 	for i := range events {
 		if events[i].TargetsPod && events[i].Type == vectorType {
-			return true
+			refs = append(refs, model.VectorSteeringEvent{
+				EventName: events[i].Name, EventUID: events[i].UID, RuleType: events[i].Type,
+				DeclaredSource: events[i].Source, TrustVerdict: events[i].Trust,
+				CreatorIdentity: events[i].CreatorIdentity,
+			})
 		}
 	}
-	return false
+	sort.Slice(refs, func(i, j int) bool { return steeringEventKey(refs[i]) < steeringEventKey(refs[j]) })
+	unique := refs[:0]
+	for _, ref := range refs {
+		if len(unique) == 0 || steeringEventKey(unique[len(unique)-1]) != steeringEventKey(ref) {
+			unique = append(unique, ref)
+		}
+	}
+	return unique
 }
 
-// boostFactWeight multiplies the weight of the first fact of the given kind in place. No-op if the
-// fact is absent (e.g. a serving pod that never emitted it), so it can never invent cover.
-func boostFactWeight(facts []Fact, kind string, mult float64) {
+func steeringEventKey(e model.VectorSteeringEvent) string {
+	return e.EventName + "\x00" + e.EventUID + "\x00" + e.RuleType + "\x00" + e.DeclaredSource + "\x00" + e.TrustVerdict + "\x00" + e.CreatorIdentity
+}
+
+// boostFactWeight applies exactly one factor to the first fact of the given kind and
+// carries the same producer branch's observations. It never invents an absent fact.
+func boostFactWeight(facts []Fact, kind, vectorType string, mult float64, refs []model.VectorSteeringEvent) {
 	for i := range facts {
 		if facts[i].Kind == kind {
 			facts[i].Weight *= mult
+			facts[i].SteeredBy = &model.VectorSteeringAttribution{
+				RuleType: vectorType, AppliedMultiplier: mult,
+				Events: append([]model.VectorSteeringEvent(nil), refs...),
+			}
 			return
 		}
 	}

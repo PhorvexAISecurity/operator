@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -50,14 +51,21 @@ func (m *mockVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, err
 type mockMIG struct {
 	repErr, availErr error
 	calls            [][3]string
+	node             string
 }
 
-func (m *mockMIG) Available(_ context.Context, _ string) error { return m.availErr }
+func (m *mockMIG) Prepare(_ context.Context, node string) (preparedMIG, error) {
+	if m.availErr != nil {
+		return nil, m.availErr
+	}
+	m.node = node
+	return m, nil
+}
 func (m *mockMIG) CurrentProfile(_ context.Context, _, _ string) (string, error) {
 	return "1g.10gb", nil
 }
-func (m *mockMIG) Repartition(_ context.Context, node, gpu, profile string) error {
-	m.calls = append(m.calls, [3]string{node, gpu, profile})
+func (m *mockMIG) Repartition(_ context.Context, gpu, profile string) error {
+	m.calls = append(m.calls, [3]string{m.node, gpu, profile})
 	return m.repErr
 }
 
@@ -93,7 +101,9 @@ func (m *mockKVXfer) MigrateRemote(_ context.Context, _ servingEndpoint, _ []str
 // ---- pod builders ----
 func aiPod(ns, name string, labels map[string]string) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, ResourceVersion: "7", Labels: labels, Annotations: map[string]string{}},
+		// [M-69] every fixture Pod carries a distinct nonempty UID: the destructive AI handlers
+		// bind their trigger check and their Delete to it, exactly as the runner's snapshot does.
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, UID: types.UID("uid-" + name), ResourceVersion: "7", Labels: labels, Annotations: map[string]string{}},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning, PodIP: "10.0.0.9",
 			Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
 		Spec: corev1.PodSpec{NodeName: "node-a", Containers: []corev1.Container{{Name: "vllm", Image: "vllm:latest"}}},
@@ -104,13 +114,19 @@ func fakeC(objs ...client.Object) client.Client {
 }
 func leaderRole(p *corev1.Pod) string { return p.Labels[labelRole] }
 
+// boundReq is the runner's shape of a destructive AI request: it names the Pod AND binds the
+// identity (TargetUID) of the observed object the selection was made against.
+func boundReq(p *corev1.Pod, a model.Action) Request {
+	return Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a}
+}
+
 // ---- warm-swap ----
 func TestWarmSwapPromotesRetiresAndRewarms(t *testing.T) {
 	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true}
-	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "leader", Action: model.ActionWarmSwap})
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err != nil {
 		t.Fatalf("warm-swap: %v", err)
 	}
@@ -139,7 +155,7 @@ func TestWarmSwapPromotesRetiresAndRewarms(t *testing.T) {
 func TestWarmSwapFailClosedNoReadyShadow(t *testing.T) {
 	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	c := fakeC(leader)
-	_, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "leader", Action: model.ActionWarmSwap})
+	_, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, boundReq(leader, model.ActionWarmSwap))
 	if err == nil {
 		t.Fatal("warm-swap must FAIL-CLOSED with no Ready shadow")
 	}
@@ -155,7 +171,7 @@ func TestWarmSwapStackUnreachableFallsBackToK8sGate(t *testing.T) {
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{readyErr: errStackUnreachable} // no vLLM stack
-	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "leader", Action: model.ActionWarmSwap})
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err != nil {
 		t.Fatalf("warm-swap (unreachable stack, K8s gate): %v", err)
 	}
@@ -255,7 +271,9 @@ func migPod(ns, name string) *corev1.Pod {
 	p := aiPod(ns, name, map[string]string{labelRole: roleLeader})
 	p.Annotations[annoGPUID] = "GPU-0"
 	p.Annotations[annoMIGProfile] = "2g.20gb"
+	// an extended resource is non-overcommittable: the API server requires limits == requests.
 	p.Spec.Containers[0].Resources.Requests = corev1.ResourceList{"nvidia.com/mig-1g.10gb": resource.MustParse("1")}
+	p.Spec.Containers[0].Resources.Limits = corev1.ResourceList{"nvidia.com/mig-1g.10gb": resource.MustParse("1")}
 	return p
 }
 
@@ -263,7 +281,7 @@ func TestMIGRebindRealRepartitionEvictsPod(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	mm := &mockMIG{} // Available nil + Repartition succeeds
-	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mm, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionMIGRebind})
+	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 	if err != nil {
 		t.Fatalf("mig-rebind: %v", err)
 	}
@@ -291,7 +309,7 @@ func TestMIGRebindRepartitionFailureEmitsNothing(t *testing.T) {
 		Client: c,
 		MIG:    &mockMIG{repErr: errors.New("live CUDA context blocks repartition")},
 		VLLM:   &mockVLLM{},
-	}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionMIGRebind})
+	}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("failed repartition must return an error")
 	}
@@ -303,7 +321,7 @@ func TestMIGRebindRepartitionFailureEmitsNothing(t *testing.T) {
 func TestMIGRebindFailClosedNoDevice(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelRole: roleLeader}) // no MIG resource
 	c := fakeC(pod)
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionMIGRebind})
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{}}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("mig-rebind must FAIL-CLOSED without a MIG device")
 	}
@@ -313,7 +331,7 @@ func TestMIGRebindFailClosedNoDevice(t *testing.T) {
 func TestMIGRebindFailClosedTransportUnavailable(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{availErr: errors.New("node-exec not wired")}, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionMIGRebind})
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{availErr: errors.New("node-exec not wired")}, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("mig-rebind must FAIL-CLOSED when the node-exec transport is unavailable")
 	}
@@ -327,7 +345,7 @@ func TestMIGRebindDefaultRunnerFailsClosed(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	// no MIG injected => the package default (unconfigured nodeRunner) => must fail-closed.
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionMIGRebind})
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("mig-rebind with the default unconfigured node runner must FAIL-CLOSED [PENDING-GPU-VALIDATION]")
 	}
@@ -338,7 +356,7 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 	leader := aiPod("ns", "shard0", map[string]string{labelModelShard: "s", labelRole: roleLeader})
 	shadow := aiPod("ns", "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
-	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, Request{Namespace: "ns", Pod: "shard0", Action: model.ActionModelShardReplace})
+	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
 	if err != nil {
 		t.Fatalf("model-shard-replace: %v", err)
 	}
@@ -355,7 +373,7 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 func TestModelShardReplaceFailClosedNoShard(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelRole: roleLeader}) // no model-shard label
 	c := fakeC(pod)
-	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionModelShardReplace})
+	_, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c}, boundReq(pod, model.ActionModelShardReplace))
 	if err == nil {
 		t.Fatal("model-shard-replace must FAIL-CLOSED without a declared shard")
 	}

@@ -103,10 +103,21 @@ class DeployAutosyncTests(unittest.TestCase):
         ci = yaml.load((ROOT / '.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
         step = next(s for s in ci['jobs']['deploy']['steps']
                     if s.get('name') == 'Wait for ArgoCD to roll it out')
-        self.assertEqual(step['if'], "steps.bump.outputs.changed == 'true'")
+        self.assertEqual(step['if'], "steps.publish.outputs.released == 'true'")
         self.assertIn('< deploy/argocd/wait-for-rollout.sh', step['run'])
         self.assertIn('V=$V bash -s', step['run'])
         self.assertLess(step['run'].index('[[ "$V" =~'), step['run'].index('sshpass -e ssh'))
+        # The waiter logs in with the shared jump-host password, so it verifies the same
+        # pinned host identity as the E2E transport (T1-E2E-AUTH) and never accepts an
+        # unknown or changed key.
+        self.assertIn('StrictHostKeyChecking=yes', step['run'])
+        self.assertIn('UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS', step['run'])
+        self.assertNotIn('StrictHostKeyChecking=no', step['run'])
+        self.assertNotIn('UserKnownHostsFile=/dev/null', step['run'])
+        steps = ci['jobs']['deploy']['steps']
+        provisioning = next(s for s in steps if s.get('name') == 'Provision the SSH host identity')
+        self.assertEqual(provisioning['if'], step['if'])
+        self.assertLess(steps.index(provisioning), steps.index(step))
         chart = '\n'.join(s.get('run', '') for s in ci['jobs']['chart-sync']['steps'])
         self.assertIn('python3 tools/test_deploy_autosync.py', chart)
         self.assertIn('bash -n deploy/argocd/wait-for-rollout.sh', chart)

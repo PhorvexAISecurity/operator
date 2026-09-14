@@ -1,0 +1,66 @@
+package actuator
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/phorvex/phorvex/internal/model"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+)
+
+func TestM46HandlerUsesCanonicalMIGPredicate(t *testing.T) {
+	tests := []struct {
+		name       string
+		requests   corev1.ResourceList
+		limits     corev1.ResourceList
+		wantReason string
+	}{
+		{
+			name:       "canonical-limit",
+			limits:     corev1.ResourceList{"nvidia.com/mig-1g.10gb": resource.MustParse("1")},
+			wantReason: "transport unavailable",
+		},
+		{
+			name:       "non-mig-nvidia-resource",
+			requests:   corev1.ResourceList{"nvidia.com/mps": resource.MustParse("1")},
+			wantReason: "has no MIG device",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "infer-" + tt.name,
+					Annotations: map[string]string{
+						annoGPUID:      "0",
+						annoMIGProfile: "2g.20gb",
+					},
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "gpu-a",
+					Containers: []corev1.Container{{
+						Name: "infer",
+						Resources: corev1.ResourceRequirements{
+							Requests: tt.requests,
+							Limits:   tt.limits,
+						},
+					}},
+				},
+			}
+			c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(pod).Build()
+			_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{
+				Client: c,
+				MIG:    &mockMIG{availErr: errors.New("probe stopped before mutation")},
+			}, Request{Namespace: pod.Namespace, Pod: pod.Name, Action: model.ActionMIGRebind})
+			if err == nil || !strings.Contains(err.Error(), tt.wantReason) {
+				t.Fatalf("reason = %v, want substring %q", err, tt.wantReason)
+			}
+		})
+	}
+}
