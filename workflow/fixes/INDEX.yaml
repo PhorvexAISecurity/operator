@@ -350,6 +350,30 @@ fixes:
     stacked_on: []
     branch: fix/tier1-e2e-console-auth
     head_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  T2-M123:
+    directory: fixes/T2-M123
+    aliases: []
+    issues:
+    - M-123
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m123-coverage-documentation
+    head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+  T2-M042:
+    directory: fixes/T2-M042
+    aliases: []
+    issues:
+    - M-42
+    related_issues: []
+    state: IN_PR
+    dependencies:
+    - T2-M123
+    stacked_on:
+    - T2-M123
+    branch: fix/v3-m042-session-cover
+    head_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
   T2-M153:
     directory: fixes/T2-M153
     aliases: []
@@ -365,28 +389,6 @@ fixes:
     - T2-M016
     branch: fix/v3-m153-steering-trace
     head_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
-  T2-M042:
-    directory: fixes/T2-M042
-    aliases: []
-    issues:
-    - M-42
-    related_issues: []
-    state: OFFLINE_VERIFIED
-    dependencies: []
-    stacked_on: []
-    branch: fix/v3-m042-session-cover
-    head_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
-  T2-M123:
-    directory: fixes/T2-M123
-    aliases: []
-    issues:
-    - M-123
-    related_issues: []
-    state: IN_PR
-    dependencies: []
-    stacked_on: []
-    branch: fix/v3-m123-coverage-documentation
-    head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
   T2-M016:
     directory: fixes/T2-M016
     aliases: []
