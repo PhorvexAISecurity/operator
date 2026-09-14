@@ -2582,7 +2582,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-173 · Primary running image projection selects a sidecar by status order · **OPEN** · `SENSE->CONTRACT`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: V3-M173
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `SENSE->CONTRACT` — anatomy locus review required.
