@@ -339,6 +339,17 @@ fixes:
     stacked_on: []
     branch: fix/v3-m161-measurement-validity
     head_sha: 9db59ccaaf7aabc7fa4f1ea7f445e7b0e3f5c3ac
+  T1-E2E-AUTH:
+    directory: fixes/T1-E2E-AUTH
+    aliases: []
+    issues:
+    - M-136
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/tier1-e2e-console-auth
+    head_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
   T2-DIFF-PORTABILITY:
     directory: fixes/T2-DIFF-PORTABILITY
     aliases: []
