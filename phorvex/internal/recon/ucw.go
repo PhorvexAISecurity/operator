@@ -132,24 +132,11 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
 		}
 
-		// The session fact is produced by standardRecon above; look it up by kind rather than
-		// re-minting one, so there is exactly one session fact per asset and the key cannot drift.
-		sessKey := ""
-		for _, f := range af.Facts {
-			if f.Kind == FactSession {
-				sessKey = f.Key()
-				break
-			}
-		}
-
 		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
 		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
 		// route they learned, which is what the audit-only endpointPath represents.
 		// Granting it endpointPath asserted a defence it does not perform — the same false-credit
 		// class as PHVX-9e.
-		if sessKey != "" {
-			af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], sessKey)
-		}
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
 		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
 		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
@@ -184,7 +171,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// jailbreak, request-drain for a request hijack) over other eligible moves.
 		// Each fact stays covered by exactly the one action that invalidates it (cover set unchanged);
 		// only the weight is lifted. Self-limiting: the boost is gone once the event ages out.
-		if hasVectorEvent(view.Events, model.AttackVectorKV) && sessKey != "" {
+		if hasVectorEvent(view.Events, model.AttackVectorKV) {
 			boostFactWeight(af.Facts, FactSession, vectorDominance) // -> kv-reset
 		}
 		if hasVectorEvent(view.Events, model.AttackVectorGuardrail) {
@@ -192,6 +179,16 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		}
 		if hasVectorEvent(view.Events, model.AttackVectorInflight) {
 			boostFactWeight(af.Facts, FactInflightRequests, vectorDominance) // -> request-drain
+		}
+	}
+	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
+	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
+	if view.Pod.ServingEndpointReady {
+		for _, f := range af.Facts {
+			if f.Kind == FactSession {
+				af.CoverByAction[model.ActionKVMigrateInvalidate] = append(af.CoverByAction[model.ActionKVMigrateInvalidate], f.Key())
+				break
+			}
 		}
 	}
 
