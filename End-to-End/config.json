@@ -1,14 +1,26 @@
 {
-  "_comment": "End-to-End pipeline configuration. No secrets live here — the SSH password is read from $PHORVEX_SSH_PASSWORD or ~/.phorvex-e2e/secret.",
+  "_comment": "End-to-End pipeline configuration. No secrets live here — the SSH password is read from $PHORVEX_SSH_PASSWORD or ~/.phorvex-e2e/secret, and the console bearer token from $PHORVEX_CONSOLE_TOKEN or ~/.phorvex-e2e/console-token.",
   "transport": {
+    "_known_hosts_comment": [
+      "The jump host receives the SSH password and, now, the console bearer configuration, so",
+      "it is verified against a provisioned host key before anything is sent: known_hosts",
+      "names a file ON THIS MACHINE (the SSH client — the runner or your workstation; env",
+      "PHORVEX_SSH_KNOWN_HOSTS overrides) holding the host's key as `ssh-keyscan -p PORT HOST`",
+      "prints it, checked out of band against the host's own `ssh-keygen -lf` fingerprint.",
+      "ssh runs with StrictHostKeyChecking=yes against that file only: an unknown or changed",
+      "key fails without prompting. There is no accept-new or insecure fallback. Note the",
+      "distinction from console.ca_file, which is a path on the SSH HOST used by curl there."
+    ],
     "kind": "ssh",
     "host": "87.106.63.105",
     "user": "hami",
     "port": 22,
+    "known_hosts": null,
     "connect_timeout_sec": 10
   },
   "_console_comment": [
-    "The IN-CLUSTER console, reached over the ALB. This used to point at localhost:8095 on",
+    "The IN-CLUSTER console, reached over the authenticated endpoint DevOps provisions (see",
+    "_auth_comment below), never the Cognito ALB. This used to point at localhost:8095 on",
     "the jump host — a systemd service running a binary built from a loose, un-versioned",
     "copy of the source. That stack was never built by CI and never deployed by ArgoCD, so",
     "the suite was asserting contracts against code nobody could trace to a commit.",
@@ -17,15 +29,39 @@
     "the operator actually writes, so what this tests is what ArgoCD deployed."
   ],
   "console": {
-    "_mode_comment": [
-      "kubectl-proxy: reach the in-cluster console Service through the API server, NOT the",
-      "console.phorvex.ai ALB. The ALB now enforces Cognito login, so a plain curl to the",
-      "public host gets a login redirect and every check fails. The proxy reaches the SAME",
-      "console pod (it still tests the real deployed image), needs no auth, and needs no",
-      "public exposure — which is why the console Service was moved to ClusterIP.",
-      "Set mode back to 'http' with a base URL to test an unauthenticated host directly."
+    "_auth_comment": [
+      "The console authenticates every request except /api/health (docs/CONSOLE-AUTH.md).",
+      "mode=http sends real HTTP from the transport host to `base` and, with auth=bearer,",
+      "carries the console credential the deployed verifier checks. The credential is NEVER",
+      "in this file: it comes from $PHORVEX_CONSOLE_TOKEN (the CI secret) or from the private",
+      "0600 file named by token_file / $PHORVEX_CONSOLE_TOKEN_FILE — exactly one of them",
+      "may be configured, and configuring both is refused whether or not the file exists",
+      "(which is why token_file has no default here). It travels to curl on stdin, never in",
+      "argv, a URL or a retained error, with curl's default configuration disabled (-q).",
+      "",
+      "`base` is provisioned by DevOps and comes from $PHORVEX_CONSOLE_BASE (or set it here):",
+      "an HTTPS endpoint that reaches the console verifier with normal certificate checks",
+      "(ca_file / $PHORVEX_CONSOLE_CA_FILE names a CA bundle ON THE TRANSPORT HOST for a",
+      "private CA), or plain HTTP to a LITERAL loopback address (127.0.0.0/8 or [::1], never a",
+      "name) on the transport host — the SSH jump host in ssh mode — i.e. a tunnel DevOps owns",
+      "there, connected to directly (no inherited proxy). Whoever can bind that port on that",
+      "host receives the credential, so the tunnel's listener must be controlled by DevOps and",
+      "the port not shareable with other users of the host. Anything else is refused before a",
+      "request is made. Redirects are never followed, so a Cognito login redirect is an error",
+      "rather than a leaked credential. Missing base/credential fails preflight closed.",
+      "",
+      "mode=kubectl-proxy (the previous default) reaches the in-cluster Service through the",
+      "API server. It authenticates the kubectl user to the API SERVER and carries no console",
+      "credential, so since the identity boundary every protected route answers 401 through",
+      "it. It remains only as an explicit anonymous compatibility path (PHORVEX_CONSOLE_MODE).",
+      "",
+      "`lens` is a presentation hint the console may use to narrow a view; it is not identity."
     ],
-    "mode": "kubectl-proxy",
+    "mode": "http",
+    "auth": "bearer",
+    "base": null,
+    "token_file": null,
+    "ca_file": null,
     "service": { "namespace": "phorvex-system", "name": "phorvex-console", "port": 80 },
     "lens": "operator"
   },
