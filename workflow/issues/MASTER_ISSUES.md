@@ -2447,7 +2447,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M163
 
 ### M-164 · Detector webhooks acknowledge SecurityEvent creation failures as HTTP success · **OPEN** · `INGESTION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: V3-M164
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `INGESTION` — anatomy locus review required.
