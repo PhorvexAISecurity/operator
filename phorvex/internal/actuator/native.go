@@ -108,7 +108,18 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
 // saga coordinator). A handler that is not a Rollbacker (forward-only/irreversible)
 // returns a no-op nil.
+//
+// [M-87] Rollback is the SAME actuation boundary as Actuate: several Rollbackers write Pods
+// or call serving APIs, so the O7 tenant-namespace assertion and the central dry-run refusal
+// run here too, BEFORE handler lookup or invocation. Tenant first keeps Actuate's error
+// precedence; a refusal returns the error and reaches no K8s read/write or serving call.
 func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) error {
+	if err := n.assertTenantNamespace(req); err != nil {
+		return err
+	}
+	if n.DryRun {
+		return errDryRunGuard
+	}
 	h, ok := HandlerRegistry.Get(string(req.Action))
 	if !ok {
 		return nil

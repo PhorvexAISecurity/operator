@@ -1083,7 +1083,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-87 · Rollback: never called live, bypasses dry-run and the tenant check · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M087
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · the 18 native-rollback operation rows, shipped_reachability=tool-only
