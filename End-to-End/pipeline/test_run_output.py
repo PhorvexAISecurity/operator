@@ -45,7 +45,7 @@ class RunOutputTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.cfg = {'invariants': {}, 'transport': {'kind': 'local'}, 'console': {},
+        self.cfg = {'invariants': {}, 'transport': {'kind': 'local'}, 'console': {'mode': 'kubectl-proxy'},
                     'capture': {'stream_seconds': 1, 'post_attack_seconds': 1,
                                 'settle_seconds': 0, 'max_bytes': 100000, 'max_records': 100},
                     'controller_deployments': ['fixture-controller'],
