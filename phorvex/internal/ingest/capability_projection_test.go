@@ -32,6 +32,40 @@ func TestProjectPodCapabilityWitnesses(t *testing.T) {
 	}
 }
 
+func TestServingEndpointReadyProducerMatrix(t *testing.T) {
+	for _, tc := range []struct {
+		name                              string
+		gpu, model, port, ready, ip, want bool
+	}{
+		{"cpu-model", false, true, false, true, true, true}, {"cpu-port", false, false, true, true, true, true},
+		{"gpu", true, false, false, true, true, true}, {"plain-stateful", false, false, false, true, true, false},
+		{"unready", true, false, false, false, true, false}, {"missing-ip", true, false, false, true, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ann := map[string]string{}
+			if tc.model {
+				ann["phorvex.ai/model-id"] = "m"
+			}
+			if tc.port {
+				ann["phorvex.ai/serving-port"] = "8000"
+			}
+			p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Annotations: ann}, Status: corev1.PodStatus{}}
+			if tc.ip {
+				p.Status.PodIP = "10.0.0.2"
+			}
+			if tc.ready {
+				p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+			}
+			if tc.gpu {
+				p.Spec.Containers = []corev1.Container{{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("1")}}}}
+			}
+			if got := projectPod(p, time.Unix(10, 0)).ServingEndpointReady; got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestProjectPodInvalidParallelSizeIsUnavailable(t *testing.T) {
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 		"phorvex.ai/parallel-size": "not-a-number",

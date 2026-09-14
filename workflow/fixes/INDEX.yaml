@@ -459,6 +459,63 @@ fixes:
     stacked_on: []
     branch: fix/v3-m134-adoption-retry
     head_sha: f4da38d87e558c35e465d30874719fff14a3098f
+  T2-M162:
+    directory: fixes/T2-M162
+    aliases: []
+    issues:
+    - M-162
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m162-real-credential-replay
+    head_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
+  T2-M126:
+    directory: fixes/T2-M126
+    aliases: []
+    issues:
+    - M-126
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m126-bounded-metadata
+    head_sha: 73b30805f8036cdf420a97d213d64ad082515477
+  T2-M081:
+    directory: fixes/T2-M081
+    aliases: []
+    issues:
+    - M-81
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m081-bound-node-agent
+    head_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+  T2-M174:
+    directory: fixes/T2-M174
+    aliases: []
+    issues:
+    - M-174
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m174-policy-cadence
+    head_sha: f0185d445d5303c13588d9d6d059309b946e0d53
+  T2-M042:
+    directory: fixes/T2-M042
+    aliases: []
+    issues:
+    - M-42
+    related_issues: []
+    state: IN_PR
+    dependencies:
+    - T2-M123
+    stacked_on:
+    - T2-M123
+    branch: fix/v3-m042-session-cover
+    head_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
   T2-M154:
     directory: fixes/T2-M154
     aliases: []

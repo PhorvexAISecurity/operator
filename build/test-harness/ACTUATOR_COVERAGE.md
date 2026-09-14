@@ -103,8 +103,8 @@ the producers, so this table cannot silently drift.
 | `quarantine` | `networkIdentity`, one `lateralEdge` per neighbour | every fixture; edges only when the graph supplies neighbours |
 | `identity-rotate` | **none** | `profile.go:66`: the handler writes an `identity-epoch` label only (`handlers_k8s.go:223`); UID, SA token, IP and EndpointSlice membership are unchanged, so no fact is invalidated. Excluded `no-cover` before scoring. Removed in `992a52c` (2026-08-09, PHVX-9e). |
 | `route-rotate` | `networkIdentity` | `profile.go:97`: granted again since `ca50e82` (2026-08-26, PHORVEXSEC-129) because the handler now re-keys `phorvex.ai/route-key` **and** restitches the declared `phorvex.ai/route-service` selector, compensating the pod label if the Service write fails (`handlers_k8s.go:267`). Without the annotation the handler returns `Emitted=false` and nothing happens; with exactly one Ready backend it refuses. The recon grant itself is unconditional — the contract is enforced at dispatch, not at fact emission. The register's "route-rotate grant removed" line is stale. |
-| `kv-reset` | `session` | only when `FactContext.HasGPU \|\| FactContext.Stateful` (`profile.go:89`); the runner copies these from `Pod.HasGPU` / `Pod.Stateful` (`coverage.go:492`). Capability additionally needs a Ready serving endpoint. |
-| `kv-migrate-invalidate` | `session` | `ucw.go:145` (PHVX-77): covers the same session key as kv-reset, **not** `endpointPath`; emitted when `Pod.HasGPU \|\| Pod.ModelID != ""`. |
+| `kv-reset` | `session` | only when ingestion produced `Pod.ServingEndpointReady`: Ready plus PodIP plus GPU, model-id or serving-port indication. This is structural eligibility, not proof of a flush effect. |
+| `kv-migrate-invalidate` | `session` | uses the same `ServingEndpointReady` prerequisite and same session key as kv-reset, **not** `endpointPath`. |
 | `endpoint-rotate` | **none** | `endpointPath` is emitted for served models but audit-only (M-35): restitching a selector does not prove the learned locator is unusable. |
 | `model-shard-replace` | **none** | `modelFingerprint` audit-only (M-37): no loaded-identity/effect witness. |
 | `mig-rebind` | `gpuContentionChannel` | only when `Pod.MIGDevice != ""` (`ucw.go:131`); never `gpuColocation` — repartitioning does not move the pod. Capability also needs node, GPU id and target profile. |
@@ -121,19 +121,18 @@ Audit-only in every fixture: `endpointPath`, `modelFingerprint`, `gpuColocation`
 the generator projects weights only through cover keys (`generator.go`, "Objective weights
 are projected strictly through action covers").
 
-### 4.1 The M-42 asymmetry, as it is
+### 4.1 The M-42 common prerequisite
 
-Two different predicates decide the AI arms:
+Both session erasers now use one producer witness:
 
-- `standard-recon` sizes the session fact and grants kv-reset on
-  `FactContext.HasGPU || FactContext.Stateful` (= `Pod.HasGPU || Pod.Stateful`).
-- `ucw-recon` emits the AI facts and grants kv-migrate-invalidate / request-drain /
-  guardrail-rotate on `Pod.HasGPU || Pod.ModelID != ""`.
+- `standard-recon` and `ucw-recon` grant their session eraser cover only when
+  `Pod.ServingEndpointReady` is true.
+- GPU/stateful still changes session exposure weight; GPU/model still controls the
+  separate UCW AI facts and their unrelated action covers.
 
-The `cpu-served-model` fixture shows the gap: a pod with `ModelID` set, no GPU and not
-stateful gets every AI fact and a kv-migrate-invalidate session grant, while its session
-weight stays at 0.6 and kv-reset gets nothing. This guide records the asymmetry; M-42
-remains open and nothing here changes it.
+The `cpu-served-model` fixture now grants both erasers the same session key at weight
+0.6. The plain stateful fixture retains full session weight but grants neither eraser
+without the endpoint witness.
 
 ### 4.2 Attack-vector steering (the ×3 lever)
 
@@ -195,7 +194,7 @@ under test, so their pins are unknown. Summary:
 
 ## 6. Open obligations this guide does not resolve
 
-- **M-42** session-arm asymmetry (§4.1). **M-35** endpointPath audit-only. **M-43**
+- **M-42** common session prerequisite (§4.1). **M-35** endpointPath audit-only. **M-43**
   pod-deleting AI moves under-credited. **M-37** model-shard-replace cover withheld.
 - **M-94** trust boundary: source enforcement is in; live acceptance of the deployed
   composition remains open (`workflow/fixes/T2-M123/AUTHORIZATION.md`: Tier 1 live

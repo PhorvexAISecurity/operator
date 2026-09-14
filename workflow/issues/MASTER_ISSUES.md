@@ -837,7 +837,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-81 · The privileged MIG agent is selected by an unauthenticated cluster-wide label match · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T2-M081
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.mig_agent
@@ -1443,7 +1443,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-42 · Session-fact gate asymmetry: kv-reset vs kv-migrate · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M042
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
@@ -1709,7 +1709,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M120
 
 ### M-126 · Tenant identity can overflow the 63-char label-value cap · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M126
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
@@ -2417,7 +2417,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M161
 
 ### M-162 · Credential-theft oracle replaces the captured credential with a new unbound token · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M162
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.
@@ -2597,7 +2597,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M173
 
 ### M-174 · Observed decision cadence exceeds configured policy interval · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: none
+Severity: MEDIUM · Tier: unassigned · Fixes: T2-M174
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONTROL` — anatomy locus review required.

@@ -15,7 +15,7 @@ import (
 func aiPod() *model.WorkloadView {
 	return &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "llm", Node: "node-a", HasGPU: true, ModelID: "m", Stateful: true,
-		RouteService: "infer", GuardrailVariants: 2,
+		RouteService: "infer", GuardrailVariants: 2, ServingEndpointReady: true,
 	}}
 }
 

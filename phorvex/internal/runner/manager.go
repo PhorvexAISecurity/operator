@@ -3,11 +3,12 @@
  */
 
 // Package runner is the per-tenant orchestration: it holds the live set of
-// PhorvexPolicies (the tenant registry), and a single tick Runnable that, each base
-// interval, builds ONE cluster ingest snapshot and processes every DUE tenant
+// PhorvexPolicies (the tenant registry), and a single tick Runnable that, at the next
+// policy or maintenance deadline, builds ONE cluster ingest snapshot and processes every DUE tenant
 // (ingest -> graph -> exposure -> decide -> audit/metrics -> [active] actuate). One
 // snapshot shared across tenants keeps a tick cheap (NFR1). Per-tenant cadence is
-// honored by skipping a tenant until its own tickInterval has elapsed.
+// honored by scheduling from the shared-snapshot admission time. Ticks remain serialized:
+// work and outages can delay service, and snapshot failures retry at a bounded maintenance wake.
 package runner
 
 import (
@@ -266,6 +267,48 @@ type Manager struct {
 	// never register one and must not have their feedback dropped; once tracking is on it
 	// applies to every owner, so a retired owner can never masquerade as unregistered.
 	epochsTracked bool
+	// scheduleClock is a private seam for exact scheduler tests. Production leaves it nil
+	// and uses monotonic time.Timer deadlines.
+	scheduleClock managerClock
+}
+
+type tickResult uint8
+
+const (
+	tickNoSnapshot tickResult = iota
+	tickSnapshotSucceeded
+	tickSnapshotFailed
+)
+
+type managerTimer interface {
+	C() <-chan time.Time
+	Reset(time.Duration)
+	Stop()
+}
+
+type managerClock interface {
+	Now() time.Time
+	NewTimer(time.Duration) managerTimer
+}
+
+type wallManagerClock struct{}
+
+func (wallManagerClock) Now() time.Time { return time.Now() }
+func (wallManagerClock) NewTimer(d time.Duration) managerTimer {
+	return &wallManagerTimer{timer: time.NewTimer(d)}
+}
+
+type wallManagerTimer struct{ timer *time.Timer }
+
+func (t *wallManagerTimer) C() <-chan time.Time   { return t.timer.C }
+func (t *wallManagerTimer) Reset(d time.Duration) { t.timer.Reset(d) }
+func (t *wallManagerTimer) Stop()                 { t.timer.Stop() }
+
+func (m *Manager) managerClock() managerClock {
+	if m.scheduleClock != nil {
+		return m.scheduleClock
+	}
+	return wallManagerClock{}
 }
 
 // lifecycleEvent is one ownership transition awaiting the tick-loop drain. It carries the
@@ -746,22 +789,72 @@ func (m *Manager) Start(ctx context.Context) error {
 			m.PerTickTimeout = 2 * time.Minute
 		}
 	}
-	t := time.NewTicker(m.BaseInterval)
+	clock := m.managerClock()
+	baseDeadline := clock.Now().Add(m.BaseInterval)
+	t := clock.NewTimer(m.BaseInterval)
 	defer t.Stop()
 	m.Log.Info("phorvex tick loop started", "baseInterval", m.BaseInterval.String(), "perTickTimeout", m.PerTickTimeout.String())
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-t.C:
+		case <-t.C():
+			// Cancellation can race a ready timer. It wins before admission, including after
+			// a prior blocked tick returns because its parent context was cancelled.
+			if ctx.Err() != nil {
+				return nil
+			}
+			now := clock.Now()
+			baseDeadline = nextMaintenanceDeadline(baseDeadline, now, m.BaseInterval)
 			// [P4b livelock fix] bound each tick: a slow/hung API server makes the tick ctx
 			// expire, CollectSnapshot/Get return promptly, the tick SKIPS (and a timed-out
 			// kill-switch read fail-CLOSES per FIX 1) — the loop never wedges.
 			tctx, cancel := context.WithTimeout(ctx, m.PerTickTimeout)
-			m.tick(tctx)
+			result := m.tick(tctx)
 			cancel()
+			if ctx.Err() != nil {
+				return nil
+			}
+			now = clock.Now()
+			// Work can cross the maintenance deadline selected before admission. Coalesce
+			// again so a failed snapshot always retries in the future, never at Reset(0).
+			baseDeadline = nextMaintenanceDeadline(baseDeadline, now, m.BaseInterval)
+			deadline := m.nextWakeDeadline(now, baseDeadline, result != tickSnapshotFailed)
+			t.Reset(max(deadline.Sub(now), time.Duration(0)))
 		}
 	}
+}
+
+// nextMaintenanceDeadline advances a missed maintenance deadline to the first future
+// period. It never replays a backlog after slow serialized work.
+func nextMaintenanceDeadline(deadline, now time.Time, interval time.Duration) time.Time {
+	if deadline.After(now) {
+		return deadline
+	}
+	missed := now.Sub(deadline)/interval + 1
+	return deadline.Add(missed * interval)
+}
+
+// nextWakeDeadline chooses an exact monotonic policy deadline when one is established.
+// Empty histories wait for maintenance. After snapshot failure, policy deadlines are
+// suppressed for one arm so unchanged history cannot create a zero-delay retry loop.
+func (m *Manager) nextWakeDeadline(now, baseDeadline time.Time, includePolicies bool) time.Time {
+	next := baseDeadline
+	if !includePolicies {
+		return next
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, e := range m.policies {
+		if e == nil || e.lastTick.IsZero() {
+			continue
+		}
+		deadline := e.lastTick.Add(e.spec.EffectiveTickInterval())
+		if deadline.Before(next) {
+			next = deadline
+		}
+	}
+	return next
 }
 
 // reconcileWedged converges crash-wedged actuator state (a double-leader warm-swap; an
@@ -780,7 +873,7 @@ func (m *Manager) reconcileWedged(ctx context.Context, namespaces []string) {
 }
 
 // tick builds one cluster snapshot and processes all due tenants.
-func (m *Manager) tick(ctx context.Context) {
+func (m *Manager) tick(ctx context.Context) tickResult {
 	// [M-140] Complete pending ownership transitions BEFORE any snapshot or decision work,
 	// on every tick including ones with no due policy, so a removal is never stranded behind
 	// an idle tenant and no decision is priced from a departed owner's state.
@@ -795,7 +888,7 @@ func (m *Manager) tick(ctx context.Context) {
 	nsSet := map[string]bool{}
 	liveOwners := make([]string, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
-	now := time.Now()
+	now := m.managerClock().Now()
 	for _, e := range m.policies {
 		if e.namespace != "" {
 			nsSet[e.namespace] = true
@@ -850,7 +943,7 @@ func (m *Manager) tick(ctx context.Context) {
 
 	calibrationDue := m.Calibration != nil && m.Calibration.Due(now)
 	if len(due) == 0 && !calibrationDue {
-		return
+		return tickNoSnapshot
 	}
 
 	var ownerReader client.Reader
@@ -867,7 +960,7 @@ func (m *Manager) tick(ctx context.Context) {
 	})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
-		return
+		return tickSnapshotFailed
 	}
 
 	m.observeEventTrust(snap.Events)
@@ -896,6 +989,7 @@ func (m *Manager) tick(ctx context.Context) {
 	for _, e := range due {
 		m.processTenantWithPhysics(ctx, snap, e, killEngaged, physicsByKey)
 	}
+	return tickSnapshotSucceeded
 }
 
 func (m *Manager) publishRLSMetrics() {
@@ -1328,6 +1422,16 @@ func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *p
 	m.processTenantWithPhysics(ctx, snap, e, killEngaged, physicsByKey)
 }
 
+// creditCadence advances only the identity admitted in this tick. An in-flight
+// predecessor must never stamp its admission time onto a replacement UID.
+func (m *Manager) creditCadence(e *policyEntry, admittedAt time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if cur := m.policies[e.key.String()]; cur != nil && cur.uid == e.uid {
+		cur.lastTick = admittedAt
+	}
+}
+
 func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool, physicsByKey map[string]model.PhysicsWitness) {
 	start := time.Now()
 	pol := buildPolicy(e)
@@ -1497,11 +1601,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 			ce.RetainStageClock(pol.Owner(), keep)
 		}
-		m.mu.Lock()
-		if cur := m.policies[e.key.String()]; cur != nil {
-			cur.lastTick = snap.Now
-		}
-		m.mu.Unlock()
+		m.creditCadence(e, snap.Now)
 		return
 	}
 	if shadowAvailable {
@@ -1615,11 +1715,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	m.updateExistentialStatus(ctx, e, decisions, inventory)
 	m.updateStatus(ctx, e, len(views), selected, 0, killEngaged, time.Now(), actionsSupport)
 
-	m.mu.Lock()
-	if cur := m.policies[e.key.String()]; cur != nil {
-		cur.lastTick = snap.Now
-	}
-	m.mu.Unlock()
+	m.creditCadence(e, snap.Now)
 }
 
 func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) bool {

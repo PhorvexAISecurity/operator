@@ -69,8 +69,8 @@ func coverInvariantProbes() []coverInvariantProbe {
 
 	return []coverInvariantProbe{
 		probe("generic", model.Pod{}, FactContext{}),
-		probe("stateful", model.Pod{Stateful: true}, FactContext{Stateful: true}),
-		probe("model", model.Pod{ModelID: "shared-model"}, FactContext{}),
-		probe("gpu", model.Pod{HasGPU: true, MIGDevice: "1g.10gb", ModelID: "shared-model", SuspectAdapter: "suspect"}, FactContext{HasGPU: true}),
+		probe("stateful", model.Pod{Stateful: true, ServingEndpointReady: true}, FactContext{Stateful: true}),
+		probe("model", model.Pod{ModelID: "shared-model", ServingEndpointReady: true}, FactContext{}),
+		probe("gpu", model.Pod{HasGPU: true, MIGDevice: "1g.10gb", ModelID: "shared-model", SuspectAdapter: "suspect", ServingEndpointReady: true}, FactContext{HasGPU: true}),
 	}
 }
