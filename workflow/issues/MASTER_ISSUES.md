@@ -1126,7 +1126,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-134 · Phoenix adoption race: the first actuations after policy creation are rejected and lost · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M134
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
