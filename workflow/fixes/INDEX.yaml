@@ -448,6 +448,28 @@ fixes:
     stacked_on: []
     branch: fix/v3-m123-coverage-documentation
     head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
+  T2-M134:
+    directory: fixes/T2-M134
+    aliases: []
+    issues:
+    - M-134
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m134-adoption-retry
+    head_sha: f4da38d87e558c35e465d30874719fff14a3098f
+  T2-M162:
+    directory: fixes/T2-M162
+    aliases: []
+    issues:
+    - M-162
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m162-real-credential-replay
+    head_sha: bb31bd7fca143cfc7f7fd1143ff2cc61837b1f6a
   T2-M126:
     directory: fixes/T2-M126
     aliases: []

@@ -83,7 +83,25 @@ type TargetConfig struct {
 
 	// RoiHorizonYears is the costing horizon. DEFAULT 1.0.
 	RoiHorizonYears float64 `json:"roiHorizonYears"`
+
+	// CredentialObservationWindowSeconds is the positive observation interval the
+	// credential-replay scenario waits between the initial post-capture usability
+	// replay and the final continued-capability replay of the SAME captured
+	// credential. It is how long the attacker "holds" an exfiltrated token before
+	// re-using it, so a defender that revokes/rotates within the window is
+	// measured, not credited for the token's own natural expiry. DEFAULT 90s;
+	// omitted (0) gets the default. Bounded to <= 30 minutes so a live matrix
+	// stays finite. Tests inject a wait seam so they never actually sleep.
+	CredentialObservationWindowSeconds int `json:"credentialObservationWindowSeconds"`
 }
+
+// DefaultCredentialObservationWindowSeconds is the observation interval applied
+// when the config omits it (0). It is a deliberate, documented positive default.
+const DefaultCredentialObservationWindowSeconds = 90
+
+// MaxCredentialObservationWindowSeconds bounds the observation interval so a
+// live run cannot be made to wait indefinitely (30 minutes).
+const MaxCredentialObservationWindowSeconds = 30 * 60
 
 // ErrAckMissing is returned when OwnedAck is not true.
 var ErrAckMissing = errors.New("config: ownedAck is REQUIRED and must be true — this is an offensive harness; you must acknowledge you OWN/are AUTHORIZED on the target cluster")
@@ -135,6 +153,9 @@ func (c *TargetConfig) applyDefaults() {
 	if c.RoiHorizonYears == 0 {
 		c.RoiHorizonYears = 1.0
 	}
+	if c.CredentialObservationWindowSeconds == 0 {
+		c.CredentialObservationWindowSeconds = DefaultCredentialObservationWindowSeconds
+	}
 }
 
 // ROIInputs returns the swappable ROI knobs as a plain tuple (the core economics
@@ -167,6 +188,14 @@ func (c TargetConfig) Validate() error {
 	}
 	if c.TrialsPerArm < 1 {
 		return fmt.Errorf("config: trialsPerArm must be >= 1, got %d", c.TrialsPerArm)
+	}
+	if c.CredentialObservationWindowSeconds < 0 {
+		return fmt.Errorf("config: credentialObservationWindowSeconds must be >= 0 (0 = default %ds), got %d",
+			DefaultCredentialObservationWindowSeconds, c.CredentialObservationWindowSeconds)
+	}
+	if c.CredentialObservationWindowSeconds > MaxCredentialObservationWindowSeconds {
+		return fmt.Errorf("config: credentialObservationWindowSeconds must be <= %d (30m), got %d",
+			MaxCredentialObservationWindowSeconds, c.CredentialObservationWindowSeconds)
 	}
 	return nil
 }
