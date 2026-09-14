@@ -10,7 +10,10 @@
 #     runs-dir  directory holding run-<stamp>.html / .json (End-to-End/runs)
 #     prefix    destination path segment, e.g. "pr-42" or "main"
 #
-# Requires PHORVEX_SSH_HOST / PHORVEX_SSH_USER / PHORVEX_SSH_PASSWORD in the environment.
+# Requires PHORVEX_SSH_HOST / PHORVEX_SSH_USER / PHORVEX_SSH_PASSWORD in the environment, and
+# PHORVEX_SSH_KNOWN_HOSTS naming the provisioned known_hosts file ON THIS MACHINE that pins
+# the jump host's key: the password goes to whatever answers that port, so the host is
+# verified strictly, exactly as the pipeline's own transport does. No accept-new, no `no`.
 # Writes `url` and `stamp` to $GITHUB_OUTPUT when running under Actions.
 
 set -euo pipefail
@@ -39,6 +42,11 @@ PY
 HOST="${PHORVEX_SSH_HOST:?PHORVEX_SSH_HOST not set}"
 USER_="${PHORVEX_SSH_USER:?PHORVEX_SSH_USER not set}"
 : "${PHORVEX_SSH_PASSWORD:?PHORVEX_SSH_PASSWORD not set}"
+KNOWN_HOSTS="${PHORVEX_SSH_KNOWN_HOSTS:?PHORVEX_SSH_KNOWN_HOSTS (provisioned known_hosts file) not set}"
+if [[ ! -s "$KNOWN_HOSTS" ]]; then
+  echo "refusing to publish: known_hosts file '$KNOWN_HOSTS' is missing or empty; the jump host's key must be provisioned" >&2
+  exit 2
+fi
 
 BASE_URL="${CI_REPORT_BASE_URL:-https://ci-report.phorvex.ai}"
 NS="${CI_REPORT_NAMESPACE:-ci-reports}"
@@ -53,7 +61,8 @@ fi
 
 # sshpass reads the password from the environment, so it never appears in `ps` or in a log.
 SSHPASS="$PHORVEX_SSH_PASSWORD"; export SSHPASS
-SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
+SSH_OPTS=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$KNOWN_HOSTS"
+          -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o LogLevel=ERROR
           -o ConnectTimeout=15)
 ssh_() { sshpass -e ssh "${SSH_OPTS[@]}" "$USER_@$HOST" "$@"; }
 scp_() { sshpass -e scp "${SSH_OPTS[@]}" "$@"; }
