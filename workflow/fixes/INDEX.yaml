@@ -361,6 +361,39 @@ fixes:
     stacked_on: []
     branch: fix/v3-m173-primary-image
     head_sha: 3d42de0974f440f64aca111763199f45c4b7ca99
+  T2-M016:
+    directory: fixes/T2-M016
+    aliases: []
+    issues:
+    - M-16
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m016-counterfactual-note
+    head_sha: b000aad2cbeebd8792e802c0b8aee766173abac7
+  T2-M087:
+    directory: fixes/T2-M087
+    aliases: []
+    issues:
+    - M-87
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m087-rollback-boundary
+    head_sha: f1e01300029fa5982ba7beaaac691bd76fb877b6
+  V3-M164:
+    directory: fixes/V3-M164
+    aliases: []
+    issues:
+    - M-164
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m164-detector-delivery
+    head_sha: 61cf35760851a98bd17a12487033c4763ef7990c
   T2-M123:
     directory: fixes/T2-M123
     aliases: []
