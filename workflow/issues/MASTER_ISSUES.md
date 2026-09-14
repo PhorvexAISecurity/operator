@@ -1696,7 +1696,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-120 · The completeness tests prove registration, not behavior · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M120
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1
@@ -2477,7 +2477,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-E2E
 
 ### M-166 · One pending console approval can be executed concurrently more than once · **OPEN** · `CONSOLE`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M166
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONSOLE` — anatomy locus review required.
