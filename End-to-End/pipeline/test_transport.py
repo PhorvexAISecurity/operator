@@ -306,7 +306,7 @@ class ControllerPodsTests(unittest.TestCase):
             self.assertEqual({m['phase'] for m in read.value.values()}, {'Unknown'})
 
     def test_preflight_board_uses_the_same_health_verdict_as_p05(self):
-        cfg = {'invariants': {}, 'transport': {'kind': 'local'}, 'console': {},
+        cfg = {'invariants': {}, 'transport': {'kind': 'local'}, 'console': {'mode': 'kubectl-proxy'},
                'capture': {'stream_seconds': 1, 'max_bytes': 1000}, 'targets': [],
                'controller_deployments': self.expected}
         for items in (self.items, self.items[3:], []):
