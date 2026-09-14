@@ -837,7 +837,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-81 · The privileged MIG agent is selected by an unauthenticated cluster-wide label match · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T2-M081
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.mig_agent
