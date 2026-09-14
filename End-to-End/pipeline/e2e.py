@@ -203,7 +203,7 @@ def _run(cfg, mode, target_name, out_dir, stream_override, notifier, run_label,
     limits = capture_limits(cap)
     started = output.started
     n = notifier or Notifier(enabled=False)
-    log(f"● transport: {t.describe()}   mode: {mode}")
+    log(f"● transport: {t.describe()}   console: {console.describe()}   mode: {mode}")
     n.start(mode, target_name, t.describe(), ctx_lines=[run_label] if run_label else [])
 
     # ── 0 · preflight ────────────────────────────────────────────────────────
