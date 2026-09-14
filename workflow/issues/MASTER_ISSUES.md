@@ -2143,7 +2143,7 @@ Severity: ADVISORY (product decision) · Tier: parallel · Fixes: none
 
 ### M-136 · The console's authentication is optional and fails OPEN — with mutation endpoints that shell out to kubectl · **OPEN** · `SURFACE`
 
-Severity: CRITICAL · Tier: parallel · Fixes: V3-M136
+Severity: CRITICAL · Tier: parallel · Fixes: T1-E2E-AUTH, V3-M136
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · bin.kubectl
