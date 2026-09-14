@@ -14,6 +14,7 @@ from test_operations import sandbox, workflow as w, run
 from test_contracts import ready_snapshot
 import delivery
 import preflight
+import patches
 
 
 def setup(repo, baseline):
@@ -112,6 +113,18 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual((fix/'04-diff.patch').read_bytes(),
                 subprocess.check_output(['git','diff','--binary','--full-index',impl['base_sha'],impl['head_sha']],cwd=repo))
             self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['checks']['implementation']['sha256'],w.sha256(fix/'04-diff.patch'))
+
+    def test_submit_renders_selected_digest_and_rejects_raw_patch(self):
+        with sandbox() as (repo,root,baseline):
+            fix=setup(repo,baseline);status=w.load_yaml(fix/'STATUS.yaml')
+            status['implementation']['diff_format']=patches.DIGEST_FORMAT
+            w.write_yaml(fix/'STATUS.yaml',status);impl=status['implementation']
+            raw=patches.render(repo,impl['base_sha'],impl['head_sha'])
+            (fix/'04-diff.patch').write_bytes(raw)
+            self.assertIsNotNone(patches.verify(repo,fix/'04-diff.patch',impl['base_sha'],impl['head_sha'],patches.DIGEST_FORMAT))
+            self.assertEqual(submit(fix,package(fix,receipt(repo,fix))),0)
+            self.assertEqual((fix/'04-diff.patch').read_bytes(),
+                             patches.render(repo,impl['base_sha'],impl['head_sha'],patches.DIGEST_FORMAT))
 
     def test_partial_batch_rolls_back_files_and_pin_updates(self):
         with sandbox() as (repo,root,baseline):

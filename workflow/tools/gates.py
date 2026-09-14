@@ -239,7 +239,7 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
         missing += check_errors(root, fix, status, 'implementation')
         if impl.get('base_sha') and impl.get('head_sha'):
             # Byte-exact against the pinned pair; only index-header abbreviation is portable.
-            error = patches.verify(root.parent, local_file(fix, '04-diff.patch'), impl['base_sha'], impl['head_sha'])
+            error = patches.verify(root.parent, local_file(fix, '04-diff.patch'), impl['base_sha'], impl['head_sha'], impl.get('diff_format'))
             if error:
                 missing.append(error)
     if reached('OFFLINE_VERIFIED'):

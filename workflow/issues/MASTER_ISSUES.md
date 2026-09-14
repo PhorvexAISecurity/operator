@@ -2612,7 +2612,7 @@ Severity: MEDIUM · Tier: unassigned · Fixes: T2-M174
 
 ### M-175 · Development SSH credential is committed in agent tool settings · **OPEN** · `WORKFLOW->ACCESS`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M175
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `WORKFLOW->ACCESS` — anatomy locus review required.

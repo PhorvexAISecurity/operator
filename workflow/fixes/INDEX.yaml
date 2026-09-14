@@ -350,6 +350,16 @@ fixes:
     stacked_on: []
     branch: fix/tier1-e2e-console-auth
     head_sha: 418ea35225ddbe689ffb0f6deb5749dde029ac0e
+  T2-DIFF-PORTABILITY:
+    directory: fixes/T2-DIFF-PORTABILITY
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/workflow-diff-portability
+    head_sha: dffae505c9509bbd3af4b8235d43c46a2974ce46
   V3-M173:
     directory: fixes/V3-M173
     aliases: []
@@ -405,16 +415,6 @@ fixes:
     stacked_on: []
     branch: fix/v3-m069-ai-delete-identity
     head_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
-  T2-DIFF-PORTABILITY:
-    directory: fixes/T2-DIFF-PORTABILITY
-    aliases: []
-    issues: []
-    related_issues: []
-    state: IN_PR
-    dependencies: []
-    stacked_on: []
-    branch: fix/workflow-diff-portability
-    head_sha: dffae505c9509bbd3af4b8235d43c46a2974ce46
   T2-M166:
     directory: fixes/T2-M166
     aliases: []
@@ -527,3 +527,16 @@ fixes:
     stacked_on: []
     branch: fix/v3-m154-retention-budget
     head_sha: 5d804831370c23ec53bf19a5a9f2c356a90aef5d
+  T2-M175:
+    directory: fixes/T2-M175
+    aliases: []
+    issues:
+    - M-175
+    related_issues: []
+    state: IN_PR
+    dependencies:
+    - T2-DIFF-PORTABILITY
+    stacked_on:
+    - T2-DIFF-PORTABILITY
+    branch: fix/v3-m175-local-credentials
+    head_sha: d889dc3ec7b7e564ca11878c037bc1bcaf3e5180
