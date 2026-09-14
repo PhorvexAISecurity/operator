@@ -2030,7 +2030,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-16 · Audit-record fallback narrates an unselected move as "selected" · **OPEN** · `RECORD`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T2-M016
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
