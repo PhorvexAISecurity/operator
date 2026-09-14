@@ -1696,7 +1696,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-120 · The completeness tests prove registration, not behavior · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M120
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1
