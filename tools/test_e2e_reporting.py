@@ -85,6 +85,15 @@ class ReportingTests(unittest.TestCase):
         stub.chmod(0o755)
         self.env.update(PHORVEX_SSH_HOST='fixture.invalid', PHORVEX_SSH_USER='fixture',
                         PHORVEX_SSH_PASSWORD='fixture-only', PATH=str(binaries) + os.pathsep + self.env['PATH'])
+        # Without a provisioned host identity the publisher refuses before any ssh (T1-E2E-AUTH):
+        # the password goes only to a host whose key is pinned.
+        result = subprocess.run(['bash', str(ROOT / 'End-to-End/publish-report.sh'),
+            str(self.runs), 'fixture', 'current'], env=self.env, capture_output=True, text=True, timeout=10)
+        self.assertNotIn(result.returncode, (0, 42), result.stderr)
+        self.assertIn('PHORVEX_SSH_KNOWN_HOSTS', result.stderr)
+        known_hosts = self.root / 'known_hosts'
+        known_hosts.write_text('[fixture.invalid]:22 ssh-ed25519 AAAAfixture\n')
+        self.env['PHORVEX_SSH_KNOWN_HOSTS'] = str(known_hosts)
         result = subprocess.run(['bash', str(ROOT / 'End-to-End/publish-report.sh'),
             str(self.runs), 'fixture', 'current'], env=self.env, capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 42)
