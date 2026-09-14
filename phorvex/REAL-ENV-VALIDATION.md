@@ -29,6 +29,22 @@ Ops: `kv-reset` (prefix-cache flush), `adapter-rotate` (LoRA unload/load), `requ
   is observable (cache-hit-rate drop) and the LoRA unload/load reflects in `/v1/models`.
 - **(d) Acceptance:** each op returns HTTP 2xx on a real vLLM AND the intended effect is observed (cache flushed
   / adapter gone-then-present / requests drained) within the op timeout; no op silently no-ops.
+- **Detector signals and steering (added 2026-09-13, source `d296799`; not a live result).** A detector reaches
+  the brain through two doors, and the validation plan must exercise both as they are now, not as the August
+  runs saw them: (i) a `SecurityEvent` becomes belief evidence only when its admission-stamped creator identity
+  is on the `--trusted-detectors` allowlist (`internal/ingest/eventtrust.go`, M-94) — `spec.rule.source` is
+  ignored, and an untrusted event is recorded with its verdict and supplies nothing; (ii) the pod marker
+  `phorvex.ai/lora-adapter` on a pod labelled `phorvex.ai/lora-enabled=true` (→ `Pod.SuspectAdapter`,
+  `internal/ingest/kube.go`) mints the `adapterIntegrity` fact, so whoever can patch the pod can steer selection
+  toward adapter-rotate regardless of any event (M-95, open). A trusted event whose `type` is one of
+  `phorvex.attack.{kv,guardrail,inflight}` additionally multiplies one serving fact's weight ×3 in `ucw-recon`
+  (`phorvex.attack.adapter` does not); the boost grants no cover, is not attributed in the trace (M-153 pending),
+  and is not aged by recon — it lasts while the CR exists. The kill-chain evidence weight of every event decays
+  to 0 at `EventAgeHorizon`. Current cover per action, with fixtures, is in
+  `docs/recon-cover-map.generated.md` (`go run ./tools/covermap --check`); mechanics and the historical-trial
+  caveats are in `build/test-harness/ACTUATOR_COVERAGE.md`. The 2026-08-21 detector runs in
+  `workflow/attacks/reference/PHORVEX_RUNTIME_VALIDATION.md` predate the trust boundary and used self-declared
+  sources; they are historical, not acceptance evidence for the current build.
 
 ## 2. Production applier — the apply-fix cluster write `[PENDING-CLUSTER-VALIDATION]`
 

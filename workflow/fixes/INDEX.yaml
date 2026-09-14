@@ -437,6 +437,17 @@ fixes:
     stacked_on: []
     branch: fix/v3-m120-ci-execution
     head_sha: 3e49808fb139e41bc2974b93a0f9d070789f5acc
+  T2-M123:
+    directory: fixes/T2-M123
+    aliases: []
+    issues:
+    - M-123
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m123-coverage-documentation
+    head_sha: 98e80a4c4c4ac3f96401911e3aa8932ce2806b8b
   T2-M134:
     directory: fixes/T2-M134
     aliases: []

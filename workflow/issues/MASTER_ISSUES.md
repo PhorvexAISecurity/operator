@@ -1650,7 +1650,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-123 · Documentation drift (the coverage doc contradicts HEAD in its headline AND its master key) · **OPEN** · `CONTRACT`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T2-M123
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1
