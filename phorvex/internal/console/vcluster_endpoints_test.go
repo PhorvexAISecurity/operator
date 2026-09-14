@@ -11,12 +11,35 @@
 package console
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
+
+// pendingGeneration reads the generation the pending listing reports for id, as subject sees it.
+func pendingGeneration(t *testing.T, f *authFixture, subject, id string) string {
+	t.Helper()
+	w := f.do(f.albReqAs(t, http.MethodGet, "/api/apply-fix/pending", "", subject))
+	if w.Code != 200 {
+		t.Fatalf("pending as %s: %d %s", subject, w.Code, w.Body.String())
+	}
+	var doc struct {
+		Pending []PendingInfo `json:"pending"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range doc.Pending {
+		if p.ID == id {
+			return p.Generation
+		}
+	}
+	t.Fatalf("id %q is not pending for %s: %s", id, subject, w.Body.String())
+	return ""
+}
 
 func TestApplyFixEndpoints_LiveTwoKeyFlow(t *testing.T) {
 	applied := false
@@ -50,8 +73,11 @@ func TestApplyFixEndpoints_LiveTwoKeyFlow(t *testing.T) {
 		t.Errorf("malicious delta must be 422 (allowlist); got %d", code)
 	}
 
+	// The approval names the generation the pending listing reports (M-166).
+	gen := pendingGeneration(t, f, "bob", "r1")
+
 	// 3) APPROVE r1 as the SAME verified subject → 422 two-key violation (no apply).
-	if code := approve(`{"id":"r1"}`, "alice"); code != 422 {
+	if code := approve(`{"id":"r1","generation":"`+gen+`"}`, "alice"); code != 422 {
 		t.Errorf("same-subject approve must be 422 (two-key); got %d", code)
 	}
 	if applied {
@@ -59,7 +85,7 @@ func TestApplyFixEndpoints_LiveTwoKeyFlow(t *testing.T) {
 	}
 
 	// 4) APPROVE r1 as a DISTINCT verified subject → 200 applied.
-	if code := approve(`{"id":"r1"}`, "bob"); code != 200 {
+	if code := approve(`{"id":"r1","generation":"`+gen+`"}`, "bob"); code != 200 {
 		t.Fatalf("distinct approve must be 200 applied; got %d", code)
 	}
 	if !applied || gotPol.NormSparsity != 1.5 {
