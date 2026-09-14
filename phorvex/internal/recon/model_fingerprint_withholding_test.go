@@ -19,7 +19,7 @@ func TestM037FingerprintWithheld(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "leader", HasGPU: tc.gpu, ModelID: tc.alias,
-				Ready: true, Node: "gpu-a", MIGDevice: "MIG-a", SuspectAdapter: "adapter-a"},
+				Ready: true, Node: "gpu-a", MIGDevice: "MIG-a", SuspectAdapter: "adapter-a", ServingEndpointReady: tc.gpu || tc.alias != ""},
 				Physics: model.PhysicsWitness{ImageRarity: 1.2, EPSSMultiplier: 1.1, CoResidency: 1.2, ModelRarity: 1.5}}
 			ctx := FactContext{AssetValue: 2, PHold: 0.8, StageUrgency: 0.5, HasGPU: tc.gpu}
 			af := ucwRecon{}.AssetFacts(v, ctx)

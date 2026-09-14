@@ -837,7 +837,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-81 · The privileged MIG agent is selected by an unauthenticated cluster-wide label match · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T2-M081
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.mig_agent
@@ -1083,7 +1083,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-87 · Rollback: never called live, bypasses dry-run and the tenant check · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M087
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · the 18 native-rollback operation rows, shipped_reachability=tool-only
@@ -1126,7 +1126,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-134 · Phoenix adoption race: the first actuations after policy creation are rejected and lost · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M134
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
@@ -1227,7 +1227,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-69 · AI-path pod deletes lack UID preconditions · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T2-M069
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -1443,7 +1443,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-42 · Session-fact gate asymmetry: kv-reset vs kv-migrate · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M042
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · kv-reset Update @ internal/actuator/handlers_ai.go:306
@@ -1650,7 +1650,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-123 · Documentation drift (the coverage doc contradicts HEAD in its headline AND its master key) · **OPEN** · `CONTRACT`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T2-M123
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1
@@ -1696,7 +1696,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-120 · The completeness tests prove registration, not behavior · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M120
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1
@@ -1709,7 +1709,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-126 · Tenant identity can overflow the 63-char label-value cap · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M126
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
@@ -2030,7 +2030,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-16 · Audit-record fallback narrates an unselected move as "selected" · **OPEN** · `RECORD`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T2-M016
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
@@ -2282,7 +2282,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-154 · Audit retention is size-capped, not time-capped — decision-trace.v3's larger records halved the observable history depth, and the pre-v3 corpus rotated out unremarked · **OPEN** · `AUDIT`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: T2-M154
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
@@ -2417,7 +2417,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M161
 
 ### M-162 · Credential-theft oracle replaces the captured credential with a new unbound token · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M162
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.
@@ -2447,7 +2447,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M163
 
 ### M-164 · Detector webhooks acknowledge SecurityEvent creation failures as HTTP success · **OPEN** · `INGESTION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: V3-M164
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `INGESTION` — anatomy locus review required.
@@ -2477,7 +2477,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-E2E
 
 ### M-166 · One pending console approval can be executed concurrently more than once · **OPEN** · `CONSOLE`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M166
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONSOLE` — anatomy locus review required.
@@ -2582,7 +2582,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-173 · Primary running image projection selects a sidecar by status order · **OPEN** · `SENSE->CONTRACT`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: V3-M173
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `SENSE->CONTRACT` — anatomy locus review required.
@@ -2597,7 +2597,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-174 · Observed decision cadence exceeds configured policy interval · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: none
+Severity: MEDIUM · Tier: unassigned · Fixes: T2-M174
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONTROL` — anatomy locus review required.

@@ -51,6 +51,11 @@ import (
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
+const (
+	defaultAuditMaxBytes   int64 = 512 << 20
+	defaultAuditMaxBackups       = 4
+)
+
 var (
 	// pcieClasses is the M-114 PCIe capacity class fallback (--pcie-class-table), shared by
 	// the live tick, the one-shot scan and the ablation snapshot.
@@ -163,8 +168,8 @@ func main() {
 	flag.DurationVar(&epssFeedTimeout, "epss-feed-scan-timeout", 10*time.Minute, "[epss-feed] maximum duration for each image scan.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
-	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", 256<<20, "[audit-json] rotate when the live file exceeds this many bytes (0 = unbounded). Default 256 MiB.")
-	flag.IntVar(&auditMaxBackups, "audit-max-backups", 4, "[audit-json] number of rotated segments to keep (total disk <= max-bytes*(backups+1)).")
+	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", defaultAuditMaxBytes, "[audit-json] target live-segment size in bytes (0 = unbounded). Whole records are preserved, so a segment may exceed this nominal cap. Default 512 MiB.")
+	flag.IntVar(&auditMaxBackups, "audit-max-backups", defaultAuditMaxBackups, "[audit-json] number of rotated segments to keep. Nominal budget is max-bytes*(backups+1); oversized records and pre-existing files can exceed it.")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")

@@ -1,0 +1,301 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 13
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 7108bb320d21863f8ed166b7fc2bb55dd4cf833f9e0e4153bad0f0d5638f2b49
+    source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+    at: '2026-09-13T21:59:55+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: sol-m042
+    artifact: evidence/red-baseline.log
+    sha256: 95d6c6ec8a89606d2bd362b3cd51e3cb5215eec1633c163e7d81c0cda0ec10ce
+    source_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+    at: '2026-09-13T22:25:01+00:00'
+  preflight:
+    result: PASS
+    by: sol-m042
+    artifact: evidence/preflight-final/receipt.json
+    sha256: 24167d2dffc0af1cb8b3e5bf28db1818a639c43bffddcdcc88bf15c69110b6aa
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:53:25+00:00'
+  implementation:
+    result: PASS
+    by: sol-m042
+    artifact: 04-diff.patch
+    sha256: 87b643bdf5d40331be11fed08281550e591a811ac7a6659ef8dd7e0f870c86b2
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:53:25+00:00'
+  l0:
+    result: PASS
+    by: sol-m042
+    artifact: evidence/worker-r2-focused.log
+    sha256: ce93d51b645cbe4f899fdcb964a7a7e5f0eb2fbbb48abc571eba3d332af106d9
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:53:25+00:00'
+  l1:
+    result: PASS
+    by: sol-m042
+    artifact: evidence/worker-r2-focused.log
+    sha256: ce93d51b645cbe4f899fdcb964a7a7e5f0eb2fbbb48abc571eba3d332af106d9
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:53:25+00:00'
+  l2:
+    result: PASS
+    by: sol-m042
+    artifact: evidence/preflight-final/receipt.json
+    sha256: 24167d2dffc0af1cb8b3e5bf28db1818a639c43bffddcdcc88bf15c69110b6aa
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:53:25+00:00'
+  positive_control:
+    result: PASS
+    by: sol-m042
+    artifact: evidence/worker-r2-focused.log
+    sha256: ce93d51b645cbe4f899fdcb964a7a7e5f0eb2fbbb48abc571eba3d332af106d9
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:53:25+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: bbe00fabd709403cb49526f816fe46c02dab389ee69ac296967031a2858dabe6
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:54:36+00:00'
+    baseline_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 510ac5bd1f9c67c193b82ded36351286b399b418c49c65036d02d4726e705636
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:54:36+00:00'
+    incident_sha256: bbe00fabd709403cb49526f816fe46c02dab389ee69ac296967031a2858dabe6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: a73bce3a5d80f229e85f0a6af16f8df050c8d6f68db019bfef29cfa9803f0c4e
+    source_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+    at: '2026-09-13T22:54:40+00:00'
+fix_id: T2-M042
+issues:
+- M-42
+title: Use the serving endpoint prerequisite for session erasers
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-m042
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.113
+  deployed_git_sha: dea7b123aa7d5a1224cd648d3346c6bd8356bd63
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/v3-m042-session-cover
+  base_sha: 341c68f83bcdecf3ba0d9f520d6227806df1a55c
+  head_sha: 61b7fda47fa0c0c29aaed1d52e488b7152146cfa
+  stacked_on:
+  - T2-M123
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/205
+  reviewed_head: 7aec6ef65d87b03c0221b894842d07655dcc3fc2
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies:
+- T2-M123
+blockers: []
+residuals: []
+next_action:
+  owner: human_owner
+  action: Review https://github.com/PhorvexSecurity/operator/pull/205; owner merges/deploys,
+    lead verifies authorized live acceptance
+updated_at: '2026-09-13T22:54:44+00:00'
+configuration_history:
+- at: '2026-09-13T21:59:53+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: workflow/fixes/T2-M042/AUTHORIZATION.md
+- at: '2026-09-13T22:15:19+00:00'
+  by: sol-m042
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:29:43+00:00'
+  by: codex-lead
+  fields:
+  - dependencies
+  - implementation
+  approval_ref: workflow/fixes/T2-M042/AUTHORIZATION.md
+- at: '2026-09-13T22:53:24+00:00'
+  by: sol-m042
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:54:44+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-13T21:59:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-13T21:59:55+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T22:25:45+00:00'
+  by: sol-m042
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T22:25:46+00:00'
+  by: sol-m042
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T22:54:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T22:54:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T22:54:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: T2-M042:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10
+check_history:
+- check: preflight
+  result: PASS
+  by: sol-m042
+  artifact: evidence/preflight/receipt.json
+  sha256: 4bee37199c408d2709d511a27e3a0f6af93273937001d33d079bcf9ce97bfee8
+  source_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  at: '2026-09-13T22:25:45+00:00'
+- check: implementation
+  result: PASS
+  by: sol-m042
+  artifact: 04-diff.patch
+  sha256: 660260abe81312093852b03ff82c40d9ce520ab7ec7617fefcca50dcad60a505
+  source_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  at: '2026-09-13T22:25:45+00:00'
+- check: l0
+  result: PASS
+  by: sol-m042
+  artifact: evidence/worker-focused-final.log
+  sha256: 3adca33bff2709caa86ed6d1018c61826e914ec559a99d78b122926b9c424006
+  source_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  at: '2026-09-13T22:25:45+00:00'
+- check: l1
+  result: PASS
+  by: sol-m042
+  artifact: evidence/worker-focused-final.log
+  sha256: 3adca33bff2709caa86ed6d1018c61826e914ec559a99d78b122926b9c424006
+  source_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  at: '2026-09-13T22:25:45+00:00'
+- check: l2
+  result: PASS
+  by: sol-m042
+  artifact: evidence/composition-generated.patch
+  sha256: e904abbe2eeba444e609a64e262871d898507adf6ac81008178a0a8ea09892d6
+  source_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  at: '2026-09-13T22:25:45+00:00'
+- check: positive_control
+  result: PASS
+  by: sol-m042
+  artifact: evidence/red-baseline.log
+  sha256: 95d6c6ec8a89606d2bd362b3cd51e3cb5215eec1633c163e7d81c0cda0ec10ce
+  source_sha: 4fcebe10acfefff46579aa3ed653fea4520f7d64
+  at: '2026-09-13T22:25:45+00:00'

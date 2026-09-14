@@ -64,11 +64,13 @@ export function SubmitFlow({ session, scope, lens, onSubmitted }: { session: Ses
     const reqId = `af-${scope.tenant}-${Date.now()}`;
     try {
       const r = await applyFixApi.submit(reqId, delta, "operator-initiated policy tune", scope, lens);
-      setResult({ ok: true, msg: `Submitted ${r.id} — ${r.note}` });
+      setResult({ ok: true, msg: `Submitted ${r.id} (gen ${r.generation}) — ${r.status}; ${r.note}` });
       onSubmitted();
     } catch (e: any) {
-      // a gate/allowlist rejection arrives as HTTP 422 with the reason.
-      setResult({ ok: false, msg: `${e.status === 422 ? "REJECTED (422)" : "Error"}: ${String(e.message || e)}` });
+      // a gate/allowlist rejection arrives as HTTP 422 with the reason; 409 is an id already used
+      // with different content; 503 is the request store at capacity.
+      const kind = e.status === 422 ? "REJECTED (422)" : e.status === 409 ? "CONFLICT (409)" : e.status === 503 ? "REFUSED (503)" : "Error";
+      setResult({ ok: false, msg: `${kind}: ${String(e.message || e)}` });
     } finally {
       setSubmitting(false);
     }
@@ -166,8 +168,8 @@ export function SubmitFlow({ session, scope, lens, onSubmitted }: { session: Ses
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          The server re-runs the safety gate on submit (and again at approval — no TOCTOU). A gate-breaking delta is
-          rejected with <span className="text-danger">422</span> and the reason, before any cluster write.
+          The server runs the safety gate on submit and again, on the exact submitted candidate, at approval. A gate-breaking
+          delta is rejected with <span className="text-danger">422</span> and the reason, before any cluster write.
         </p>
       </CardContent>
     </Card>

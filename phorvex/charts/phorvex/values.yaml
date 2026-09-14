@@ -184,8 +184,10 @@ phorvex:
     # This checks Deployment pod shape, not authenticated controller identity.
     volumeGuard:
       enabled: false
-    # 0 = unbounded. The operator rotates the file itself (internal/audit/rotate.go).
-    maxBytes: 268435456
+    # 0 = unbounded. Otherwise this is a target segment size; whole records can
+    # exceed it. Nominal budget = maxBytes * (maxBackups + 1).
+    maxBytes: 536870912
+    maxBackups: 4
     persistence:
       # A PVC rather than an emptyDir so the decision history survives a restart. The
       # volume is shared between the operator and the console container INSIDE ONE POD,
