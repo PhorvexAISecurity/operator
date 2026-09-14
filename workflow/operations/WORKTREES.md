@@ -20,6 +20,25 @@ follow-up PR synchronizes later verification and closure back to main. It does n
 pretend the already-merged PR includes later evidence. Merge/deploy permissions
 still follow separately recorded scope.
 
+For the readiness campaign, the user's 2026-09-14 cleanup instruction supersedes
+the physical-checkout retention rule above. A merged, inactive issue worktree may
+be removed after preserving every local change, ignored evidence file, index and
+staged-only blob in a verified private disk archive. Keep its Git branch/source
+reachable and record the archive and current record location. Do not remove an
+active service's executable checkout or discard an unmerged head. Continue live
+verification from the merged fix records in a tier verification checkout; merging
+or removing a directory does not close the issue. Historical evidence keeps its
+original source, signer and path provenance.
+
+On the current 8 GiB development host, keep build/test TMPDIR and GOTMPDIR on
+disk under `/home/mehrdad/.cache/phorvex-command-tmp`; do not accumulate builds in
+RAM-backed `/tmp`. The saved Codex shell environment and new VS Code terminals
+use that directory after their configuration is loaded. Existing sessions must
+set both variables explicitly for heavyweight commands. Keep heavy checks
+sequential while memory headroom is limited. Archives/caches are excluded from
+editor watching; preserve user configuration backups and avoid runner/system
+administration. See `assessments/20260913-tier2/CLEANUP-20260914.md`.
+
 Concurrent issue branches may conflict in generated indexes/registers: reconcile
 their underlying status/entry records, preserve both issues, then regenerate views.
 Do not resolve a conflict by replacing another issue's directory wholesale.

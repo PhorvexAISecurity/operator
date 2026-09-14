@@ -7,3 +7,5 @@ Tier2 keeps its existing issue PRs and explicit merge dependencies. Starting wit
 Per-issue evidence and acceptance conditions remain required. A passing combined suite does not substitute for an issue's actual producer, baseline and positive controls. Run required combined CI; avoid redundant individual PR-triggered jobs. State which issue commits are contained in the exact tested tier head.
 
 Stop when the tier PR is review-ready with required checks passing or clearly identified infrastructure blockers. Owner/DevOps merges and deploys. Lead verifies the deployed composition and each member live before advancing. One PR does not authorize merge/deploy or weaken any evidence gate.
+
+On 2026-09-14 the user reconfirmed live verification after every tier. Tier 3 waits for Tier 2 deployment and live acceptance. The one-PR-per-tier and unrestricted-commit rules remain in effect.
