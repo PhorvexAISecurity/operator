@@ -117,7 +117,24 @@ export interface ApplyFixDelta {
 // the server refuses any tenant outside that grant.
 export interface AFScope { tenant?: string }
 export interface GatePreview { pass: boolean; reason: string }
-export interface AFPending { id: string; tenant: string; namespace: string; requester: string; reason: string; deltaHash: string }
+// AFPending is one OPEN request as the server lists it. `generation` is the server-issued identity an
+// approval must echo back (it changes on every submit and on every console restart); `state` is
+// "pending" or "applying" (claimed by `approver`, callback in flight).
+export interface AFPending {
+  id: string; tenant: string; namespace: string; requester: string; reason: string; deltaHash: string;
+  generation: string; state: "pending" | "applying"; approver?: string;
+}
+export interface AFPendingList { pending: AFPending[]; applierMode: string; applierWired: boolean }
+export interface AFSubmitResult { status: string; id: string; tenant: string; generation: string; existing: boolean; note: string }
+// AFApproveOutcome is what ONE approval call did. Only status === "applied" means the applier accepted
+// the candidate; every other status is an explicit non-applied outcome (see docs/CONSOLE-APPLY-FIX.md).
+export type AFApproveStatus =
+  | "applied" | "in-progress" | "conflict" | "stale-generation" | "stale" | "refused" | "rejected"
+  | "applier-unavailable" | "failed" | "not-found" | "invalid";
+export interface AFApproveOutcome {
+  status: AFApproveStatus | string; id: string; tenant: string; generation: string; state: string;
+  approver: string; retry: boolean; error?: string; httpStatus: number;
+}
 export interface AFAuditEntry { event: string; fields: Record<string, any> }
 
 function withTenant(path: string, scope: AFScope): string {
@@ -138,15 +155,29 @@ async function afFetch<T>(method: string, path: string, scope: AFScope, lens: Le
   if (!r.ok) throw new ApiError(data.error || `HTTP ${r.status}`, r.status);
   return data as T;
 }
+// afApprove posts ONE approval for the exact pending generation and returns the server's outcome for
+// every response that carries a `status` — a 409/422/500/501 outcome is an answer about this approval,
+// not a transport failure. Responses without a status (401/403/400 from the boundary) still throw.
+async function afApprove(req: { id: string; generation: string }, scope: AFScope, lens: Lens): Promise<AFApproveOutcome> {
+  let r: Response;
+  try {
+    r = await fetch(API_BASE + withTenant("/api/apply-fix/approve", scope), {
+      method: "POST", headers: { "X-Phorvex-Lens": lens, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: req.id, generation: req.generation }), cache: "no-store", credentials: "include",
+    });
+  } catch { throw new Error("BACKEND_UNREACHABLE"); }
+  const data = await r.json().catch(() => ({}));
+  if (typeof data.status !== "string") throw new ApiError(data.error || `HTTP ${r.status}`, r.status);
+  return { ...(data as Omit<AFApproveOutcome, "httpStatus">), httpStatus: r.status };
+}
 export const applyFixApi = {
   gatePreview: (delta: ApplyFixDelta, scope: AFScope, lens: Lens) =>
     afFetch<GatePreview>("POST", "/api/apply-fix/gate-preview", scope, lens, { delta }),
   submit: (reqId: string, delta: ApplyFixDelta, reason: string, scope: AFScope, lens: Lens) =>
-    afFetch<{ status: string; id: string; note: string }>("POST", "/api/apply-fix/submit", scope, lens, { id: reqId, delta, reason }),
-  approve: (reqId: string, scope: AFScope, lens: Lens) =>
-    afFetch<{ status: string; id: string }>("POST", "/api/apply-fix/approve", scope, lens, { id: reqId }),
+    afFetch<AFSubmitResult>("POST", "/api/apply-fix/submit", scope, lens, { id: reqId, delta, reason }),
+  approve: afApprove,
   pending: (scope: AFScope, lens: Lens) =>
-    afFetch<{ pending: AFPending[]; applierMode: string }>("GET", "/api/apply-fix/pending", scope, lens),
+    afFetch<AFPendingList>("GET", "/api/apply-fix/pending", scope, lens),
   audit: (scope: AFScope, lens: Lens) =>
     afFetch<{ audit: AFAuditEntry[] }>("GET", "/api/apply-fix/audit", scope, lens),
 };
