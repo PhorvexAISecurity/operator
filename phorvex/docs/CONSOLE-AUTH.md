@@ -355,7 +355,9 @@ start otherwise, and will tell you which settings are missing.
 
 ## Out of scope
 
-Approval-lifecycle concurrency/persistence and experiment-recovery defects, and the writable
-audit-mount question, are separate open issues. This fix neither widens nor closes them: the
-apply-fix applier remains nil (record-only) by default, and the operator's decision audit is still
-mounted read-only.
+Experiment-recovery defects and the writable audit-mount question are separate open issues.
+This fix neither widens nor closes them; the operator's decision audit is still mounted read-only.
+The apply-fix approval lifecycle (immutable tenant/generation-bound requests, one apply attempt
+per generation, explicit non-applied outcomes) is documented in `CONSOLE-APPLY-FIX.md`; the
+applier itself remains nil (record-only) by default, and an approval then answers
+`applier-unavailable` rather than `applied`.
