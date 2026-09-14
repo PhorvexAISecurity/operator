@@ -142,6 +142,15 @@ func TestNoGrantsConfigured_EveryAuthenticatedCallerIsDenied(t *testing.T) {
 		if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "no authorization grant") {
 			t.Fatalf("%s with no grants: got %d %s", path, w.Code, w.Body.String())
 		}
+		// The denial names the caller's OWN verified subject and issuer, so the administrator
+		// can write the grant entry from the screen. It must never name anyone else.
+		var body map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("%s: denial body is not a JSON object: %v", path, err)
+		}
+		if body["subject"] != "alb-subject-1" || body["issuer"] != f.alb.issuer || !strings.Contains(body["error"], "alb-subject-1") {
+			t.Fatalf("%s: denial must echo the verified identity, got %s", path, w.Body.String())
+		}
 	}
 }
 
