@@ -394,3 +394,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m164-detector-delivery
     head_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+  T2-M069:
+    directory: fixes/T2-M069
+    aliases: []
+    issues:
+    - M-69
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m069-ai-delete-identity
+    head_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4

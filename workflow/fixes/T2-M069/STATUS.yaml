@@ -1,0 +1,269 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 16
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: ee6dfc3313d10f25b52210a02688fbe8383618423db0a2d15a088b9c199af0fc
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T19:07:14+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  implementation:
+    result: PASS
+    by: claude-v3-m069
+    artifact: 04-diff.patch
+    sha256: 6c79a7a84007a78a4ce28a9df619732b5d0372d74484fa00d3d109ffc43dfbe9
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:35:32+00:00'
+  red:
+    result: PASS
+    by: claude-v3-m069
+    artifact: evidence/red/RED.md
+    sha256: 5559e9ffc7abe6ba3b777770af39a74d7d219beadf5ccf43e7534d31cd5c6a54
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T19:35:32+00:00'
+    rationale: 'Discriminating baseline RED executed by the implementer: the identical
+      overlay probe (evidence/red/zz_m069_probe_test.go) FAILS all four name-reuse
+      cases at a git-archive of d296799 (same-name replacement deleted, move credited,
+      MIG repartitioned) and PASSES at 60846ff; the three unchanged-identity positive
+      controls PASS at both sources. Verdict is structural on go test -json (expect_red_green.py),
+      with retained negative controls.'
+  l0:
+    result: PASS
+    by: claude-v3-m069
+    artifact: evidence/l0/head-build.log
+    sha256: 19eaf43821a7660ec323a87c8457bf74823beb296c39f5e01aa8a683aa50f061
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:35:33+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 67994c33d41d9668e75ec1637e04c138bc1f0fb78b418bc276074909b1b19144
+  l1:
+    result: PASS
+    by: claude-v3-m069
+    artifact: evidence/l1/head-phorvex-full-suite.log
+    sha256: 9ce4e828b2e4e04e32492d7a28565a12ad1b25dbd4a2fc6d8dbd6713683e0522
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:35:33+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 67994c33d41d9668e75ec1637e04c138bc1f0fb78b418bc276074909b1b19144
+  l2:
+    result: PASS
+    by: claude-v3-m069
+    artifact: evidence/l2/head-m069-apiserver.log
+    sha256: 4a5b7b31368a2a9968c1e8a1b7f9e79d63d4cb4205454b0683d254b8e8a807d6
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:35:33+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 67994c33d41d9668e75ec1637e04c138bc1f0fb78b418bc276074909b1b19144
+  positive_control:
+    result: PASS
+    by: claude-v3-m069
+    artifact: evidence/red/head-probe.log
+    sha256: 8bb939e1377c7791a0e046fef6a3639ef4112c454aef4737705646e4027e962f
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:35:33+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 67994c33d41d9668e75ec1637e04c138bc1f0fb78b418bc276074909b1b19144
+  preflight:
+    result: PASS
+    by: claude-v3-m069
+    artifact: evidence/preflight/receipt.json
+    sha256: 5bb8ffd9ad90e315e7def0896784de875edcdb9843c0657fbbfa13c2d141419f
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:41:15+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 59317cbd8caff87fc10b5a0d5e30edde515d0aea74fa5eee8cddeac679ba098a
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:48:58+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 677cbfaf8e8b5992df65ee40bef560b39f72cbafd84f3db2b049b55879de9869
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:48:58+00:00'
+    incident_sha256: 59317cbd8caff87fc10b5a0d5e30edde515d0aea74fa5eee8cddeac679ba098a
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: 6cbf00cad5b915ce7f4eac5502e2cd17f76dfa3cca76ab110c63824b62aca384
+    source_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+    at: '2026-09-13T19:50:55+00:00'
+fix_id: T2-M069
+issues:
+- M-69
+title: Pin AI retire and eviction deletes to the observed Pod identity
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: claude-v3-m069
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: d296799dd59a909b149eec06802b5152f67a036f
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.113
+  deployed_git_sha: dea7b123aa7d5a1224cd648d3346c6bd8356bd63
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/v3-m069-ai-delete-identity
+  base_sha: d296799dd59a909b149eec06802b5152f67a036f
+  head_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/195
+  reviewed_head: 1d11be911357e484cf5f5adffd1c1e2989d98e87
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: PR195 CI and owner review; merge/deploy by owner or DevOps, then lead live
+    verification
+updated_at: '2026-09-13T19:50:56+00:00'
+configuration_history:
+- at: '2026-09-13T19:07:13+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-13T19:34:36+00:00'
+  by: claude-v3-m069
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T19:41:15+00:00'
+  by: claude-v3-m069
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T19:50:55+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-13T19:07:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-13T19:07:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T19:41:15+00:00'
+  by: claude-v3-m069
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T19:41:16+00:00'
+  by: claude-v3-m069
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T19:48:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T19:48:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T19:50:56+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: T2-M069:13:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 13
