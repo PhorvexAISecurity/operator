@@ -65,7 +65,7 @@ func TestApplyFixEndpoints_PreviewPendingAudit(t *testing.T) {
 
 	// APPROVE (distinct verified subject) → AUDIT shows submitted + applied, attributed to the
 	// verified identities rather than a query parameter.
-	post("/api/apply-fix/approve", `{"id":"q1"}`, "bob")
+	post("/api/apply-fix/approve", `{"id":"q1","generation":"`+pendingGeneration(t, f, "bob", "q1")+`"}`, "bob")
 	audit := get("/api/apply-fix/audit", "alice")
 	if !strings.Contains(audit, "apply-fix.submitted") || !strings.Contains(audit, "apply-fix.applied") {
 		t.Errorf("audit must show submitted + applied: %s", audit)
