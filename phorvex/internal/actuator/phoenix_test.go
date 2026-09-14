@@ -40,9 +40,7 @@ func TestPhoenixEnsurePolicy(t *testing.T) {
 		t.Fatalf("EnsurePolicy: %v", err)
 	}
 	var amtd amtdv1beta1.AdaptiveMovingTargetDefense
-	// Name is namespace-qualified (phorvex-<namespace>-<tenant>) so two policies that share a
-	// tenant across namespaces can't produce the same cluster-global AMTD RuleID and jam the
-	// controller.
+	// Valid legacy names remain byte-for-byte compatible.
 	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "phorvex-ns-team-a"}, &amtd); err != nil {
 		t.Fatalf("AMTD not created: %v", err)
 	}

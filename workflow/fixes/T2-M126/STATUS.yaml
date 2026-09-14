@@ -1,0 +1,269 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f10397f5ccd2b1a3e2dd03d1d56fc0c8d84d3c0ebe2a747ebedac61be2e6a1bd
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T21:26:38+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: sol-m126
+    artifact: evidence/baseline-red/baseline.log
+    sha256: b135c915a4a1312b800c46d3e06575fccc75070bf0e5ae751ac23b10e5b7c9c7
+    source_sha: d296799dd59a909b149eec06802b5152f67a036f
+    at: '2026-09-13T21:34:45+00:00'
+  preflight:
+    result: PASS
+    by: sol-m126
+    artifact: evidence/preflight/receipt.json
+    sha256: 5f87913220c9782f4235869104898d1fd5d4b1c6743149e2bdc11c2f97ab4b62
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:03:56+00:00'
+  implementation:
+    result: PASS
+    by: sol-m126
+    artifact: 04-diff.patch
+    sha256: e87d63a3ed151180b9b438b8c5006d5dec54f3ac1ee8d1622a83453ea0e66101
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:03:56+00:00'
+  l0:
+    result: PASS
+    by: sol-m126
+    artifact: evidence/head/race.log
+    sha256: 98d4bb984493cc3d025b20a2b4ecea827b6d9e1845a2108994ce85f38bb15c83
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:03:56+00:00'
+    inputs:
+    - phorvex/go.mod
+    - phorvex/go.sum
+    - phorvex/internal/actuator
+    inputs_sha256: 6eb908e30ef3d79155bda9ea5673bb190d7a7ed0ad7dfe16f72020d8e1b654ca
+  l1:
+    result: PASS
+    by: sol-m126
+    artifact: evidence/head/targeted.log
+    sha256: 1708530fedf8771680ae9b61bc22af589c17ea2c672cbb88bf1a6bcaada57128
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:03:56+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: ca1bdfac3e056d2d01ffd7589439eab356b5ff54989c977c276d18d7a0fe2dbf
+  l2:
+    result: PASS
+    by: sol-m126
+    artifact: evidence/head/targeted.log
+    sha256: 1708530fedf8771680ae9b61bc22af589c17ea2c672cbb88bf1a6bcaada57128
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:03:56+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: ca1bdfac3e056d2d01ffd7589439eab356b5ff54989c977c276d18d7a0fe2dbf
+  positive_control:
+    result: PASS
+    by: sol-m126
+    artifact: evidence/head/targeted.log
+    sha256: 1708530fedf8771680ae9b61bc22af589c17ea2c672cbb88bf1a6bcaada57128
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:03:56+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: ca1bdfac3e056d2d01ffd7589439eab356b5ff54989c977c276d18d7a0fe2dbf
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 1dfe017fd752489ac3638a1217f5af1d6f121207a297d0b85b88cdaf6ad0fdd3
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:05:11+00:00'
+    baseline_sha: d296799dd59a909b149eec06802b5152f67a036f
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 225cf54085ab713c3d037cecde474525ebeb1969f71cf833e7edb58673b6efed
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:05:11+00:00'
+    incident_sha256: 1dfe017fd752489ac3638a1217f5af1d6f121207a297d0b85b88cdaf6ad0fdd3
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/patch-equivalence.json
+    sha256: bd61b211ce52aa93364db72b246d818c93d7819d4af4e6943cc7d8412a436914
+    source_sha: 73b30805f8036cdf420a97d213d64ad082515477
+    at: '2026-09-13T22:05:19+00:00'
+fix_id: T2-M126
+issues:
+- M-126
+title: Bound Phoenix metadata and refuse ambiguous identity reuse
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-m126
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: d296799dd59a909b149eec06802b5152f67a036f
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.113
+  deployed_git_sha: dea7b123aa7d5a1224cd648d3346c6bd8356bd63
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/v3-m126-bounded-metadata
+  base_sha: d296799dd59a909b149eec06802b5152f67a036f
+  head_sha: 73b30805f8036cdf420a97d213d64ad082515477
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/202
+  reviewed_head: 0843009dd193603aca9977fc9cc3eeff32feada6
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: human_owner
+  action: Review https://github.com/PhorvexSecurity/operator/pull/202; owner merges/deploys,
+    lead verifies authorized live acceptance
+updated_at: '2026-09-13T22:05:27+00:00'
+configuration_history:
+- at: '2026-09-13T21:26:37+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: /home/mehrdad/operator-v3-m126/workflow/fixes/T2-M126/AUTHORIZATION.md
+- at: '2026-09-13T21:34:26+00:00'
+  by: sol-m126
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T21:58:32+00:00'
+  by: sol-m126
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:03:56+00:00'
+  by: sol-m126
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-13T22:05:25+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-13T21:26:37+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-13T21:26:38+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-13T22:03:56+00:00'
+  by: sol-m126
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-13T22:03:57+00:00'
+  by: sol-m126
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-13T22:05:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-13T22:05:14+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-13T22:05:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+handoff:
+  id: T2-M126:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9

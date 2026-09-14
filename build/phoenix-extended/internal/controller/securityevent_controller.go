@@ -52,6 +52,63 @@ type SecurityEventReconciler struct {
 // {timed -> rotate} rule reschedules with exactly today's behavior.
 const defaultRotateGracePeriodSeconds int64 = 30
 
+const securityEventAdoptionRetryInterval = 2 * time.Second
+
+type preparedSecurityEventTarget struct {
+	pod        *corev1.Pod
+	management []AMTDManageInfo
+}
+
+// prepareSecurityEventTargets validates and snapshots the complete target batch
+// before the reconcile loop performs any action or records an event as applied.
+// Adoption is asynchronous, so absent or empty managed-by metadata is a pending
+// state rather than successful completion.
+func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Context, targets []string) ([]preparedSecurityEventTarget, bool, bool, error) {
+	prepared := make([]preparedSecurityEventTarget, 0, len(targets))
+	var pendingAdoption, absentPod bool
+	for _, target := range targets {
+		parts := strings.Split(target, "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return nil, false, false, fmt.Errorf("invalid SecurityEvent target %q: expected namespace/name", target)
+		}
+
+		pod := &corev1.Pod{}
+		key := types.NamespacedName{Namespace: parts[0], Name: parts[1]}
+		if err := r.Client.Get(ctx, key, pod); err != nil {
+			if errors.IsNotFound(err) {
+				// Preserve the established absent-pod no-action outcome. Because this
+				// is preflight, no earlier target has been mutated yet.
+				absentPod = true
+				continue
+			}
+			return nil, false, false, fmt.Errorf("retrieve target pod %s: %w", key, err)
+		}
+
+		raw, found := pod.Annotations[AMTD_MANAGED_BY]
+		if !found || strings.TrimSpace(raw) == "" {
+			pendingAdoption = true
+			continue
+		}
+
+		var management []AMTDManageInfo
+		if err := json.Unmarshal([]byte(raw), &management); err != nil {
+			return nil, false, false, fmt.Errorf("decode %s annotation on pod %s: %w", AMTD_MANAGED_BY, key, err)
+		}
+		if len(management) == 0 {
+			pendingAdoption = true
+			continue
+		}
+		for i, info := range management {
+			if info.AMTDNamespace == "" || info.AMTDName == "" {
+				return nil, false, false, fmt.Errorf("invalid %s annotation entry %d on pod %s: AMTD namespace and name are required", AMTD_MANAGED_BY, i, key)
+			}
+		}
+
+		prepared = append(prepared, preparedSecurityEventTarget{pod: pod, management: management})
+	}
+	return prepared, pendingAdoption, absentPod, nil
+}
+
 //+kubebuilder:rbac:groups=amtd.r6security.com,resources=securityevents,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=amtd.r6security.com,resources=securityevents/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=amtd.r6security.com,resources=securityevents/finalizers,verbs=update
@@ -96,37 +153,22 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// ---------------------------------------------------
 	// Process pods in the target list of the SecurityEvent
 	// ---------------------------------------------------
+	preparedTargets, pendingAdoption, absentPod, err := r.prepareSecurityEventTargets(ctx, securityEvent.Spec.Targets)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if absentPod {
+		log.Info("At least one SecurityEvent target pod does not exist; no action is needed")
+		return ctrl.Result{}, nil
+	}
+	if pendingAdoption {
+		log.Info("SecurityEvent target adoption is pending; retrying", "retryAfter", securityEventAdoptionRetryInterval)
+		return ctrl.Result{RequeueAfter: securityEventAdoptionRetryInterval}, nil
+	}
+
 	var AMTD *amtdv1beta1.AdaptiveMovingTargetDefense
-	for _, target := range securityEvent.Spec.Targets {
-		namespace := strings.Split(target, "/")[0]
-		name := strings.Split(target, "/")[1]
-
-		// ---------------------------------------------------
-		// Check that the resource exists and whether to deal with it
-		// ---------------------------------------------------
-		pod := &corev1.Pod{}
-		namespacedName := types.NamespacedName{Namespace: namespace, Name: name}
-		err = r.Client.Get(context.Background(), namespacedName, pod)
-
-		if err != nil {
-			if errors.IsNotFound(err) {
-				log.Info(fmt.Sprintf(`Pod "%s/%s" does not exist`, namespace, name))
-				return ctrl.Result{}, nil
-			} else {
-				// some other error happend
-				log.Error(err, fmt.Sprintf(`Failed to retrieve pod "%s"`, pod.Name))
-				return ctrl.Result{}, err
-			}
-		}
-
-		// Does the pod have annotation AMTD_MANAGED_BY?
-		if pod.ObjectMeta.Annotations == nil {
-			log.Error(err, fmt.Sprintf(`Pod "%s" is a SecurityEvent target but not AMTD managed`, pod.Name))
-			return ctrl.Result{}, err
-		} else if _, found := pod.ObjectMeta.Annotations[AMTD_MANAGED_BY]; !found {
-			log.Error(err, fmt.Sprintf(`Pod "%s" is a SecurityEvent target but not AMTD managed`, pod.Name))
-			return ctrl.Result{}, err
-		}
+	for _, prepared := range preparedTargets {
+		pod := prepared.pod
 
 		// ---------------------------------------------------
 		// Look for the proper action for the SecurityEvent in AMTDs that manage the pod
@@ -134,9 +176,7 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		var action amtdv1beta1.AMTDAction
 		var matcherModeWarning bool
 		var warnAMTD *amtdv1beta1.AdaptiveMovingTargetDefense
-		var AMTDManageInfoList []AMTDManageInfo
-		json.Unmarshal([]byte(pod.ObjectMeta.Annotations[AMTD_MANAGED_BY]), &AMTDManageInfoList)
-		for _, AMTDManageInfo := range AMTDManageInfoList {
+		for _, AMTDManageInfo := range prepared.management {
 
 			// Get AMTD resource that is in AMTDManageInfo so it belongs to the pod
 			AMTD = &amtdv1beta1.AdaptiveMovingTargetDefense{}

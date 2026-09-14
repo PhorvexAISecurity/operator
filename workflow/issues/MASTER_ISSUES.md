@@ -1126,7 +1126,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-134 · Phoenix adoption race: the first actuations after policy creation are rejected and lost · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M134
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
@@ -1709,7 +1709,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M120
 
 ### M-126 · Tenant identity can overflow the 63-char label-value cap · **OPEN** · `CONTRACT`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M126
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
@@ -2417,7 +2417,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M161
 
 ### M-162 · Credential-theft oracle replaces the captured credential with a new unbound token · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M162
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.
