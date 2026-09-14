@@ -111,6 +111,12 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, kind, req)
 	}
+	// [M-69] The request names WHICH Pod it selected (TargetUID); the observed object must be
+	// that Pod before anything is flipped, relabeled or retired. A delayed retry that finds a
+	// same-name replacement is refused here, untouched (native rotate's refusal convention).
+	if reason := triggerIdentityRefusal(req, leader); reason != "" {
+		return refuseAI(kind, reason)
+	}
 	group := leader.Labels[groupKey]
 	if group == "" {
 		return HandlerResult{}, fmt.Errorf("%s blocked: pod %s/%s has no %s (no warm pool); old leader keeps serving", kind, req.Namespace, req.Pod, groupKey)
@@ -147,17 +153,28 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if drainErr != nil {
 		return HandlerResult{}, fmt.Errorf("%s drain old leader %s/%s: %w", kind, req.Namespace, req.Pod, drainErr)
 	}
-	if delErr := ec.Client.Delete(ctx, leader); delErr != nil && !apierrors.IsNotFound(delErr) {
-		return HandlerResult{}, fmt.Errorf("%s retire %s/%s: %w", kind, req.Namespace, req.Pod, delErr)
+	// [M-69] The Delete is bound to the UID of the leader object observed above (API-enforced
+	// precondition): a same-name replacement created meanwhile is never the object deleted.
+	// A rejected Delete is reported as a non-success carrying the partial state honestly —
+	// the shadow IS promoted and the old-leader name IS relabeled retiring; nothing is rolled
+	// back and no rewarm is provisioned.
+	touched := []string{objRef("Pod", req.Namespace, shadow.Name), objRef("Pod", req.Namespace, req.Pod)}
+	alreadyGone, delErr := deleteObservedPod(ctx, ec.Client, leader)
+	if delErr != nil {
+		return HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + shadow.Name, ObjectsTouched: touched},
+			fmt.Errorf("%s retire %s/%s (partial: shadow %s promoted to leader, old leader name relabeled %s, observed pod uid %s NOT deleted, no rewarm): %w", kind, req.Namespace, req.Pod, shadow.Name, roleRetiring, leader.UID, delErr)
 	}
 	// (4) REWARM-to-N: provision a replacement shadow (cold-load OFF the serving path).
 	rewarm, rwErr := rewarmShadow(ctx, ec, leader, groupKey, group)
-	touched := []string{objRef("Pod", req.Namespace, shadow.Name), objRef("Pod", req.Namespace, req.Pod)}
 	drainNote := "in-flight drained"
 	if drainPending {
 		drainNote = "in-flight abort [PENDING-GPU-VALIDATION] (stack unreachable; K8s route-drained)"
 	}
-	note := fmt.Sprintf("%s: shadow %s promoted, old leader %s + retired (no cold-load on serving path)", kind, shadow.Name, drainNote)
+	retireNote := "retired (uid " + string(leader.UID) + ")"
+	if alreadyGone {
+		retireNote = "already gone before retire (no pod of that name; uid " + string(leader.UID) + ")"
+	}
+	note := fmt.Sprintf("%s: shadow %s promoted, old leader %s + %s (no cold-load on serving path)", kind, shadow.Name, drainNote, retireNote)
 	if rwErr == nil {
 		touched = append(touched, objRef("Pod", req.Namespace, rewarm))
 		note += "; rewarmed " + rewarm
@@ -215,6 +232,10 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "mig-rebind", req)
 	}
+	// [M-69] Refuse before any mutation unless the observed Pod is the one the request selected.
+	if reason := triggerIdentityRefusal(req, pod); reason != "" {
+		return refuseAI("mig-rebind", reason)
+	}
 	// FAIL-CLOSED preconditions: a MIG device, a node, and a declared target profile (you never pick a
 	// MIG geometry blindly, and you never fabricate a rebind without a real device).
 	if !hasMIGDevice(pod) {
@@ -238,8 +259,13 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	// The pod's owner reschedules the workload onto the new MIG geometry after repartition.
 	_ = relabelRole(ctx, ec.Client, req.Namespace, req.Pod, roleRetiring)
 	_, drainPending, _ := drainInflight(ctx, ec, pod)
-	if delErr := ec.Client.Delete(ctx, pod); delErr != nil && !apierrors.IsNotFound(delErr) {
-		return HandlerResult{}, fmt.Errorf("mig-rebind GPU-context eviction (delete %s/%s): %w", req.Namespace, req.Pod, delErr)
+	// [M-69] Evict exactly the observed Pod (UID-bound Delete). A rejected eviction — a same-name
+	// replacement, or any other API refusal — means the GPU was NOT freed by this move, so the
+	// repartition is NOT attempted; the relabel already applied to the name is reported as-is.
+	alreadyGone, delErr := deleteObservedPod(ctx, ec.Client, pod)
+	if delErr != nil {
+		return HandlerResult{ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}},
+			fmt.Errorf("mig-rebind GPU-context eviction (delete %s/%s, observed uid %s) rejected; repartition NOT attempted (pod name relabeled %s): %w", req.Namespace, req.Pod, pod.UID, roleRetiring, delErr)
 	}
 	// REAL nvidia-smi repartition on the now-idle GPU (destroy CI/GI, create the new geometry) via the
 	// execNodeRunner transport. The exec syscall is [PENDING-GPU-VALIDATION]; Available() already
@@ -251,10 +277,14 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	if drainPending {
 		drainNote = "in-flight abort [PENDING-GPU-VALIDATION]"
 	}
+	evictNote := "pod evicted off GPU (uid " + string(pod.UID) + ", " + drainNote + ", zero CUDA contexts)"
+	if alreadyGone {
+		evictNote = "pod already gone before eviction (no pod of that name; uid " + string(pod.UID) + ", " + drainNote + ")"
+	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "swap", RollbackRef: req.Namespace + "/" + req.Pod,
 		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod), objRef("Node", "", node)},
-		Note:           fmt.Sprintf("mig-rebind: pod evicted off GPU (%s, zero CUDA contexts), GPU %s repartitioned to %s off the co-resident slot [PENDING-GPU-VALIDATION]: VRAM/geometry magnitudes unvalidated", drainNote, gpuID, profile),
+		Note:           fmt.Sprintf("mig-rebind: %s, GPU %s repartitioned to %s off the co-resident slot [PENDING-GPU-VALIDATION]: VRAM/geometry magnitudes unvalidated", evictNote, gpuID, profile),
 	}, nil
 }
 

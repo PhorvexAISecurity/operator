@@ -1227,7 +1227,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-69 · AI-path pod deletes lack UID preconditions · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T2-M069
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -2477,7 +2477,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-E2E
 
 ### M-166 · One pending console approval can be executed concurrently more than once · **OPEN** · `CONSOLE`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T2-M166
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONSOLE` — anatomy locus review required.

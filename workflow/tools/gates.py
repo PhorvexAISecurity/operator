@@ -10,6 +10,7 @@ import re
 import subprocess
 import attacks
 import evidence_scope
+import patches
 from pathlib import Path
 
 STAGES = ('TRIAGED DESIGNING CRITIQUED AGREED IMPLEMENTED OFFLINE_VERIFIED '
@@ -237,12 +238,10 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
             missing += check_errors(root, fix, status, 'base_review')
         missing += check_errors(root, fix, status, 'implementation')
         if impl.get('base_sha') and impl.get('head_sha'):
-            result = subprocess.run(['git', '-C', str(root.parent), 'diff', '--binary',
-                                     str(impl['base_sha']), str(impl['head_sha'])],
-                                    capture_output=True)
-            patch = local_file(fix, '04-diff.patch')
-            if result.returncode or not patch or not result.stdout or patch.read_bytes() != result.stdout:
-                missing.append('04-diff.patch must equal nonempty git diff --binary base_sha head_sha')
+            # Byte-exact against the pinned pair; only index-header abbreviation is portable.
+            error = patches.verify(root.parent, local_file(fix, '04-diff.patch'), impl['base_sha'], impl['head_sha'])
+            if error:
+                missing.append(error)
     if reached('OFFLINE_VERIFIED'):
         if status.get('delivery_version') == 1:
             missing += check_errors(root, fix, status, 'preflight')

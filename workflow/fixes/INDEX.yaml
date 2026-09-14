@@ -394,6 +394,38 @@ fixes:
     stacked_on: []
     branch: fix/v3-m164-detector-delivery
     head_sha: 61cf35760851a98bd17a12487033c4763ef7990c
+  T2-M069:
+    directory: fixes/T2-M069
+    aliases: []
+    issues:
+    - M-69
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m069-ai-delete-identity
+    head_sha: 60846ffcbbd53c7f701d03218224ef6ec7e4b5b4
+  T2-DIFF-PORTABILITY:
+    directory: fixes/T2-DIFF-PORTABILITY
+    aliases: []
+    issues: []
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/workflow-diff-portability
+    head_sha: dffae505c9509bbd3af4b8235d43c46a2974ce46
+  T2-M166:
+    directory: fixes/T2-M166
+    aliases: []
+    issues:
+    - M-166
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m166-approval-lifecycle
+    head_sha: ec8764a10e96a7d90757e058b2d1de948c024826
   T2-M120:
     directory: fixes/T2-M120
     aliases: []
