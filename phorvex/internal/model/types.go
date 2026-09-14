@@ -395,6 +395,7 @@ type SecurityEventInfo struct {
 	OutcomeParseError string
 	ResolvedTargets   []string
 	Name              string // SecurityEvent CR name (audit: which event carried the evidence)
+	UID               string // actual SecurityEvent CR UID; empty for direct simulation inputs
 	Type              string
 	ThreatLevel       string
 	Source            string
@@ -418,6 +419,25 @@ type SecurityEventInfo struct {
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
 	UnresolvedTargets []string
+}
+
+// VectorSteeringEvent identifies one observation that jointly caused an existing
+// attack-vector multiplier. It carries identity and trust evidence only, never payload.
+type VectorSteeringEvent struct {
+	EventName       string `json:"eventName"`
+	EventUID        string `json:"eventUID,omitempty"`
+	RuleType        string `json:"ruleType"`
+	DeclaredSource  string `json:"declaredSource,omitempty"`
+	TrustVerdict    string `json:"trustVerdict,omitempty"`
+	CreatorIdentity string `json:"creatorIdentity,omitempty"`
+}
+
+// VectorSteeringAttribution describes the one factor applied to one recon fact.
+// Multiple matching events remain references to one multiplication.
+type VectorSteeringAttribution struct {
+	RuleType          string                `json:"ruleType"`
+	AppliedMultiplier float64               `json:"appliedMultiplier"`
+	Events            []VectorSteeringEvent `json:"events"`
 }
 
 // NeighborRef is a graph-reachable neighbor and its (generic) asset value — used by

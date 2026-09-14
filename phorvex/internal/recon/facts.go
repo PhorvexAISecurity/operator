@@ -119,6 +119,8 @@ type Fact struct {
 	Kind   string  // one of the Fact* constants
 	Edge   string  // neighbor "ns/pod" for FactLateralEdge; "" otherwise
 	Weight float64 // value x P(hold) x stage-urgency (x neighbor value for edges)
+	// SteeredBy is present only when the UCW producer actually multiplied this fact.
+	SteeredBy *model.VectorSteeringAttribution
 }
 
 // Key is the stable scope-prefixed identity of a fact (scope|asset|kind[|edge]).

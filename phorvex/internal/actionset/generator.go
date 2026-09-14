@@ -64,6 +64,19 @@ type ActionSet struct {
 	CoverByAsset map[string]map[model.Action][]string
 }
 
+func cloneFacts(in []recon.Fact) []recon.Fact {
+	out := append([]recon.Fact(nil), in...)
+	for i := range out {
+		if out[i].SteeredBy == nil {
+			continue
+		}
+		steering := *out[i].SteeredBy
+		steering.Events = append([]model.VectorSteeringEvent(nil), steering.Events...)
+		out[i].SteeredBy = &steering
+	}
+	return out
+}
+
 // CrossBlockCollision is one recon key claimed by two distinct pod decision blocks.
 // Reuse by multiple actions inside one block is legal under the partition constraint;
 // reuse across blocks breaks modularity and voids the exact-optimality guarantee.
@@ -218,7 +231,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			}
 			continue
 		}
-		out.FactsByAsset[key] = append([]recon.Fact(nil), af.Facts...)
+		out.FactsByAsset[key] = cloneFacts(af.Facts)
 		// T0-C: carry the full declared cover map (all actions) for the trace's
 		// per-fact CoveringActions inversion. The slices are shared read-only.
 		out.CoverByAsset[key] = af.CoverByAction
