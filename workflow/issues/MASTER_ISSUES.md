@@ -1083,7 +1083,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-87 · Rollback: never called live, bypasses dry-run and the tenant check · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T2-M087
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · the 18 native-rollback operation rows, shipped_reachability=tool-only
@@ -2030,7 +2030,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-16 · Audit-record fallback narrates an unselected move as "selected" · **OPEN** · `RECORD`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T2-M016
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
