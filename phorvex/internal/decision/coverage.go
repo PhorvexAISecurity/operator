@@ -833,7 +833,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			InfeasibleWhy:         infeasibleWhy,
 			Reason:                coverageReason(action, selected, ac.assess, cov, ecost, selectionGain, lambda),
 			R6Counterfactual:      model.ActionRotate,
-			CounterfactualNote:    counterfactualNote(action, v),
+			CounterfactualNote:    counterfactualNote(action, selected, v),
 			BlindCost:             blindCost,
 			DryRun:                pol.DryRun,
 			DecidedAt:             now,
@@ -1474,26 +1474,43 @@ func factKind(key string) string {
 // counterfactualNote explains, per decision, how Phorvex's choice diverges from R6's
 // blind machinery (whose time-based-trigger would Delete every covered pod on schedule
 // with no cost/value/stateful awareness).
-func counterfactualNote(a model.Action, v *model.WorkloadView) string {
-	if v.Pod.Stateful {
-		switch a {
-		case model.ActionQuarantine:
-			return "R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex quarantined to contain while preserving state."
-		case model.ActionNoop:
-			return "R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex skipped — rotate is inviolably excluded and no other move is net-positive."
+//
+// The note narrates SELECTION and intended purpose only. Whether the move ran, contained
+// anything or kept the workload serving is actuation evidence (Actuated / ActuationOutcome),
+// so the note never claims it. `selected` is the decision's own Selected flag: the fallback
+// branch above names the best standalone candidate for a feasible-but-unselected
+// attack-backed pod (Reason "<action>: considered (…)"), and that record must not read as
+// if Phorvex chose or used the action (M-16). The structured action/cost/selection fields are
+// untouched by this function; it only labels them.
+func counterfactualNote(a model.Action, selected bool, v *model.WorkloadView) string {
+	if a == model.ActionNoop {
+		// No move was selected. Reason/trace carry the selector's actual outcome; do not
+		// invent a specific blocker or a negative score here.
+		if v.Pod.Stateful {
+			return "R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex selected no action for this pod this tick."
 		}
+		return "R6's blind timer would DELETE this pod on schedule regardless; Phorvex selected no action for this pod this tick."
+	}
+	if !selected {
+		// [M-16] Fallback record: the named action is the best standalone candidate that was
+		// considered and NOT selected. Nothing was chosen or executed for this pod.
+		if v.Pod.Stateful {
+			return fmt.Sprintf("R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex considered %s but did not select it this tick — no action was chosen or executed for this pod.", a)
+		}
+		return fmt.Sprintf("R6's blind timer would DELETE this pod on schedule regardless; Phorvex considered %s but did not select it this tick — no action was chosen or executed for this pod.", a)
+	}
+	if v.Pod.Stateful && a == model.ActionQuarantine {
+		return "R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex selected quarantine to contain while preserving state."
 	}
 	switch a {
 	case model.ActionRotate:
 		return "R6 would rotate too, but on a blind fixed timer; Phorvex selected rotate with a strict positive marginal-value-minus-cost score."
 	case model.ActionQuarantine:
-		return "R6 has no path to quarantine here without a hand-written exact-match rule; Phorvex chose quarantine to cut lateral recon."
-	case model.ActionNoop:
-		return "R6's blind timer would DELETE this pod on schedule regardless; Phorvex skipped because no feasible candidate won the strict positive-gain selector."
+		return "R6 has no path to quarantine here without a hand-written exact-match rule; Phorvex selected quarantine to cut lateral recon."
 	default:
 		// [HONEST-LABEL FIX] An AI-native move was previously narrated as "Phorvex skipped" — the
 		// exact opposite of what happened. R6 has no non-destructive equivalent at all.
-		return fmt.Sprintf("R6's blind timer would DELETE this pod on schedule; Phorvex used %s instead — the workload keeps serving (R6 has no non-destructive equivalent).", a)
+		return fmt.Sprintf("R6's blind timer would DELETE this pod on schedule; Phorvex selected %s instead, a non-destructive move (R6 has no non-destructive equivalent).", a)
 	}
 }
 
