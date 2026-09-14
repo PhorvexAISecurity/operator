@@ -1227,7 +1227,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-69 · AI-path pod deletes lack UID preconditions · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T2-M069
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
