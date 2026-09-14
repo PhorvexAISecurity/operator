@@ -103,7 +103,7 @@ class DeployAutosyncTests(unittest.TestCase):
         ci = yaml.load((ROOT / '.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
         step = next(s for s in ci['jobs']['deploy']['steps']
                     if s.get('name') == 'Wait for ArgoCD to roll it out')
-        self.assertEqual(step['if'], "steps.bump.outputs.changed == 'true'")
+        self.assertEqual(step['if'], "steps.publish.outputs.released == 'true'")
         self.assertIn('< deploy/argocd/wait-for-rollout.sh', step['run'])
         self.assertIn('V=$V bash -s', step['run'])
         self.assertLess(step['run'].index('[[ "$V" =~'), step['run'].index('sshpass -e ssh'))

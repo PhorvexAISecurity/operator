@@ -155,7 +155,10 @@ jobs:
       - name: Release image provenance regressions
         run: |
           bash -n deploy/ci/retag-images.sh
+          bash -n deploy/ci/check-release-head.sh
+          bash -n deploy/ci/publish-release.sh
           python3 tools/test_deploy_image_manifest.py
+          python3 tools/test_deploy_release_race.py
 
   # ── 3. Phorvex operator ────────────────────────────────────────────────────
   build-operator:
@@ -526,14 +529,22 @@ jobs:
       cancel-in-progress: false
     outputs:
       version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.publish.outputs.released }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0          # the version is derived from the tag history
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify this run still owns main
+        id: freshness
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: bash deploy/ci/check-release-head.sh
+
       - name: Compute the next version
         id: version
+        if: steps.freshness.outputs.current == 'true'
         run: |
           # Semver from the tag history. A commit whose message contains [major] or [minor]
           # bumps that component; everything else is a patch. Deliberately boring — the
@@ -566,11 +577,13 @@ jobs:
           echo "Next version: $NEXT (previous: ${LAST:-none})"
 
       - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.freshness.outputs.current == 'true'
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region:     ${{ env.AWS_REGION }}
 
       - uses: aws-actions/amazon-ecr-login@v2
+        if: steps.freshness.outputs.current == 'true'
         id: ecr
 
       # Which images exist is decided from the BUILD JOBS' results, not by asking ECR.
@@ -586,6 +599,7 @@ jobs:
       # IAM permission, and cannot silently answer "no".
       - name: Decide what was built
         id: built
+        if: steps.freshness.outputs.current == 'true'
         env:
           OPERATOR: ${{ needs.build-operator.result }}
           CONSOLE:  ${{ needs.build-console.result }}
@@ -613,7 +627,7 @@ jobs:
           fi
 
       - name: Tag the built images with the version
-        if: steps.built.outputs.any == 'true'
+        if: steps.freshness.outputs.current == 'true' && steps.built.outputs.any == 'true'
         env:
           REG:                ${{ steps.ecr.outputs.registry }}
           V:                  ${{ steps.version.outputs.version }}
@@ -626,7 +640,7 @@ jobs:
 
       - name: Write the version into the GitOps values
         id: bump
-        if: steps.built.outputs.any == 'true'
+        if: steps.freshness.outputs.current == 'true' && steps.built.outputs.any == 'true'
         env:
           V:       ${{ steps.version.outputs.version }}
           MARKERS: ${{ steps.built.outputs.markers }}
@@ -663,27 +677,18 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit, tag and push
-        if: steps.bump.outputs.changed == 'true'
+        id: publish
+        if: steps.freshness.outputs.current == 'true' && steps.bump.outputs.changed == 'true'
         env:
-          V: ${{ steps.version.outputs.version }}
-        run: |
-          git config user.name  "phorvex-ci[bot]"
-          git config user.email "ci@phorvex.ai"
-          git add deploy/helm/phorvex-stack/values-eks.yaml
-          # [skip ci] stops the version commit from re-triggering this workflow, which
-          # would otherwise version every version commit, forever.
-          git commit -m "release: v$V [skip ci]" -m "Deployed by ArgoCD from deploy/helm/phorvex-stack/values-eks.yaml."
-          git tag -a "v$V" -m "v$V"
-          # One atomic push: the release commit and its tag land together or not at all.
-          # Pushed separately, a rejected tag push left main carrying a release commit
-          # with no tag, which wedged every later deploy (see "Compute the next version").
-          git push --atomic origin HEAD:main "v$V"
+          SOURCE_SHA: ${{ github.sha }}
+          V:          ${{ steps.version.outputs.version }}
+        run: bash deploy/ci/publish-release.sh
 
       # The waiter below logs into the jump host with the same password the E2E jobs use,
       # so it verifies the same pinned host identity (see the secrets block at the top).
       # Gated exactly like the waiter: a merge that deploys nothing needs no ssh.
       - name: Provision the SSH host identity
-        if: steps.bump.outputs.changed == 'true'
+        if: steps.publish.outputs.released == 'true'
         env:
           PHORVEX_SSH_KNOWN_HOSTS_CONTENT: ${{ vars.PHORVEX_SSH_KNOWN_HOSTS }}
         run: |
@@ -700,7 +705,7 @@ jobs:
         # Only wait for a rollout that was actually requested. Without this guard a merge
         # that pushed nothing still polled for 15 minutes and then failed, pointing at
         # ArgoCD instead of at the step that had quietly done nothing.
-        if: steps.bump.outputs.changed == 'true'
+        if: steps.publish.outputs.released == 'true'
         env:
           SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
           HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
@@ -739,6 +744,7 @@ jobs:
     # Runs after any real deploy, however it was triggered.
     if: |
       !cancelled() && needs.deploy.result == 'success'
+      && needs.deploy.outputs.released == 'true'
       && (
         (github.event_name == 'push' && github.ref == 'refs/heads/main')
         || (github.event_name == 'workflow_dispatch' && inputs.force_release)
