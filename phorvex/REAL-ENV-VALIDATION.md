@@ -62,7 +62,9 @@ Ops: `kv-reset` (prefix-cache flush), `adapter-rotate` (LoRA unload/load), `requ
   PhorvexPolicy name resolution (exactly one per namespace) matches your install convention.
 - **(d) Acceptance:** a gate-passing, two-key-approved delta lands on the real CRD (`kubectl get phorvexpolicy -o
   yaml` shows the new values); a delta in another namespace is refused; a malicious delta is rejected with 422
-  and the CRD is untouched; the audit shows submitted→applied.
+  and the CRD is untouched; the audit shows submitted→applying→applied exactly once. Until the applier is
+  wired, an approval answers `501 applier-unavailable` and the request stays pending — `ApplierMode` is a
+  label only (`docs/CONSOLE-APPLY-FIX.md`).
 
 ## 3. MIG node-exec transport — `mig-rebind` `[PENDING-GPU-VALIDATION]`
 

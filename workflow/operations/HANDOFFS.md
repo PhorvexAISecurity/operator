@@ -25,7 +25,7 @@ the current code worktree to match the pinned implementation; that check is not 
 source: {branch: fix/example, base_sha: FULL_BASE_SHA, head_sha: FULL_HEAD_SHA}
 preflight: evidence/preflight/receipt.json
 checks:
-  implementation: {artifact: 04-diff.patch, command: "git diff --binary BASE HEAD"}
+  implementation: {artifact: 04-diff.patch, command: "git diff --binary --full-index BASE HEAD"}
   l0:
     artifact: evidence/l0.txt
     command: "cd phorvex && go test ./..."
@@ -35,6 +35,21 @@ checks:
   l2: {artifact: evidence/l2.txt, command: "EXACT_BEHAVIORAL_COMPARISON"}
   positive_control: {artifact: evidence/control.txt, command: "EXACT_CONTROL_COMMAND"}
 ```
+
+`04-diff.patch` is normally the canonical `git diff --binary --full-index --no-color
+--no-ext-diff --no-textconv BASE HEAD`; `submit-review` renders it when absent or
+stale and keeps an already-matching artifact byte-for-byte. The gate compares every
+byte against the pinned pair; the only tolerance is an `index OLD..NEW` header whose
+ids are valid prefixes of the pinned full ids (plain `git diff --binary` abbreviates
+them per clone). Never rewrite or re-sign a historical patch to change its bytes.
+
+For a source removal whose patch would retain private bytes, the coordinator may set
+`implementation.diff_format: git-diff-digest-v1`. The artifact then contains only its format,
+the exact resolved base and head commit IDs, and the SHA256 of the same entire nonempty canonical
+diff. Gates regenerate the diff from those objects and compare the strict envelope. Reviewers
+inspect ordinary source changes directly and confirm a sensitive deletion through tree and blob
+identities without reproducing the deleted bytes. Workers may update source pins during handoff;
+they cannot change the selected evidence format.
 
 Already-valid checks at this head, including explicitly authorized waivers, may
 be omitted; the batch validates them without changing their signer. It cannot

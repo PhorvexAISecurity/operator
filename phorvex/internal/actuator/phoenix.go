@@ -72,18 +72,12 @@ func (p *PhoenixActuator) timestamp() metav1.Time {
 	return metav1.Now()
 }
 
-// amtdName is the deterministic AMTD name Phorvex owns for a tenant. It is qualified by
-// namespace because the Phoenix/r6security controller treats the AMTD NAME as a
-// CLUSTER-GLOBAL RuleID: two AMTDs that share a name — even in different namespaces —
-// collide ("AMTD RuleIDs collision") and the AMTD controller stops reconciling ALL of them,
-// which silently kills every decision/actuation. That is exactly what a set of policies
-// cloned with the same spec.tenant produced (five `phorvex-voice` AMTDs across namespaces).
-// Prefixing the namespace makes the name globally unique regardless of the tenant value, so a
-// duplicate tenant can never jam the operator again. (Within ONE namespace two policies must
-// still use distinct tenants — that is a local, obvious misconfiguration, not a silent
-// cross-namespace trap.)
+// amtdName is the deterministic, Kubernetes-valid AMTD name Phorvex derives for a
+// tenant. Valid legacy names remain unchanged. Phoenix's "AMTD RuleIDs collision"
+// path compares complete Rule triples for AMTDs with overlapping pod selectors; AMTD
+// naming does not make those rules unique and this encoder does not claim to fix that.
 func amtdName(namespace, tenant string) string {
-	return "phorvex-" + sanitize(namespace) + "-" + sanitize(tenant)
+	return boundedAMTDName(namespace, tenant)
 }
 
 // EnsurePolicy idempotently maintains the tenant's AMTD strategy. Implements Actuator.
@@ -92,6 +86,10 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 		return fmt.Errorf("phoenix actuator: tenant %q has no matchLabels selector; P0 active-mode requires a matchLabels-expressible selector for the AMTD guest list", target.Tenant)
 	}
 	name := amtdName(target.Namespace, target.Tenant)
+	identity := identityAnnotations(target.Namespace, target.Tenant)
+	if err := validateIdentityMetadata(target.Namespace, identity); err != nil {
+		return fmt.Errorf("phoenix actuator: %w", err)
+	}
 	desired := buildStrategies(target.EnabledActions)
 
 	var amtd amtdv1beta1.AdaptiveMovingTargetDefense
@@ -102,9 +100,10 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 		}
 		amtd = amtdv1beta1.AdaptiveMovingTargetDefense{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: target.Namespace,
-				Labels:    map[string]string{"app.kubernetes.io/managed-by": "phorvex", "phorvex.ai/tenant": sanitize(target.Tenant)},
+				Name:        name,
+				Namespace:   target.Namespace,
+				Labels:      map[string]string{"app.kubernetes.io/managed-by": "phorvex", "phorvex.ai/tenant": tenantLabel(target.Tenant)},
+				Annotations: identity,
 			},
 			Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
 				PodSelector: target.MatchLabels,
@@ -112,20 +111,65 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 				MatcherMode: amtdv1beta1.MatcherModeExact,
 			},
 		}
+		if verr := validateObjectMetadata(&amtd.ObjectMeta); verr != nil {
+			return fmt.Errorf("create AMTD %s/%s metadata: %w", target.Namespace, name, verr)
+		}
 		if cerr := p.Client.Create(ctx, &amtd); cerr != nil {
 			return fmt.Errorf("create AMTD %s/%s: %w", target.Namespace, name, cerr)
 		}
 		return nil
 	}
 
+	if oerr := validateAMTDOwnership(&amtd, target, name); oerr != nil {
+		return fmt.Errorf("refuse AMTD update %s/%s: %w", target.Namespace, name, oerr)
+	}
+	amtd.Annotations = mergeAnnotations(amtd.Annotations, identity)
+	if amtd.Labels == nil {
+		amtd.Labels = map[string]string{}
+	}
+	amtd.Labels["app.kubernetes.io/managed-by"] = "phorvex"
+	amtd.Labels["phorvex.ai/tenant"] = tenantLabel(target.Tenant)
 	// Update in place if the selector or strategy drifted.
 	amtd.Spec.PodSelector = target.MatchLabels
 	amtd.Spec.Strategy = desired
 	if amtd.Spec.MatcherMode == "" {
 		amtd.Spec.MatcherMode = amtdv1beta1.MatcherModeExact
 	}
+	if verr := validateObjectMetadata(&amtd.ObjectMeta); verr != nil {
+		return fmt.Errorf("update AMTD %s/%s metadata: %w", target.Namespace, name, verr)
+	}
 	if uerr := p.Client.Update(ctx, &amtd); uerr != nil {
 		return fmt.Errorf("update AMTD %s/%s: %w", target.Namespace, name, uerr)
+	}
+	return nil
+}
+
+func validateAMTDOwnership(amtd *amtdv1beta1.AdaptiveMovingTargetDefense, target TenantTarget, expectedName string) error {
+	if amtd.Labels["app.kubernetes.io/managed-by"] != "phorvex" {
+		return fmt.Errorf("managed-by marker is not phorvex")
+	}
+	annotations := amtd.Annotations
+	version, hasVersion := annotations[identityVersionAnnotation]
+	rawNamespace, hasNamespace := annotations[rawNamespaceAnnotation]
+	rawTenant, hasTenant := annotations[rawTenantAnnotation]
+	if hasVersion || hasNamespace || hasTenant {
+		if !hasVersion || !hasNamespace || !hasTenant {
+			return fmt.Errorf("identity annotations are incomplete")
+		}
+		if version != metadataIdentityVersion {
+			return fmt.Errorf("unsupported identity version %q", version)
+		}
+		if rawNamespace != target.Namespace || rawTenant != target.Tenant {
+			return fmt.Errorf("identity annotations belong to namespace %q tenant %q", rawNamespace, rawTenant)
+		}
+		return nil
+	}
+	legacyName := "phorvex-" + sanitize(target.Namespace) + "-" + sanitize(target.Tenant)
+	if target.Tenant != sanitize(target.Tenant) {
+		return fmt.Errorf("annotation-free legacy identity for noncanonical tenant %q is ambiguous; operator migration required", target.Tenant)
+	}
+	if amtd.Namespace != target.Namespace || amtd.Name != expectedName || expectedName != legacyName || amtd.Labels["phorvex.ai/tenant"] != target.Tenant {
+		return fmt.Errorf("annotation-free legacy metadata does not exactly match canonical identity")
 	}
 	return nil
 }
@@ -136,14 +180,19 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 	if ruleType == "" {
 		return Result{}, fmt.Errorf("phoenix actuator: unsupported action %q", req.Action)
 	}
+	identity := identityAnnotations(req.Namespace, req.Tenant)
+	if err := validateIdentityMetadata(req.Namespace, identity); err != nil {
+		return Result{}, fmt.Errorf("phoenix actuator: %w", err)
+	}
 	se := &amtdv1beta1.SecurityEvent{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("phorvex-%s-", string(req.Action)),
 			Labels: map[string]string{
 				"app.kubernetes.io/managed-by": "phorvex",
-				"phorvex.ai/tenant":            sanitize(req.Tenant),
+				"phorvex.ai/tenant":            tenantLabel(req.Tenant),
 				"phorvex.ai/action":            string(req.Action),
 			},
+			Annotations: identity,
 		},
 		Spec: amtdv1beta1.SecurityEventSpec{
 			Targets: []string{req.Namespace + "/" + req.Pod},
@@ -156,7 +205,7 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 		},
 	}
 	if req.CoverageValue != nil {
-		se.Annotations = map[string]string{"phorvex.ai/coverage-contract": "selection-fact-weight-v1"}
+		se.Annotations["phorvex.ai/coverage-contract"] = "selection-fact-weight-v1"
 		value := *req.CoverageValue
 		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
 			se.Annotations["phorvex.ai/coverage-status"] = "invalid-source-value"
@@ -167,6 +216,9 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 	} else if req.Score >= 0 {
 		s := fmt.Sprintf("%.4f", req.Score)
 		se.Spec.AnomalyScore = &s
+	}
+	if verr := validateObjectMetadata(&se.ObjectMeta); verr != nil {
+		return Result{}, fmt.Errorf("emit SecurityEvent for %s/%s metadata: %w", req.Namespace, req.Pod, verr)
 	}
 	if err := p.Client.Create(ctx, se); err != nil {
 		return Result{}, fmt.Errorf("emit SecurityEvent for %s/%s: %w", req.Namespace, req.Pod, err)

@@ -14,6 +14,7 @@ from test_operations import sandbox, workflow as w, run
 from test_contracts import ready_snapshot
 import delivery
 import preflight
+import patches
 
 
 def setup(repo, baseline):
@@ -89,6 +90,41 @@ class DeliveryTests(unittest.TestCase):
             before=w.load_yaml(fix/'STATUS.yaml')['checks']['l2']
             self.assertEqual(submit(fix,{'preflight':receipt(repo,fix),'checks':{}}),0)
             self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['checks']['l2'],before)
+
+    def test_submit_keeps_matching_patch_bytes_and_renders_full_index_when_stale(self):
+        with sandbox() as (repo,root,baseline):
+            fix=setup(repo,baseline);impl=w.load_yaml(fix/'STATUS.yaml')['implementation']
+            abbreviated=subprocess.check_output(['git','-c','core.abbrev=8','diff','--binary',impl['base_sha'],impl['head_sha']],cwd=repo)
+            canonical=subprocess.check_output(['git','diff','--binary','--full-index',impl['base_sha'],impl['head_sha']],cwd=repo)
+            self.assertNotEqual(abbreviated,canonical)
+            (fix/'04-diff.patch').write_bytes(abbreviated)
+            self.assertEqual(w.cmd_record_check(argparse.Namespace(fix_id=fix.name,check='implementation',by='author',
+                artifact='04-diff.patch',result='PASS',command='git diff --binary base head',approval_ref=None,rationale=None,
+                inputs=None,expect_revision=revision(fix))),0)
+            signed=w.load_yaml(fix/'STATUS.yaml')['checks']['implementation']
+            self.assertEqual(submit(fix,{'preflight':receipt(repo,fix),'checks':{}}),0)
+            self.assertEqual((fix/'04-diff.patch').read_bytes(),abbreviated)
+            self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['checks']['implementation'],signed)
+        with sandbox() as (repo,root,baseline):
+            fix=setup(repo,baseline);impl=w.load_yaml(fix/'STATUS.yaml')['implementation']
+            (fix/'04-diff.patch').write_bytes(b'stale artifact\n')
+            data=package(fix,receipt(repo,fix))
+            self.assertEqual(submit(fix,data),0)
+            self.assertEqual((fix/'04-diff.patch').read_bytes(),
+                subprocess.check_output(['git','diff','--binary','--full-index',impl['base_sha'],impl['head_sha']],cwd=repo))
+            self.assertEqual(w.load_yaml(fix/'STATUS.yaml')['checks']['implementation']['sha256'],w.sha256(fix/'04-diff.patch'))
+
+    def test_submit_renders_selected_digest_and_rejects_raw_patch(self):
+        with sandbox() as (repo,root,baseline):
+            fix=setup(repo,baseline);status=w.load_yaml(fix/'STATUS.yaml')
+            status['implementation']['diff_format']=patches.DIGEST_FORMAT
+            w.write_yaml(fix/'STATUS.yaml',status);impl=status['implementation']
+            raw=patches.render(repo,impl['base_sha'],impl['head_sha'])
+            (fix/'04-diff.patch').write_bytes(raw)
+            self.assertIsNotNone(patches.verify(repo,fix/'04-diff.patch',impl['base_sha'],impl['head_sha'],patches.DIGEST_FORMAT))
+            self.assertEqual(submit(fix,package(fix,receipt(repo,fix))),0)
+            self.assertEqual((fix/'04-diff.patch').read_bytes(),
+                             patches.render(repo,impl['base_sha'],impl['head_sha'],patches.DIGEST_FORMAT))
 
     def test_partial_batch_rolls_back_files_and_pin_updates(self):
         with sandbox() as (repo,root,baseline):
