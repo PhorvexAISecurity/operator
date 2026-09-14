@@ -492,3 +492,14 @@ fixes:
     stacked_on: []
     branch: fix/v3-m081-bound-node-agent
     head_sha: fae92b0f01de880c21af0955a2680c97a012a2fc
+  T2-M174:
+    directory: fixes/T2-M174
+    aliases: []
+    issues:
+    - M-174
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/v3-m174-policy-cadence
+    head_sha: f0185d445d5303c13588d9d6d059309b946e0d53

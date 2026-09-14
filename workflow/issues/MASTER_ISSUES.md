@@ -2597,7 +2597,7 @@ Severity: HIGH · Tier: unassigned · Fixes: V3-M173
 
 ### M-174 · Observed decision cadence exceeds configured policy interval · **OPEN** · `CONTROL`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: none
+Severity: MEDIUM · Tier: unassigned · Fixes: T2-M174
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONTROL` — anatomy locus review required.
