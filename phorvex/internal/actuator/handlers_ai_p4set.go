@@ -60,6 +60,10 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "model-shard-replace", req)
 	}
+	// [M-69] Refuse before any group mutation unless the observed trigger is the selected Pod.
+	if reason := triggerIdentityRefusal(req, trig); reason != "" {
+		return refuseAI("model-shard-replace", reason)
+	}
 	size, _ := strconv.Atoi(trig.Annotations[annoParallelSize])
 	if size <= 0 {
 		return HandlerResult{}, fmt.Errorf("model-shard-replace: %s unset on group %q — cannot coherently flip a TP/PP group (fail-closed)", annoParallelSize, group)
@@ -101,23 +105,44 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 		}
 		flipped = append(flipped, s)
 	}
-	// (2) DRAIN + RETIRE the old leaders of the group, coherently.
+	// (2) DRAIN + RETIRE the old leaders of the group, coherently. [M-69] Each Delete is bound to
+	// the UID of the list object that selected that leader for retirement; the trigger keeps the
+	// identity verified above (a same-name object listed under another UID is a replacement, not
+	// the trigger). A rejected Delete is never swallowed: the move reports which old leaders were
+	// NOT retired and the partial state (shadows promoted, names relabeled) rather than claiming
+	// every old member retired. No rollback is attempted.
 	var leaders corev1.PodList
 	_ = ec.Client.List(ctx, &leaders, client.InNamespace(req.Namespace), sel)
 	touched := make([]string, 0, len(flipped)+size)
+	var retired, notRetired []string
+	var delErrs []error
 	for i := range leaders.Items {
 		old := &leaders.Items[i]
 		if old.Labels[labelRole] != roleRetiring && isOldLeader(old, flipped) {
+			if old.Name == trig.Name && old.UID != trig.UID {
+				notRetired = append(notRetired, old.Name)
+				delErrs = append(delErrs, fmt.Errorf("%w: %s/%s listed uid %s, observed trigger uid %s", errPodReplaced, old.Namespace, old.Name, old.UID, trig.UID))
+				continue
+			}
 			_ = relabelRole(ctx, ec.Client, old.Namespace, old.Name, roleRetiring)
 			_, _, _ = drainInflight(ctx, ec, old)
-			_ = ec.Client.Delete(ctx, old)
 			touched = append(touched, objRef("Pod", old.Namespace, old.Name))
+			if _, derr := deleteObservedPod(ctx, ec.Client, old); derr != nil {
+				notRetired = append(notRetired, old.Name)
+				delErrs = append(delErrs, derr)
+				continue
+			}
+			retired = append(retired, old.Name)
 		}
 	}
 	for _, s := range flipped {
 		touched = append(touched, objRef("Pod", req.Namespace, s.Name))
 	}
-	note := fmt.Sprintf("model-shard-replace: TP/PP group %q flipped COHERENTLY (%d ranks), old group drained + retired", group, size)
+	if len(delErrs) > 0 {
+		return HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + group, ObjectsTouched: touched},
+			fmt.Errorf("model-shard-replace TP/PP group %q PARTIAL (no rollback): %d shadow ranks promoted to leader, old leaders retired %v, NOT retired %v: %w", group, len(flipped), retired, notRetired, errors.Join(delErrs...))
+	}
+	note := fmt.Sprintf("model-shard-replace: TP/PP group %q flipped COHERENTLY (%d ranks), old group drained + retired (%d old leaders)", group, size, len(retired))
 	if pending {
 		note += " [PENDING-GPU-VALIDATION]: shadow readiness used the K8s gate (no vLLM stack reachable)"
 	} else {
