@@ -117,3 +117,11 @@ intakes:
     state: FILED
     issue_id: M-175
     aliases: []
+  RPT-20260913-153400-route-prerequisites:
+    directory: intake/RPT-20260913-153400-route-prerequisites
+    kind: OBSERVATION
+    title: Route selections repeatedly reach a non-emitting handler while support
+      status omits route prerequisites
+    state: REPORTED
+    issue_id: null
+    aliases: []
