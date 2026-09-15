@@ -85,6 +85,11 @@ other untested conditions stay explicit; they are not passing evidence. Only
 after every member is live-verified may the lead mark the tier VERIFIED and
 begin the next tier's fixes.
 
+For this campaign, the owner's September 15 instruction explicitly allows Tier3
+implementation while unavailable Tier1/2 live controls remain pending. See
+assessments/20260915-tier3/AUTHORIZATION.md. This changes scheduling for Tier3
+only; it grants no live evidence waiver or shared deployment authority.
+
 ## Durable handover and final evidence
 
 Persist assessment coverage, source/deployment pins, issue reconciliation, the
