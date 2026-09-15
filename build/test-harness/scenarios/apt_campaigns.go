@@ -60,8 +60,8 @@ func (c *aptCampaign) Execute(ctx context.Context, env *core.Env) (core.AttackRe
 	}
 	c.targetUID = pod.UID
 	container := firstContainer(pod)
-	cmds := plantBackdoor(ctx, env, pod.Name, container)
-	if err := stimulusExec(ctx, env.Exec(ctx, pod.Name, container, []string{"sh", "-c", "test -f " + BackdoorMarkerPath})); err != nil {
+	cmds, err := plantBackdoorObserved(ctx, env, pod.Name, container)
+	if err != nil {
 		return core.AttackResult{Stages: []string{"plant bounded in-container persistence marker"}, Commands: cmds}, err
 	}
 	notes := map[string]string{"narrativeOperation": c.spec.op, "declaredTechniqueIDs": fmt.Sprintf("%v", c.spec.ttps), "narrativePhaseCount": fmt.Sprintf("%d", len(c.spec.killChain)), "realism": string(core.RealismMarkerSimulation)}

@@ -118,6 +118,7 @@ func DefaultRotationIntervals() map[string]float64 {
 type dollarRow struct {
 	Scenario           string
 	Defender           string
+	Realism            core.ScenarioRealism
 	Trials             int
 	MeanDisruption     float64
 	MeanDefensiveActs  float64
@@ -186,7 +187,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 	baselineSeen := map[string]int{}
 	for i := range metrics {
 		m := metrics[i]
-		if m.AnchorOnly || m.Kind() != core.TrialOrdinary || !m.IsScored() {
+		if m.AnchorOnly || effectiveMetricRealism(m) == core.RealismMarkerSimulation || m.Kind() != core.TrialOrdinary || !m.IsScored() {
 			continue
 		}
 		if m.Defender == in.BaselineDefender && m.Reuse != nil {
@@ -213,7 +214,8 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		if m.IsLegacy() && m.NegativeControl {
 			rowKind = core.TrialNegativeControl
 		}
-		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender}
+		realism := effectiveMetricRealism(m)
+		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender, Realism: realism}
 		a, ok := byArm[k]
 		if !ok {
 			a = &acc{negFalseMax: -1}
@@ -246,6 +248,11 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 			continue
 		}
 		a.validity.Emitted++
+		if realism == core.RealismMarkerSimulation {
+			a.validity.RealismExcluded++
+			a.validity.addReason("marker simulation excluded from real attack-defense economics")
+			continue
+		}
 
 		// Attribution notes are raw stamps and survive an unscored row; numbers
 		// do not.
@@ -315,6 +322,7 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		row := dollarRow{
 			Scenario:           k.Scenario,
 			Defender:           k.Defender,
+			Realism:            k.Realism,
 			Trials:             len(a.disruption),
 			RotationInterval:   in.RotationIntervals[k.Defender],
 			MTDEffect:          a.mtd,
@@ -356,7 +364,10 @@ func recomputeEconomics(metrics []core.Metric, in DollarInputs) []dollarRow {
 		if rows[i].Scenario != rows[j].Scenario {
 			return rows[i].Scenario < rows[j].Scenario
 		}
-		return rows[i].Defender < rows[j].Defender
+		if rows[i].Defender != rows[j].Defender {
+			return rows[i].Defender < rows[j].Defender
+		}
+		return rows[i].Realism < rows[j].Realism
 	})
 	return rows
 }
@@ -370,7 +381,7 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	var b strings.Builder
 	b.WriteString("# Phoenix / Phorvex -- Dollars, Schwartau & Attack-Reusability View\n\n")
 	b.WriteString("Pure post-processing over the SAME extended Metric schema (ZERO re-execution). ROI($) is recomputed from the swappable knobs; Schwartau P = the arm's rotation interval, D/R = measured time-to-action; attack-reusability anchors replay-success to the static baseline.\n\n")
-	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only SCORED trials with an OBSERVED defensive cost enter these figures. Invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
+	b.WriteString(fmt.Sprintf("Measurement-validity contract v%d: only SCORED trials with an OBSERVED defensive cost enter these figures. Marker simulations, invalid, skipped, unanchored, cleanup-failed, cost-unobserved and legacy/unverified rows are counted in the validity column and excluded from every denominator. An arm with nothing measured renders `n/a` — never $0, 0%% or a PASS.\n\n", core.MeasurementValidityVersion))
 
 	b.WriteString("## Swappable $ inputs (clearly-labeled defaults)\n\n")
 	b.WriteString(fmt.Sprintf("- **gpuCount** = %d (a single DGX-class node)\n", in.ROI.GpuCount))
@@ -382,12 +393,12 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString(fmt.Sprintf("- Derived **GPU-overhead $/yr saved** = gpuCount*$/hr*8760*overhead = **$%.0f**\n\n", gpuSaved))
 
 	b.WriteString("## Per-arm dollars / Schwartau / reusability\n\n")
-	b.WriteString("| Scenario | Defender | ScoredTrials | Disrupt% | MTDEffect | Trigger | SecPerCost($) | DefenseCost$/yr | Schwartau P/D/R (s) | P>D+R | Replay succ | ReuseRedux% | CapPending |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Scenario | Defender | Realism | ScoredTrials | Disrupt% | MTDEffect | Trigger | SecPerCost($) | DefenseCost$/yr | Schwartau P/D/R (s) | P>D+R | Replay succ | ReuseRedux% | CapPending |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rows {
 		if !r.Economics {
-			b.WriteString(fmt.Sprintf("| %s | %s | 0 | n/a | %s | %s | n/a | n/a | n/a | n/a | n/a | n/a | %v |\n",
-				r.Scenario, r.Defender, dash(r.MTDEffect), dash(r.TriggerAttribution), r.CapabilityPending))
+			b.WriteString(fmt.Sprintf("| %s | %s | %s | 0 | n/a | %s | %s | n/a | n/a | n/a | n/a | n/a | n/a | %v |\n",
+				r.Scenario, r.Defender, r.Realism, dash(r.MTDEffect), dash(r.TriggerAttribution), r.CapabilityPending))
 			continue
 		}
 		sch := ""
@@ -396,8 +407,8 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 		} else {
 			sch = fmt.Sprintf("%.0f/%.1f/%.1f", r.Schwartau.ProtectionTimeSeconds, r.Schwartau.DetectionTimeSeconds, r.Schwartau.ReactionTimeSeconds)
 		}
-		b.WriteString(fmt.Sprintf("| %s | %s | %d | %.0f%% | %s | %s | $%.0f | $%.0f | %s | %v | %d | %.0f%% | %v |\n",
-			r.Scenario, r.Defender, r.Trials, r.MeanDisruption*100,
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %.0f%% | %s | %s | $%.0f | $%.0f | %s | %v | %d | %.0f%% | %v |\n",
+			r.Scenario, r.Defender, r.Realism, r.Trials, r.MeanDisruption*100,
 			dash(r.MTDEffect), dash(r.TriggerAttribution),
 			r.ROI.SecurityPerCostDollars, r.ROI.AnnualDefenseCostDollars,
 			sch, r.Schwartau.SchwartauPositive,
@@ -409,8 +420,8 @@ func RenderDollars(metrics []core.Metric, in DollarInputs, ciLevel float64) stri
 	b.WriteString("| Scenario | Defender | Accounting | Reasons |\n|---|---|---|---|\n")
 	for _, r := range rows {
 		v := r.Validity
-		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
-			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+		acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+			v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
 			r.NegControlState, r.NegControlUsable, r.NegControlTotal)
 		if !v.Complete() {
 			acct = "INCOMPLETE " + acct

@@ -25,6 +25,7 @@ import (
 type ArmKey struct {
 	Scenario string
 	Defender string
+	Realism  core.ScenarioRealism
 }
 
 // Negative-control states. Only "observed" — EVERY negative-control row of the
@@ -56,7 +57,10 @@ type ArmValidity struct {
 	// without a usable control, cleanup or oracle). They are counted here so they
 	// stay visible instead of disappearing from every bucket.
 	Unverified int
-	Reasons    []string
+	// RealismExcluded counts otherwise valid rows withheld from real-attack
+	// reporting because their mechanism is explicitly a simulation.
+	RealismExcluded int
+	Reasons         []string
 }
 
 // addReason appends each distinct, non-empty reason, skipping duplicates. Every
@@ -181,12 +185,12 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 	byArm := map[ArmKey]*armAcc{}
 	order := []ArmKey{}
 	touch := func(m core.Metric) *armAcc {
-		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender}
+		k := ArmKey{Scenario: m.Scenario, Defender: m.Defender, Realism: effectiveMetricRealism(m)}
 		a, ok := byArm[k]
 		if !ok {
 			// negFalseMax starts at -1 (UNOBSERVED) so an arm that never observed a
 			// negative control can never present a zero.
-			a = &armAcc{category: m.Category, r6: m.R6Tag, realism: effectiveMetricRealism(m), negFalseMax: -1}
+			a = &armAcc{category: m.Category, r6: m.R6Tag, realism: k.Realism, negFalseMax: -1}
 			byArm[k] = a
 			order = append(order, k)
 		}
@@ -360,7 +364,10 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		if out[i].Scenario != out[j].Scenario {
 			return out[i].Scenario < out[j].Scenario
 		}
-		return out[i].Defender < out[j].Defender
+		if out[i].Defender != out[j].Defender {
+			return out[i].Defender < out[j].Defender
+		}
+		return out[i].Realism < out[j].Realism
 	})
 	return out
 }
@@ -543,8 +550,8 @@ func renderArmTable(summaries []ArmSummary) string {
 // so a partially observed control cannot pass as a clean one.
 func armAccounting(s ArmSummary) string {
 	v := s.Validity
-	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
-		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.CleanupFailed, v.CostUnobserved, v.Legacy,
+	acct := fmt.Sprintf("emitted=%d scored=%d invalid=%d skipped=%d unscored=%d unverified=%d realismExcluded=%d cleanupFailed=%d costUnobserved=%d legacy=%d negControl=%s(%d/%d observed)",
+		v.Emitted, v.Scored, v.Invalid, v.Skipped, v.UnscoredValid, v.Unverified, v.RealismExcluded, v.CleanupFailed, v.CostUnobserved, v.Legacy,
 		s.NegativeControl, s.NegControlUsable, s.NegControlTotal)
 	if !v.Complete() {
 		acct = "INCOMPLETE " + acct

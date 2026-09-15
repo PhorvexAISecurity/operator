@@ -35,10 +35,35 @@ func TestMarkerSummariesAreSeparatedFromRealPercentages(t *testing.T) {
 	}
 }
 
-func TestMarkerMetricsExcludedFromRealEconomics(t *testing.T) {
-	got := ExcludeMarkerSimulations([]core.Metric{{Scenario: "marker", ScenarioRealism: core.RealismMarkerSimulation}, {Scenario: "legacy"}, {Scenario: "real", ScenarioRealism: core.RealismExecutable}})
-	if len(got) != 2 || got[0].Scenario != "legacy" || got[1].Scenario != "real" {
-		t.Fatalf("unexpected economics inputs: %+v", got)
+func TestRunnerReaderRowsAreOrderIndependentAtReportBoundaries(t *testing.T) {
+	produced := r1ProducerRow(t)
+	marker := produced
+	marker.ScenarioRealism = core.RealismMarkerSimulation
+	unassessed := produced
+	unassessed.ScenarioRealism = ""
+	for _, rows := range [][]core.Metric{{unassessed, marker}, {marker, unassessed}} {
+		read := replayThroughReader(t, rows...)
+		ordinary, markers := splitMarkerSummaries(Aggregate(read, 0.95))
+		if len(ordinary) != 1 || ordinary[0].Trials != 1 || len(markers) != 1 || markers[0].Trials != 1 {
+			t.Fatalf("mixed realism rows changed groups by order: ordinary=%+v marker=%+v", ordinary, markers)
+		}
+		economics := recomputeEconomics(read, DollarInputs{BaselineDefender: "d-v161-nomtd"})
+		var excluded, scored int
+		for _, row := range economics {
+			if row.Validity.RealismExcluded == 1 && !row.Economics {
+				excluded++
+			}
+			if row.Economics {
+				scored++
+			}
+		}
+		if excluded != 1 || scored != 1 {
+			t.Fatalf("economics boundary leaked marker: %+v", economics)
+		}
+		rendered := RenderDollars(read, DollarInputs{BaselineDefender: "d-v161-nomtd"}, 0.95)
+		if !strings.Contains(rendered, "realismExcluded=1") || !strings.Contains(rendered, "marker simulation excluded") {
+			t.Fatalf("excluded marker not disclosed:\n%s", rendered)
+		}
 	}
 }
 

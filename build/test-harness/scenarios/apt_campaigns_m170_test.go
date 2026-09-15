@@ -58,7 +58,7 @@ func TestAPTCampaignInventoryAndExecutedStimulus(t *testing.T) {
 			if len(result.Stages) != 1 || strings.Contains(strings.Join(result.Stages, " "), "recon:") {
 				t.Fatalf("narrative returned as stages: %v", result.Stages)
 			}
-			if len(commands) != 2 || !strings.Contains(strings.Join(commands[0], " "), BackdoorMarkerPath) {
+			if len(commands) != 1 || !strings.Contains(strings.Join(commands[0], " "), BackdoorMarkerPath) {
 				t.Fatalf("unexpected stimulus commands: %v", commands)
 			}
 			if err := campaign.Teardown(context.Background(), env); err != nil {
@@ -70,6 +70,24 @@ func TestAPTCampaignInventoryAndExecutedStimulus(t *testing.T) {
 				t.Fatalf("teardown did not issue owned pod collection delete: %v", last)
 			}
 		})
+	}
+}
+
+func TestAPTCampaignFailedMarkerExecCannotReuseStaleMarker(t *testing.T) {
+	campaign := allScenarios()[aptTable[0].id+"-apt"].(*aptCampaign)
+	campaign.app = "apt-failed-stimulus"
+	env := fixtureObservationEnv()
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: campaign.app, Namespace: "sandbox", UID: "stale-marker-pod", Labels: map[string]string{"app": campaign.app}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	_, _ = env.Kube.CoreV1().Pods("sandbox").Create(context.Background(), pod, metav1.CreateOptions{})
+	calls := 0
+	core.SetExecer(func(_ context.Context, _ *rest.Config, _ kubernetes.Interface, _, _, _ string, _ []string) core.ExecResult {
+		calls++
+		return core.ExecResult{Stdout: BackdoorMarker, ExitCode: 19, Err: context.DeadlineExceeded}
+	})
+	t.Cleanup(func() { core.SetExecer(nil) })
+	result, err := campaign.Execute(context.Background(), env)
+	if err == nil || calls != 1 {
+		t.Fatalf("failed producer was not preserved: calls=%d result=%+v err=%v", calls, result, err)
 	}
 }
 
