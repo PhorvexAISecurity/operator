@@ -753,8 +753,8 @@ fixes:
     issues:
     - M-82
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t5-m082
-    head_sha: null
+    head_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
