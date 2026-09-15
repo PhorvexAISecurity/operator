@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -79,13 +79,15 @@ synchronization:
   anatomy_release: pending
   permanent_tests: pending
 dependencies: []
-blockers: []
+blockers:
+- Automatic cybersecurity filter stopped M92 worker implementation and a narrower
+  defensive validation task. No implementation delivered; no bypass attempted.
 residuals: []
 next_action:
-  owner: sol-t3-m092
-  action: Implement the signed serving destination containment plan; coordinate heavy
-    tests
-updated_at: '2026-09-15T06:06:46+00:00'
+  owner: codex-lead
+  action: Retain M92 as incomplete and continue independent Tier3 fixes; await an
+    available permitted path for this blocked task.
+updated_at: '2026-09-15T06:31:10+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:39+00:00'
   by: codex-lead
@@ -107,6 +109,12 @@ configuration_history:
   by: codex-lead
   fields:
   - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T06:31:10+00:00'
+  by: codex-lead
+  fields:
+  - blockers
+  - next_action
   approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
