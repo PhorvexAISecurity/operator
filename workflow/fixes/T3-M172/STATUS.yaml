@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -85,13 +85,29 @@ checks:
     - workflow/assessments/20260910-readiness/fresh-catalogue/revision2-overlays/scenarios
     - workflow/fixes/T3-M172/evidence/red-probe
     inputs_sha256: f966e196fd65b1f91a45fbd5ea97f1a382316c7b44e1c7af67c79e764ea3907d
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: fdbd5d75061c6e9adc0b85b3ecb963a06ce79dee935fe154aad164074445cbc4
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:57:48+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f1cf736fb7d7b7c5c4584348866934f2bba54faad53d9529f4b1ce6e517ff9b0
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:57:48+00:00'
+    incident_sha256: fdbd5d75061c6e9adc0b85b3ecb963a06ce79dee935fe154aad164074445cbc4
 fix_id: T3-M172
 issues:
 - M-172
 title: Scenario oracles conflate missing targets and failed observations with attack
   disruption
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,7 +154,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -154,10 +170,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T08:56:22+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T08:57:51+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:47+00:00'
   by: codex-lead
@@ -228,10 +244,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T08:57:48+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T08:57:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T3-M172:11:submit
-  from: sol-t3-m172
+  id: T3-M172:12:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 11
+  role: coordinator
+  kind: review
+  revision: 12
