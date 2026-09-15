@@ -13,6 +13,8 @@ package scenarios
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,10 +30,13 @@ const StealthFootholdMarker = "R6TH-STEALTH-FOOTHOLD"
 // /tmp/.r6th_backdoor the base attack uses).
 const (
 	stealthPrimary = "/tmp/.cache/.session_cache" // looks like an app cache file
-	stealthBackup  = "/tmp/.config/.sysd"          // redundant copy, looks like config
+	stealthBackup  = "/tmp/.config/.sysd"         // redundant copy, looks like config
 )
 
-type c2StealthFoothold struct{ app string }
+type c2StealthFoothold struct {
+	app       string
+	targetUID types.UID
+}
 
 func (s *c2StealthFoothold) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{
@@ -57,33 +62,50 @@ func (s *c2StealthFoothold) Execute(ctx context.Context, env *core.Env) (core.At
 	if err != nil {
 		return core.AttackResult{}, err
 	}
-	script := fmt.Sprintf(
-		"mkdir -p /tmp/.cache /tmp/.config; echo %s > %s; echo %s > %s; echo planted",
-		StealthFootholdMarker, stealthPrimary, StealthFootholdMarker, stealthBackup)
+	script := stealthPlantCommand(stealthPrimary, stealthBackup)
 	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", script})
+	if err := stimulusExec(ctx, res); err != nil {
+		return core.AttackResult{}, err
+	}
+	s.targetUID = pod.UID
 	env.Log.Logf("stealth-foothold plant: %q exit=%d", strings.TrimSpace(res.Stdout), res.ExitCode)
 	return core.AttackResult{
 		Stages:   []string{"persistence: plant DISGUISED foothold (T1543.005)", "redundancy: plant BACKUP copy (T1564.001)"},
-		Commands: []string{"sh -c '" + script + "'"},
+		Commands: []string{"sh -c " + script},
 	}, nil
+}
+
+// Both writes and their marker reads must succeed before Execute reports that
+// the original fake two-copy stimulus was established.
+func stealthPlantCommand(primary, backup string) string {
+	q := func(path string) string { return "'" + strings.ReplaceAll(path, "'", "'\"'\"'") + "'" }
+	return fmt.Sprintf("mkdir -p %s %s && echo %s > %s && echo %s > %s && test \"$(cat %s)\" = %s && test \"$(cat %s)\" = %s && echo planted",
+		q(filepath.Dir(primary)), q(filepath.Dir(backup)), StealthFootholdMarker, q(primary), StealthFootholdMarker, q(backup), q(primary), StealthFootholdMarker, q(backup), StealthFootholdMarker)
 }
 
 // SuccessOracle — succeeds if EITHER disguised copy is still present after a wait.
 func (s *c2StealthFoothold) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(8 * time.Second) // give a rotating defender time to act
-	pod, err := runningPodByApp(ctx, env, s.app)
+	observationPause(8 * time.Second) // give a rotating defender time to act
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		// no running pod = the victim was rotated away = fully evicted
-		return core.OracleResult{Achieved: false, ObservedState: "no running pod (rotated) — both footholds evicted"}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	check := fmt.Sprintf("cat %s %s 2>/dev/null", stealthPrimary, stealthBackup)
+	check := fmt.Sprintf("for p in %s %s; do if test -f \"$p\"; then cat \"$p\"; else echo %s; fi; done", stealthPrimary, stealthBackup, observationAbsent)
 	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", check})
-	hits := strings.Count(res.Stdout, StealthFootholdMarker)
+	out, err := observationExec(ctx, res)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	hits := strings.Count(out, StealthFootholdMarker)
+	if hits+strings.Count(out, observationAbsent) != 2 {
+		return core.OracleResult{}, fmt.Errorf("stealth foothold observation malformed or truncated")
+	}
 	achieved := hits >= 1
 	return core.OracleResult{
 		Achieved:      achieved,
 		ObservedState: fmt.Sprintf("stealth foothold survived: %d/2 copies present (need >=1)", hits),
-		Evidence:      map[string]string{"copiesSurvived": fmt.Sprintf("%d", hits), "observedPod": pod.Name},
+		Evidence:      map[string]string{"copiesSurvived": fmt.Sprintf("%d", hits), "observedPod": pod.Name, "originalPodUID": string(s.targetUID), "observedPodUID": string(pod.UID)},
 	}, nil
 }
 

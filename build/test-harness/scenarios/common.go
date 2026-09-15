@@ -537,18 +537,25 @@ func firstContainer(p *corev1.Pod) string {
 // the foothold reliably plant so disruption reflects REAL eviction, not a race.
 func runningPodByApp(ctx context.Context, env *core.Env, appLabel string) (*corev1.Pod, error) {
 	deadline := time.Now().Add(40 * time.Second)
+	var lastLookupErr error
 	for {
 		pods, err := env.Kube.CoreV1().Pods(env.Config.Namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: "app=" + appLabel,
 		})
 		if err == nil {
+			lastLookupErr = nil
 			for i := range pods.Items {
 				if pods.Items[i].Status.Phase == corev1.PodRunning && pods.Items[i].DeletionTimestamp == nil {
 					return &pods.Items[i], nil
 				}
 			}
+		} else {
+			lastLookupErr = err
 		}
 		if time.Now().After(deadline) {
+			if lastLookupErr != nil {
+				return nil, fmt.Errorf("pod lookup failed for app=%s after polling: %w", appLabel, lastLookupErr)
+			}
 			return nil, fmt.Errorf("no running pod for app=%s after polling", appLabel)
 		}
 		select {

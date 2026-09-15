@@ -3,6 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"strings"
 	"time"
 
@@ -17,18 +18,21 @@ import (
 func init() { core.RegisterScenario(&c3SecretsSprawl{}) }
 
 // SprawledSecretValue is the FAKE secret value mounted over-permissively; it is
-// only ever trusted by the mock sink in the same namespace.
+// only ever presented to the mock sink in the same namespace.
 const SprawledSecretValue = "R6TH-FAKE-SPRAWLED-SECRET-tok-7c1d"
 
 // c3SecretsSprawl: a secret value is read from an over-permissive volume mount/env
-// var in the compromised pod AND then used successfully (authenticates to the mock
-// sink that trusts that secret). ORACLE: the mock sink accepts the leaked secret.
+// var in the compromised pod AND then presented to the in-namespace mock sink.
+// ORACLE: the same captured fake value is presented and the fixed responder
+// reports an authorized body; it does not authenticate the header.
 // R6 CANNOT respond: a single in-pod read has no runtime signal Phoenix classifies;
 // rotation does not un-leak an already-read secret; the over-permissive mount is
 // re-created on the rotated pod.
 type c3SecretsSprawl struct {
-	app    string
-	secret string
+	app            string
+	targetUID      types.UID
+	capturedSecret string
+	secret         string
 }
 
 func (s *c3SecretsSprawl) Metadata() core.ScenarioMeta {
@@ -68,7 +72,7 @@ func (s *c3SecretsSprawl) Setup(ctx context.Context, env *core.Env) error {
 	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return err
 	}
-	// A mock sink that trusts the sprawled secret value (the oracle endpoint).
+	// The fixed in-namespace mock sink returns a response for the fake value.
 	if _, err := mocks.DeployMockCloudAPI(ctx, env); err != nil {
 		return err
 	}
@@ -80,35 +84,57 @@ func (s *c3SecretsSprawl) Execute(ctx context.Context, env *core.Env) (core.Atta
 	if err != nil {
 		return core.AttackResult{}, err
 	}
+	s.targetUID = pod.UID
 	stages := []string{
 		"cred-access: read the sprawled secret from the over-permissive mount (T1552.001)",
-		"use: authenticate to the mock sink that trusts the secret (T1078)",
+		"use: present the captured fake value to the mock sink (T1078)",
 	}
 	readCmd := "cat /secrets/token 2>/dev/null"
 	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", readCmd})
-	got := strings.Contains(res.Stdout, SprawledSecretValue)
+	if err := stimulusExec(ctx, res); err != nil {
+		return core.AttackResult{}, err
+	}
+	got := strings.TrimSpace(res.Stdout) == SprawledSecretValue
+	if !got {
+		return core.AttackResult{}, fmt.Errorf("mock secret read missing or malformed")
+	}
+	s.capturedSecret = strings.TrimSpace(res.Stdout)
 	env.Log.Logf("c3-secrets-sprawl: secret read from mount=%v", got)
 	return core.AttackResult{Stages: stages, Commands: []string{readCmd, "present leaked secret to mock sink"}, Notes: map[string]string{"secretRead": fmt.Sprintf("%v", got)}}, nil
 }
 
 func (s *c3SecretsSprawl) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(2 * time.Second)
+	observationPause(2 * time.Second)
 	ev := map[string]string{}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
-		ev["secretUsed"] = "false"
-		return core.OracleResult{Achieved: false, ObservedState: "pod absent for secret replay", Evidence: ev}, nil
+		// Source Pod loss cannot establish fake-value revocation or denial.
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	// Use the leaked secret against the mock sink (mock-cloud-api authorizes).
-	// Retry the use against the mock sink so a transient Service-endpoint or
-	// listener gap does not yield an empty body (which previously failed the
-	// positive-control anchor); the mock readiness gate already confirmed it serves.
-	useCmd := "TOK=$(cat /secrets/token 2>/dev/null); for i in 1 2 3 4 5; do R=$(wget -T 3 -qO- --header=\"Authorization: $TOK\" http://mock-cloud-api-svc:8082/authorize 2>/dev/null); if [ -n \"$R\" ]; then break; fi; sleep 1; done; printf '%s' \"$R\""
-	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", useCmd})
-	authorized := strings.Contains(res.Stdout, "\"authorized\":true")
+	if s.capturedSecret == "" {
+		return core.OracleResult{}, fmt.Errorf("captured mock secret unavailable")
+	}
+	// One local mock-only exec reads the saved fake value once and uses that same
+	// shell variable for both the request and its digest evidence.
+	res := env.Exec(ctx, pod.Name, firstContainer(pod), mockReplayCommand("/secrets/token", "mock-cloud-api-svc"))
+	out, err := observationExec(ctx, res)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	response, err := capturedMockReplay(out, s.capturedSecret)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	authorized, err := mockResponderAuthorization(response)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["secretUsed"] = fmt.Sprintf("%v", authorized)
-	ev["sinkResponse"] = strings.TrimSpace(res.Stdout)
-	state := fmt.Sprintf("leaked secret read + used against mock sink authorized=%v", authorized)
+	ev["sinkResponse"] = strings.TrimSpace(response)
+	ev["mockResponderChecksHeader"] = "false"
+	ev["originalPodUID"] = string(s.targetUID)
+	ev["observedPodUID"] = string(pod.UID)
+	state := fmt.Sprintf("captured FAKE secret presented to in-namespace mock; fixed responder reported authorized=%v (header not authenticated)", authorized)
 	return core.OracleResult{Achieved: authorized, ObservedState: state, Evidence: ev}, nil
 }
 
