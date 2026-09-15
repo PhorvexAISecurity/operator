@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,6 +144,20 @@ func TestSchemaAmbiguityAndReadFailureRemainUnknown(t *testing.T) {
 	if _, err := installedPolicyActions(unserved); err == nil {
 		t.Fatal("unserved schema verified")
 	}
+	missingUID := policySchemaCRD("", "rotate")
+	if _, err := installedPolicyActions(missingUID); err == nil {
+		t.Fatal("CRD without stable UID verified")
+	}
+	missingRV := policySchemaCRD("bad", "rotate")
+	missingRV.ResourceVersion = ""
+	if _, err := installedPolicyActions(missingRV); err == nil {
+		t.Fatal("CRD without resourceVersion verified")
+	}
+	deleting := policySchemaCRD("bad", "rotate")
+	deleting.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+	if _, err := installedPolicyActions(deleting); err == nil {
+		t.Fatal("deleting CRD verified")
+	}
 	conflicting := policySchemaCRD("bad", "rotate")
 	second := conflicting.Spec.Versions[0]
 	second.Name = "v1beta1"
@@ -237,6 +252,31 @@ func TestVocabularyUnknownIsPublishedOnPolicyStatus(t *testing.T) {
 	cond = meta.FindStatusCondition(got.Status.Conditions, "PolicyActionVocabulary")
 	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != "SchemaObserved" {
 		t.Fatalf("recovered status not verified: %+v", cond)
+	}
+}
+
+func TestVocabularySnapshotConcurrentPublicationIsImmutable(t *testing.T) {
+	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("stable", "rotate")), Log: logr.Discard()}
+	start := time.Now()
+	m.refreshVocabulary(context.Background(), start)
+	var group sync.WaitGroup
+	group.Add(2)
+	go func() {
+		defer group.Done()
+		for i := 1; i <= 40; i++ {
+			m.refreshVocabulary(context.Background(), start.Add(time.Duration(i)*vocabularyRefreshInterval))
+		}
+	}()
+	go func() {
+		defer group.Done()
+		for i := 0; i < 400; i++ {
+			s := m.VocabularySnapshot()
+			delete(s.NotInstallable, model.ActionQuarantine)
+		}
+	}()
+	group.Wait()
+	if !m.VocabularySnapshot().NotInstallable.Has(model.ActionQuarantine) {
+		t.Fatal("concurrent caller mutated published exclusions")
 	}
 }
 

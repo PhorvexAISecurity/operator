@@ -61,6 +61,9 @@ func TestM158ReaderToProcessTenantTrace(t *testing.T) {
 	if err := m158ConfigureRuntimeVocabulary(context.Background(), m, crdReader, now); err != nil {
 		t.Fatal(err)
 	}
+	// Exercise automatic maintenance refresh in the actual manager tick, before
+	// any tenant witness. Empty registry makes this a bounded no-snapshot tick.
+	m.tick(context.Background())
 	entry := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", tenant: "m158-runtime", namespace: "ns", spec: spec, selector: labels.SelectorFromSet(map[string]string{"app": "api"})}
 	m.policies[entry.key.String()] = entry
 	pod := model.Pod{Namespace: "ns", Name: "api-0", UID: "pod-uid", Labels: map[string]string{"app": "api"}, StartedAt: now.Add(-2 * time.Hour), Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, MountedSecrets: []string{"secret-ref"}}

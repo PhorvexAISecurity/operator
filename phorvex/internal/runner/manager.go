@@ -1692,6 +1692,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
+		if decisions[i].Trace != nil {
+			decisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
+		}
 		appendRepresentation(&decisions[i], representationInputs[i])
 		m.Audit.Record(decisions[i])
 		m.recordColocation(assessmentInput, decisions[i], pol)

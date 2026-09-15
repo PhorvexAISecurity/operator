@@ -58,6 +58,17 @@ func (v ActionVocabulary) diagnostic() (metav1.ConditionStatus, string, string) 
 	return metav1.ConditionUnknown, "DiscoveryUnavailable", msg
 }
 
+func (v ActionVocabulary) traceEvidence() *model.PolicyActionVocabularyObservation {
+	result := &model.PolicyActionVocabularyObservation{Known: v.Known, UID: string(v.UID), ResourceVersion: v.ResourceVersion, Error: v.Error}
+	if !v.ObservedAt.IsZero() {
+		result.ObservedAt = v.ObservedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !v.AttemptedAt.IsZero() {
+		result.AttemptedAt = v.AttemptedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return result
+}
+
 // VocabularySnapshot returns a defensive copy so callers cannot mutate the
 // manager's published map. A nil reader leaves the state explicitly unobserved.
 func (m *Manager) VocabularySnapshot() ActionVocabulary {
