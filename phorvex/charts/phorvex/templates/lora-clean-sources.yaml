@@ -1,0 +1,12 @@
+{{- if .Values.phorvex.loraCleanSources.content }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex.fullname" . }}-lora-clean-sources
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+data:
+  sources.json: |-
+{{ .Values.phorvex.loraCleanSources.content | nindent 4 }}
+{{- end }}

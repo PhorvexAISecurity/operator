@@ -474,7 +474,7 @@ type NeighborRef struct {
 // decision is byte-identical to the pre-scan baseline (the 1.62x ablation reproduces
 // exactly). The recon EMR profile and the GPU-conservation feasibility laws read it.
 //
-// The K8s half (ImageRarity/CoResidency/SchedulerSlack/PDBMinAvailable/EPSS) is
+// The K8s half (ImageRarity/namespace-count CoResidency/SchedulerSlack/PDBMinAvailable/EPSS) is
 // measurable on any real cluster. The DCGM half (VRAM/SM/interconnect) is live when
 // Prometheus has exporter series for the pod and honest-absent otherwise. Runtime-only
 // KV/cold-load values remain separately gated until their serving counters are available.
@@ -484,8 +484,9 @@ type PhysicsWitness struct {
 	// --- K8s, measurable now (recon-EMR dispersion multipliers, >=1.0; 1.0 = neutral) ---
 	ImageRarity        float64 // 1 + (-log2 freq)/log2(N): heavy-tailed image-digest surprisal [1,2]
 	ImageRarityPresent bool    // an image identity participated in the current fleet population
-	CoResidency        float64 // 1 + (tenants_on_node-1)/maxTenants: shared-node co-location [1,2]
+	CoResidency        float64 // historical proxy: 1 + (running_namespaces_on_node-1)/cap [1,2]
 	CoResidencyPresent bool    // this pod had a node represented in the current fleet scan
+	CoResidencyBasis   string  // running-namespace-count-on-node; never authenticated tenancy/device sharing
 	EPSSMultiplier     float64 // the M-104 value multiplier 1 + EPSSScore·(CVSS/10) ∈ [1,2]; exactly 1 when !EPSSPresent (was EPSS)
 	EPSSPresent        bool    // a usable (present, finite, in-domain) EPSS/CVSS pair produced the multiplier
 	EPSSScore          float64 // raw cache EPSS [0,1]; meaningful only when EPSSPresent
@@ -741,6 +742,32 @@ type Decision struct {
 	// Trace is populated only after selection. It is observational and never fed
 	// back into candidate generation, scoring, feasibility or actuation.
 	Trace *DecisionTraceV2
+	// Measurements records which legacy scalar audit fields were actually computed.
+	// Scalar zero values alone cannot carry that distinction.
+	Measurements *DecisionMeasurementsV1
+}
+
+const DecisionMeasurementsSchemaV1 = "phorvex.decision-measurements.v1"
+
+// DecisionMeasurementsV1 is producer-owned presence for optional top-level audit
+// scalars. Values are repeated here deliberately: old readers retain the scalar
+// fields, while new readers can distinguish a measured zero from unavailable.
+type DecisionMeasurementsV1 struct {
+	SchemaVersion         string        `json:"schemaVersion"`
+	Source                string        `json:"source"`
+	ThreatRisk            OptionalFloat `json:"threatRisk"`
+	PerDollar             OptionalFloat `json:"perDollar"`
+	CoveredWeight         OptionalFloat `json:"coveredWeight"`
+	CoveredFacts          OptionalInt   `json:"coveredFacts"`
+	StageHazard           OptionalFloat `json:"stageHazard"`
+	Lambda                OptionalFloat `json:"lambda"`
+	ProactiveRate         OptionalFloat `json:"proactiveRate"`
+	PreemptMargin         OptionalFloat `json:"preemptMargin"`
+	ProjectedNextStageSec OptionalFloat `json:"projectedNextStageSec"`
+	KillSwitch            OptionalBool  `json:"killSwitch"`
+	AIClassified          OptionalBool  `json:"aiClassified"`
+	EventEvidence         OptionalFloat `json:"eventEvidence"`
+	Provenance            OptionalFloat `json:"provenance"`
 }
 
 // PhoenixForensics is the forensic identity of ONE Phoenix emission attempt: enough to

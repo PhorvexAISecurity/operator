@@ -20,12 +20,13 @@ package console
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -35,7 +36,6 @@ import (
 
 const (
 	uptimeInterval = 5 * time.Second // sample cadence (catches a 10–60s replacement dip)
-	uptimeCapBytes = 48 << 20        // soft cap: keep the JSONL bounded (rotate-keep-last-half)
 )
 
 // uptimeSample is one workload-availability reading at one instant — all from the K8s API.
@@ -52,10 +52,7 @@ type uptimeSample struct {
 
 // uptimePath stores the samples next to the decision audit (or a temp dir if none).
 func uptimePath(cfg Config) string {
-	if cfg.AuditPath != "" {
-		return filepath.Join(filepath.Dir(cfg.AuditPath), "phorvex-uptime.jsonl")
-	}
-	return filepath.Join(os.TempDir(), "phorvex-uptime.jsonl")
+	return cfg.statePath("phorvex-uptime.jsonl")
 }
 
 // StartUptimeSampler launches the background availability sampler (read-only K8s list calls). Safe
@@ -92,17 +89,23 @@ func (s *Server) sampleUptimeOnce(ctx context.Context) {
 	if len(samples) == 0 {
 		return
 	}
+	if err := s.persistUptimeSamples(samples); err != nil {
+		s.recordStateError(fmt.Errorf("persist uptime sample: %w", err))
+	}
+}
+
+func (s *Server) persistUptimeSamples(samples []uptimeSample) error {
 	path := uptimePath(s.cfg)
-	rotateIfLarge(path, uptimeCapBytes)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
 	for i := range samples {
-		_ = enc.Encode(&samples[i])
+		b, err := json.Marshal(&samples[i])
+		if err == nil {
+			err = s.cfg.appendState(path, b)
+		}
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // sampleContextWorkloads lists Deployments + StatefulSets on ONE cluster context, tagging each
@@ -156,30 +159,6 @@ func sampleContextWorkloads(ctx context.Context, ctxName, now string) []uptimeSa
 	return samples
 }
 
-// rotateIfLarge keeps the JSONL bounded: when it exceeds cap, rewrite it with only its last half.
-func rotateIfLarge(path string, cap int64) {
-	st, err := os.Stat(path)
-	if err != nil || st.Size() < cap {
-		return
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	buf := make([]byte, cap/2)
-	n, _ := f.ReadAt(buf, st.Size()-cap/2)
-	f.Close()
-	if n <= 0 {
-		return
-	}
-	// drop the first (partial) line so we start on a record boundary.
-	b := buf[:n]
-	if i := strings.IndexByte(string(b), '\n'); i >= 0 && i+1 < len(b) {
-		b = b[i+1:]
-	}
-	_ = os.WriteFile(path, b, 0o644)
-}
-
 // --- /api/uptime ---
 
 type uptimePoint struct {
@@ -221,7 +200,12 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 	type key struct{ ns, wl string }
 	series := map[key]*uptimeWorkload{}
 	order := []key{}
-	for _, sm := range readUptimeSamples(uptimePath(s.cfg)) {
+	samples, sampleErr := readUptimeSamples(uptimePath(s.cfg))
+	if sampleErr != nil {
+		writeJSON(w, 503, map[string]any{"available": false, "error": sampleErr.Error()})
+		return
+	}
+	for _, sm := range samples {
 		if reqCtx != "" && sm.Ctx != reqCtx {
 			continue // a different provider's sample
 		}
@@ -505,21 +489,16 @@ func benchScenarios(cfg Config, context string) []uptimeScenario {
 	return out
 }
 
-func readUptimeSamples(path string) []uptimeSample {
-	f, err := os.Open(path)
+func readUptimeSamples(path string) ([]uptimeSample, error) {
+	b, err := readStateLedger(path)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("read retained uptime: %w", err)
 	}
-	defer f.Close()
-	// read only the tail (bounded) so a long run stays fast.
-	if st, e := f.Stat(); e == nil {
-		chunk := int64(16 << 20)
-		if st.Size() > chunk {
-			_, _ = f.Seek(st.Size()-chunk, 0)
-		}
+	if len(b) == 0 {
+		return nil, nil
 	}
 	var out []uptimeSample
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(bytes.NewReader(b))
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<22)
 	first := true
 	for sc.Scan() {
@@ -534,11 +513,18 @@ func readUptimeSamples(path string) []uptimeSample {
 			}
 		}
 		var sm uptimeSample
-		if json.Unmarshal([]byte(ln), &sm) == nil && sm.Workload != "" {
-			out = append(out, sm)
+		if err := json.Unmarshal([]byte(ln), &sm); err != nil {
+			return nil, fmt.Errorf("malformed retained uptime record: %w", err)
 		}
+		if sm.Workload == "" {
+			return nil, fmt.Errorf("malformed retained uptime record: missing workload")
+		}
+		out = append(out, sm)
 	}
-	return out
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("read retained uptime: %w", err)
+	}
+	return out, nil
 }
 
 type actMarker struct {

@@ -84,7 +84,7 @@ func listPlugins() {
 	fmt.Println("Registered scenarios:")
 	for _, s := range core.Scenarios() {
 		m := s.Metadata()
-		fmt.Printf("  - %-26s [%s] R6=%s techniques=%v caps=%v\n", m.Name, m.Category, m.R6ResponseTag, m.AttackTechniqueIDs, m.CapabilityRequirements)
+		fmt.Printf("  - %-26s [%s] R6=%s realism=%s declared=%v exercised=%v caps=%v limits=%q\n", m.Name, m.Category, m.R6ResponseTag, m.EffectiveRealism(), m.AttackTechniqueIDs, m.ExercisedTechniqueIDs, m.CapabilityRequirements, m.ClaimLimits)
 	}
 	fmt.Println("Registered defenders:")
 	for _, d := range core.Defenders() {
@@ -284,11 +284,17 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	}
 	mitre := report.RenderMitreMatrix(core.Scenarios())
 	mitrePath := filepath.Join(outDir, "mitre_matrix.md")
-	_ = os.WriteFile(mitrePath, []byte(mitre), 0o644)
+	if err := os.WriteFile(mitrePath, []byte(mitre), 0o644); err != nil {
+		return fmt.Errorf("write MITRE mapping inventory: %w", err)
+	}
+	inventoryPath := filepath.Join(outDir, "scenario_inventory.md")
+	if err := os.WriteFile(inventoryPath, []byte(report.RenderScenarioInventory(core.Scenarios())), 0o644); err != nil {
+		return fmt.Errorf("write scenario mechanism inventory: %w", err)
+	}
 
 	// Pass-B dollars / Schwartau / reusability + H1/H2/H3 view (uses the live config
 	// $ knobs and the per-arm rotation intervals from defender metadata).
-	dollarsPath, derr := report.WriteDollarsReport(outDir, "report-dollars.md", metrics, dollarInputsFromConfig(cfg), opts.CILevel)
+	dollarsPath, derr := report.WriteDollarsReport(outDir, "report-dollars.md", report.ExcludeMarkerSimulations(metrics), dollarInputsFromConfig(cfg), opts.CILevel)
 	if derr != nil {
 		fmt.Fprintf(os.Stderr, "WARN: dollars report: %v\n", derr)
 	}
@@ -297,8 +303,8 @@ func run(ctx context.Context, cfg config.TargetConfig, dryRun, negControl, adapt
 	if !outcome.Complete {
 		state = "INCOMPLETE"
 	}
-	fmt.Printf("\nDone (%s: planned %d / executed %d / written %d). %d metric records.\n  metrics:    %s\n  report:     %s\n  provenance: %s\n  mitre:      %s\n  dollars:    %s\n",
-		state, outcome.PlannedTrials, outcome.ExecutedTrials, outcome.WrittenTrials, len(metrics), metricsPath, repPath, provPath, mitrePath, dollarsPath)
+	fmt.Printf("\nDone (%s: planned %d / executed %d / written %d). %d metric records.\n  metrics:    %s\n  report:     %s\n  provenance: %s\n  mitre:      %s\n  inventory:  %s\n  dollars:    %s\n",
+		state, outcome.PlannedTrials, outcome.ExecutedTrials, outcome.WrittenTrials, len(metrics), metricsPath, repPath, provPath, mitrePath, inventoryPath, dollarsPath)
 	// Both failures matter and neither masks the other.
 	return errors.Join(runErr, finalErr)
 }

@@ -94,13 +94,75 @@ func TestAdapterRotateUnloadsPoisonedDegradeToBase(t *testing.T) {
 func TestAdapterRotateReloadsOnlyFromCleanSource(t *testing.T) {
 	c, req := trustedAdapterCase(t, true)
 	mv := &mockVLLM{}
-	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, req)
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/clean-v2"}}, req)
 	if err != nil {
 		t.Fatalf("adapter-rotate: %v", err)
 	}
 	// PREMORTEM: reload ONLY from the declared trusted source (never re-pull the poison).
 	if mv.unloadCalls != 1 || mv.loadCalls != 1 {
 		t.Errorf("must unload(1)+reload-clean(1), got unload=%d load=%d", mv.unloadCalls, mv.loadCalls)
+	}
+	if mv.loadedSource != "/models/clean-v2" {
+		t.Fatalf("wrong configured source: %q", mv.loadedSource)
+	}
+}
+
+func TestAdapterRotateIgnoresAnnotationAndRequiresExactOperatorMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		sources AdapterSources
+	}{
+		{"absent", nil},
+		{"wrong-namespace", AdapterSources{adapterSourceKey("other", "evil-adapter"): "/models/approved"}},
+		{"wrong-adapter", AdapterSources{adapterSourceKey("ns", "other"): "/models/approved"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, req := trustedAdapterCase(t, true)
+			mv := &mockVLLM{}
+			hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: tc.sources}, req)
+			if err != nil || !hr.Emitted || mv.unloadCalls != 1 || mv.loadCalls != 0 || !containsStr(hr.Note, "degraded to base") {
+				t.Fatalf("annotation gained reload authority: %+v err=%v calls=%d", hr, err, mv.loadCalls)
+			}
+		})
+	}
+}
+
+func TestAdapterRotateConfiguredLoadFailureIsPartial(t *testing.T) {
+	c, req := trustedAdapterCase(t, false)
+	mv := &mockVLLM{loadErr: errors.New("load failed")}
+	s := AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/approved"}
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req)
+	if err == nil || !hr.Emitted || hr.MutationKind != "forward-only" || mv.unloadCalls != 1 || mv.loadCalls != 1 {
+		t.Fatalf("load partial hidden: %+v err=%v", hr, err)
+	}
+}
+
+func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
+	c, req := trustedAdapterCase(t, false)
+	s := AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/approved"}
+	mv := &mockVLLM{}
+	if _, err := (adapterRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req, req.Namespace+"/"+req.Pod); err != nil {
+		t.Fatalf("authorized compensation refused: %v", err)
+	}
+	if mv.loadCalls != 2 || mv.loadedSource != "/models/approved" {
+		t.Fatalf("compensation did not use current mapping: %+v", mv)
+	}
+	p := &corev1.Pod{}
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, p); err != nil {
+		t.Fatal(err)
+	}
+	p.Annotations[annoAdapterSnapshot] = `{"adapter":"forged"}`
+	if err := c.Update(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req, ""); err == nil {
+		t.Fatal("forged snapshot authorized compensation")
+	}
+	if mv.loadCalls != 2 {
+		t.Fatal("refused compensation reached serving client")
 	}
 }
 

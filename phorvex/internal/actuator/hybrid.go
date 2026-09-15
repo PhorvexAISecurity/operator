@@ -51,6 +51,7 @@ func (h *HybridActuator) ConfigureNativeJournal(reader client.Reader, namespace 
 	h.native.Reader = reader
 	h.native.JournalNamespace = namespace
 }
+func (h *HybridActuator) SetAdapterSources(s AdapterSources) { h.native.SetAdapterSources(s) }
 
 func (h *HybridActuator) RecoverOperations(ctx context.Context, globalKill bool) ([]RecoveryEvent, error) {
 	return h.native.recoverOperations(ctx, globalKill, func(a model.Action) bool { return RuleTypeFor(a) == "" })

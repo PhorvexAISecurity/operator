@@ -84,7 +84,7 @@ func m069Client(d *m069Delete, fns interceptor.Funcs, objs ...client.Object) cli
 		}
 		return c.Create(ctx, obj, opts...)
 	}
-	objs = append(objs, &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
+	objs = append(objs, &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind)}}}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(fns).Build()
 }
 
@@ -316,9 +316,10 @@ func TestM069MIGRebindRejectedDeleteSkipsRepartition(t *testing.T) {
 	c := m069Client(d, interceptor.Funcs{}, pod)
 	ec, mm := m069Stack()
 	ec.Client = c
+	ec.Reader, ec.JournalNamespace = c, "operator"
 	hr, err := migRebindHandler{}.Enact(context.Background(), ec, boundReq(pod, model.ActionMIGRebind))
-	if err == nil || !errors.Is(err, errPodReplaced) || hr.Emitted {
-		t.Fatalf("rejected eviction must be a non-success wrapping errPodReplaced: err=%v hr=%+v", err, hr)
+	if err == nil || !errors.Is(err, errPodReplaced) || !hr.Emitted || hr.MutationKind != "partial" {
+		t.Fatalf("rejected eviction must expose the accepted relabel as a partial effect while wrapping errPodReplaced: err=%v hr=%+v", err, hr)
 	}
 	if len(mm.calls) != 0 {
 		t.Fatalf("Repartition must NOT run after a rejected eviction, got %v", mm.calls)

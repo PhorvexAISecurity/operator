@@ -16,10 +16,9 @@ import (
 // The proactive-cadence feasibility cap reads view.HasEventEvidence, but a hard law never sees the
 // killchain Assessment. AssembleSet is the wiring: it must mirror assess.HasEventEvidence onto the
 // shared view. HasEventEvidence is the EVENT-ONLY, age-weighted subset — a trusted recent event
-// bears on the pod — NOT the broad HasEvidence (which also fires on the physics/topology AI
-// classification a healthy event-less GPU server carries). Keying the cap on the broad signal would
-// fail-open on the physics-pinned churn pod, so this test pins BOTH that a real event stamps true
-// AND that a physics-only classification (aiClassified, zero events) stamps FALSE (reviewer gap #1).
+// bears on the pod — NOT the broad HasEvidence (which also includes contextual AI classification).
+// This test pins BOTH that a real event stamps true AND that a supported telemetry-only
+// classification (aiClassified, zero events) stamps FALSE (reviewer gap #1).
 func TestAssembleSetStampsHasEventEvidenceOntoView(t *testing.T) {
 	e := NewCoverageEngine()
 	pol := covPolicy(1)
@@ -30,12 +29,12 @@ func TestAssembleSetStampsHasEventEvidenceOntoView(t *testing.T) {
 	}
 	clean := covView("clean", true, 2*time.Hour, false) // no event, no physics
 
-	// physics-only model-theft: aiClassified ⇒ broad HasEvidence=true, but ZERO events ⇒
-	// HasEventEvidence MUST be false, or the cap fail-opens on the churn pod.
+	// Telemetry-only LLM-jacking: aiClassified ⇒ broad HasEvidence=true, but ZERO events ⇒
+	// HasEventEvidence MUST be false.
 	physicsOnly := covView("physics", true, 2*time.Hour, false)
-	physicsOnly.Pod.HasGPU = true
-	physicsOnly.Pod.ModelID = "qwen"
-	physicsOnly.Physics = model.PhysicsWitness{CoResidency: 1.5, ModelRarity: 1.4, SMOccupancy: 0.9}
+	physicsOnly.Pod.ModelID = "served-model"
+	physicsOnly.Pod.EndpointPath = "/v1"
+	physicsOnly.Telemetry.GPUUtil = model.PresentSignal(0.9, "dcgm")
 
 	for _, v := range []*model.WorkloadView{withEvent, clean, physicsOnly} {
 		if v.HasEventEvidence {
@@ -45,13 +44,12 @@ func TestAssembleSetStampsHasEventEvidenceOntoView(t *testing.T) {
 
 	_, ctx := e.AssembleSet([]*model.WorkloadView{withEvent, clean, physicsOnly}, pol)
 
-	// NON-VACUOUSNESS pin (K3 P3-2): the physics fixture must genuinely trip the BROAD HasEvidence
-	// (aiClassified via the real aiStageFromView), or the HasEventEvidence=false assertion below is
+	// NON-VACUOUSNESS pin (K3 P3-2): the telemetry fixture must genuinely trip broad HasEvidence
+	// (aiClassified via the real supported LLM-jacking arm), or the assertion below is
 	// vacuous — it would also pass if the fixture simply carried no signal at all, silently vacating
 	// the gap-#1 guard. This asserts the exclusion is doing real work.
 	if !ctx["ns/physics"].assess.HasEvidence {
-		t.Fatal("fixture drift: the physics-only pod no longer trips broad HasEvidence (aiClassified) — " +
-			"the HasEventEvidence=false check below would be vacuous; restore a real physics/AI signal")
+		t.Fatal("fixture drift: the telemetry-only pod no longer trips broad HasEvidence (aiClassified)")
 	}
 
 	if !withEvent.HasEventEvidence {
@@ -62,7 +60,6 @@ func TestAssembleSetStampsHasEventEvidenceOntoView(t *testing.T) {
 		t.Error("AssembleSet stamped HasEventEvidence=true on a clean pod — the cap would never floor its hygiene")
 	}
 	if physicsOnly.HasEventEvidence {
-		t.Error("GAP #1: AssembleSet stamped HasEventEvidence=true on a physics-only (aiClassified, zero-event) " +
-			"pod — the cap would fail-open on exactly the physics-pinned churn pod (reviewer 2026-09-07)")
+		t.Error("GAP #1: AssembleSet stamped HasEventEvidence=true on a telemetry-only AI classification with zero events")
 	}
 }

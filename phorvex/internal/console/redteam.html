@@ -167,7 +167,7 @@ async function renderSee(){
   // live proof
   if(live.available){
     html+='<div class="card"><div class="label">Live end-to-end actuation — the real pod actually changed</div><table><thead><tr><th>attack</th><th>foothold rotated?</th><th>action</th><th class="num">perDollar</th><th class="num">λ max</th><th class="num">foothold actuations</th></tr></thead><tbody>';
-    live.proofs.forEach(p=>{html+='<tr><td>'+esc(p.attack)+'</td><td>'+badge(p.footholdRotated?'✓ rotated':'—',p.footholdRotated?'b-ok':'b-n')+'</td><td>'+esc(p.action||'—')+'</td><td class="num">'+(p.perDollar?p.perDollar.toFixed(2):'—')+'</td><td class="num">'+(p.lambdaMax?p.lambdaMax.toFixed(2):'—')+'</td><td class="num">'+p.footholdActuations+'</td></tr>';});
+    live.proofs.forEach(p=>{html+='<tr><td>'+esc(p.attack)+'</td><td>'+badge(p.footholdRotated?'✓ rotated':'—',p.footholdRotated?'b-ok':'b-n')+'</td><td>'+esc(p.action||'—')+'</td><td class="num">'+(p.perDollarAvailable?p.perDollar.toFixed(2):'—')+'</td><td class="num">'+(p.lambdaAvailable?p.lambdaMax.toFixed(2):'—')+'</td><td class="num">'+p.footholdActuations+'</td></tr>';});
     html+='</tbody></table><div class="pending">'+esc(live.caveat)+'</div></div>';
   }
   root.innerHTML=html;
@@ -250,7 +250,7 @@ async function renderReports(){
     md+="- verdict: steer-fix neutralizes="+cv.steerFixNeutralizes+", vuln-was-real="+cv.vulnWasReal+", flat-vs-random="+cv.flatVsRandom+", auto-escalate="+cv.autoEscalate+"\n\n";}
   md+="## Findings (co-evolution)\n";(f.findings||[]).forEach(x=>{md+="- ["+(x.neutralized?"NEUTRALIZED":"OPEN")+"] "+x.title+" — "+x.cycle+" (fix: "+x.fixFile+")\n";});
   md+="\n## -apt campaigns (mean disruption per arm)\n";(camp.campaigns||[]).forEach(c=>{md+="- "+c.scenario+" ["+c.product+"]: "+c.arms.map(a=>a.arm+"="+a.disruption.toFixed(2)).join(", ")+"\n";});
-  if(live.available){md+="\n## Live end-to-end actuation\n";live.proofs.forEach(p=>{md+="- "+p.attack+": footholdRotated="+p.footholdRotated+", action="+p.action+", perDollar="+(p.perDollar||0).toFixed(2)+", λmax="+(p.lambdaMax||0).toFixed(2)+"\n";});md+="- caveat: "+live.caveat+"\n";}
+  if(live.available){md+="\n## Live end-to-end actuation\n";live.proofs.forEach(p=>{md+="- "+p.attack+": footholdRotated="+p.footholdRotated+", action="+p.action+", perDollar="+(p.perDollarAvailable?p.perDollar.toFixed(2):"unavailable")+", λmax="+(p.lambdaAvailable?p.lambdaMax.toFixed(2):"unavailable")+"\n";});md+="- caveat: "+live.caveat+"\n";}
   root.innerHTML='<div class="card"><div class="label">Generated from the live run data (not hardcoded)</div>'
    +'<div class="row"><button class="ghost" id="btn-full">View full P-REDTEAM-REPORT.md</button><button class="ghost" id="btn-copy">Copy generated report</button></div>'
    +'<pre id="rep-md">'+esc(md)+'</pre></div>';

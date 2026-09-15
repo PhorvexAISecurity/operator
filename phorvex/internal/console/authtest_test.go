@@ -397,6 +397,13 @@ type authFixture struct {
 // served over the injected transport, the clock pinned, and the supplied grants loaded.
 func newAuthFixture(t *testing.T, cfg Config, subjects ...SubjectGrant) *authFixture {
 	t.Helper()
+	if cfg.StateDir == "" {
+		if cfg.HarnessDir != "" {
+			cfg.StateDir = cfg.HarnessDir
+		} else {
+			cfg.StateDir = t.TempDir()
+		}
+	}
 	keys := newKeyServer()
 	alb := newALBFixture(t, keys)
 	bearer := newBearerFixture(t, keys)

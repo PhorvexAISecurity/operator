@@ -134,6 +134,7 @@ func main() {
 		auditSourceCA           string
 		auditSourceClientDNS    string
 		auditSourceVClusterPath string
+		loraCleanSourcesFile    string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -155,6 +156,7 @@ func main() {
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
 	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
+	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
@@ -247,6 +249,11 @@ func main() {
 	// at which every entrypoint reports what was configured and where it came from.
 	setupLog.Info("actuator configuration resolved",
 		"actuator", string(backend.Backend), "source", backend.Origin())
+	adapterSources, sourceErr := actuator.LoadAdapterSourcesFile(loraCleanSourcesFile)
+	if sourceErr != nil {
+		setupLog.Error(sourceErr, "invalid adapter reload source configuration; refusing to start")
+		os.Exit(2)
+	}
 
 	if epssFeed {
 		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
@@ -326,9 +333,11 @@ func main() {
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
 		native.JournalNamespace = operatorNS
+		native.SetAdapterSources(adapterSources)
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
+		hybrid.SetAdapterSources(adapterSources)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval

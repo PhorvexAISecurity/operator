@@ -103,7 +103,7 @@ func debuggerEphemeralSpec() corev1.EphemeralContainer {
 	return ephemeralContainerSpec("phorvex-debugger", codeExecImage, []string{"sleep", "300"}, nil)
 }
 
-// --- 4. custom-inject (= Phoenix CustomAction) — also the KV-reset carrier — IRREVERSIBLE -
+// --- 4. custom-inject (= Phoenix CustomAction) — fixed bounded marker profile — IRREVERSIBLE -
 
 type customInjectHandler struct{}
 

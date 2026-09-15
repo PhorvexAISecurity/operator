@@ -50,6 +50,7 @@ func main() {
 		root            string
 		addr            string
 		auditPath       string
+		stateDir        string
 		web             string
 		metricsAllow    string
 		grantsPath      string
@@ -63,6 +64,7 @@ func main() {
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
 	flag.StringVar(&auditPath, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
+	flag.StringVar(&stateDir, "state-dir", "", "Writable console-owned durable state directory (independent of the decision audit).")
 	flag.StringVar(&auditSourceURL, "audit-source-url", "", "Optional mTLS manager audit source HTTPS origin.")
 	flag.StringVar(&auditServerDNS, "audit-source-server-dns", "", "[audit-source-url] exact server certificate DNS SAN.")
 	flag.StringVar(&auditClientCert, "audit-source-client-cert", "", "[audit-source-url] client leaf certificate file.")
@@ -80,6 +82,9 @@ func main() {
 		}
 	}
 	cfg := console.DefaultConfig(root)
+	if stateDir != "" {
+		cfg.StateDir = stateDir
+	}
 	cfg.Addr = addr
 	if auditPath != "" {
 		cfg.AuditPath = auditPath
@@ -95,6 +100,9 @@ func main() {
 	}
 	if web != "" {
 		cfg.Web = web
+	}
+	if err := cfg.ValidateStateDir(); err != nil {
+		log.Fatalf("console state storage unavailable: %v", err)
 	}
 	for _, h := range strings.Split(metricsAllow, ",") {
 		if h = strings.TrimSpace(h); h != "" {
@@ -136,6 +144,7 @@ func main() {
 	hasWeb := statErr == nil
 	log.Printf("Phorvex Console")
 	log.Printf("  root      : %s", root)
+	log.Printf("  state     : %s (write/read/sync verified)", cfg.StateDir)
 	log.Printf("  dashboard : %s  ->  open %s", map[bool]string{true: "built (serving the SPA)", false: "NOT BUILT (run: cd dashboard-web && npm run build)"}[hasWeb], url)
 	log.Printf("  api       : %s/api/* (authenticated; only /api/health and the static SPA are public)", url)
 	log.Printf("  auth      : %s", strings.Join(auth.Modes(), "+"))

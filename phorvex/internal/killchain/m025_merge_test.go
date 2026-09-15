@@ -45,29 +45,28 @@ func TestConsequenceRankCompleteness(t *testing.T) {
 	}
 }
 
-// TestAssess_M025_NoDowngrade is the RED->GREEN anchor (ticket (a)): a persist-class event on a
-// co-resident GPU pod (arm (2) => gpu-side-channel) must keep the persist stage, not be
-// downgraded to the AI/topology stage. OLD code (stage = ai) returned gpu-side-channel.
+// A persist-class event on a GPU pod keeps the supported event-backed prompt persistence stage;
+// namespace dispersion contributes no independent AI stage.
 func TestAssess_M025_NoDowngrade(t *testing.T) {
 	m := NewModel()
 	v := &model.WorkloadView{
-		Pod:     model.Pod{Namespace: "ns", Name: "p", HasGPU: true, Ready: true, Age: time.Hour},
+		Pod:     model.Pod{Namespace: "ns", Name: "p", HasGPU: true, ModelID: "m", Ready: true, Age: time.Hour},
 		Physics: model.PhysicsWitness{GPUPresent: true, CoResidency: 2, ModelRarity: 1.2, SMOccupancy: 0}, // arm (2), not (1)
 		Events:  []model.SecurityEventInfo{{Type: v1beta1.TypePanic, ThreatLevel: "high", TargetsPod: true, Age: time.Minute}},
 	}
 	a := m.Assess(v, m025Policy(), 600, 3600)
-	if a.StageName != "persist" {
-		t.Fatalf("(a) merged stage = %q, want persist (detector floor must not be downgraded by topology)", a.StageName)
+	if a.StageName != "prompt-inject-persist" {
+		t.Fatalf("(a) merged stage = %q, want prompt-inject-persist", a.StageName)
 	}
-	if a.EventStageName != "persist" || a.AIStageName != "gpu-side-channel" {
-		t.Errorf("record must attribute both inputs: event=%q ai=%q (want persist / gpu-side-channel)", a.EventStageName, a.AIStageName)
+	if a.EventStageName != "persist" || a.AIStageName != "prompt-inject-persist" {
+		t.Errorf("record must attribute supported inputs: event=%q ai=%q", a.EventStageName, a.AIStageName)
 	}
 	if a.StageMergeRule != "max-consequence" {
 		t.Errorf("merge rule = %q, want max-consequence", a.StageMergeRule)
 	}
 }
 
-// (b) escalation preserved: a model-theft AI stage (0.9) raises a recon base.
+// Namespace count, rarity and activity do not constitute model-theft evidence.
 func TestAssess_M025_EscalationPreserved(t *testing.T) {
 	m := NewModel()
 	v := &model.WorkloadView{
@@ -75,12 +74,12 @@ func TestAssess_M025_EscalationPreserved(t *testing.T) {
 		Physics: model.PhysicsWitness{GPUPresent: true, CoResidency: 2, ModelRarity: 1.5, SMOccupancy: 0.9, SMSource: "DCGM_FI_PROF_SM_ACTIVE"}, // arm (1)
 	}
 	a := m.Assess(v, m025Policy(), 600, 3600)
-	if a.StageName != "model-theft" {
-		t.Fatalf("(b) merged stage = %q, want model-theft (escalation must be preserved)", a.StageName)
+	if a.StageName != "recon" || a.AIClassified {
+		t.Fatalf("(b) namespace proxy manufactured AI stage %q", a.StageName)
 	}
 }
 
-// (c) no events: merged == the AI stage (unchanged until M-26 gates arm (1)).
+// No event and only namespace topology leaves the AI arm silent.
 func TestAssess_M025_NoEventsIsAIStage(t *testing.T) {
 	m := NewModel()
 	v := &model.WorkloadView{
@@ -88,8 +87,8 @@ func TestAssess_M025_NoEventsIsAIStage(t *testing.T) {
 		Physics: model.PhysicsWitness{GPUPresent: true, CoResidency: 2, ModelRarity: 1.2, SMOccupancy: 0}, // arm (2)
 	}
 	a := m.Assess(v, m025Policy(), 600, 3600)
-	if a.StageName != "gpu-side-channel" {
-		t.Errorf("(c) no events: merged = %q, want gpu-side-channel (AI stage, arm (1) still fires — M-26 territory)", a.StageName)
+	if a.StageName != "recon" || a.AIStageName != "" {
+		t.Errorf("(c) no events: namespace topology produced stage=%q ai=%q", a.StageName, a.AIStageName)
 	}
 }
 

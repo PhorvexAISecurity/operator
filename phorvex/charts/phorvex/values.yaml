@@ -117,6 +117,11 @@ phorvex:
   # ReplicaSets and Services. Service access is exactly get/update so route-rotate and
   # endpoint-rotate can restitch selectors; Secrets and EndpointSlices remain denied.
   actuatorNamespaces: []
+  # Operator-administered exact namespace+adapter reload mappings. Empty disables
+  # adapter reload and mounts nothing. Changes take effect after manager restart.
+  loraCleanSources:
+    content: ""
+    mountPath: /etc/phorvex-adapters/sources.json
   # M-6 code-exec admission protection. OFF by default: enabling it renders the installer-owned
   # ValidatingAdmissionPolicy + Binding (phorvex-codeexec-ephemeral) that DENIES any
   # pods/ephemeralcontainers UPDATE in a managed namespace unless it exactly matches the approved
@@ -222,6 +227,20 @@ phorvex:
     # Matches the console image's own CMD (deploy/docker/console.Dockerfile).
     root: /data
     web: /app/web
+    # Console-owned mutable evidence is physically separate from the manager decision audit.
+    # Keep persistence enabled in shared environments. Operators own StorageClass/claim
+    # provisioning, backup/restore, retention of the PVC, and capacity monitoring.
+    state:
+      mountPath: /var/lib/phorvex-console
+      persistence:
+        enabled: true
+        existingClaim: ""
+        storageClass: ""
+        size: 5Gi
+        accessModes: [ReadWriteOnce]
+        retainOnDelete: true
+      # Explicit development opt-out. State is lost on Pod replacement.
+      allowEphemeral: false
     resources:
       limits: { cpu: 500m, memory: 256Mi }
       requests: { cpu: 10m, memory: 64Mi }

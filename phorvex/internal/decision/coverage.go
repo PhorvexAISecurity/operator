@@ -998,6 +998,22 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			PreemptMargin:         ac.assess.PreemptMargin,
 			ProjectedNextStageSec: ac.assess.ProjectedNextStageSec,
 			AIClassified:          ac.assess.AIClassified,
+			Measurements: &model.DecisionMeasurementsV1{
+				SchemaVersion:         model.DecisionMeasurementsSchemaV1,
+				Source:                "p1-coverage",
+				PerDollar:             traceOptional(chosen != nil && ecost > 0, perDollar),
+				CoveredWeight:         traceOptional(chosen != nil, marginal),
+				CoveredFacts:          traceOptionalInt(chosen != nil, coveredFacts),
+				StageHazard:           traceOptional(true, ac.assess.Hazard),
+				Lambda:                traceOptional(true, lambda),
+				ProactiveRate:         traceOptional(chosen != nil && ecost > 0, rate),
+				PreemptMargin:         traceOptional(true, ac.assess.PreemptMargin),
+				ProjectedNextStageSec: traceOptional(ac.assess.NextStageName != "", ac.assess.ProjectedNextStageSec),
+				KillSwitch:            model.OptionalBool{Present: true},
+				AIClassified:          model.OptionalBool{Present: true, Value: ac.assess.AIClassified},
+				EventEvidence:         traceOptional(true, ac.assess.EventEvidence),
+				Provenance:            traceOptional(true, prov(key)),
+			},
 		}
 		finishExistential(existential[key], set, key, selected, B-len(selectedAsset), prioritySelections)
 		decision.Existential = existential[key]
@@ -1190,6 +1206,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
 		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
 		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+		CoResidencyBasis:  v.Physics.CoResidencyBasis,
 		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSScore),
 		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
 		EPSSMultiplier:    traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSMultiplier),

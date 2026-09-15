@@ -15,8 +15,8 @@ func ctxPolicy() model.Policy {
 	return model.Policy{Tenant: "t", Namespace: "t", ProactiveFloor: 3600 * 1e9}
 }
 
-// TestAIStageClassification: the 4 AI stages classify off existing fields; a non-AI pod
-// never triggers them (generic byte-identity guard).
+// TestAIStageClassification verifies the supported event-backed AI branches and that namespace
+// dispersion cannot manufacture GPU attack evidence.
 func TestAIStageClassification(t *testing.T) {
 	m := NewModel()
 	panicEvt := model.SecurityEventInfo{Type: v1beta1.TypePanic, ThreatLevel: "high", TargetsPod: true}
@@ -40,16 +40,22 @@ func TestAIStageClassification(t *testing.T) {
 		t.Fatalf("prompt-inject successor must be lateral, got %s", a.NextStageName)
 	}
 
-	// GPU co-resident rare model => side-channel recon.
+	// A GPU plus the historical namespace-count proxy is context only. It is not proof that
+	// another workload shares this device or that a side-channel exists.
 	ph := model.NeutralPhysics()
 	ph.CoResidency, ph.ModelRarity = 1.5, 1.4
 	gpu := &model.WorkloadView{Pod: model.Pod{Namespace: "t", Name: "nim2", HasGPU: true}, Physics: ph}
 	a = m.Assess(gpu, ctxPolicy(), 60, 3600)
-	if !a.AIClassified || a.Stage != StageGPUSideChannel {
-		t.Fatalf("co-resident GPU rare model must classify gpu-side-channel, got %s", a.StageName)
+	if a.AIClassified || a.Stage != StageRecon {
+		t.Fatalf("namespace dispersion must not classify a GPU attack, got %s ai=%v", a.StageName, a.AIClassified)
 	}
-	if a.NextStage != StageModelTheft {
-		t.Fatalf("side-channel successor must be model-theft, got %s", a.NextStageName)
+
+	// Exposed endpoint plus a trusted exploit signal retains the LLM-jacking branch.
+	jack := &model.WorkloadView{Pod: model.Pod{Namespace: "t", Name: "api", ModelID: "m", EndpointPath: "/v1"},
+		Physics: model.NeutralPhysics(), Events: []model.SecurityEventInfo{{Type: v1beta1.TypeDisable, ThreatLevel: "high", TargetsPod: true}}}
+	a = m.Assess(jack, ctxPolicy(), 60, 3600)
+	if !a.AIClassified || a.Stage != StageLLMJacking {
+		t.Fatalf("trusted exploit event on a model endpoint must classify llm-jacking, got %s ai=%v", a.StageName, a.AIClassified)
 	}
 }
 

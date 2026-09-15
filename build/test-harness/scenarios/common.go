@@ -481,6 +481,15 @@ func firstContainerName(podName string, env *core.Env) string {
 // FAITHFULLY models a runc-overwrite file-clobber persistence (T1543.005) within
 // the sandbox container. Returns the commands issued.
 func plantBackdoor(ctx context.Context, env *core.Env, pod, container string) []string {
+	cmds, _ := plantBackdoorObserved(ctx, env, pod, container)
+	return cmds
+}
+
+// plantBackdoorObserved is the error-preserving form for scenarios that must
+// prove their stimulus completed. The compatibility wrapper above retains the
+// older call contract for scenarios whose independent checks already establish
+// their stimulus.
+func plantBackdoorObserved(ctx context.Context, env *core.Env, pod, container string) ([]string, error) {
 	// Write the marker (the clobbered file the attacker drops) and spawn a
 	// DETACHED sleeper that re-touches the marker, so a liveness probe of the
 	// process succeeds. Real backdoor tradecraft detaches from the controlling
@@ -495,7 +504,11 @@ func plantBackdoor(ctx context.Context, env *core.Env, pod, container string) []
 		BackdoorMarker, BackdoorMarkerPath, BackdoorMarker, BackdoorMarkerPath)
 	res := env.Exec(ctx, pod, container, []string{"sh", "-c", script})
 	env.Log.Logf("plantBackdoor stdout=%q stderr=%q exit=%d", strings.TrimSpace(res.Stdout), strings.TrimSpace(res.Stderr), res.ExitCode)
-	return []string{"sh -c '" + script + "'"}
+	cmds := []string{"sh -c '" + script + "'"}
+	if err := stimulusExec(ctx, res); err != nil {
+		return cmds, err
+	}
+	return cmds, nil
 }
 
 // backdoorAlive checks whether the backdoor marker is still present in ANY pod

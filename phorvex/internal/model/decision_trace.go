@@ -197,6 +197,7 @@ type DecisionModelInputsV2 struct {
 	ImageRarity       OptionalFloat `json:"imageRarity"`
 	ModelRarity       OptionalFloat `json:"modelRarity"`
 	CoResidency       OptionalFloat `json:"coResidency"`
+	CoResidencyBasis  string        `json:"coResidencyBasis,omitempty"`
 	EPSS              OptionalFloat `json:"epss"`                        // RAW exploit probability [0,1] (M-104; was the multiplier before)
 	CVSS              OptionalFloat `json:"cvss"`                        // raw base severity [0,10]
 	EPSSMultiplier    OptionalFloat `json:"epssMultiplier"`              // 1 + epss·(cvss/10) ∈ [1,2]; present only for a usable pair

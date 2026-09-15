@@ -1032,7 +1032,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-82 · MIG repartition destroys before creating, with no rollback · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M082
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.mig_agent
@@ -1143,7 +1143,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M134
 
 ### M-138 · There is no recovery path: no bulk undo, no "revert last tick", no DR runbook · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M138
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -1200,6 +1200,17 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 *Sources: A-66.*
 
+
+## Current-source reconciliation (2026-09-15)
+
+The historical claim is already addressed in main c53b04cb by protected,
+UID-bound operation receipts and authoritative target/NetworkPolicy checks.
+Independent long-name producer/recovery controls pass, including live-target
+retention, orphan collection, replacement refusal, failed-read refusal and
+copied-marker non-authority. No duplicate implementation is required.
+Live verification remains pending; this is not closure or deployment acceptance.
+See [the Tier5 reconciliation](../../assessments/20260915-tier5/M056-RECONCILIATION.md).
+
 ### M-60 · identity/route-rotate are not retry-safe · **OPEN** · `ACTUATION`
 
 Severity: MINOR · Tier: parallel · Fixes: none
@@ -1216,7 +1227,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-61 · custom-inject's "KV-reset carrier" role is a comment, not code · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T5-M061
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · custom-inject Update @ internal/actuator/handlers_k8s.go:235
@@ -1489,7 +1500,7 @@ Severity: HIGH · Tier: parallel · Fixes: T4-M095
 
 ### M-96 · The LoRA "clean source" is an unvalidated annotation · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M096
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · killchain
@@ -1983,7 +1994,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-146 · `omitempty` on eleven numeric audit fields erases measured zeros — the audit record cannot distinguish "0" from "not computed" · **OPEN** · `RECORD`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M146
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit
@@ -2224,7 +2235,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-150 · `CoResidency` counts namespaces, and DaemonSets count as namespaces — the `> 1` conjunct is vacuous fleet-wide · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: T5-M150
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ingest
@@ -2494,7 +2505,7 @@ Severity: HIGH · Tier: unassigned · Fixes: T2-M166
 
 ### M-167 · Shipped console storage configuration silently drops mutation and experiment records · **OPEN** · `CONSOLE`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T5-M167
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONSOLE` — anatomy locus review required.
@@ -2539,7 +2550,7 @@ Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
 
 ### M-170 · APT catalogue labels technique-specific attacks that execute the same generic marker routine · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T5-M170
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

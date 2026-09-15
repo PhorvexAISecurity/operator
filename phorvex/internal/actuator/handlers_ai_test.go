@@ -28,6 +28,7 @@ type mockVLLM struct {
 	loaded                                           bool
 	drained                                          int
 	resetCalls, unloadCalls, loadCalls, drainCalls   int
+	loadedAdapter, loadedSource                      string
 }
 
 func (m *mockVLLM) ModelReady(_ context.Context, _ servingEndpoint) (bool, error) {
@@ -41,8 +42,9 @@ func (m *mockVLLM) UnloadAdapter(_ context.Context, _ servingEndpoint, _ string)
 	m.unloadCalls++
 	return m.unloadErr
 }
-func (m *mockVLLM) LoadAdapter(_ context.Context, _ servingEndpoint, _, _ string) error {
+func (m *mockVLLM) LoadAdapter(_ context.Context, _ servingEndpoint, adapter, source string) error {
 	m.loadCalls++
+	m.loadedAdapter, m.loadedSource = adapter, source
 	return m.loadErr
 }
 func (m *mockVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, error) {
@@ -63,12 +65,21 @@ func (m *mockMIG) Prepare(_ context.Context, node string) (preparedMIG, error) {
 	m.node = node
 	return m, nil
 }
-func (m *mockMIG) CurrentProfile(_ context.Context, _, _ string) (string, error) {
-	return "1g.10gb", nil
+func (m *mockMIG) Capture(_ context.Context, gpu, profile string) (migGeometry, error) {
+	if m.availErr != nil {
+		return migGeometry{}, m.availErr
+	}
+	return migGeometry{GPUUUID: "GPU-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", GIs: []migGI{{ProfileName: "1g.10gb", ProfileID: 19, InstanceID: 0, Start: 0, Size: 1, CI: migCI{ProfileName: "1g.10gb", ProfileID: 7, InstanceID: 0}}}}, nil
 }
-func (m *mockMIG) Repartition(_ context.Context, gpu, profile string) error {
-	m.calls = append(m.calls, [3]string{m.node, gpu, profile})
-	return m.repErr
+func (m *mockMIG) Repartition(ctx context.Context, prior migGeometry, profile string, stillOwned func(context.Context) error) (migEffect, error) {
+	m.calls = append(m.calls, [3]string{m.node, prior.GPUUUID, profile})
+	if err := stillOwned(ctx); err != nil {
+		return migEffect{Outcome: "no-destructive-effect", OriginalErr: err}, err
+	}
+	if m.repErr != nil {
+		return migEffect{Outcome: "partial-unrestored", OriginalErr: m.repErr}, m.repErr
+	}
+	return migEffect{Outcome: "new-geometry-verified"}, nil
 }
 
 // ---- mock guardrail + kv-transfer ----
@@ -133,7 +144,7 @@ func fakeC(objs ...client.Object) client.Client {
 			}
 		}
 	}
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind)}}}}
 	objs = append(objs, policy, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 		if obj.GetUID() == "" {
@@ -308,21 +319,21 @@ func TestMIGRebindRealRepartitionEvictsPod(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	mm := &mockMIG{} // Available nil + Repartition succeeds
-	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
+	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 	if err != nil {
 		t.Fatalf("mig-rebind: %v", err)
 	}
-	want := [3]string{"node-a", "GPU-0", "2g.20gb"}
+	want := [3]string{"node-a", "GPU-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2g.20gb"}
 	if len(mm.calls) != 1 || mm.calls[0] != want {
 		t.Errorf("mig-rebind must call the REAL Repartition(node,gpu,profile), got %v", mm.calls)
 	}
-	// GPU-context eviction: the pod must be DELETED (zero CUDA contexts before repartition).
+	// The selected Pod deletion must be submitted before repartition; this does not prove CUDA state.
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err == nil {
 		t.Error("mig-rebind must EVICT the pod off the GPU (delete) before repartition")
 	}
-	if !containsStr(hr.Note, "evicted") || !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
-		t.Errorf("note must record eviction + pending, %q", hr.Note)
+	if !containsStr(hr.Note, "eviction submitted") || !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+		t.Errorf("note must record the submitted eviction + pending hardware proof, %q", hr.Note)
 	}
 }
 
@@ -333,15 +344,15 @@ func TestMIGRebindRepartitionFailureEmitsNothing(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{
-		Client: c,
-		MIG:    &mockMIG{repErr: errors.New("live CUDA context blocks repartition")},
-		VLLM:   &mockVLLM{},
+		Client: c, Reader: c, JournalNamespace: "operator",
+		MIG:  &mockMIG{repErr: errors.New("live CUDA context blocks repartition")},
+		VLLM: &mockVLLM{},
 	}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("failed repartition must return an error")
 	}
-	if hr.Emitted {
-		t.Fatalf("failed repartition received actuation credit: %+v", hr)
+	if !hr.Emitted || hr.MutationKind != "partial" {
+		t.Fatalf("failed repartition hid its pod/GPU effects: %+v", hr)
 	}
 }
 
@@ -365,6 +376,48 @@ func TestMIGRebindFailClosedTransportUnavailable(t *testing.T) {
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err != nil {
 		t.Error("an unavailable transport must NOT evict the pod (no destructive action before the probe passes)")
+	}
+}
+
+func TestMIGRebindUnconfirmedDrainStopsBeforeEvictionAndGPU(t *testing.T) {
+	pod := migPod("ns", "infer")
+	c := fakeC(pod)
+	mm := &mockMIG{}
+	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{drainErr: errStackUnreachable}}, boundReq(pod, model.ActionMIGRebind))
+	if err == nil || !hr.Emitted || len(mm.calls) != 0 {
+		t.Fatalf("unconfirmed drain crossed boundary: hr=%+v calls=%v err=%v", hr, mm.calls, err)
+	}
+	current := &corev1.Pod{}
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, current); err != nil || current.UID != pod.UID {
+		t.Fatalf("pod evicted on unconfirmed drain: %v", err)
+	}
+	var receipts corev1.ConfigMapList
+	if err := c.List(context.Background(), &receipts, client.InNamespace("operator"), client.MatchingLabels{migRecoveryLabel: "v1"}); err != nil || len(receipts.Items) != 1 {
+		t.Fatalf("recovery receipt not retained: %v %+v", err, receipts.Items)
+	}
+}
+
+func TestMIGRebindInvalidTargetAndMissingReaderArePreEffect(t *testing.T) {
+	for _, tc := range []struct {
+		name, profile string
+		reader        bool
+	}{{"invalid-profile", "../../etc/passwd", true}, {"missing-reader", "2g.20gb", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := migPod("ns", "infer")
+			pod.Annotations[annoMIGProfile] = tc.profile
+			c := fakeC(pod)
+			ec := EnactCtx{Client: c, MIG: &mockMIG{}, VLLM: &mockVLLM{}}
+			if tc.reader {
+				ec.Reader = c
+			}
+			if _, err := (migRebindHandler{}).Enact(context.Background(), ec, boundReq(pod, model.ActionMIGRebind)); err == nil {
+				t.Fatal("invalid precondition accepted")
+			}
+			current := &corev1.Pod{}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, current); err != nil || current.Labels[labelRole] != roleLeader {
+				t.Fatalf("precondition failure mutated pod: %v %+v", err, current.Labels)
+			}
+		})
 	}
 }
 

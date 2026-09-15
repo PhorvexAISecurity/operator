@@ -747,3 +747,91 @@ fixes:
     stacked_on: []
     branch: fix/t4-m171
     head_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+  T5-M061:
+    directory: fixes/T5-M061
+    aliases: []
+    issues:
+    - M-61
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m061
+    head_sha: 9fc6cea5c95f5f64d01fb987173c1d0e9c364767
+  T5-M082:
+    directory: fixes/T5-M082
+    aliases: []
+    issues:
+    - M-82
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m082
+    head_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+  T5-M096:
+    directory: fixes/T5-M096
+    aliases: []
+    issues:
+    - M-96
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m096
+    head_sha: ddd9408e717405dd4d6ebc4330cd4d149387abe9
+  T5-M138:
+    directory: fixes/T5-M138
+    aliases: []
+    issues:
+    - M-138
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m138
+    head_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+  T5-M146:
+    directory: fixes/T5-M146
+    aliases: []
+    issues:
+    - M-146
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m146
+    head_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  T5-M150:
+    directory: fixes/T5-M150
+    aliases: []
+    issues:
+    - M-150
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m150
+    head_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+  T5-M167:
+    directory: fixes/T5-M167
+    aliases: []
+    issues:
+    - M-167
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m167
+    head_sha: b63ca37b27612a9cfa10f261b74ea3db54e20ec9
+  T5-M170:
+    directory: fixes/T5-M170
+    aliases: []
+    issues:
+    - M-170
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m170
+    head_sha: e42b23def1398b84e42be9536c0c4d0370afa7d8

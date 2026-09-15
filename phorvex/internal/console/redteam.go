@@ -15,6 +15,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -33,24 +34,30 @@ type findingDecision struct {
 	At     string `json:"at"`
 }
 type redteamState struct {
-	mu             sync.Mutex
-	loaded         bool
-	runState       string // idle | running | done | error
-	runMsg         string
-	runStartedAt   string
-	continuous     bool
-	continuousGen  int
-	cancel         context.CancelFunc
-	decisions      map[string]findingDecision
+	mu            sync.Mutex
+	loaded        bool
+	runState      string // idle | running | done | error
+	runMsg        string
+	runStartedAt  string
+	continuous    bool
+	continuousGen int
+	cancel        context.CancelFunc
+	decisions     map[string]findingDecision
 }
 
 var rtState = &redteamState{runState: "idle", decisions: map[string]findingDecision{}}
 
 func (s *Server) rtArtifact() string {
-	return filepath.Join(s.cfg.HarnessDir, "out-redteam-rl", "result.json")
+	if base := s.cfg.statePath("redteam"); base != "" {
+		return filepath.Join(base, "result.json")
+	}
+	return ""
 }
 func (s *Server) rtDecisionsPath() string {
-	return filepath.Join(s.cfg.HarnessDir, "out-redteam-rl", "decisions.json")
+	if base := s.cfg.statePath("redteam"); base != "" {
+		return filepath.Join(base, "decisions.json")
+	}
+	return ""
 }
 func (s *Server) rtBinary() string {
 	name := "redteam-rl"
@@ -60,19 +67,26 @@ func (s *Server) rtBinary() string {
 	return filepath.Join(s.cfg.Root, "phorvex", "bin", name)
 }
 
-func (s *Server) rtLoadDecisions() {
+func (s *Server) rtLoadDecisions() error {
 	rtState.mu.Lock()
 	defer rtState.mu.Unlock()
 	if rtState.loaded {
-		return
+		return nil
 	}
 	rtState.loaded = true
 	if b, err := os.ReadFile(s.rtDecisionsPath()); err == nil {
-		_ = json.Unmarshal(b, &rtState.decisions)
+		if err = json.Unmarshal(b, &rtState.decisions); err != nil {
+			rtState.loaded = false
+			return fmt.Errorf("read retained red-team decisions: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		rtState.loaded = false
+		return fmt.Errorf("read retained red-team decisions: %w", err)
 	}
 	if rtState.decisions == nil {
 		rtState.decisions = map[string]findingDecision{}
 	}
+	return nil
 }
 
 // ---- /api/redteam/curves : the RL learning curves + QD + gate (from result.json) ----
@@ -83,7 +97,10 @@ func (s *Server) redteamCurves(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var raw map[string]any
-	_ = json.Unmarshal(b, &raw)
+	if err := json.Unmarshal(b, &raw); err != nil {
+		writeJSON(w, 503, map[string]any{"available": false, "error": "retained RL result is malformed: " + err.Error()})
+		return
+	}
 	raw["available"] = true
 	writeJSON(w, 200, raw)
 }
@@ -177,13 +194,15 @@ func (s *Server) redteamCampaigns(w http.ResponseWriter, r *http.Request) {
 // ---- /api/redteam/live : the end-to-end live-actuation proof (real pod rotated) ----
 func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 	type proof struct {
-		Attack          string  `json:"attack"`
-		FootholdRotated bool    `json:"footholdRotated"`
-		Action          string  `json:"action"`
-		PerDollar       float64 `json:"perDollar"`
-		LambdaMax       float64 `json:"lambdaMax"`
-		Actuations      int     `json:"footholdActuations"`
-		Note            string  `json:"note"`
+		Attack             string  `json:"attack"`
+		FootholdRotated    bool    `json:"footholdRotated"`
+		Action             string  `json:"action"`
+		PerDollar          float64 `json:"perDollar"`
+		PerDollarAvailable bool    `json:"perDollarAvailable"`
+		LambdaMax          float64 `json:"lambdaMax"`
+		LambdaAvailable    bool    `json:"lambdaAvailable"`
+		Actuations         int     `json:"footholdActuations"`
+		Note               string  `json:"note"`
 	}
 	read := func(dir, attack, note string) (proof, bool) {
 		path := filepath.Join(s.cfg.HarnessDir, dir, "phorvex-audit-d-phorvex.jsonl")
@@ -201,8 +220,11 @@ func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 			if json.Unmarshal([]byte(line), &rec) != nil {
 				continue
 			}
-			if l, ok := rec["lambda"].(float64); ok && l > p.LambdaMax {
-				p.LambdaMax = l
+			if auditFieldAvailable(rec, "lambda") {
+				p.LambdaAvailable = true
+				if l, ok := rec["lambda"].(float64); ok && l > p.LambdaMax {
+					p.LambdaMax = l
+				}
 			}
 			pod, _ := rec["pod"].(string)
 			act, _ := rec["actuated"].(bool)
@@ -210,8 +232,9 @@ func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 				p.Actuations++
 				if p.Action == "" {
 					p.Action, _ = rec["action"].(string)
-					if pd, ok := rec["perDollar"].(float64); ok {
+					if pd, ok := rec["perDollar"].(float64); ok && auditFieldAvailable(rec, "perDollar") {
 						p.PerDollar = pd
+						p.PerDollarAvailable = true
 					}
 				}
 			}
@@ -232,7 +255,11 @@ func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 
 // ---- /api/redteam/findings : the two co-evolution cycles + reasoning + fix + review status ----
 func (s *Server) redteamFindings(w http.ResponseWriter, r *http.Request) {
-	s.rtLoadDecisions()
+	if err := s.rtLoadDecisions(); err != nil {
+		s.recordStateError(err)
+		writeJSON(w, 503, map[string]any{"error": err.Error()})
+		return
+	}
 	// the live status is recomputed from the RL artifact (did the fix neutralize?).
 	neutralized := map[string]bool{"lambda-pump": true, "dispersion-steer": true}
 	if b, err := os.ReadFile(s.rtArtifact()); err == nil {
@@ -243,16 +270,16 @@ func (s *Server) redteamFindings(w http.ResponseWriter, r *http.Request) {
 		neutralized["dispersion-steer"] = res.SteerFixNeutralizes
 	}
 	type finding struct {
-		ID          string `json:"id"`
-		Title       string `json:"title"`
-		Product     string `json:"product"`
-		Category    string `json:"category"`
-		Source      string `json:"source"`
-		Reasoning   string `json:"reasoning"`
-		Cycle       string `json:"cycle"`
-		Fix         string `json:"fix"`
-		FixFile     string `json:"fixFile"`
-		Neutralized bool   `json:"neutralized"`
+		ID           string `json:"id"`
+		Title        string `json:"title"`
+		Product      string `json:"product"`
+		Category     string `json:"category"`
+		Source       string `json:"source"`
+		Reasoning    string `json:"reasoning"`
+		Cycle        string `json:"cycle"`
+		Fix          string `json:"fix"`
+		FixFile      string `json:"fixFile"`
+		Neutralized  bool   `json:"neutralized"`
 		ReviewStatus string `json:"reviewStatus"`
 		ReviewNote   string `json:"reviewNote"`
 		ApplyNote    string `json:"applyNote"`
@@ -306,13 +333,27 @@ func (s *Server) redteamDecision(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "status must be open|addressed|deferred|accepted-risk"})
 		return
 	}
-	s.rtLoadDecisions()
+	if err := s.rtLoadDecisions(); err != nil {
+		writeJSON(w, 503, map[string]any{"error": err.Error()})
+		return
+	}
 	rtState.mu.Lock()
+	previous, existed := rtState.decisions[body.ID]
 	rtState.decisions[body.ID] = findingDecision{Status: body.Status, Note: body.Note, At: nowStamp()}
 	snapshot, _ := json.MarshalIndent(rtState.decisions, "", "  ")
 	rtState.mu.Unlock()
-	_ = os.MkdirAll(filepath.Dir(s.rtDecisionsPath()), 0o755)
-	_ = os.WriteFile(s.rtDecisionsPath(), snapshot, 0o644)
+	if err := atomicWriteState(s.rtDecisionsPath(), snapshot); err != nil {
+		rtState.mu.Lock()
+		if existed {
+			rtState.decisions[body.ID] = previous
+		} else {
+			delete(rtState.decisions, body.ID)
+		}
+		rtState.mu.Unlock()
+		s.recordStateError(err)
+		writeJSON(w, 503, map[string]any{"error": "decision was not persisted: " + err.Error()})
+		return
+	}
 	writeJSON(w, 200, map[string]any{"ok": true, "id": body.ID, "status": body.Status,
 		"applyNote": "Decision recorded. Applying the fix is [PENDING-P-VCLUSTER write-path] — apply the recommended fix via code; the console does not fake an auto-apply."})
 }
@@ -370,6 +411,13 @@ func (s *Server) redteamRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"state": "unavailable", "note": "redteam-rl binary not built at " + bin + " — build it: go build -o bin/redteam-rl ./cmd/redteam-rl"})
 		return
 	}
+	intent, _ := json.Marshal(map[string]any{"kind": "phorvex.console.redteam", "phase": "intent", "time": time.Now().UTC()})
+	if err := s.cfg.appendState(s.cfg.statePath("redteam-events.jsonl"), intent); err != nil {
+		s.recordStateError(err)
+		rtState.mu.Unlock()
+		writeJSON(w, 503, map[string]any{"state": "refused", "error": "red-team run refused before effect: " + err.Error()})
+		return
+	}
 	rtState.runState = "running"
 	rtState.runMsg = "training the RL adversary (Recurrent-PPO + PBT + QD)…"
 	rtState.runStartedAt = nowStamp()
@@ -382,6 +430,14 @@ func (s *Server) rtRunJob(bin string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	tmp := s.rtArtifact() + ".tmp"
+	if err := os.MkdirAll(filepath.Dir(tmp), 0o750); err != nil {
+		rtState.mu.Lock()
+		rtState.runState = "error"
+		rtState.runMsg = "RL run refused before process start: " + err.Error()
+		rtState.mu.Unlock()
+		s.recordStateError(err)
+		return
+	}
 	cmd := exec.CommandContext(ctx, bin, "--iters", "24", "--batch", "8", "--generations", "12", "--pop", "5", "--json", tmp)
 	cmd.Dir = filepath.Join(s.cfg.Root, "phorvex")
 	cmd.Env = envBase()
@@ -393,10 +449,20 @@ func (s *Server) rtRunJob(bin string) {
 		rtState.runMsg = "RL run failed: " + err.Error()
 		return
 	}
-	if b, rerr := os.ReadFile(tmp); rerr == nil {
-		_ = os.WriteFile(s.rtArtifact(), b, 0o644)
-		_ = os.Remove(tmp)
+	b, rerr := os.ReadFile(tmp)
+	if rerr != nil {
+		rtState.runState = "partial"
+		rtState.runMsg = "RL process completed but result is unreadable: " + rerr.Error()
+		s.recordStateError(rerr)
+		return
 	}
+	if rerr = atomicWriteState(s.rtArtifact(), b); rerr != nil {
+		rtState.runState = "partial"
+		rtState.runMsg = "RL process completed but result persistence failed: " + rerr.Error()
+		s.recordStateError(rerr)
+		return
+	}
+	_ = os.Remove(tmp)
 	rtState.runState = "done"
 	rtState.runMsg = "RL run complete — curves + QD refreshed"
 }
@@ -432,6 +498,12 @@ func (s *Server) redteamContinuous(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 200, map[string]any{"continuous": false, "note": "redteam-rl binary not built"})
 			return
 		}
+		intent, _ := json.Marshal(map[string]any{"kind": "phorvex.console.redteam", "phase": "intent", "mode": "continuous", "time": time.Now().UTC()})
+		if err := s.cfg.appendState(s.cfg.statePath("redteam-events.jsonl"), intent); err != nil {
+			s.recordStateError(err)
+			writeJSON(w, 503, map[string]any{"continuous": false, "error": "continuous run refused before effect: " + err.Error()})
+			return
+		}
 		ctx, cancel := context.WithCancel(context.Background())
 		rtState.cancel = cancel
 		rtState.continuous = true
@@ -463,8 +535,18 @@ func (s *Server) rtContinuousLoop(ctx context.Context, bin string) {
 		cmd.Env = envBase()
 		if cmd.Run() == nil {
 			if b, err := os.ReadFile(tmp); err == nil {
-				_ = os.WriteFile(s.rtArtifact(), b, 0o644)
+				if err = atomicWriteState(s.rtArtifact(), b); err != nil {
+					s.recordStateError(err)
+					rtState.mu.Lock()
+					rtState.continuous = false
+					rtState.runMsg = "continuous result persistence failed: " + err.Error()
+					rtState.mu.Unlock()
+					return
+				}
 				_ = os.Remove(tmp)
+			} else {
+				s.recordStateError(err)
+				return
 			}
 		}
 		rtState.mu.Lock()

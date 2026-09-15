@@ -201,12 +201,24 @@ spec:
 		return
 	}
 	defer os.Remove(f.Name())
-	_, _ = f.WriteString(yaml)
-	_ = f.Close()
+	if _, ferr = f.WriteString(yaml); ferr == nil {
+		ferr = f.Sync()
+	}
+	if cerr := f.Close(); ferr == nil {
+		ferr = cerr
+	}
+	if ferr != nil {
+		writeJSON(w, 500, map[string]string{"error": "write attack manifest: " + ferr.Error()})
+		return
+	}
 
 	// snapshot the defense baseline BEFORE applying the attack — the operator can quarantine within ~1s,
 	// so a post-apply snapshot would absorb this attack's own response and misreport it as LANDED.
 	base := s.snapshotBaseline(ns, pod)
+	if err := s.persistEffectIntent("/api/workload/attack", actorOf(r), ns, "foothold"); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "attack refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 
 	if out, e := kctl(10*time.Second, "apply", "-f", f.Name()); e != nil {
 		writeJSON(w, 502, map[string]string{"error": "apply SecurityEvent failed: " + strings.TrimSpace(out)})

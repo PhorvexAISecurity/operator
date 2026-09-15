@@ -11,10 +11,9 @@ package console
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
-	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
@@ -32,43 +31,36 @@ type consoleMutation struct {
 	Message   string `json:"message,omitempty"`
 }
 
-var mutationAuditMu sync.Mutex
-
-// mutationAuditPath resolves the append-only trail: an explicit path, else beside the decision
-// audit, else under the harness dir. Empty when nothing is configured (log line only).
+// mutationAuditPath never derives from the manager-owned decision audit.
 func (c *Config) mutationAuditPath() string {
 	if c.MutationAuditPath != "" {
 		return c.MutationAuditPath
 	}
-	if c.AuditPath != "" {
-		return filepath.Join(filepath.Dir(c.AuditPath), "console-mutations.jsonl")
-	}
-	if c.HarnessDir != "" {
-		return filepath.Join(c.HarnessDir, "console-mutations.jsonl")
-	}
-	return ""
+	return c.statePath("console-mutations.jsonl")
 }
 
-// auditConsoleMutation appends the entry (best-effort; never blocks or fails the request)
-// and always emits a structured log line so the verdict survives even without a writable path.
-func (s *Server) auditConsoleMutation(m consoleMutation) {
+// auditConsoleMutation returns only after the record is durable. The log is supplementary.
+func (s *Server) auditConsoleMutation(m consoleMutation) error {
 	m.Kind = "phorvex.console.mutation"
 	m.Time = time.Now().UTC().Format(time.RFC3339Nano)
 	b, err := json.Marshal(m)
 	if err != nil {
-		return
+		return fmt.Errorf("encode mutation evidence: %w", err)
 	}
 	log.Printf("console-mutation %s", b)
 	path := s.cfg.mutationAuditPath()
 	if path == "" {
-		return
+		err := fmt.Errorf("console state path is not configured")
+		s.recordStateError(err)
+		return err
 	}
-	mutationAuditMu.Lock()
-	defer mutationAuditMu.Unlock()
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return
+	if m.Verdict == "intent" {
+		path = filepath.Join(filepath.Dir(path), "mutation-intents.jsonl")
 	}
-	defer f.Close()
-	_, _ = f.Write(append(b, '\n'))
+	if err := s.cfg.appendState(path, b); err != nil {
+		err = fmt.Errorf("persist mutation evidence: %w", err)
+		s.recordStateError(err)
+		return err
+	}
+	return nil
 }

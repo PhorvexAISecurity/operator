@@ -101,8 +101,8 @@ proof" is qualified to the *hit path*; F5 makes it fail-closed-on-miss.
 labels **with no provenance** → an in-namespace label-write stages a malicious leader, the Service reroutes,
 the real leader is deleted; the P4b crash-resume keeps the attacker's fresh shadow. **Control:** signed/
 controller-set promotion attestation (image-digest allowlist / SA-bound identity), not a self-settable label.
-**kv-reset = forced session/KV wipe** (also carried by custom-inject → ties the AI surface to the code-exec
-gate). **model-shard-replace / mig-rebind** = model-swap / device manipulation. GPU magnitudes
+**kv-reset = forced session/KV wipe** through its separate serving-client action; custom-inject is only a
+fixed bounded marker and does not flush KV state. **model-shard-replace / mig-rebind** = model-swap / device manipulation. GPU magnitudes
 `[SP-0-PENDING-P4]` — the K8s-mechanical halves are exploitable/defensible now; the quantitative GPU exposure
 is unvalidated-until-GPU.
 
@@ -131,8 +131,8 @@ signing); soft-law floors become tighten-only but are still operator-set.
 - **F1 [CRITICAL]** — ship the namespaced least-privilege write Role + RoleBinding per managed ns; split the
   actuator SA from the read SA; delete the cluster-wide write path; minimal verbs (Role A + opt-in Role B).
   *Close-proof:* the `can-i` matrix above.
-- **F2 [CRITICAL]** — action-risk tier + a HARD gate for debugger/custom-inject (+ the kv-reset-via-inject
-  carrier): image+command allowlist (busybox-only), **system-namespace denylist**, the **missing code-exec
+- **F2 [CRITICAL]** — action-risk tier + a HARD gate for debugger/custom-inject: image+command allowlist
+  (busybox-only), **system-namespace denylist**, the **missing code-exec
   feasibility law**, optional human-approval for irreversible code-exec. *Close-proof:* a custom-inject policy
   in kube-system is vetoed; a non-busybox image rejected; rotate/quarantine stay autonomous.
 - **F3 [HIGH]** — ValidatingWebhook/CEL on PhorvexPolicy: deny kube-system/kube-public/kube-node-lease

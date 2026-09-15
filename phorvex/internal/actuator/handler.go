@@ -49,6 +49,7 @@ type EnactCtx struct {
 	MIG              migController        // GPU MIG control plane; nil => real nvidia-smi default
 	Guardrail        guardrailController  // safety/guardrail-tier control plane; nil => real default
 	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
+	AdapterSources   AdapterSources
 }
 
 // HandlerResult is the native effect record.

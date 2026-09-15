@@ -2,11 +2,94 @@ package audit
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
+
+func TestMeasurementsPreserveZeroAndUnavailable(t *testing.T) {
+	d := model.Decision{Engine: "p1-coverage", Measurements: &model.DecisionMeasurementsV1{
+		SchemaVersion: model.DecisionMeasurementsSchemaV1, Source: "p1-coverage",
+		Lambda: model.OptionalFloat{Present: true}, PerDollar: model.OptionalFloat{},
+		AIClassified: model.OptionalBool{Present: true}, CoveredFacts: model.OptionalInt{},
+	}}
+	b, err := json.Marshal(ToRecord(d))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(b, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if string(fields["lambda"]) != "0" || string(fields["aiClassified"]) != "false" {
+		t.Fatalf("measured zeros omitted: %s", b)
+	}
+	if _, ok := fields["perDollar"]; ok {
+		t.Fatalf("unavailable ratio invented: %s", b)
+	}
+	if _, ok := fields["coveredFacts"]; ok {
+		t.Fatalf("unavailable count invented: %s", b)
+	}
+	var got Record
+	if err = json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Measurements == nil || !got.Measurements.Lambda.Present || got.Measurements.PerDollar.Present {
+		t.Fatalf("presence lost: %+v", got.Measurements)
+	}
+}
+
+func TestLegacyScalarPresenceRoundTripIsRecordedOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw string
+		present   bool
+	}{
+		{"absent", `{"schemaVersion":"phorvex.audit.v2"}`, false},
+		{"null", `{"schemaVersion":"phorvex.audit.v2","lambda":null}`, false},
+		{"zero", `{"schemaVersion":"phorvex.audit.v2","lambda":0}`, true},
+		{"positive", `{"schemaVersion":"phorvex.audit.v2","lambda":1.25}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var r Record
+			if err := json.Unmarshal([]byte(tc.raw), &r); err != nil {
+				t.Fatal(err)
+			}
+			if (r.Measurements != nil) != tc.present {
+				t.Fatalf("presence=%v", r.Measurements)
+			}
+			if tc.present && (r.Measurements.Source != "legacy-recorded" || !r.Measurements.Lambda.Present || r.Measurements.Lambda.Value != r.Lambda) {
+				t.Fatalf("legacy evidence changed: %+v", r.Measurements)
+			}
+			b, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			_ = json.Unmarshal(b, &fields)
+			_, ok := fields["lambda"]
+			if ok != tc.present {
+				t.Fatalf("round trip presence=%v: %s", ok, b)
+			}
+		})
+	}
+}
+
+func TestMeasurementPresenceRequiresTopLevelValue(t *testing.T) {
+	raw := `{"schemaVersion":"phorvex.audit.v2","measurements":{"schemaVersion":"phorvex.decision-measurements.v1","source":"p1-coverage","lambda":{"present":true,"value":0}}}`
+	var r Record
+	if err := json.Unmarshal([]byte(raw), &r); err == nil {
+		t.Fatal("presence envelope legitimized a missing top-level scalar")
+	}
+}
+
+func TestMeasurementsRejectNonFiniteProducerValue(t *testing.T) {
+	r := ToRecord(model.Decision{Lambda: math.NaN(), Measurements: &model.DecisionMeasurementsV1{SchemaVersion: model.DecisionMeasurementsSchemaV1, Source: "p1-coverage", Lambda: model.OptionalFloat{Present: true, Value: math.NaN()}}})
+	if _, err := json.Marshal(r); err == nil {
+		t.Fatal("non-finite measurement was laundered through audit rounding")
+	}
+}
 
 func TestNewWriterEmitsOnlyCanonicalV2(t *testing.T) {
 	rec := ToRecord(model.Decision{

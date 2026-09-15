@@ -17,24 +17,25 @@ import (
 )
 
 // The event stream is projected by the real ingestion gate, then the same views
-// pass through production AssembleSet and Decide. A busy shared GPU node may
-// supply AI context, but it cannot authenticate an attack observation.
+// pass through production AssembleSet and Decide. Namespace/GPU topology supplies
+// no attack evidence; supported detector and trusted-event signals retain their contracts.
 func TestM026ObservationProvenanceFromIngestionToSelection(t *testing.T) {
 	trustEvents(t, "ns/detector")
 	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
-		name    string
-		event   *amtdv1beta1.SecurityEvent
-		adapter string
-		wantObs bool
+		name      string
+		event     *amtdv1beta1.SecurityEvent
+		adapter   string
+		wantBroad bool
+		wantObs   bool
 	}{
 		{name: "event-free topology"},
-		{name: "annotation alone", adapter: "suspicious"},
+		{name: "annotation alone", adapter: "suspicious", wantBroad: true},
 		{name: "unstamped event", event: seEvent("unstamped", "", "detector", "ns/physics")},
 		{name: "missing timestamp", event: seEvent("missing", "system:serviceaccount:ns:detector", "detector", "ns/physics")},
 		{name: "stale trusted event", event: seEvent("stale", "system:serviceaccount:ns:detector", "detector", "ns/physics")},
-		{name: "weak trusted event", event: seEvent("weak", "system:serviceaccount:ns:detector", "detector", "ns/physics"), wantObs: true},
-		{name: "trusted lateral event", event: seEvent("lateral", "system:serviceaccount:ns:detector", "detector", "ns/physics-neighbor"), wantObs: true},
+		{name: "weak trusted event", event: seEvent("weak", "system:serviceaccount:ns:detector", "detector", "ns/physics"), wantBroad: true, wantObs: true},
+		{name: "trusted lateral event", event: seEvent("lateral", "system:serviceaccount:ns:detector", "detector", "ns/physics-neighbor"), wantBroad: true, wantObs: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
@@ -94,8 +95,8 @@ func TestM026ObservationProvenanceFromIngestionToSelection(t *testing.T) {
 			engine := decision.NewCoverageEngine()
 			_, _ = engine.AssembleSet([]*model.WorkloadView{physics, due}, pol)
 			assessment := killchain.NewModel().Assess(physics, pol, 90, floor.Seconds())
-			if !assessment.HasEvidence || assessment.HasEventEvidence != tc.wantObs {
-				t.Fatalf("real assessment broad/strict=%v/%v, want true/%v", assessment.HasEvidence, assessment.HasEventEvidence, tc.wantObs)
+			if assessment.HasEvidence != tc.wantBroad || assessment.HasEventEvidence != tc.wantObs {
+				t.Fatalf("real assessment broad/strict=%v/%v, want %v/%v", assessment.HasEvidence, assessment.HasEventEvidence, tc.wantBroad, tc.wantObs)
 			}
 			if physics.HasEventEvidence != tc.wantObs {
 				t.Fatalf("stamped observation=%v, want %v", physics.HasEventEvidence, tc.wantObs)
@@ -111,8 +112,8 @@ func TestM026ObservationProvenanceFromIngestionToSelection(t *testing.T) {
 					if math.Abs(d.Provenance-wantProv) > 1e-9 {
 						t.Fatalf("physics provenance=%v, want %v; decision=%+v", d.Provenance, wantProv, d)
 					}
-					if d.StageAI == "" {
-						t.Fatal("fixture lost physics/AI stage")
+					if d.StageAI == "model-theft" || d.StageAI == "gpu-side-channel" {
+						t.Fatalf("namespace topology manufactured GPU stage %q", d.StageAI)
 					}
 					if d.Selected {
 						selected = d.Pod

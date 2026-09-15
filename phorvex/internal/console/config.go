@@ -16,6 +16,7 @@ type Config struct {
 	PhorvexBin  string                 // phorvex.exe (for --scan/--ablation/--native-demo/--audit-json)
 	HarnessBin  string                 // harness.exe (for -config <yaml>)
 	HarnessDir  string                 // build/test-harness (cwd for harness runs)
+	StateDir    string                 // writable console-owned state; never the manager decision audit
 	AuditPath   string                 // optional explicit audit JSONL (owner-view source)
 	AuditSource *audittransport.Client // remote mTLS source; nil keeps local-file mode
 	Addr        string                 // http listen address
@@ -25,9 +26,25 @@ type Config struct {
 	MetricsAllow []string
 	// Exec, when set, replaces the kubectl/harness process launcher (test seam; nil = real exec).
 	Exec func(timeout time.Duration, bin string, args ...string) (string, error)
-	// MutationAuditPath is the append-only JSONL trail of console cluster writes (accepted and
-	// rejected). Empty derives console-mutations.jsonl beside AuditPath, else under HarnessDir.
+	// StateAppend is a test seam for storage faults. Production always uses durable appendState.
+	StateAppend func(path string, record []byte) error
+	// MutationAuditPath is a compatibility override for the mutation journal. Empty uses StateDir.
 	MutationAuditPath string
+}
+
+func (c Config) appendState(path string, record []byte) error {
+	if c.StateAppend != nil {
+		return c.StateAppend(path, record)
+	}
+	return appendState(path, record)
+}
+
+func (c Config) runsDir() string { return c.statePath("runs") }
+func (c Config) runOutputPath(out string) string {
+	if base := c.runsDir(); base != "" {
+		return filepath.Join(base, filepath.Base(out))
+	}
+	return ""
 }
 
 // DefaultConfig derives the standard in-repo layout from a root.
@@ -38,6 +55,7 @@ func DefaultConfig(root string) Config {
 		PhorvexBin: filepath.Join(root, "phorvex", "bin", "phorvex.exe"),
 		HarnessBin: filepath.Join(hd, "bin", "harness.exe"),
 		HarnessDir: hd,
+		StateDir:   hd, // standalone compatibility; deployments must configure a dedicated mount
 		Addr:       ":8090",
 		Web:        filepath.Join(root, "dashboard-web", "out"),
 	}

@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -86,21 +87,25 @@ type attackRecord struct {
 	Containment string `json:"containment"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
-	Why          string  `json:"why"`
-	PerDollar    float64 `json:"perDollar"`
-	Stage        string  `json:"stage"`
-	CoveredFacts int     `json:"coveredFacts"`
-	PHold        float64 `json:"pHold"`
-	Lambda       float64 `json:"lambda"`
-	R6Would      string  `json:"r6Would"`
-	R6Note       string  `json:"r6Note"`
+	Why                   string  `json:"why"`
+	PerDollar             float64 `json:"perDollar"`
+	PerDollarAvailable    bool    `json:"perDollarAvailable"`
+	Stage                 string  `json:"stage"`
+	CoveredFacts          int     `json:"coveredFacts"`
+	CoveredFactsAvailable bool    `json:"coveredFactsAvailable"`
+	PHold                 float64 `json:"pHold"`
+	Lambda                float64 `json:"lambda"`
+	LambdaAvailable       bool    `json:"lambdaAvailable"`
+	R6Would               string  `json:"r6Would"`
+	R6Note                string  `json:"r6Note"`
 
 	// real uptime, sampled around the attack (ready/desired * 100)
 	UptimeBefore float64 `json:"uptimeBefore"`
 	UptimeDip    float64 `json:"uptimeDip"`
 	UptimeAfter  float64 `json:"uptimeAfter"`
 
-	Cost attackCost `json:"cost"`
+	Cost             attackCost `json:"cost"`
+	PersistenceError string     `json:"persistenceError,omitempty"`
 
 	started     time.Time       // unexported, for elapsed timing
 	baseEpoch   string          // pre-attack adapter epoch (poison detection)
@@ -196,45 +201,52 @@ func attackSnapshots(p *Principal) []*attackRecord {
 }
 
 func (s *Server) attacksPath() string {
-	base := s.cfg.AuditPath
-	if base == "" {
-		base = filepath.Join(s.cfg.Root, "phorvex-live.jsonl")
+	if p := s.cfg.statePath("phorvex-attacks.jsonl"); p != "" {
+		return p
 	}
-	return filepath.Join(filepath.Dir(base), "phorvex-attacks.jsonl")
+	if s.cfg.Root != "" {
+		return filepath.Join(s.cfg.Root, "phorvex-attacks.jsonl")
+	}
+	return ""
 }
 
-func (s *Server) loadAttacks() {
+func (s *Server) loadAttacks() error {
 	attackLoadMu.Lock()
 	defer attackLoadMu.Unlock()
 	attackMu.Lock()
 	if attackLoaded {
 		attackMu.Unlock()
-		return
+		return nil
 	}
 	attackMu.Unlock()
 	attackFileMu.Lock()
-	b, err := os.ReadFile(s.attacksPath())
+	b, err := readStateLedger(s.attacksPath())
 	attackFileMu.Unlock()
 	loaded := []*attackRecord{}
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read retained attack results: %w", err)
+	}
 	if err == nil {
 		for _, ln := range strings.Split(string(b), "\n") {
 			if ln = strings.TrimSpace(ln); ln == "" {
 				continue
 			}
 			var r attackRecord
-			if json.Unmarshal([]byte(ln), &r) == nil {
-				r.Status = "done"
-				if r.Containment == "" { // (re)classify records persisted before the field existed
-					classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
-				}
-				loaded = append(loaded, cloneAttackRecord(&r))
+			if err := json.Unmarshal([]byte(ln), &r); err != nil {
+				return fmt.Errorf("malformed retained attack result: %w", err)
 			}
+			r.Status = "done"
+			if r.Containment == "" { // (re)classify records persisted before the field existed
+				classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
+			}
+			loaded = append(loaded, cloneAttackRecord(&r))
 		}
 	}
 	attackMu.Lock()
 	attackList = append(loaded, attackList...)
 	attackLoaded = true
 	attackMu.Unlock()
+	return nil
 }
 
 // classifyContainment sets Containment + the honest dwell. `elapsed` is the observation window used as
@@ -258,25 +270,20 @@ func classifyContainment(r *attackRecord, elapsed float64) {
 	}
 }
 
-func (s *Server) persistAttack(r *attackRecord) {
+func (s *Server) persistAttack(r *attackRecord) error {
 	b, err := json.Marshal(cloneAttackRecord(r))
 	if err != nil {
-		return
+		return err
 	}
-	attackFileMu.Lock()
-	defer attackFileMu.Unlock()
-	f, err := os.OpenFile(s.attacksPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_, _ = f.Write(append(b, '\n'))
+	return s.cfg.appendState(s.attacksPath(), b)
 }
 
 // startAttackRecord registers a running attack and launches the ground-truth watcher. Called by the
 // attack handlers immediately after the real attack is applied to the cluster.
 func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline) {
-	s.loadAttacks()
+	if err := s.loadAttacks(); err != nil {
+		s.recordStateError(err)
+	}
 	now := time.Now()
 	deploy := s.firstDeploy(ns)
 	r := &attackRecord{
@@ -385,7 +392,12 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	s.fillCost(ctxName, r)
 	r.Status = "done"
 	publishAttack(r)
-	s.persistAttack(r)
+	if err := s.persistAttack(r); err != nil {
+		r.Status = "partial"
+		r.PersistenceError = "effect observed but outcome evidence unavailable; unsafe to retry: " + err.Error()
+		s.recordStateError(fmt.Errorf("persist attack outcome: %w", err))
+		publishAttack(r)
+	}
 }
 
 // --- ground-truth probes (real kubectl) ---
@@ -572,11 +584,41 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	r.Stage, _ = best["stage"].(string)
 	r.R6Would, _ = best["r6Would"].(string)
 	r.R6Note, _ = best["r6Note"].(string)
-	r.PerDollar = numf(best["perDollar"])
+	r.PerDollarAvailable = auditFieldAvailable(best, "perDollar")
+	if r.PerDollarAvailable {
+		r.PerDollar = numf(best["perDollar"])
+	}
 	r.PHold = numf(best["pHold"])
-	r.Lambda = numf(best["lambda"])
-	r.CoveredFacts = int(numf(best["coveredFacts"]))
+	r.LambdaAvailable = auditFieldAvailable(best, "lambda")
+	if r.LambdaAvailable {
+		r.Lambda = numf(best["lambda"])
+	}
+	r.CoveredFactsAvailable = auditFieldAvailable(best, "coveredFacts")
+	if r.CoveredFactsAvailable {
+		r.CoveredFacts = int(numf(best["coveredFacts"]))
+	}
 	s.parseDescReasoning(r) // backfill any numbers the audit line lacked (e.g. per-$ from the event desc)
+}
+
+func auditFieldAvailable(rec map[string]any, name string) bool {
+	b, err := json.Marshal(rec)
+	if err != nil {
+		return false
+	}
+	var decoded audit.Record
+	if err := json.Unmarshal(b, &decoded); err != nil || decoded.Measurements == nil {
+		return false
+	}
+	m := decoded.Measurements
+	switch name {
+	case "perDollar":
+		return m.PerDollar.Present
+	case "lambda":
+		return m.Lambda.Present
+	case "coveredFacts":
+		return m.CoveredFacts.Present
+	}
+	return false
 }
 
 var (
@@ -592,9 +634,10 @@ func (s *Server) parseDescReasoning(r *attackRecord) {
 	if r.Why == "" {
 		return
 	}
-	if r.PerDollar == 0 {
+	if !r.PerDollarAvailable {
 		if m := reDescPerDollar.FindStringSubmatch(r.Why); len(m) == 2 {
 			r.PerDollar = atof(m[1])
+			r.PerDollarAvailable = true
 		}
 	}
 	if r.PHold == 0 {
@@ -684,7 +727,11 @@ func (s *Server) fillCost(ctxName string, r *attackRecord) {
 }
 
 func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
-	s.loadAttacks()
+	if err := s.loadAttacks(); err != nil {
+		s.recordStateError(err)
+		writeJSON(w, 503, map[string]any{"attacks": []*attackRecord{}, "error": err.Error()})
+		return
+	}
 	// [M-136] The attack ledger spans every namespace the console has ever fired at, so it is
 	// filtered to the tenants this identity is granted. A cross-tenant grant sees all of it.
 	p := principalOf(r)

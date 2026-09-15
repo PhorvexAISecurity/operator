@@ -72,7 +72,7 @@ func m069Namespace(t *testing.T, c client.Client, name string) string {
 	if err := c.Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
 		t.Fatal(err)
 	}
-	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: name}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}
+	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: name}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind)}}}}
 	if err := c.Create(context.Background(), pol); err != nil {
 		t.Fatal(err)
 	}
@@ -230,11 +230,15 @@ func TestM069APIServerNameReuse(t *testing.T) {
 
 	t.Run("mig-rebind", func(t *testing.T) {
 		ns := m069Namespace(t, c, "m069-mig")
-		pod := m069Create(t, c, migPod(ns, "infer"))
+		fixture := migPod(ns, "infer")
+		fixture.Spec.NodeName = ns
+		pod := m069Create(t, c, fixture)
 		wc, r := m069Wrap(t, c, "infer")
 		mm := &mockMIG{}
-		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: wc, MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
-		m069Rejected(t, hr, err)
+		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, m069Request(t, c, pod, model.ActionMIGRebind))
+		if err == nil || !errors.Is(err, errPodReplaced) || !hr.Emitted || hr.MutationKind != "partial" {
+			t.Fatalf("rejected MIG eviction must report the prior relabel as a truthful partial effect: err=%v hr=%+v", err, hr)
+		}
 		m069Survived(t, c, r)
 		if len(mm.calls) != 0 {
 			t.Fatalf("Repartition must not run after the rejected eviction: %v", mm.calls)
@@ -243,9 +247,11 @@ func TestM069APIServerNameReuse(t *testing.T) {
 
 	t.Run("mig-rebind-positive-control", func(t *testing.T) {
 		ns := m069Namespace(t, c, "m069-mig-ok")
-		pod := m069Create(t, c, migPod(ns, "infer"))
+		fixture := migPod(ns, "infer")
+		fixture.Spec.NodeName = ns
+		pod := m069Create(t, c, fixture)
 		mm := &mockMIG{}
-		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
+		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, m069Request(t, c, pod, model.ActionMIGRebind))
 		if err != nil || !hr.Emitted || len(mm.calls) != 1 {
 			t.Fatalf("unchanged identity must evict and repartition: %+v %v calls=%v", hr, err, mm.calls)
 		}

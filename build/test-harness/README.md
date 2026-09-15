@@ -286,15 +286,20 @@ type myScenario struct {
     app string // private per-scenario state
 }
 
-// 2) Advertise static metadata (name, category, source, honest R6 tag,
-//    ATT&CK technique IDs, and any cluster capability requirements).
+// 2) Advertise static metadata, including what the code actually exercises.
 func (s *myScenario) Metadata() core.ScenarioMeta {
     return core.ScenarioMeta{
         Name:               "cX-my-scenario",          // stable, unique (dup name panics at startup)
         Category:           core.CategoryModernUnsupported,
         Source:             "where this scenario was extracted from",
         R6ResponseTag:      core.R6CannotRespond,       // honest, code-grounded verdict
-        AttackTechniqueIDs: []string{"T1610", "T1525"}, // MITRE ATT&CK for Containers
+        AttackTechniqueIDs: []string{"T1610", "T1525"}, // declared narrative mappings
+        ExercisedTechniqueIDs: []string{"T1610"},         // only IDs supported by this mechanism
+        Realism:            core.RealismExecutable,
+        Mechanism:          "create an owned pod through the Kubernetes API",
+        OracleDescription:  "the owned pod reaches the documented post-state",
+        CleanupDescription: "delete and verify every object with the scenario app label",
+        ClaimLimits:        "does not exercise image implantation (T1525)",
         CapabilityRequirements: nil,                    // e.g. []core.Capability{core.CapGPU} -> skip-with-note if absent
         R6Justification:    "honest prose explaining the tag",
     }
@@ -309,7 +314,7 @@ func (s *myScenario) Setup(ctx context.Context, env *core.Env) error {
     return err
 }
 
-// 4) Perform the attack kill-chain; return the stages + commands (provenance).
+// 4) Perform the implemented stimulus; return only stages actually executed.
 func (s *myScenario) Execute(ctx context.Context, env *core.Env) (core.AttackResult, error) {
     // ... do the attack against the OWNED target in env.Cfg.Namespace ...
     return core.AttackResult{
@@ -335,6 +340,13 @@ func (s *myScenario) Teardown(ctx context.Context, env *core.Env) error {
     return teardownByApp(ctx, env, s.app)
 }
 ```
+
+The run writes `scenario_inventory.md` beside the report. `marker-simulation`
+rows measure only their marker fixture and are excluded from real attack-defense
+percentages and economics. An omitted realism descriptor is rendered as
+`unassessed`; declared ATT&CK/ATLAS mappings never become exercised coverage by
+name alone. Historical output directories retain the labels produced by their
+older binaries and are not rewritten by later runs.
 
 **Optional:** to drive the genuine reactive Phoenix matcher path, have `Execute`
 look up the active defender's `Emitter` (see `scenarios/c2_persistence_evict.go`)
@@ -641,7 +653,8 @@ additive evidence CONSISTENTLY with zero interface changes:
 Stamp the target pod with `RotationTargetLabel` (`r6th.io/rotation-target=true`,
 via `stampRotationTarget`) so the timer arms and the FullPhoenix AMTD `PodSelector`
 churn it. That is the entire change — the runner's enumerator, the report, and the
-ATLAS/OWASP coverage pick it up with zero core edits.
+ATLAS/OWASP declared mappings pick it up with zero core edits; exercised coverage
+requires an explicit mechanism descriptor.
 
 ### The 5 AI mock stand-ins (`internal/mocks/ai_standins.go`)
 
