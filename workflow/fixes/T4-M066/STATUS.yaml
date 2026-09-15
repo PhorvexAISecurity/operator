@@ -2,17 +2,26 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 2
+revision: 4
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 268d86147a31e3de12d596d148690d07f78c55e4f4c0efd31c01c9e318d51c5f
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T11:14:20+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
 fix_id: T4-M066
 issues:
 - M-66
 title: '`rewarmShadow` creates an ownerless pod (and copies ephemeral containers)'
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -73,9 +82,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Sign current source design and assign worker
-updated_at: '2026-09-15T10:30:15+00:00'
+  owner: sol-t4-m066
+  action: Implement signed controller-managed scalar pool plan; await heavy test slot;
+    no live changes
+updated_at: '2026-09-15T11:14:20+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:14+00:00'
   by: codex-lead
@@ -94,6 +104,14 @@ transitions:
   at: '2026-09-15T10:30:15+00:00'
   by: codex-lead
   artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T11:14:20+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
   note: null
   approval_ref: null
   forced: false
