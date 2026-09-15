@@ -555,3 +555,113 @@ fixes:
     - T2-M016
     branch: fix/v3-m153-steering-trace
     head_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+  T3-M026:
+    directory: fixes/T3-M026
+    aliases: []
+    issues:
+    - M-26
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m026
+    head_sha: null
+  T3-M033:
+    directory: fixes/T3-M033
+    aliases: []
+    issues:
+    - M-33
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m033
+    head_sha: null
+  T3-M086:
+    directory: fixes/T3-M086
+    aliases: []
+    issues:
+    - M-86
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m086
+    head_sha: null
+  T3-M092:
+    directory: fixes/T3-M092
+    aliases: []
+    issues:
+    - M-92
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m092
+    head_sha: null
+  T3-M122:
+    directory: fixes/T3-M122
+    aliases: []
+    issues:
+    - M-122
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m122
+    head_sha: null
+  T3-M132:
+    directory: fixes/T3-M132
+    aliases: []
+    issues:
+    - M-132
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m132
+    head_sha: null
+  T3-M148:
+    directory: fixes/T3-M148
+    aliases: []
+    issues:
+    - M-148
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m148
+    head_sha: null
+  T3-M158:
+    directory: fixes/T3-M158
+    aliases: []
+    issues:
+    - M-158
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m158
+    head_sha: null
+  T3-M169:
+    directory: fixes/T3-M169
+    aliases: []
+    issues:
+    - M-169
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m169
+    head_sha: null
+  T3-M172:
+    directory: fixes/T3-M172
+    aliases: []
+    issues:
+    - M-172
+    related_issues: []
+    state: TRIAGED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m172
+    head_sha: null
