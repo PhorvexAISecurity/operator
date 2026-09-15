@@ -626,11 +626,12 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	// spawned, MANUFACTURED-high-coverage DECOYS out-gain a genuinely-due real foothold and crowd it
 	// out of the B-move budget (the foothold is never SELECTED, so never rotated — zero detector
 	// signal). The fix weights a candidate's SELECTION gain by a PROVENANCE factor a decoy cannot
-	// manufacture: a GENUINE threat — overdue for the hygiene floor (aged exposure ≥ proactiveFloor)
-	// OR carrying real kill-chain evidence (StageUrgency>0, i.e. real recon/events) — keeps prov=1 so
-	// its gain (and the SELECTION) is BYTE-IDENTICAL. A FRESH, evidence-less candidate (a manufactured
+	// manufacture: an overdue hygiene workload (aged exposure ≥ proactiveFloor)
+	// OR carrying a trusted, recent direct or lateral observation — keeps prov=1 so
+	// its gain (and the SELECTION) is BYTE-IDENTICAL. A FRESH candidate without an observation (a manufactured
 	// decoy) is down-weighted toward provFloor, so it can no longer displace a real asset from the
-	// slot. The reported coverage/marginal is the UN-discounted value (reporting unchanged). NO
+	// slot. Broad AI/topology HasEvidence remains contextual inference and cannot prove an observation.
+	// The reported coverage/marginal is the UN-discounted value (reporting unchanged). NO
 	// learning enters Decide — prov is a deterministic function of the real exposure/assessment.
 	floorSec := pol.ProactiveFloor.Seconds()
 	prov := func(key string) float64 {
@@ -638,8 +639,8 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			return 1
 		}
 		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.HasEvidence {
-			return 1 // genuinely due, or backed by real recon/event evidence => full weight (legit path unchanged)
+		if ac.exposure >= floorSec || ac.assess.HasEventEvidence {
+			return 1 // genuinely due, or backed by a trusted observation => full weight
 		}
 		r := ac.exposure / floorSec
 		if r < 0 {

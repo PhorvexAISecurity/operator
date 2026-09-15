@@ -163,6 +163,8 @@ Severity: HIGH · Tier: 1 · Fixes: T3-M026
 **Fix:** gate `HasEvidence` and the AI classifier on an actual adversary signal.
 *Sources: N2.*
 
+**Current scope, 2026-09-15 (T3-M026):** The agreed Tier3 fix closes the selection provenance bypass with strict, trusted age-weighted direct or lateral event observation (`HasEventEvidence`). Broad `HasEvidence` and physical AI/topology classification remain contextual inference; they do not authenticate attack observation. Overdue hygiene remains full weight, while fresh physics-only or annotation-only workloads receive the provenance discount. The historical Fix text above remains the original issue proposal, not the revised implementation contract.
+
 ### M-27 · Kill-chain belief never ages events · **OPEN** · `CLOCK->BELIEF`
 
 Severity: HIGH · Tier: 1 · Fixes: none
