@@ -21,6 +21,7 @@ export interface Session {
   canEdit: boolean;
   authModes: string[];
   grantsConfigured: boolean;
+  auditClearAvailable: boolean;
   trustedOrigins: string[];
   note: string;
 }
@@ -196,8 +197,8 @@ export const api = {
   suites: (lens: Lens) => get<{ suites: Suite[] }>("/api/suites", lens),
   // owner endpoints are tenant-scoped: the owner lens MUST pass its tenant (the backend fail-closes
   // on an empty tenant to prevent cross-tenant leak). ownerTenants lists the selectable tenants.
-  ownerEvents: (lens: Lens, tenant?: string) => get<{ events: OwnerEvent[]; empty: boolean; rollup: OwnerRollup; note: string }>(`/api/owner/events${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`, lens),
-  ownerTenants: (lens: Lens) => get<{ tenants: string[] }>("/api/owner/tenants", lens),
+  ownerEvents: (lens: Lens, tenant?: string) => get<{ events: OwnerEvent[]; empty: boolean; rollup: OwnerRollup; note: string; partial: boolean; coveredFrom?: string; coveredTo?: string }>(`/api/owner/events${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`, lens),
+  ownerTenants: (lens: Lens) => get<{ tenants: string[]; partial: boolean; coveredFrom?: string; coveredTo?: string }>("/api/owner/tenants", lens),
   reports: (lens: Lens) => get<{ reports: ReportMeta[] }>("/api/reports", lens),
   cost: (lens: Lens, context = "") => get<CostResult>(`/api/cost${context ? `?context=${encodeURIComponent(context)}` : ""}`, lens),
   costTimeseries: (lens: Lens) => get<CostTimeseries>("/api/cost-timeseries", lens),
@@ -401,9 +402,9 @@ export interface BenchResult {
 export interface CostScenario { scenario: string; avoidedBreach: number; disruptWithout: number; disruptBlind: number; disruptWith: number; defensiveActions: number; blindActions: number; responseCost: number; defenseCost: number; costWithout: number; costBlind: number; costWith: number; successNone: number; successBlind: number; successWith: number; savings: number; helps: boolean }
 export interface NodePrice { instanceType: string; count: number; gpu: boolean; pricePerHr: number; estimated: boolean }
 export interface ClusterPricing { provider: string; region: string; nodes: NodePrice[]; totalPerHr: number; totalPerYear: number; gpuPricePerHr: number; gpuCount: number; source: string; available: boolean }
-export interface CostResult { available: boolean; scenarios: CostScenario[]; source?: string; runId?: string; totalWithout: number; totalBlind: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; valueAtRisk?: number; defenseOverhead?: number; operatorCost?: number; actuationCost?: number; actuationRatePerHr?: number; perActionCost?: number; overheadBasis?: string; note: string }
+export interface CostResult { available: boolean; scenarios: CostScenario[]; source?: string; runId?: string; totalWithout: number; totalBlind: number; totalWith: number; totalSavings: number; pricing?: ClusterPricing; valueAtRisk?: number; defenseOverhead?: number; operatorCost?: number; actuationCost?: number; actuationRatePerHr?: number; actuationPartial?: boolean; perActionCost?: number; overheadBasis?: string; note: string }
 export interface CostTimePoint { time: string; unixMillis: number; phorvexCost: number; blindCost: number; savings: number; decisions: number }
-export interface CostTimeseries { available: boolean; points: CostTimePoint[]; totalPhorvex: number; totalBlind: number; totalSavings: number; decisions: number; note: string }
+export interface CostTimeseries { available: boolean; points: CostTimePoint[]; totalPhorvex: number; totalBlind: number; totalSavings: number; decisions: number; note: string; partial: boolean; coveredFrom?: string; coveredTo?: string }
 // UPTIME (P-UPTIME) — MEASURED service availability vs the moments Phorvex acted.
 export interface UptimePoint { t: string; pct: number }
 export interface UptimeMarker { t: string; action: string }
@@ -411,7 +412,7 @@ export interface UptimeWorkload { ns: string; workload: string; kind: string; se
 export interface UptimeStrategy { key: string; label: string; attackSuccess: number; disrupted: number; defensiveActions: number; trials: number }
 export interface UptimeScenarioArm { key: string; label: string; attackSuccess: number; disrupted: number; dwell: number; defensiveActions: number; trials: number }
 export interface UptimeScenario { scenario: string; category: string; arms: UptimeScenarioArm[] }
-export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; strategies?: UptimeStrategy[]; scenarios?: UptimeScenario[]; strategiesSource?: string; strategiesRun?: string; note: string }
+export interface UptimeResult { windowSeconds: number; workloads: UptimeWorkload[]; markerPartial?: boolean; strategies?: UptimeStrategy[]; scenarios?: UptimeScenario[]; strategiesSource?: string; strategiesRun?: string; note: string }
 export interface RunEvidenceArm { defender: string; label: string; trials: number; disruption: CI; dwell: CI; oracleHitPct: number; defensiveActions: number; securityPerCost: number; evidenceRetention: number; mtdEffect: string; schwartauP: number; schwartauD: number; schwartauR: number; replaySuccess: number; replayAttempts: number }
 export interface RunEvidenceTrial { defender: string; trial: number; skipped: boolean; oracleAchieved: boolean; disruption: number; dwell: number; defensiveActions: number; mtdEffect: string; observed: string; commands: string[] }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; note: string }

@@ -206,6 +206,14 @@ phorvex:
   # The cost is a shared lifecycle: the console restarts whenever the operator does.
   console:
     enabled: false
+    allowWorkloadMutations: false
+    auditTransport:
+      port: 8445
+      serverSecretName: ""
+      clientSecretName: ""
+      serverDNSName: ""
+      clientDNSName: ""
+      vclusterPath: ""
     image:
       repository: ""
       tag: ""

@@ -64,13 +64,20 @@ function attacksFor(type: string, armed: boolean): WlAttack[] {
 export function LiveOpsPanel({ lens }: { lens: Lens }) {
   const [clearing, setClearing] = React.useState(false);
   const [clearError, setClearError] = React.useState("");
+  const [auditClearAvailable,setAuditClearAvailable] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [actionFilter, setActionFilter] = React.useState("");  // "" = all actuator types
   const [query, setQuery] = React.useState("");                // pod / namespace text search
   const [actuatedOnly, setActuatedOnly] = React.useState(false);
   const owner = lens === "owner";
-  const { tenant, tenants, setTenant } = useOwnerTenant(lens);
+  const { tenant, tenants, tenantListPartial, setTenant } = useOwnerTenant(lens);
   const sel = useSelectedTarget(); // SCOPE the live stream to the selected provider (EKS vs vCluster)
+
+  React.useEffect(() => {
+    let alive=true;
+    api.session(lens).then((session)=>{if(alive)setAuditClearAvailable(session.auditClearAvailable);}).catch(()=>{if(alive)setAuditClearAvailable(false);});
+    return ()=>{alive=false};
+  },[lens]);
 
   // This remains an explicit destructive action, scoped to the selected provider.
   async function clearDecisions() {
@@ -232,12 +239,14 @@ export function LiveOpsPanel({ lens }: { lens: Lens }) {
         )}
         {owner && <div className="flex items-center gap-1.5 text-[11px] text-primary"><Lock className="h-3 w-3" /> IP-walled stream (outcome only)</div>}
         {!owner && (
-          <Button variant="outline" size="sm" onClick={clearDecisions} disabled={clearing || events.length === 0} className="ml-auto gap-1.5">
+          <Button variant="outline" size="sm" onClick={clearDecisions} disabled={!auditClearAvailable || clearing || events.length === 0} className="ml-auto gap-1.5">
             <Trash2 className="h-3.5 w-3.5" /> {clearing ? "Clearing…" : "Clear current audit"}
           </Button>
         )}
       </div>
       {clearError && <div role="alert" className="text-sm text-danger">Could not clear audit: {clearError}</div>}
+      {!owner && !auditClearAvailable && <div role="status" className="text-xs text-muted-foreground">This console reads the manager audit through a read-only connection. Clearing the audit is unavailable here; use the manager retention procedure.</div>}
+      {owner && tenantListPartial && <div role="status" className="text-xs text-warning">Tenant choices come from the latest bounded audit window and may omit inactive older tenants. Retained decisions can still be paged in history.</div>}
 
       {/* LIVE WORKLOAD ATTACK — step 1: pick a workload; step 2: fire an attack meaningful for its type */}
       {!owner && (

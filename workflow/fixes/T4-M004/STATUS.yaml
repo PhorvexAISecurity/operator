@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: ea154322fe87091bd264c76b71ba150477904843d6c3d8fe64d19ec604ef4381
+    sha256: 7f21243e6f24250647080c80c65c21e63f39c0170df26e890457d82ee94a8b1b
     source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
-    at: '2026-09-15T10:52:45+00:00'
+    at: '2026-09-15T11:39:50+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
 fix_id: T4-M004
@@ -84,7 +84,7 @@ residuals: []
 next_action:
   owner: sol-t4-m004
   action: Implement signed plan; await heavy-test slot; submit-review with no notification
-updated_at: '2026-09-15T10:52:45+00:00'
+updated_at: '2026-09-15T11:39:50+00:00'
 configuration_history:
 - at: '2026-09-15T10:28:50+00:00'
   by: codex-lead
@@ -114,3 +114,13 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: ea154322fe87091bd264c76b71ba150477904843d6c3d8fe64d19ec604ef4381
+  source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  at: '2026-09-15T10:52:45+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md

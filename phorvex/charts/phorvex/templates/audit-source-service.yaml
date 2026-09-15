@@ -1,0 +1,20 @@
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.audit.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "phorvex.fullname" . }}-audit-source
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: audit-source
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "phorvex.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: manager
+  ports:
+  - name: audit-tls
+    port: {{ .Values.phorvex.console.auditTransport.port }}
+    targetPort: audit-tls
+{{- end }}

@@ -296,6 +296,8 @@ export function UptimePanel({ lens }: { lens: Lens }) {
     <div className="space-y-5">
       <PageHead title="Uptime — what the actuators cost the service" sub="MEASURED from the Kubernetes API (readyReplicas ÷ desired) for every workload Phorvex acted on, overlaid with the exact moments it acted (live decision audit). A quarantine detaches a pod (it leaves the ReplicaSet → brief dip → replacement Ready); a rotate deletes it; a kv-reset is an in-process flush that NEVER kills the pod — so it never dents availability. Nothing here is synthesized." />
 
+      {d.markerPartial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">Actuation markers and counts cover only the latest 24 MiB audit window. Availability samples are separate; use paged Live Ops history for older actions.</div>}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid grid-cols-3 gap-3">
           <Card><CardContent className="p-3">

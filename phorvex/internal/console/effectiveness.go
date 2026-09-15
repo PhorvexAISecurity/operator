@@ -11,6 +11,7 @@
 package console
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -19,15 +20,15 @@ import (
 
 // Stat is one dashboard number with its 95% CI + provenance + honesty label.
 type Stat struct {
-	Key     string  `json:"key"`
-	Label   string  `json:"label"`
-	Value   string  `json:"value"`
-	Unit    string  `json:"unit,omitempty"`
-	CI      *ci     `json:"ci,omitempty"`
-	Source  string  `json:"source"`
-	Status  string  `json:"status"`  // real | modeled | pending
-	Product string  `json:"product"` // k8s | ai | both
-	Note    string  `json:"note,omitempty"`
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+	Value   string `json:"value"`
+	Unit    string `json:"unit,omitempty"`
+	CI      *ci    `json:"ci,omitempty"`
+	Source  string `json:"source"`
+	Status  string `json:"status"`  // real | modeled | pending
+	Product string `json:"product"` // k8s | ai | both
+	Note    string `json:"note,omitempty"`
 }
 
 func (c *Config) harnessOut(name string) string {
@@ -38,7 +39,7 @@ func (c *Config) report(name string) string {
 }
 
 // Effectiveness returns the hero board — the >90% K8s numbers with CIs, each traced.
-func (c *Config) Effectiveness() []Stat {
+func (c *Config) Effectiveness(ctx context.Context) []Stat {
 	var out []Stat
 	deep, hasDeep := readMetrics(c.harnessOut("out-p3deep"))
 	pact, hasPact := readMetrics(c.harnessOut("out-pactuator"))
@@ -108,7 +109,9 @@ func (c *Config) Effectiveness() []Stat {
 	}
 
 	// 6. Explainability — COMPUTED from the real decision audit (explained / total decisions).
-	if exp, tot := explainabilityFromAudit(c.auditFile()); tot > 0 {
+	if exp, tot, sourceErr := explainabilityFromAuditContext(ctx, c.auditFile(), c.AuditSource); sourceErr != nil && c.AuditSource != nil {
+		out = append(out, Stat{Key: "explainability", Label: "Decisions explained", Status: "unavailable", Product: "k8s", Note: "remote audit source unavailable: " + sourceErr.Error()})
+	} else if tot > 0 {
 		w := wilson(exp, tot)
 		out = append(out, Stat{Key: "explainability", Label: "Decisions explained", Value: pct(w.Mean), Unit: "%",
 			CI: &w, Source: "console decision audit · Reason or SHAP attribution present / total decisions", Status: "real", Product: "k8s",
