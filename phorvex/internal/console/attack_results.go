@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -592,16 +593,24 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 }
 
 func auditFieldAvailable(rec map[string]any, name string) bool {
-	if measurements, ok := rec["measurements"].(map[string]any); ok {
-		optional, ok := measurements[name].(map[string]any)
-		if !ok {
-			return false
-		}
-		present, _ := optional["present"].(bool)
-		return present
+	b, err := json.Marshal(rec)
+	if err != nil {
+		return false
 	}
-	v, ok := rec[name]
-	return ok && v != nil
+	var decoded audit.Record
+	if err := json.Unmarshal(b, &decoded); err != nil || decoded.Measurements == nil {
+		return false
+	}
+	m := decoded.Measurements
+	switch name {
+	case "perDollar":
+		return m.PerDollar.Present
+	case "lambda":
+		return m.Lambda.Present
+	case "coveredFacts":
+		return m.CoveredFacts.Present
+	}
+	return false
 }
 
 var (
