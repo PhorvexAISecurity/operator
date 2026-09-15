@@ -35,9 +35,11 @@ type ActionVocabulary struct {
 
 func (v ActionVocabulary) clone() ActionVocabulary {
 	out := v
-	out.NotInstallable = make(model.InstallSet, len(v.NotInstallable))
-	for action := range v.NotInstallable {
-		out.NotInstallable[action] = struct{}{}
+	if v.NotInstallable != nil {
+		out.NotInstallable = make(model.InstallSet, len(v.NotInstallable))
+		for action := range v.NotInstallable {
+			out.NotInstallable[action] = struct{}{}
+		}
 	}
 	return out
 }
@@ -98,6 +100,9 @@ func (m *Manager) refreshVocabulary(ctx context.Context, now time.Time) ActionVo
 func installedPolicyActions(crd *apiextv1.CustomResourceDefinition) ([]model.Action, error) {
 	if crd.Name != policyCRDName || crd.Spec.Group != v1alpha1.GroupVersion.Group || crd.Spec.Names.Kind != "PhorvexPolicy" || crd.Spec.Names.Plural != "phorvexpolicies" {
 		return nil, fmt.Errorf("unexpected PhorvexPolicy CRD identity")
+	}
+	if crd.UID == "" || crd.ResourceVersion == "" || crd.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("PhorvexPolicy CRD has no current UID/resourceVersion or is deleting")
 	}
 	var selected []model.Action
 	seenCurrent := false

@@ -19,6 +19,7 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -67,6 +68,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiextv1.AddToScheme(scheme))
 	// Register the Phoenix types so Phorvex can construct/emit SecurityEvent + AMTD
 	// CRs over Seam 1 (the ONLY reason Phorvex depends on the Phoenix module).
 	utilruntime.Must(amtdv1beta1.AddToScheme(scheme))

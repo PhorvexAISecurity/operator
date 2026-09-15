@@ -77,6 +77,7 @@ func TestInstalledSchemaReaderReachesRuntimeWitness(t *testing.T) {
 	}
 
 	current := policySchemaCRD("new", "rotate", "quarantine", "noop", "kv-reset", "future-action")
+	current.ResourceVersion = ""
 	if err := reader.Delete(context.Background(), policySchemaCRD("old", "rotate", "quarantine", "noop")); err != nil {
 		t.Fatal(err)
 	}
