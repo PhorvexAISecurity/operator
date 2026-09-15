@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 17
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,13 +16,86 @@ checks:
     at: '2026-09-15T06:19:32+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 577f673b01ce860db2f4f6ab4e4c78100fff64b1dd4232109b590a5f74fc6b1a
+    source_sha: c3e503872d2cbda85947930684b84eb247273625
+    at: '2026-09-15T07:03:13+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  red:
+    result: PASS
+    by: sol-t3-m158
+    artifact: evidence/red-main3906776-positive-reordered.txt
+    sha256: 2015db97750d0935d6a93dda5ced4d247923aa9923de86a60d9df5effbe92ed6
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T07:41:38+00:00'
+  preflight:
+    result: PASS
+    by: sol-t3-m158
+    artifact: evidence/preflight/receipt.json
+    sha256: 18bec026cf0a40e4ec277a0c488928edd5c133059d59befc8089de24db2291b1
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:12:19+00:00'
+  implementation:
+    result: PASS
+    by: sol-t3-m158
+    artifact: 04-diff.patch
+    sha256: e1530ef0859785b46e57ac065206ed90f5685798d4af9a06a74799a7db921c5f
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:12:19+00:00'
+  l0:
+    result: PASS
+    by: sol-t3-m158
+    artifact: evidence/preflight/run-1789459630293551688/go-phorvex.log
+    sha256: 5d907ae5a3530c2a6673664088a61caf84cfbdb45e3b2c1d7f0e8a9e5cccf4e3
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:12:19+00:00'
+  l1:
+    result: PASS
+    by: sol-t3-m158
+    artifact: evidence/l1-named-crd-rbac-render.txt
+    sha256: a7385e84fd34ea9c844c3d63443afc00558d4a70ebefac23815d7a23562a1e77
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:12:19+00:00'
+  l2:
+    result: PASS
+    by: sol-t3-m158
+    artifact: evidence/head-focused-positive-reordered.txt
+    sha256: 3ff9586ba55dbf433c591ffbbf3072217594f3afa571f27c0eaae2979c640e95
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:12:19+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t3-m158
+    artifact: evidence/red-main3906776-positive-reordered.txt
+    sha256: 2015db97750d0935d6a93dda5ced4d247923aa9923de86a60d9df5effbe92ed6
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:12:19+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: aa7ab75f3a7662b409d35138b29a9309ec552373a683bfc582aaf6409346ab82
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:15:04+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f3e9ab937989fdee20d7d8d7a6058ae0ae72a55c96e63702e8ecbc3c529f9530
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:15:04+00:00'
+    incident_sha256: aa7ab75f3a7662b409d35138b29a9309ec552373a683bfc582aaf6409346ab82
 fix_id: T3-M158
 issues:
 - M-158
 title: 'T1-E follow-up: boot DISCOVERY of the deployed CRD action enum into `model.NotInstallable`
   is unwired — the not-installable gate is live but its set is populated empty'
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -46,7 +119,7 @@ blind_derivation:
 implementation:
   branch: fix/t3-m158
   base_sha: c3e503872d2cbda85947930684b84eb247273625
-  head_sha: null
+  head_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
   stacked_on:
   - T3-M169
 pull_request:
@@ -68,13 +141,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -84,9 +157,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t3-m158
-  action: Implement signed installed vocabulary discovery when worker slot opens
-updated_at: '2026-09-15T06:51:38+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T08:15:06+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:44+00:00'
   by: codex-lead
@@ -114,6 +188,31 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-15T07:19:22+00:00'
+  by: sol-t3-m158
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T07:42:17+00:00'
+  by: sol-t3-m158
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T07:42:58+00:00'
+  by: sol-t3-m158
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T08:00:43+00:00'
+  by: sol-t3-m158
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T08:07:01+00:00'
+  by: sol-t3-m158
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -131,3 +230,50 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T08:12:19+00:00'
+  by: sol-t3-m158
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T08:12:21+00:00'
+  by: sol-t3-m158
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T08:15:04+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T08:15:05+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: red
+  result: PASS
+  by: sol-t3-m158
+  artifact: evidence/red-main3906776.txt
+  sha256: 7c54cb258e8b26b064d5708be3d8b99c9db4dda30c9d40fcb2b85099cb5681bd
+  source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  at: '2026-09-15T07:19:13+00:00'
+handoff:
+  id: T3-M158:17:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 17

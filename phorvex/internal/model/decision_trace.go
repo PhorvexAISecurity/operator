@@ -345,6 +345,9 @@ type DecisionTraceV2 struct {
 	BrainImage     string               `json:"brainImage"`
 	GitSHA         string               `json:"gitSHA"`
 	DecisionEngine string               `json:"decisionEngine"`
+	// PolicyActionVocabulary records the one CRD observation used by this tick's
+	// installability witness. Unknown reads preserve historical identity only.
+	PolicyActionVocabulary *PolicyActionVocabularyObservation `json:"policyActionVocabulary,omitempty"`
 
 	PolicyNamespace string `json:"policyNamespace"`
 	PolicyName      string `json:"policyName"`
@@ -406,6 +409,17 @@ type DecisionTraceV2 struct {
 	SelectionRound       OptionalInt `json:"selectionRound"`
 	TieBreakReason       string      `json:"tieBreakReason"`
 	NoopReason           string      `json:"noopReason,omitempty"`
+}
+
+// PolicyActionVocabularyObservation is additive capability evidence for a
+// retained decision. Known=false never establishes that an action was installed.
+type PolicyActionVocabularyObservation struct {
+	Known           bool   `json:"known"`
+	UID             string `json:"uid,omitempty"`
+	ResourceVersion string `json:"resourceVersion,omitempty"`
+	ObservedAt      string `json:"observedAt,omitempty"`
+	AttemptedAt     string `json:"attemptedAt,omitempty"`
+	Error           string `json:"error,omitempty"`
 }
 
 var (

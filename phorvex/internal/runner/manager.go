@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -171,7 +172,11 @@ func eligibilityFrom(
 }
 
 type Manager struct {
-	OwnershipReader client.Reader // uncached, read-only owner evidence
+	// VocabularyReader reads only the named PhorvexPolicy CRD, bypassing the
+	// informer cache so schema upgrades are observable without a restart.
+	VocabularyReader client.Reader
+	vocabulary       atomic.Pointer[ActionVocabulary]
+	OwnershipReader  client.Reader // uncached, read-only owner evidence
 	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
 	BoundaryReader client.Reader
 	Client         client.Client
@@ -890,6 +895,9 @@ func (m *Manager) reconcileWedged(ctx context.Context, killEngaged bool) {
 
 // tick builds one cluster snapshot and processes all due tenants.
 func (m *Manager) tick(ctx context.Context) tickResult {
+	// One bounded CRD read at most per refresh period, before any tenant witness.
+	// The published observation remains fixed for this serialized tick.
+	m.refreshVocabulary(ctx, m.managerClock().Now())
 	// [M-140] Complete pending ownership transitions BEFORE any snapshot or decision work,
 	// on every tick including ones with no due policy, so a removal is never stranded behind
 	// an idle tenant and no decision is priced from a departed owner's state.
@@ -1563,9 +1571,14 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	// for BOTH the ActionsSupported status (capability leg only, via Capable) AND the
 	// generator's pre-scoring gate (full Eligible incl. installability + RBAC) — so the
 	// two can never drift into the M-20 mirror. m.Authz is nil until the boot layer wires
-	// the SSAR checker (then no-rbac becomes live); NotInstallable is empty on a current
-	// CRD (17/17).
-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator).
+	// the SSAR checker (then no-rbac becomes live). Unknown discovery supplies no
+	// invented absent actions and is published separately as unverified evidence.
+	vocabulary := m.VocabularySnapshot()
+	var absent model.InstallSet
+	if vocabulary.Known {
+		absent = vocabulary.NotInstallable
+	}
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), absent, m.Authz, m.Actuator).
 		WithCodeExec(m.CodeExec, snap.NamespaceLabels)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
@@ -1688,6 +1701,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
+		if decisions[i].Trace != nil {
+			decisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
+		}
 		appendRepresentation(&decisions[i], representationInputs[i])
 		m.Audit.Record(decisions[i])
 		m.recordColocation(assessmentInput, decisions[i], pol)
