@@ -67,6 +67,7 @@ const (
 	ExclusionNotInstallable = "not-installable"
 	ExclusionNoRBAC         = "no-rbac"
 	ExclusionCapability     = "capability-unsupported"
+	ExclusionActionFailure  = "action-failure-cooldown"
 )
 
 // T0-C: the closed dispatch-outcome vocabulary. The runner stamps it after the
@@ -781,7 +782,7 @@ func (t DecisionTraceV2) validateV3() error {
 		ExclusionNone: true, ExclusionNotEnabled: true, ExclusionReconCover: true,
 		ExclusionFeasibility: true, ExclusionCostNaN: true, ExclusionSLOGate: true,
 		ExclusionReactiveOnly: true, ExclusionSelection: true,
-		ExclusionNotInstallable: true, ExclusionNoRBAC: true, ExclusionCapability: true,
+		ExclusionNotInstallable: true, ExclusionNoRBAC: true, ExclusionCapability: true, ExclusionActionFailure: true,
 	}
 	selectedRows := 0
 	for i, row := range t.ActionStatus {
@@ -811,8 +812,8 @@ func (t DecisionTraceV2) validateV3() error {
 			return fmt.Errorf("actionStatus[%d] not-installable must read exclusionKind=not-installable, got %q", i, row.ExclusionKind)
 		}
 		if row.Status == ActionStatusIneligible &&
-			row.ExclusionKind != ExclusionNoRBAC && row.ExclusionKind != ExclusionCapability {
-			return fmt.Errorf("actionStatus[%d] ineligible must read exclusionKind=no-rbac|capability-unsupported, got %q", i, row.ExclusionKind)
+			row.ExclusionKind != ExclusionNoRBAC && row.ExclusionKind != ExclusionCapability && row.ExclusionKind != ExclusionActionFailure {
+			return fmt.Errorf("actionStatus[%d] ineligible must read a recognized eligibility exclusion, got %q", i, row.ExclusionKind)
 		}
 	}
 	if t.SelectedAction == string(ActionNoop) && selectedRows != 0 {

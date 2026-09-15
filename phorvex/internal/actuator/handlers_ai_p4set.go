@@ -513,7 +513,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 		return HandlerResult{}, orGone(err, ok, "guardrail-rotate", req)
 	}
 	if pod.Labels[labelGuardrailTier] != "true" || pod.Annotations[annoGuardrailAlts] == "" {
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate GuardrailUnavailable: pod %s/%s is not %s / declares no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelGuardrailTier, annoGuardrailAlts)
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate GuardrailUnavailable: pod %s/%s is not %s / declares no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelGuardrailTier, annoGuardrailAlts))
 	}
 	cur := pod.Annotations[annoGuardrailVariant]
 	// PREMORTEM: pick a DISTINCT variant (same blind spot = no MTD diversity = no help).
@@ -525,7 +525,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 		}
 	}
 	if next == "" {
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur)
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur))
 	}
 	// (1) apply the variant to the live guardrail first. A K8s annotation is only a
 	// forensic record; it must never turn an unconfirmed filter change into a
