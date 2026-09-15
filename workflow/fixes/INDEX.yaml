@@ -594,7 +594,7 @@ fixes:
     issues:
     - M-92
     related_issues: []
-    state: AGREED
+    state: BLOCKED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m092

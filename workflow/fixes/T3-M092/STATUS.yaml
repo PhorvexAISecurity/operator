@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -21,7 +21,7 @@ issues:
 - M-92
 title: 'Annotation-driven serving URLs: a tenant-controlled SSRF primitive'
 profile: standard
-state: AGREED
+state: BLOCKED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -85,9 +85,9 @@ blockers:
 residuals: []
 next_action:
   owner: codex-lead
-  action: Retain M92 as incomplete and continue independent Tier3 fixes; await an
-    available permitted path for this blocked task.
-updated_at: '2026-09-15T06:31:10+00:00'
+  action: Retain incomplete after automatic worker restriction; continue independent
+    Tier3 fixes
+updated_at: '2026-09-15T06:31:36+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:39+00:00'
   by: codex-lead
@@ -130,6 +130,14 @@ transitions:
   at: '2026-09-15T06:06:46+00:00'
   by: codex-lead
   artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: BLOCKED
+  at: '2026-09-15T06:31:36+00:00'
+  by: codex-lead
+  artifact: evidence/automation-blocker.md
   note: null
   approval_ref: null
   forced: false
