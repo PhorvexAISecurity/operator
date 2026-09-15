@@ -32,6 +32,7 @@ import (
 // pre-M158 runtime has no discovery reader to configure. The head-only adapter
 // replaces this function with the manager's real discovery wiring.
 var m158ConfigureRuntimeVocabulary = func(context.Context, *Manager, client.Reader, time.Time) error { return nil }
+var m158AssertFailedReadTrace func(*testing.T, *Manager, *policyEntry, *ingest.Snapshot, *bytes.Buffer, *model.DecisionTraceV2)
 
 func TestM158ReaderToProcessTenantTrace(t *testing.T) {
 	now := time.Date(2026, 9, 15, 7, 0, 0, 0, time.UTC)
@@ -102,6 +103,9 @@ func TestM158ReaderToProcessTenantTrace(t *testing.T) {
 	}
 	if present == nil || present.Status == model.ActionStatusNotInstallable {
 		t.Fatalf("present action falsely absent: %+v", present)
+	}
+	if m158AssertFailedReadTrace != nil {
+		m158AssertFailedReadTrace(t, m, entry, snap, &auditSink, trace)
 	}
 }
 
