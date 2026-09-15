@@ -89,14 +89,7 @@ func (s *Server) attackMonitoringHandler(w http.ResponseWriter, r *http.Request)
 	// [M-136] Same cross-tenant control as /api/attack-results: the ledger is cluster-wide, so a
 	// tenant-limited grant monitors only its own namespaces.
 	p := principalOf(r)
-	attackMu.Lock()
-	recs := make([]*attackRecord, 0, len(attackList))
-	for i := len(attackList) - 1; i >= 0; i-- { // newest first
-		if rec := attackList[i]; p.TenantWildcard() || p.AllowsTenant(rec.Namespace) {
-			recs = append(recs, rec)
-		}
-	}
-	attackMu.Unlock()
+	recs := attackSnapshots(p)
 
 	samples := readUptimeSamples(uptimePath(s.cfg))
 	// index samples by (ns, workload) with parsed timestamps, sorted by time
