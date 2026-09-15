@@ -1,0 +1,293 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 17
+change_class: A
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 8d88029ce91df1bedce6e93e18bb3b9c5dde3ed8d022d16e9e7f1bc369d45b3a
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T06:24:45+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review-m086.md
+    sha256: 519ceaabd7579dacb6a4c2490f7f5493407645792e4e406ff0e00bec4b1fa2a8
+    source_sha: 2e45c9903262827253dff0c21a7b1fb94fe9b511
+    at: '2026-09-15T08:02:41+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  red:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/worker/red-original-main-final.log
+    sha256: 0daf99e6742c3405b4cf5de676ab347df547823a1795d6eb7f1e8db47367340f
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T08:37:55+00:00'
+  preflight:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/preflight/receipt.json
+    sha256: 06a533739370d2f08e549334a92ded2b62ca993fe9f3ab35c50e19f324d61851
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  implementation:
+    result: PASS
+    by: sol-t3-m148
+    artifact: 04-diff.patch
+    sha256: c0e150b62ee29a72fc12ed7ee4b6a967c7039661bbb5328a659096e016dda6e3
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  l0:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/preflight/receipt.json
+    sha256: 06a533739370d2f08e549334a92ded2b62ca993fe9f3ab35c50e19f324d61851
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  l1:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/preflight/run-1789461224020171744/go-phorvex.log
+    sha256: 89bed5a02f0a8d10dcb87281f70b474015915b705bafe3e6819510a1a8ed8912
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  l2:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/worker/head-focused-final.log
+    sha256: 808e66dd512c2c64c6225a521f0bb7ca0ef58e40e4f2708f1bbd817a87ed0776
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/worker/head-focused-final.log
+    sha256: 808e66dd512c2c64c6225a521f0bb7ca0ef58e40e4f2708f1bbd817a87ed0776
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 720f158edaf478b8a112242c7e0cde3f47b96c9dbd669162652b6fd577982490
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:40:44+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d25e92065df18f7706d0f3d297c4ab4848855aedef9378967f03d3ad60e46e24
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:40:44+00:00'
+    incident_sha256: 720f158edaf478b8a112242c7e0cde3f47b96c9dbd669162652b6fd577982490
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/tier3-composition.md
+    sha256: cec7763b82871decae5ee341d770e6b34b0806b8aae53ed1956faeccd75149f5
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T09:15:36+00:00'
+fix_id: T3-M148
+issues:
+- M-148
+title: Three compensation writes discard their error — a failed rollback is silent
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t3-m148
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  deployed_image: phorvex:0.4.116
+  deployed_git_sha: b1db5bdab328dc9c006e45c9171c3e7e35330285
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t3-m148
+  base_sha: 2e45c9903262827253dff0c21a7b1fb94fe9b511
+  head_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+  stacked_on:
+  - T3-M169
+  - T3-M026
+  - T3-M132
+  - T3-M086
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/210
+  reviewed_head: b9f0bba66f73e5c694979d74cfac40504eec33ce
+  merge_sha: null
+  checks: pending
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: human_owner
+  action: Review shared draft PR210; M92 remains incomplete, and the whole-tier deployment
+    barrier is not met.
+updated_at: '2026-09-15T09:19:23+00:00'
+configuration_history:
+- at: '2026-09-15T05:57:43+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T06:00:00+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T06:01:00+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T07:37:00+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T08:02:41+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T08:31:14+00:00'
+  by: sol-t3-m148
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T08:39:32+00:00'
+  by: sol-t3-m148
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T09:19:22+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-15T05:59:23+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T06:24:45+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T08:39:32+00:00'
+  by: sol-t3-m148
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T08:39:33+00:00'
+  by: sol-t3-m148
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T08:40:44+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T08:40:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-15T09:19:23+00:00'
+  by: codex-lead
+  artifact: https://github.com/PhorvexSecurity/operator/pull/210
+  note: One shared draft PR for nine independently reviewed fixes; no issue closure,
+    missing-evidence waiver, merge or deployment.
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: base_review
+  result: PASS
+  by: codex-lead
+  artifact: evidence/base-review.md
+  sha256: ec9e4987649510fe9960d7b15bd408fc7a6a368fd956228cdd230ecbeae0f26c
+  source_sha: 1c8bd4e75abf3d03c7ec28fc5ed64ad71192d5c2
+  at: '2026-09-15T07:37:00+00:00'
+  baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+handoff:
+  id: T3-M148:14:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 14

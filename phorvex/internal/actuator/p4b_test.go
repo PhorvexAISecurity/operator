@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +17,7 @@ func p4bScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = networkingv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	return s
 }
 
@@ -32,28 +34,20 @@ func readyLeader(ns, name, group string, flipping bool) *corev1.Pod {
 	return p
 }
 
-// TestResumeWarmSwapConvergesDoubleLeader — P4b FIX 4: a crash-induced double-leader (old
-// leader carries swap-phase=flipping; promoted shadow does not) converges to the SINGLE new
-// leader; the old leader is reaped.
+// Label-only double leaders have no operation authority and remain unchanged.
 func TestResumeWarmSwapConvergesDoubleLeader(t *testing.T) {
-	oldLeader := readyLeader("ns", "old", "g", true)   // the one that was flipping
-	newLeader := readyLeader("ns", "new", "g", false)  // the promoted shadow
+	oldLeader := readyLeader("ns", "old", "g", true)  // the one that was flipping
+	newLeader := readyLeader("ns", "new", "g", false) // the promoted shadow
 	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(oldLeader, newLeader).Build()
 
 	n, err := ResumeWarmSwaps(context.Background(), c, "ns")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n == 0 {
-		t.Fatal("reconciler reaped nothing on a double-leader")
+	if err == nil || n != 0 {
+		t.Fatalf("label-only resume must refuse, reaped=%d err=%v", n, err)
 	}
 	var leaders corev1.PodList
 	_ = c.List(context.Background(), &leaders, client.InNamespace("ns"), client.MatchingLabels{labelRole: roleLeader})
-	if len(leaders.Items) != 1 {
-		t.Fatalf("expected single leader after convergence, got %d", len(leaders.Items))
-	}
-	if leaders.Items[0].Name != "new" {
-		t.Errorf("survivor = %q, want the promoted shadow %q", leaders.Items[0].Name, "new")
+	if len(leaders.Items) != 2 {
+		t.Fatalf("refusal changed leader set: %d", len(leaders.Items))
 	}
 }
 
@@ -67,8 +61,8 @@ func TestResumeWarmSwapLeavesHealthySingleLeader(t *testing.T) {
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "lone"}, &got); err != nil {
 		t.Fatalf("healthy lone leader was reaped: %v", err)
 	}
-	if got.Annotations[annoSwapPhase] != "" {
-		t.Error("stale flipping annotation not cleared")
+	if got.Annotations[annoSwapPhase] != "flipping" {
+		t.Error("untrusted legacy annotation changed")
 	}
 }
 
@@ -84,15 +78,12 @@ func TestGCReapsOrphanNPOnly(t *testing.T) {
 		WithObjects(np("np-orphan", "gone"), np("np-live", "alive"), livePod).Build()
 
 	n, err := GCOrphanedQuarantineNPs(context.Background(), c, "ns")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("reaped %d, want exactly 1 (the orphan)", n)
+	if err == nil || n != 0 {
+		t.Fatalf("label-only GC must refuse, reaped=%d err=%v", n, err)
 	}
 	var nps networkingv1.NetworkPolicyList
 	_ = c.List(context.Background(), &nps, client.InNamespace("ns"))
-	if len(nps.Items) != 1 || nps.Items[0].Name != "np-live" {
-		t.Errorf("expected only np-live to remain, got %+v", nps.Items)
+	if len(nps.Items) != 2 {
+		t.Errorf("refusal changed NPs: %+v", nps.Items)
 	}
 }

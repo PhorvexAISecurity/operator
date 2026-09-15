@@ -87,8 +87,19 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 // rewarmShadow provisions a REPLACEMENT warm shadow by cloning the (old) leader's pod spec — the
 // REWARM-to-N step: the new shadow performs its cold model-load OFF the serving path (the whole point
 // of warm-swap). Real K8s create; the actual model-load timing is [PENDING-GPU-VALIDATION].
-func rewarmShadow(ctx context.Context, ec EnactCtx, oldLeader *corev1.Pod, groupKey, groupVal string) (string, error) {
+func rewarmShadow(ctx context.Context, ec EnactCtx, oldLeader *corev1.Pod, groupKey, groupVal string) (string, string, error) {
 	name := truncName(oldLeader.Name + "-rw-" + oldLeader.ResourceVersion)
+	uid, err := rewarmShadowNamed(ctx, ec, oldLeader, name, groupKey, groupVal)
+	return name, uid, err
+}
+
+func rewarmSpecDigest(source *corev1.Pod) string {
+	shadow := &corev1.Pod{Spec: *source.Spec.DeepCopy()}
+	shadow.Spec.NodeName = ""
+	return podSpecDigest(shadow)
+}
+
+func rewarmShadowNamed(ctx context.Context, ec EnactCtx, oldLeader *corev1.Pod, name, groupKey, groupVal string) (string, error) {
 	labels := copyLabels(oldLeader.Labels)
 	labels[groupKey] = groupVal
 	labels[labelRole] = roleShadow
@@ -98,10 +109,13 @@ func rewarmShadow(ctx context.Context, ec EnactCtx, oldLeader *corev1.Pod, group
 		Spec:       *oldLeader.Spec.DeepCopy(),
 	}
 	shadow.Spec.NodeName = "" // reschedule freely (and onto a fresh GPU/MIG slot)
-	if err := ec.Client.Create(ctx, shadow); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := ec.Client.Create(ctx, shadow); err != nil {
 		return "", err
 	}
-	return name, nil
+	if shadow.UID == "" || shadow.ResourceVersion == "" {
+		return "", fmt.Errorf("replacement shadow create unacknowledged")
+	}
+	return string(shadow.UID), nil
 }
 
 // warmCutover is the shared provision-before-retire leadership flip: find a Ready shadow, flip it to
@@ -129,22 +143,131 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if shadow == nil {
 		return HandlerResult{}, fmt.Errorf("%s blocked: no Ready model-loaded shadow in group %q; old leader keeps serving", kind, group)
 	}
-	// persist the phase for crash-resume (idempotent dedupe on the triggering decision).
+	// Administrative receipt is the only crash-resume authority. Validate the selecting
+	// policy and acknowledge persistence before either serving role changes.
+	receipt := operationReceipt{Version: 1, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group}
+	if !receipt.valid() {
+		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
+	}
+	pol, err := receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: policy authority: %w", kind, err)
+	}
+	if err := warmCurrentScope(pol, receipt, leader, shadow); err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: %w", kind, err)
+	}
+	if !podReady(shadow) || shadow.UID == "" || leader.ResourceVersion == "" || shadow.ResourceVersion == "" {
+		return HandlerResult{}, fmt.Errorf("%s: observed pod identity/readiness unavailable", kind)
+	}
+	journal, err := journalWrite(ctx, ec, receipt)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: persist operation before promotion: %w", kind, err)
+	}
+	// The old annotation is a diagnostic hint, never authorization.
 	leader.Annotations = ensureMap(leader.Annotations)
 	leader.Annotations[annoSwapPhase] = "flipping"
-	_ = ec.Client.Update(ctx, leader)
+	if err := ec.Client.Update(ctx, leader); err != nil {
+		if cleanErr := journalFinish(ctx, ec, journal); cleanErr != nil {
+			return HandlerResult{}, fmt.Errorf("%s: phase annotation and receipt cleanup failed: %w", kind, errors.Join(err, cleanErr))
+		}
+		return HandlerResult{}, fmt.Errorf("%s: phase annotation failed before serving flip: %w", kind, err)
+	}
+	pol, err = receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+	if err != nil {
+		if cleanErr := journalFinish(ctx, ec, journal); cleanErr != nil {
+			return HandlerResult{}, errors.Join(err, cleanErr)
+		}
+		return HandlerResult{}, fmt.Errorf("%s: current authority before promotion: %w", kind, err)
+	}
+	if err := warmCurrentScope(pol, receipt, leader, shadow); err != nil {
+		if cleanErr := journalFinish(ctx, ec, journal); cleanErr != nil {
+			return HandlerResult{}, errors.Join(err, cleanErr)
+		}
+		return HandlerResult{}, err
+	}
 
 	// (1) FLIP up: shadow -> leader (provision-before-retire: new leader Ready BEFORE old touched).
 	shadow.Labels[labelRole] = roleLeader
 	if err := ec.Client.Update(ctx, shadow); err != nil {
-		return HandlerResult{}, fmt.Errorf("%s flip-up %s: %w", kind, shadow.Name, err)
+		return HandlerResult{MutationKind: "swap", Note: "promotion response unresolved; receipt retained for checked recovery"}, fmt.Errorf("%s flip-up %s: %w", kind, shadow.Name, err)
+	}
+	promotedPartial := HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + shadow.Name, ObjectsTouched: []string{objRef("Pod", req.Namespace, shadow.Name)}, Note: "partial cutover: promoted leader retained; completion unresolved"}
+	receipt.Phase = "promoted"
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		return promotedPartial, fmt.Errorf("%s: promoted but journal phase update failed: %w", kind, err)
+	}
+	pol, err = receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+	if err != nil {
+		return promotedPartial, fmt.Errorf("%s: authority changed before old route removal: %w", kind, err)
+	}
+	if err := warmCurrentScope(pol, receipt, leader, shadow); err != nil {
+		return promotedPartial, err
 	}
 	// (2) FLIP down: old leader -> retiring. On failure, ROLL BACK (re-flip shadow; old leader serves).
-	if err := relabelRole(ctx, ec.Client, req.Namespace, req.Pod, roleRetiring); err != nil {
-		shadow.Labels[labelRole] = roleShadow
-		_ = ec.Client.Update(ctx, shadow)
-		return HandlerResult{}, fmt.Errorf("%s flip-down %s/%s (rolled back): %w", kind, req.Namespace, req.Pod, err)
+	freshOld, freshNew := &corev1.Pod{}, &corev1.Pod{}
+	flipErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld)
+	if flipErr == nil {
+		flipErr = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, freshNew)
 	}
+	if flipErr == nil {
+		flipErr = warmCurrentScope(pol, receipt, freshOld, freshNew)
+	}
+	if flipErr == nil && (freshOld.Labels[labelRole] != roleLeader || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.DeletionTimestamp != nil || freshNew.DeletionTimestamp != nil) {
+		flipErr = fmt.Errorf("recorded pair changed before old route removal")
+	}
+	if flipErr == nil {
+		before := freshOld.DeepCopy()
+		freshOld.Labels[labelRole] = roleRetiring
+		flipErr = ec.Client.Patch(ctx, freshOld, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{}))
+	}
+	if flipErr != nil {
+		// A failed response does not prove that the old-role Patch had no effect.
+		// Preserve the promoted leader unless the exact old incarnation is still
+		// a healthy serving leader under current policy authority.
+		currentPol, authErr := receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+		oldAfter, rollback := &corev1.Pod{}, &corev1.Pod{}
+		checkErr := authErr
+		if checkErr == nil {
+			checkErr = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, oldAfter)
+		}
+		if checkErr == nil {
+			checkErr = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, rollback)
+		}
+		if checkErr == nil {
+			checkErr = warmCurrentScope(currentPol, receipt, oldAfter, rollback)
+		}
+		if checkErr == nil && (oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) || rollback.Labels[labelRole] != roleLeader || !podReady(rollback)) {
+			checkErr = fmt.Errorf("exact old/new serving roles or readiness changed")
+		}
+		if checkErr != nil {
+			if oldAfter.UID == leader.UID && oldAfter.Labels[labelRole] == roleRetiring {
+				promotedPartial.ObjectsTouched = append(promotedPartial.ObjectsTouched, objRef("Pod", req.Namespace, leader.Name))
+			}
+			return promotedPartial, fmt.Errorf("%s flip-down %s/%s unresolved; promoted leader and receipt retained: %w", kind, req.Namespace, req.Pod, errors.Join(flipErr, checkErr))
+		}
+		before := rollback.DeepCopy()
+		rollback.Labels[labelRole] = roleShadow
+		rbErr := ec.Client.Patch(ctx, rollback, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{}))
+		if rbErr != nil {
+			return promotedPartial, fmt.Errorf("%s flip-down %s/%s failed, rollback failed; receipt retained: %w", kind, req.Namespace, req.Pod, errors.Join(flipErr, rbErr))
+		}
+		oldAfter = &corev1.Pod{}
+		if checkErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, oldAfter); checkErr != nil || oldAfter.UID != leader.UID || oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) {
+			return promotedPartial, fmt.Errorf("%s rollback could not confirm old leader; receipt retained: %w", kind, errors.Join(flipErr, checkErr))
+		}
+		if finishErr := journalFinish(ctx, ec, journal); finishErr != nil {
+			promotedPartial.Note = "cutover role changes compensated; receipt cleanup unresolved"
+			return promotedPartial, fmt.Errorf("%s flip-down %s/%s rolled back but receipt cleanup failed: %w", kind, req.Namespace, req.Pod, errors.Join(flipErr, finishErr))
+		}
+		return HandlerResult{}, fmt.Errorf("%s flip-down %s/%s (rolled back): %w", kind, req.Namespace, req.Pod, flipErr)
+	}
+	receipt.Phase = "retiring"
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		promotedPartial.ObjectsTouched = append(promotedPartial.ObjectsTouched, objRef("Pod", req.Namespace, leader.Name))
+		promotedPartial.Note = "partial cutover: promoted leader and old retiring route retained; journal phase unresolved"
+		return promotedPartial, fmt.Errorf("%s: old leader retiring but journal phase update failed: %w", kind, err)
+	}
+	partial := HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + shadow.Name, ObjectsTouched: []string{objRef("Pod", req.Namespace, shadow.Name), objRef("Pod", req.Namespace, leader.Name)}, Note: "partial cutover: earlier Pod mutations accepted; completion unresolved"}
 	// (3) DRAIN then RETIRE the old leader. [P-ACTUATOR-SET-COMPLETE] The old leader is already
 	// relabeled `retiring` (admits routed away by step 2); now actually DRAIN its in-flight requests
 	// via the serving stack BEFORE deleting it, so in-flight requests are not dropped ungracefully
@@ -152,21 +275,60 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	// applies; the in-flight abort is [PENDING-GPU-VALIDATION] (recorded in the note).
 	_, drainPending, drainErr := drainInflight(ctx, ec, leader)
 	if drainErr != nil {
-		return HandlerResult{}, fmt.Errorf("%s drain old leader %s/%s: %w", kind, req.Namespace, req.Pod, drainErr)
+		return partial, fmt.Errorf("%s drain old leader %s/%s: %w", kind, req.Namespace, req.Pod, drainErr)
 	}
+	pol, err = receiptAuthority(ctx, ec.Reader, receipt, req.Action)
+	if err != nil {
+		return partial, fmt.Errorf("%s: authority changed before retirement: %w", kind, err)
+	}
+	freshOld, freshNew = &corev1.Pod{}, &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld); err != nil {
+		return partial, err
+	}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, freshNew); err != nil {
+		return partial, err
+	}
+	if err := warmCurrentScope(pol, receipt, freshOld, freshNew); err != nil {
+		return partial, err
+	}
+	if freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.Labels[labelRole] != roleRetiring {
+		return partial, fmt.Errorf("%s: recorded pair not ready for retirement", kind)
+	}
+	leader = freshOld
 	// [M-69] The Delete is bound to the UID of the leader object observed above (API-enforced
 	// precondition): a same-name replacement created meanwhile is never the object deleted.
 	// A rejected Delete is reported as a non-success carrying the partial state honestly —
 	// the shadow IS promoted and the old-leader name IS relabeled retiring; nothing is rolled
 	// back and no rewarm is provisioned.
 	touched := []string{objRef("Pod", req.Namespace, shadow.Name), objRef("Pod", req.Namespace, req.Pod)}
-	alreadyGone, delErr := deleteObservedPod(ctx, ec.Client, leader)
+	delErr := ec.Client.Delete(ctx, leader, uidPrecondition(leader))
+	alreadyGone := apierrors.IsNotFound(delErr)
+	if alreadyGone {
+		delErr = nil
+	}
+	if apierrors.IsConflict(delErr) {
+		delErr = fmt.Errorf("%w: %s/%s observed uid %s: %v", errPodReplaced, req.Namespace, req.Pod, leader.UID, delErr)
+	}
 	if delErr != nil {
-		return HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + shadow.Name, ObjectsTouched: touched},
+		partial.Note = "partial cutover: old retirement response unresolved; promoted leader and receipt retained"
+		return partial,
 			fmt.Errorf("%s retire %s/%s (partial: shadow %s promoted to leader, old leader name relabeled %s, observed pod uid %s NOT deleted, no rewarm): %w", kind, req.Namespace, req.Pod, shadow.Name, roleRetiring, leader.UID, delErr)
 	}
+	receipt.Phase = "retired"
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		partial.Note = "partial cutover: old leader retired; journal phase unresolved"
+		return partial, fmt.Errorf("%s: old leader retired but journal phase update failed: %w", kind, err)
+	}
 	// (4) REWARM-to-N: provision a replacement shadow (cold-load OFF the serving path).
-	rewarm, rwErr := rewarmShadow(ctx, ec, leader, groupKey, group)
+	receipt.RewarmName = truncName(leader.Name + "-rw-" + leader.ResourceVersion)
+	receipt.RewarmSpecHash = rewarmSpecDigest(leader)
+	receipt.Phase = "rewarm-intent"
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		partial.Note = "partial cutover: old leader retired; rewarm intent not persisted"
+		return partial, fmt.Errorf("%s: rewarm intent not persisted; replacement not created: %w", kind, err)
+	}
+	rewarm := receipt.RewarmName
+	rewarmUID, rwErr := rewarmShadowNamed(ctx, ec, leader, rewarm, groupKey, group)
 	drainNote := "in-flight drained"
 	if drainPending {
 		drainNote = "in-flight abort [PENDING-GPU-VALIDATION] (stack unreachable; K8s route-drained)"
@@ -177,10 +339,33 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	note := fmt.Sprintf("%s: shadow %s promoted, old leader %s + %s (no cold-load on serving path)", kind, shadow.Name, drainNote, retireNote)
 	if rwErr == nil {
+		partial.ObjectsTouched = append(partial.ObjectsTouched, objRef("Pod", req.Namespace, rewarm))
+		partial.Note = "partial cutover: replacement Create acknowledged; UID binding or cleanup unresolved"
+		observed := &corev1.Pod{}
+		if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: rewarm}, observed); err != nil {
+			return partial, fmt.Errorf("%s: replacement created but readback unavailable: %w", kind, err)
+		}
+		if string(observed.UID) != rewarmUID || observed.Labels[groupKey] != group || observed.Labels[labelRole] != roleShadow || observed.Labels[labelModelLoaded] != "false" {
+			return partial, fmt.Errorf("%s: replacement created but readback identity/scope mismatch", kind)
+		}
+		if rewarmSpecDigest(observed) != receipt.RewarmSpecHash {
+			return partial, fmt.Errorf("%s: replacement spec differs from persisted intent", kind)
+		}
+		receipt.RewarmUID, receipt.Phase = rewarmUID, "rewarmed"
+		if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+			return partial, fmt.Errorf("%s: replacement created but journal UID binding failed: %w", kind, err)
+		}
 		touched = append(touched, objRef("Pod", req.Namespace, rewarm))
 		note += "; rewarmed " + rewarm
 	} else {
-		note += "; REWARM deferred: " + rwErr.Error()
+		partial.Note = "partial cutover: old leader retired; replacement Create unresolved"
+		return partial, fmt.Errorf("%s: rewarm unresolved after retirement: %w", kind, rwErr)
+	}
+	if rwErr == nil {
+		if err := journalFinish(ctx, ec, journal); err != nil {
+			partial.Note = "cutover replacement acknowledged; receipt cleanup unresolved"
+			return partial, fmt.Errorf("%s: cutover completed but receipt cleanup failed: %w", kind, err)
+		}
 	}
 	if pending {
 		note += " [PENDING-GPU-VALIDATION]: shadow readiness used the K8s gate (no vLLM stack reachable); model-load/ColdLoadSec magnitudes unvalidated"

@@ -22,6 +22,7 @@ package actuator
 
 import (
 	"context"
+	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -45,6 +46,16 @@ func NewHybridActuator(c client.Client) *HybridActuator {
 
 func (h *HybridActuator) Name() string { return "hybrid" }
 
+// ConfigureNativeJournal wires only the native leg. Phoenix actions never enter it.
+func (h *HybridActuator) ConfigureNativeJournal(reader client.Reader, namespace string) {
+	h.native.Reader = reader
+	h.native.JournalNamespace = namespace
+}
+
+func (h *HybridActuator) RecoverOperations(ctx context.Context, globalKill bool) ([]RecoveryEvent, error) {
+	return h.native.recoverOperations(ctx, globalKill, func(a model.Action) bool { return RuleTypeFor(a) == "" })
+}
+
 // SupportsAction delegates exactly as Actuate does: Phoenix-mapped actions (rotate,
 // quarantine) to the Phoenix stub; every native action (incl. guardrail-rotate and
 // mig-rebind) to the native actuator's real target-local checks — so M-19 and M-79 are
@@ -64,6 +75,54 @@ func (h *HybridActuator) EnsurePolicy(ctx context.Context, target TenantTarget) 
 		return err
 	}
 	return h.native.EnsurePolicy(ctx, target)
+}
+
+// RoutePreparation is local to one runner preparation call. It cannot retain a
+// refusal from another policy, namespace, generation, or tick.
+type RoutePreparation struct {
+	PhoenixErr     error
+	NativeErr      error
+	PhoenixSkipped bool
+	NativeSkipped  bool
+}
+
+// ForAction reports the preparation result for the backend that will dispatch
+// this action. The caller must check it before attempting Actuate.
+func (p RoutePreparation) ForAction(a model.Action) error {
+	if RuleTypeFor(a) != "" {
+		if p.PhoenixSkipped {
+			return fmt.Errorf("Phoenix route was not prepared for action %q", a)
+		}
+		return p.PhoenixErr
+	}
+	if p.NativeSkipped {
+		return fmt.Errorf("native route was not prepared for action %q", a)
+	}
+	return p.NativeErr
+}
+
+// PrepareRoutes prepares both backends independently. An unsupported Phoenix
+// selector leaves native actions available, while a Phoenix-routed action sees
+// the refusal through the preparation result.
+func (h *HybridActuator) PrepareRoutes(ctx context.Context, target TenantTarget) RoutePreparation {
+	prep := RoutePreparation{PhoenixSkipped: true, NativeSkipped: true}
+	for a, enabled := range target.EnabledActions {
+		if !enabled {
+			continue
+		}
+		if RuleTypeFor(a) != "" {
+			prep.PhoenixSkipped = false
+		} else {
+			prep.NativeSkipped = false
+		}
+	}
+	if !prep.PhoenixSkipped {
+		prep.PhoenixErr = h.phoenix.EnsurePolicy(ctx, target)
+	}
+	if !prep.NativeSkipped {
+		prep.NativeErr = h.native.EnsurePolicy(ctx, target)
+	}
+	return prep
 }
 
 // Actuate routes by capability: an action Phoenix can enact (rotate/quarantine) goes to

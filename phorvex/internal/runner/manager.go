@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -171,7 +172,11 @@ func eligibilityFrom(
 }
 
 type Manager struct {
-	OwnershipReader client.Reader // uncached, read-only owner evidence
+	// VocabularyReader reads only the named PhorvexPolicy CRD, bypassing the
+	// informer cache so schema upgrades are observable without a restart.
+	VocabularyReader client.Reader
+	vocabulary       atomic.Pointer[ActionVocabulary]
+	OwnershipReader  client.Reader // uncached, read-only owner evidence
 	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
 	BoundaryReader client.Reader
 	Client         client.Client
@@ -861,19 +866,38 @@ func (m *Manager) nextWakeDeadline(now, baseDeadline time.Time, includePolicies 
 // orphaned quarantine NetworkPolicy) for each managed namespace, idempotently. Runs every
 // tick INDEPENDENT of tenant cadence (a wedged double-leader must converge even if no policy
 // is "due" this tick).
-func (m *Manager) reconcileWedged(ctx context.Context, namespaces []string) {
-	for _, ns := range namespaces {
-		if n, err := actuator.ResumeWarmSwaps(ctx, m.Client, ns); err == nil && n > 0 {
-			m.Log.Info("warm-swap resume: converged wedged swap", "namespace", ns, "reaped", n)
+func (m *Manager) reconcileWedged(ctx context.Context, killEngaged bool) {
+	recoverer, ok := m.Actuator.(interface {
+		RecoverOperations(context.Context, bool) ([]actuator.RecoveryEvent, error)
+	})
+	if !ok {
+		return
+	}
+	events, err := recoverer.RecoverOperations(ctx, killEngaged)
+	if err != nil {
+		m.Log.Error(err, "operation journal maintenance failed")
+		metrics.RecordMaintenanceAttempt("journal", "refused")
+		if m.Audit != nil {
+			m.Audit.Maintenance("", "", "", "", "", "", "", "", "journal-read-failed", "", err)
 		}
-		if n, err := actuator.GCOrphanedQuarantineNPs(ctx, m.Client, ns); err == nil && n > 0 {
-			m.Log.Info("orphan-GC: reaped quarantine NetworkPolicy", "namespace", ns, "reaped", n)
+		return
+	}
+	for _, ev := range events {
+		metrics.RecordMaintenanceAttempt(ev.Kind, ev.Outcome)
+		if ev.Err != nil {
+			m.Log.Error(ev.Err, "operation maintenance incomplete", "receipt", ev.Receipt, "policyUID", ev.PolicyUID, "targetUID", ev.TargetUID, "outcome", ev.Outcome, "effect", ev.Effect)
+		}
+		if m.Audit != nil {
+			m.Audit.Maintenance(ev.Receipt, ev.Kind, ev.Tenant, ev.PolicyNamespace, ev.PolicyName, ev.PolicyUID, ev.TargetName, ev.TargetUID, ev.Outcome, ev.Effect, ev.Err)
 		}
 	}
 }
 
 // tick builds one cluster snapshot and processes all due tenants.
 func (m *Manager) tick(ctx context.Context) tickResult {
+	// One bounded CRD read at most per refresh period, before any tenant witness.
+	// The published observation remains fixed for this serialized tick.
+	m.refreshVocabulary(ctx, m.managerClock().Now())
 	// [M-140] Complete pending ownership transitions BEFORE any snapshot or decision work,
 	// on every tick including ones with no due policy, so a removal is never stranded behind
 	// an idle tenant and no decision is priced from a departed owner's state.
@@ -885,14 +909,10 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	// then be rejected as retired. They must describe the same instant.
 	m.mu.Lock()
 	due := make([]*policyEntry, 0, len(m.policies))
-	nsSet := map[string]bool{}
 	liveOwners := make([]string, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := m.managerClock().Now()
 	for _, e := range m.policies {
-		if e.namespace != "" {
-			nsSet[e.namespace] = true
-		}
 		liveOwners = append(liveOwners, e.ownerKey())
 		if now.Sub(e.lastTick) >= e.spec.EffectiveTickInterval() {
 			due = append(due, e)
@@ -933,12 +953,8 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
 	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
 	// engaged (a deliberate global freeze) or actuation is unavailable.
-	if !killEngaged && m.Actuator != nil && len(nsSet) > 0 {
-		nss := make([]string, 0, len(nsSet))
-		for ns := range nsSet {
-			nss = append(nss, ns)
-		}
-		m.reconcileWedged(ctx, nss)
+	if !killEngaged && m.Actuator != nil {
+		m.reconcileWedged(ctx, killEngaged)
 	}
 
 	calibrationDue := m.Calibration != nil && m.Calibration.Due(now)
@@ -1555,9 +1571,14 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	// for BOTH the ActionsSupported status (capability leg only, via Capable) AND the
 	// generator's pre-scoring gate (full Eligible incl. installability + RBAC) — so the
 	// two can never drift into the M-20 mirror. m.Authz is nil until the boot layer wires
-	// the SSAR checker (then no-rbac becomes live); NotInstallable is empty on a current
-	// CRD (17/17).
-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), model.NotInstallable, m.Authz, m.Actuator).
+	// the SSAR checker (then no-rbac becomes live). Unknown discovery supplies no
+	// invented absent actions and is published separately as unverified evidence.
+	vocabulary := m.VocabularySnapshot()
+	var absent model.InstallSet
+	if vocabulary.Known {
+		absent = vocabulary.NotInstallable
+	}
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), absent, m.Authz, m.Actuator).
 		WithCodeExec(m.CodeExec, snap.NamespaceLabels)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
@@ -1666,12 +1687,13 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
+	var currentPreparation *actuator.RoutePreparation
 	if !effectiveDryRun && !killEngaged && m.Actuator != nil {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
 		}
-		m.actuate(ctx, e, pol, decisions, viewByKey)
+		_, currentPreparation = m.actuatePrepared(ctx, e, pol, decisions, viewByKey)
 	}
 
 	assessmentInput := colocationInput(snap, e)
@@ -1679,6 +1701,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
+		if decisions[i].Trace != nil {
+			decisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
+		}
 		appendRepresentation(&decisions[i], representationInputs[i])
 		m.Audit.Record(decisions[i])
 		m.recordColocation(assessmentInput, decisions[i], pol)
@@ -1713,6 +1738,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
 	}
 	m.updateExistentialStatus(ctx, e, decisions, inventory)
+	actionsSupport.preparation = currentPreparation
 	m.updateStatus(ctx, e, len(views), selected, 0, killEngaged, time.Now(), actionsSupport)
 
 	m.creditCadence(e, snap.Now)
@@ -1791,6 +1817,11 @@ func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadV
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) int {
+	count, _ := m.actuatePrepared(ctx, e, pol, decisions, tickViewByKey)
+	return count
+}
+
+func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) (int, *actuator.RoutePreparation) {
 	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -1807,10 +1838,33 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
-		MatchLabels:    e.spec.Selector.MatchLabels,
+		PolicyName:     e.key.Name,
+		PolicyUID:      e.uid,
+		Generation:     e.generation,
+		Selector:       e.spec.Selector.DeepCopy(),
 		EnabledActions: pol.EnabledActions,
 	}
-	if err := m.Actuator.EnsurePolicy(ctx, target); err != nil {
+	var preparation actuator.RoutePreparation
+	var err error
+	if routed, ok := m.Actuator.(interface {
+		PrepareRoutes(context.Context, actuator.TenantTarget) actuator.RoutePreparation
+	}); ok {
+		preparation = routed.PrepareRoutes(ctx, target)
+		if preparation.PhoenixErr != nil {
+			m.Log.Error(preparation.PhoenixErr, "Phoenix route preparation refused", "tenant", pol.Tenant, "namespace", e.namespace)
+		}
+		if preparation.NativeErr != nil {
+			m.Log.Error(preparation.NativeErr, "native route preparation refused", "tenant", pol.Tenant, "namespace", e.namespace)
+		}
+	} else {
+		err = m.Actuator.EnsurePolicy(ctx, target)
+		if m.Actuator.Name() == "native" {
+			preparation.NativeErr = err
+		} else {
+			preparation.PhoenixErr = err
+		}
+	}
+	if err != nil {
 		m.Log.Error(err, "actuator EnsurePolicy failed; suppressing actuation this tick", "tenant", pol.Tenant)
 		// T0-C: a tick-level pre-dispatch guard — every selected move is refused here.
 		for i := range decisions {
@@ -1819,7 +1873,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				decisions[i].Trace.DispatchReason = "ensure-policy-failed"
 			}
 		}
-		return 0
+		return 0, &preparation
 	}
 	actuated := 0
 	for i := range decisions {
@@ -1841,6 +1895,11 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			m.Log.Error(nil, "INVARIANT VIOLATION: a selected move was infeasible/noop; refusing to emit",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			stampDispatch(model.DispatchNotAttempted, "inviolability-guard")
+			continue
+		}
+		if prepErr := preparation.ForAction(decisions[i].Action); prepErr != nil {
+			m.Log.Error(prepErr, "action route preparation refused; suppressing dispatch", "tenant", pol.Tenant, "namespace", decisions[i].Namespace, "pod", decisions[i].Pod, "action", decisions[i].Action)
+			stampDispatch(model.DispatchNotAttempted, "route-preparation-failed: "+prepErr.Error())
 			continue
 		}
 		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
@@ -1902,6 +1961,8 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
+			PolicyName:    pol.PolicyName,
+			PolicyUID:     pol.PolicyUID,
 			Tenant:        pol.Tenant,
 			Namespace:     decisions[i].Namespace,
 			Pod:           decisions[i].Pod,
@@ -1988,7 +2049,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}
-	return actuated
+	return actuated, &preparation
 }
 
 // phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision

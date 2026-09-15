@@ -82,8 +82,9 @@ func amtdName(namespace, tenant string) string {
 
 // EnsurePolicy idempotently maintains the tenant's AMTD strategy. Implements Actuator.
 func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget) error {
-	if len(target.MatchLabels) == 0 {
-		return fmt.Errorf("phoenix actuator: tenant %q has no matchLabels selector; P0 active-mode requires a matchLabels-expressible selector for the AMTD guest list", target.Tenant)
+	selector, err := phoenixEqualities(targetSelector(target))
+	if err != nil {
+		return fmt.Errorf("phoenix actuator: tenant %q selector preparation refused: %w", target.Tenant, err)
 	}
 	name := amtdName(target.Namespace, target.Tenant)
 	identity := identityAnnotations(target.Namespace, target.Tenant)
@@ -93,7 +94,7 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 	desired := buildStrategies(target.EnabledActions)
 
 	var amtd amtdv1beta1.AdaptiveMovingTargetDefense
-	err := p.Client.Get(ctx, client.ObjectKey{Namespace: target.Namespace, Name: name}, &amtd)
+	err = p.Client.Get(ctx, client.ObjectKey{Namespace: target.Namespace, Name: name}, &amtd)
 	if err != nil {
 		if !apiNotFound(err) {
 			return fmt.Errorf("get AMTD %s/%s: %w", target.Namespace, name, err)
@@ -106,7 +107,7 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 				Annotations: identity,
 			},
 			Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
-				PodSelector: target.MatchLabels,
+				PodSelector: selector,
 				Strategy:    desired,
 				MatcherMode: amtdv1beta1.MatcherModeExact,
 			},
@@ -130,7 +131,7 @@ func (p *PhoenixActuator) EnsurePolicy(ctx context.Context, target TenantTarget)
 	amtd.Labels["app.kubernetes.io/managed-by"] = "phorvex"
 	amtd.Labels["phorvex.ai/tenant"] = tenantLabel(target.Tenant)
 	// Update in place if the selector or strategy drifted.
-	amtd.Spec.PodSelector = target.MatchLabels
+	amtd.Spec.PodSelector = selector
 	amtd.Spec.Strategy = desired
 	if amtd.Spec.MatcherMode == "" {
 		amtd.Spec.MatcherMode = amtdv1beta1.MatcherModeExact

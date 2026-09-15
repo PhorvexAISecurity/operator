@@ -457,6 +457,7 @@ type trialRun struct {
 	actCount    int
 	actTimes    []float64
 	attackStart time.Time
+	oracleEnd   time.Time
 	dwell       float64
 }
 
@@ -608,6 +609,7 @@ func (t *trialRun) execute(ctx context.Context) {
 			v.OracleObserved = true
 		} else {
 			or, err := sc.SuccessOracle(ctx, env)
+			t.oracleEnd = time.Now()
 			t.or = or
 			switch {
 			case err != nil:
@@ -974,6 +976,13 @@ func (t *trialRun) finalize() Metric {
 		}
 	default:
 		v.Phase = PhaseComplete
+		if requiresAttributedNegativeObservation(t.spec.scenario.Metadata().Name) && !m.OracleAchieved && !t.attributedNegativeObservation() {
+			v.Scored = false
+			v.UnscoredReason = "negative objective observation lacks target-matched defender action/effect provenance"
+			m.Skipped = true
+			m.SkipReason = "UNSCORED(unattributed-negative): " + v.UnscoredReason
+			break
+		}
 		if !usable {
 			// A VALID observation with no usable positive control. The raw result
 			// is preserved, but nothing is scored — and the compatibility flag is
@@ -1003,6 +1012,32 @@ func (t *trialRun) finalize() Metric {
 		m.Commands = mergeCommands(m.Commands, t.env.Log.Commands())
 	}
 	return t.m
+}
+
+func requiresAttributedNegativeObservation(name string) bool {
+	switch name {
+	case "c1-lateral", "c2-lateral-disrupt", "c2-supplychain-foothold", "c2-stealth-foothold", "c3-admission-bypass", "c3-cicd", "c3-cryptomining", "c3-imds-theft", "c3-secrets-sprawl", "c3-sidecar-inject", "c3-supplychain":
+		return true
+	}
+	return false
+}
+
+// A false post-state is a measured objective failure, but disruption credit also
+// needs a defender action tied to that objective and the original observed Pod.
+// The current eleven producers do not expose such an effect source, so their
+// measured negatives remain usable raw facts and unscored comparisons.
+func (t *trialRun) attributedNegativeObservation() bool {
+	ev := t.or.Evidence
+	if !t.v.CostObserved || t.actCount <= 0 || ev["defensiveEffectAttributed"] != "true" || ev["originalPodUID"] == "" || ev["defensiveActionTargetUID"] != ev["originalPodUID"] || ev["defensiveEffectObjective"] != t.spec.scenario.Metadata().Name {
+		return false
+	}
+	for _, at := range t.actTimes {
+		when := time.Unix(0, int64(at*float64(time.Second)))
+		if !when.Before(t.attackStart) && !when.After(t.oracleEnd) {
+			return true
+		}
+	}
+	return false
 }
 
 // timeToAction is the first observed defensive action after attack start.

@@ -140,7 +140,60 @@ var (
 	attackMu     sync.Mutex
 	attackList   []*attackRecord
 	attackLoaded bool
+	attackFileMu sync.Mutex
+	attackLoadMu sync.Mutex
 )
+
+// cloneAttackRecord copies every mutable member before a record crosses the watcher/ledger
+// boundary. Add copies here if attackRecord gains another map, slice or pointer field.
+func cloneAttackRecord(r *attackRecord) *attackRecord {
+	c := *r
+	if r.Claim != nil {
+		claim := *r.Claim
+		claim.DetectorSet = append([]string(nil), r.Claim.DetectorSet...)
+		c.Claim = &claim
+	}
+	if r.baseQuar != nil {
+		c.baseQuar = make(map[string]bool, len(r.baseQuar))
+		for k, v := range r.baseQuar {
+			c.baseQuar[k] = v
+		}
+	}
+	if r.baseNP != nil {
+		c.baseNP = make(map[string]bool, len(r.baseNP))
+		for k, v := range r.baseNP {
+			c.baseNP[k] = v
+		}
+	}
+	return &c
+}
+
+// publishAttack replaces only this attack's ledger entry. The watcher retains its private
+// working record; neither it nor its mutable nested fields are shared with readers.
+func publishAttack(r *attackRecord) {
+	snapshot := cloneAttackRecord(r)
+	attackMu.Lock()
+	defer attackMu.Unlock()
+	for i, old := range attackList {
+		if old.ID == r.ID {
+			attackList[i] = snapshot
+			return
+		}
+	}
+	attackList = append(attackList, snapshot)
+}
+
+func attackSnapshots(p *Principal) []*attackRecord {
+	attackMu.Lock()
+	defer attackMu.Unlock()
+	out := make([]*attackRecord, 0, len(attackList))
+	for i := len(attackList) - 1; i >= 0; i-- {
+		if rec := attackList[i]; p.TenantWildcard() || p.AllowsTenant(rec.Namespace) {
+			out = append(out, cloneAttackRecord(rec))
+		}
+	}
+	return out
+}
 
 func (s *Server) attacksPath() string {
 	base := s.cfg.AuditPath
@@ -151,29 +204,37 @@ func (s *Server) attacksPath() string {
 }
 
 func (s *Server) loadAttacks() {
+	attackLoadMu.Lock()
+	defer attackLoadMu.Unlock()
 	attackMu.Lock()
-	defer attackMu.Unlock()
 	if attackLoaded {
+		attackMu.Unlock()
 		return
 	}
-	attackLoaded = true
+	attackMu.Unlock()
+	attackFileMu.Lock()
 	b, err := os.ReadFile(s.attacksPath())
-	if err != nil {
-		return
-	}
-	for _, ln := range strings.Split(string(b), "\n") {
-		if ln = strings.TrimSpace(ln); ln == "" {
-			continue
-		}
-		var r attackRecord
-		if json.Unmarshal([]byte(ln), &r) == nil {
-			r.Status = "done"
-			if r.Containment == "" { // (re)classify records persisted before the field existed
-				classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
+	attackFileMu.Unlock()
+	loaded := []*attackRecord{}
+	if err == nil {
+		for _, ln := range strings.Split(string(b), "\n") {
+			if ln = strings.TrimSpace(ln); ln == "" {
+				continue
 			}
-			attackList = append(attackList, &r)
+			var r attackRecord
+			if json.Unmarshal([]byte(ln), &r) == nil {
+				r.Status = "done"
+				if r.Containment == "" { // (re)classify records persisted before the field existed
+					classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
+				}
+				loaded = append(loaded, cloneAttackRecord(&r))
+			}
 		}
 	}
+	attackMu.Lock()
+	attackList = append(loaded, attackList...)
+	attackLoaded = true
+	attackMu.Unlock()
 }
 
 // classifyContainment sets Containment + the honest dwell. `elapsed` is the observation window used as
@@ -198,14 +259,18 @@ func classifyContainment(r *attackRecord, elapsed float64) {
 }
 
 func (s *Server) persistAttack(r *attackRecord) {
+	b, err := json.Marshal(cloneAttackRecord(r))
+	if err != nil {
+		return
+	}
+	attackFileMu.Lock()
+	defer attackFileMu.Unlock()
 	f, err := os.OpenFile(s.attacksPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-	if b, err := json.Marshal(r); err == nil {
-		_, _ = f.Write(append(b, '\n'))
-	}
+	_, _ = f.Write(append(b, '\n'))
 }
 
 // startAttackRecord registers a running attack and launches the ground-truth watcher. Called by the
@@ -237,14 +302,18 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 	// capture value-at-risk NOW (the attacked pod's node still exists; it may be rotated away before
 	// the watcher finishes) so the cost is grounded in the real node price, not the cluster fallback.
 	r.Cost.ValueAtRisk = s.nodeAnnualCost("", ns, pod)
-	attackMu.Lock()
-	attackList = append(attackList, r)
-	attackMu.Unlock()
+	r = cloneAttackRecord(r) // detach the handler's baseline maps before the watcher owns them
+	publishAttack(r)
 	go s.watchAttack(ctxName, r)
 }
 
 func (s *Server) watchAttack(ctxName string, r *attackRecord) {
-	deadline := time.Now().Add(95 * time.Second)
+	s.watchAttackUntil(ctxName, r, time.Now().Add(95*time.Second), 3*time.Second)
+}
+
+// watchAttackUntil keeps the production window unchanged and gives local producer fixtures
+// a bounded clock. A caller must give this watcher exclusive ownership of r.
+func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time.Time, interval time.Duration) {
 	minUp := r.UptimeBefore
 	// baselines were captured PRE-FIRE by the handler (see defenseBaseline) — using a watcher-side
 	// snapshot here would race a fast operator and misreport a real quarantine as LANDED.
@@ -253,7 +322,7 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 	quar0 := r.baseQuar
 	np0 := r.baseNP
 	for time.Now().Before(deadline) {
-		time.Sleep(3 * time.Second)
+		time.Sleep(interval)
 		if up := s.workloadUptime(r.Namespace, r.Deploy); up >= 0 && up < minUp {
 			minUp = up
 		}
@@ -298,6 +367,9 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
 			}
 		}
+		if r.Outcome != "" {
+			publishAttack(r)
+		}
 	}
 	if r.Outcome == "" {
 		r.Outcome = "LANDED"
@@ -312,6 +384,7 @@ func (s *Server) watchAttack(ctxName string, r *attackRecord) {
 	s.fillReasoning(ctxName, r)
 	s.fillCost(ctxName, r)
 	r.Status = "done"
+	publishAttack(r)
 	s.persistAttack(r)
 }
 
@@ -615,14 +688,7 @@ func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
 	// [M-136] The attack ledger spans every namespace the console has ever fired at, so it is
 	// filtered to the tenants this identity is granted. A cross-tenant grant sees all of it.
 	p := principalOf(r)
-	attackMu.Lock()
-	out := make([]*attackRecord, 0, len(attackList))
-	for i := len(attackList) - 1; i >= 0; i-- { // newest first
-		if rec := attackList[i]; p.TenantWildcard() || p.AllowsTenant(rec.Namespace) {
-			out = append(out, rec)
-		}
-	}
-	attackMu.Unlock()
+	out := attackSnapshots(p)
 	writeJSON(w, 200, map[string]any{"attacks": out})
 }
 

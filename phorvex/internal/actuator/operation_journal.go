@@ -1,0 +1,250 @@
+package actuator
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/model"
+)
+
+const journalLabel = "phorvex.ai/operation-journal"
+
+// operationReceipt is administrative provenance, stored only in the operator namespace.
+// Pod annotations and labels are never used as evidence that a receipt exists.
+type operationReceipt struct {
+	Version         int               `json:"version"`
+	Kind            string            `json:"kind"`
+	Phase           string            `json:"phase"`
+	PolicyNamespace string            `json:"policyNamespace"`
+	PolicyName      string            `json:"policyName"`
+	PolicyUID       string            `json:"policyUID"`
+	TargetName      string            `json:"targetName"`
+	TargetUID       string            `json:"targetUID"`
+	TargetLabels    map[string]string `json:"targetLabels"`
+	OldName         string            `json:"oldName,omitempty"`
+	OldUID          string            `json:"oldUID,omitempty"`
+	NewName         string            `json:"newName,omitempty"`
+	NewUID          string            `json:"newUID,omitempty"`
+	GroupKey        string            `json:"groupKey,omitempty"`
+	GroupValue      string            `json:"groupValue,omitempty"`
+	NPName          string            `json:"npName,omitempty"`
+	NPUID           string            `json:"npUID,omitempty"`
+	RewarmName      string            `json:"rewarmName,omitempty"`
+	RewarmUID       string            `json:"rewarmUID,omitempty"`
+	RewarmSpecHash  string            `json:"rewarmSpecHash,omitempty"`
+}
+
+func receiptName(r operationReceipt) string {
+	h := sha256.Sum256([]byte(r.Kind + "/" + r.PolicyUID + "/" + r.TargetUID))
+	return fmt.Sprintf("phorvex-operation-%x", h[:20])
+}
+
+func podSpecDigest(p *corev1.Pod) string {
+	b, _ := json.Marshal(p.Spec)
+	h := sha256.Sum256(b)
+	return fmt.Sprintf("%x", h[:])
+}
+
+func (r operationReceipt) valid() bool {
+	if r.Version != 1 || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+		return false
+	}
+	switch r.Kind {
+	case "warm-swap", "model-shard-replace":
+		validPhase := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired" || r.Phase == "rewarm-intent" || r.Phase == "rewarmed"
+		validRewarm := (r.Phase != "rewarm-intent" && r.Phase != "rewarmed" && r.RewarmName == "" && r.RewarmUID == "" && r.RewarmSpecHash == "") || (r.Phase == "rewarm-intent" && r.RewarmName != "" && r.RewarmUID == "" && r.RewarmSpecHash != "") || (r.Phase == "rewarmed" && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmSpecHash != "")
+		return validPhase && validRewarm && r.OldName == r.TargetName && r.OldUID == r.TargetUID && r.NewName != "" && r.NewUID != "" && r.OldName != r.NewName && r.OldUID != r.NewUID && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.GroupValue != "" && ((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard))
+	case "quarantine":
+		return (r.Phase == "prepared" || r.Phase == "policy-bound") && r.NPName != "" && r.TargetLabels != nil && (r.Phase != "policy-bound" || r.NPUID != "")
+	default:
+		return false
+	}
+}
+
+func journalWrite(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.ConfigMap, error) {
+	if ec.JournalNamespace == "" || ec.JournalNamespace == r.PolicyNamespace || ec.Client == nil || !r.valid() {
+		return nil, fmt.Errorf("operation journal unavailable or invalid")
+	}
+	b, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: ec.JournalNamespace, Name: receiptName(r), Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	if err := ec.Client.Create(ctx, cm); err != nil {
+		return nil, err
+	}
+	if cm.UID == "" || cm.ResourceVersion == "" {
+		return nil, fmt.Errorf("operation journal create not acknowledged")
+	}
+	return cm, nil
+}
+
+func journalAdvance(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r operationReceipt) error {
+	if cm == nil || cm.UID == "" || cm.ResourceVersion == "" || !r.valid() {
+		return fmt.Errorf("operation journal identity invalid")
+	}
+	b, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	next := cm.DeepCopy()
+	next.Data["receipt"] = string(b)
+	if err := ec.Client.Update(ctx, next); err != nil {
+		return err
+	}
+	if next.UID != cm.UID || next.ResourceVersion == "" {
+		return fmt.Errorf("operation journal update unconfirmed")
+	}
+	*cm = *next
+	return nil
+}
+
+func journalFinish(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap) error {
+	if cm == nil || cm.UID == "" || cm.ResourceVersion == "" {
+		return fmt.Errorf("operation journal finish identity invalid")
+	}
+	uid := cm.UID
+	rv := cm.ResourceVersion
+	err := ec.Client.Delete(ctx, cm, client.Preconditions{UID: &uid, ResourceVersion: &rv})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+func journalList(ctx context.Context, ec EnactCtx) ([]struct {
+	CM      corev1.ConfigMap
+	Receipt operationReceipt
+}, error) {
+	if ec.JournalNamespace == "" || ec.Reader == nil {
+		return nil, fmt.Errorf("operation journal reader unavailable")
+	}
+	var list corev1.ConfigMapList
+	if err := ec.Reader.List(ctx, &list, client.InNamespace(ec.JournalNamespace), client.MatchingLabels{journalLabel: "v1"}); err != nil {
+		return nil, err
+	}
+	out := make([]struct {
+		CM      corev1.ConfigMap
+		Receipt operationReceipt
+	}, 0, len(list.Items))
+	for i := range list.Items {
+		cm := list.Items[i]
+		var r operationReceipt
+		if err := json.Unmarshal([]byte(cm.Data["receipt"]), &r); err != nil || !r.valid() || cm.Name != receiptName(r) || cm.UID == "" || cm.ResourceVersion == "" {
+			return nil, fmt.Errorf("invalid operation journal %s/%s: %v", cm.Namespace, cm.Name, err)
+		}
+		out = append(out, struct {
+			CM      corev1.ConfigMap
+			Receipt operationReceipt
+		}{cm, r})
+	}
+	return out, nil
+}
+
+func journalRequire(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.ConfigMap, operationReceipt, error) {
+	if ec.JournalNamespace == "" || ec.JournalNamespace == r.PolicyNamespace || ec.Reader == nil || !r.valid() {
+		return nil, operationReceipt{}, fmt.Errorf("operation journal unavailable")
+	}
+	cm := &corev1.ConfigMap{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: ec.JournalNamespace, Name: receiptName(r)}, cm); err != nil {
+		return nil, operationReceipt{}, err
+	}
+	var recorded operationReceipt
+	if err := json.Unmarshal([]byte(cm.Data["receipt"]), &recorded); err != nil {
+		return nil, operationReceipt{}, err
+	}
+	if !recorded.valid() || cm.Name != receiptName(recorded) || cm.Namespace != ec.JournalNamespace || cm.Labels[journalLabel] != "v1" || recorded.TargetUID != r.TargetUID || recorded.PolicyUID != r.PolicyUID || recorded.PolicyName != r.PolicyName || recorded.PolicyNamespace != r.PolicyNamespace || cm.UID == "" || cm.ResourceVersion == "" {
+		return nil, operationReceipt{}, fmt.Errorf("operation journal identity mismatch")
+	}
+	return cm, recorded, nil
+}
+
+func receiptAuthority(ctx context.Context, reader client.Reader, r operationReceipt, action model.Action) (*v1alpha1.PhorvexPolicy, error) {
+	if reader == nil {
+		return nil, fmt.Errorf("authoritative reader unavailable")
+	}
+	pol := &v1alpha1.PhorvexPolicy{}
+	if err := reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.PolicyName}, pol); err != nil {
+		return nil, err
+	}
+	if string(pol.UID) != r.PolicyUID || pol.DeletionTimestamp != nil || pol.Spec.IsDryRun() {
+		return nil, fmt.Errorf("policy identity retired or dry-run")
+	}
+	enabled := len(pol.Spec.Actions.Enabled) == 0 && (action == model.ActionQuarantine)
+	for _, a := range pol.Spec.Actions.Enabled {
+		if model.Action(a) == action {
+			enabled = true
+		}
+	}
+	if !enabled {
+		return nil, fmt.Errorf("action disabled by policy")
+	}
+	if len(pol.Spec.Selector.MatchLabels) == 0 && len(pol.Spec.Selector.MatchExpressions) == 0 {
+		return nil, fmt.Errorf("current policy selector empty")
+	}
+	sel, err := metav1.LabelSelectorAsSelector(&pol.Spec.Selector)
+	if err != nil {
+		return nil, err
+	}
+	if r.Kind == "quarantine" && !sel.Matches(labels.Set(r.TargetLabels)) {
+		return nil, fmt.Errorf("recorded target outside policy selector")
+	}
+	ns := &corev1.Namespace{}
+	if err := reader.Get(ctx, client.ObjectKey{Name: r.PolicyNamespace}, ns); err != nil {
+		return nil, err
+	}
+	switch ns.Annotations["phorvex.ai/dry-run"] {
+	case "true", "True", "1", "yes":
+		return nil, fmt.Errorf("namespace dry-run")
+	}
+	return pol, nil
+}
+
+func warmCurrentScope(pol *v1alpha1.PhorvexPolicy, r operationReceipt, old, promoted *corev1.Pod) error {
+	if pol == nil || old == nil || promoted == nil {
+		return fmt.Errorf("warm scope unavailable")
+	}
+	if old.Name != r.OldName || string(old.UID) != r.OldUID || promoted.Name != r.NewName || string(promoted.UID) != r.NewUID {
+		return fmt.Errorf("warm pair UID/name changed")
+	}
+	sel, err := metav1.LabelSelectorAsSelector(&pol.Spec.Selector)
+	if err != nil {
+		return err
+	}
+	for _, p := range []*corev1.Pod{old, promoted} {
+		if p.Namespace != r.PolicyNamespace || p.DeletionTimestamp != nil || p.UID == "" || p.Labels[r.GroupKey] != r.GroupValue || !sel.Matches(labels.Set(p.Labels)) {
+			return fmt.Errorf("current pod %s outside policy/group scope", p.Name)
+		}
+	}
+	return nil
+}
+
+func warmSurvivorScope(pol *v1alpha1.PhorvexPolicy, r operationReceipt, promoted *corev1.Pod) error {
+	if pol == nil || promoted == nil || promoted.Name != r.NewName || string(promoted.UID) != r.NewUID || promoted.Namespace != r.PolicyNamespace || promoted.DeletionTimestamp != nil || promoted.Labels[r.GroupKey] != r.GroupValue {
+		return fmt.Errorf("survivor identity/scope changed")
+	}
+	sel, err := metav1.LabelSelectorAsSelector(&pol.Spec.Selector)
+	if err != nil {
+		return err
+	}
+	if !sel.Matches(labels.Set(promoted.Labels)) {
+		return fmt.Errorf("survivor outside current policy selector")
+	}
+	return nil
+}
+
+func uidPrecondition(p *corev1.Pod) client.DeleteOption {
+	u := types.UID(p.UID)
+	rv := p.ResourceVersion
+	return client.Preconditions{UID: &u, ResourceVersion: &rv}
+}

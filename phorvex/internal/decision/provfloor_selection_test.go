@@ -122,6 +122,10 @@ func TestWeakGenuineEvidenceIsNotTreatedAsADecoy(t *testing.T) {
 				t.Fatalf("HasEvidence = %v, want %v (StageUrgency %.4f — note how little it separates these)",
 					a.HasEvidence, tc.wantEvidence, a.StageUrgency)
 			}
+			if a.HasEventEvidence != tc.wantEvidence {
+				t.Fatalf("strict trusted observation = %v, want %v; assessment=%+v",
+					a.HasEventEvidence, tc.wantEvidence, a)
+			}
 		})
 	}
 }

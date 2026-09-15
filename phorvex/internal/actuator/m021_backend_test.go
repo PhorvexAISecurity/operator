@@ -244,6 +244,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if !registered {
 				t.Fatal("fixture: disable is expected to keep its registered handler")
 			}
+		case model.ActionIdentityRotate:
+			if ok || !registered || !strings.Contains(why, "declared-only") {
+				t.Fatalf("identity-rotate must remain registered for historical rollback but unsupported for new dispatch: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		case model.ActionMIGRebind:
 			// The M-79 transport prerequisite is retained verbatim and takes precedence
 			// over a bare "supported" answer.

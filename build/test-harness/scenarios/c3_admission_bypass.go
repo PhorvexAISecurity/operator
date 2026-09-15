@@ -3,6 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"strings"
 	"time"
 
@@ -23,7 +24,10 @@ func init() { core.RegisterScenario(&c3AdmissionBypass{}) }
 //
 // CONTAINMENT: the privileged pod is created ONLY in the sandbox namespace, does
 // NOT mount the host root, and only exercises a privileged-context marker.
-type c3AdmissionBypass struct{ app string }
+type c3AdmissionBypass struct {
+	app       string
+	targetUID types.UID
+}
 
 func (s *c3AdmissionBypass) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{
@@ -60,26 +64,34 @@ func (s *c3AdmissionBypass) Execute(ctx context.Context, env *core.Env) (core.At
 	if _, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
 		return core.AttackResult{}, err
 	}
-	admitted := true
 	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
-		admitted = false
-		env.Log.Logf("c3-admission-bypass: privileged pod did not reach Running: %v", err)
+		return core.AttackResult{}, fmt.Errorf("privileged stimulus pod did not reach Running: %w", err)
 	}
+	original, err := runningPodByApp(ctx, env, s.app)
+	if err != nil {
+		return core.AttackResult{}, fmt.Errorf("stimulus target unavailable: %w", err)
+	}
+	s.targetUID = original.UID
 	stages := []string{"admission: privileged/policy-violating pod admitted (T1610)", "exercise: run from the privileged context (T1611/T1068)"}
-	return core.AttackResult{Stages: stages, Commands: []string{"create privileged pod (sandbox)"}, Notes: map[string]string{"admitted": fmt.Sprintf("%v", admitted)}}, nil
+	return core.AttackResult{Stages: stages, Commands: []string{"create privileged pod (sandbox)"}, Notes: map[string]string{"admitted": "true"}}, nil
 }
 
 func (s *c3AdmissionBypass) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(2 * time.Second)
+	observationPause(2 * time.Second)
 	ev := map[string]string{}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	ev["originalPodUID"] = string(s.targetUID)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		ev["privilegedRan"] = "false"
-		return core.OracleResult{Achieved: false, ObservedState: "privileged pod absent", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	res := env.Exec(ctx, pod.Name, "app", []string{"sh", "-c", "cat /tmp/.r6th_priv 2>/dev/null"})
-	ran := strings.Contains(res.Stdout, "PRIVILEGED-CONTEXT-RAN")
+	res := env.Exec(ctx, pod.Name, "app", markerReadCommand("/tmp/.r6th_priv"))
+	ran, err := observedMarker(ctx, res, "PRIVILEGED-CONTEXT-RAN")
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["privilegedRan"] = fmt.Sprintf("%v", ran)
+	ev["observedPodUID"] = string(pod.UID)
 	ev["idOutput"] = strings.TrimSpace(res.Stdout)
 	state := fmt.Sprintf("policy-violating pod admitted+Running and exercised privileged context=%v", ran)
 	return core.OracleResult{Achieved: ran, ObservedState: state, Evidence: ev}, nil

@@ -53,12 +53,11 @@ const (
 	// Excluded from MutatingActions (never generatable) but a handler exists so the
 	// completeness enumeration stays green. Never fabricated behaviour.
 	ActionDisable Action = "disable"
-	// ActionIdentityRotate writes a fresh `phorvex.ai/identity-epoch` LABEL on the pod
-	// (advanced K8s; native-only). It does NOT change the SA token, the UID or the IP —
-	// projected tokens rotate on their own — so it does not invalidate the podIdentity
-	// recon fact. See handlers_k8s.go and recon/profile.go, where the cover grant was
-	// removed for exactly this reason.
-	ActionIdentityRotate Action = "identity-rotate"
+	// ActionIdentityRotate remains in stored policy vocabulary for compatibility, but is
+	// declared-only: an epoch relabel cannot rotate UID, IP or credentials. Historical
+	// relabel snapshots may still be restored through Rollback.
+	ActionIdentityRotate            Action = "identity-rotate"
+	IdentityRotateUnsupportedReason        = "identity-rotate declared-only: epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
 	// ActionRouteRotate re-keys `phorvex.ai/route-key` on the pod and restitches the
 	// selector of its explicitly declared `phorvex.ai/route-service` (advanced K8s;
 	// native-only). It returns Emitted=false when that deployment contract is absent.
@@ -95,9 +94,10 @@ const (
 	ActionKVMigrateInvalidate Action = "kv-migrate-invalidate"
 )
 
-// MutatingActions is the SINGLE SOURCE OF TRUTH for every action a policy may enable and
-// the optimizer may emit (every const EXCEPT ActionNoop and the declared-only
-// ActionDisable). Both actionset.enabledActions and decision.candidateActions iterate it
+// MutatingActions is the compatible action order for policy and trace enumeration.
+// identity-rotate remains here as stored vocabulary but is explicitly excluded by the
+// generator/capability gate and cannot be emitted. Both actionset.enabledActions and
+// decision.candidateActions iterate it
 // (policy-filtered) so the two emit lists can never drift, and the completeness invariant
 // enumerates it to prove every generatable action has a native handler. Order is
 // load-bearing: ActionRotate precedes ActionQuarantine so the engine's strict-`>`
@@ -189,8 +189,8 @@ const (
 	// anti-over-rotation guard reads a clock the action actually resets.
 	// VarRouteKey = serving route key (endpoint-rotate / route-rotate re-key it).
 	VarRouteKey = "routeKey"
-	// VarIdentity = identity-rotate epoch (relabel only; the SA token is unchanged, so this
-	// is NOT "saToken").
+	// VarIdentity is the historical identity-epoch relabel clock. New identity-rotate
+	// dispatch is refused; this clock never represented SA-token invalidation.
 	VarIdentity = "identity"
 	// VarAdapterEpoch = adapter-rotate epoch.
 	VarAdapterEpoch = "adapterEpoch"

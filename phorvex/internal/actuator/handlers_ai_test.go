@@ -12,7 +12,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -110,14 +112,21 @@ func aiPod(ns, name string, labels map[string]string) *corev1.Pod {
 	}
 }
 func fakeC(objs ...client.Object) client.Client {
-	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).Build()
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}
+	objs = append(objs, policy, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
+	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+		if obj.GetUID() == "" {
+			obj.SetUID(types.UID("created-" + obj.GetName()))
+		}
+		return c.Create(ctx, obj, opts...)
+	}}).Build()
 }
 func leaderRole(p *corev1.Pod) string { return p.Labels[labelRole] }
 
 // boundReq is the runner's shape of a destructive AI request: it names the Pod AND binds the
 // identity (TargetUID) of the observed object the selection was made against.
 func boundReq(p *corev1.Pod, a model.Action) Request {
-	return Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a}
+	return Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a, PolicyName: "policy", PolicyUID: "policy-uid"}
 }
 
 // ---- warm-swap ----
@@ -126,7 +135,7 @@ func TestWarmSwapPromotesRetiresAndRewarms(t *testing.T) {
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true}
-	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err != nil {
 		t.Fatalf("warm-swap: %v", err)
 	}
@@ -171,7 +180,7 @@ func TestWarmSwapStackUnreachableFallsBackToK8sGate(t *testing.T) {
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{readyErr: errStackUnreachable} // no vLLM stack
-	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err != nil {
 		t.Fatalf("warm-swap (unreachable stack, K8s gate): %v", err)
 	}
@@ -356,7 +365,7 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 	leader := aiPod("ns", "shard0", map[string]string{labelModelShard: "s", labelRole: roleLeader})
 	shadow := aiPod("ns", "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
-	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
+	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
 	if err != nil {
 		t.Fatalf("model-shard-replace: %v", err)
 	}

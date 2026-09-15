@@ -19,6 +19,7 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -67,6 +68,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiextv1.AddToScheme(scheme))
 	// Register the Phoenix types so Phorvex can construct/emit SecurityEvent + AMTD
 	// CRs over Seam 1 (the ONLY reason Phorvex depends on the Phoenix module).
 	utilruntime.Must(amtdv1beta1.AddToScheme(scheme))
@@ -266,7 +268,7 @@ func main() {
 	}
 
 	if nativeDemo {
-		if err := runNativeActuatorDemo(nativeDemoNS); err != nil {
+		if err := runNativeActuatorDemo(nativeDemoNS, operatorNS); err != nil {
 			setupLog.Error(err, "native-demo failed")
 			os.Exit(1)
 		}
@@ -306,8 +308,13 @@ func main() {
 		os.Exit(1)
 	}
 	rmgr.OwnershipReader = mgr.GetAPIReader()
+	rmgr.VocabularyReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
+		native.JournalNamespace = operatorNS
+	}
+	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
+		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval

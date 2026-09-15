@@ -194,7 +194,9 @@ their actual age and provenance (authorized re-emission by the detector, or reti
   K8s-only signals and reports telemetry absent — it never fabricates a metric.
 - Native/hybrid actuation requires explicit per-namespace RBAC opt-in; an unlisted
   namespace remains read-only and the handler fails closed.
-- Active-mode actuation requires a **matchLabels** selector (the Phoenix AMTD guest
-  list is matchLabels-only in P0).
+- Active-mode actuation requires a nonempty label selector. Native accepts
+  expression-only selectors. Phoenix's AMTD guest list remains an equality map:
+  its route prepares only selectors exactly expressible as nonempty equalities;
+  unsupported expressions refuse Phoenix actions without broadening the guest list.
 
 See [P0-REPORT.md](P0-REPORT.md) for the real build/test/live results.

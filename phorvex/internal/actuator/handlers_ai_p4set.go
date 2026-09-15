@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -92,16 +93,47 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 	if len(readyByRank) < size {
 		return HandlerResult{}, fmt.Errorf("model-shard-replace TP/PP blocked: replacement group %q incomplete (%d/%d ranks Ready) — never flip a partial parallel group (fail-closed)", group, len(readyByRank), size)
 	}
+	ranks := make([]string, 0, len(readyByRank))
+	for rank := range readyByRank {
+		ranks = append(ranks, rank)
+	}
+	sort.Strings(ranks)
 	// (1) FLIP UP every shadow rank to leader, COHERENTLY; roll back all on any failure.
 	var flipped []*corev1.Pod
-	for _, s := range readyByRank {
+	for _, rank := range ranks {
+		s := readyByRank[rank]
 		s.Labels[labelRole] = roleLeader
 		if err := ec.Client.Update(ctx, s); err != nil {
-			for _, f := range flipped {
-				f.Labels[labelRole] = roleShadow
-				_ = ec.Client.Update(ctx, f)
+			var compensation []error
+			var restored, unresolved []string
+			touched := make([]string, 0, len(flipped)+1)
+			failedTouched, failedRestored, failedErr := reconcileFailedPromotion(ctx, ec.Client, s)
+			if failedTouched {
+				touched = append(touched, objRef("Pod", s.Namespace, s.Name))
 			}
-			return HandlerResult{}, fmt.Errorf("model-shard-replace TP/PP flip-up %s (group rolled back): %w", s.Name, err)
+			if failedRestored {
+				restored = append(restored, s.Name)
+			}
+			if failedErr != nil {
+				unresolved = append(unresolved, s.Name)
+				compensation = append(compensation, fmt.Errorf("reconcile failed rank %s pod %s uid %s: %w", s.Labels[labelRank], s.Name, s.UID, failedErr))
+			}
+			for i := len(flipped) - 1; i >= 0; i-- {
+				f := flipped[i]
+				touched = append(touched, objRef("Pod", f.Namespace, f.Name))
+				if rerr := updateObservedRole(ctx, ec.Client, f, roleShadow); rerr != nil {
+					unresolved = append(unresolved, f.Name)
+					compensation = append(compensation, fmt.Errorf("restore rank %s pod %s uid %s: %w", f.Labels[labelRank], f.Name, f.UID, rerr))
+				} else {
+					restored = append(restored, f.Name)
+				}
+			}
+			status := "all promoted ranks restored"
+			if len(compensation) != 0 {
+				status = fmt.Sprintf("PARTIAL: restored %v; unresolved or remaining promoted %v", restored, unresolved)
+			}
+			return HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + group, ObjectsTouched: touched},
+				fmt.Errorf("model-shard-replace TP/PP flip-up %s (%s): %w", s.Name, status, errors.Join(append([]error{err}, compensation...)...))
 		}
 		flipped = append(flipped, s)
 	}
@@ -112,21 +144,53 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 	// NOT retired and the partial state (shadows promoted, names relabeled) rather than claiming
 	// every old member retired. No rollback is attempted.
 	var leaders corev1.PodList
-	_ = ec.Client.List(ctx, &leaders, client.InNamespace(req.Namespace), sel)
+	if err := ec.Client.List(ctx, &leaders, client.InNamespace(req.Namespace), sel); err != nil {
+		return groupPartialResult(req, group, flipped, nil), fmt.Errorf("model-shard-replace TP/PP old-group inventory failed (shadows promoted; retirement unverified): %w", err)
+	}
+	sort.Slice(leaders.Items, func(i, j int) bool {
+		if leaders.Items[i].Labels[labelRank] != leaders.Items[j].Labels[labelRank] {
+			return leaders.Items[i].Labels[labelRank] < leaders.Items[j].Labels[labelRank]
+		}
+		return leaders.Items[i].Name < leaders.Items[j].Name
+	})
 	touched := make([]string, 0, len(flipped)+size)
 	var retired, notRetired []string
 	var delErrs []error
+	var pendingDrains []string
 	for i := range leaders.Items {
 		old := &leaders.Items[i]
+		for _, promoted := range flipped {
+			if old.Name == promoted.Name && old.UID != promoted.UID {
+				notRetired = append(notRetired, old.Name)
+				delErrs = append(delErrs, fmt.Errorf("%w: promoted pod %s/%s uid %s replaced by listed uid %s", errPodReplaced, old.Namespace, old.Name, promoted.UID, old.UID))
+			}
+		}
+		if promotedName(old, flipped) {
+			continue
+		}
 		if old.Labels[labelRole] != roleRetiring && isOldLeader(old, flipped) {
 			if old.Name == trig.Name && old.UID != trig.UID {
 				notRetired = append(notRetired, old.Name)
 				delErrs = append(delErrs, fmt.Errorf("%w: %s/%s listed uid %s, observed trigger uid %s", errPodReplaced, old.Namespace, old.Name, old.UID, trig.UID))
 				continue
 			}
-			_ = relabelRole(ctx, ec.Client, old.Namespace, old.Name, roleRetiring)
-			_, _, _ = drainInflight(ctx, ec, old)
+			if rerr := updateObservedRole(ctx, ec.Client, old, roleRetiring); rerr != nil {
+				notRetired = append(notRetired, old.Name)
+				delErrs = append(delErrs, fmt.Errorf("relabel old leader %s uid %s: %w", old.Name, old.UID, rerr))
+				continue
+			}
 			touched = append(touched, objRef("Pod", old.Namespace, old.Name))
+			_, drainPending, drainErr := drainInflight(ctx, ec, old)
+			if drainErr != nil {
+				notRetired = append(notRetired, old.Name)
+				delErrs = append(delErrs, fmt.Errorf("drain old leader %s uid %s: %w", old.Name, old.UID, drainErr))
+				continue
+			}
+			if drainPending {
+				pendingDrains = append(pendingDrains, old.Name)
+				notRetired = append(notRetired, old.Name)
+				continue
+			}
 			if _, derr := deleteObservedPod(ctx, ec.Client, old); derr != nil {
 				notRetired = append(notRetired, old.Name)
 				delErrs = append(delErrs, derr)
@@ -138,9 +202,9 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 	for _, s := range flipped {
 		touched = append(touched, objRef("Pod", req.Namespace, s.Name))
 	}
-	if len(delErrs) > 0 {
+	if len(delErrs) > 0 || len(pendingDrains) > 0 {
 		return HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + group, ObjectsTouched: touched},
-			fmt.Errorf("model-shard-replace TP/PP group %q PARTIAL (no rollback): %d shadow ranks promoted to leader, old leaders retired %v, NOT retired %v: %w", group, len(flipped), retired, notRetired, errors.Join(delErrs...))
+			fmt.Errorf("model-shard-replace TP/PP group %q PARTIAL (no rollback): %d shadow ranks promoted to leader, old leaders retired %v, NOT retired %v, drain pending %v: %w", group, len(flipped), retired, notRetired, pendingDrains, errors.Join(append(delErrs, pendingErrors(pendingDrains)...)...))
 	}
 	note := fmt.Sprintf("model-shard-replace: TP/PP group %q flipped COHERENTLY (%d ranks), old group drained + retired (%d old leaders)", group, size, len(retired))
 	if pending {
@@ -159,6 +223,82 @@ func isOldLeader(p *corev1.Pod, flipped []*corev1.Pod) bool {
 		}
 	}
 	return p.Labels[labelRole] == roleLeader
+}
+
+func promotedName(p *corev1.Pod, flipped []*corev1.Pod) bool {
+	for _, f := range flipped {
+		if f.Name == p.Name {
+			return true
+		}
+	}
+	return false
+}
+
+// A rejected Update can still have reached the API. Inspect that rank before declaring rollback.
+func reconcileFailedPromotion(ctx context.Context, c client.Client, attempted *corev1.Pod) (touched, restored bool, err error) {
+	if attempted.UID == "" {
+		return false, false, fmt.Errorf("%w: %s/%s", errObservedUIDMissing, attempted.Namespace, attempted.Name)
+	}
+	var current corev1.Pod
+	if err := c.Get(ctx, client.ObjectKey{Namespace: attempted.Namespace, Name: attempted.Name}, &current); err != nil {
+		return true, false, err
+	}
+	if current.UID != attempted.UID {
+		return true, false, fmt.Errorf("%w: %s/%s attempted uid %s current uid %s", errPodReplaced, attempted.Namespace, attempted.Name, attempted.UID, current.UID)
+	}
+	switch current.Labels[labelRole] {
+	case roleShadow:
+		return false, false, nil
+	case roleLeader:
+		current.Labels = ensureMap(current.Labels)
+		current.Labels[labelRole] = roleShadow
+		if err := c.Update(ctx, &current); err != nil {
+			return true, false, err
+		}
+		return true, true, nil
+	default:
+		return true, false, fmt.Errorf("failed promotion role unresolved on %s/%s: %q", attempted.Namespace, attempted.Name, current.Labels[labelRole])
+	}
+}
+
+// updateObservedRole changes only the role on a freshly read Pod. Its observed UID binds the
+// write to the selected object, while the fresh resource version preserves concurrent metadata.
+func updateObservedRole(ctx context.Context, c client.Client, observed *corev1.Pod, role string) error {
+	if observed.UID == "" {
+		return fmt.Errorf("%w: %s/%s", errObservedUIDMissing, observed.Namespace, observed.Name)
+	}
+	var current corev1.Pod
+	if err := c.Get(ctx, client.ObjectKey{Namespace: observed.Namespace, Name: observed.Name}, &current); err != nil {
+		return err
+	}
+	if current.UID != observed.UID {
+		return fmt.Errorf("%w: %s/%s observed uid %s current uid %s", errPodReplaced, observed.Namespace, observed.Name, observed.UID, current.UID)
+	}
+	if current.Labels[labelRole] != observed.Labels[labelRole] && current.Labels[labelRole] != role {
+		return fmt.Errorf("role changed concurrently on %s/%s: observed %q current %q", observed.Namespace, observed.Name, observed.Labels[labelRole], current.Labels[labelRole])
+	}
+	current.Labels = ensureMap(current.Labels)
+	current.Labels[labelRole] = role
+	return c.Update(ctx, &current)
+}
+
+func groupPartialResult(req Request, group string, flipped []*corev1.Pod, old []*corev1.Pod) HandlerResult {
+	touched := make([]string, 0, len(flipped)+len(old))
+	for _, s := range flipped {
+		touched = append(touched, objRef("Pod", s.Namespace, s.Name))
+	}
+	for _, p := range old {
+		touched = append(touched, objRef("Pod", p.Namespace, p.Name))
+	}
+	return HandlerResult{MutationKind: "swap", RollbackRef: req.Namespace + "/" + group, ObjectsTouched: touched}
+}
+
+func pendingErrors(names []string) []error {
+	errs := make([]error, 0, len(names))
+	for _, name := range names {
+		errs = append(errs, fmt.Errorf("old leader %s drain unconfirmed: serving endpoint unreachable [PENDING-GPU-VALIDATION]", name))
+	}
+	return errs
 }
 
 // drainInflight performs the stack-side in-flight drain/abort with the honest tri-state. Shared by
@@ -289,7 +429,7 @@ func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 	// ORDERING (premortem): STOP new admits BEFORE aborting in-flight, else new requests slip in mid-
 	// drain. The K8s readiness-drain (flip the serving label out) is the real, stack-independent step.
 	pod.Labels = ensureMap(pod.Labels)
-	prevServing := pod.Labels[labelServing]
+	prevServing, hadServing := pod.Labels[labelServing]
 	pod.Labels[labelServing] = "drained"
 	// M-23 A1: stamp an event-valued drain epoch in the SAME Update as the serving flip. The
 	// serving label is boolean and reverts on rollback/failure-restore, so it can't clock
@@ -303,9 +443,13 @@ func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 	aborted, pending, derr := drainInflight(ctx, ec, pod)
 	if derr != nil {
 		// reachable-but-failed: restore admits (do not strand the pod unready) then fail-closed.
-		pod.Labels[labelServing] = prevServing
-		_ = ec.Client.Update(ctx, pod)
-		return HandlerResult{}, fmt.Errorf("request-drain abort %s/%s: %w", req.Namespace, req.Pod, derr)
+		restoreErr := restoreObservedServing(ctx, ec.Client, pod, hadServing, prevServing)
+		status := "serving label restored"
+		if restoreErr != nil {
+			status = "PARTIAL: serving label may remain drained"
+		}
+		return HandlerResult{MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod, ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}},
+			fmt.Errorf("request-drain abort %s/%s (%s): %w", req.Namespace, req.Pod, status, errors.Join(derr, restoreErr))
 	}
 	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, aborted)
 	note := fmt.Sprintf("admits stopped; %d in-flight aborted", aborted)
@@ -318,6 +462,34 @@ func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request) 
 		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
 		Note:           "request-drain: " + note,
 	}, nil
+}
+
+// restoreObservedServing re-reads the accepted stop-admit object so a concurrent annotation,
+// drain epoch or same-name replacement cannot be overwritten by failure compensation.
+func restoreObservedServing(ctx context.Context, c client.Client, stopped *corev1.Pod, present bool, value string) error {
+	if stopped.UID == "" {
+		return fmt.Errorf("%w: %s/%s", errObservedUIDMissing, stopped.Namespace, stopped.Name)
+	}
+	var current corev1.Pod
+	if err := c.Get(ctx, client.ObjectKey{Namespace: stopped.Namespace, Name: stopped.Name}, &current); err != nil {
+		return err
+	}
+	if current.UID != stopped.UID {
+		return fmt.Errorf("%w: %s/%s stopped uid %s current uid %s", errPodReplaced, stopped.Namespace, stopped.Name, stopped.UID, current.UID)
+	}
+	if current.Labels[labelDrainEpoch] != stopped.Labels[labelDrainEpoch] {
+		return fmt.Errorf("drain epoch changed concurrently on %s/%s: operation %q current %q", stopped.Namespace, stopped.Name, stopped.Labels[labelDrainEpoch], current.Labels[labelDrainEpoch])
+	}
+	if current.Labels[labelServing] != "drained" {
+		return fmt.Errorf("serving label changed concurrently on %s/%s: %q", stopped.Namespace, stopped.Name, current.Labels[labelServing])
+	}
+	current.Labels = ensureMap(current.Labels)
+	if present {
+		current.Labels[labelServing] = value
+	} else {
+		delete(current.Labels, labelServing)
+	}
+	return c.Update(ctx, &current)
 }
 
 // Rollback re-admits the pod (restore the serving label) — drain is transient eviction.

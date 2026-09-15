@@ -361,7 +361,7 @@ func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true, drained: 2}
-	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
+	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
 	if err != nil {
 		t.Fatalf("warm-swap: %v", err)
 	}

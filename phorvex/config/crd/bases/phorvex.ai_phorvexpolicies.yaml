@@ -324,7 +324,7 @@ spec:
                 type: object
               selector:
                 description: |-
-                  Selector chooses the pods this policy protects (PRD: selector.matchLabels).
+                  Selector chooses the pods this policy protects, including matchExpressions.
                   Only pods in this policy's namespace (tenant) that match are considered.
                 properties:
                   matchExpressions:
@@ -525,7 +525,7 @@ spec:
                 type: boolean
               conditions:
                 description: Conditions includes Ready, DryRun, ValidationError, KillSwitch,
-                  ActionsSupported.
+                  ActionsSupported, and ActuationPrepared (current tick's backend preparation).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

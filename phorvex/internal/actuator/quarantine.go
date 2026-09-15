@@ -107,22 +107,39 @@ func (quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (o
 			return HandlerResult{}, err
 		}
 		if err == nil {
-			var recorded qtnSnapshot
-			_ = json.Unmarshal([]byte(p.Annotations[quarantineSnapAnno]), &recorded)
-			provenRecord := validQuarantineSnapshot(p, &recorded) && ((recorded.Version == 2 && recorded.PolicyName == legacy.Name && recorded.PolicyUID == legacy.UID) || (recorded.LegacyName == legacy.Name && recorded.LegacyUID == legacy.UID))
-			if !provenRecord {
-				defer func() {
-					out.Note += "; legacy policy " + legacy.Name + " UID=" + string(legacy.UID) + " retained unchanged; inventory/cleanup unresolved"
-				}()
-			}
+			defer func() {
+				out.Note += "; legacy policy " + legacy.Name + " UID=" + string(legacy.UID) + " retained unchanged; inventory/cleanup unresolved (no protected authority)"
+			}()
 		}
 	}
 	if p.Labels[quarantineLabel] != "" || p.Annotations[quarantineSnapAnno] != "" {
-		return retryQuarantine(ctx, ec, req, p)
+		reqReceipt := operationReceipt{Version: 1, Kind: "quarantine", Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: p.Name, TargetUID: string(p.UID), TargetLabels: copyLabels(p.Labels), NPName: quarantinePolicy(p).Name}
+		journal, recorded, requireErr := journalRequire(ctx, ec, reqReceipt)
+		if requireErr != nil {
+			return HandlerResult{}, fmt.Errorf("quarantine retry: bound administrative receipt required: %v", requireErr)
+		}
+		if recorded.Phase != "policy-bound" || recorded.NPName != reqReceipt.NPName || recorded.NPUID == "" {
+			return HandlerResult{}, fmt.Errorf("quarantine retry: canonical policy identity not bound in administrative receipt")
+		}
+		if _, requireErr = receiptAuthority(ctx, ec.Reader, recorded, req.Action); requireErr != nil {
+			return HandlerResult{}, requireErr
+		}
+		return retryQuarantine(ctx, ec, req, p, journal, recorded)
 	}
 	plan, err := planQuarantine(ctx, ec.Reader, p)
 	if err != nil {
 		return HandlerResult{}, err
+	}
+	receipt := operationReceipt{Version: 1, Kind: "quarantine", Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: p.Name, TargetUID: string(p.UID), TargetLabels: copyLabels(p.Labels), NPName: quarantinePolicy(p).Name}
+	if !receipt.valid() {
+		return HandlerResult{}, fmt.Errorf("quarantine: operation provenance unavailable")
+	}
+	if _, err := receiptAuthority(ctx, ec.Reader, receipt, req.Action); err != nil {
+		return HandlerResult{}, fmt.Errorf("quarantine: policy authority: %w", err)
+	}
+	journal, err := journalWrite(ctx, ec, receipt)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("quarantine: persist operation before mutation: %w", err)
 	}
 	snap := qtnSnapshot{Version: 3, UID: p.UID, Before: map[string]labelState{}, Applied: map[string]labelState{}, OwnerRefs: p.OwnerReferences, PolicyName: quarantinePolicy(p).Name}
 	after := p.DeepCopy()
@@ -148,9 +165,17 @@ func (quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (o
 		}
 	}
 	result := quarantineResult(p)
-	np, err := ensureQuarantinePolicy(ctx, ec, p, &snap, &result)
+	np, err := ensureQuarantinePolicy(ctx, ec, p, &snap, &result, nil)
 	if err != nil {
 		return result, err
+	}
+	receipt.NPUID = string(np.UID)
+	receipt.Phase = "policy-bound"
+	if receipt.NPUID == "" {
+		return result, fmt.Errorf("quarantine: policy UID not acknowledged; receipt retained")
+	}
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		return result, fmt.Errorf("quarantine: policy created but receipt binding failed: %w", err)
 	}
 	snap.PolicyUID = np.UID
 	data, err := json.Marshal(snap)
@@ -189,7 +214,10 @@ func (quarantineHandler) Rollback(ctx context.Context, ec EnactCtx, req Request,
 		return fmt.Errorf("quarantine rollback: unverified/legacy snapshot or identity mismatch")
 	}
 	if snap.Released {
-		return finishQuarantineRelease(ctx, ec, p, &snap)
+		if err := finishQuarantineRelease(ctx, ec, p, &snap); err != nil {
+			return err
+		}
+		return finishMatchingQuarantineReceipt(ctx, ec, p, &snap)
 	}
 	for k, want := range snap.Applied {
 		if labelAt(p.Labels, k) != want {
@@ -238,5 +266,39 @@ func (quarantineHandler) Rollback(ctx context.Context, ec EnactCtx, req Request,
 	if err = ec.Client.Update(ctx, restored); err != nil {
 		return err
 	}
-	return finishQuarantineRelease(ctx, ec, restored, &snap)
+	if err := finishQuarantineRelease(ctx, ec, restored, &snap); err != nil {
+		return err
+	}
+	return finishMatchingQuarantineReceipt(ctx, ec, restored, &snap)
+}
+
+func finishMatchingQuarantineReceipt(ctx context.Context, ec EnactCtx, p *corev1.Pod, snap *qtnSnapshot) error {
+	if ec.JournalNamespace == "" {
+		return nil
+	} // pre-journal legacy rollback
+	entries, err := journalList(ctx, ec)
+	if err != nil {
+		return fmt.Errorf("quarantine rollback succeeded but journal read failed: %w", err)
+	}
+	for i := range entries {
+		r := entries[i].Receipt
+		if r.Kind != "quarantine" || r.PolicyNamespace != p.Namespace || r.TargetName != p.Name || r.TargetUID != string(p.UID) {
+			continue
+		}
+		if r.Phase != "policy-bound" || r.NPName != quarantinePolicy(p).Name {
+			return fmt.Errorf("quarantine rollback succeeded but receipt identity ambiguous")
+		}
+		if r.NPName != snap.PolicyName || r.NPUID != string(snap.PolicyUID) {
+			// A legacy snapshot cannot authorize deletion of the bound canonical NP.
+			// Finish only when that exact object is confirmed absent independently.
+			canonical := &networkingv1.NetworkPolicy{}
+			if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: r.NPName}, canonical); !apierrors.IsNotFound(err) {
+				return fmt.Errorf("quarantine rollback succeeded but canonical receipt remains unresolved: %v", err)
+			}
+		}
+		if err := journalFinish(ctx, ec, &entries[i].CM); err != nil {
+			return fmt.Errorf("quarantine rollback succeeded but receipt cleanup failed: %w", err)
+		}
+	}
+	return nil
 }

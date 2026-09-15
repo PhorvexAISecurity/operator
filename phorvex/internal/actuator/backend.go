@@ -247,6 +247,8 @@ func nativeAccepts(a model.Action) (bool, string) {
 		return false, detailSentinel
 	case a == model.ActionDisable:
 		return false, detailDeclaredOnly
+	case a == model.ActionIdentityRotate:
+		return false, "declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
 	case !KnownAction(a):
 		return false, detailUnknownAction
 	}

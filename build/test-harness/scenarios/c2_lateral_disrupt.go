@@ -3,7 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
-	"strings"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
@@ -18,8 +18,9 @@ func init() { core.RegisterScenario(&c2LateralDisrupt{}) }
 // rotation. R6 partial (overshoots: no NetworkPolicy actuator in api/v1beta1;
 // disruption is only the side effect of rotating the moving pod).
 type c2LateralDisrupt struct {
-	srcApp string
-	dstApp string
+	srcApp    string
+	dstApp    string
+	targetUID types.UID
 }
 
 const c2LatMarker = "R6TH-C2-LATERAL-DONE"
@@ -56,6 +57,7 @@ func (s *c2LateralDisrupt) Execute(ctx context.Context, env *core.Env) (core.Att
 	if err != nil {
 		return core.AttackResult{}, err
 	}
+	s.targetUID = dst.UID
 	stages := []string{
 		"lateral-move: begin reaching pod B from compromised pod A (T1021)",
 		"in-flight: drive a multi-step command in B (rotation may sever it)",
@@ -63,24 +65,34 @@ func (s *c2LateralDisrupt) Execute(ctx context.Context, env *core.Env) (core.Att
 	// A slow, multi-step "in-flight" command in B: sleep then write the marker, so
 	// a rotation landing mid-move severs it before the marker is written.
 	dialCmd := fmt.Sprintf("nc -w 1 %s 1234 2>/dev/null; echo reached-B", dst.Status.PodIP)
-	_ = env.Exec(ctx, src.Name, firstContainer(src), []string{"sh", "-c", dialCmd})
+	if err := stimulusExec(ctx, env.Exec(ctx, src.Name, firstContainer(src), []string{"sh", "-c", dialCmd})); err != nil {
+		return core.AttackResult{}, err
+	}
 	slowCmd := "sleep 4; echo " + c2LatMarker + " > /tmp/.r6th_c2lat"
 	res := env.Exec(ctx, dst.Name, firstContainerName(dst.Name, env), []string{"sh", "-c", slowCmd})
+	if err := stimulusExec(ctx, res); err != nil {
+		return core.AttackResult{}, err
+	}
 	env.Log.Logf("c2-lateral-disrupt: in-flight command exit=%d", res.ExitCode)
 	return core.AttackResult{Stages: stages, Commands: []string{"sh -c '" + dialCmd + "'", "sh -c '" + slowCmd + "'"}}, nil
 }
 
 func (s *c2LateralDisrupt) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(2 * time.Second)
+	observationPause(2 * time.Second)
 	ev := map[string]string{}
-	dst, err := runningPodByApp(ctx, env, s.dstApp)
+	ev["originalPodUID"] = string(s.targetUID)
+	dst, err := observationTarget(ctx, env, s.dstApp, s.targetUID)
 	if err != nil {
-		return core.OracleResult{Achieved: false, ObservedState: "pod B rotated/absent — in-flight move severed", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	res := env.Exec(ctx, dst.Name, firstContainerName(dst.Name, env), []string{"sh", "-c", "cat /tmp/.r6th_c2lat 2>/dev/null"})
-	done := strings.Contains(res.Stdout, c2LatMarker)
+	res := env.Exec(ctx, dst.Name, firstContainerName(dst.Name, env), markerReadCommand("/tmp/.r6th_c2lat"))
+	done, err := observedMarker(ctx, res, c2LatMarker)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["commandCompletedInB"] = fmt.Sprintf("%v", done)
 	ev["podB"] = dst.Name
+	ev["observedPodUID"] = string(dst.UID)
 	state := fmt.Sprintf("in-flight command completed in B before rotation=%v", done)
 	return core.OracleResult{Achieved: done, ObservedState: state, Evidence: ev}, nil
 }

@@ -69,7 +69,7 @@ type PhorvexPolicySpec struct {
 	// even if enabled while its weight and execution prerequisites are unresolved.
 	Cover CoverSpec `json:"cover,omitempty"`
 
-	// Selector chooses the pods this policy protects (PRD: selector.matchLabels).
+	// Selector chooses the pods this policy protects, including matchExpressions.
 	// Only pods in this policy's namespace (tenant) that match are considered.
 	// +kubebuilder:validation:Required
 	Selector metav1.LabelSelector `json:"selector"`
@@ -395,10 +395,11 @@ type ActionsSpec struct {
 	Enabled []ActionType `json:"enabled,omitempty"`
 }
 
-// ActionType is one enabled mutation. The native actuator (P-ACTUATOR) enacts the full
-// vocabulary; rotate/quarantine also map to Phoenix Delete/Quarantine via the optional
-// adapter. The advanced/AI moves are native-only and opt-in (a nil/empty Enabled set
-// defaults to rotate+quarantine — the historical behaviour).
+// ActionType is stored policy vocabulary. Runtime support is separate: identity-rotate
+// remains admitted for existing objects but is declared-only for a security effect and
+// refused for new native/hybrid dispatch. rotate/quarantine also map to Phoenix
+// Delete/Quarantine; advanced/AI moves are opt-in. A nil/empty Enabled set defaults
+// to rotate+quarantine.
 // +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;disable
 type ActionType string
 
@@ -411,8 +412,9 @@ const (
 	ActionNoop ActionType = "noop"
 
 	// --- P-ACTUATOR native vocabulary (advanced K8s + AI/GPU; native-only, opt-in) ---
-	ActionDebugger            ActionType = "debugger"
-	ActionCustomInject        ActionType = "custom-inject"
+	ActionDebugger     ActionType = "debugger"
+	ActionCustomInject ActionType = "custom-inject"
+	// ActionIdentityRotate is retained for stored policy compatibility, not execution.
 	ActionIdentityRotate      ActionType = "identity-rotate"
 	ActionRouteRotate         ActionType = "route-rotate"
 	ActionWarmSwap            ActionType = "warm-swap"
@@ -484,7 +486,8 @@ type PhorvexPolicyStatus struct {
 	// +kubebuilder:validation:Optional
 	KillSwitchEngaged bool `json:"killSwitchEngaged"`
 
-	// Conditions includes Ready, DryRun, ValidationError, KillSwitch, ActionsSupported.
+	// Conditions includes Ready, DryRun, ValidationError, KillSwitch,
+	// ActionsSupported, and ActuationPrepared (current tick's backend preparation).
 	// +kubebuilder:validation:Optional
 	// +listType=map
 	// +listMapKey=type

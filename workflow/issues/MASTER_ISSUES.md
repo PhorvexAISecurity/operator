@@ -150,7 +150,7 @@ Severity: HIGH · Tier: 1 · Fixes: M-25
 
 ### M-26 · The anti-decoy gate (`HasEvidence`) is tautologically open on multi-namespace GPU nodes · **OPEN** · `BELIEF`
 
-Severity: HIGH · Tier: 1 · Fixes: none
+Severity: HIGH · Tier: 1 · Fixes: T3-M026
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · belief
@@ -162,6 +162,8 @@ Severity: HIGH · Tier: 1 · Fixes: none
 **What:** The PHVX-72 decoy defense disables the `prov()` discount when `HasEvidence` is true — but `HasEvidence` is set by the same physics-only classifier arm, no adversary signal needed. On any fleet with ≥2 models and ≥2 namespaces per GPU node, the decoy discount never engages on exactly the pods the decoy story is about. Side effect: every such pod permanently reads `stage=gpu-side-channel→model-theft` in dashboards with zero attacker presence.
 **Fix:** gate `HasEvidence` and the AI classifier on an actual adversary signal.
 *Sources: N2.*
+
+**Current scope, 2026-09-15 (T3-M026):** The agreed Tier3 fix closes the selection provenance bypass with strict, trusted age-weighted direct or lateral event observation (`HasEventEvidence`). Broad `HasEvidence` and physical AI/topology classification remain contextual inference; they do not authenticate attack observation. Overdue hygiene remains full weight, while fresh physics-only or annotation-only workloads receive the provenance discount. The historical Fix text above remains the original issue proposal, not the revised implementation contract.
 
 ### M-27 · Kill-chain belief never ages events · **OPEN** · `CLOCK->BELIEF`
 
@@ -852,7 +854,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T2-M081
 
 ### M-92 · Annotation-driven serving URLs: a tenant-controlled SSRF primitive · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T3-M092
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
@@ -1264,7 +1266,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-122 · The actuator demo CLI is stale after the fail-closed fixes · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T3-M122
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native
@@ -1329,7 +1331,7 @@ Severity: ADVISORY · Tier: parallel · Fixes: none
 
 ### M-148 · Three compensation writes discard their error — a failed rollback is silent · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T3-M148
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · the 3 compensation rows with error_handling=DISCARDED: handlers_ai.go:138, handlers_ai_p4set.go:97, handlers_ai_p4set.go:276
@@ -1350,7 +1352,7 @@ Two success-path writes also discard errors (`handlers_ai.go:128` flipping marke
 
 ### M-33 · `identity-rotate` / `route-rotate` are label-only and coverless · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T3-M033
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · identity-rotate Update @ internal/actuator/handlers_k8s.go:286
@@ -1725,7 +1727,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M126
 
 ### M-132 · AMTD guest list ignores matchExpressions; empty MatchLabels suppresses the whole tick · **OPEN** · `CONTRACT`
 
-Severity: HIGH/MINOR · Tier: parallel · Fixes: none
+Severity: HIGH/MINOR · Tier: parallel · Fixes: T3-M132
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.phoenix
@@ -1782,7 +1784,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-86 · The wedge-reconciler family: dry-run bypass, selector-blind, unconditional, error-swallowed, unaudited · **OPEN** · `CONTROL`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T3-M086
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -2328,7 +2330,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-158 · T1-E follow-up: boot DISCOVERY of the deployed CRD action enum into `model.NotInstallable` is unwired — the not-installable gate is live but its set is populated empty · **OPEN** · `CONTRACT`
 
-Severity: LOW · Tier: parallel · Fixes: none
+Severity: LOW · Tier: parallel · Fixes: T3-M158
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · model
@@ -2522,7 +2524,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-169 · Attack watcher and HTTP result readers race on shared mutable outcome records · **OPEN** · `CONSOLE`
 
-Severity: MAJOR · Tier: unassigned · Fixes: none
+Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONSOLE` — anatomy locus review required.
@@ -2567,7 +2569,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-172 · Scenario oracles conflate missing targets and failed observations with attack disruption · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T3-M172
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

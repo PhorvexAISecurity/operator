@@ -13,6 +13,8 @@ package actuator
 import (
 	"context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -34,15 +36,23 @@ const (
 
 // TenantTarget describes one tenant's protected workloads for AMTD maintenance.
 type TenantTarget struct {
-	Tenant         string
-	Namespace      string
-	MatchLabels    map[string]string // the AMTD PodSelector (guest list)
+	Tenant      string
+	Namespace   string
+	PolicyName  string
+	PolicyUID   string
+	Generation  int64
+	MatchLabels map[string]string // the AMTD PodSelector (guest list)
+	// Selector is the complete policy selector. MatchLabels remains for legacy
+	// internal callers; when Selector is supplied it is authoritative.
+	Selector       *metav1.LabelSelector
 	EnabledActions map[model.Action]bool
 }
 
 // Request is one actuation: perform Action on Namespace/Pod for Tenant.
 type Request struct {
-	TargetUID string // Bound identity from the selecting snapshot.
+	TargetUID  string // Bound identity from the selecting snapshot.
+	PolicyName string // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID  string
 
 	Tenant    string
 	Namespace string

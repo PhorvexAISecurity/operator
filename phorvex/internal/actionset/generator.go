@@ -262,6 +262,15 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			generationRank := rank
 			rank++
 			coverKeys := af.CoverByAction[action]
+			if action == model.ActionIdentityRotate {
+				out.Excluded = append(out.Excluded, Exclusion{
+					GenerationRank: generationRank, Key: key, Action: action,
+					Reason:          model.IdentityRotateUnsupportedReason,
+					EligibilityKind: "capability-unsupported",
+					CoverKeys:       append([]string(nil), coverKeys...),
+				})
+				continue
+			}
 			// (1) T1-E capability gate — cheapest-first, before any scoring. Exactly one
 			// reason per excluded action; an SSAR error flags-but-does-not-exclude. When
 			// the gate is not wired (legacy/tests), fall back to the pre-T1-E empty-cover

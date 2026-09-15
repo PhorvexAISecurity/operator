@@ -7,6 +7,7 @@ package actuator
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -25,8 +26,10 @@ import (
 // (ZERO Phoenix imports); every handler is authored from the published k8s.io API
 // contract (clean-room), so the standalone product IP carries no SSPL-derived Go.
 type NativeActuator struct {
-	Client client.Client
-	Reader client.Reader
+	Client           client.Client
+	Reader           client.Reader
+	JournalNamespace string
+	RecoveryVLLM     vLLMClient // optional serving-stack seam for recovery tests; nil uses live client
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -69,6 +72,15 @@ func (*NativeActuator) Name() string { return "native" }
 // EnsurePolicy records the tenant→namespace binding (O7) and pre-stages per-tenant native state where a
 // handler needs it. The base K8s moves need no standing CR, so beyond the binding this is a no-op.
 func (n *NativeActuator) EnsurePolicy(_ context.Context, target TenantTarget) error {
+	if target.Selector != nil {
+		sel := targetSelector(target)
+		if len(sel.MatchLabels)+len(sel.MatchExpressions) == 0 {
+			return fmt.Errorf("native actuator: active tenant %q has empty selector", target.Tenant)
+		}
+		if _, err := metav1.LabelSelectorAsSelector(&sel); err != nil {
+			return fmt.Errorf("native actuator: tenant %q invalid selector: %w", target.Tenant, err)
+		}
+	}
 	if target.Tenant == "" || target.Namespace == "" {
 		return nil
 	}
@@ -102,7 +114,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
@@ -125,7 +137,7 @@ func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) 
 		return nil
 	}
 	if rb, ok := h.(Rollbacker); ok {
-		return rb.Rollback(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun}, req, ref)
+		return rb.Rollback(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace}, req, ref)
 	}
 	return nil
 }

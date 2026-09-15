@@ -268,3 +268,25 @@ func TestGenerateNeverEmitsAnEmptyCoverCandidate(t *testing.T) {
 		}
 	}
 }
+
+func TestM033IdentityVocabularyProducesDeclaredRefusal(t *testing.T) {
+	d := ucwTestDeps(t)
+	pol := testPolicy()
+	pol.EnabledActions = map[model.Action]bool{model.ActionIdentityRotate: true, model.ActionRouteRotate: true}
+	v := baseView("identity")
+	set := d.Generate([]*model.WorkloadView{v}, pol)
+	for _, cand := range set.Candidates {
+		if cand.Action == model.ActionIdentityRotate {
+			t.Fatalf("identity-rotate emitted from real recon producer: %+v", cand)
+		}
+	}
+	for _, ex := range set.Excluded {
+		if ex.Action == model.ActionIdentityRotate {
+			if ex.Reason != model.IdentityRotateUnsupportedReason || ex.EligibilityKind != "capability-unsupported" {
+				t.Fatalf("identity exclusion lacks declared reason: %+v", ex)
+			}
+			return
+		}
+	}
+	t.Fatal("identity vocabulary produced neither candidate nor declared exclusion")
+}

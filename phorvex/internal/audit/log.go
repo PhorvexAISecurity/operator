@@ -406,6 +406,48 @@ func (l *Logger) TenantDisplayNameChanged(previousTenant, currentTenant, owner s
 		"economicIdentityRetained", true)
 }
 
+// Maintenance records every attempted administrative recovery, including refused
+// and partial outcomes. It is a separate wire kind from decision records.
+func (l *Logger) Maintenance(receipt, kind, tenant, namespace, policy, policyUID, targetName, targetUID, outcome, effect string, failure error) {
+	reason := ""
+	if failure != nil {
+		reason = failure.Error()
+	}
+	rec := struct {
+		SchemaVersion string    `json:"schemaVersion"`
+		Kind          string    `json:"kind"`
+		Time          time.Time `json:"time"`
+		Receipt       string    `json:"receipt"`
+		Operation     string    `json:"operation"`
+		Tenant        string    `json:"tenant,omitempty"`
+		Namespace     string    `json:"namespace"`
+		Policy        string    `json:"policy"`
+		PolicyUID     string    `json:"policyUID"`
+		TargetName    string    `json:"targetName"`
+		TargetUID     string    `json:"targetUID"`
+		Outcome       string    `json:"outcome"`
+		Effect        string    `json:"effect"`
+		Error         string    `json:"error,omitempty"`
+	}{SchemaVersionCurrent, "phorvex.maintenance", time.Now().UTC(), receipt, kind, tenant, namespace, policy, policyUID, targetName, targetUID, outcome, effect, reason}
+	l.log.Info("maintenance", "receipt", receipt, "operation", kind, "namespace", namespace, "policy", policy, "policyUID", policyUID, "target", targetName, "targetUID", targetUID, "outcome", outcome, "effect", effect, "error", reason)
+	b, err := json.Marshal(rec)
+	if err != nil {
+		l.log.Error(err, "maintenance audit encoding failed")
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := l.jsonOut
+	if l.sinkFor != nil && tenant != "" {
+		out = l.sinkFor(tenant)
+	}
+	if out != nil {
+		if _, err := out.Write(append(b, '\n')); err != nil {
+			l.log.Error(err, "maintenance audit persistence failed")
+		}
+	}
+}
+
 // RotationObservationTerminated records that an in-flight rotation observation ended because
 // its owning policy was removed. ledgerRecorded distinguishes the two honest arms: with an
 // existing entry the ledger is left untouched (its measured or censored amounts stand), and

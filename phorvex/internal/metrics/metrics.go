@@ -114,6 +114,11 @@ var (
 		Help: "SecurityEvents actually emitted to Phoenix (active mode only).",
 	}, []string{"tenant", "action"})
 
+	maintenanceAttempts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_maintenance_attempts_total",
+		Help: "Protected operation journal recovery attempts by operation and confirmed/refused/partial outcome; no object identity labels.",
+	}, []string{"operation", "outcome"})
+
 	ticksTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_ticks_total",
 		Help: "Decision ticks executed, by tenant and policy. The policy label keeps two policies that share one tenant name from collapsing into a single series (M-145).",
@@ -201,7 +206,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda, policyLambda, tenantCollisions,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
+		decisionsTotal, actuationsTotal, maintenanceAttempts, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
@@ -408,6 +413,10 @@ func RecordEventAgedOut(tenant string) {
 
 func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
+}
+
+func RecordMaintenanceAttempt(operation, outcome string) {
+	maintenanceAttempts.WithLabelValues(operation, outcome).Inc()
 }
 
 // RecordActionSetRejection counts a fail-closed tick before any decision or actuation.

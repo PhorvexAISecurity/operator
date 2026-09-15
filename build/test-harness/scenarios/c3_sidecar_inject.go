@@ -3,7 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
-	"strings"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -20,7 +20,10 @@ func init() { core.RegisterScenario(&c3SidecarInject{}) }
 // and writes proof. R6 CANNOT respond: admission-time mutation; no webhook
 // actuator; a rotation re-creates the pod from its (already-poisoned) spec,
 // re-injecting the sidecar.
-type c3SidecarInject struct{ app string }
+type c3SidecarInject struct {
+	app       string
+	targetUID types.UID
+}
 
 const sidecarProofMarker = "R6TH-SIDECAR-READ-SHARED-VOLUME"
 
@@ -72,22 +75,32 @@ func (s *c3SidecarInject) Execute(ctx context.Context, env *core.Env) (core.Atta
 	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
 		return core.AttackResult{}, err
 	}
+	original, err := runningPodByApp(ctx, env, s.app)
+	if err != nil {
+		return core.AttackResult{}, fmt.Errorf("stimulus target unavailable: %w", err)
+	}
+	s.targetUID = original.UID
 	stages := []string{"admission: pod admitted with injected sidecar (T1610)", "sidecar-exec: reads shared volume with granted access (T1525)"}
 	return core.AttackResult{Stages: stages, Commands: []string{"create pod with injected-sidecar container"}}, nil
 }
 
 func (s *c3SidecarInject) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(3 * time.Second)
+	observationPause(3 * time.Second)
 	ev := map[string]string{}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	ev["originalPodUID"] = string(s.targetUID)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		ev["sidecarRan"] = "false"
-		return core.OracleResult{Achieved: false, ObservedState: "pod absent", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	res := env.Exec(ctx, pod.Name, "app", []string{"sh", "-c", "cat /shared/proof 2>/dev/null"})
-	ran := strings.Contains(res.Stdout, sidecarProofMarker)
+	res := env.Exec(ctx, pod.Name, "app", markerReadCommand("/shared/proof"))
+	ran, err := observedMarker(ctx, res, sidecarProofMarker)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["sidecarRan"] = fmt.Sprintf("%v", ran)
 	ev["observedPod"] = pod.Name
+	ev["observedPodUID"] = string(pod.UID)
 	state := fmt.Sprintf("injected sidecar read shared volume + wrote proof=%v", ran)
 	return core.OracleResult{Achieved: ran, ObservedState: state, Evidence: ev}, nil
 }

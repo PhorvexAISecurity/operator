@@ -555,3 +555,129 @@ fixes:
     - T2-M016
     branch: fix/v3-m153-steering-trace
     head_sha: f6937358bf061e4d047c4ac601378019cb19cfe1
+  T3-M026:
+    directory: fixes/T3-M026
+    aliases: []
+    issues:
+    - M-26
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m026
+    head_sha: 47d5b5750d243b3a91a25553596304b8600be468
+  T3-M033:
+    directory: fixes/T3-M033
+    aliases: []
+    issues:
+    - M-33
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - T3-M169
+    - T3-M026
+    branch: fix/t3-m033
+    head_sha: 8e151790df7350243a630f9d8b3b92fc66e92001
+  T3-M086:
+    directory: fixes/T3-M086
+    aliases: []
+    issues:
+    - M-86
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m086
+    head_sha: 12361303dba164d1fdb5bad21b77701d99bc4ca2
+  T3-M092:
+    directory: fixes/T3-M092
+    aliases: []
+    issues:
+    - M-92
+    related_issues: []
+    state: BLOCKED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m092
+    head_sha: null
+  T3-M122:
+    directory: fixes/T3-M122
+    aliases: []
+    issues:
+    - M-122
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - T3-M169
+    - T3-M026
+    - T3-M132
+    - T3-M086
+    - T3-M158
+    - T3-M033
+    branch: fix/t3-m122
+    head_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+  T3-M132:
+    directory: fixes/T3-M132
+    aliases: []
+    issues:
+    - M-132
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - T3-M169
+    branch: fix/t3-m132
+    head_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+  T3-M148:
+    directory: fixes/T3-M148
+    aliases: []
+    issues:
+    - M-148
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - T3-M169
+    - T3-M026
+    - T3-M132
+    - T3-M086
+    branch: fix/t3-m148
+    head_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+  T3-M158:
+    directory: fixes/T3-M158
+    aliases: []
+    issues:
+    - M-158
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - T3-M169
+    branch: fix/t3-m158
+    head_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+  T3-M169:
+    directory: fixes/T3-M169
+    aliases: []
+    issues:
+    - M-169
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t3-m169
+    head_sha: ad9c56c9a4685d44cd3673f60a698b5960bba327
+  T3-M172:
+    directory: fixes/T3-M172
+    aliases: []
+    issues:
+    - M-172
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on:
+    - T3-M169
+    - T3-M026
+    branch: fix/t3-m172
+    head_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
