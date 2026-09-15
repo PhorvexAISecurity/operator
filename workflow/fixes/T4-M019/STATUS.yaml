@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -93,7 +93,7 @@ issues:
 - M-19
 title: 'No failure feedback: a permanently-failing move is re-selected forever'
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -120,11 +120,11 @@ implementation:
   head_sha: 0e05348544a4b7de0d7f2984913ce1fdbf09f9e4
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/211
+  reviewed_head: 17f9acdc0c48b2f1621dcbd44b1f5e4be0c2ea2a
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -155,9 +155,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-15T18:02:12+00:00'
+  action: Await owner/DevOps merge and deployment of PR211; codex-lead verifies the
+    deployed source and issue-specific live acceptance.
+updated_at: '2026-09-15T18:04:13+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:08+00:00'
   by: codex-lead
@@ -179,6 +179,11 @@ configuration_history:
   by: sol-t4-m019
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-15T18:04:12+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -244,6 +249,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-15T18:04:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T4-M019:9:review

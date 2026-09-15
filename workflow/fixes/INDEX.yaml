@@ -687,7 +687,7 @@ fixes:
     issues:
     - M-4
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t4-m004
@@ -698,7 +698,7 @@ fixes:
     issues:
     - M-19
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t4-m019
@@ -709,7 +709,7 @@ fixes:
     issues:
     - M-57
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t4-m057
@@ -720,7 +720,7 @@ fixes:
     issues:
     - M-66
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t4-m066
@@ -731,7 +731,7 @@ fixes:
     issues:
     - M-95
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t4-m095
@@ -742,7 +742,7 @@ fixes:
     issues:
     - M-171
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t4-m171
