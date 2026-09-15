@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -45,9 +45,10 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: fix/t3-m158
-  base_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  base_sha: c3e503872d2cbda85947930684b84eb247273625
   head_sha: null
-  stacked_on: []
+  stacked_on:
+  - T3-M169
 pull_request:
   url: null
   reviewed_head: null
@@ -85,7 +86,7 @@ residuals: []
 next_action:
   owner: sol-t3-m158
   action: Implement signed installed vocabulary discovery when worker slot opens
-updated_at: '2026-09-15T06:19:32+00:00'
+updated_at: '2026-09-15T06:51:38+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:44+00:00'
   by: codex-lead
@@ -108,6 +109,11 @@ configuration_history:
   fields:
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T06:51:38+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING

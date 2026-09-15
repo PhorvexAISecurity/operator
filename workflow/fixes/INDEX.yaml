@@ -641,7 +641,8 @@ fixes:
     related_issues: []
     state: AGREED
     dependencies: []
-    stacked_on: []
+    stacked_on:
+    - T3-M169
     branch: fix/t3-m158
     head_sha: null
   T3-M169:
