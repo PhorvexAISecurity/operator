@@ -753,8 +753,8 @@ fixes:
     issues:
     - M-167
     related_issues: []
-    state: PR_READY
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t5-m167
-    head_sha: 2f56dfe1e987aed00ad01bfbc70b740ce77d9a1c
+    head_sha: b63ca37b27612a9cfa10f261b74ea3db54e20ec9
