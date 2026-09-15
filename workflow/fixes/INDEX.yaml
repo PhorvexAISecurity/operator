@@ -572,7 +572,7 @@ fixes:
     issues:
     - M-33
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m033
@@ -638,7 +638,7 @@ fixes:
     issues:
     - M-158
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m158
