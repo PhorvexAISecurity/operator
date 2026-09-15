@@ -35,7 +35,7 @@ var groupBScenarios = []struct {
 	// KV-cache.
 	{"ai2-kvcache-poisoning-cross-session-leak", core.CategoryModernUnsupported, core.R6CannotRespond, []core.Capability{core.CapGPU}},
 	// AI supply chain.
-	{"ai2-poisoned-model-registry", core.CategoryR6Claimed, core.R6Covers, nil},
+	{"ai2-poisoned-model-registry", core.CategoryR6Claimed, core.R6CannotRespond, nil},
 	{"ai2-malicious-model-artifact", core.CategoryR6Claimed, core.R6Covers, nil},
 	{"ai2-tampered-inference-base-image", core.CategoryModernUnsupported, core.R6Partial, nil},
 	// RAG / data-plane.
@@ -157,7 +157,7 @@ func TestGroupBMTDEffectDerivation(t *testing.T) {
 		// Tampered base image: same ref re-pulled -> tamper re-appears -> CANNOT-HELP.
 		{"ai2-tampered-inference-base-image (same-ref)", true, false, false, core.MTDCannotHelp},
 		// Supply-chain with INJECTED trigger neutralizing the foothold -> NEUTRALIZES.
-		{"ai2-poisoned-model-registry (injected-drift, fullphoenix)", false, true, true, core.MTDNeutralizes},
+		{"ai2-poisoned-model-registry (emitter-only, no repair)", true, false, false, core.MTDCannotHelp},
 		{"ai2-malicious-model-artifact (injected-panic, fullphoenix)", false, true, true, core.MTDNeutralizes},
 		// Query-extraction held-session: persistence bounded but the act still landed
 		// -> BOUNDS-ONLY (rotation caps dwell, not the distillation).

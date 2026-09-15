@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,92 @@ checks:
     at: '2026-09-15T10:31:26+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/red-baseline.txt
+    sha256: 76110aea8a8c08d42ac5bef56f99563db8e55880ac65cb49436b234aad0c4cce
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T11:29:26+00:00'
+  preflight:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/preflight/receipt.json
+    sha256: 67d0aae1af203c96f475e34d9ab6d2efbd4508802963b959df98c618490ce770
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:33:30+00:00'
+  implementation:
+    result: PASS
+    by: sol-t4-m171
+    artifact: 04-diff.patch
+    sha256: 7dbdc73d6a2a3842bbe16c6e95d553ca10fe7269de6fa3869c986988e80e5bea
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:33:30+00:00'
+  l0:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/green-harness.txt
+    sha256: 897b2ef91d250e67e1054f8b454c25566a263b239fa3f552c6f2a94b1cecbe41
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:33:30+00:00'
+    inputs:
+    - build/ATTACKS-AI.md
+    - build/EFFECTIVENESS-AI.md
+    - build/test-harness
+    - workflow/fixes/T4-M171/verify.sh
+    inputs_sha256: 18322399d6df22c200e85df8caf51ff031b2613594aded20f00387a8d62be788
+  l1:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/l1-no-repair.txt
+    sha256: 6a85c7c4cd721568aa4fb3cc6acd5c5461fa364f82891492eeedf0d626bf132a
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:33:30+00:00'
+    inputs:
+    - build/test-harness/scenarios
+    inputs_sha256: 33636deb6fd4a2c15e722b22207b5a63f611b17f031f4654c9a06163896fd3f6
+  l2:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/green-runner.txt
+    sha256: d0611869d0da58931fc477424f58e6289fb2a90b67a48346ad3d7ecc3ae76dcb
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:33:30+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: e4e15f91fb0aa1da53cd9841e6dc13ee4c521885e806cd253d4f32e5de01d380
+  positive_control:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/positive-control.txt
+    sha256: d0611869d0da58931fc477424f58e6289fb2a90b67a48346ad3d7ecc3ae76dcb
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:33:30+00:00'
+    inputs:
+    - build/test-harness
+    inputs_sha256: e4e15f91fb0aa1da53cd9841e6dc13ee4c521885e806cd253d4f32e5de01d380
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 48ef1b0991eb3f696bd9f81d84c39ef4e0ede5a873256b272d8aa150d47a624e
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:36:17+00:00'
+    baseline_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: a5b596f3b7bf81d2ce238f201fc231d447cac89b6eee0b252c21f146046fce49
+    source_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+    at: '2026-09-15T11:36:17+00:00'
+    incident_sha256: 48ef1b0991eb3f696bd9f81d84c39ef4e0ede5a873256b272d8aa150d47a624e
 fix_id: T4-M171
 issues:
 - M-171
 title: AI scenario harness performs the defense it later attributes to the defender
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +125,7 @@ blind_derivation:
 implementation:
   branch: fix/t4-m171
   base_sha: ecac2d7229a9701be64ed90886393906e2c4f067
-  head_sha: null
+  head_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +146,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t4-m171
-  action: Implement signed plan; await heavy-test slot; submit-review with no notification
-updated_at: '2026-09-15T10:31:26+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T11:36:20+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:20+00:00'
   by: codex-lead
@@ -97,6 +178,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T11:33:30+00:00'
+  by: sol-t4-m171
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -114,3 +200,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T11:33:30+00:00'
+  by: sol-t4-m171
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T11:33:31+00:00'
+  by: sol-t4-m171
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T11:36:18+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T11:36:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T4-M171:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
