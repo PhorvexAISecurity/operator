@@ -34,6 +34,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
@@ -49,9 +50,40 @@ type Server struct {
 	// [P-VCLUSTER Pass 2] multi-tenant write-path components:
 	quota    *TenantQuota     // per-tenant DoS limiter on tenant-facing surfaces
 	applyfix *ApplyFixManager // the safe apply-fix write-path
+	stateMu  sync.RWMutex
+	stateErr string
 }
 
-func NewServer(cfg Config) *Server { return &Server{cfg: cfg, runs: NewRunManager(cfg)} }
+func (s *Server) recordStateError(err error) {
+	if err == nil {
+		return
+	}
+	s.stateMu.Lock()
+	s.stateErr = err.Error()
+	s.stateMu.Unlock()
+}
+func (s *Server) stateStatus() (bool, string) {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.stateErr == "", s.stateErr
+}
+
+func NewServer(cfg Config) *Server {
+	// Standalone callers historically supplied HarnessDir directly. Root alone is a read-only
+	// source location and never implies a writable or globally shared fallback.
+	if cfg.StateDir == "" {
+		if cfg.HarnessDir != "" {
+			cfg.StateDir = cfg.HarnessDir
+		}
+	}
+	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+	if cfg.StateDir == "" {
+		s.stateErr = "console state directory is not configured"
+	} else if s.runs.loadErr != nil {
+		s.stateErr = s.runs.loadErr.Error()
+	}
+	return s
+}
 
 // EnableAuth installs the verified-identity boundary. Without it the API is closed: there is no
 // "demo trust" construction path, so a deployment cannot forget to configure authentication and
@@ -175,13 +207,17 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // diagnostics is the authenticated form of what /api/health used to disclose: whether the
 // harness corpora and binaries this console reads are actually present.
 func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
+	available, stateErr := s.stateStatus()
 	writeJSON(w, 200, map[string]any{
-		"ok":           true,
-		"root":         s.cfg.Root,
-		"hasP3Deep":    fileExists(s.harnessOutCfg("out-p3deep")),
-		"hasPactuator": fileExists(s.harnessOutCfg("out-pactuator")),
-		"phorvexBin":   fileExists(s.cfg.PhorvexBin),
-		"harnessBin":   fileExists(s.cfg.HarnessBin),
+		"ok":             true,
+		"root":           s.cfg.Root,
+		"hasP3Deep":      fileExists(s.harnessOutCfg("out-p3deep")),
+		"hasPactuator":   fileExists(s.harnessOutCfg("out-pactuator")),
+		"phorvexBin":     fileExists(s.cfg.PhorvexBin),
+		"harnessBin":     fileExists(s.cfg.HarnessBin),
+		"stateDir":       s.cfg.StateDir,
+		"stateAvailable": available,
+		"stateError":     stateErr,
 	})
 }
 

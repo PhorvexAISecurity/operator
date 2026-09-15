@@ -75,8 +75,8 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	metricsPath := filepath.Join(s.cfg.HarnessDir, outDir, "metrics.jsonl")
-	logPath := filepath.Join(s.cfg.HarnessDir, outDir, "console-run.log")
+	metricsPath := filepath.Join(s.cfg.runOutputPath(outDir), "metrics.jsonl")
+	logPath := filepath.Join(s.cfg.runOutputPath(outDir), "console-run.log")
 
 	send := func(v any) {
 		b, _ := json.Marshal(v)
@@ -120,7 +120,7 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request) {
 				Observed: row.ObservedState, Commands: row.Commands, DefensiveActions: row.DefensiveActions,
 			})
 		})
-		if st := s.runs.runState(id); st == "done" || st == "error" || st == "stopped" {
+		if st := s.runs.runState(id); st == "done" || st == "partial" || st == "error" || st == "stopped" {
 			drain++ // one more pass to flush the final rows, then end cleanly.
 			if drain >= 2 {
 				send(map[string]any{"type": "end", "state": st})

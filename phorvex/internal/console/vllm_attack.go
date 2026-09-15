@@ -62,8 +62,15 @@ spec:
 		return ferr
 	}
 	defer os.Remove(f.Name())
-	_, _ = f.WriteString(yaml)
-	_ = f.Close()
+	if _, ferr = f.WriteString(yaml); ferr == nil {
+		ferr = f.Sync()
+	}
+	if cerr := f.Close(); ferr == nil {
+		ferr = cerr
+	}
+	if ferr != nil {
+		return fmt.Errorf("write SecurityEvent manifest: %w", ferr)
+	}
 	if out, e := s.cfg.execText(10*time.Second, "kubectl", "-n", vllmAttackNS, "apply", "-f", f.Name()); e != nil {
 		return fmt.Errorf("apply SecurityEvent: %s", strings.TrimSpace(out))
 	}
@@ -89,11 +96,17 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 	execIn := func(sh string) (string, error) {
 		return s.cfg.execText(20*time.Second, "kubectl", "-n", vllmAttackNS, "exec", pod, "--", "sh", "-c", sh)
 	}
-	kctl := func(args ...string) { _, _ = s.cfg.execText(8*time.Second, "kubectl", append([]string{"-n", vllmAttackNS}, args...)...) }
+	kctl := func(args ...string) {
+		_, _ = s.cfg.execText(8*time.Second, "kubectl", append([]string{"-n", vllmAttackNS}, args...)...)
+	}
 
 	// snapshot the defense baseline BEFORE the attack lands (esp. the adapter epoch for poison) so a
 	// fast operator reaction is correctly attributed and not absorbed into the baseline.
 	base := s.snapshotBaseline(vllmAttackNS, pod)
+	if err := s.persistEffectIntent("/api/vllm/attack", actorOf(r), vllmAttackNS, body.Action); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "attack refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 
 	switch body.Action {
 	case "poison":

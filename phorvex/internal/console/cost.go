@@ -63,7 +63,7 @@ func comparePointerFile(context string) string {
 // friendly run id, or ("","") if none. This is what makes the comparison DYNAMIC + per-provider:
 // after a live 3-way attack on a provider, that provider's panels read THAT run.
 func (c *Config) latestComparePath(context string) (path, runID string) {
-	b, err := os.ReadFile(filepath.Join(c.HarnessDir, comparePointerFile(context)))
+	b, err := os.ReadFile(c.statePath(comparePointerFile(context)))
 	if err != nil {
 		return "", ""
 	}
@@ -71,7 +71,7 @@ func (c *Config) latestComparePath(context string) (path, runID string) {
 	if outDir == "" {
 		return "", ""
 	}
-	p := filepath.Join(c.HarnessDir, outDir, "metrics.jsonl")
+	p := filepath.Join(c.runOutputPath(outDir), "metrics.jsonl")
 	// Only adopt the run if it actually measured ALL THREE strategies — a partial/interrupted run
 	// (e.g. timed out before the blind arm) would otherwise render a broken 3-way. Fall back to the
 	// static benchmark when incomplete.

@@ -144,10 +144,10 @@ func TestPolicyEditPropagatesAPIServerRejectionVerbatim(t *testing.T) {
 		t.Fatalf("audit entries = %+v", entries)
 	}
 
-	// A transport/exec failure (no server verdict) stays 502 and is still ok:false.
+	// A transport/exec failure after dispatch has an unknown effect and is unsafe to retry.
 	s2, _, _ := guardServer(t, "Unable to connect to the server: dial tcp: i/o timeout", errors.New("exit status 1"))
 	w2, resp2 := postEdit(t, s2, `{"namespace":"vllm","name":"vllm-defense","mode":"active"}`)
-	if w2.Code != 502 || resp2["ok"] != false {
+	if w2.Code != 502 || resp2["ok"] != false || resp2["verdict"] != "effect-unknown" || resp2["unsafeToRetry"] != true || resp2["effectUnknown"] != true {
 		t.Fatalf("transport failure: status %d resp %v", w2.Code, resp2)
 	}
 }

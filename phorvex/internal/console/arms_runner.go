@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -109,6 +108,12 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "no PhorvexPolicy in " + ns})
 		return
 	}
+	intent, _ := json.Marshal(map[string]any{"kind": "phorvex.console.experiment", "phase": "intent", "time": time.Now().UTC(), "namespace": ns, "deploy": deploy, "attack": attack})
+	if err := s.cfg.appendState(s.cfg.statePath("experiment-events.jsonl"), intent); err != nil {
+		s.failArms(ns, "experiment evidence unavailable: "+err.Error())
+		writeJSON(w, 503, map[string]string{"error": "experiment refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 	go s.armsWorker(ns, deploy, policy, attack)
 
 	writeJSON(w, 200, map[string]any{"ok": true, "namespace": ns, "deploy": deploy,
@@ -192,11 +197,12 @@ func (s *Server) armsWorker(ns, deploy, policy, attack string) {
 
 	rec := armExperiment{RunAt: mark(), Namespace: ns, Deploy: deploy, Attack: attack,
 		ArmAStart: a0, ArmAEnd: a1, ArmBStart: b0, ArmBEnd: b1, ArmCStart: c0, ArmCEnd: c1}
-	if b, err := json.Marshal(rec); err == nil {
-		if f, ferr := os.OpenFile(armsPath(s.cfg), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); ferr == nil {
-			_, _ = f.Write(append(b, '\n'))
-			_ = f.Close()
-		}
+	if b, err := json.Marshal(rec); err != nil {
+		s.failArms(ns, "encode experiment result: "+err.Error())
+		return
+	} else if err = s.cfg.appendState(armsPath(s.cfg), b); err != nil {
+		s.failArms(ns, "experiment completed but outcome evidence is unavailable; unsafe to retry: "+err.Error())
+		return
 	}
 	s.setArmsPhase(ns, "done", "complete — results below", 100)
 }

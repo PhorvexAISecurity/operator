@@ -94,8 +94,15 @@ spec:
 		return err
 	}
 	defer os.Remove(f.Name())
-	_, _ = f.WriteString(yaml)
-	_ = f.Close()
+	if _, err = f.WriteString(yaml); err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("write SecurityEvent manifest: %w", err)
+	}
 	if out, e := s.cfg.execText(10*time.Second, "kubectl", "-n", ns, "apply", "-f", f.Name()); e != nil {
 		return fmt.Errorf("apply SecurityEvent: %s", strings.TrimSpace(out))
 	}
@@ -150,6 +157,10 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 
 	// Clear: delete this scenario's event so the app returns to a calm baseline.
 	if body.Action == "clear" {
+		if err := s.persistEffectIntent("/api/scenario/fire", actorOf(r), ns, "clear:"+scenario); err != nil {
+			writeJSON(w, 503, map[string]string{"error": "clear refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+			return
+		}
 		_, _ = s.cfg.execText(8*time.Second, "kubectl", "-n", ns, "delete", "securityevent", evName, "--ignore-not-found")
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "clear", "scenario": scenario,
 			"message": "Cleared " + scenario + " in " + ns + "."})
@@ -198,6 +209,10 @@ func (s *Server) fireScenarioLive(w http.ResponseWriter, r *http.Request) {
 	// is steered to it (kv-reset/guardrail-rotate/request-drain/adapter-rotate) instead of the
 	// cheapest generic cover; "" (e.g. rotate/quarantine) keeps the recognised "Panic" default.
 	vector := model.AttackVectorForActuator(expected)
+	if err := s.persistEffectIntent("/api/scenario/fire", actorOf(r), ns, "fire:"+scenario); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "attack refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 	if err := s.fireSecurityEventAt(ns, pod, evName, desc, vector); err != nil {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return

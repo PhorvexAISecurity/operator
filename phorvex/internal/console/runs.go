@@ -10,8 +10,10 @@
 package console
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -107,10 +109,67 @@ type RunManager struct {
 	seq       int
 	active    int       // currently-running exec count
 	lastStart time.Time // for the min-interval rate limit
+	loadErr   error
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	return &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}}
+	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}}
+	rm.loadErr = rm.loadStatuses()
+	return rm
+}
+
+type persistedRunStatus struct {
+	Kind  string    `json:"kind"`
+	Phase string    `json:"phase"`
+	Out   string    `json:"out"`
+	Run   RunStatus `json:"run"`
+}
+
+func (rm *RunManager) persistStatus(st *RunStatus, out string) error {
+	b, err := json.Marshal(persistedRunStatus{Kind: "phorvex.console.run", Phase: "status", Out: out, Run: *st})
+	if err != nil {
+		return err
+	}
+	return rm.cfg.appendState(rm.cfg.statePath("run-events.jsonl"), b)
+}
+
+func (rm *RunManager) loadStatuses() error {
+	path := rm.cfg.statePath("run-events.jsonl")
+	if path == "" {
+		return nil
+	}
+	b, err := readStateLedgerHistory(path)
+	if err != nil {
+		return fmt.Errorf("read retained runs: %w", err)
+	}
+	if len(b) == 0 {
+		return nil
+	}
+	sc := bufio.NewScanner(bytes.NewReader(b))
+	sc.Buffer(make([]byte, 4096), consoleStateRecordLimit)
+	for sc.Scan() {
+		var p persistedRunStatus
+		if err = json.Unmarshal(sc.Bytes(), &p); err != nil {
+			return fmt.Errorf("malformed retained run status: %w", err)
+		}
+		if p.Phase != "status" {
+			continue
+		}
+		cp := p.Run
+		if cp.State == "running" || cp.State == "queued" {
+			cp.State = "error"
+			cp.Error = "run interrupted by console restart"
+			cp.Finished = tsNow()
+		}
+		rm.runs[cp.ID], rm.runOut[cp.ID] = &cp, p.Out
+		if n := seqOf(cp.ID); n > rm.seq {
+			rm.seq = n
+		}
+	}
+	if err = sc.Err(); err != nil {
+		return fmt.Errorf("read retained runs: %w", err)
+	}
+	return nil
 }
 
 const (
@@ -217,16 +276,59 @@ func (rm *RunManager) Start(name string, nativeActuator bool, startedAt, owner s
 	rm.active++
 	rm.lastStart = time.Now()
 	id := fmt.Sprintf("run-%d", rm.seq)
+	runtimeSuite, err := rm.prepareSuite(id, su)
+	if err != nil {
+		rm.active--
+		rm.mu.Unlock()
+		return "", fmt.Errorf("prepare durable run: %w", err)
+	}
+	su = runtimeSuite
 	// dest is what SuiteDestination read out of the suite's own config — never a stamped default.
 	// Both halves are recorded so a later run-id lookup is authorized against the cluster AND the
 	// namespace this run actually drives.
 	st := &RunStatus{ID: id, Config: name, State: "running", Started: startedAt, Date: tsNow(), NativeActuator: nativeActuator, Owner: owner, ScopeTarget: normalizeTargetID(dest.ScopeTarget), ScopeTenant: dest.ScopeTenant}
 	rm.runs[id] = st
 	rm.runOut[id] = su.OutDir
+	if err := rm.persistStatus(st, su.OutDir); err != nil {
+		delete(rm.runs, id)
+		delete(rm.runOut, id)
+		rm.active--
+		rm.mu.Unlock()
+		return "", fmt.Errorf("persist run status before effect: %w", err)
+	}
 	rm.mu.Unlock()
 
 	go rm.run(id, su, nativeActuator)
 	return id, nil
+}
+
+func (rm *RunManager) prepareSuite(id string, su suite) (suite, error) {
+	if rm.cfg.runsDir() == "" {
+		return suite{}, fmt.Errorf("console state directory is not configured")
+	}
+	raw, err := os.ReadFile(filepath.Join(rm.cfg.HarnessDir, su.File))
+	if err != nil {
+		return suite{}, err
+	}
+	var doc map[string]any
+	if err = yaml.Unmarshal(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")), &doc); err != nil {
+		return suite{}, err
+	}
+	out := id
+	doc["outDir"] = rm.cfg.runOutputPath(out)
+	raw, err = yaml.Marshal(doc)
+	if err != nil {
+		return suite{}, err
+	}
+	configPath := filepath.Join(rm.cfg.runsDir(), "configs", id+".yaml")
+	if err = atomicWriteState(configPath, raw); err != nil {
+		return suite{}, err
+	}
+	intent, _ := json.Marshal(map[string]any{"kind": "phorvex.console.run", "phase": "intent", "time": time.Now().UTC(), "id": id, "config": su.File})
+	if err = rm.cfg.appendState(rm.cfg.statePath("run-events.jsonl"), intent); err != nil {
+		return suite{}, err
+	}
+	return suite{File: configPath, OutDir: out, Desc: su.Desc}, nil
 }
 
 // Stop terminates a running attack: it kills the harness AND the operator children it spawned
@@ -246,6 +348,10 @@ func (rm *RunManager) Stop(id string) error {
 		st.State = "stopped"
 		st.Finished = tsNow()
 		st.Error = "cancelled while queued"
+		if err := rm.persistStatus(st, rm.runOut[id]); err != nil {
+			rm.mu.Unlock()
+			return fmt.Errorf("stop recorded in memory but persistence failed: %w", err)
+		}
 		rm.mu.Unlock()
 		return nil
 	}
@@ -311,6 +417,9 @@ func (rm *RunManager) ClusterTargets() []ClusterTarget {
 // own synthetic attacker + victim into `namespace` and confines every object there — it does
 // not touch pre-existing workloads in other namespaces.
 func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, targetID, namespace, startedAt, owner string) (string, error) {
+	if rm.cfg.runsDir() == "" {
+		return "", fmt.Errorf("console state directory is not configured")
+	}
 	if len(scenarios) == 0 {
 		return "", fmt.Errorf("no scenario selected")
 	}
@@ -371,14 +480,18 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	outDir := "out-console-" + id
 	rm.mu.Unlock()
 	cfg := fmt.Sprintf("kubeconfig: \"\"\ncontext: %q\nnamespace: %q\nownedAck: true\ntrialsPerArm: 2\nmasterSeed: 1337\nphoenixSrcDir: %q\noutDir: %q\ndefenderFilter: %s\nscenarioFilter: [%s]\n",
-		target, namespace, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), filepath.Join(rm.cfg.HarnessDir, outDir), arms, scenList)
-	cfgPath := filepath.Join(rm.cfg.HarnessDir, "config.console-"+id+".yaml")
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
+		target, namespace, filepath.Join(rm.cfg.Root, "build", "phoenix-extended"), rm.cfg.runOutputPath(outDir), arms, scenList)
+	cfgPath := filepath.Join(rm.cfg.runsDir(), "configs", "config.console-"+id+".yaml")
+	if err := atomicWriteState(cfgPath, []byte(cfg)); err != nil {
+		return "", err
+	}
+	intent, _ := json.Marshal(map[string]any{"kind": "phorvex.console.run", "phase": "intent", "time": time.Now().UTC(), "id": id, "scenarios": scenarios, "namespace": namespace, "target": target})
+	if err := rm.cfg.appendState(rm.cfg.statePath("run-events.jsonl"), intent); err != nil {
 		return "", err
 	}
 	// A 3-way (compare3) run uses the NATIVE actuator so the Phorvex arm actually rotates the
 	// sandbox victim (direct client-go pod delete) — reliable + fast, so it visibly disrupts the attack.
-	su := suite{File: "config.console-" + id + ".yaml", OutDir: outDir}
+	su := suite{File: cfgPath, OutDir: outDir}
 	rm.mu.Lock()
 	// QUEUE rather than reject: when a slot is busy the run waits in FIFO and auto-starts on completion
 	// (the harness shares one sandbox ns + fixed operator ports, so concurrent runs would collide).
@@ -392,6 +505,15 @@ func (rm *RunManager) StartScenario(scenarios []string, withPX, compare3 bool, t
 	st := &RunStatus{ID: id, Config: scenLabel, State: state, Started: startedAt, Date: tsNow(), NativeActuator: withPX, Compare3: compare3, Namespace: namespace, Target: target, Provider: provider, TargetLabel: targetLabel, ExpectedTrials: expectedTrials, Owner: owner, ScopeTarget: normalizeTargetID(target), ScopeTenant: namespace}
 	rm.runs[id] = st
 	rm.runOut[id] = outDir
+	if err := rm.persistStatus(st, outDir); err != nil {
+		delete(rm.runs, id)
+		delete(rm.runOut, id)
+		if !queued && rm.active > 0 {
+			rm.active--
+		}
+		rm.mu.Unlock()
+		return "", fmt.Errorf("persist run status before effect: %w", err)
+	}
 	if queued {
 		rm.pending[id] = pendingRun{su: su, native: compare3}
 		rm.queue = append(rm.queue, id)
@@ -519,7 +641,7 @@ func (rm *RunManager) Status(id string) (*RunStatus, bool) {
 		return nil, false
 	}
 	// refresh the live arm summary from the streaming metrics.jsonl (the config's out dir).
-	out := filepath.Join(rm.cfg.HarnessDir, rm.runOut[id], "metrics.jsonl")
+	out := filepath.Join(rm.cfg.runOutputPath(rm.runOut[id]), "metrics.jsonl")
 	if rows, ok := readMetrics(out); ok {
 		st.Arms, st.Trials = summarizeArms(rows)
 	}
@@ -535,7 +657,7 @@ func (rm *RunManager) List() []RunStatus {
 	defer rm.mu.Unlock()
 	out := make([]RunStatus, 0, len(rm.runs))
 	for id, st := range rm.runs {
-		if rows, ok := readMetrics(filepath.Join(rm.cfg.HarnessDir, rm.runOut[id], "metrics.jsonl")); ok {
+		if rows, ok := readMetrics(filepath.Join(rm.cfg.runOutputPath(rm.runOut[id]), "metrics.jsonl")); ok {
 			st.Arms, st.Trials = summarizeArms(rows)
 		}
 		cp := *st
@@ -573,7 +695,7 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), cap)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, rm.cfg.HarnessBin,
-		"-config", filepath.Join(rm.cfg.HarnessDir, su.File),
+		"-config", su.File,
 		"-negative-control=false", "-adaptive=false")
 	cmd.Dir = rm.cfg.HarnessDir
 	cmd.Env = append(envBase(), "NO_COLOR=1")
@@ -585,12 +707,18 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// Capture the harness's live stdout/stderr to a per-run log the timeline SSE tails (the
 	// "=== scenario=… defender=… trial=N ===" stage headers stream from here in real time).
-	outAbs := filepath.Join(rm.cfg.HarnessDir, su.OutDir)
-	_ = os.MkdirAll(outAbs, 0o755)
-	if lf, lerr := os.Create(filepath.Join(outAbs, "console-run.log")); lerr == nil {
-		cmd.Stdout, cmd.Stderr = lf, lf
-		defer lf.Close()
+	outAbs := rm.cfg.runOutputPath(su.OutDir)
+	if mkErr := os.MkdirAll(outAbs, 0o750); mkErr != nil {
+		rm.failRunBeforeStart(id, mkErr)
+		return
 	}
+	lf, lerr := os.OpenFile(filepath.Join(outAbs, "console-run.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+	if lerr != nil {
+		rm.failRunBeforeStart(id, lerr)
+		return
+	}
+	cmd.Stdout, cmd.Stderr = lf, lf
+	defer lf.Close()
 	var err error
 	if serr := cmd.Start(); serr != nil {
 		err = serr
@@ -611,6 +739,12 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if st == nil {
 		return
 	}
+	defer func() {
+		if e := rm.persistStatus(st, rm.runOut[id]); e != nil {
+			st.State = "partial"
+			st.Error = "run outcome persistence failed; unsafe to retry: " + e.Error()
+		}
+	}()
 	if rm.stopping[id] {
 		delete(rm.stopping, id)
 		st.State = "stopped"
@@ -633,12 +767,16 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 	if st.Compare3 {
 		// per-provider pointer (st.Target is the kubeconfig context) so a vCluster 3-way doesn't
 		// overwrite the EKS comparison and vice-versa.
-		_ = os.WriteFile(filepath.Join(rm.cfg.HarnessDir, comparePointerFile(st.Target)), []byte(su.OutDir), 0o644)
+		if e := atomicWriteState(rm.cfg.statePath(comparePointerFile(st.Target)), []byte(su.OutDir)); e != nil {
+			st.State = "partial"
+			st.Error = "run completed but comparison pointer is unavailable: " + e.Error()
+			return
+		}
 	}
 	// Regenerate the cost/ROI report for THIS run so the Report tab updates after an attack
 	// finishes (no cluster, no re-run — pure post-processing of the run's metrics.jsonl).
 	go func(out string) {
-		metrics := filepath.Join(rm.cfg.HarnessDir, out, "metrics.jsonl")
+		metrics := filepath.Join(rm.cfg.runOutputPath(out), "metrics.jsonl")
 		if _, e := os.Stat(metrics); e != nil {
 			return
 		}
@@ -649,6 +787,23 @@ func (rm *RunManager) run(id string, su suite, native bool) {
 		dc.Env = envBase()
 		_ = dc.Run()
 	}(su.OutDir)
+}
+
+func (rm *RunManager) failRunBeforeStart(id string, err error) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if rm.active > 0 {
+		rm.active--
+	}
+	if st := rm.runs[id]; st != nil {
+		st.State = "error"
+		st.Finished = tsNow()
+		st.Error = "run refused before process start: " + err.Error()
+		if persistErr := rm.persistStatus(st, rm.runOut[id]); persistErr != nil {
+			st.State = "partial"
+			st.Error += "; status persistence failed: " + persistErr.Error()
+		}
+	}
 }
 
 // streamRef returns the run's out dir (relative to HarnessDir) for tailing its metrics.jsonl +

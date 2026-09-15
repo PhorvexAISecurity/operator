@@ -21,22 +21,22 @@ import (
 
 // richRow is the permissive full subset of a harness metric row used for per-run evidence.
 type richRow struct {
-	Scenario             string   `json:"scenario"`
-	Defender             string   `json:"defender"`
-	Trial                int      `json:"trial"`
-	OracleAchieved       bool     `json:"oracleAchieved"`
-	DisruptionVsOracle   float64  `json:"disruptionVsOracle"`
-	AttackerDwellSeconds float64  `json:"attackerDwellSeconds"`
-	DefensiveActions     int      `json:"defensiveActions"`
-	FalseDefensiveActions int     `json:"falseDefensiveActions"`
-	SecurityPerCost      float64  `json:"securityPerCost"`
-	EvidenceRetention    float64  `json:"evidenceRetention"`
-	Skipped              bool     `json:"skipped"`
-	NegativeControl      bool     `json:"negativeControl"`
-	MTDEffect            string   `json:"mtdEffect"`
-	ObservedState        string   `json:"observedState"`
-	Commands             []string `json:"commands"`
-	Schwartau            *struct {
+	Scenario              string   `json:"scenario"`
+	Defender              string   `json:"defender"`
+	Trial                 int      `json:"trial"`
+	OracleAchieved        bool     `json:"oracleAchieved"`
+	DisruptionVsOracle    float64  `json:"disruptionVsOracle"`
+	AttackerDwellSeconds  float64  `json:"attackerDwellSeconds"`
+	DefensiveActions      int      `json:"defensiveActions"`
+	FalseDefensiveActions int      `json:"falseDefensiveActions"`
+	SecurityPerCost       float64  `json:"securityPerCost"`
+	EvidenceRetention     float64  `json:"evidenceRetention"`
+	Skipped               bool     `json:"skipped"`
+	NegativeControl       bool     `json:"negativeControl"`
+	MTDEffect             string   `json:"mtdEffect"`
+	ObservedState         string   `json:"observedState"`
+	Commands              []string `json:"commands"`
+	Schwartau             *struct {
 		ProtectionTimeSeconds float64 `json:"protectionTimeSeconds"`
 		DetectionTimeSeconds  float64 `json:"detectionTimeSeconds"`
 		ReactionTimeSeconds   float64 `json:"reactionTimeSeconds"`
@@ -49,35 +49,35 @@ type richRow struct {
 
 // RunEvidenceArm is the aggregated evidence for one defender arm of a run.
 type RunEvidenceArm struct {
-	Defender         string  `json:"defender"`
-	Label            string  `json:"label"`
-	Trials           int     `json:"trials"`
-	Disruption       ci      `json:"disruption"`
-	Dwell            ci      `json:"dwell"`
-	OracleHitPct     float64 `json:"oracleHitPct"`
-	DefensiveActions float64 `json:"defensiveActions"`
-	SecurityPerCost  float64 `json:"securityPerCost"`
+	Defender          string  `json:"defender"`
+	Label             string  `json:"label"`
+	Trials            int     `json:"trials"`
+	Disruption        ci      `json:"disruption"`
+	Dwell             ci      `json:"dwell"`
+	OracleHitPct      float64 `json:"oracleHitPct"`
+	DefensiveActions  float64 `json:"defensiveActions"`
+	SecurityPerCost   float64 `json:"securityPerCost"`
 	EvidenceRetention float64 `json:"evidenceRetention"`
-	MTDEffect        string  `json:"mtdEffect"`
-	SchwartauP       float64 `json:"schwartauP"`
-	SchwartauD       float64 `json:"schwartauD"`
-	SchwartauR       float64 `json:"schwartauR"`
-	ReplaySuccess    int     `json:"replaySuccess"`
-	ReplayAttempts   int     `json:"replayAttempts"`
+	MTDEffect         string  `json:"mtdEffect"`
+	SchwartauP        float64 `json:"schwartauP"`
+	SchwartauD        float64 `json:"schwartauD"`
+	SchwartauR        float64 `json:"schwartauR"`
+	ReplaySuccess     int     `json:"replaySuccess"`
+	ReplayAttempts    int     `json:"replayAttempts"`
 }
 
 // RunEvidenceTrial is one per-trial row (the granular evidence).
 type RunEvidenceTrial struct {
-	Defender       string   `json:"defender"`
-	Trial          int      `json:"trial"`
-	Skipped        bool     `json:"skipped"`
-	OracleAchieved bool     `json:"oracleAchieved"`
-	Disruption     float64  `json:"disruption"`
-	Dwell          float64  `json:"dwell"`
-	DefensiveActions int    `json:"defensiveActions"`
-	MTDEffect      string   `json:"mtdEffect"`
-	Observed       string   `json:"observed"`
-	Commands       []string `json:"commands"`
+	Defender         string   `json:"defender"`
+	Trial            int      `json:"trial"`
+	Skipped          bool     `json:"skipped"`
+	OracleAchieved   bool     `json:"oracleAchieved"`
+	Disruption       float64  `json:"disruption"`
+	Dwell            float64  `json:"dwell"`
+	DefensiveActions int      `json:"defensiveActions"`
+	MTDEffect        string   `json:"mtdEffect"`
+	Observed         string   `json:"observed"`
+	Commands         []string `json:"commands"`
 }
 
 func armLabelOf(def string) string {
@@ -109,20 +109,20 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 	if !has {
 		return nil, nil, st, false
 	}
-	f, err := os.Open(filepath.Join(rm.cfg.HarnessDir, out, "metrics.jsonl"))
+	f, err := os.Open(filepath.Join(rm.cfg.runOutputPath(out), "metrics.jsonl"))
 	if err != nil {
 		return []RunEvidenceArm{}, []RunEvidenceTrial{}, st, true // run exists, no metrics yet
 	}
 	defer f.Close()
 
 	type acc struct {
-		dis, dwl       []float64
-		oracleHits, n  int
-		defActs        int
-		secPerCost     float64
-		evidRetain     float64
-		mtd            string
-		schP, schD, schR float64
+		dis, dwl              []float64
+		oracleHits, n         int
+		defActs               int
+		secPerCost            float64
+		evidRetain            float64
+		mtd                   string
+		schP, schD, schR      float64
 		replaySucc, replayAtt int
 	}
 	byDef := map[string]*acc{}
@@ -174,15 +174,17 @@ func (rm *RunManager) RunEvidence(id string) (arms []RunEvidenceArm, trials []Ru
 		arms = append(arms, RunEvidenceArm{
 			Defender: def, Label: armLabelOf(def), Trials: a.n,
 			Disruption: tci(a.dis), Dwell: tci(a.dwl),
-			OracleHitPct: float64(a.oracleHits) / nn * 100,
-			DefensiveActions: float64(a.defActs) / nn,
-			SecurityPerCost:  a.secPerCost / nn,
+			OracleHitPct:      float64(a.oracleHits) / nn * 100,
+			DefensiveActions:  float64(a.defActs) / nn,
+			SecurityPerCost:   a.secPerCost / nn,
 			EvidenceRetention: a.evidRetain / nn,
-			MTDEffect: a.mtd, SchwartauP: a.schP, SchwartauD: a.schD, SchwartauR: a.schR,
+			MTDEffect:         a.mtd, SchwartauP: a.schP, SchwartauD: a.schD, SchwartauR: a.schR,
 			ReplaySuccess: a.replaySucc, ReplayAttempts: a.replayAtt,
 		})
 	}
-	sort.Slice(arms, func(i, j int) bool { return arms[i].Defender == "d-phorvex" || (arms[j].Defender != "d-phorvex" && arms[i].Defender < arms[j].Defender) })
+	sort.Slice(arms, func(i, j int) bool {
+		return arms[i].Defender == "d-phorvex" || (arms[j].Defender != "d-phorvex" && arms[i].Defender < arms[j].Defender)
+	})
 	sort.Slice(trials, func(i, j int) bool {
 		if trials[i].Defender != trials[j].Defender {
 			return trials[i].Defender < trials[j].Defender

@@ -2505,7 +2505,7 @@ Severity: HIGH · Tier: unassigned · Fixes: T2-M166
 
 ### M-167 · Shipped console storage configuration silently drops mutation and experiment records · **OPEN** · `CONSOLE`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T5-M167
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `CONSOLE` — anatomy locus review required.

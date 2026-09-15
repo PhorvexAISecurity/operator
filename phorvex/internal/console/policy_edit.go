@@ -68,10 +68,13 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 	if key, present := tenantWriteAttempt(raw); present {
 		msg := fmt.Sprintf("%s is not editable from the console: spec.tenant keys the tenant's learned state; "+
 			"merging duals is not supported and a rename is a state reset (M-140) — change it deliberately with kubectl", key)
-		s.auditConsoleMutation(consoleMutation{
+		if err := s.auditConsoleMutation(consoleMutation{
 			Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
 			Field: "spec.tenant", Verdict: "rejected-tenant-key-write", Message: msg,
-		})
+		}); err != nil {
+			writeJSON(w, 503, map[string]string{"error": "mutation evidence unavailable: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+			return
+		}
 		writeJSON(w, 409, map[string]string{"error": msg, "verdict": "rejected-tenant-key-write"})
 		return
 	}
@@ -143,28 +146,45 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	patch, _ := json.Marshal(map[string]any{"spec": spec})
+	// Intent is durable before kubectl. If this fails, no cluster write is attempted.
+	if err := s.auditConsoleMutation(consoleMutation{Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
+		Field: "spec", Patch: string(patch), Verdict: "intent"}); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "mutation refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
+		return
+	}
 	out, err := s.cfg.execText(10*time.Second, "kubectl", "-n", ns, "patch", "phorvexpolicy", name,
 		"--type", "merge", "-p", string(patch))
 	verdict := strings.TrimSpace(out)
 	if err != nil {
-		// HONEST SURFACE (M-145): a write the API server (CRD validation, admission webhook,
-		// RBAC) rejected is reported as rejected, with the rejecting layer's message verbatim —
-		// never {"ok": true}. 422 when the server said so, 502 for transport/exec failure.
-		status := 502
+		// Only an authoritative API response proves rejection. Transport failure or timeout after
+		// dispatch has an unknown effect and must not invite an automatic retry.
+		status, outcome := 502, "effect-unknown"
 		if apiServerRejected(verdict) {
 			status = 422
+			outcome = "rejected-by-apiserver"
 		}
-		s.auditConsoleMutation(consoleMutation{
+		if auditErr := s.auditConsoleMutation(consoleMutation{
 			Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
-			Field: "spec", Patch: string(patch), Verdict: "rejected-by-apiserver", Message: verdict,
-		})
-		writeJSON(w, status, map[string]any{"ok": false, "error": "patch rejected: " + verdict, "verdict": "rejected-by-apiserver"})
+			Field: "spec", Patch: string(patch), Verdict: outcome, Message: verdict,
+		}); auditErr != nil {
+			writeJSON(w, 503, map[string]any{"ok": false, "effectUnknown": outcome == "effect-unknown", "unsafeToRetry": true, "error": "patch outcome and evidence are unavailable: " + auditErr.Error(), "verdict": "partial-evidence-unavailable"})
+			return
+		}
+		if outcome == "effect-unknown" {
+			writeJSON(w, status, map[string]any{"ok": false, "effectUnknown": true, "unsafeToRetry": true, "error": "patch result unknown: " + verdict, "verdict": outcome})
+			return
+		}
+		writeJSON(w, status, map[string]any{"ok": false, "error": "patch rejected: " + verdict, "verdict": outcome})
 		return
 	}
-	s.auditConsoleMutation(consoleMutation{
+	if auditErr := s.auditConsoleMutation(consoleMutation{
 		Actor: actorOf(r), Endpoint: "/api/policy/edit", Namespace: ns, Policy: name,
 		Field: "spec", Patch: string(patch), Verdict: "applied", Message: verdict,
-	})
+	}); auditErr != nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "applied": true, "unsafeToRetry": true,
+			"error": "patch applied but outcome evidence is unavailable: " + auditErr.Error(), "verdict": "applied-partial-evidence-unavailable"})
+		return
+	}
 	writeJSON(w, 200, map[string]any{
 		"ok": true, "namespace": ns, "name": name, "patched": spec,
 		"result": verdict,
