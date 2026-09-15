@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 13
+revision: 14
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -89,6 +89,13 @@ checks:
     source_sha: 8e151790df7350243a630f9d8b3b92fc66e92001
     at: '2026-09-15T08:31:05+00:00'
     incident_sha256: b0612f2b7ce313eab653679768dc77cb0c3ff9f41cce539ea9610d7bc8ecf0bb
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/tier3-composition.md
+    sha256: ec61233cc1fba56e29d46e0bc2eb3466a010352628f4793b640ec7ba0a9c40df
+    source_sha: 8e151790df7350243a630f9d8b3b92fc66e92001
+    at: '2026-09-15T09:15:35+00:00'
 fix_id: T3-M033
 issues:
 - M-33
@@ -160,7 +167,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-15T08:31:07+00:00'
+updated_at: '2026-09-15T09:15:35+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:37+00:00'
   by: codex-lead
