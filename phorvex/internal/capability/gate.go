@@ -352,8 +352,9 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 			return "pod has no Ready serving endpoint"
 		}
 	case model.ActionAdapterRotate:
-		if !(pod.Labels[labelLoRAEnabled] == "true" && pod.SuspectAdapter != "") {
-			return "pod is not LoRA-enabled or names no adapter to rotate"
+		if !(pod.Labels[labelLoRAEnabled] == "true" && pod.AdapterObservation != nil &&
+			pod.AdapterObservation.TargetPodUID == pod.UID && pod.AdapterObservation.AdapterName == pod.SuspectAdapter) {
+			return "pod is not LoRA-enabled or has no UID-bound detector adapter observation"
 		}
 	case model.ActionGuardrailRotate:
 		if !(pod.Labels[labelGuardrailTier] == "true" && pod.GuardrailVariants >= 2) {

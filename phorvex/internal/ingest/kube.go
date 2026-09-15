@@ -216,6 +216,9 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		snap.EventInventoryComplete = true
 		snap.Events = events
 		snap.EventByPod = byPod
+		for i := range snap.Pods {
+			bindAdapterObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+		}
 	}
 
 	// Best effort: failure is UNKNOWN for M-34, not an empty policy inventory.
@@ -374,12 +377,7 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	)
 	out.ServingEndpointReady = out.Ready && p.Status.PodIP != "" &&
 		(out.HasGPU || out.ModelID != "" || p.Annotations["phorvex.ai/serving-port"] != "")
-	// A detector flags a poisoned/unauthorized LoRA via phorvex.ai/lora-adapter on a LoRA-enabled
-	// pod; surfacing it as SuspectAdapter lets recon mint the adapter-integrity fact that ONLY
-	// adapter-rotate covers (the same annotation/label the adapter-rotate handler consumes).
-	if p.Labels["phorvex.ai/lora-enabled"] == "true" {
-		out.SuspectAdapter = p.Annotations["phorvex.ai/lora-adapter"]
-	}
+	// lora-adapter is operational tenant configuration, never an integrity assertion.
 	return out
 }
 

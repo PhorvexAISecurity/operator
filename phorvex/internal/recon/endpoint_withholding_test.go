@@ -17,6 +17,7 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 			for _, epoch := range []string{"", "ep-stale"} {
 				t.Run(asset.name+"/"+route+"/"+epoch, func(t *testing.T) {
 					v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: asset.gpu, ModelID: asset.model, RouteService: route, RouteKeyEpoch: epoch, MIGDevice: "MIG-a", SuspectAdapter: "bad", ServingEndpointReady: asset.gpu || asset.model != ""}}
+					detectorAdapter(&v.Pod, "bad")
 					v.Physics.ImageRarity = 2
 					v.Physics.EPSSMultiplier = 1
 					v.Physics.CoResidency = 1

@@ -815,6 +815,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		selectionGain := legacyMixedGain(marginal, prov(key), lambda, ecost)
 
 		decision := model.Decision{
+			AdapterObservation:    v.Pod.AdapterObservation,
 			Tenant:                pol.Tenant,
 			Namespace:             v.Pod.Namespace,
 			Pod:                   v.Pod.Name,

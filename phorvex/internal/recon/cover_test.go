@@ -53,6 +53,7 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 	// (2) AI serving pod — preserve the existing grants for these serving actuators.
 	// model-shard-replace is withheld pending loaded-identity/effect evidence (M-037).
 	ai := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil", ServingEndpointReady: true}}
+	detectorAdapter(&ai.Pod, "evil")
 	ac := prof.AssetFacts(ai, fctx).CoverByAction
 	for _, a := range []model.Action{
 		model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVReset,
@@ -93,6 +94,7 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 		Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil",
 		MIGDevice: "MIG-abc",
 	}}
+	detectorAdapter(&migPod.Pod, "evil")
 	mc := prof.AssetFacts(migPod, fctx)
 	byKey := map[string]string{}
 	for _, f := range mc.Facts {

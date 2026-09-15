@@ -193,6 +193,7 @@ func main() {
 	physics.ConfigureFlowActivation(strings.Split(flowClasses, ","))
 	detectors := ingest.NewTrustedDetectors(strings.Split(trustedDetectors, ","))
 	ingest.ConfigureEventTrust(detectors)
+	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	if detectors.Empty() {
 		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")

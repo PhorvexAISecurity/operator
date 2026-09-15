@@ -162,6 +162,7 @@ func TestNoDeadFactKinds(t *testing.T) {
 		{Pod: model.Pod{Namespace: "ns", Name: "db", Stateful: true}},
 		{Pod: model.Pod{Namespace: "ns", Name: "lora", HasGPU: true, ModelID: "m", SuspectAdapter: "evil"}},
 	}
+	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {
 		for _, v := range views {
 			for _, f := range p.AssetFacts(v, fctx).Facts {

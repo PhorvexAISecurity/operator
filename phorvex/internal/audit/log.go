@@ -104,6 +104,9 @@ type Record struct {
 	// dropped on the way out. Records written before this field carry no metadata at
 	// all; that means UNAVAILABLE, and never that no SecurityEvent was emitted.
 	Phoenix *model.PhoenixForensics `json:"phoenix,omitempty"`
+	// AdapterObservation is the exact detector assertion bound to adapter-rotate
+	// selection and dispatch. Empty when no valid assertion exists.
+	AdapterObservation *model.AdapterObservation `json:"adapterObservation,omitempty"`
 
 	// P-DASHBOARD-2: the P-CONTEXT predictive horizon, serialized so the Live-Ops + Context
 	// panels can stream the moved-before-next-stage story (IP-sensitive — owner-redacted).
@@ -224,6 +227,7 @@ func ToRecord(d model.Decision) Record {
 		claim = model.NewClaimScope(d.Claim.DetectorSet, d.Claim.DetectorSetKnown, d.Claim.BrainImage, d.Claim.GitSHA)
 	}
 	return Record{
+		AdapterObservation: d.AdapterObservation,
 		Representation:        cloneRepresentation(d.Representation),
 		Existential:           d.Existential,
 		Claim:                 &claim,

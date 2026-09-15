@@ -54,6 +54,11 @@ func coverInvariantProbes() []coverInvariantProbe {
 	probe := func(name string, pod model.Pod, ctx FactContext) coverInvariantProbe {
 		pod.Namespace = "cover-invariant"
 		pod.Name = name
+		if pod.SuspectAdapter != "" {
+			pod.UID = "cover-invariant-" + name
+			pod.AdapterObservation = &model.AdapterObservation{EventName: "probe-detector", EventUID: "probe-event",
+				CreatorIdentity: "system:serviceaccount:cover-invariant:detector", TargetPodUID: pod.UID, AdapterName: pod.SuspectAdapter}
+		}
 		pod.Node = "shared-node"
 		pod.Labels = map[string]string{"app": "cover-invariant"}
 		ctx.AssetValue = 1

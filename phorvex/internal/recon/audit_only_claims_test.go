@@ -31,6 +31,7 @@ func factsWithCover(t *testing.T) map[string]bool {
 		Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil",
 		MIGDevice: "MIG-audit-fixture",
 	}}
+	detectorAdapter(&view.Pod, "evil")
 	af := ucwRecon{}.AssetFacts(view, fctx)
 
 	covered := map[string]bool{}

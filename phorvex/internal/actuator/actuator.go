@@ -50,9 +50,10 @@ type TenantTarget struct {
 
 // Request is one actuation: perform Action on Namespace/Pod for Tenant.
 type Request struct {
-	TargetUID  string // Bound identity from the selecting snapshot.
-	PolicyName string // Selecting PhorvexPolicy identity for recoverable native operations.
-	PolicyUID  string
+	AdapterObservation *model.AdapterObservation // selection-time detector assertion; runtime rechecks event
+	TargetUID          string                    // Bound identity from the selecting snapshot.
+	PolicyName         string                    // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID          string
 
 	Tenant    string
 	Namespace string
