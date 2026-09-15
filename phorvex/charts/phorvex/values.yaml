@@ -117,6 +117,11 @@ phorvex:
   # ReplicaSets and Services. Service access is exactly get/update so route-rotate and
   # endpoint-rotate can restitch selectors; Secrets and EndpointSlices remain denied.
   actuatorNamespaces: []
+  # Operator-administered exact namespace+adapter reload mappings. Empty disables
+  # adapter reload and mounts nothing. Changes take effect after manager restart.
+  loraCleanSources:
+    content: ""
+    mountPath: /etc/phorvex-adapters/sources.json
   # M-6 code-exec admission protection. OFF by default: enabling it renders the installer-owned
   # ValidatingAdmissionPolicy + Binding (phorvex-codeexec-ephemeral) that DENIES any
   # pods/ephemeralcontainers UPDATE in a managed namespace unless it exactly matches the approved
