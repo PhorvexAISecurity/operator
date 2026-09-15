@@ -8,11 +8,14 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -32,6 +35,9 @@ type m069Delete struct {
 
 func (d *m069Delete) fn() func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
 	return func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+		if _, ok := obj.(*corev1.Pod); !ok {
+			return c.Delete(ctx, obj, opts...)
+		}
 		o := &client.DeleteOptions{}
 		o.ApplyOptions(opts)
 		if d.opts == nil {
@@ -47,6 +53,17 @@ func (d *m069Delete) fn() func(ctx context.Context, c client.WithWatch, obj clie
 
 func m069Client(d *m069Delete, fns interceptor.Funcs, objs ...client.Object) client.Client {
 	fns.Delete = d.fn()
+	originalCreate := fns.Create
+	fns.Create = func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+		if obj.GetUID() == "" {
+			obj.SetUID(types.UID("created-" + obj.GetName()))
+		}
+		if originalCreate != nil {
+			return originalCreate(ctx, c, obj, opts...)
+		}
+		return c.Create(ctx, obj, opts...)
+	}
+	objs = append(objs, &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(fns).Build()
 }
 
@@ -211,6 +228,7 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 			c := m069Client(d, interceptor.Funcs{}, objs...)
 			ec, _ := m069Stack()
 			ec.Client = c
+			ec.Reader, ec.JournalNamespace = c, "operator"
 			hr, err := tc.handler.Enact(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), tc.action))
 			if err != nil || !hr.Emitted {
 				t.Fatalf("positive control: %+v %v", hr, err)
@@ -223,8 +241,8 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 					if o.Preconditions == nil || o.Preconditions.UID == nil || string(*o.Preconditions.UID) != observed[name] || observed[name] == "" {
 						t.Errorf("Delete %s must carry the observed UID %q as a precondition, got %+v", name, observed[name], o.Preconditions)
 					}
-					if o.Preconditions != nil && o.Preconditions.ResourceVersion != nil {
-						t.Errorf("Delete %s must not pin a ResourceVersion (the handler relabels first), got %+v", name, o.Preconditions)
+					if (tc.name == "warm-swap" || tc.name == "model-shard-replace") && (o.Preconditions == nil || o.Preconditions.ResourceVersion == nil) {
+						t.Errorf("scalar recovery retirement must pin the freshly read ResourceVersion for %s, got %+v", name, o.Preconditions)
 					}
 				}
 			}
@@ -242,6 +260,7 @@ func TestM069WarmCutoverRejectedDeleteIsHonestNonSuccess(t *testing.T) {
 	c := m069Client(d, interceptor.Funcs{}, leader, shadow)
 	ec, _ := m069Stack()
 	ec.Client = c
+	ec.Reader, ec.JournalNamespace = c, "operator"
 	hr, err := warmSwapHandler{}.Enact(context.Background(), ec, boundReq(leader, model.ActionWarmSwap))
 	if err == nil || !errors.Is(err, errPodReplaced) {
 		t.Fatalf("rejected retire must propagate errPodReplaced, got err=%v hr=%+v", err, hr)

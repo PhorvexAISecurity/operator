@@ -12,6 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 func quarantineResult(p *corev1.Pod) HandlerResult {
@@ -110,7 +112,7 @@ func touchedPolicy(r *HandlerResult, np *networkingv1.NetworkPolicy) {
 	r.ObjectsTouched = append(r.ObjectsTouched, objRef("NetworkPolicy", np.Namespace, np.Name))
 }
 
-func ensureQuarantinePolicy(ctx context.Context, ec EnactCtx, p *corev1.Pod, s *qtnSnapshot, r *HandlerResult) (*networkingv1.NetworkPolicy, error) {
+func ensureQuarantinePolicy(ctx context.Context, ec EnactCtx, p *corev1.Pod, s *qtnSnapshot, r *HandlerResult, bound *operationReceipt) (*networkingv1.NetworkPolicy, error) {
 	if err := sameQuarantinePod(ctx, ec, p); err != nil {
 		return nil, err
 	}
@@ -120,14 +122,22 @@ func ensureQuarantinePolicy(ctx context.Context, ec EnactCtx, p *corev1.Pod, s *
 	want := quarantinePolicy(p)
 	got := &networkingv1.NetworkPolicy{}
 	err := ec.Reader.Get(ctx, client.ObjectKeyFromObject(want), got)
+	accepted := false
 	if apierrors.IsNotFound(err) {
+		if bound != nil {
+			if _, err = receiptAuthority(ctx, ec.Reader, *bound, model.ActionQuarantine); err != nil {
+				return nil, err
+			}
+		}
 		if err = sameQuarantinePod(ctx, ec, p); err != nil {
 			return nil, err
 		}
 		err = ec.Client.Create(ctx, want)
-		accepted := err == nil
+		accepted = err == nil
 		if err == nil {
 			touchedPolicy(r, want)
+		} else if bound != nil && apierrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("quarantine: canonical policy name collision after absent read; receipt UID not verified: %w", err)
 		} else if !apierrors.IsAlreadyExists(err) {
 			policyMutationFailure(r, err)
 			return nil, err
@@ -142,14 +152,24 @@ func ensureQuarantinePolicy(ctx context.Context, ec EnactCtx, p *corev1.Pod, s *
 	} else if err != nil {
 		return nil, err
 	}
+	if bound != nil && !accepted && string(got.UID) != bound.NPUID {
+		return nil, fmt.Errorf("quarantine: canonical policy UID differs from administrative receipt")
+	}
 	recorded := types.UID("")
-	if s.Version == 3 && s.PolicyName == want.Name {
+	if bound != nil && !accepted {
+		recorded = types.UID(bound.NPUID)
+	} else if s.Version == 3 && s.PolicyName == want.Name {
 		recorded = s.PolicyUID
 	}
 	if err = quarantineAuthority(got, p, recorded, false); err != nil {
 		return nil, err
 	}
 	if verifyQuarantinePolicy(got, want) != nil || !reflect.DeepEqual(got.OwnerReferences, want.OwnerReferences) {
+		if bound != nil {
+			if _, err = receiptAuthority(ctx, ec.Reader, *bound, model.ActionQuarantine); err != nil {
+				return nil, err
+			}
+		}
 		if err = sameQuarantinePod(ctx, ec, p); err != nil {
 			return nil, err
 		}
@@ -210,7 +230,7 @@ func verifyQuarantineTarget(ctx context.Context, ec EnactCtx, p *corev1.Pod, np 
 	return noCopiedQuarantineLabel(ctx, ec, p)
 }
 
-func retryQuarantine(ctx context.Context, ec EnactCtx, req Request, p *corev1.Pod) (r HandlerResult, err error) {
+func retryQuarantine(ctx context.Context, ec EnactCtx, req Request, p *corev1.Pod, journal *corev1.ConfigMap, bound operationReceipt) (r HandlerResult, err error) {
 	r = quarantineResult(p)
 	var s qtnSnapshot
 	if json.Unmarshal([]byte(p.Annotations[quarantineSnapAnno]), &s) != nil || !validQuarantineSnapshot(p, &s) || s.Released {
@@ -225,17 +245,40 @@ func retryQuarantine(ctx context.Context, ec EnactCtx, req Request, p *corev1.Po
 		return r, fmt.Errorf("quarantine: owner references drifted")
 	}
 	if s.Version == 2 {
-		legacy := &networkingv1.NetworkPolicy{}
-		if err = ec.Reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: s.PolicyName}, legacy); err != nil {
-			return r, err
-		}
-		if err = quarantineAuthority(legacy, p, s.PolicyUID, true); err != nil {
-			return r, err
-		}
+		// Keep the historical identity for explicit rollback inventory. Pod
+		// snapshot metadata alone never authorizes automatic legacy cleanup.
 		s.LegacyName, s.LegacyUID = s.PolicyName, s.PolicyUID
 	}
-	np, err := ensureQuarantinePolicy(ctx, ec, p, &s, &r)
+	canonical := &networkingv1.NetworkPolicy{}
+	canonicalRead := ec.Reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: bound.NPName}, canonical)
+	missing := apierrors.IsNotFound(canonicalRead)
+	if canonicalRead != nil && !missing {
+		return r, canonicalRead
+	}
+	if !missing && string(canonical.UID) != bound.NPUID {
+		return r, fmt.Errorf("quarantine retry: canonical policy UID differs from administrative receipt")
+	}
+	np, err := ensureQuarantinePolicy(ctx, ec, p, &s, &r, &bound)
 	if err != nil {
+		return r, err
+	}
+	if np.Name != bound.NPName || np.UID == "" || np.ResourceVersion == "" {
+		return r, fmt.Errorf("quarantine retry: canonical policy identity unacknowledged")
+	}
+	if string(np.UID) != bound.NPUID {
+		if !missing || !r.Emitted {
+			return r, fmt.Errorf("quarantine retry: canonical policy replacement not created by this retry")
+		}
+		if _, err = receiptAuthority(ctx, ec.Reader, bound, req.Action); err != nil {
+			return r, err
+		}
+		bound.NPUID = string(np.UID)
+		if err = journalAdvance(ctx, ec, journal, bound); err != nil {
+			r.Note = "partial quarantine: replacement policy created but administrative UID binding failed"
+			return r, err
+		}
+	}
+	if _, err = receiptAuthority(ctx, ec.Reader, bound, req.Action); err != nil {
 		return r, err
 	}
 	// Durable progress precedes legacy cleanup and retains the original detach
@@ -259,28 +302,15 @@ func retryQuarantine(ctx context.Context, ec EnactCtx, req Request, p *corev1.Po
 		return r, err
 	}
 	if s.LegacyName != "" {
-		legacy := &networkingv1.NetworkPolicy{}
-		err = ec.Reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: s.LegacyName}, legacy)
-		if err != nil && !apierrors.IsNotFound(err) {
-			return r, err
-		}
-		if err == nil {
-			if err = quarantineAuthority(legacy, p, s.LegacyUID, true); err != nil {
-				return r, err
-			}
-			if err = sameQuarantinePod(ctx, ec, p); err != nil {
-				return r, err
-			}
-			if err = deleteQuarantinePolicy(ctx, ec, legacy); err != nil {
-				return r, err
-			}
-			touchedPolicy(&r, legacy)
-		}
+		r.Note = "legacy policy " + s.LegacyName + " UID=" + string(s.LegacyUID) + " retained; automatic cleanup lacks protected operation authority"
 	}
 	if err = verifyQuarantineTarget(ctx, ec, p, np); err != nil {
 		return r, err
 	}
-	r.Note = "already quarantined; UID=" + string(p.UID) + " policy and selector verified; endpoint convergence and network enforcement unverified"
+	if r.Note != "" {
+		r.Note += "; "
+	}
+	r.Note += "already quarantined; UID=" + string(p.UID) + " canonical policy and selector verified; endpoint convergence and network enforcement unverified"
 	if !r.Emitted {
 		r.Note += "; no new mutation"
 	}

@@ -8,6 +8,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"testing"
+	"time"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type qtnRaceClient struct {
@@ -34,7 +38,7 @@ func TestM038APIServerConditionalDetach(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires envtest assets")
 	}
-	e := &envtest.Environment{}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}}
 	cfg, err := e.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +51,13 @@ func TestM038APIServerConditionalDetach(t *testing.T) {
 	ctx := context.Background()
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "m038"}}
 	if err = c.Create(ctx, ns); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}); err != nil {
+		t.Fatal(err)
+	}
+	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: ns.Name}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionQuarantine)}}}}
+	if err = c.Create(ctx, pol); err != nil {
 		t.Fatal(err)
 	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "front"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "web"}, Ports: []corev1.ServicePort{{Port: 80}}}}
@@ -64,7 +75,8 @@ func TestM038APIServerConditionalDetach(t *testing.T) {
 		}
 		n := NewNativeActuator(&qtnRaceClient{Client: c, race: race})
 		n.SetBoundaryReader(c)
-		req := Request{Namespace: ns.Name, Pod: name, TargetUID: string(p.UID), Action: "quarantine"}
+		n.JournalNamespace = "operator"
+		req := Request{Namespace: ns.Name, Pod: name, TargetUID: string(p.UID), Action: "quarantine", PolicyName: pol.Name, PolicyUID: string(pol.UID)}
 		result, err := n.Actuate(ctx, req)
 		got := &corev1.Pod{}
 		if getErr := c.Get(ctx, client.ObjectKeyFromObject(p), got); getErr != nil {

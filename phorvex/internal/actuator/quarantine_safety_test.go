@@ -23,7 +23,8 @@ func TestM038OwnerAndIndependentServiceSelectors(t *testing.T) {
 	c := qtnClient(p, rs, svc)
 	n := NewNativeActuator(c)
 	n.SetBoundaryReader(c)
-	req := Request{Namespace: "ns", Pod: "p", Action: "quarantine", TargetUID: string(p.UID)}
+	n.JournalNamespace = "operator"
+	req := Request{Namespace: "ns", Pod: "p", Action: "quarantine", TargetUID: string(p.UID), PolicyName: "policy", PolicyUID: "policy-uid"}
 	res, err := n.Actuate(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -89,10 +90,13 @@ func TestM038RejectsNewServiceMembershipAndUIDMismatch(t *testing.T) {
 func TestM038PartialUpdateFailureSurvivesDispatch(t *testing.T) {
 	p := ownedPod("ns", "p", map[string]string{"app": "a"}, metav1.OwnerReference{})
 	base := qtnClient(p)
-	c := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Update: func(context.Context, client.WithWatch, client.Object, ...client.UpdateOption) error {
-		return errors.New("conflict")
+	c := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+		if _, ok := obj.(*corev1.Pod); ok {
+			return errors.New("conflict")
+		}
+		return inner.Update(ctx, obj, opts...)
 	}})
-	res, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: "p", Action: "quarantine"})
+	res, err := dispatch(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: "ns", Pod: "p", TargetUID: string(p.UID), Action: "quarantine", PolicyName: "policy", PolicyUID: "policy-uid"})
 	if err == nil || !res.Emitted || len(res.ObjectsTouched) != 1 || !strings.Contains(res.Note, "partial") {
 		t.Fatalf("partial result lost: %+v %v", res, err)
 	}

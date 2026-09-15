@@ -2,11 +2,11 @@ package actuator
 
 import (
 	"context"
-	"errors"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -15,6 +15,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // API-server evidence only: envtest has neither a GC controller nor a CNI.
@@ -22,7 +25,7 @@ func TestM048APIServerLifecycle(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires envtest assets")
 	}
-	e := &envtest.Environment{}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}}
 	cfg, err := e.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +38,13 @@ func TestM048APIServerLifecycle(t *testing.T) {
 	ctx := context.Background()
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "m048"}}
 	if err = c.Create(ctx, ns); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}); err != nil {
+		t.Fatal(err)
+	}
+	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "x"}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionQuarantine)}}}}
+	if err = c.Create(ctx, pol); err != nil {
 		t.Fatal(err)
 	}
 	makePod := func(name string) *corev1.Pod {
@@ -140,7 +150,7 @@ func TestM048APIServerLifecycle(t *testing.T) {
 		}
 		t.Logf("legacy UID=%s retained selecting old-incarnation; canonical targets PodUID=%s; %s", legacy.UID, p.UID, r.Note)
 	})
-	t.Run("migration-checkpoint-and-cleanup-retry", func(t *testing.T) {
+	t.Run("migration-checkpoint-retains-legacy-until-explicit-release", func(t *testing.T) {
 		p := makePod("migration")
 		if _, err := m048Dispatch(c, p); err != nil {
 			t.Fatal(err)
@@ -159,35 +169,30 @@ func TestM048APIServerLifecycle(t *testing.T) {
 		}
 		s.Version, s.PolicyName, s.PolicyUID = 2, legacy.Name, legacy.UID
 		m048PutSnapshot(t, c, got, s)
-		fail := true
-		wrapped := interceptor.NewClient(c, interceptor.Funcs{Delete: func(ctx context.Context, base client.WithWatch, o client.Object, opts ...client.DeleteOption) error {
-			if fail && o.GetName() == legacy.Name {
-				return errors.New("injected cleanup interruption")
-			}
-			return base.Delete(ctx, o, opts...)
-		}})
-		r, err := m048Dispatch(wrapped, p)
-		if err == nil || !r.Emitted {
+		r, err := m048Dispatch(c, p)
+		if err != nil || !r.Emitted || !strings.Contains(r.Note, "retained") {
 			t.Fatal(r, err)
 		}
 		progress := m048Snapshot(t, m048GetPod(t, c, p))
 		if progress.Version != 3 || progress.LegacyUID != legacy.UID || progress.PolicyUID == "" {
 			t.Fatal("checkpoint absent", progress)
 		}
-		t.Logf("durable canonicalUID=%s legacyUID=%s before interrupted cleanup", progress.PolicyUID, progress.LegacyUID)
+		t.Logf("durable canonicalUID=%s legacyUID=%s; retry retains unproven legacy", progress.PolicyUID, progress.LegacyUID)
 		if err := verifyQuarantineTarget(ctx, EnactCtx{Client: c, Reader: c}, m048GetPod(t, c, p), m048GetPolicy(t, c, p)); err != nil {
 			t.Fatal(err)
 		}
-		fail = false
-		r, err = m048Dispatch(wrapped, p)
-		if err != nil || !r.Emitted {
+		r, err = m048Dispatch(c, p)
+		if err != nil || r.Emitted {
 			t.Fatal(r, err)
 		}
-		if err = c.Get(ctx, client.ObjectKeyFromObject(legacy), &networkingv1.NetworkPolicy{}); !apierrors.IsNotFound(err) {
-			t.Fatal("legacy cleanup", err)
+		if err = c.Get(ctx, client.ObjectKeyFromObject(legacy), &networkingv1.NetworkPolicy{}); err != nil {
+			t.Fatal("retry deleted legacy without administrative authority", err)
 		}
-		if err = (quarantineHandler{}).Rollback(ctx, EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, r.RollbackRef); err != nil {
+		if err = (quarantineHandler{}).Rollback(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, r.RollbackRef); err != nil {
 			t.Fatal(err)
+		}
+		if err = c.Get(ctx, client.ObjectKeyFromObject(legacy), &networkingv1.NetworkPolicy{}); !apierrors.IsNotFound(err) {
+			t.Fatal("explicit rollback did not finish historical cleanup", err)
 		}
 	})
 	t.Run("in-flight-release-conflicts-repair", func(t *testing.T) {

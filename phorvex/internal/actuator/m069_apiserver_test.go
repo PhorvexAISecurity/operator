@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -31,7 +33,7 @@ func m069Env(t *testing.T) client.WithWatch {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires local envtest API-server binaries")
 	}
-	e := &envtest.Environment{}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}}
 	cfg, err := e.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +72,22 @@ func m069Namespace(t *testing.T, c client.Client, name string) string {
 	if err := c.Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
 		t.Fatal(err)
 	}
+	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: name}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}
+	if err := c.Create(context.Background(), pol); err != nil {
+		t.Fatal(err)
+	}
 	return name
+}
+
+func m069Request(t *testing.T, c client.Client, p *corev1.Pod, a model.Action) Request {
+	t.Helper()
+	req := boundReq(p, a)
+	pol := &v1alpha1.PhorvexPolicy{}
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: p.Namespace, Name: "policy"}, pol); err != nil {
+		t.Fatal(err)
+	}
+	req.PolicyUID = string(pol.UID)
+	return req
 }
 
 // m069Replacer replaces the named Pod with a same-name object the moment the handler issues
@@ -154,13 +171,16 @@ func m069Rejected(t *testing.T, hr HandlerResult, err error) {
 func TestM069APIServerNameReuse(t *testing.T) {
 	c := m069Env(t)
 	ctx := context.Background()
+	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("warm-swap", func(t *testing.T) {
 		ns := m069Namespace(t, c, "m069-warm")
 		leader := m069Create(t, c, aiPod(ns, "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader}))
 		shadow := m069Create(t, c, aiPod(ns, "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"}))
 		wc, r := m069Wrap(t, c, "leader")
-		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: wc, VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionWarmSwap))
+		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, m069Request(t, c, leader, model.ActionWarmSwap))
 		m069Rejected(t, hr, err)
 		m069Survived(t, c, r)
 		// honest partial state: the shadow was promoted before the rejected retire; no rewarm.
@@ -177,7 +197,7 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		ns := m069Namespace(t, c, "m069-warm-ok")
 		leader := m069Create(t, c, aiPod(ns, "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader}))
 		m069Create(t, c, aiPod(ns, "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"}))
-		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionWarmSwap))
+		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, m069Request(t, c, leader, model.ActionWarmSwap))
 		if err != nil || !hr.Emitted || !strings.Contains(hr.Note, "retired (uid "+string(leader.UID)+")") {
 			t.Fatalf("unchanged identity must retire: %+v %v", hr, err)
 		}
@@ -195,9 +215,9 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		ns := m069Namespace(t, c, "m069-warm-mismatch")
 		leader := m069Create(t, c, aiPod(ns, "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader}))
 		m069Create(t, c, aiPod(ns, "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"}))
-		req := boundReq(leader, model.ActionWarmSwap)
+		req := m069Request(t, c, leader, model.ActionWarmSwap)
 		req.TargetUID = string(types.UID("00000000-0000-4000-8000-000000000069")) // a previous incarnation's identity
-		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: c, VLLM: &mockVLLM{loaded: true}}, req)
+		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, req)
 		if err != nil || hr.Emitted || !strings.Contains(hr.Note, reasonTargetUIDMismatch) {
 			t.Fatalf("stale request identity must be refused untouched: %+v %v", hr, err)
 		}
@@ -238,7 +258,7 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		leader := m069Create(t, c, aiPod(ns, "shard0", map[string]string{labelModelShard: "s", labelRole: roleLeader}))
 		m069Create(t, c, aiPod(ns, "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"}))
 		wc, r := m069Wrap(t, c, "shard0")
-		hr, err := modelShardReplaceHandler{}.Enact(ctx, EnactCtx{Client: wc, VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
+		hr, err := modelShardReplaceHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, m069Request(t, c, leader, model.ActionModelShardReplace))
 		m069Rejected(t, hr, err)
 		m069Survived(t, c, r)
 	})
