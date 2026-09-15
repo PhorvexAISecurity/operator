@@ -1200,6 +1200,17 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 *Sources: A-66.*
 
+
+## Current-source reconciliation (2026-09-15)
+
+The historical claim is already addressed in main c53b04cb by protected,
+UID-bound operation receipts and authoritative target/NetworkPolicy checks.
+Independent long-name producer/recovery controls pass, including live-target
+retention, orphan collection, replacement refusal, failed-read refusal and
+copied-marker non-authority. No duplicate implementation is required.
+Live verification remains pending; this is not closure or deployment acceptance.
+See [the Tier5 reconciliation](../../assessments/20260915-tier5/M056-RECONCILIATION.md).
+
 ### M-60 · identity/route-rotate are not retry-safe · **OPEN** · `ACTUATION`
 
 Severity: MINOR · Tier: parallel · Fixes: none
