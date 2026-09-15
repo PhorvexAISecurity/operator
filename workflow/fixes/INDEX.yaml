@@ -616,7 +616,7 @@ fixes:
     issues:
     - M-132
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m132

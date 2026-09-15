@@ -2,18 +2,27 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 724b4da2c27ea305bb6add862bdffc13f5fb1bd8ecc08104b2f491a33724176e
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T06:17:15+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
 fix_id: T3-M132
 issues:
 - M-132
 title: AMTD guest list ignores matchExpressions; empty MatchLabels suppresses the
   whole tick
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -74,9 +83,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Investigate current source and sign plan
-updated_at: '2026-09-15T06:01:00+00:00'
+  owner: sol-t3-m132
+  action: Implement signed full-selector and per-route preparation contract when worker
+    slot opens
+updated_at: '2026-09-15T06:17:15+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:42+00:00'
   by: codex-lead
@@ -107,4 +117,12 @@ transitions:
   artifact: null
   note: null
   approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T06:17:15+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
   forced: false
