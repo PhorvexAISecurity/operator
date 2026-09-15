@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 14
+revision: 15
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -73,13 +73,29 @@ checks:
     sha256: 00cfabee2752b0a7d36f519e3384439f7584e5562ccd714a82f4f670a1312d4e
     source_sha: 12361303dba164d1fdb5bad21b77701d99bc4ca2
     at: '2026-09-15T07:57:20+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e40841c4f3f5c36201cc4e2fc62bf130498bb0c728e3d9c9bd72b755c9a16465
+    source_sha: 12361303dba164d1fdb5bad21b77701d99bc4ca2
+    at: '2026-09-15T07:58:44+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f6fdb34322902aff130a67a40a8e9526c88770a3ba12eca2e6137e7e55b48e0c
+    source_sha: 12361303dba164d1fdb5bad21b77701d99bc4ca2
+    at: '2026-09-15T07:58:44+00:00'
+    incident_sha256: e40841c4f3f5c36201cc4e2fc62bf130498bb0c728e3d9c9bd72b755c9a16465
 fix_id: T3-M086
 issues:
 - M-86
 title: 'The wedge-reconciler family: dry-run bypass, selector-blind, unconditional,
   error-swallowed, unaudited'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -124,7 +140,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -140,10 +156,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T07:57:22+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T07:58:47+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:38+00:00'
   by: codex-lead
@@ -229,6 +245,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T07:58:45+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T07:58:46+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -240,9 +272,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T3-M086:14:submit
-  from: sol-t3-m086
+  id: T3-M086:15:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 14
+  role: coordinator
+  kind: review
+  revision: 15
