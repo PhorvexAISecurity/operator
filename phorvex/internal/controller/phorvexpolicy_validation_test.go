@@ -44,13 +44,18 @@ func TestValidatePhorvexPolicyRejectsUnsafeLambda(t *testing.T) {
 	}
 }
 
-func TestValidatePhorvexPolicyRequiresMatchLabelsOnlyInActiveMode(t *testing.T) {
+func TestValidatePhorvexPolicyRequiresNonemptySelectorInActiveMode(t *testing.T) {
 	p := validAdmissionPolicy()
 	p.Spec.Selector = metav1.LabelSelector{}
 
-	if errs := ValidatePhorvexPolicy(p); len(errs) != 1 || errs[0].Field != "spec.selector.matchLabels" {
+	if errs := ValidatePhorvexPolicy(p); len(errs) != 1 || errs[0].Field != "spec.selector" {
 		t.Fatalf("active empty selector errors = %v", errs)
 	}
+	p.Spec.Selector = metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "app", Operator: metav1.LabelSelectorOpIn, Values: []string{"api"}}}}
+	if errs := ValidatePhorvexPolicy(p); len(errs) != 0 {
+		t.Fatalf("expression-only active selector rejected: %v", errs)
+	}
+	p.Spec.Selector = metav1.LabelSelector{}
 
 	p.Spec.Mode = v1alpha1.ModeDryRun
 	if errs := ValidatePhorvexPolicy(p); len(errs) != 0 {
@@ -64,7 +69,7 @@ func TestValidatePhorvexPolicyRejectsInvalidSelector(t *testing.T) {
 		Key: "app", Operator: metav1.LabelSelectorOperator("Bogus"), Values: []string{"api"},
 	}}}
 	errList := ValidatePhorvexPolicy(p)
-	if len(errList) != 2 || errList[0].Field != "spec.selector" || errList[1].Field != "spec.selector.matchLabels" {
+	if len(errList) != 1 || errList[0].Field != "spec.selector" {
 		t.Fatalf("invalid active selector errors = %v", errList)
 	}
 }

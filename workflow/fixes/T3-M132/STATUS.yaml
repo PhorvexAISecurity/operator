@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 9
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,6 +16,21 @@ checks:
     at: '2026-09-15T06:17:15+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: sol-t3-m132
+    artifact: evidence/red.md
+    sha256: 92efe913a3caf194334ced48b780b58c87b84fbaa42fa6ab0a47bc9b9c387f76
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T07:01:23+00:00'
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: 460eb4bcaf629dc876c6bcc0af62b6eb20ca493d22ba61ee93cc436c6597e98b
+    source_sha: 19c0f3d195bb51e1906af6cc961558ef99d28145
+    at: '2026-09-15T07:03:12+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
 fix_id: T3-M132
 issues:
 - M-132
@@ -87,7 +102,7 @@ next_action:
   owner: sol-t3-m132
   action: Implement signed full-selector and per-route preparation contract when worker
     slot opens
-updated_at: '2026-09-15T06:35:36+00:00'
+updated_at: '2026-09-15T07:03:12+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:42+00:00'
   by: codex-lead

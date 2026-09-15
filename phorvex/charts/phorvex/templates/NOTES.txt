@@ -19,7 +19,8 @@ CRs (Seam 1). It NEVER writes pods.
    kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "phorvex.fullname" . }} 8080:8080
    curl -s localhost:8080/metrics | grep phorvex_
 
-4. To enable actuation for a tenant, set spec.mode: active (requires a matchLabels
-   selector). The global kill-switch overrides everything:
+4. To enable actuation for a tenant, set spec.mode: active (requires a nonempty
+   label selector). Phoenix requires a selector exactly expressible as nonempty
+   equalities; native accepts matchExpressions. The global kill-switch overrides everything:
 
    kubectl -n {{ .Release.Namespace }} create configmap phorvex-killswitch --from-literal=engaged=true
