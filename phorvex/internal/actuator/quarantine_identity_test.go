@@ -17,13 +17,20 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
 )
 
 func m048Pod() *corev1.Pod {
 	return ownedPod("ns", "same", map[string]string{"app": "x"}, metav1.OwnerReference{})
 }
 func m048Dispatch(c client.Client, p *corev1.Pod) (Result, error) {
-	return dispatch(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: "quarantine"})
+	ctx := context.Background()
+	pol := &v1alpha1.PhorvexPolicy{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: "policy"}, pol); err != nil {
+		return Result{}, err
+	}
+	return dispatch(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: "quarantine", PolicyName: pol.Name, PolicyUID: string(pol.UID)})
 }
 func m048GetPod(t *testing.T, c client.Client, p *corev1.Pod) *corev1.Pod {
 	t.Helper()
@@ -320,7 +327,9 @@ func m048Legacy(t *testing.T) (client.Client, *corev1.Pod, qtnSnapshot) {
 	return c, p, s
 }
 func TestM048MigrationCrashRetryAndRelease(t *testing.T) {
-	for _, mode := range []string{"normal", "checkpoint-failed", "delete-failed", "delete-response-lost", "rollback-before-checkpoint"} {
+	// Retry establishes canonical isolation but retains legacy policy inventory.
+	// Only explicit rollback performs the historical UID-checked cleanup.
+	for _, mode := range []string{"normal", "checkpoint-failed", "rollback-before-checkpoint"} {
 		t.Run(mode, func(t *testing.T) {
 			base, p, original := m048Legacy(t)
 			fail := true
@@ -330,20 +339,6 @@ func TestM048MigrationCrashRetryAndRelease(t *testing.T) {
 						return errors.New("checkpoint failed")
 					}
 					return c.Update(ctx, o, opts...)
-				},
-				Delete: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.DeleteOption) error {
-					if o.GetName() == original.PolicyName && fail {
-						if mode == "delete-failed" {
-							return errors.New("delete denied")
-						}
-						if mode == "delete-response-lost" {
-							if err := c.Delete(ctx, o, opts...); err != nil {
-								return err
-							}
-							return errors.New("delete response lost")
-						}
-					}
-					return c.Delete(ctx, o, opts...)
 				},
 			})
 			r, err := m048Dispatch(c, p)
@@ -376,11 +371,11 @@ func TestM048MigrationCrashRetryAndRelease(t *testing.T) {
 					t.Fatal("migration lost baseline", s)
 				}
 				var legacy networkingv1.NetworkPolicy
-				if err = base.Get(context.Background(), client.ObjectKey{Namespace: p.Namespace, Name: original.PolicyName}, &legacy); !apierrors.IsNotFound(err) {
-					t.Fatal("legacy retained", err)
+				if err = base.Get(context.Background(), client.ObjectKey{Namespace: p.Namespace, Name: original.PolicyName}, &legacy); err != nil || legacy.UID != original.PolicyUID {
+					t.Fatal("retry adopted or deleted unproven legacy policy", err)
 				}
 			}
-			err = (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, p.Namespace+"/"+p.Name+"@"+string(p.UID))
+			err = (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, p.Namespace+"/"+p.Name+"@"+string(p.UID))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -419,14 +414,25 @@ func TestM048LegacyIdentityRefusals(t *testing.T) {
 				np.Labels["app.kubernetes.io/managed-by"] = "foreign"
 				m048Update(t, c, &np)
 			}
+			legacyBefore := &networkingv1.NetworkPolicy{}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: p.Namespace, Name: s.PolicyName}, legacyBefore); err != nil {
+				t.Fatal(err)
+			}
 			r, err := m048Dispatch(c, p)
-			if err == nil || r.Emitted {
-				t.Fatal(r, err)
+			if err != nil || !r.Emitted || !strings.Contains(r.Note, "retained") {
+				t.Fatal("authorized canonical retry lost legacy refusal boundary", r, err)
+			}
+			legacyAfter := &networkingv1.NetworkPolicy{}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: p.Namespace, Name: s.PolicyName}, legacyAfter); err != nil || !reflect.DeepEqual(legacyBefore, legacyAfter) {
+				t.Fatal("retry changed unproven legacy policy", err)
+			}
+			if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, r.RollbackRef); err == nil {
+				t.Fatal("explicit historical cleanup accepted altered legacy identity")
 			}
 			var list networkingv1.NetworkPolicyList
 			_ = c.List(context.Background(), &list)
-			if len(list.Items) != 1 {
-				t.Fatal("wrote before proving migration authority")
+			if len(list.Items) != 2 {
+				t.Fatal("retry failed canonical isolation or deleted legacy", list.Items)
 			}
 		})
 	}
@@ -444,6 +450,9 @@ func TestM048RollbackPreconditionsAndRetry(t *testing.T) {
 			fail := true
 			deletes := 0
 			c := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{Delete: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.DeleteOption) error {
+				if _, ok := o.(*corev1.ConfigMap); ok {
+					return c.Delete(ctx, o, opts...)
+				}
 				options := &client.DeleteOptions{}
 				for _, opt := range opts {
 					opt.ApplyToDelete(options)
@@ -459,7 +468,7 @@ func TestM048RollbackPreconditionsAndRetry(t *testing.T) {
 			}})
 			req := Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}
 			ref := p.Namespace + "/" + p.Name + "@" + string(p.UID)
-			if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, req, ref); err == nil {
+			if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, req, ref); err == nil {
 				t.Fatal("ignored deletion failure")
 			}
 			got := m048GetPod(t, base, p)
@@ -470,7 +479,7 @@ func TestM048RollbackPreconditionsAndRetry(t *testing.T) {
 				t.Fatal("new quarantine bypassed pending cleanup")
 			}
 			fail = false
-			if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, req, ref); err != nil {
+			if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, req, ref); err != nil {
 				t.Fatal(err)
 			}
 			if deletes != 2 || m048GetPod(t, base, p).Annotations[quarantineSnapAnno] != "" {
@@ -500,7 +509,7 @@ func TestM048OldRollbackCannotReleaseReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := m048GetPolicy(t, c, next)
-	if err = (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name}, r.RollbackRef); err == nil {
+	if err = (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: p.Namespace, Pod: p.Name}, r.RollbackRef); err == nil {
 		t.Fatal("old release authorized replacement")
 	}
 	if !reflect.DeepEqual(before, m048GetPolicy(t, c, next)) {
@@ -607,7 +616,7 @@ func TestM048FreshTargetCoexistsWithUnprovenLegacy(t *testing.T) {
 			if err != nil || r.Emitted || !strings.Contains(r.Note, "cleanup unresolved") {
 				t.Fatal("retry lost legacy disposition", r, err)
 			}
-			if err = (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, r.RollbackRef); err != nil {
+			if err = (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID)}, r.RollbackRef); err != nil {
 				t.Fatal(err)
 			}
 			after := &networkingv1.NetworkPolicy{}

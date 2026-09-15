@@ -861,13 +861,29 @@ func (m *Manager) nextWakeDeadline(now, baseDeadline time.Time, includePolicies 
 // orphaned quarantine NetworkPolicy) for each managed namespace, idempotently. Runs every
 // tick INDEPENDENT of tenant cadence (a wedged double-leader must converge even if no policy
 // is "due" this tick).
-func (m *Manager) reconcileWedged(ctx context.Context, namespaces []string) {
-	for _, ns := range namespaces {
-		if n, err := actuator.ResumeWarmSwaps(ctx, m.Client, ns); err == nil && n > 0 {
-			m.Log.Info("warm-swap resume: converged wedged swap", "namespace", ns, "reaped", n)
+func (m *Manager) reconcileWedged(ctx context.Context, killEngaged bool) {
+	recoverer, ok := m.Actuator.(interface {
+		RecoverOperations(context.Context, bool) ([]actuator.RecoveryEvent, error)
+	})
+	if !ok {
+		return
+	}
+	events, err := recoverer.RecoverOperations(ctx, killEngaged)
+	if err != nil {
+		m.Log.Error(err, "operation journal maintenance failed")
+		metrics.RecordMaintenanceAttempt("journal", "refused")
+		if m.Audit != nil {
+			m.Audit.Maintenance("", "", "", "", "", "", "", "", "journal-read-failed", "", err)
 		}
-		if n, err := actuator.GCOrphanedQuarantineNPs(ctx, m.Client, ns); err == nil && n > 0 {
-			m.Log.Info("orphan-GC: reaped quarantine NetworkPolicy", "namespace", ns, "reaped", n)
+		return
+	}
+	for _, ev := range events {
+		metrics.RecordMaintenanceAttempt(ev.Kind, ev.Outcome)
+		if ev.Err != nil {
+			m.Log.Error(ev.Err, "operation maintenance incomplete", "receipt", ev.Receipt, "policyUID", ev.PolicyUID, "targetUID", ev.TargetUID, "outcome", ev.Outcome, "effect", ev.Effect)
+		}
+		if m.Audit != nil {
+			m.Audit.Maintenance(ev.Receipt, ev.Kind, ev.Tenant, ev.PolicyNamespace, ev.PolicyName, ev.PolicyUID, ev.TargetName, ev.TargetUID, ev.Outcome, ev.Effect, ev.Err)
 		}
 	}
 }
@@ -885,14 +901,10 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	// then be rejected as retired. They must describe the same instant.
 	m.mu.Lock()
 	due := make([]*policyEntry, 0, len(m.policies))
-	nsSet := map[string]bool{}
 	liveOwners := make([]string, 0, len(m.policies))
 	dueEpochs := make(map[string]uint64, len(m.policies))
 	now := m.managerClock().Now()
 	for _, e := range m.policies {
-		if e.namespace != "" {
-			nsSet[e.namespace] = true
-		}
 		liveOwners = append(liveOwners, e.ownerKey())
 		if now.Sub(e.lastTick) >= e.spec.EffectiveTickInterval() {
 			due = append(due, e)
@@ -933,12 +945,8 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
 	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
 	// engaged (a deliberate global freeze) or actuation is unavailable.
-	if !killEngaged && m.Actuator != nil && len(nsSet) > 0 {
-		nss := make([]string, 0, len(nsSet))
-		for ns := range nsSet {
-			nss = append(nss, ns)
-		}
-		m.reconcileWedged(ctx, nss)
+	if !killEngaged && m.Actuator != nil {
+		m.reconcileWedged(ctx, killEngaged)
 	}
 
 	calibrationDue := m.Calibration != nil && m.Calibration.Due(now)
@@ -1937,6 +1945,8 @@ func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
+			PolicyName:    pol.PolicyName,
+			PolicyUID:     pol.PolicyUID,
 			Tenant:        pol.Tenant,
 			Namespace:     decisions[i].Namespace,
 			Pod:           decisions[i].Pod,

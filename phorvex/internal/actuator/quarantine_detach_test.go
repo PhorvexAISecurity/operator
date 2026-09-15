@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -31,10 +32,12 @@ func qtnScheme() *runtime.Scheme {
 	_ = networkingv1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 	_ = batchv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	return s
 }
 
 func qtnClient(objs ...client.Object) client.Client {
+	objs = append(objs, &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionQuarantine)}}}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	for _, obj := range objs {
 		if obj.GetUID() == "" {
 			obj.SetUID(types.UID("uid-" + obj.GetName()))
@@ -86,7 +89,11 @@ func selectorOf(labels map[string]string) *metav1.LabelSelector {
 
 func enactQuarantine(t *testing.T, c client.Client, ns, name string) (HandlerResult, *corev1.Pod) {
 	t.Helper()
-	res, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: ns, Pod: name, Action: model.ActionQuarantine})
+	var target corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: name}, &target); err != nil {
+		t.Fatal(err)
+	}
+	res, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: ns, Pod: name, TargetUID: string(target.UID), Action: model.ActionQuarantine, PolicyName: "policy", PolicyUID: "policy-uid"})
 	if err != nil {
 		t.Fatalf("quarantine enact: %v", err)
 	}
@@ -129,7 +136,7 @@ func TestQuarantineDetachBreaksStatefulSetSelector(t *testing.T) {
 		t.Fatalf("note does not attribute the detach to the owner: %q", res.Note)
 	}
 
-	if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: "nats-1"}, res.RollbackRef); err != nil {
+	if err := (quarantineHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: "ns", Pod: "nats-1"}, res.RollbackRef); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
 	var restored corev1.Pod
@@ -262,7 +269,7 @@ func TestQuarantineDetachReportsWhenNoSelectorCanBeBroken(t *testing.T) {
 		t.Fatalf("note must not claim a detach it did not perform: %q", res.Note)
 	}
 	// Idempotent: a second enact is a no-op.
-	again, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c}, Request{Namespace: "ns", Pod: "orphan", Action: model.ActionQuarantine})
+	again, err := quarantineHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}, Request{Namespace: "ns", Pod: "orphan", TargetUID: string(pod.UID), Action: model.ActionQuarantine, PolicyName: "policy", PolicyUID: "policy-uid"})
 	if err != nil || !strings.Contains(again.Note, "already quarantined") {
 		t.Fatalf("second enact = %+v, %v; want idempotent no-op", again, err)
 	}

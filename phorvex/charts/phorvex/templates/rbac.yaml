@@ -102,6 +102,32 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+---
+# Protected operation receipts live only with the operator, outside tenant
+# namespaces. Tenant credentials must not receive this Role or ConfigMap writes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-operation-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "create", "update", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-operation-journal
+  namespace: {{ default .Release.Namespace .Values.phorvex.operatorNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-operation-journal
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
 {{- range $namespace := .Values.phorvex.actuatorNamespaces }}
 ---
 # Native/hybrid actuator routine permissions are always namespaced. Listing a tenant

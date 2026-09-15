@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/model"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -82,7 +83,7 @@ func TestM048APIServerRestrictedRole(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires isolated API server")
 	}
-	e := &envtest.Environment{}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}}
 	e.ControlPlane.GetAPIServer().Configure().Set("authorization-mode", "RBAC")
 	cfg, err := e.Start()
 	if err != nil {
@@ -109,9 +110,11 @@ func TestM048APIServerRestrictedRole(t *testing.T) {
 		}
 	}
 	const ns = "m048-rbac"
-	for _, name := range []string{ns, "m048-unbound"} {
+	for _, name := range []string{ns, "m048-unbound", "operator"} {
 		create(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}})
 	}
+	create(&v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: ns}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "x"}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionQuarantine)}}}})
+	create(&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "m048-authority-namespace-read"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"namespaces"}, Verbs: []string{"get"}}}})
 	source := m048RoutineRole(t, "../../config/rbac/phorvex-actuator-role.yaml")
 	clients := map[string]client.Client{}
 	for _, identity := range []string{"old", "updated"} {
@@ -134,12 +137,17 @@ func TestM048APIServerRestrictedRole(t *testing.T) {
 		}
 		create(role)
 		create(&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: identity, Namespace: ns}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: identity}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: identity, Namespace: ns}}})
+		create(&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: identity + "-policy-read", Namespace: ns}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{"phorvex.ai"}, Resources: []string{"phorvexpolicies"}, Verbs: []string{"get"}}}})
+		create(&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: identity + "-policy-read", Namespace: ns}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: identity + "-policy-read"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: identity, Namespace: ns}}})
+		create(&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: identity + "-operation-journal", Namespace: "operator"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"get", "list", "create", "update", "delete"}}}})
+		create(&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: identity + "-operation-journal", Namespace: "operator"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: identity + "-operation-journal"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: identity, Namespace: ns}}})
+		create(&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: identity + "-authority-namespace-read"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "m048-authority-namespace-read"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: identity, Namespace: ns}}})
 		username := "system:serviceaccount:" + ns + ":" + identity
 		groups := []string{"system:authenticated", "system:serviceaccounts", "system:serviceaccounts:" + ns}
 		// Wait only for observed authorizer readiness; no handler mutation is retried
 		// on an arbitrary timer and a denial remains a real test assertion below.
 		err = wait.PollUntilContextTimeout(ctx, 50*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
-			for _, a := range []authorizationv1.ResourceAttributes{{Namespace: ns, Resource: "pods", Verb: "update"}, {Namespace: ns, Resource: "pods", Verb: "list"}, {Namespace: ns, Resource: "services", Verb: "list"}, {Namespace: ns, Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Namespace: ns, Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}} {
+			for _, a := range []authorizationv1.ResourceAttributes{{Namespace: ns, Resource: "pods", Verb: "update"}, {Namespace: ns, Resource: "pods", Verb: "list"}, {Namespace: ns, Resource: "services", Verb: "list"}, {Namespace: ns, Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Namespace: ns, Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Namespace: ns, Group: "phorvex.ai", Resource: "phorvexpolicies", Verb: "get"}, {Resource: "namespaces", Verb: "get"}, {Namespace: "operator", Resource: "configmaps", Verb: "create"}, {Namespace: "operator", Resource: "configmaps", Verb: "update"}} {
 				review := &authorizationv1.SubjectAccessReview{Spec: authorizationv1.SubjectAccessReviewSpec{User: username, Groups: groups, ResourceAttributes: &a}}
 				if err := admin.Create(ctx, review); err != nil {
 					return false, err

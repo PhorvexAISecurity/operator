@@ -41,13 +41,14 @@ type Rollbacker interface {
 // implementations when nil (production); tests inject mocks so the handler logic is exercised
 // without GPU hardware (see gpu_stack.go).
 type EnactCtx struct {
-	Reader    client.Reader // authoritative boundary reader
-	Client    client.Client
-	DryRun    bool
-	VLLM      vLLMClient           // serving-stack control plane; nil => real httpVLLM default
-	MIG       migController        // GPU MIG control plane; nil => real nvidia-smi default
-	Guardrail guardrailController  // safety/guardrail-tier control plane; nil => real default
-	KVXfer    kvTransferController // disaggregated KV-transfer control plane; nil => real default
+	Reader           client.Reader // authoritative boundary reader
+	Client           client.Client
+	JournalNamespace string // protected operator namespace; empty refuses recoverable writes
+	DryRun           bool
+	VLLM             vLLMClient           // serving-stack control plane; nil => real httpVLLM default
+	MIG              migController        // GPU MIG control plane; nil => real nvidia-smi default
+	Guardrail        guardrailController  // safety/guardrail-tier control plane; nil => real default
+	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
 }
 
 // HandlerResult is the native effect record.

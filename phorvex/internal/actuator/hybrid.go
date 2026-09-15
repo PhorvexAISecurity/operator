@@ -46,6 +46,16 @@ func NewHybridActuator(c client.Client) *HybridActuator {
 
 func (h *HybridActuator) Name() string { return "hybrid" }
 
+// ConfigureNativeJournal wires only the native leg. Phoenix actions never enter it.
+func (h *HybridActuator) ConfigureNativeJournal(reader client.Reader, namespace string) {
+	h.native.Reader = reader
+	h.native.JournalNamespace = namespace
+}
+
+func (h *HybridActuator) RecoverOperations(ctx context.Context, globalKill bool) ([]RecoveryEvent, error) {
+	return h.native.recoverOperations(ctx, globalKill, func(a model.Action) bool { return RuleTypeFor(a) == "" })
+}
+
 // SupportsAction delegates exactly as Actuate does: Phoenix-mapped actions (rotate,
 // quarantine) to the Phoenix stub; every native action (incl. guardrail-rotate and
 // mig-rebind) to the native actuator's real target-local checks — so M-19 and M-79 are

@@ -308,6 +308,10 @@ func main() {
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
+		native.JournalNamespace = operatorNS
+	}
+	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
+		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval
