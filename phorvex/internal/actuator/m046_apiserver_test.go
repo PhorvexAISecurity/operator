@@ -65,6 +65,11 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	if err := c.Create(ctx, pod); err != nil {
 		t.Fatal(err)
 	}
+	control := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "control"},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "control", Image: "example.invalid/control:test"}}}}
+	if err := c.Create(ctx, control); err != nil {
+		t.Fatal(err)
+	}
 	admitted := &corev1.Pod{}
 	if err := c.Get(ctx, client.ObjectKeyFromObject(pod), admitted); err != nil {
 		t.Fatal(err)
@@ -77,12 +82,16 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	result, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, MIG: mig, VLLM: &mockVLLM{}}, Request{
 		Namespace: pod.Namespace,
 		Pod:       pod.Name,
+		TargetUID: string(admitted.UID),
 		Action:    model.ActionMIGRebind,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Emitted || len(mig.calls) != 1 {
+	if !result.Emitted || len(mig.calls) != 1 || mig.calls[0] != ([3]string{"gpu-a", "0", "2g.20gb"}) {
 		t.Fatalf("admitted MIG path did not reach repartition: result=%+v calls=%v", result, mig.calls)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(control), &corev1.Pod{}); err != nil {
+		t.Fatalf("MIG handler touched unrelated control pod: %v", err)
 	}
 }
