@@ -561,11 +561,11 @@ fixes:
     issues:
     - M-26
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m026
-    head_sha: null
+    head_sha: 47d5b5750d243b3a91a25553596304b8600be468
   T3-M033:
     directory: fixes/T3-M033
     aliases: []
