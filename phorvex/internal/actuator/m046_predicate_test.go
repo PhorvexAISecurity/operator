@@ -60,6 +60,7 @@ func TestM46HandlerUsesCanonicalMIGPredicate(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(pod).Build()
 			_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{
 				Client: c,
+				Reader: c,
 				MIG:    &mockMIG{availErr: errors.New("probe stopped before mutation")},
 			}, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
 			if err == nil || !strings.Contains(err.Error(), tt.wantReason) {
