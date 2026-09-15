@@ -649,7 +649,7 @@ fixes:
     issues:
     - M-169
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t3-m169
