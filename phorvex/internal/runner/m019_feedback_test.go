@@ -3,6 +3,8 @@ package runner
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -18,6 +20,31 @@ type m019Hands struct {
 	calls   []model.Action
 	refusal error
 	result  actuator.Result
+}
+
+type m019HTTPTimeoutHands struct {
+	client *http.Client
+	url    string
+	calls  int
+}
+
+func (*m019HTTPTimeoutHands) Name() string                                              { return "native" }
+func (*m019HTTPTimeoutHands) EnsurePolicy(context.Context, actuator.TenantTarget) error { return nil }
+func (*m019HTTPTimeoutHands) SupportsAction(context.Context, model.Action, actuator.Target) (bool, string) {
+	return true, ""
+}
+func (h *m019HTTPTimeoutHands) Actuate(ctx context.Context, _ actuator.Request) (actuator.Result, error) {
+	h.calls++
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.url, nil)
+	if err != nil {
+		return actuator.Result{}, err
+	}
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return actuator.Result{}, err
+	}
+	resp.Body.Close()
+	return actuator.Result{Emitted: true}, nil
 }
 
 func (*m019Hands) Name() string                                              { return "native" }
@@ -55,6 +82,22 @@ func m019Scenario(t *testing.T) (*decision.CoverageEngine, model.Policy, []*mode
 func TestM019CleanRefusalGetsOneReservedAlternative(t *testing.T) {
 	ce, pol, views, ds := m019Scenario(t)
 	lambdaAfterDecision := ce.Cost.Dual.Lambda()
+	alt, ok := ce.SelectAlternative(pol.Owner(), "ns/pod", ds[0].Action)
+	if !ok {
+		t.Fatal("alternative absent")
+	}
+	ds[0].Existential = &model.ExistentialDecision{Present: true, Result: "selected", EffectStatus: "not-attempted",
+		PrioritySelections: []string{"ns/pod|" + string(ds[0].Action)},
+		Candidates: []model.ExistentialCandidate{{Action: ds[0].Action, Present: true, Contains: true, Reasons: []string{"first"}},
+			{Action: alt.Action, Present: true, Contains: true, Reasons: []string{"alternative"}}}}
+	ds[0].Trace.Existential = ds[0].Existential
+	for i := range ds[0].Trace.Candidates {
+		for j := range ds[0].Existential.Candidates {
+			if ds[0].Trace.Candidates[i].Action == string(ds[0].Existential.Candidates[j].Action) {
+				ds[0].Trace.Candidates[i].Existential = &ds[0].Existential.Candidates[j]
+			}
+		}
+	}
 	h := &m019Hands{refusal: actuator.RefusedWithoutEffect(errors.New("precondition unavailable"))}
 	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]})
@@ -66,6 +109,20 @@ func TestM019CleanRefusalGetsOneReservedAlternative(t *testing.T) {
 	}
 	if len(m.fallbackDecisions) != 1 || !m.fallbackDecisions[0].Actuated || m.fallbackDecisions[0].Trace.DispatchOutcome != model.DispatchEmitted || ds[0].Trace.DispatchOutcome != model.DispatchError {
 		t.Fatalf("attempt evidence lost: initial=%+v fallback=%+v", ds[0], m.fallbackDecisions)
+	}
+	if ds[0].Existential.EffectStatus != "failed-or-unconfirmed" || m.fallbackDecisions[0].Existential.EffectStatus != "attempted-unconfirmed" {
+		t.Fatalf("existential effects crossed attempts: first=%+v fallback=%+v", ds[0].Existential, m.fallbackDecisions[0].Existential)
+	}
+	if ds[0].Trace.Existential != ds[0].Existential || m.fallbackDecisions[0].Trace.Existential != m.fallbackDecisions[0].Existential ||
+		m.fallbackDecisions[0].Existential == ds[0].Existential {
+		t.Fatal("existential trace/decision ownership drift")
+	}
+	m.fallbackDecisions[0].Existential.Candidates[0].Reasons[0] = "changed-fallback"
+	if ds[0].Existential.Candidates[0].Reasons[0] != "first" {
+		t.Fatal("fallback candidate aliased original failed evidence")
+	}
+	if len(m.fallbackDecisions[0].Existential.PrioritySelections) != 1 || m.fallbackDecisions[0].Existential.PrioritySelections[0] != "ns/pod|"+string(alt.Action) {
+		t.Fatal("fallback existential selection names old action")
 	}
 	if err := m.fallbackDecisions[0].Trace.Validate(); err != nil {
 		t.Fatalf("fallback trace invalid: %v", err)
@@ -95,9 +152,12 @@ func TestM019AmbiguousRefusalNeverGetsAlternative(t *testing.T) {
 			if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
 				t.Fatalf("ambiguous effect triggered fallback: n=%d calls=%v", n, h.calls)
 			}
-			if tc.name == "partial" || tc.name == "deadline" {
-				if len(m.Failures.at) != 0 {
-					t.Fatalf("uncertain or canceled effect entered failure cooldown: %+v", m.Failures.at)
+			if tc.name == "partial" && len(m.Failures.at) != 0 {
+				t.Fatalf("partial effect entered failure cooldown: %+v", m.Failures.at)
+			}
+			if tc.name == "deadline" {
+				if r := m.Failures.at[failureKey{pol.Owner(), "ns", views[0].Pod.UID, ds[0].Action}]; r.consecutive != 1 || !r.retry.IsZero() {
+					t.Fatalf("action-local deadline failed to count as transient feedback: %+v", r)
 				}
 			}
 		})
@@ -226,5 +286,51 @@ func TestM019RetiredOwnerCannotReceiveLateFailureFeedback(t *testing.T) {
 	}
 	if len(m.Failures.at) != 0 {
 		t.Fatalf("stale generation acquired failure state: %+v", m.Failures.at)
+	}
+}
+
+func TestM019ActionLocalHTTPTimeoutCoolsButCanceledTickDoesNot(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() }))
+	defer server.Close()
+	ce, pol, views, _ := m019Scenario(t)
+	now := time.Date(2026, 9, 15, 1, 54, 32, 0, time.UTC)
+	h := &m019HTTPTimeoutHands{client: &http.Client{Timeout: 20 * time.Millisecond}, url: server.URL}
+	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
+	ce.FailureExclusion = func(v *model.WorkloadView, a model.Action) (string, bool) {
+		return m.Failures.exclusion(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, a}, now)
+	}
+	initial, err := ce.DecideChecked(views, pol)
+	if err != nil || len(initial) != 1 || !initial[0].Selected {
+		t.Fatalf("timeout producer absent: %v %+v", err, initial)
+	}
+	failed := initial[0].Action
+	viewMap := map[string]*model.WorkloadView{"ns/pod": views[0]}
+	for tick := 0; tick < 2; tick++ {
+		ds, err := ce.DecideChecked(views, pol)
+		if err != nil || ds[0].Action != failed {
+			t.Fatalf("first transient drifted at tick %d: %v %+v", tick, err, ds)
+		}
+		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, viewMap); n != 0 || len(m.fallbackDecisions) != 0 {
+			t.Fatalf("ambiguous HTTP timeout licensed alternative at tick %d", tick)
+		}
+		now = now.Add(10 * time.Second)
+	}
+	if r := m.Failures.at[failureKey{pol.Owner(), "ns", views[0].Pod.UID, failed}]; r.consecutive != 2 || !r.retry.After(now) {
+		t.Fatalf("local timeout missed bounded feedback: %+v", r)
+	}
+	after, err := ce.DecideChecked(views, pol)
+	if err != nil || after[0].Action == failed {
+		t.Fatalf("local HTTP timeout repeated forever: %v %+v", err, after)
+	}
+	// Parent cancellation is a tick-level interruption, even if the HTTP client
+	// returns the same deadline/cancellation family of error.
+	other, otherPol, otherViews, otherDS := m019Scenario(t)
+	otherHands := &m019HTTPTimeoutHands{client: &http.Client{Timeout: 20 * time.Millisecond}, url: server.URL}
+	otherManager := &Manager{Actuator: otherHands, Optimizer: other, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	otherManager.actuate(ctx, &policyEntry{namespace: "ns"}, otherPol, otherDS, map[string]*model.WorkloadView{"ns/pod": otherViews[0]})
+	if len(otherManager.Failures.at) != 0 {
+		t.Fatalf("canceled parent tick taught action failure: %+v", otherManager.Failures.at)
 	}
 }

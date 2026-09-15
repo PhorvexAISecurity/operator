@@ -96,6 +96,7 @@ type alternativeContext struct {
 	set        actionset.ActionSet
 	lambda     float64
 	selected   map[string]model.Action
+	exchanged  map[string]model.Action // tick-local exchanges; original scored set is immutable
 	provenance map[string]float64
 	attack     map[string]bool
 	states     map[string]*model.ExistentialDecision
@@ -103,25 +104,28 @@ type alternativeContext struct {
 }
 
 // Alternative is selected from the exact action set and runtime price used by
-// the original production pass. Other originally selected assets stay reserved;
-// the failed target merely exchanges its one partition/budget slot.
+// the original production pass. Other selected assets, including earlier
+// same-tick exchanges, stay reserved; the failed target exchanges one slot.
 type Alternative struct {
 	Action                         model.Action
 	Coverage, Marginal, Cost, Gain float64
 	CoverKeys                      []string
+	Attribution                    []model.AttributionTerm
+	CounterfactualNote             string
 }
 
 func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Action) (Alternative, bool) {
 	c := e.alternative
-	if c == nil || c.owner != owner || c.selected[target] != failed || len(c.selected) > c.budget {
+	if c == nil || c.owner != owner || c.currentAction(target) != failed || len(c.selected) > c.budget {
 		return Alternative{}, false
 	}
 	covered := map[string]bool{}
 	selected := map[string]bool{}
-	for key, action := range c.selected {
+	for key := range c.selected {
 		if key == target {
 			continue
 		}
+		action := c.currentAction(key)
 		selected[key] = true
 		for _, cand := range c.set.Candidates {
 			if cand.Key == key && cand.Action == action {
@@ -149,8 +153,47 @@ func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Ac
 	for _, key := range cand.CoverKeys {
 		coverage += c.set.FactWeights[key]
 	}
+	note := ""
+	if cand.View != nil {
+		note = counterfactualNote(cand.Action, true, cand.View)
+	}
 	return Alternative{Action: cand.Action, Coverage: coverage, Marginal: marginal, Cost: cand.ECost,
-		Gain: legacyMixedGain(marginal, prov(target), c.lambda, cand.ECost), CoverKeys: append([]string(nil), cand.CoverKeys...)}, true
+		Gain: legacyMixedGain(marginal, prov(target), c.lambda, cand.ECost), CoverKeys: append([]string(nil), cand.CoverKeys...),
+		Attribution: attributionOf(cand, c.set.FactWeights, c.lambda), CounterfactualNote: note}, true
+}
+
+func (c *alternativeContext) currentAction(target string) model.Action {
+	if c == nil {
+		return ""
+	}
+	if a, exchanged := c.exchanged[target]; exchanged {
+		return a
+	}
+	return c.selected[target]
+}
+
+// ReserveAlternative updates only this tick's partition-slot accounting. It
+// never rewrites original scores, dual learning, or the first attempt's audit.
+func (e *CoverageEngine) ReserveAlternative(owner, target string, failed, chosen model.Action) bool {
+	c := e.alternative
+	if c == nil || c.owner != owner || c.currentAction(target) != failed || c.selected[target] == "" || chosen == failed {
+		return false
+	}
+	valid := false
+	for _, cand := range c.set.Candidates {
+		if cand.Key == target && cand.Action == chosen {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return false
+	}
+	if c.exchanged == nil {
+		c.exchanged = make(map[string]model.Action)
+	}
+	c.exchanged[target] = chosen
+	return true
 }
 
 // capabilityFor selects the gate collaborator an evaluation in this mode may call, and

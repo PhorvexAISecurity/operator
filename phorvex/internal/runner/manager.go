@@ -1852,13 +1852,60 @@ func cleanNoEffectResult(r actuator.Result) bool {
 		r.AMTDName == "" && r.EventName == "" && r.EventUID == ""
 }
 
+// cloneExistential preserves the first attempt's evidence after a fallback
+// reaches recordExistentialEffect. JSON round-tripping is unsuitable here:
+// ExistentialDecision's MarshalJSON redacts content for output, so cloning must
+// preserve the in-memory evidence exactly and own every mutable slice.
+func cloneExistential(in *model.ExistentialDecision) *model.ExistentialDecision {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Reasons = append([]string(nil), in.Reasons...)
+	out.PrioritySelections = append([]string(nil), in.PrioritySelections...)
+	out.Evidence = append([]model.OutcomeEvidence(nil), in.Evidence...)
+	for i := range out.Evidence {
+		out.Evidence[i].Reasons = append([]string(nil), in.Evidence[i].Reasons...)
+		out.Evidence[i].Outcome.RequiredKeys = append([]string(nil), in.Evidence[i].Outcome.RequiredKeys...)
+	}
+	out.Candidates = append([]model.ExistentialCandidate(nil), in.Candidates...)
+	for i := range out.Candidates {
+		out.Candidates[i].MissingKeys = append([]string(nil), in.Candidates[i].MissingKeys...)
+		out.Candidates[i].Reasons = append([]string(nil), in.Candidates[i].Reasons...)
+	}
+	return &out
+}
+
 func fallbackDecision(original model.Decision, a decision.Alternative) model.Decision {
 	d := original
+	d.Existential = cloneExistential(original.Existential)
+	if d.Existential != nil {
+		d.Existential.EffectStatus = "not-attempted"
+		oldKey := d.Namespace + "/" + d.Pod + "|" + string(original.Action)
+		newKey := d.Namespace + "/" + d.Pod + "|" + string(a.Action)
+		for i, key := range d.Existential.PrioritySelections {
+			if key == oldKey {
+				d.Existential.PrioritySelections[i] = newKey
+			}
+		}
+		for i := range d.Existential.Candidates {
+			c := &d.Existential.Candidates[i]
+			c.SLORelaxed = c.Action == a.Action && c.SLOExcluded && c.Contains && d.Existential.MayBreachSLO
+		}
+	}
 	d.Action, d.CoverageValue, d.CoveredWeight, d.Cost = a.Action, a.Coverage, a.Marginal, a.Cost
 	d.Net = a.Coverage - original.Lambda*a.Cost
+	d.Attribution = append([]model.AttributionTerm(nil), a.Attribution...)
+	if a.CounterfactualNote != "" {
+		d.CounterfactualNote = a.CounterfactualNote
+	}
 	d.PerDollar = 0
 	if a.Cost > 0 {
 		d.PerDollar = a.Coverage / a.Cost
+	}
+	d.ProactiveRate = 0
+	if d.PerDollar > d.Lambda {
+		d.ProactiveRate = d.PerDollar - d.Lambda
 	}
 	d.CoveredFacts = len(a.CoverKeys)
 	d.Reason = fmt.Sprintf("same-tick alternative after explicit no-effect refusal of %s; reserved marginal gain %.6g", original.Action, a.Gain)
@@ -1867,6 +1914,10 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 	d.ObjectsTouched = nil
 	if original.Trace != nil {
 		tr := *original.Trace
+		tr.Existential = d.Existential
+		if tr.Existential == nil {
+			tr.Existential = cloneExistential(original.Trace.Existential)
+		}
 		tr.DecisionID = fmt.Sprintf("%s-fallback-%s", original.Trace.DecisionID, a.Action)
 		tr.Candidates = append([]model.DecisionCandidateV2(nil), original.Trace.Candidates...)
 		tr.Facts = append([]model.DecisionFactV2(nil), original.Trace.Facts...)
@@ -1893,6 +1944,15 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		}
 		for i := range tr.Candidates {
 			c := &tr.Candidates[i]
+			c.Existential = nil
+			if tr.Existential != nil {
+				for j := range tr.Existential.Candidates {
+					if tr.Existential.Candidates[j].Action == model.Action(c.Action) {
+						c.Existential = &tr.Existential.Candidates[j]
+						break
+					}
+				}
+			}
 			c.Selected = c.Action == string(a.Action)
 			if c.Selected {
 				c.MarginalCoverage = model.OptionalFloat{Present: true, Value: a.Marginal}
@@ -2094,10 +2154,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		}
 		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil {
-			// Cancellation belongs to the whole tick, not to this action's
-			// capability. A result with partial effects is still a failure, but
-			// it never licenses another mutation in this tick.
-			if cleanNoEffectResult(res) && ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
+			// A canceled parent context belongs to the whole tick, not this
+			// action's capability. An action-local timeout with a clean result
+			// still counts toward later-tick feedback, but cannot license an
+			// immediate different mutation. Partial effects enter neither gate.
+			if cleanNoEffectResult(res) && ctx.Err() == nil &&
 				m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) {
 				failureNow := time.Now()
 				if m.FailureNow != nil {
@@ -2124,10 +2185,17 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
 			if allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
-				ctx.Err() == nil && actuator.IsNoEffectRefusal(err) && cleanNoEffectResult(res) {
+				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
+				actuator.IsNoEffectRefusal(err) && cleanNoEffectResult(res) {
 				if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 					targetKey := v.Pod.Namespace + "/" + v.Pod.Name
 					if alternative, ok := ce.SelectAlternative(pol.Owner(), targetKey, decisions[i].Action); ok {
+						if !ce.ReserveAlternative(pol.Owner(), targetKey, decisions[i].Action, alternative.Action) {
+							if decisions[i].Trace != nil {
+								decisions[i].Trace.DispatchReason += "; alternative-deferred: reservation-changed"
+							}
+							continue
+						}
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
 						more, _ := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false)
