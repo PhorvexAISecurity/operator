@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -385,7 +386,7 @@ func TestAdministrativeRecoveryBoundsMalformedInventoryAndPlanParser(t *testing.
 func unrelatedRecoveryReceipt(name string) *corev1.ConfigMap {
 	r := operationReceipt{Version: 1, Kind: "warm-swap", Phase: "prepared", PolicyNamespace: "other", PolicyName: "other-policy", PolicyUID: "other-policy-uid", TargetName: name, TargetUID: "uid-" + name, OldName: name, OldUID: "uid-" + name, NewName: name + "-new", NewUID: "uid-" + name + "-new", GroupKey: labelSwapGroup, GroupValue: "group"}
 	b, _ := json.Marshal(r)
-	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: receiptName(r), UID: "cm-" + name, ResourceVersion: "1", Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: receiptName(r), UID: types.UID("cm-" + name), ResourceVersion: "1", Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
 }
 
 func TestAdministrativeRecoveryScopedLimitIgnoresUnrelatedReceipts(t *testing.T) {
