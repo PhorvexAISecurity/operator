@@ -668,10 +668,10 @@ fixes:
     issues:
     - M-172
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on:
     - T3-M169
     - T3-M026
     branch: fix/t3-m172
-    head_sha: null
+    head_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb

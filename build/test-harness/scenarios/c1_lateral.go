@@ -3,7 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
-	"strings"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
@@ -16,8 +16,9 @@ func init() { core.RegisterScenario(&c1Lateral{}) }
 // target pod's filesystem (observed by exec) — i.e. command execution in pod B
 // from pod A.
 type c1Lateral struct {
-	srcApp string
-	dstApp string
+	srcApp    string
+	dstApp    string
+	targetUID types.UID
 }
 
 const lateralMarker = "R6TH-LATERAL-REACHED"
@@ -55,6 +56,7 @@ func (s *c1Lateral) Execute(ctx context.Context, env *core.Env) (core.AttackResu
 	if err != nil {
 		return core.AttackResult{}, err
 	}
+	s.targetUID = dst.UID
 	stages := []string{
 		"discovery: enumerate reachable pods/services (T1046/T1613)",
 		"lateral-move: reach pod B from compromised pod A (T1021)",
@@ -64,10 +66,15 @@ func (s *c1Lateral) Execute(ctx context.Context, env *core.Env) (core.AttackResu
 	// dst via an exec on dst (the harness's stand-in for "A drove a command in B").
 	// A faithful network reach is exercised by src dialing dst's IP first.
 	dialCmd := fmt.Sprintf("wget -T 2 -qO- http://%s:1234 2>/dev/null; echo dialed", dst.Status.PodIP)
-	_ = env.Exec(ctx, src.Name, firstContainer(src), []string{"sh", "-c", dialCmd})
+	if err := stimulusExec(ctx, env.Exec(ctx, src.Name, firstContainer(src), []string{"sh", "-c", dialCmd})); err != nil {
+		return core.AttackResult{}, err
+	}
 	// The remote command effect in B (observable marker in B's filesystem).
 	writeCmd := "echo " + lateralMarker + " > /tmp/.r6th_lateral"
 	res := env.Exec(ctx, dst.Name, firstContainerName(dst.Name, env), []string{"sh", "-c", writeCmd})
+	if err := stimulusExec(ctx, res); err != nil {
+		return core.AttackResult{}, err
+	}
 	env.Log.Logf("c1-lateral: command-in-B exit=%d", res.ExitCode)
 	cmds := []string{"sh -c '" + dialCmd + "'", "sh -c '" + writeCmd + "'"}
 	return core.AttackResult{Stages: stages, Commands: cmds}, nil
@@ -75,17 +82,22 @@ func (s *c1Lateral) Execute(ctx context.Context, env *core.Env) (core.AttackResu
 
 func (s *c1Lateral) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
 	// Give a rotation arm a moment to potentially disrupt mid-move.
-	time.Sleep(3 * time.Second)
-	dst, err := runningPodByApp(ctx, env, s.dstApp)
+	observationPause(3 * time.Second)
+	dst, err := observationTarget(ctx, env, s.dstApp, s.targetUID)
 	ev := map[string]string{}
+	ev["originalPodUID"] = string(s.targetUID)
 	if err != nil {
 		// Pod B gone (rotated) — lateral effect not observable.
-		return core.OracleResult{Achieved: false, ObservedState: "target pod B not reachable (rotated/absent)", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	res := env.Exec(ctx, dst.Name, firstContainerName(dst.Name, env), []string{"sh", "-c", "cat /tmp/.r6th_lateral 2>/dev/null"})
-	got := strings.Contains(res.Stdout, lateralMarker)
+	res := env.Exec(ctx, dst.Name, firstContainerName(dst.Name, env), markerReadCommand("/tmp/.r6th_lateral"))
+	got, err := observedMarker(ctx, res, lateralMarker)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["markerInB"] = fmt.Sprintf("%v", got)
 	ev["podB"] = dst.Name
+	ev["observedPodUID"] = string(dst.UID)
 	state := fmt.Sprintf("command-in-B marker present=%v in %s", got, dst.Name)
 	return core.OracleResult{Achieved: got, ObservedState: state, Evidence: ev}, nil
 }

@@ -3,7 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
-	"strings"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,7 +19,10 @@ func init() { core.RegisterScenario(&c3CICD{}) }
 // tampers a build artifact. ORACLE: the injected step runs / artifact is tampered
 // (injected marker present in the mock output volume). R6 CANNOT respond: pipeline
 // compromise is build-time, before any workload pod exists for Phoenix to rotate.
-type c3CICD struct{ app string }
+type c3CICD struct {
+	app       string
+	targetUID types.UID
+}
 
 func (s *c3CICD) Metadata() core.ScenarioMeta {
 	return core.ScenarioMeta{
@@ -63,22 +66,32 @@ func (s *c3CICD) Execute(ctx context.Context, env *core.Env) (core.AttackResult,
 	if err := env.WaitForPodRunning(ctx, s.app, 60*time.Second); err != nil {
 		return core.AttackResult{}, err
 	}
+	original, err := runningPodByApp(ctx, env, s.app)
+	if err != nil {
+		return core.AttackResult{}, fmt.Errorf("stimulus target unavailable: %w", err)
+	}
+	s.targetUID = original.UID
 	stages := []string{"cicd: mock pipeline runs build steps (T1053.007)", "inject: malicious step tampers the build artifact (T1525)"}
 	return core.AttackResult{Stages: stages, Commands: []string{"run mock pipeline with injected step"}}, nil
 }
 
 func (s *c3CICD) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	time.Sleep(3 * time.Second)
+	observationPause(3 * time.Second)
 	ev := map[string]string{}
-	pod, err := runningPodByApp(ctx, env, s.app)
+	ev["originalPodUID"] = string(s.targetUID)
+	pod, err := observationTarget(ctx, env, s.app, s.targetUID)
 	if err != nil {
 		ev["injectedStepRan"] = "false"
-		return core.OracleResult{Achieved: false, ObservedState: "pipeline runner absent", Evidence: ev}, nil
+		return core.OracleResult{}, fmt.Errorf("observation target unavailable: %w", err)
 	}
-	res := env.Exec(ctx, pod.Name, "runner", []string{"sh", "-c", "cat /out/artifact 2>/dev/null"})
-	tampered := strings.Contains(res.Stdout, mocks.InjectedStepMarker)
+	res := env.Exec(ctx, pod.Name, "runner", markerReadCommand("/out/artifact"))
+	tampered, err := observedMarker(ctx, res, mocks.InjectedStepMarker)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
 	ev["injectedStepRan"] = fmt.Sprintf("%v", tampered)
 	ev["observedPod"] = pod.Name
+	ev["observedPodUID"] = string(pod.UID)
 	state := fmt.Sprintf("injected pipeline step tampered artifact=%v", tampered)
 	return core.OracleResult{Achieved: tampered, ObservedState: state, Evidence: ev}, nil
 }
