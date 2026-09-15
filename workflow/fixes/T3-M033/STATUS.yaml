@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 16
+revision: 18
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -96,6 +96,14 @@ checks:
     sha256: ec61233cc1fba56e29d46e0bc2eb3466a010352628f4793b640ec7ba0a9c40df
     source_sha: 8e151790df7350243a630f9d8b3b92fc66e92001
     at: '2026-09-15T09:15:35+00:00'
+  l3:
+    result: UNAVAILABLE
+    by: codex-lead
+    artifact: evidence/live-tier3-20260915.md
+    sha256: 2f8c533288d042285c2bd77aed63d82ef3b8caf4bda18ea7e483440905a0db5a
+    source_sha: b3b9a28ce2a3de17b326d6e0623b88eea92e2457
+    at: '2026-09-15T10:53:52+00:00'
+    deployment_digest: sha256:32593f9d0eeb65b710542410ee3f355be281e7222395c15f854655bc415bf76c
 fix_id: T3-M033
 issues:
 - M-33
@@ -132,14 +140,14 @@ implementation:
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/210
   reviewed_head: b9f0bba66f73e5c694979d74cfac40504eec33ce
-  merge_sha: null
+  merge_sha: b3b9a28ce2a3de17b326d6e0623b88eea92e2457
   checks: pending
   patch_equivalence: PASS
 deployment:
-  image: null
-  digest: null
-  git_sha: null
-  rolled_out_at: null
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.117
+  digest: sha256:32593f9d0eeb65b710542410ee3f355be281e7222395c15f854655bc415bf76c
+  git_sha: b3b9a28ce2a3de17b326d6e0623b88eea92e2457
+  rolled_out_at: '2026-09-15T10:09:05Z'
 verification:
   required:
   - L0
@@ -152,7 +160,7 @@ verification:
   l0: PASS
   l1: PASS
   l2: PASS
-  l3: pending
+  l3: UNAVAILABLE
   l4: pending
   positive_control: PASS
 synchronization:
@@ -164,10 +172,11 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: human_owner
-  action: Review shared draft PR210; M92 remains incomplete, and the whole-tier deployment
-    barrier is not met.
-updated_at: '2026-09-15T09:19:15+00:00'
+  owner: codex-lead
+  action: PR210 merged and manager source deployed; complete issue-specific L3 controls
+    listed in Tier3 live report. Historical required CI execution remains unverified;
+    no fabricated PASS.
+updated_at: '2026-09-15T10:53:52+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:37+00:00'
   by: codex-lead
@@ -213,6 +222,13 @@ configuration_history:
 - at: '2026-09-15T09:19:14+00:00'
   by: codex-lead
   fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-09-15T10:53:51+00:00'
+  by: codex-lead
+  fields:
+  - deployment
+  - next_action
   - pull_request
   approval_ref: null
 transitions:

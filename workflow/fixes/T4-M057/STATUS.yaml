@@ -2,17 +2,26 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 2
+revision: 4
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6437fbe954f93a4514c222f5ba977b0ddf2f38f8da8de68ffc29d8a9b9d39420
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T10:52:46+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
 fix_id: T4-M057
 issues:
 - M-57
 title: '`debugger` injects a corpse'
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -73,9 +82,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Sign current source design and assign worker
-updated_at: '2026-09-15T10:30:13+00:00'
+  owner: sol-t4-m057
+  action: Implement signed plan; await heavy-test slot; submit-review with no notification
+updated_at: '2026-09-15T10:52:47+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:12+00:00'
   by: codex-lead
@@ -94,6 +103,14 @@ transitions:
   at: '2026-09-15T10:30:13+00:00'
   by: codex-lead
   artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T10:52:47+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
   note: null
   approval_ref: null
   forced: false

@@ -687,7 +687,7 @@ fixes:
     issues:
     - M-4
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t4-m004
@@ -709,7 +709,7 @@ fixes:
     issues:
     - M-57
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t4-m057
