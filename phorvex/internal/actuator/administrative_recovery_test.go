@@ -193,7 +193,7 @@ func TestAdministrativeRecoveryInventoriesUnsafeActionsWithoutUndo(t *testing.T)
 	n, c := recoveryFixture(t, "victim")
 	r := operationReceipt{Version: 1, Kind: "warm-swap", Phase: "prepared", PolicyNamespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", TargetName: "old", TargetUID: "old-uid", OldName: "old", OldUID: "old-uid", NewName: "new", NewUID: "new-uid", GroupKey: labelSwapGroup, GroupValue: "group"}
 	b, _ := json.Marshal(r)
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: receiptName(r), UID: "warm-receipt", ResourceVersion: "1", Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: receiptName(r), Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
 	if err := c.Create(context.Background(), cm); err != nil {
 		t.Fatal(err)
 	}
@@ -301,6 +301,7 @@ func TestAdministrativeRecoveryCopiedSnapshotHasNoAuthority(t *testing.T) {
 	source := &corev1.Pod{}
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "source"}, source)
 	copyPod := aiPod("ns", "copy", map[string]string{"app": "victim", quarantineLabel: string(source.UID)})
+	copyPod.UID, copyPod.ResourceVersion = "", ""
 	copyPod.Annotations = map[string]string{quarantineSnapAnno: source.Annotations[quarantineSnapAnno]}
 	if err := c.Create(context.Background(), copyPod); err != nil {
 		t.Fatal(err)
