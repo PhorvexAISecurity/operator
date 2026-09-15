@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/capability"
+	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -86,6 +87,41 @@ func TestInstalledSchemaReaderReachesRuntimeWitness(t *testing.T) {
 	upgraded := m.refreshVocabulary(context.Background(), now.Add(vocabularyRefreshInterval))
 	if !upgraded.Known || upgraded.UID != "new" || upgraded.NotInstallable.Has(model.ActionKVReset) {
 		t.Fatalf("upgrade not observed: %+v", upgraded)
+	}
+}
+
+func TestAbsentActionReachesCandidateStatus(t *testing.T) {
+	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("subset", "rotate", "noop")), Log: logr.Discard()}
+	observed := m.refreshVocabulary(context.Background(), time.Now())
+	pod := model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, MountedSecrets: []string{"secret-ref"}}
+	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), observed.NotInstallable, nil, supportsAll{})
+	ce := decision.NewCoverageEngine()
+	exposure := map[string]time.Duration{}
+	for _, variable := range model.LiveExposureVariables {
+		exposure[variable] = 2 * time.Hour
+	}
+	views := []*model.WorkloadView{{Pod: pod, Phase: model.PhaseWarm, BlastRadius: .6, ExposureByVariable: exposure}}
+	pol := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyUID: "policy", PolicyName: "policy", TraceEnabled: true, BrainImage: "fixture", GitSHA: "fixture", DryRun: true, Lambda: .4, NormSparsity: .4, FlowDisruption: .6, WeightSecrets: .8, MaxMovesPerTick: 2, ProactiveFloor: time.Hour, AntiOverRotationWindow: 5 * time.Minute, MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true, model.ActionQuarantine: true}}
+	wireCapabilityGates(ce, witness, false, func(*model.WorkloadView) bool { return false })
+	decisions, err := ce.DecideChecked(views, pol)
+	if err != nil || len(decisions) != 1 || decisions[0].Trace == nil {
+		t.Fatalf("candidate trace unavailable: %v %+v", err, decisions)
+	}
+	var absent, present *model.DecisionActionStatusV3
+	for i := range decisions[0].Trace.ActionStatus {
+		row := &decisions[0].Trace.ActionStatus[i]
+		if row.Action == string(model.ActionQuarantine) {
+			absent = row
+		}
+		if row.Action == string(model.ActionRotate) {
+			present = row
+		}
+	}
+	if absent == nil || absent.Status != model.ActionStatusNotInstallable || absent.ExclusionKind != model.ExclusionNotInstallable {
+		t.Fatalf("absent candidate not labelled: %+v", absent)
+	}
+	if present == nil || present.Status == model.ActionStatusNotInstallable {
+		t.Fatalf("present action marked absent: %+v", present)
 	}
 }
 
