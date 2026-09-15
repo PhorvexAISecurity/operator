@@ -749,7 +749,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-57 · `debugger` injects a corpse · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T4-M057
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · debugger Update @ internal/actuator/handlers_k8s.go:235
@@ -993,7 +993,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-66 · `rewarmShadow` creates an ownerless pod (and copies ephemeral containers) · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T4-M066
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -1473,7 +1473,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-95 · The adapter-poison fact is attacker-steerable · **OPEN** · `KNOWLEDGE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T4-M095
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.phoenix
@@ -2078,7 +2078,7 @@ Severity: MINOR · Tier: parallel · Fixes: M-18
 
 ### M-19 · No failure feedback: a permanently-failing move is re-selected forever · **OPEN** · `CHOICE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T4-M019
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.feedback
@@ -2163,7 +2163,7 @@ Severity: CRITICAL · Tier: parallel · Fixes: T1-E2E-AUTH, V3-M136
 
 ### M-4 · The brain's own SA is over-privileged when the console is enabled · **OPEN** · `SURFACE`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T4-M004
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · console
@@ -2554,7 +2554,7 @@ Severity: HIGH · Tier: unassigned · Fixes: none
 
 ### M-171 · AI scenario harness performs the defense it later attributes to the defender · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T4-M171
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

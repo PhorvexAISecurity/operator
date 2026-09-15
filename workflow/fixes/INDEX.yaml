@@ -681,3 +681,69 @@ fixes:
     - T3-M026
     branch: fix/t3-m172
     head_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+  T4-M004:
+    directory: fixes/T4-M004
+    aliases: []
+    issues:
+    - M-4
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m004
+    head_sha: null
+  T4-M019:
+    directory: fixes/T4-M019
+    aliases: []
+    issues:
+    - M-19
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m019
+    head_sha: null
+  T4-M057:
+    directory: fixes/T4-M057
+    aliases: []
+    issues:
+    - M-57
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m057
+    head_sha: null
+  T4-M066:
+    directory: fixes/T4-M066
+    aliases: []
+    issues:
+    - M-66
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m066
+    head_sha: null
+  T4-M095:
+    directory: fixes/T4-M095
+    aliases: []
+    issues:
+    - M-95
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m095
+    head_sha: null
+  T4-M171:
+    directory: fixes/T4-M171
+    aliases: []
+    issues:
+    - M-171
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m171
+    head_sha: null
