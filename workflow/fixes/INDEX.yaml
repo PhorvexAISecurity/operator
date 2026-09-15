@@ -720,11 +720,11 @@ fixes:
     issues:
     - M-66
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t4-m066
-    head_sha: null
+    head_sha: edea622430d3804331090077d7283b4aa0ca77b3
   T4-M095:
     directory: fixes/T4-M095
     aliases: []
