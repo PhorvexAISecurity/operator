@@ -325,13 +325,13 @@ func TestMIGRebindRealRepartitionEvictsPod(t *testing.T) {
 	if len(mm.calls) != 1 || mm.calls[0] != want {
 		t.Errorf("mig-rebind must call the REAL Repartition(node,gpu,profile), got %v", mm.calls)
 	}
-	// GPU-context eviction: the pod must be DELETED (zero CUDA contexts before repartition).
+	// The selected Pod deletion must be submitted before repartition; this does not prove CUDA state.
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err == nil {
 		t.Error("mig-rebind must EVICT the pod off the GPU (delete) before repartition")
 	}
-	if !containsStr(hr.Note, "evicted") || !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
-		t.Errorf("note must record eviction + pending, %q", hr.Note)
+	if !containsStr(hr.Note, "eviction submitted") || !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+		t.Errorf("note must record the submitted eviction + pending hardware proof, %q", hr.Note)
 	}
 }
 

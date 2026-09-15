@@ -25,13 +25,17 @@ import (
 
 // seqRunner records every Run() argv so the test can assert the MIG command sequence + ordering.
 type seqRunner struct {
-	calls [][]string
-	avail error
+	calls      [][]string
+	avail      error
+	configured bool
 }
 
 func (r *seqRunner) Run(_ context.Context, argv ...string) (string, error) {
 	r.calls = append(r.calls, append([]string(nil), argv...))
-	return "", nil
+	if strings.Contains(strings.Join(argv, " "), "-cgi") {
+		r.configured = true
+	}
+	return migTestCommandOutput(argv, r.configured), nil
 }
 func (r *seqRunner) Prepare(context.Context, string) (preparedNodeRunner, error) {
 	return r, r.avail
@@ -48,9 +52,14 @@ func TestMIG_RepartitionSequenceAndOrdering(t *testing.T) {
 		t.Fatalf("repartition: %v", err)
 	}
 	want := [][]string{
-		{"nvidia-smi", "mig", "-i", "0", "-dci"},                  // destroy compute instances
-		{"nvidia-smi", "mig", "-i", "0", "-dgi"},                  // destroy GPU instances
-		{"nvidia-smi", "mig", "-i", "0", "-cgi", "1g.10gb", "-C"}, // create new geometry + CIs
+		{"nvidia-smi", "-i", testGPUUUID, "--query-gpu=uuid", "--format=csv,noheader"},
+		{"nvidia-smi", "mig", "-i", testGPUUUID, "-dci"},
+		{"nvidia-smi", "-i", testGPUUUID, "--query-gpu=uuid", "--format=csv,noheader"},
+		{"nvidia-smi", "mig", "-i", testGPUUUID, "-dgi"},
+		{"nvidia-smi", "-i", testGPUUUID, "--query-gpu=uuid", "--format=csv,noheader"},
+		{"nvidia-smi", "mig", "-i", testGPUUUID, "-cgi", "1g.10gb", "-C"},
+		{"nvidia-smi", "mig", "-i", testGPUUUID, "-lgi"},
+		{"nvidia-smi", "mig", "-i", testGPUUUID, "-lci"},
 	}
 	if !reflect.DeepEqual(rec.calls, want) {
 		t.Errorf("MIG sequence/ordering wrong:\n got %v\nwant %v", rec.calls, want)

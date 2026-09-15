@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-15T19:36:09+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-baseline.log
+    sha256: 1d1648b448170f0b443b6809718b1f8fc310a24faaa139fb72665717cbb11d7e
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T21:02:20+00:00'
 fix_id: T5-M082
 issues:
 - M-82
@@ -84,7 +91,7 @@ residuals: []
 next_action:
   owner: sol-t5-m082
   action: Implement signed plan; coordinate heavy-test slot; submit-review --no-notify
-updated_at: '2026-09-15T19:36:09+00:00'
+updated_at: '2026-09-15T21:02:20+00:00'
 configuration_history:
 - at: '2026-09-15T19:36:07+00:00'
   by: codex-lead

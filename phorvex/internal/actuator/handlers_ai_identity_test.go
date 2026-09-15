@@ -318,8 +318,8 @@ func TestM069MIGRebindRejectedDeleteSkipsRepartition(t *testing.T) {
 	ec.Client = c
 	ec.Reader, ec.JournalNamespace = c, "operator"
 	hr, err := migRebindHandler{}.Enact(context.Background(), ec, boundReq(pod, model.ActionMIGRebind))
-	if err == nil || !errors.Is(err, errPodReplaced) || hr.Emitted {
-		t.Fatalf("rejected eviction must be a non-success wrapping errPodReplaced: err=%v hr=%+v", err, hr)
+	if err == nil || !errors.Is(err, errPodReplaced) || !hr.Emitted || hr.MutationKind != "partial" {
+		t.Fatalf("rejected eviction must expose the accepted relabel as a partial effect while wrapping errPodReplaced: err=%v hr=%+v", err, hr)
 	}
 	if len(mm.calls) != 0 {
 		t.Fatalf("Repartition must NOT run after a rejected eviction, got %v", mm.calls)

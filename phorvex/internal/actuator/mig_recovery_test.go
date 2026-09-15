@@ -6,12 +6,27 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type migScriptRunner struct {
 	calls [][]string
 	run   func([]string) (string, error)
+}
+
+type terminatingConfigMapReader struct{ client.Reader }
+
+func (r terminatingConfigMapReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if err := r.Reader.Get(ctx, key, obj, opts...); err != nil {
+		return err
+	}
+	if cm, ok := obj.(*corev1.ConfigMap); ok {
+		now := metav1.Now()
+		cm.DeletionTimestamp = &now
+	}
+	return nil
 }
 
 func (r *migScriptRunner) Run(_ context.Context, argv ...string) (string, error) {
@@ -28,6 +43,20 @@ const (
 
 func migTestPrior() migGeometry {
 	return migGeometry{GPUUUID: testGPUUUID, GIs: []migGI{{ProfileName: "1g.10gb", ProfileID: 19, InstanceID: 7, Start: 0, Size: 1, CI: migCI{ProfileName: "1g.10gb", ProfileID: 7, InstanceID: 0}}}}
+}
+
+func migTestCommandOutput(argv []string, configured bool) string {
+	s := strings.Join(argv, " ")
+	if strings.Contains(s, "--query-gpu=uuid") {
+		return testGPUUUID + "\n"
+	}
+	if configured && strings.HasSuffix(s, "-lgi") {
+		return oneGITable("|  0  MIG 1g.10gb  19  7  0:1  |")
+	}
+	if configured && strings.HasSuffix(s, "-lci") {
+		return oneCITable("|  0  7  MIG 1g.10gb  7  0  |")
+	}
+	return ""
 }
 
 func oneGITable(row string) string {
@@ -192,8 +221,14 @@ func TestMIGRepartitionDoesNotDestroyForeignReadbackDuringRecovery(t *testing.T)
 	if err == nil || effect.Outcome != "partial-unrestored" {
 		t.Fatalf("effect=%+v err=%v", effect, err)
 	}
-	for i, c := range r.calls {
-		if i > 2 && (strings.Contains(strings.Join(c, " "), "-dci") || strings.Contains(strings.Join(c, " "), "-dgi")) {
+	seenTarget := false
+	for _, c := range r.calls {
+		s := strings.Join(c, " ")
+		if strings.Contains(s, "-cgi 2g.20gb") {
+			seenTarget = true
+			continue
+		}
+		if seenTarget && (strings.Contains(s, "-dci") || strings.Contains(s, "-dgi")) {
 			t.Fatalf("foreign geometry destroyed during compensation: %v", c)
 		}
 	}
@@ -354,11 +389,7 @@ func TestMIGRecoveryOwnershipRejectsTerminatingAndWrongNamespaceReceipt(t *testi
 	if err := migRecoveryRequireOwned(context.Background(), ec, wrong, r, r.TargetLabels); err == nil {
 		t.Fatal("receipt outside protected namespace accepted")
 	}
-	now := metav1.Now()
-	cm.DeletionTimestamp = &now
-	if err := c.Update(context.Background(), cm); err != nil {
-		t.Fatal(err)
-	}
+	ec.Reader = terminatingConfigMapReader{Reader: c}
 	if err := migRecoveryRequireOwned(context.Background(), ec, cm, r, r.TargetLabels); err == nil {
 		t.Fatal("terminating recovery receipt accepted")
 	}
