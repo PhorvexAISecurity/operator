@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 15
+revision: 16
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -73,12 +73,28 @@ checks:
     sha256: 03aa31bb6e0c841b52d7ac3489e869d28dc12bfd1e3fc81ddbdfadc2a2733387
     source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
     at: '2026-09-15T09:02:35+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 3d06d7eb3626594fb4484b5af74dfde48cb0b4857178dba01c343b3dda997975
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:03:41+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: cb6ec4daa409262b18f55d0ae3e47760ab03fa558a5eaa51c972a3e1522b419d
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:03:42+00:00'
+    incident_sha256: 3d06d7eb3626594fb4484b5af74dfde48cb0b4857178dba01c343b3dda997975
 fix_id: T3-M122
 issues:
 - M-122
 title: The actuator demo CLI is stale after the fail-closed fixes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -129,7 +145,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -145,10 +161,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T09:02:38+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T09:03:44+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:40+00:00'
   by: codex-lead
@@ -229,6 +245,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T09:03:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T09:03:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: base_review
   result: PASS
@@ -247,9 +279,9 @@ check_history:
   at: '2026-09-15T08:02:41+00:00'
   baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
 handoff:
-  id: T3-M122:15:submit
-  from: sol-t3-m122
+  id: T3-M122:16:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 15
+  role: coordinator
+  kind: review
+  revision: 16
