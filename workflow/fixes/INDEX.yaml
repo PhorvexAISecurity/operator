@@ -742,8 +742,8 @@ fixes:
     issues:
     - M-171
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t4-m171
-    head_sha: null
+    head_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
