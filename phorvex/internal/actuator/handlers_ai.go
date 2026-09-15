@@ -21,7 +21,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/gpudevice"
@@ -84,40 +83,6 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 	return nil, false, nil
 }
 
-// rewarmShadow provisions a REPLACEMENT warm shadow by cloning the (old) leader's pod spec — the
-// REWARM-to-N step: the new shadow performs its cold model-load OFF the serving path (the whole point
-// of warm-swap). Real K8s create; the actual model-load timing is [PENDING-GPU-VALIDATION].
-func rewarmShadow(ctx context.Context, ec EnactCtx, oldLeader *corev1.Pod, groupKey, groupVal string) (string, string, error) {
-	name := truncName(oldLeader.Name + "-rw-" + oldLeader.ResourceVersion)
-	uid, err := rewarmShadowNamed(ctx, ec, oldLeader, name, groupKey, groupVal)
-	return name, uid, err
-}
-
-func rewarmSpecDigest(source *corev1.Pod) string {
-	shadow := &corev1.Pod{Spec: *source.Spec.DeepCopy()}
-	shadow.Spec.NodeName = ""
-	return podSpecDigest(shadow)
-}
-
-func rewarmShadowNamed(ctx context.Context, ec EnactCtx, oldLeader *corev1.Pod, name, groupKey, groupVal string) (string, error) {
-	labels := copyLabels(oldLeader.Labels)
-	labels[groupKey] = groupVal
-	labels[labelRole] = roleShadow
-	labels[labelModelLoaded] = "false" // it is loading; promotable only once model-loaded/ready
-	shadow := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: oldLeader.Namespace, Labels: labels},
-		Spec:       *oldLeader.Spec.DeepCopy(),
-	}
-	shadow.Spec.NodeName = "" // reschedule freely (and onto a fresh GPU/MIG slot)
-	if err := ec.Client.Create(ctx, shadow); err != nil {
-		return "", err
-	}
-	if shadow.UID == "" || shadow.ResourceVersion == "" {
-		return "", fmt.Errorf("replacement shadow create unacknowledged")
-	}
-	return string(shadow.UID), nil
-}
-
 // warmCutover is the shared provision-before-retire leadership flip: find a Ready shadow, flip it to
 // leader, retire the old leader, and REWARM a replacement shadow. Used by warm-swap (swap-group) and
 // model-shard-replace (model-shard group). FAIL-CLOSED: no Ready shadow => the old leader keeps serving.
@@ -145,7 +110,24 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	// Administrative receipt is the only crash-resume authority. Validate the selecting
 	// policy and acknowledge persistence before either serving role changes.
-	receipt := operationReceipt{Version: 1, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group}
+	// A picked shadow is only a candidate. Re-read both identities through the
+	// authoritative Reader and persist the complete controller intent first.
+	currentOld, currentNew := &corev1.Pod{}, &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, currentOld); err != nil {
+		return HandlerResult{}, err
+	}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: shadow.Name}, currentNew); err != nil {
+		return HandlerResult{}, err
+	}
+	if currentOld.UID != leader.UID || currentNew.UID != shadow.UID {
+		return HandlerResult{}, fmt.Errorf("%s: warm pair UID changed before intent", kind)
+	}
+	leader, shadow = currentOld, currentNew
+	pool, err := warmPoolCapture(ctx, ec.Reader, leader, shadow, groupKey, group)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: unsupported warm pool: %w", kind, err)
+	}
+	receipt := operationReceipt{Version: 2, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}
@@ -155,6 +137,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if err := warmCurrentScope(pol, receipt, leader, shadow); err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: %w", kind, err)
+	}
+	if err := warmPoolRecheck(ctx, ec.Reader, receipt, leader, shadow); err != nil {
+		return HandlerResult{}, err
 	}
 	if !podReady(shadow) || shadow.UID == "" || leader.ResourceVersion == "" || shadow.ResourceVersion == "" {
 		return HandlerResult{}, fmt.Errorf("%s: observed pod identity/readiness unavailable", kind)
@@ -185,6 +170,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		}
 		return HandlerResult{}, err
 	}
+	if err := warmPoolRecheck(ctx, ec.Reader, receipt, leader, shadow); err != nil {
+		return HandlerResult{}, err
+	}
 
 	// (1) FLIP up: shadow -> leader (provision-before-retire: new leader Ready BEFORE old touched).
 	shadow.Labels[labelRole] = roleLeader
@@ -203,6 +191,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err := warmCurrentScope(pol, receipt, leader, shadow); err != nil {
 		return promotedPartial, err
 	}
+	if err := warmPoolRecheck(ctx, ec.Reader, receipt, leader, shadow); err != nil {
+		return promotedPartial, err
+	}
 	// (2) FLIP down: old leader -> retiring. On failure, ROLL BACK (re-flip shadow; old leader serves).
 	freshOld, freshNew := &corev1.Pod{}, &corev1.Pod{}
 	flipErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: leader.Name}, freshOld)
@@ -211,6 +202,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	}
 	if flipErr == nil {
 		flipErr = warmCurrentScope(pol, receipt, freshOld, freshNew)
+	}
+	if flipErr == nil {
+		flipErr = warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew)
 	}
 	if flipErr == nil && (freshOld.Labels[labelRole] != roleLeader || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.DeletionTimestamp != nil || freshNew.DeletionTimestamp != nil) {
 		flipErr = fmt.Errorf("recorded pair changed before old route removal")
@@ -235,6 +229,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		}
 		if checkErr == nil {
 			checkErr = warmCurrentScope(currentPol, receipt, oldAfter, rollback)
+		}
+		if checkErr == nil {
+			checkErr = warmPoolRecheck(ctx, ec.Reader, receipt, oldAfter, rollback)
 		}
 		if checkErr == nil && (oldAfter.Labels[labelRole] != roleLeader || !podReady(oldAfter) || rollback.Labels[labelRole] != roleLeader || !podReady(rollback)) {
 			checkErr = fmt.Errorf("exact old/new serving roles or readiness changed")
@@ -291,6 +288,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if err := warmCurrentScope(pol, receipt, freshOld, freshNew); err != nil {
 		return partial, err
 	}
+	if err := warmPoolRecheck(ctx, ec.Reader, receipt, freshOld, freshNew); err != nil {
+		return partial, err
+	}
 	if freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshOld.Labels[labelRole] != roleRetiring {
 		return partial, fmt.Errorf("%s: recorded pair not ready for retirement", kind)
 	}
@@ -314,21 +314,11 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		return partial,
 			fmt.Errorf("%s retire %s/%s (partial: shadow %s promoted to leader, old leader name relabeled %s, observed pod uid %s NOT deleted, no rewarm): %w", kind, req.Namespace, req.Pod, shadow.Name, roleRetiring, leader.UID, delErr)
 	}
-	receipt.Phase = "retired"
+	receipt.Phase = "retired-awaiting-controller"
 	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
 		partial.Note = "partial cutover: old leader retired; journal phase unresolved"
 		return partial, fmt.Errorf("%s: old leader retired but journal phase update failed: %w", kind, err)
 	}
-	// (4) REWARM-to-N: provision a replacement shadow (cold-load OFF the serving path).
-	receipt.RewarmName = truncName(leader.Name + "-rw-" + leader.ResourceVersion)
-	receipt.RewarmSpecHash = rewarmSpecDigest(leader)
-	receipt.Phase = "rewarm-intent"
-	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
-		partial.Note = "partial cutover: old leader retired; rewarm intent not persisted"
-		return partial, fmt.Errorf("%s: rewarm intent not persisted; replacement not created: %w", kind, err)
-	}
-	rewarm := receipt.RewarmName
-	rewarmUID, rwErr := rewarmShadowNamed(ctx, ec, leader, rewarm, groupKey, group)
 	drainNote := "in-flight drained"
 	if drainPending {
 		drainNote = "in-flight abort [PENDING-GPU-VALIDATION] (stack unreachable; K8s route-drained)"
@@ -337,35 +327,66 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if alreadyGone {
 		retireNote = "already gone before retire (no pod of that name; uid " + string(leader.UID) + ")"
 	}
-	note := fmt.Sprintf("%s: shadow %s promoted, old leader %s + %s (no cold-load on serving path)", kind, shadow.Name, drainNote, retireNote)
-	if rwErr == nil {
-		partial.ObjectsTouched = append(partial.ObjectsTouched, objRef("Pod", req.Namespace, rewarm))
-		partial.Note = "partial cutover: replacement Create acknowledged; UID binding or cleanup unresolved"
-		observed := &corev1.Pod{}
-		if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: rewarm}, observed); err != nil {
-			return partial, fmt.Errorf("%s: replacement created but readback unavailable: %w", kind, err)
-		}
-		if string(observed.UID) != rewarmUID || observed.Labels[groupKey] != group || observed.Labels[labelRole] != roleShadow || observed.Labels[labelModelLoaded] != "false" {
-			return partial, fmt.Errorf("%s: replacement created but readback identity/scope mismatch", kind)
-		}
-		if rewarmSpecDigest(observed) != receipt.RewarmSpecHash {
-			return partial, fmt.Errorf("%s: replacement spec differs from persisted intent", kind)
-		}
-		receipt.RewarmUID, receipt.Phase = rewarmUID, "rewarmed"
-		if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
-			return partial, fmt.Errorf("%s: replacement created but journal UID binding failed: %w", kind, err)
-		}
-		touched = append(touched, objRef("Pod", req.Namespace, rewarm))
-		note += "; rewarmed " + rewarm
-	} else {
-		partial.Note = "partial cutover: old leader retired; replacement Create unresolved"
-		return partial, fmt.Errorf("%s: rewarm unresolved after retirement: %w", kind, rwErr)
+	note := fmt.Sprintf("%s: shadow %s promoted, old leader %s + %s; controller replenishment pending", kind, shadow.Name, drainNote, retireNote)
+	if pending {
+		note += " [PENDING-GPU-VALIDATION]: promoted shadow used K8s/model-loaded fallback"
 	}
-	if rwErr == nil {
-		if err := journalFinish(ctx, ec, journal); err != nil {
-			partial.Note = "cutover replacement acknowledged; receipt cleanup unresolved"
-			return partial, fmt.Errorf("%s: cutover completed but receipt cleanup failed: %w", kind, err)
-		}
+	// One immediate authoritative observation keeps the handler tick bounded. The
+	// real ReplicaSet, never Phorvex, supplies the new Pod.
+	freshSurvivor := &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: receipt.NewName}, freshSurvivor); err != nil {
+		partial.Note = note
+		return partial, err
+	}
+	if string(freshSurvivor.UID) != receipt.NewUID || freshSurvivor.Labels[labelRole] != roleLeader || !podReady(freshSurvivor) {
+		partial.Note = note
+		return partial, fmt.Errorf("%s: serving survivor changed after retirement", kind)
+	}
+	if err := warmSurvivorScope(pol, receipt, freshSurvivor); err != nil {
+		partial.Note = note
+		return partial, err
+	}
+	if err := warmPoolRecheck(ctx, ec.Reader, receipt, nil, freshSurvivor); err != nil {
+		partial.Note = note
+		return partial, err
+	}
+	oldAfterDelete := &corev1.Pod{}
+	oldReadErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: receipt.OldName}, oldAfterDelete)
+	if oldReadErr != nil && !apierrors.IsNotFound(oldReadErr) {
+		partial.Note = note
+		return partial, oldReadErr
+	}
+	if oldReadErr == nil && string(oldAfterDelete.UID) == receipt.OldUID {
+		partial.Note = note
+		return partial, fmt.Errorf("%s: retired old UID still present; controller observation pending", kind)
+	}
+	candidate, observeErr := warmPoolObserve(ctx, ec.Reader, receipt)
+	if observeErr != nil {
+		partial.Note = note
+		return partial, fmt.Errorf("%s: serving cutover submitted; pool replenishment pending: %w", kind, observeErr)
+	}
+	receipt.RewarmName, receipt.RewarmUID, receipt.Phase = candidate.Name, string(candidate.UID), "pool-observed"
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		partial.Note = note
+		return partial, err
+	}
+	ready, fallback := shadowModelReady(ctx, ec, candidate)
+	if !ready {
+		partial.Note = note + "; replacement Pod observed; warm capacity not ready"
+		return partial, fmt.Errorf("%s: replacement Pod observed; warm capacity pending", kind)
+	}
+	receipt.Phase = "pool-warm-ready"
+	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
+		partial.Note = note
+		return partial, err
+	}
+	if err := journalFinish(ctx, ec, journal); err != nil {
+		partial.Note = note
+		return partial, err
+	}
+	note += "; controller Pod observed and warm capacity ready"
+	if fallback {
+		note += " [PENDING-GPU-VALIDATION]: K8s/model-loaded fallback used"
 	}
 	if pending {
 		note += " [PENDING-GPU-VALIDATION]: shadow readiness used the K8s gate (no vLLM stack reachable); model-load/ColdLoadSec magnitudes unvalidated"

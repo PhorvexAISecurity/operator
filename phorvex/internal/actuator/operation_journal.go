@@ -42,6 +42,7 @@ type operationReceipt struct {
 	RewarmName      string            `json:"rewarmName,omitempty"`
 	RewarmUID       string            `json:"rewarmUID,omitempty"`
 	RewarmSpecHash  string            `json:"rewarmSpecHash,omitempty"`
+	Pool            *warmPoolIntent   `json:"pool,omitempty"`
 }
 
 func receiptName(r operationReceipt) string {
@@ -56,16 +57,35 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if r.Version != 1 || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
 	case "warm-swap", "model-shard-replace":
+		if r.Version == 2 {
+			p := r.Pool
+			if p == nil || p.RSName == "" || p.RSUID == "" || p.RSGeneration <= 0 || p.Desired < 2 || p.Desired > warmPoolMaxMembers || len(p.Members) != int(p.Desired) || p.RSTemplateHash == "" || p.RSSelectorHash == "" || p.ServiceName == "" || p.ServiceUID == "" || p.ServiceSelectorHash == "" || ((p.ParentName == "") != (p.ParentUID == "")) || r.RewarmSpecHash != "" || r.OldName == "" || r.OldName != r.TargetName || r.OldUID == "" || r.OldUID != r.TargetUID || r.NewName == "" || r.NewUID == "" || r.OldName == r.NewName || r.OldUID == r.NewUID || r.GroupValue == "" || !((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard)) {
+				return false
+			}
+			members := make(map[string]bool, len(p.Members))
+			for _, uid := range p.Members {
+				if uid == "" || members[uid] {
+					return false
+				}
+				members[uid] = true
+			}
+			if !members[r.OldUID] || !members[r.NewUID] {
+				return false
+			}
+			preObservation := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired-awaiting-controller"
+			postObservation := r.Phase == "pool-observed" || r.Phase == "pool-warm-ready"
+			return (preObservation && r.RewarmName == "" && r.RewarmUID == "") || (postObservation && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.RewarmUID != r.OldUID && r.RewarmUID != r.NewUID && !members[r.RewarmUID])
+		}
 		validPhase := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired" || r.Phase == "rewarm-intent" || r.Phase == "rewarmed"
 		validRewarm := (r.Phase != "rewarm-intent" && r.Phase != "rewarmed" && r.RewarmName == "" && r.RewarmUID == "" && r.RewarmSpecHash == "") || (r.Phase == "rewarm-intent" && r.RewarmName != "" && r.RewarmUID == "" && r.RewarmSpecHash != "") || (r.Phase == "rewarmed" && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmSpecHash != "")
 		return validPhase && validRewarm && r.OldName == r.TargetName && r.OldUID == r.TargetUID && r.NewName != "" && r.NewUID != "" && r.OldName != r.NewName && r.OldUID != r.NewUID && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.GroupValue != "" && ((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard))
 	case "quarantine":
-		return (r.Phase == "prepared" || r.Phase == "policy-bound") && r.NPName != "" && r.TargetLabels != nil && (r.Phase != "policy-bound" || r.NPUID != "")
+		return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "policy-bound") && r.NPName != "" && r.TargetLabels != nil && (r.Phase != "policy-bound" || r.NPUID != "")
 	default:
 		return false
 	}

@@ -362,8 +362,8 @@ func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true, drained: 2}
 	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
-	if err != nil {
-		t.Fatalf("warm-swap: %v", err)
+	if err == nil || hr.MutationKind != "swap" {
+		t.Fatalf("fake controller must leave replenishment pending after cutover: %+v %v", hr, err)
 	}
 	if mv.drainCalls < 1 {
 		t.Error("warm-swap must DRAIN the old leader's in-flight before retiring it (the :141 gap)")
