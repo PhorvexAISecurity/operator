@@ -83,7 +83,7 @@ func hardenedSC() map[string]any {
 }
 
 func debuggerContainer() map[string]any {
-	return map[string]any{"name": "phorvex-debugger", "image": approvedImg, "securityContext": hardenedSC()}
+	return map[string]any{"name": "phorvex-debugger", "image": approvedImg, "securityContext": hardenedSC(), "targetContainerName": "web", "command": []any{"sleep", "300"}}
 }
 
 func customContainer() map[string]any {
@@ -101,7 +101,7 @@ func activation(t *testing.T, env *cel.Env, vars map[string]string, user string,
 	for i, c := range containers {
 		ecs[i] = c
 	}
-	object := map[string]any{"spec": map[string]any{"ephemeralContainers": ecs}}
+	object := map[string]any{"spec": map[string]any{"ephemeralContainers": ecs, "containers": []any{map[string]any{"name": "web"}}}}
 	oldObject := map[string]any{"spec": map[string]any{}} // no ephemeralContainers => all are new
 	base := map[string]any{"object": object, "oldObject": oldObject}
 	managerSA := celEval(t, env, vars["managerSA"], base)
@@ -184,6 +184,9 @@ func TestCELDeniesEachViolationIsolated(t *testing.T) {
 		{"tty-set", managerSAName, func(c map[string]any) { c["tty"] = true }, 7},
 		{"env-set", managerSAName, func(c map[string]any) { c["env"] = []any{map[string]any{"name": "X", "value": "y"}} }, 7},
 		{"debugger-with-command", managerSAName, func(c map[string]any) { c["command"] = []any{"sh"} }, 8},
+		{"debugger-wrong-duration", managerSAName, func(c map[string]any) { c["command"] = []any{"sleep", "600"} }, 8},
+		{"debugger-target-absent", managerSAName, func(c map[string]any) { c["targetContainerName"] = "missing" }, 7},
+		{"debugger-target-empty", managerSAName, func(c map[string]any) { c["targetContainerName"] = "" }, 7},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

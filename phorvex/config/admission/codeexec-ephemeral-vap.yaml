@@ -1,9 +1,9 @@
 # M-6 — request-level ValidatingAdmissionPolicy for pods/ephemeralcontainers (code-exec admission).
 #
-# Enforces the SEC-1/SEC-2/PO-1 contract frozen in workflow/fixes/M-6/03-decision.md
-# (SHA256 9d566b9f…): only the Phorvex manager SA may add an ephemeral container in a MANAGED
+# Enforces the SEC-1/SEC-2/PO-1 M-6 admission contract as amended by the signed
+# T4-M057 bounded debugger decision: only the Phorvex manager SA may add an ephemeral container in a MANAGED
 # namespace, and only the exact approved profile (name / pinned digest / hardened securityContext /
-# Option A empty debugger command+args / exact custom-inject command+args; forbidden extra fields).
+# fixed five-minute debugger command and ordinary target / exact custom-inject command+args; forbidden extra fields).
 #
 # Native VAP (no webhook pod). GA in k8s >=1.30 (validation target 1.36.2). failurePolicy: Fail;
 # the Binding uses validationActions:[Deny]; namespace scope is on the Binding (installer-set label a
@@ -19,7 +19,7 @@ metadata:
     phorvex.ai/policy: codeexec-ephemeral
   annotations:
     # Content/version pin the runtime capability check verifies (not name presence alone).
-    phorvex.ai/policy-version: "m6-1"
+    phorvex.ai/policy-version: "m6-2"
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -101,25 +101,30 @@ spec:
         variables.newContainers.all(ec,
           (!has(ec.tty) || ec.tty == false)
           && (!has(ec.stdin) || ec.stdin == false)
-          && !has(ec.targetContainerName)
+          && (ec.name == 'phorvex-debugger'
+              ? (has(ec.targetContainerName) && ec.targetContainerName != ''
+                 && has(object.spec.containers)
+                 && object.spec.containers.exists(c, c.name == ec.targetContainerName))
+              : !has(ec.targetContainerName))
           && (!has(ec.env) || size(ec.env) == 0)
           && (!has(ec.envFrom) || size(ec.envFrom) == 0)
           && (!has(ec.volumeMounts) || size(ec.volumeMounts) == 0)
           && (!has(ec.volumeDevices) || size(ec.volumeDevices) == 0))
       reason: Forbidden
-      message: "code-exec/fields: tty/stdin/targetContainerName/env/envFrom/volumeMounts/volumeDevices are not permitted"
-    # --- SEC-1 command/args (C1): debugger MUST have empty command AND args (Option A); custom-inject
+      message: "code-exec/fields: tty/stdin/env/envFrom/volumeMounts/volumeDevices are forbidden; debugger target must name an existing ordinary container; custom target must be absent"
+    # --- SEC-1 command/args (C1): debugger MUST carry fixed sleep 300 command and empty args; custom-inject
     # MUST match its exact command/args. "Not specified" is not enough — emptiness is required. ---
     - expression: >-
         variables.newContainers.all(ec,
           ec.name == 'phorvex-debugger'
-            ? ((!has(ec.command) || size(ec.command) == 0) && (!has(ec.args) || size(ec.args) == 0))
+            ? (has(ec.command) && ec.command == ['sleep', '300']
+               && (!has(ec.args) || size(ec.args) == 0))
             : (ec.name == 'phorvex-custom'
                 ? (has(ec.command) && ec.command == ['sh', '-c']
                    && has(ec.args) && ec.args == ['echo phorvex-custom-action; sleep 1'])
                 : true))
       reason: Forbidden
-      message: "code-exec/command: phorvex-debugger must carry empty command+args; phorvex-custom must carry the exact approved command+args"
+      message: "code-exec/command: phorvex-debugger must carry command=[sleep,300] with empty args; phorvex-custom must carry the exact approved command+args"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

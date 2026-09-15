@@ -12,6 +12,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -24,7 +26,7 @@ import (
 
 // getPod fetches the target pod; returns (nil,false,nil) if already gone (a NotFound is
 // SUCCESS for an idempotent destructive move — the recon target is invalidated).
-func getPod(ctx context.Context, c client.Client, ns, name string) (*corev1.Pod, bool, error) {
+func getPod(ctx context.Context, c client.Reader, ns, name string) (*corev1.Pod, bool, error) {
 	var pod corev1.Pod
 	if err := c.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &pod); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -92,16 +94,13 @@ type debuggerHandler struct{}
 func (debuggerHandler) Name() string { return string(model.ActionDebugger) }
 
 func (debuggerHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	// M-6 Option A: the debugger carries NO command and NO args (empty), so the injected
-	// container runs the pinned image's own entrypoint and nothing operator-supplied. The
-	// VAP requires command+args empty for phorvex-debugger, so this is the paired request.
 	return injectEphemeral(ctx, ec, req, debuggerEphemeralSpec())
 }
 
-// debuggerEphemeralSpec is the exact phorvex-debugger container the VAP allow-set validates
-// (Option A: empty command AND args). Defined once so the handler and its test cannot drift.
+// BusyBox's default sh exits on stdin EOF. This fixed command keeps a diagnostic process
+// available for at most five minutes without accepting a user command or script.
 func debuggerEphemeralSpec() corev1.EphemeralContainer {
-	return ephemeralContainerSpec("phorvex-debugger", codeExecImage, nil, nil)
+	return ephemeralContainerSpec("phorvex-debugger", codeExecImage, []string{"sleep", "300"}, nil)
 }
 
 // --- 4. custom-inject (= Phoenix CustomAction) — also the KV-reset carrier — IRREVERSIBLE -
@@ -163,31 +162,99 @@ func ephemeralContainerSpec(name, image string, command, args []string) corev1.E
 }
 
 // injectEphemeral appends ONE prebuilt ephemeral container via the pods/ephemeralcontainers
-// subresource. Name-keyed idempotent (skip if present). IRREVERSIBLE — K8s cannot remove
+// subresource. IRREVERSIBLE — K8s cannot remove
 // an ephemeral container, so there is no rollback, only audit-flagging. The emitted request
 // is the M-6 paired profile the VAP validates; see ephemeralContainerSpec.
 func injectEphemeral(ctx context.Context, ec EnactCtx, req Request, spec corev1.EphemeralContainer) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
+	if ec.Reader == nil {
+		return HandlerResult{}, fmt.Errorf("inject: authoritative Pod reader unavailable")
+	}
+	pod, ok, err := getPod(ctx, ec.Reader, req.Namespace, req.Pod)
 	if err != nil {
 		return HandlerResult{}, err
 	}
 	if !ok {
 		return HandlerResult{}, fmt.Errorf("inject: pod %s/%s gone", req.Namespace, req.Pod)
 	}
+	if req.TargetUID == "" || string(pod.UID) != req.TargetUID {
+		return HandlerResult{}, fmt.Errorf("inject: target UID missing or changed for %s/%s", req.Namespace, req.Pod)
+	}
+	if pod.ResourceVersion == "" {
+		return HandlerResult{}, fmt.Errorf("inject: target version unavailable for %s/%s", req.Namespace, req.Pod)
+	}
+	if spec.Name == "phorvex-debugger" {
+		if len(pod.Spec.Containers) == 0 || pod.Spec.Containers[0].Name == "" {
+			return HandlerResult{}, fmt.Errorf("debugger: target pod has no ordinary primary container")
+		}
+		spec.TargetContainerName = pod.Spec.Containers[0].Name
+	}
 	for _, ec2 := range pod.Spec.EphemeralContainers {
 		if ec2.Name == spec.Name {
-			return HandlerResult{Emitted: true, MutationKind: "irreversible", Note: "ephemeral container already present (idempotent)"}, nil
+			if !sameEphemeralSpec(ec2, spec) {
+				return HandlerResult{}, fmt.Errorf("inject: existing %s spec differs; immutable session requires a fresh Pod", spec.Name)
+			}
+			if spec.Name == "phorvex-debugger" {
+				return debuggerObservedResult(pod, time.Now()), nil
+			}
+			return HandlerResult{Emitted: false, MutationKind: "irreversible", Note: "custom-inject spec already present; no new submission"}, nil
 		}
 	}
 	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, spec)
 	if err := ec.Client.SubResource("ephemeralcontainers").Update(ctx, pod); err != nil {
 		return HandlerResult{}, fmt.Errorf("inject ephemeral container %s into %s/%s: %w", spec.Name, req.Namespace, req.Pod, err)
 	}
-	return HandlerResult{
+	result := HandlerResult{
 		Emitted: true, MutationKind: "irreversible",
 		ObjectsTouched: []string{objRef("Pod/ephemeralcontainers", req.Namespace, req.Pod)},
-		Note:           "ephemeral container " + spec.Name + " injected (irreversible — audit-flagged)",
-	}, nil
+		Note:           "ephemeral container " + spec.Name + " submitted; runtime state unobserved (irreversible spec)",
+	}
+	if spec.Name == "phorvex-debugger" {
+		result.Note = "bounded debugger submitted for target " + spec.TargetContainerName + "; runtime state unobserved, inspect Pod status before use"
+	}
+	return result, nil
+}
+
+// The API server defaults these three ordinary fields on readback. Strip only their
+// canonical defaults from the existing value; every unexpected value and every other
+// field still participates in the exact comparison.
+func sameEphemeralSpec(existing, desired corev1.EphemeralContainer) bool {
+	normalized := *existing.DeepCopy()
+	if normalized.ImagePullPolicy == corev1.PullIfNotPresent {
+		normalized.ImagePullPolicy = ""
+	}
+	if normalized.TerminationMessagePath == corev1.TerminationMessagePathDefault {
+		normalized.TerminationMessagePath = ""
+	}
+	if normalized.TerminationMessagePolicy == corev1.TerminationMessageReadFile {
+		normalized.TerminationMessagePolicy = ""
+	}
+	return reflect.DeepEqual(normalized, desired)
+}
+
+func debuggerObservedResult(pod *corev1.Pod, now time.Time) HandlerResult {
+	for _, st := range pod.Status.EphemeralContainerStatuses {
+		if st.Name != "phorvex-debugger" {
+			continue
+		}
+		switch {
+		case st.State.Running != nil:
+			started := st.State.Running.StartedAt.Time
+			if started.IsZero() || started.After(now) {
+				return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger running status has invalid or missing start time; availability unobservable"}
+			}
+			if !now.Before(started.Add(5 * time.Minute)) {
+				return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger running status is past five-minute expiry; status may lag, use a fresh Pod for another session"}
+			}
+			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger observed running within five-minute window; no new submission; inspect runtime/PID support before use"}
+		case st.State.Waiting != nil:
+			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger observed waiting (" + st.State.Waiting.Reason + "); unavailable; no new submission"}
+		case st.State.Terminated != nil:
+			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger terminated; immutable session expired, use a fresh Pod for another session"}
+		default:
+			return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger state unobservable; no new submission"}
+		}
+	}
+	return HandlerResult{MutationKind: "irreversible", Note: "bounded debugger status missing; availability unobservable, no new submission"}
 }
 
 // --- 5. disable (= Phoenix DECLARATION) — declared-not-implemented ------------------------
