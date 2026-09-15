@@ -753,7 +753,7 @@ fixes:
     issues:
     - M-146
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t5-m146
