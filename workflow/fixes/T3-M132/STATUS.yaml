@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -73,13 +73,29 @@ checks:
     sha256: 181c503ae60c6023ab912aaa29aa49107dfb266ab7cb41494bf1c1f1f1a2b5c1
     source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
     at: '2026-09-15T07:26:22+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 4eecb0040ecedc9a2dd6f178da585aed71f9adf7ae0099b01e8147406899ef56
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:33:20+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b9fec32dd00768cd23c4da31a9545e38cee488990b98924bc011aa448dba504e
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:33:20+00:00'
+    incident_sha256: 4eecb0040ecedc9a2dd6f178da585aed71f9adf7ae0099b01e8147406899ef56
 fix_id: T3-M132
 issues:
 - M-132
 title: AMTD guest list ignores matchExpressions; empty MatchLabels suppresses the
   whole tick
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -125,7 +141,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -141,10 +157,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T07:26:25+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T07:33:23+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:42+00:00'
   by: codex-lead
@@ -220,10 +236,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T07:33:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T07:33:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T3-M132:12:submit
-  from: sol-t3-m132
+  id: T3-M132:13:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 12
+  role: coordinator
+  kind: review
+  revision: 13
