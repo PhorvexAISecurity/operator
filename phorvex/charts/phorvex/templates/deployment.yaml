@@ -22,6 +22,7 @@ spec:
     metadata:
       labels:
         {{- include "phorvex.labels" . | nindent 8 }}
+        app.kubernetes.io/component: manager
     spec:
       serviceAccountName: {{ include "phorvex.serviceAccountName" . }}
       securityContext:
@@ -112,6 +113,16 @@ spec:
         - --audit-json={{ .Values.phorvex.audit.path }}
         - --audit-max-bytes={{ $auditMaxBytes }}
         - --audit-max-backups={{ $auditMaxBackups }}
+        {{- if .Values.phorvex.console.enabled }}
+        - --audit-source-addr=:{{ .Values.phorvex.console.auditTransport.port }}
+        - --audit-source-cert=/etc/audit-server/tls.crt
+        - --audit-source-key=/etc/audit-server/tls.key
+        - --audit-source-ca=/etc/audit-server/ca.crt
+        - --audit-source-client-dns={{ required "console.auditTransport.clientDNSName required" .Values.phorvex.console.auditTransport.clientDNSName }}
+        {{- if .Values.phorvex.console.auditTransport.vclusterPath }}
+        - --audit-source-vcluster-path={{ .Values.phorvex.console.auditTransport.vclusterPath }}
+        {{- end }}
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true
@@ -138,6 +149,10 @@ spec:
           containerPort: 8080
         - name: health
           containerPort: 8081
+        {{- if and .Values.phorvex.console.enabled .Values.phorvex.audit.enabled }}
+        - name: audit-tls
+          containerPort: {{ .Values.phorvex.console.auditTransport.port }}
+        {{- end }}
         {{- if .Values.phorvex.admissionWebhook.enabled }}
         - name: webhook-server
           containerPort: {{ .Values.phorvex.admissionWebhook.port }}
@@ -172,6 +187,11 @@ spec:
         {{- if .Values.phorvex.audit.enabled }}
         - name: audit
           mountPath: {{ .Values.phorvex.audit.path | dir }}
+        {{- if .Values.phorvex.console.enabled }}
+        - name: audit-server
+          mountPath: /etc/audit-server
+          readOnly: true
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.calibration.enabled }}
         - name: calibration-evidence
@@ -183,122 +203,7 @@ spec:
           readOnly: true
         {{- end }}
         {{- end }}
-{{- if .Values.phorvex.console.enabled }}
-
-      # ── console ────────────────────────────────────────────────────────────
-      # Second container, not a second Deployment: it reads the audit as a local file and
-      # the operator writes it as a local file, so they have to share one filesystem.
-      # It also inherits this pod's ServiceAccount, which is what finally lets
-      # /api/workload/attack apply a SecurityEvent — the console's own ServiceAccount
-      # never had the rights, and its image never had kubectl.
-      - name: console
-        image: "{{ .Values.phorvex.console.image.repository }}:{{ .Values.phorvex.console.image.tag }}"
-        imagePullPolicy: {{ .Values.phorvex.console.image.pullPolicy }}
-        args:
-        - -root={{ .Values.phorvex.console.root }}
-        - -web={{ .Values.phorvex.console.web }}
-        - -addr=:{{ .Values.phorvex.console.port }}
-        {{- if .Values.phorvex.audit.enabled }}
-        # Explicit, so the console streams the operator's LIVE audit rather than falling
-        # back to newestAudit() and serving the snapshot baked into its own image.
-        - -audit-json={{ .Values.phorvex.audit.path }}
-        {{- end }}
-        {{- if .Values.phorvex.prometheusUrl }}
-        # Let `phorvex --scan` (the console's Scan / Physics tab) reach the live DCGM/GPU feed.
-        # The scan's SSRF guard only fetches a Prometheus whose host is allow-listed here, so
-        # without this the URL is dropped and the GPU half of physics stays "unmeasured (no
-        # GPU/DCGM scan)" even though dcgm-exporter is scraping. host[:port], scheme stripped.
-        - -metrics-allow={{ .Values.phorvex.prometheusUrl | trimPrefix "https://" | trimPrefix "http://" }}
-        {{- end }}
-        {{- if .Values.phorvex.console.auth.grants.enabled }}
-        # M-136: the DevOps-supplied subject grant table. Without it the console still starts and
-        # still authenticates callers, but authorizes NOBODY — the fail-closed rollout state.
-        - -auth-grants={{ .Values.phorvex.console.auth.grants.mountPath }}/{{ .Values.phorvex.console.auth.grants.fileName }}
-        {{- end }}
-        {{- if or .Values.phorvex.prometheusUrl .Values.phorvex.console.auth.alb.signerArn .Values.phorvex.console.auth.oidc.issuer .Values.phorvex.console.auth.trustedOrigins }}
-        env:
-        {{- if .Values.phorvex.prometheusUrl }}
-        # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
-        # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
-        - name: PHORVEX_PROM_URL
-          value: {{ .Values.phorvex.prometheusUrl | quote }}
-        {{- end }}
-        # ── M-136 console identity ─────────────────────────────────────────────
-        # The console refuses to start unless at least one credential path is configured. These
-        # are CONFIGURATION IDENTIFIERS (a load-balancer ARN, a user-pool issuer, an app-client
-        # id) — not secrets — and they are per-deployment: never reuse one environment's signer
-        # in another, or that environment's ALB becomes a trusted issuer for this one.
-        {{- with .Values.phorvex.console.auth.alb }}
-        {{- if .signerArn }}
-        - name: PHORVEX_CONSOLE_ALB_SIGNER_ARN
-          value: {{ .signerArn | quote }}
-        - name: PHORVEX_CONSOLE_ALB_ISSUER
-          value: {{ required "console.auth.alb.issuer is required when signerArn is set" .issuer | quote }}
-        - name: PHORVEX_CONSOLE_ALB_CLIENT_ID
-          value: {{ required "console.auth.alb.clientId is required when signerArn is set" .clientId | quote }}
-        {{- if .region }}
-        - name: PHORVEX_CONSOLE_ALB_REGION
-          value: {{ .region | quote }}
-        {{- end }}
-        {{- end }}
-        {{- end }}
-        {{- with .Values.phorvex.console.auth.oidc }}
-        {{- if .issuer }}
-        - name: PHORVEX_CONSOLE_OIDC_ISSUER
-          value: {{ .issuer | quote }}
-        - name: PHORVEX_CONSOLE_OIDC_AUDIENCE
-          value: {{ required "console.auth.oidc.audience is required when issuer is set" .audience | quote }}
-        - name: PHORVEX_CONSOLE_OIDC_JWKS_URL
-          value: {{ required "console.auth.oidc.jwksUrl is required when issuer is set" .jwksUrl | quote }}
-        {{- if .algorithms }}
-        - name: PHORVEX_CONSOLE_OIDC_ALGS
-          value: {{ join "," .algorithms | quote }}
-        {{- end }}
-        {{- end }}
-        {{- end }}
-        {{- if .Values.phorvex.console.auth.trustedOrigins }}
-        # The same-origin/CSRF boundary for browser-driven state changes. Exact origins only;
-        # there is no wildcard, and an unlisted origin gets no CORS grant either.
-        - name: PHORVEX_CONSOLE_TRUSTED_ORIGINS
-          value: {{ join "," .Values.phorvex.console.auth.trustedOrigins | quote }}
-        {{- end }}
-        {{- end }}
-        ports:
-        - name: http
-          containerPort: {{ .Values.phorvex.console.port }}
-        readinessProbe:
-          httpGet: { path: /, port: http }
-          initialDelaySeconds: 3
-          periodSeconds: 10
-        livenessProbe:
-          httpGet: { path: /, port: http }
-          initialDelaySeconds: 10
-          periodSeconds: 20
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: ["ALL"]
-        resources:
-          {{- toYaml .Values.phorvex.console.resources | nindent 10 }}
-        volumeMounts:
-        {{- if .Values.phorvex.audit.enabled }}
-        - name: audit
-          mountPath: {{ .Values.phorvex.audit.path | dir }}
-          readOnly: true
-        {{- end }}
-        # workload_attack.go writes the SecurityEvent manifest with os.CreateTemp before
-        # applying it. With readOnlyRootFilesystem that fails, so /tmp must be writable —
-        # an emptyDir keeps the root filesystem read-only while allowing it.
-        - name: console-tmp
-          mountPath: /tmp
-        {{- if .Values.phorvex.console.auth.grants.enabled }}
-        - name: console-grants
-          mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
-          readOnly: true
-        {{- end }}
-{{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.console.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -313,14 +218,10 @@ spec:
         {{- else }}
         emptyDir: {}
         {{- end }}
-      {{- end }}
       {{- if .Values.phorvex.console.enabled }}
-      - name: console-tmp
-        emptyDir: {}
-      {{- if .Values.phorvex.console.auth.grants.enabled }}
-      - name: console-grants
-        configMap:
-          name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
+      - name: audit-server
+        secret:
+          secretName: {{ required "console.auditTransport.serverSecretName required" .Values.phorvex.console.auditTransport.serverSecretName }}
       {{- end }}
       {{- end }}
       {{- if .Values.phorvex.calibration.enabled }}

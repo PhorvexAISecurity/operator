@@ -57,8 +57,9 @@ type HandlerResult struct {
 	RollbackRef    string
 	// MutationKind: "reversible" | "irreversible" | "forward-only" | "swap" | "declared".
 	MutationKind string
-	// Emitted is false only for the declared-not-implemented handler (disable); every
-	// real handler that mutates sets it true.
+	// Emitted is false for a refused/not-performed action (including an
+	// already-absent adapter goal); it is true for a confirmed mutation or
+	// partial mutation that must remain visible even alongside an error.
 	Emitted bool
 	Note    string
 }

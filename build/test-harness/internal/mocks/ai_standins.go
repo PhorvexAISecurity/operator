@@ -50,21 +50,21 @@ const (
 
 	// Per-stand-in OBSERVABLE markers (all distinct so one oracle cannot cross-read
 	// another mock's marker and report a false-positive success).
-	InjectionMarker        = "R6TH-PROMPT-INJECTION-FIRED"
-	RAGPoisonMarker        = "R6TH-RAG-POISON-DOC"
-	ToolPoisonMarker       = "R6TH-MCP-TOOL-POISON"
-	RogueServerMarker      = "R6TH-MCP-ROGUE-SERVER"
-	ToolResponseInjMarker  = "R6TH-MCP-TOOLRESP-INJECT"
+	InjectionMarker           = "R6TH-PROMPT-INJECTION-FIRED"
+	RAGPoisonMarker           = "R6TH-RAG-POISON-DOC"
+	ToolPoisonMarker          = "R6TH-MCP-TOOL-POISON"
+	RogueServerMarker         = "R6TH-MCP-ROGUE-SERVER"
+	ToolResponseInjMarker     = "R6TH-MCP-TOOLRESP-INJECT"
 	MemoryContaminationMarker = "R6TH-AGENT-MEM-CONTAMINATION"
-	RogueToolMarker        = "R6TH-AGENT-ROGUE-TOOL"
-	ConfusedDeputyMarker   = "R6TH-AGENT-CONFUSED-DEPUTY"
-	AgentBackdoorMarker    = "R6TH-AGENT-BACKDOOR"
-	SensitiveSecretMarker  = "R6TH-LEAKED-SECRET-FAKE-KEY"
-	SystemPromptMarker     = "R6TH-SYSTEM-PROMPT-SECRET"
-	KVLeakMarker           = "R6TH-KVCACHE-CROSS-SESSION-LEAK"
-	EmbeddingTamperMarker  = "R6TH-EMBEDDING-TAMPER"
-	MaliciousArtifactMarker = "R6TH-MALICIOUS-ARTIFACT-PAYLOAD-RAN"
-	ShadowComputeMarker    = "R6TH-SHADOW-COMPUTE"
+	RogueToolMarker           = "R6TH-AGENT-ROGUE-TOOL"
+	ConfusedDeputyMarker      = "R6TH-AGENT-CONFUSED-DEPUTY"
+	AgentBackdoorMarker       = "R6TH-AGENT-BACKDOOR"
+	SensitiveSecretMarker     = "R6TH-LEAKED-SECRET-FAKE-KEY"
+	SystemPromptMarker        = "R6TH-SYSTEM-PROMPT-SECRET"
+	KVLeakMarker              = "R6TH-KVCACHE-CROSS-SESSION-LEAK"
+	EmbeddingTamperMarker     = "R6TH-EMBEDDING-TAMPER"
+	MaliciousArtifactMarker   = "R6TH-MALICIOUS-ARTIFACT-PAYLOAD-RAN"
+	ShadowComputeMarker       = "R6TH-SHADOW-COMPUTE"
 )
 
 // ---- 1) MockInferenceServer ("the model") ----
@@ -257,8 +257,8 @@ func (r *MockModelRegistry) PoisonManifest(ctx context.Context, env *core.Env) {
 	_ = execMarker(ctx, env, r.PodName, "server", script)
 }
 
-// RestoreGolden restores the signed golden digest (models the Regenerate-on-drift
-// defensive action restoring provenance).
+// RestoreGolden is an explicit fixture reset. It is not a supported Regenerate
+// action on the registry and must not run in a scored scenario.
 func (r *MockModelRegistry) RestoreGolden(ctx context.Context, env *core.Env) {
 	script := fmt.Sprintf(`echo '{"name":"r6th-mock-llm","version":"1.0.0","digest":"%s","signature":"r6th-signed-golden"}' > /tmp/manifest.json; echo "%s" > /tmp/served_digest`, GoldenModelDigest, GoldenModelDigest)
 	_ = execMarker(ctx, env, r.PodName, "server", script)
@@ -268,6 +268,49 @@ func (r *MockModelRegistry) RestoreGolden(ctx context.Context, env *core.Env) {
 func (r *MockModelRegistry) ServedDigest(ctx context.Context, env *core.Env) string {
 	res := env.Exec(ctx, r.PodName, "server", []string{"sh", "-c", "cat /tmp/served_digest 2>/dev/null"})
 	return strings.TrimSpace(res.Stdout)
+}
+
+// ObservedServedDigest rejects failed and malformed reads. A missing digest must
+// never be interpreted as a defender clearing poison.
+func (r *MockModelRegistry) ObservedServedDigest(ctx context.Context, env *core.Env) (string, error) {
+	digest, _, err := r.ObservedServedDigestWithUID(ctx, env)
+	return digest, err
+}
+
+// ObservedServedDigestWithUID brackets exec with fresh Pod identity reads.
+// Same-name recreation, deletion and non-running targets invalidate the value.
+func (r *MockModelRegistry) ObservedServedDigestWithUID(ctx context.Context, env *core.Env) (string, string, error) {
+	pod, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, r.PodName, metav1.GetOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf("read registry target: %w", err)
+	}
+	uid := string(pod.UID)
+	if uid == "" || pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning {
+		return "", "", fmt.Errorf("registry target has no stable running identity")
+	}
+	res := env.Exec(ctx, r.PodName, "server", []string{"sh", "-c", "cat /tmp/served_digest"})
+	if res.Err != nil || res.ExitCode != 0 {
+		return "", "", fmt.Errorf("read served digest: exit=%d: %w", res.ExitCode, execReadError(res))
+	}
+	digest := strings.TrimSpace(res.Stdout)
+	if digest != GoldenModelDigest && digest != PoisonedModelDigest {
+		return "", "", fmt.Errorf("malformed served digest %q", digest)
+	}
+	after, err := env.Kube.CoreV1().Pods(env.Config.Namespace).Get(ctx, r.PodName, metav1.GetOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf("recheck registry target: %w", err)
+	}
+	if string(after.UID) != uid || after.DeletionTimestamp != nil || after.Status.Phase != corev1.PodRunning {
+		return "", "", fmt.Errorf("registry target changed during digest read")
+	}
+	return digest, uid, nil
+}
+
+func execReadError(res core.ExecResult) error {
+	if res.Err != nil {
+		return res.Err
+	}
+	return fmt.Errorf("command failed: %s", res.Stderr)
 }
 
 // ---- 4) MockRetriever + EmbeddingStore ----
@@ -415,13 +458,13 @@ func (a *MockAgentRuntime) ContaminateMemory(ctx context.Context, env *core.Env)
 }
 
 // RegisterRogueTool registers a durable malicious tool in the agent-tools
-// ConfigMap (rogue-tool persistence). Restored to golden by a regenerate.
+// ConfigMap (rogue-tool persistence).
 func (a *MockAgentRuntime) RegisterRogueTool(ctx context.Context, env *core.Env) error {
 	return patchConfigMap(ctx, env, AgentToolsConfigMap, "tools", "search,summarize,"+RogueToolMarker)
 }
 
-// RestoreGoldenTools restores the golden tool set (models Regenerate restoring the
-// signed-good tool registry).
+// RestoreGoldenTools is an explicit fixture reset, not a supported Regenerate
+// action on the tools ConfigMap. It must not run in a scored scenario.
 func (a *MockAgentRuntime) RestoreGoldenTools(ctx context.Context, env *core.Env) error {
 	return patchConfigMap(ctx, env, AgentToolsConfigMap, "tools", "search,summarize")
 }
@@ -434,6 +477,33 @@ func (a *MockAgentRuntime) MemoryContains(ctx context.Context, env *core.Env, wa
 // ToolsContain reports whether the agent-tools ConfigMap carries the marker.
 func (a *MockAgentRuntime) ToolsContain(ctx context.Context, env *core.Env, want string) bool {
 	return configMapContains(ctx, env, AgentToolsConfigMap, "tools", want)
+}
+
+// ObservedTools reads the owned registry without collapsing API errors or a
+// missing tools key into a successful defense observation.
+func (a *MockAgentRuntime) ObservedTools(ctx context.Context, env *core.Env) (string, error) {
+	tools, _, err := a.ObservedToolsWithUID(ctx, env)
+	return tools, err
+}
+
+// ObservedToolsWithUID binds content and ConfigMap identity to the same API Get.
+func (a *MockAgentRuntime) ObservedToolsWithUID(ctx context.Context, env *core.Env) (string, string, error) {
+	cm, err := env.Kube.CoreV1().ConfigMaps(env.Config.Namespace).Get(ctx, AgentToolsConfigMap, metav1.GetOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf("read agent tools: %w", err)
+	}
+	uid := string(cm.UID)
+	if uid == "" || cm.DeletionTimestamp != nil {
+		return "", "", fmt.Errorf("agent tools target has no stable identity")
+	}
+	tools, ok := cm.Data["tools"]
+	if !ok || strings.TrimSpace(tools) == "" {
+		return "", "", fmt.Errorf("agent tools observation missing tools value")
+	}
+	if tools != "search,summarize" && tools != "search,summarize,"+RogueToolMarker {
+		return "", "", fmt.Errorf("malformed agent tools observation %q", tools)
+	}
+	return tools, uid, nil
 }
 
 // ActionLogContains reports whether the agent pod's action log carries the marker.

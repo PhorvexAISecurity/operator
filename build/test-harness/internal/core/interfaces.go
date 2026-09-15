@@ -166,3 +166,17 @@ type DefenseObserver interface {
 	// the rotation rhythm.
 	DefensiveActions(ctx context.Context, env *Env) (count int, atUnix []float64, err error)
 }
+
+// DefenseEffectReceipt links a defender-owned action to one scenario objective
+// and one attack attempt. It is optional: arms without a target-specific action
+// cannot receive effect credit from a changed fixture state alone.
+type DefenseEffectReceipt struct {
+	Objective string
+	TargetUID string
+	AttemptID string
+	AtUnix    float64
+}
+
+type DefenseEffectObserver interface {
+	DefensiveEffectReceipt(ctx context.Context, env *Env) (DefenseEffectReceipt, error)
+}

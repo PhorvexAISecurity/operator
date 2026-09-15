@@ -50,7 +50,7 @@ func coverArchetypes() []coverArchetype {
 								pod.ModelID = "model-v1"
 							}
 							if poisoned {
-								pod.SuspectAdapter = "untrusted-lora"
+								detectorAdapter(&pod, "untrusted-lora")
 							}
 							if mig {
 								pod.MIGDevice = "MIG-abc"

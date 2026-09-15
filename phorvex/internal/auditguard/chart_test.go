@@ -112,7 +112,20 @@ func clone(t *testing.T, source object) object {
 
 func deploymentPod(t *testing.T, docs []object) object {
 	t.Helper()
-	d := resource(t, docs, "Deployment", false)
+	var matches []object
+	for _, d := range docs {
+		if d["kind"] != "Deployment" {
+			continue
+		}
+		labels, _ := d["spec"].(object)["template"].(object)["metadata"].(object)["labels"].(object)
+		if labels["app.kubernetes.io/component"] == "manager" {
+			matches = append(matches, d)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("want exactly one manager Deployment, got %d", len(matches))
+	}
+	d := matches[0]
 	p := clone(t, d["spec"].(object)["template"].(object))
 	m := p["metadata"].(object)
 	m["namespace"] = d["metadata"].(object)["namespace"]
@@ -237,7 +250,7 @@ func TestAuditVolumeGuardNarrowManifestAndOrdering(t *testing.T) {
 }
 
 func TestAuditVolumeGuardCEL(t *testing.T) {
-	docs := enabled(t, "phorvex", "phorvex-system", "--set", "phorvex.console.enabled=true")
+	docs := enabled(t, "phorvex", "phorvex-system", "--set", "phorvex.console.enabled=true,phorvex.console.auditTransport.serverSecretName=server,phorvex.console.auditTransport.clientSecretName=client,phorvex.console.auditTransport.serverDNSName=server.test,phorvex.console.auditTransport.clientDNSName=client.test")
 	policy, original := resource(t, docs, "ValidatingAdmissionPolicy", true), deploymentPod(t, docs)
 	if matched, denied := admission(t, policy, original, "phorvex-system"); !matched || len(denied) != 0 {
 		t.Fatalf("real rendered Deployment Pod must pass: matched=%v rejected=%v", matched, denied)
@@ -371,7 +384,19 @@ func TestAuditVolumeGuardEKSUsesVendoredChartAndSystemPool(t *testing.T) {
 	if matched, denied := admission(t, policy, pod, "phorvex-system"); !matched || len(denied) != 0 {
 		t.Fatalf("real EKS vendored Deployment must pass: matched=%v rejected=%v", matched, denied)
 	}
-	d := resource(t, docs, "Deployment", false)["spec"].(object)
+	var manager object
+	for _, candidate := range docs {
+		if candidate["kind"] == "Deployment" {
+			labels, _ := candidate["spec"].(object)["template"].(object)["metadata"].(object)["labels"].(object)
+			if labels["app.kubernetes.io/component"] == "manager" {
+				manager = candidate
+			}
+		}
+	}
+	if manager == nil {
+		t.Fatal("manager Deployment missing")
+	}
+	d := manager["spec"].(object)
 	spec := pod["spec"].(object)
 	if !reflect.DeepEqual(spec["nodeSelector"], object{"node-type": "system"}) {
 		t.Fatalf("EKS operator/console must select system pool: %#v", spec["nodeSelector"])

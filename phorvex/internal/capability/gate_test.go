@@ -34,21 +34,23 @@ func (okActuator) SupportsAction(context.Context, model.Action, actuator.Target)
 func capFleet() ([]*model.WorkloadView, Witness) {
 	leader := model.Pod{
 		Namespace: "ns", Name: "leader", HasGPU: true, MIGDevice: "1g.10gb", ModelID: "model",
-		Node: "gpu-a", MIGGPUID: "0", MIGTargetProfile: "2g.20gb", SuspectAdapter: "adapter-a",
+		Node: "gpu-a", MIGGPUID: "0", MIGTargetProfile: "2g.20gb", UID:"uid-leader", SuspectAdapter: "adapter-a",
+		AdapterObservation:&model.AdapterObservation{EventName:"detected",EventUID:"event-uid",CreatorIdentity:"system:serviceaccount:ns:detector",TargetPodUID:"uid-leader",AdapterName:"adapter-a"},
 		Ready: true, ServingEndpointReady: true, RouteService: "infer", GuardrailVariants: 2,
+		WarmPoolConfigured: true, WarmPoolOwnerUID: "pool-uid",
 		Labels: map[string]string{
 			"app": "infer", labelServing: "true", labelLoRAEnabled: "true", labelGuardrailTier: "true",
 			labelWarmRole: "leader", labelSwapGroup: "swap-a", labelModelShard: "shard-a",
 		},
 	}
-	swap := model.Pod{Namespace: "ns", Name: "swap-shadow", HasGPU: true, ModelID: "model", Ready: true,
+	swap := model.Pod{Namespace: "ns", Name: "swap-shadow", HasGPU: true, ModelID: "model", Ready: true, RouteService: "infer", WarmPoolConfigured: true, WarmPoolOwnerUID: "pool-uid",
 		Labels: map[string]string{labelWarmRole: warmShadowRole, labelModelLoaded: "true", labelSwapGroup: "swap-a"}}
-	shard := model.Pod{Namespace: "ns", Name: "shard-shadow", HasGPU: true, ModelID: "model", Ready: true,
+	shard := model.Pod{Namespace: "ns", Name: "shard-shadow", HasGPU: true, ModelID: "model", Ready: true, RouteService: "infer", WarmPoolConfigured: true, WarmPoolOwnerUID: "pool-uid",
 		Labels: map[string]string{labelWarmRole: warmShadowRole, labelModelLoaded: "true", labelModelShard: "shard-a"}}
 	fleet := []model.Pod{leader, swap, shard}
 	views := []*model.WorkloadView{{Pod: leader}, {Pod: swap}, {Pod: shard}}
 	nodes := []ingest.NodeInfo{{Name: "gpu-a", Schedulable: true, AllocatableGPU: 1}, {Name: "gpu-b", Schedulable: true, AllocatableGPU: 1}}
-	svcs := []ingest.ServiceInfo{{Namespace: "ns", Name: "infer", Selector: map[string]string{"app": "infer", labelServing: "true"}}}
+	svcs := []ingest.ServiceInfo{{Namespace: "ns", Name: "infer", Selector: map[string]string{"app": "infer", labelServing: "true", labelWarmRole: "leader", labelSwapGroup: "swap-a", labelModelShard: "shard-a"}}}
 	wit := BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, okActuator{})
 	return views, wit
 }
@@ -287,6 +289,30 @@ func TestCapable_UnrelatedPoolRejected(t *testing.T) {
 	}
 	if ok, _ := wit.Capable(views[0], model.ActionModelShardReplace); ok {
 		t.Fatal("model-shard-replace must reject an unrelated-shard shadow")
+	}
+}
+
+func TestCapable_ScalarWarmPoolRequiresVerifiedSameController(t *testing.T) {
+	views, _ := capFleet()
+	leader := views[0].Pod
+	shadow := views[1].Pod
+	for _, tc := range []struct {
+		name   string
+		change func(*model.Pod, *model.Pod)
+	}{
+		{"unverified-target", func(l, _ *model.Pod) { l.WarmPoolConfigured = false }},
+		{"unverified-shadow", func(_ *model.Pod, s *model.Pod) { s.WarmPoolConfigured = false }},
+		{"different-owner", func(_ *model.Pod, s *model.Pod) { s.WarmPoolOwnerUID = "other" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l, s := leader, shadow
+			tc.change(&l, &s)
+			fleet := []model.Pod{l, s, views[2].Pod}
+			wit := witOver(fleet, twoGPUNodes(), nil)
+			if ok, _ := wit.Capable(&model.WorkloadView{Pod: l}, model.ActionWarmSwap); ok {
+				t.Fatal("unsupported scalar pool advertised")
+			}
+		})
 	}
 }
 

@@ -215,9 +215,10 @@ func TestDemoRouteSameNameServiceReplacementIsNotCreditedOrCleaned(t *testing.T)
 	}
 }
 
-func TestDemoWarmCaseUsesPolicyJournalAndRealCutoverBoundary(t *testing.T) {
+func TestDemoWarmCaseBuildsConfiguredPoolScaffoldWithoutClaimingCutover(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = appsv1.AddToScheme(s)
 	_ = v1alpha1.AddToScheme(s)
 	admin := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator", UID: "operator-uid"}}
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
@@ -231,11 +232,11 @@ func TestDemoWarmCaseUsesPolicyJournalAndRealCutoverBoundary(t *testing.T) {
 	n := newDemoActuator(&demoTrackingClient{Client: c, run: run})
 	n.JournalNamespace = "operator"
 	row := runDemoWarmCase(ctx, run, n, "demo", policy)
-	if row.verdict != demoConfirmed {
-		t.Fatalf("warm cutover control: %+v", row)
+	if row.verdict != demoUnavailable {
+		t.Fatalf("controller replenishment pending control: %+v", row)
 	}
-	if !strings.Contains(row.observed, "receiptFinished=true") || !strings.Contains(row.observed, "oldUIDGone=true") {
-		t.Fatalf("warm readback lacks receipt/UID: %+v", row)
+	if !strings.Contains(row.observed, "configuredPool=true") || !strings.Contains(row.observed, "cutover not submitted") {
+		t.Fatalf("warm prerequisite result overclaims cutover/capacity: %+v", row)
 	}
 }
 

@@ -181,11 +181,15 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		shadow := m069Create(t, c, aiPod(ns, "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"}))
 		wc, r := m069Wrap(t, c, "leader")
 		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, m069Request(t, c, leader, model.ActionWarmSwap))
-		m069Rejected(t, hr, err)
-		m069Survived(t, c, r)
+		if err == nil || hr.Emitted || !strings.Contains(err.Error(), "unsupported warm pool") {
+			t.Fatalf("ownerless API fixture must fail before delete race: %+v %v", hr, err)
+		}
+		if r.replacement != nil {
+			t.Fatal("unsupported pool reached Delete interceptor")
+		}
 		// honest partial state: the shadow was promoted before the rejected retire; no rewarm.
-		if s := m069Live(t, c, ns, "shadow"); s.Labels[labelRole] != roleLeader || s.UID != shadow.UID {
-			t.Errorf("shadow promotion is real partial state: %v", s.Labels)
+		if s := m069Live(t, c, ns, "shadow"); s.Labels[labelRole] != roleShadow || s.UID != shadow.UID {
+			t.Errorf("unsupported pool mutated shadow: %v", s.Labels)
 		}
 		var pods corev1.PodList
 		if err := c.List(ctx, &pods, client.InNamespace(ns)); err != nil || len(pods.Items) != 2 {
@@ -198,16 +202,11 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		leader := m069Create(t, c, aiPod(ns, "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader}))
 		m069Create(t, c, aiPod(ns, "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"}))
 		hr, err := warmSwapHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, m069Request(t, c, leader, model.ActionWarmSwap))
-		if err != nil || !hr.Emitted || !strings.Contains(hr.Note, "retired (uid "+string(leader.UID)+")") {
-			t.Fatalf("unchanged identity must retire: %+v %v", hr, err)
+		if err == nil || hr.Emitted || !strings.Contains(err.Error(), "unsupported warm pool") {
+			t.Fatalf("ownerless API positive is no longer supported: %+v %v", hr, err)
 		}
-		m069Retired(t, c, ns, "leader", leader.UID)
-		if s := m069Live(t, c, ns, "shadow"); s.Labels[labelRole] != roleLeader {
-			t.Errorf("shadow not promoted: %v", s.Labels)
-		}
-		var pods corev1.PodList
-		if err := c.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{labelRole: roleShadow}); err != nil || len(pods.Items) != 1 {
-			t.Errorf("rewarm expected exactly one new shadow: %d %v", len(pods.Items), err)
+		if l := m069Live(t, c, ns, "leader"); l.UID != leader.UID || l.Labels[labelRole] != roleLeader {
+			t.Fatal("unsupported ownerless pool mutated leader")
 		}
 	})
 
@@ -259,8 +258,12 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		m069Create(t, c, aiPod(ns, "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"}))
 		wc, r := m069Wrap(t, c, "shard0")
 		hr, err := modelShardReplaceHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, m069Request(t, c, leader, model.ActionModelShardReplace))
-		m069Rejected(t, hr, err)
-		m069Survived(t, c, r)
+		if err == nil || hr.Emitted || !strings.Contains(err.Error(), "unsupported warm pool") {
+			t.Fatalf("ownerless scalar shard must fail before delete race: %+v %v", hr, err)
+		}
+		if r.replacement != nil {
+			t.Fatal("unsupported pool reached Delete interceptor")
+		}
 	})
 
 	t.Run("model-shard-replace-group", func(t *testing.T) {

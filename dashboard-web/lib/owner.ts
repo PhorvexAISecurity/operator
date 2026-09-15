@@ -11,6 +11,7 @@ const EVT = "phorvex-owner-tenant";
 // per-tenant authn is [PENDING-P-VCLUSTER].
 export function useOwnerTenant(lens: Lens) {
   const [tenants, setTenants] = React.useState<string[]>([]);
+  const [tenantListPartial, setTenantListPartial] = React.useState(false);
   const [tenant, setT] = React.useState<string>("");
   React.useEffect(() => {
     if (lens !== "owner") {
@@ -22,6 +23,7 @@ export function useOwnerTenant(lens: Lens) {
       if (!live) return;
       const ts = d.tenants ?? [];
       setTenants(ts);
+      setTenantListPartial(!!d.partial);
       const saved = typeof window !== "undefined" ? localStorage.getItem(KEY) || "" : "";
       const next = saved && ts.includes(saved) ? saved : ts[0] || "";
       setT(next);
@@ -41,5 +43,5 @@ export function useOwnerTenant(lens: Lens) {
     }
     setT(t);
   }, []);
-  return { tenant, tenants, setTenant };
+  return { tenant, tenants, tenantListPartial, setTenant };
 }

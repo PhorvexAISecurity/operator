@@ -299,24 +299,28 @@ type RotationOwnership struct {
 type Pod struct {
 	RotationOwnership RotationOwnership
 
-	Namespace       string
-	Name            string
-	UID             string
-	Labels          map[string]string
-	Node            string
-	Phase           string // raw K8s pod phase
-	Ready           bool
-	StartedAt       time.Time
-	ReadyAt         time.Time // PodReady=True transition; zero when unavailable/not Ready
-	Age             time.Duration
-	MountedSecrets  []string // distinct Secret names referenced by the pod spec (names only)
-	ServiceAccount  string
-	OwnerKind       string
-	OwnerName       string
-	DesiredReplicas int
-	ReadyReplicas   int
-	HasGPU          bool
-	MIGDevice       string
+	Namespace      string
+	Name           string
+	UID            string
+	Labels         map[string]string
+	Node           string
+	Phase          string // raw K8s pod phase
+	Ready          bool
+	StartedAt      time.Time
+	ReadyAt        time.Time // PodReady=True transition; zero when unavailable/not Ready
+	Age            time.Duration
+	MountedSecrets []string // distinct Secret names referenced by the pod spec (names only)
+	ServiceAccount string
+	OwnerKind      string
+	OwnerName      string
+	// WarmPoolConfigured is a conservative read-only snapshot witness for the
+	// scalar ReplicaSet warm-pool contract. Final dispatch rechecks live objects.
+	WarmPoolConfigured bool
+	WarmPoolOwnerUID   string
+	DesiredReplicas    int
+	ReadyReplicas      int
+	HasGPU             bool
+	MIGDevice          string
 	// SessionEpoch is the concatenated kv-reset / kv-migrate epoch annotations. It changes every
 	// time an actuator flushes this pod's KV-cache or agent session, and is what clocks
 	// model.VarSession — WITHOUT it, a session-affecting action has no exposure clock of its own
@@ -337,15 +341,16 @@ type Pod struct {
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
-	ImageID          string  // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
-	CPURequestMilli  int64   // sum of container CPU requests (millicores) — scheduler-slack input
-	MemRequestBytes  int64   // sum of container memory requests (bytes) — scheduler-slack input
-	GPURequestCount  int64   // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
-	VRAMRequestBytes int64   // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
-	SMFraction       float64 // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
-	ModelID          string  // served model identity/version fingerprint (AI; "" if not a model server)
-	EndpointPath     string  // inference endpoint/API route the attacker can map (AI; "" if none)
-	SuspectAdapter   string  // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
+	ImageID            string              // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
+	CPURequestMilli    int64               // sum of container CPU requests (millicores) — scheduler-slack input
+	MemRequestBytes    int64               // sum of container memory requests (bytes) — scheduler-slack input
+	GPURequestCount    int64               // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
+	VRAMRequestBytes   int64               // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
+	SMFraction         float64             // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
+	ModelID            string              // served model identity/version fingerprint (AI; "" if not a model server)
+	EndpointPath       string              // inference endpoint/API route the attacker can map (AI; "" if none)
+	SuspectAdapter     string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
+	AdapterObservation *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
 
 	// Typed capability witnesses used only for operator-facing ActionsSupported status.
 	ServingEndpointReady bool   // Ready AI pod with an assigned PodIP / serving endpoint
@@ -414,7 +419,9 @@ type SecurityEventInfo struct {
 	Trust string
 	// CreatorIdentity is the authenticated identity the admission stamp recorded, e.g.
 	// "system:serviceaccount:vllm:detector-kv-canary". Empty = unstamped.
-	CreatorIdentity string
+	CreatorIdentity  string
+	AdapterName      string // event-owned phorvex.ai/adapter-name, never copied from a Pod
+	AdapterTargetUID string // event-owned phorvex.ai/target-pod-uid
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -430,6 +437,19 @@ type VectorSteeringEvent struct {
 	DeclaredSource  string `json:"declaredSource,omitempty"`
 	TrustVerdict    string `json:"trustVerdict,omitempty"`
 	CreatorIdentity string `json:"creatorIdentity,omitempty"`
+	TargetPodUID    string `json:"targetPodUID,omitempty"`
+	AdapterName     string `json:"adapterName,omitempty"`
+}
+
+// AdapterObservation identifies the one fresh detector assertion that authorizes
+// adapter-integrity and a later adapter eviction. Conflicting names suppress it.
+type AdapterObservation struct {
+	EventName       string    `json:"eventName"`
+	EventUID        string    `json:"eventUID"`
+	CreatorIdentity string    `json:"creatorIdentity"`
+	TargetPodUID    string    `json:"targetPodUID"`
+	AdapterName     string    `json:"adapterName"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 // VectorSteeringAttribution describes the one factor applied to one recon fact.
@@ -625,7 +645,8 @@ type Policy struct {
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	Existential *ExistentialDecision
+	AdapterObservation *AdapterObservation `json:"adapterObservation,omitempty"`
+	Existential        *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
 	Claim          *ClaimScope

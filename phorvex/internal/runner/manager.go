@@ -178,13 +178,16 @@ type Manager struct {
 	vocabulary       atomic.Pointer[ActionVocabulary]
 	OwnershipReader  client.Reader // uncached, read-only owner evidence
 	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
-	BoundaryReader client.Reader
-	Client         client.Client
-	Clock          *exposure.Clock
-	Intents        *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
-	Optimizer      decision.Optimizer
-	Audit          *audit.Logger
-	MetricsSource  ingest.MetricsSource
+	BoundaryReader    client.Reader
+	Client            client.Client
+	Clock             *exposure.Clock
+	Intents           *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
+	Failures          actionFailures    // M-19: owner/Pod-UID/action failure feedback
+	FailureNow        func() time.Time  // exact clock seam for cooldown tests
+	fallbackDecisions []model.Decision  // tick-local distinct audit attempts
+	Optimizer         decision.Optimizer
+	Audit             *audit.Logger
+	MetricsSource     ingest.MetricsSource
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
 	PromURL  string
@@ -726,6 +729,8 @@ func (m *Manager) DrainLifecycle() {
 			m.Intents.RetainOwner(ev.owner, nil)
 			stores++
 		}
+		m.Failures.forgetOwner(ev.owner)
+		stores++
 		stores += m.closePendingForOwner(ev)
 		// The owner is gone and its cleanup is complete, so the epoch entry can go too:
 		// churn cannot accumulate tombstones. A later same-UID Upsert starts at 1 again.
@@ -1506,6 +1511,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		}
 	}
 	keep := make(map[string]struct{}, len(selPods))
+	failureKeep := make(map[string]struct{}, len(selPods))
 	views := make([]*model.WorkloadView, 0, len(selPods))
 	for _, p := range selPods {
 		t := tele[p.Name]
@@ -1520,6 +1526,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			Fingerprints: model.ExposureFingerprints(*p),
 		}, snap.Now)
 		keep[exposure.SlotKey(pol.Owner(), p.Namespace, p.Name)] = struct{}{}
+		failureKeep[p.Namespace+"\x00"+p.UID] = struct{}{}
 		exp := m.Clock.Since(pol.Owner(), p.Namespace, p.Name, snap.Now)
 		// Per-action emit intent (M-23): the most recent EMISSION per variable, stamped at the
 		// emit boundary before the observed epoch catches up. The guard takes min(exp, intent).
@@ -1584,6 +1591,14 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		wireCapabilityGates(ce, capWit, m.Authz == nil,
 			func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
+		m.Failures.retain(pol.Owner(), failureKeep)
+		failureNow := snap.Now
+		if m.FailureNow != nil {
+			failureNow = m.FailureNow()
+		}
+		ce.FailureExclusion = func(vv *model.WorkloadView, a model.Action) (string, bool) {
+			return m.Failures.exclusion(failureKey{pol.Owner(), vv.Pod.Namespace, vv.Pod.UID, a}, failureNow)
+		}
 	}
 
 	var shadowDecisions []model.Decision
@@ -1687,6 +1702,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
+	m.fallbackDecisions = nil
 	var currentPreparation *actuator.RoutePreparation
 	if !effectiveDryRun && !killEngaged && m.Actuator != nil {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
@@ -1713,6 +1729,16 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		if decisions[i].Action == model.ActionNoop && !decisions[i].Feasible {
 			infeasible++
 		}
+	}
+	for i := range m.fallbackDecisions {
+		m.fallbackDecisions[i].Claim = &claim
+		if m.fallbackDecisions[i].Trace != nil {
+			m.fallbackDecisions[i].Trace.PolicyActionVocabulary = vocabulary.traceEvidence()
+		}
+		appendRepresentation(&m.fallbackDecisions[i], representationSnapshotV1(m.fallbackDecisions[i], pol,
+			versions[m.fallbackDecisions[i].Namespace+"/"+m.fallbackDecisions[i].Pod], reportClaim, representationInventory))
+		m.Audit.Record(m.fallbackDecisions[i])
+		m.recordColocation(assessmentInput, m.fallbackDecisions[i], pol)
 	}
 
 	exposuresForMetrics := make(map[string]map[string]float64, len(views))
@@ -1821,7 +1847,145 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 	return count
 }
 
+func cleanNoEffectResult(r actuator.Result) bool {
+	return !r.Emitted && len(r.ObjectsTouched) == 0 && r.RollbackRef == "" && r.MutationKind == "" &&
+		r.AMTDName == "" && r.EventName == "" && r.EventUID == ""
+}
+
+// cloneExistential preserves the first attempt's evidence after a fallback
+// reaches recordExistentialEffect. JSON round-tripping is unsuitable here:
+// ExistentialDecision's MarshalJSON redacts content for output, so cloning must
+// preserve the in-memory evidence exactly and own every mutable slice.
+func cloneExistential(in *model.ExistentialDecision) *model.ExistentialDecision {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Reasons = append([]string(nil), in.Reasons...)
+	out.PrioritySelections = append([]string(nil), in.PrioritySelections...)
+	out.Evidence = append([]model.OutcomeEvidence(nil), in.Evidence...)
+	for i := range out.Evidence {
+		out.Evidence[i].Reasons = append([]string(nil), in.Evidence[i].Reasons...)
+		out.Evidence[i].Outcome.RequiredKeys = append([]string(nil), in.Evidence[i].Outcome.RequiredKeys...)
+	}
+	out.Candidates = append([]model.ExistentialCandidate(nil), in.Candidates...)
+	for i := range out.Candidates {
+		out.Candidates[i].MissingKeys = append([]string(nil), in.Candidates[i].MissingKeys...)
+		out.Candidates[i].Reasons = append([]string(nil), in.Candidates[i].Reasons...)
+	}
+	return &out
+}
+
+func fallbackDecision(original model.Decision, a decision.Alternative) model.Decision {
+	d := original
+	d.Existential = cloneExistential(original.Existential)
+	if d.Existential != nil {
+		d.Existential.EffectStatus = "not-attempted"
+		oldKey := d.Namespace + "/" + d.Pod + "|" + string(original.Action)
+		newKey := d.Namespace + "/" + d.Pod + "|" + string(a.Action)
+		for i, key := range d.Existential.PrioritySelections {
+			if key == oldKey {
+				d.Existential.PrioritySelections[i] = newKey
+			}
+		}
+		for i := range d.Existential.Candidates {
+			c := &d.Existential.Candidates[i]
+			c.SLORelaxed = c.Action == a.Action && c.SLOExcluded && c.Contains && d.Existential.MayBreachSLO
+		}
+	}
+	d.Action, d.CoverageValue, d.CoveredWeight, d.Cost = a.Action, a.Coverage, a.Marginal, a.Cost
+	d.Net = a.Coverage - original.Lambda*a.Cost
+	d.Attribution = append([]model.AttributionTerm(nil), a.Attribution...)
+	if a.CounterfactualNote != "" {
+		d.CounterfactualNote = a.CounterfactualNote
+	}
+	d.PerDollar = 0
+	if a.Cost > 0 {
+		d.PerDollar = a.Coverage / a.Cost
+	}
+	d.ProactiveRate = 0
+	if d.PerDollar > d.Lambda {
+		d.ProactiveRate = d.PerDollar - d.Lambda
+	}
+	d.CoveredFacts = len(a.CoverKeys)
+	d.Reason = fmt.Sprintf("same-tick alternative after explicit no-effect refusal of %s; reserved marginal gain %.6g", original.Action, a.Gain)
+	d.Actuated, d.Phoenix = false, nil
+	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
+	d.ObjectsTouched = nil
+	if original.Trace != nil {
+		tr := *original.Trace
+		tr.Existential = d.Existential
+		if tr.Existential == nil {
+			tr.Existential = cloneExistential(original.Trace.Existential)
+		}
+		tr.DecisionID = fmt.Sprintf("%s-fallback-%s", original.Trace.DecisionID, a.Action)
+		tr.Candidates = append([]model.DecisionCandidateV2(nil), original.Trace.Candidates...)
+		tr.Facts = append([]model.DecisionFactV2(nil), original.Trace.Facts...)
+		tr.ActionStatus = append([]model.DecisionActionStatusV3(nil), original.Trace.ActionStatus...)
+		tr.SelectedAction = string(a.Action)
+		tr.SelectedCandidateKey = d.Namespace + "/" + d.Pod + "|" + string(a.Action)
+		tr.DispatchOutcome, tr.DispatchReason = "", ""
+		tr.DualUpdate.Applied = false // this exchange makes no second learning step
+		fallbackCover := make(map[string]struct{}, len(a.CoverKeys))
+		for _, key := range a.CoverKeys {
+			fallbackCover[key] = struct{}{}
+		}
+		for i := range tr.Facts {
+			fact := &tr.Facts[i]
+			wasEarlier := fact.CoveredRound.Present && fact.CoveredRound.Value < tr.EvaluationRound
+			_, nowCovered := fallbackCover[fact.FactKey]
+			if !wasEarlier {
+				fact.CoveredRound = model.OptionalInt{}
+				if nowCovered {
+					fact.CoveredRound = tr.SelectionRound
+				}
+			}
+			fact.CoveredBeforeDecision = wasEarlier
+		}
+		for i := range tr.Candidates {
+			c := &tr.Candidates[i]
+			c.Existential = nil
+			if tr.Existential != nil {
+				for j := range tr.Existential.Candidates {
+					if tr.Existential.Candidates[j].Action == model.Action(c.Action) {
+						c.Existential = &tr.Existential.Candidates[j]
+						break
+					}
+				}
+			}
+			c.Selected = c.Action == string(a.Action)
+			if c.Selected {
+				c.MarginalCoverage = model.OptionalFloat{Present: true, Value: a.Marginal}
+				c.NetGain = model.OptionalFloat{Present: true, Value: a.Gain}
+				c.SelectionReason = "same_tick_no_effect_alternative"
+				c.SelectionRound = tr.SelectionRound
+			} else {
+				c.SelectionRound = model.OptionalInt{}
+			}
+		}
+		for i := range tr.ActionStatus {
+			row := &tr.ActionStatus[i]
+			if row.Action == string(a.Action) {
+				row.Status = model.ActionStatusSelected
+				row.ExclusionKind = model.ExclusionNone
+				row.Reason = "same-tick no-effect alternative"
+			}
+			if row.Action == string(original.Action) {
+				row.Status = model.ActionStatusCandidate
+				row.ExclusionKind = model.ExclusionSelection
+				row.Reason = "first attempt refused without effect"
+			}
+		}
+		d.Trace = &tr
+	}
+	return d
+}
+
 func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) (int, *actuator.RoutePreparation) {
+	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true)
+}
+
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool) (int, *actuator.RoutePreparation) {
 	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -1961,16 +2125,17 @@ func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
-			PolicyName:    pol.PolicyName,
-			PolicyUID:     pol.PolicyUID,
-			Tenant:        pol.Tenant,
-			Namespace:     decisions[i].Namespace,
-			Pod:           decisions[i].Pod,
-			Action:        decisions[i].Action,
-			Reason:        decisions[i].Reason,
-			Score:         score,
-			CoverageValue: coverageValue,
-			TargetUID:     v.Pod.UID,
+			AdapterObservation: v.Pod.AdapterObservation,
+			PolicyName:         pol.PolicyName,
+			PolicyUID:          pol.PolicyUID,
+			Tenant:             pol.Tenant,
+			Namespace:          decisions[i].Namespace,
+			Pod:                decisions[i].Pod,
+			Action:             decisions[i].Action,
+			Reason:             decisions[i].Reason,
+			Score:              score,
+			CoverageValue:      coverageValue,
+			TargetUID:          v.Pod.UID,
 		})
 		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch,
 		// so a result carrying real identifiers alongside an error keeps the facts the
@@ -1990,6 +2155,18 @@ func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model
 		}
 		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
 		if err != nil {
+			// A canceled parent context belongs to the whole tick, not this
+			// action's capability. An action-local timeout with a clean result
+			// still counts toward later-tick feedback, but cannot license an
+			// immediate different mutation. Partial effects enter neither gate.
+			if cleanNoEffectResult(res) && ctx.Err() == nil &&
+				m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) {
+				failureNow := time.Now()
+				if m.FailureNow != nil {
+					failureNow = m.FailureNow()
+				}
+				m.Failures.observe(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, decisions[i].Action}, failureNow)
+			}
 			// Retain partial native writes without promoting an error to success.
 			decisions[i].Handler = res.Handler
 			decisions[i].ObjectsTouched = res.ObjectsTouched
@@ -2008,9 +2185,34 @@ func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model
 			stampDispatch(model.DispatchError, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
+			if allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
+				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
+				actuator.IsNoEffectRefusal(err) && cleanNoEffectResult(res) {
+				if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+					targetKey := v.Pod.Namespace + "/" + v.Pod.Name
+					if alternative, ok := ce.SelectAlternative(pol.Owner(), targetKey, decisions[i].Action); ok {
+						if !ce.ReserveAlternative(pol.Owner(), targetKey, decisions[i].Action, alternative.Action) {
+							if decisions[i].Trace != nil {
+								decisions[i].Trace.DispatchReason += "; alternative-deferred: reservation-changed"
+							}
+							continue
+						}
+						fallback := fallbackDecision(decisions[i], alternative)
+						attempt := []model.Decision{fallback}
+						more, _ := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false)
+						actuated += more
+						// The recursive call modifies its local slice's owned trace;
+						// capture that actual attempt as a separate audit decision.
+						m.fallbackDecisions = append(m.fallbackDecisions, attempt[0])
+					} else if decisions[i].Trace != nil {
+						decisions[i].Trace.DispatchReason += "; alternative-deferred: no-admissible-candidate"
+					}
+				}
+			}
 			continue
 		}
 		if res.Emitted {
+			m.Failures.reset(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, decisions[i].Action})
 			stampDispatch(model.DispatchEmitted, res.Note)
 			decisions[i].Actuated = true
 			recordExistentialEffect(&decisions[i], true)

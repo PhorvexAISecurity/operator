@@ -7,7 +7,11 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -52,10 +56,27 @@ func adapterPod(ns, name string, clean bool) *corev1.Pod {
 	return p
 }
 
+func trustedAdapterCase(t *testing.T, clean bool) (client.Client, Request) {
+	t.Helper()
+	pod, event, o := m95DispatchFixture(t)
+	if clean {
+		pod.Annotations[annoLoRACleanSource] = "s3://trusted/clean-v2"
+	}
+	s := runtime.NewScheme()
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "amtd.r6security.com", Version: "v1beta1", Kind: "SecurityEvent"}, &unstructured.Unstructured{})
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(pod, event).Build()
+	ConfigureAdapterDetectorIdentities([]string{o.CreatorIdentity})
+	t.Cleanup(func() { ConfigureAdapterDetectorIdentities(nil) })
+	return c, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, AdapterObservation: &o}
+}
+
 func TestAdapterRotateUnloadsPoisonedDegradeToBase(t *testing.T) {
-	c := fakeC(adapterPod("ns", "infer", false))
+	c, req := trustedAdapterCase(t, false)
 	mv := &mockVLLM{}
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, req)
 	if err != nil {
 		t.Fatalf("adapter-rotate: %v", err)
 	}
@@ -71,9 +92,9 @@ func TestAdapterRotateUnloadsPoisonedDegradeToBase(t *testing.T) {
 }
 
 func TestAdapterRotateReloadsOnlyFromCleanSource(t *testing.T) {
-	c := fakeC(adapterPod("ns", "infer", true))
+	c, req := trustedAdapterCase(t, true)
 	mv := &mockVLLM{}
-	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, req)
 	if err != nil {
 		t.Fatalf("adapter-rotate: %v", err)
 	}
@@ -85,15 +106,15 @@ func TestAdapterRotateReloadsOnlyFromCleanSource(t *testing.T) {
 
 func TestAdapterRotateFailClosedNoAdapter(t *testing.T) {
 	c := fakeC(aiPod("ns", "infer", map[string]string{})) // no lora-enabled / no adapter
-	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
-	if err == nil {
-		t.Fatal("adapter-rotate must FAIL-CLOSED without a declared lora adapter")
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err != nil || hr.Emitted {
+		t.Fatal("adapter-rotate must refuse without trusted observation")
 	}
 }
 
 func TestAdapterRotateUnreachableIsPending(t *testing.T) {
-	c := fakeC(adapterPod("ns", "infer", true))
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{unloadErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	c, req := trustedAdapterCase(t, true)
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{unloadErr: errStackUnreachable}}, req)
 	if err != nil {
 		t.Fatalf("unreachable unload must not error: %v", err)
 	}
@@ -121,8 +142,8 @@ func TestAdapterRotateUnreachableIsPending(t *testing.T) {
 }
 
 func TestAdapterRotateReachableFailFailsClosed(t *testing.T) {
-	c := fakeC(adapterPod("ns", "infer", true))
-	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{unloadErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	c, req := trustedAdapterCase(t, true)
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{unloadErr: errors.New("HTTP 500")}}, req)
 	if err == nil {
 		t.Fatal("adapter-rotate must FAIL-CLOSED on a reachable-but-failing unload")
 	}
@@ -362,8 +383,8 @@ func TestWarmSwapDrainsOldLeaderBeforeRetire(t *testing.T) {
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true, drained: 2}
 	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
-	if err != nil {
-		t.Fatalf("warm-swap: %v", err)
+	if err == nil || hr.MutationKind != "swap" {
+		t.Fatalf("fake controller must leave replenishment pending after cutover: %+v %v", hr, err)
 	}
 	if mv.drainCalls < 1 {
 		t.Error("warm-swap must DRAIN the old leader's in-flight before retiring it (the :141 gap)")

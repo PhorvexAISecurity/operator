@@ -681,3 +681,69 @@ fixes:
     - T3-M026
     branch: fix/t3-m172
     head_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+  T4-M004:
+    directory: fixes/T4-M004
+    aliases: []
+    issues:
+    - M-4
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m004
+    head_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  T4-M019:
+    directory: fixes/T4-M019
+    aliases: []
+    issues:
+    - M-19
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m019
+    head_sha: 0e05348544a4b7de0d7f2984913ce1fdbf09f9e4
+  T4-M057:
+    directory: fixes/T4-M057
+    aliases: []
+    issues:
+    - M-57
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m057
+    head_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+  T4-M066:
+    directory: fixes/T4-M066
+    aliases: []
+    issues:
+    - M-66
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m066
+    head_sha: edea622430d3804331090077d7283b4aa0ca77b3
+  T4-M095:
+    directory: fixes/T4-M095
+    aliases: []
+    issues:
+    - M-95
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m095
+    head_sha: 68cef80025fb867ca700f3c291c5452360a4916c
+  T4-M171:
+    directory: fixes/T4-M171
+    aliases: []
+    issues:
+    - M-171
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t4-m171
+    head_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772

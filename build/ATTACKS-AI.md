@@ -35,27 +35,20 @@ Phoenix-for-AI product pages):
 | **MTD-BOUNDS-ONLY** | rotation caps dwell / reduces replay but the act lands; external endpoint stays stable backend-only (audit #3). |
 | **MTD-CANNOT-HELP** | rotation cannot touch the oracle (detector ABSENT/RECEIVER-ONLY, or data-plane / hardware). |
 
-**MEASURED vs expected.** The complete 2-trial smoke (`out-ai-smoke/`, **540 rows,
-all 27 scenarios processed**) MEASURED the MTD-effect for **all 21 CPU-runnable
-scenarios** across the 4 real arms — see `EFFECTIVENESS-AI.md` §2 for the per-arm
-distribution: **4 trigger scenarios reach MTD-NEUTRALIZES under `d-fullphoenix`**
-(poisoned-model-registry, data-model-poisoning, malicious-model-artifact,
-agent-rogue-tool-persistence), **8 reach MTD-BOUNDS-ONLY under the rotating arms**
-(prompt-injection, the agentic/excessive-agency/system-prompt/mcp-tool-poisoning/
-sensitive-info/query-extraction scenarios), the rest measure **MTD-CANNOT-HELP**. The
-**6 capability-pending scenarios** carry an **(expected)** tag — to be measured on a
-GPU/multi-node cluster. All smoke %s are coarse (n=2); the **tags are robust**, the %s
-tighten at `trialsPerArm >= 20` (DEFERRED).
-
-**Harness-completed-effect seam (NEUTRALIZE scenarios, honesty note).** For the
-injected-trigger NEUTRALIZE scenarios, `emitGenuineTrigger` fires the genuine
-`SecurityEvent` and the operator runs its real action on the AMTD-matched pod; because
-the mock substrate (a mock registry digest / agent-memory store) is NOT the rotated
-workload, the SCENARIO completes the operator's EFFECT on the mock (e.g. `RestoreGolden`)
-**gated on the genuine trigger firing** — never unconditionally. It is a faithful
-stand-in for the operator's Regenerate/rotate effect on a real GPU workload; the
-real-workload action itself is proven by Pass A's `c2-persistence-evict` (100%
-disruption via the same matcher path).
+**Historical smoke output and withdrawn claims.** The 2-trial `out-ai-smoke/`
+artifact reported four injected-trigger NEUTRALIZES rows. Three of those rows
+(`ai2-data-model-poisoning`, `ai2-poisoned-model-registry`, and
+`ai2-agent-rogue-tool-persistence`) received scenario-completed golden restoration
+after event delivery. Their mitigation claims and percentages are withdrawn.
+The retained artifact documents the prior run; it is not evidence that the
+configured defender repaired the mock registry digest or tools ConfigMap.
+The remaining `ai2-malicious-model-artifact` row is outside this correction.
+The three corrected scenarios observe only synthetic served-digest or ConfigMap
+membership changes. Their legacy `inRequestAchieved` field means the synthetic
+attacker marker was present before response; it does not attest a model pull,
+inference, or rogue tool invocation. A matching SecurityEvent proves delivery,
+while effect credit requires a changed state and a defender-owned action receipt
+for the same target and attempt.
 
 **Capability-pending.** 6 scenarios carry `CapabilityRequirements` and
 SKIP-WITH-NOTE on kind (single CPU-only node, `CapGPU=CapMIG=CapMultiNode=false`,
@@ -95,7 +88,7 @@ are pending for the AWS/CoreWeave run. A skip is **never** a failure.
 | Scenario | Source | R6 tag | MTD-effect (a) in-request / (b) persistence | ATLAS | OWASP | Oracle (split) |
 |---|---|---|---|---|---|---|
 | **ai2-sensitive-info-disclosure** | OWASP LLM02 Sensitive Information Disclosure | R6-PARTIAL | (a) CANNOT-HELP (no output filter) / (b) BOUNDS-ONLY (rotation invalidates session/cred substrate) — (expected) | T0057, T0024.000 | LLM02:2025 | (a) model disclosed a planted secret marker (fake API key in context). (b) the leaked secret still authenticates after a rotation (replay-success). |
-| **ai2-data-model-poisoning** | OWASP LLM04 Data and Model Poisoning; AUDIT #5 Regenerate drift path | R6-COVERS | (a) CANNOT-HELP autonomously (no benignity check; signing proves provenance not benignity) / (b) NEUTRALIZES via INJECTED drift -> Regenerate restoring the golden digest — (expected) | T0020, T0018, T0019 | LLM04:2025 | (a) poisoned model data loaded (poison digest live). (b) after an injected drift the served digest is the GOLDEN (poison gone). |
+| **ai2-data-model-poisoning** | OWASP LLM04 Data and Model Poisoning; mock model registry | R6-CANNOT-RESPOND | Poisoned digest is observed before and after a timed SecurityEvent. Regenerate has no supported action restoring the registry digest; event delivery receives no mitigation credit. | T0020, T0018, T0019 | LLM04:2025 | Initial and post-response served digests are retained; failed reads invalidate the trial. |
 | **ai2-excessive-agency** | OWASP LLM06 Excessive Agency (confused-deputy) | R6-PARTIAL | (a) CANNOT-HELP (agency is app-layer) / (b) BOUNDS-ONLY (rotation drops the session/tool grant) — (expected) | T0053, T0048, T0054 | LLM06:2025 | (a) agent invoked a high-privilege mock tool it should not (confused-deputy marker). (b) the excessive grant persists across a rotation. |
 | **ai2-system-prompt-leakage** | OWASP LLM07 System Prompt Leakage | R6-PARTIAL | (a) CANNOT-HELP (no semantic filter) / (b) BOUNDS-ONLY (rotation churns serving pod/secret) — (expected) | T0056, T0051 | LLM07:2025 | (a) system prompt (with planted secret) leaked in the completion. (b) a credential from the leaked prompt still works after a rotation. |
 | **ai2-embedding-vector-weakness** | OWASP LLM08 Vector and Embedding Weaknesses | R6-PARTIAL | (a) CANNOT-HELP (data-plane store untouched by pod rotation) / (b) BOUNDS-ONLY iff store is pod-backed and rotated; else CANNOT-HELP (measured) — (expected) | T0024.001, T0048, T0020 | LLM08:2025 | (a) a crafted query retrieved cross-tenant/poisoned vectors (leak marker). (b) the tampered embedding survived a rotation (still top-k). |
@@ -104,18 +97,22 @@ are pending for the AWS/CoreWeave run. A skip is **never** a failure.
 | **ai2-mcp-rogue-server** | MCP: rogue MCP server (untrusted impersonation/hijack); two mock MCP servers | R6-PARTIAL | (a) CANNOT-HELP (selection is app config) / (b) BOUNDS-ONLY (endpoint rotation backend-only; held rogue DNS not invalidated — measured) — (expected) | T0040, T0048, T0053 | LLM01:2025, LLM03:2025 | (a) agent connected to the rogue MCP server and ran its tool (rogue marker). (b) the rogue-server binding survived a rotation (still reaches `mock-rogue-mcp-svc`). |
 | **ai2-mcp-tool-response-injection** | MCP: tool-response injection (malicious content in tool result ingested by model) | R6-CANNOT-RESPOND | (a) CANNOT-HELP (response content is in-request, no semantic filter) / (b) BOUNDS-ONLY (rotation clears agent memory) — (expected) | T0051, T0054 | LLM01:2025 | (a) an injected MCP tool RESPONSE steered the model output (injection marker in completion). (b) the injected directive persisted into agent memory across a rotation. |
 | **ai2-agent-memory-contamination** | Agentic: cross-session memory contamination; `agent-memory` ConfigMap | R6-PARTIAL | (a) CANNOT-HELP / (b) BOUNDS-ONLY (rotation that deletes `agent-memory` ConfigMap clears it; external/PVC-backed survives — measured, may flip to CANNOT-HELP) — (expected) | T0051, T0054, T0061 | LLM01:2025, LLM04:2025 | (a) contaminated memory altered the agent's behavior this session. (b) the contamination crossed into a NEW session after a rotation. |
-| **ai2-agent-rogue-tool-persistence** | Agentic: rogue tool persistence (durable malicious tool); `agent-tools` ConfigMap | R6-COVERS | (a) CANNOT-HELP autonomously / (b) NEUTRALIZES iff rotation/regenerate restores the golden tool set (INJECTED drift -> Regenerate); else BOUNDS-ONLY (measured per arm) — (expected) | T0053, T0048, T0020 | LLM06:2025, LLM03:2025 | (a) a rogue tool registered + invoked (rogue-tool marker). (b) the rogue tool survived a rotation/regenerate (still in `agent-tools`). |
+| **ai2-agent-rogue-tool-persistence** | Agentic: rogue tool persistence; `agent-tools` ConfigMap | R6-CANNOT-RESPOND | Rogue tool registration and post-response ConfigMap state are observed separately. Regenerate does not restore this ConfigMap, so a timed event has no credited repair. | T0053, T0048, T0020 | LLM06:2025, LLM03:2025 | Initial and post-response tool sets are retained; failed reads invalidate the trial. |
 | **ai2-agent-excessive-agency** | Agentic: excessive agency / confused-deputy (in-depth variant) | R6-PARTIAL | (a) CANNOT-HELP / (b) BOUNDS-ONLY (rotation drops session-scoped grant) — (expected) | T0053, T0048, T0054 | LLM06:2025 | (a) agent tricked into a privileged action against a sandbox resource (confused-deputy marker). (b) the deputy capability persisted across a rotation. |
 | **ai2-agent-injection-to-persistence** | Agentic: injection escalating to durable persistence (kill-chain bridge) | R6-COVERS | (a) CANNOT-HELP (no semantic filter) / (b) NEUTRALIZES via INJECTED panic/policy-violation -> Delete (c2-persistence-evict path) evicting the agent pod — (expected) | T0051, T0054, T0061 | LLM01:2025, LLM06:2025 | (a) the injection executed a persistence step (agent backdoor marker planted). (b) the planted persistence evicted by an injected panic (marker gone, old pod UID replaced). |
 | **ai2-gpu-side-channel** | Model theft via GPU side-channel (timing/contention); GPU-PENDING | R6-CANNOT-RESPOND | CANNOT-HELP (hardware side-channel below the infra-MTD layer) — **capability-pending (SKIPPED on kind, CapGPU+CapMultiNode)** | T0024.001, T0035, T0040 | LLM02:2025 | (a) a side-channel observation recovered model/secret bits (MOCKED marker; REAL number capability-pending). (b) the side-channel vantage survived a rotation. |
 | **ai2-co-location-cross-tenant** | Cross-tenant co-location (co-residency on shared GPU); GPU-PENDING | R6-PARTIAL | (a) CANNOT-HELP autonomously / (b) BOUNDS-ONLY via node-rotation breaking co-location; true relocation CAPABILITY-PENDING — **capability-pending (SKIPPED on kind, CapGPU+CapMultiNode)** | T0024.002, T0040, T0029 | LLM02:2025, LLM10:2025 | (a) attacker achieved co-residency with the victim (co-residency marker). (b) co-residency survived a node rotation (relocation breaks it — number pending). |
 | **ai2-query-extraction** | Query-based model extraction (distillation via API queries); CPU-runnable | R6-PARTIAL | (a) CANNOT-HELP (rotation cannot un-distill) / (b) BOUNDS-ONLY (endpoint stable backend-only; rotation reduces held-session replay) — (expected) | T0024.000, T0035, T0040 | LLM02:2025, LLM10:2025 | (a) a usable replica/decision-boundary file extracted from N seeded queries (fidelity marker over threshold). (b) the extraction channel/session survived a rotation (replay-success vs static). |
 | **ai2-kvcache-poisoning-cross-session-leak** | KV-cache poisoning / cross-session leak; AUDIT #11 KV-cache ABSENT/GPU-PENDING (mocked) | R6-CANNOT-RESPOND | (a) CANNOT-HELP (KV-cache isolation ABSENT) / (b) BOUNDS-ONLY (a rotation dropping the pod clears the mocked `/tmp/kv`) — **capability-pending (SKIPPED on kind, CapGPU)** | T0024.001, T0051, T0048 | LLM08:2025, LLM02:2025 | (a) a poisoned KV-cache entry leaked another session's content (leak marker; MOCKED on CPU). (b) the poisoned cache entry survived a rotation. REAL KV-cache behavior CAPABILITY-PENDING. |
-| **ai2-poisoned-model-registry** | AI supply chain: poisoned model registry (malicious model/version pushed) | R6-COVERS | (a) CANNOT-HELP autonomously (no benignity check) / (b) NEUTRALIZES via INJECTED drift -> Regenerate restoring the signed golden digest (signing proves provenance NOT benignity — caveat carried) — (expected) | T0019, T0018, T0020 | LLM03:2025, LLM04:2025 | (a) a poisoned model artifact pulled from the mock registry and served (poison digest live). (b) the poisoned digest survived a rotation/regenerate (golden restored after injected drift). |
+| **ai2-poisoned-model-registry** | AI supply chain: poisoned model registry | R6-CANNOT-RESPOND | Poisoned digest is observed before and after a timed SecurityEvent. Regenerate repairs a workload baseline, not this registry digest; signing proves provenance, not benignity. | T0019, T0018, T0020 | LLM03:2025, LLM04:2025 | Initial and post-response served digests are retained; failed reads invalidate the trial. |
 | **ai2-malicious-model-artifact** | AI supply chain: malicious model artifact (pickle/safetensors loader RCE stand-in); CPU-runnable | R6-COVERS | (a) CANNOT-HELP autonomously (model-I/O detector ABSENT) / (b) NEUTRALIZES via INJECTED panic -> Delete evicting the loader pod; payload exec itself not prevented (MISSING-TRIGGER) — (expected) | T0010.003, T0011, T0018 | LLM03:2025, LLM05:2025 | (a) a malicious deserialization stand-in executed its payload (payload marker — containment-safe busybox echo). (b) the loader foothold evicted by injected panic (marker gone, pod UID replaced). |
 | **ai2-tampered-inference-base-image** | AI supply chain: tampered inference base image (poisoned serving layer); reuses MockRegistry tamper pattern | R6-PARTIAL | (a) CANNOT-HELP autonomously (admission/build-time, ModernUnsupported-class) / (b) BOUNDS-ONLY (rotation churns the pod but re-pulls the SAME tampered ref — measured; may stay CANNOT-HELP) — (expected) | T0010.001, T0018, T0020 | LLM03:2025 | (a) the tampered base image's injected layer ran (TamperedMarker written by the serving pod). (b) the tamper re-appears after a rotation because the ref is unchanged. |
 | **ai2-rag-retrieval-poisoning** | RAG/data-plane: retrieval poisoning (malicious doc injected into corpus); mock retriever | R6-CANNOT-RESPOND | (a) CANNOT-HELP (data-plane corpus untouched by pod rotation) / (b) CANNOT-HELP if the store survives rotation (measured) — a genuine Phorvex data-plane differentiator — (expected) | T0051, T0020, T0048 | LLM08:2025, LLM04:2025 | (a) a poisoned retrieved document steered the model output (RAG-poison marker in completion). (b) the poisoned document persisted in the corpus across a rotation (still top-k). |
 | **ai2-embedding-store-tampering** | RAG/data-plane: embedding store tampering (vector index mutation); mock embedding store | R6-CANNOT-RESPOND | (a) CANNOT-HELP / (b) CANNOT-HELP if store is PVC/external (measured); BOUNDS-ONLY only if pod-backed + rotated — data-plane differentiator — (expected) | T0020, T0048, T0024.001 | LLM08:2025 | (a) a tampered embedding biased retrieval (tamper marker doc returned for an unrelated query). (b) the tampered vector survived a rotation (present after the defensive action). |
+
+For the three corrected registry/tool rows, `CategoryR6Claimed` retains the
+historical claim cohort under test. Their `R6-CANNOT-RESPOND` tags state the
+current supported response to the measured fixture objective.
 
 ---
 
@@ -132,16 +129,7 @@ are pending for the AWS/CoreWeave run. A skip is **never** a failure.
   result is **never** read as a Phoenix defense failure. The measured smoke rows for
   `ai1-model-theft` / `ai1-inference-manipulation` carry
   `triggerAttribution = MISSING-TRIGGER:detector-absent`.
-- **Genuine matcher path.** The R6-COVERS / NEUTRALIZE scenarios
-  (`ai1-pillar03-panic-mutation`, `ai2-data-model-poisoning`,
-  `ai2-poisoned-model-registry`, `ai2-agent-rogue-tool-persistence`,
-  `ai2-agent-injection-to-persistence`, `ai2-malicious-model-artifact`) drive the
-  real `matcher.go` by injecting a `SecurityEvent{Type,ThreatLevel,Source}` through
-  the EXISTING `Emitter` (only `d-fullphoenix` implements it) — EXACTLY as
-  `c2-persistence-evict`. These NEUTRALIZE / BOUNDS-ONLY paths are validated by the
-  unit tests today; the live smoke had not yet reached them (it ran only the 4
-  alphabetically-first `ai1-*` scenarios) so **no live NEUTRALIZES/BOUNDS-ONLY
-  result exists yet** — to be filled at `trialsPerArm >= 20` (DEFERRED).
+- **Genuine matcher path.** A matching `SecurityEvent` is delivery evidence. For the three registry/tool scenarios above, the mock substrate has no supported Regenerate repair; their post-state stays raw and an unattributed negative is unscored.
 
 See `build/ATTACK-COVERAGE-AI.md` (ATLAS + OWASP coverage) and
 `build/EFFECTIVENESS-AI.md` (the live smoke results + `$`/Schwartau/reusability +

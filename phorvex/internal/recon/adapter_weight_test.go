@@ -12,9 +12,11 @@ import (
 // additive term made the fact independent of the evidence it is supposed to rest on.
 
 func adapterPod() *model.WorkloadView {
-	return &model.WorkloadView{Pod: model.Pod{
+	v := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "llm", HasGPU: true, ModelID: "m", SuspectAdapter: "evil",
 	}}
+	detectorAdapter(&v.Pod, "evil")
+	return v
 }
 
 func factOfKind(fs []Fact, k string) (Fact, bool) {

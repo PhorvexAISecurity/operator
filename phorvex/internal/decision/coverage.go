@@ -85,6 +85,115 @@ type CoverageEngine struct {
 	// shadow evaluation is reported UNAVAILABLE (ErrShadowCapabilityUnavailable) rather than
 	// run without a gate or run through the impure one. Production is unaffected either way.
 	ShadowCapability func(*model.WorkloadView, model.Action, []string) *actionset.Eligibility
+	// FailureExclusion is runner-owned, immutable for one evaluation, and read-only.
+	// It applies equally to production and shadow candidate generation.
+	FailureExclusion func(*model.WorkloadView, model.Action) (detail string, excluded bool)
+	alternative      *alternativeContext // immutable scores and reservations from last production pass
+}
+
+type alternativeContext struct {
+	owner      string
+	set        actionset.ActionSet
+	lambda     float64
+	selected   map[string]model.Action
+	exchanged  map[string]model.Action // tick-local exchanges; original scored set is immutable
+	provenance map[string]float64
+	attack     map[string]bool
+	states     map[string]*model.ExistentialDecision
+	budget     int
+}
+
+// Alternative is selected from the exact action set and runtime price used by
+// the original production pass. Other selected assets, including earlier
+// same-tick exchanges, stay reserved; the failed target exchanges one slot.
+type Alternative struct {
+	Action                         model.Action
+	Coverage, Marginal, Cost, Gain float64
+	CoverKeys                      []string
+	Attribution                    []model.AttributionTerm
+	CounterfactualNote             string
+}
+
+func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Action) (Alternative, bool) {
+	c := e.alternative
+	if c == nil || c.owner != owner || c.currentAction(target) != failed || len(c.selected) > c.budget {
+		return Alternative{}, false
+	}
+	covered := map[string]bool{}
+	selected := map[string]bool{}
+	for key := range c.selected {
+		if key == target {
+			continue
+		}
+		action := c.currentAction(key)
+		selected[key] = true
+		for _, cand := range c.set.Candidates {
+			if cand.Key == key && cand.Action == action {
+				for _, fact := range cand.CoverKeys {
+					covered[fact] = true
+				}
+				break
+			}
+		}
+	}
+	filtered := c.set
+	filtered.Candidates = nil
+	for _, cand := range c.set.Candidates {
+		if cand.Key == target && cand.Action != failed {
+			filtered.Candidates = append(filtered.Candidates, cand)
+		}
+	}
+	prov := func(key string) float64 { return c.provenance[key] }
+	idx, marginal, _ := chooseRound(filtered, c.states, covered, selected, c.attack, c.lambda, prov, map[string]float64{})
+	if idx < 0 {
+		return Alternative{}, false
+	}
+	cand := filtered.Candidates[idx]
+	coverage := 0.0
+	for _, key := range cand.CoverKeys {
+		coverage += c.set.FactWeights[key]
+	}
+	note := ""
+	if cand.View != nil {
+		note = counterfactualNote(cand.Action, true, cand.View)
+	}
+	return Alternative{Action: cand.Action, Coverage: coverage, Marginal: marginal, Cost: cand.ECost,
+		Gain: legacyMixedGain(marginal, prov(target), c.lambda, cand.ECost), CoverKeys: append([]string(nil), cand.CoverKeys...),
+		Attribution: attributionOf(cand, c.set.FactWeights, c.lambda), CounterfactualNote: note}, true
+}
+
+func (c *alternativeContext) currentAction(target string) model.Action {
+	if c == nil {
+		return ""
+	}
+	if a, exchanged := c.exchanged[target]; exchanged {
+		return a
+	}
+	return c.selected[target]
+}
+
+// ReserveAlternative updates only this tick's partition-slot accounting. It
+// never rewrites original scores, dual learning, or the first attempt's audit.
+func (e *CoverageEngine) ReserveAlternative(owner, target string, failed, chosen model.Action) bool {
+	c := e.alternative
+	if c == nil || c.owner != owner || c.currentAction(target) != failed || c.selected[target] == "" || chosen == failed {
+		return false
+	}
+	valid := false
+	for _, cand := range c.set.Candidates {
+		if cand.Key == target && cand.Action == chosen {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return false
+	}
+	if c.exchanged == nil {
+		c.exchanged = make(map[string]model.Action)
+	}
+	c.exchanged[target] = chosen
+	return true
 }
 
 // capabilityFor selects the gate collaborator an evaluation in this mode may call, and
@@ -197,6 +306,9 @@ func (e *CoverageEngine) OwnerRetired(owner string) bool { return e.ownerAbsent(
 // controller goroutine. Retiring the legacy alias when its holder leaves is what makes the
 // NEXT creation genuinely fresh rather than a reused singleton carrying trained RLS state.
 func (e *CoverageEngine) ForgetOwner(owner string) {
+	if e.alternative != nil && e.alternative.owner == owner {
+		e.alternative = nil
+	}
 	if e.aliasOwner == owner {
 		e.aliasRetired = true
 		e.aliasOwner = ""
@@ -433,6 +545,22 @@ func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Poli
 	eligible, gateAvailable := e.capabilityFor(mode)
 	if !gateAvailable {
 		return actionset.ActionSet{}, map[string]assetCtx{}, ErrShadowCapabilityUnavailable
+	}
+	if e.FailureExclusion != nil {
+		base := eligible
+		eligible = func(v *model.WorkloadView, a model.Action, cover []string) *actionset.Eligibility {
+			var r *actionset.Eligibility
+			if base != nil {
+				r = base(v, a, cover)
+				if r != nil && r.Excluded {
+					return r
+				}
+			}
+			if detail, excluded := e.FailureExclusion(v, a); excluded {
+				return &actionset.Eligibility{Excluded: true, Kind: model.ExclusionActionFailure, Detail: detail}
+			}
+			return r
+		}
 	}
 	floorSec := pol.ProactiveFloor.Seconds()
 
@@ -701,6 +829,16 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 			coveredRound[k] = round + 1
 		}
 	}
+	if persist {
+		provenance := make(map[string]float64, len(views))
+		for _, v := range views {
+			key := v.Pod.Namespace + "/" + v.Pod.Name
+			provenance[key] = prov(key)
+		}
+		e.alternative = &alternativeContext{owner: pol.Owner(), set: set, lambda: lambda,
+			selected: selectedAction, provenance: provenance, attack: attackBackedKey,
+			states: existential, budget: B}
+	}
 
 	// demand = number of assets with a net-positive best move (for the dual subgradient).
 	// PHORVEXSEC-196 / M-110 site 2: the SAME provenance discount selection applies
@@ -815,6 +953,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 		selectionGain := legacyMixedGain(marginal, prov(key), lambda, ecost)
 
 		decision := model.Decision{
+			AdapterObservation:    v.Pod.AdapterObservation,
 			Tenant:                pol.Tenant,
 			Namespace:             v.Pod.Namespace,
 			Pod:                   v.Pod.Name,
@@ -1337,6 +1476,8 @@ func eligibilityTrace(kind string) (status, exclusionKind string) {
 		return model.ActionStatusIneligible, model.ExclusionCapability
 	case model.ExclusionNoRBAC: // "no-rbac"
 		return model.ActionStatusIneligible, model.ExclusionNoRBAC
+	case model.ExclusionActionFailure:
+		return model.ActionStatusIneligible, model.ExclusionActionFailure
 	default:
 		return model.ActionStatusNotEvaluated, model.ExclusionNone // defensive; never reached
 	}

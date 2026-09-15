@@ -40,6 +40,7 @@ func writeHistory(t *testing.T, path string, recs ...audit.Record) {
 		}
 	}
 }
+
 // getHistory drives the history handler as a verified operator with cross-tenant scope. These
 // are DATA-behaviour tests (paging, cursors, filters, truncation); the identity and scope
 // boundary itself is asserted in auth_boundary_test.go against the real router.
@@ -449,7 +450,7 @@ func TestHistoryConcurrentRotationRejectsMixedManifest(t *testing.T) {
 	}
 	opens := 0
 	rotated := false
-	openFile := func(p string) (*os.File, error) {
+	openFile := func(p string) (auditHandle, error) {
 		f, e := openAuditFile(p)
 		opens++
 		// Two generation opens establish the manifest. Rotate after the first

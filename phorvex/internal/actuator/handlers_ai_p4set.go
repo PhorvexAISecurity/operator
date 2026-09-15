@@ -325,9 +325,12 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "adapter-rotate", req)
 	}
-	adapter := pod.Annotations[annoLoRAAdapter]
-	if pod.Labels[labelLoRAEnabled] != "true" || adapter == "" {
-		return HandlerResult{}, fmt.Errorf("adapter-rotate AdapterUnavailable: pod %s/%s is not %s / names no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelLoRAEnabled, annoLoRAAdapter)
+	adapter, evidenceErr := validateAdapterDispatch(ctx, ec, req, string(pod.UID))
+	if evidenceErr != nil {
+		return HandlerResult{Emitted: false, MutationKind: "none", Note: evidenceErr.Error()}, nil
+	}
+	if pod.Labels[labelLoRAEnabled] != "true" {
+		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate unsupported: LoRA capability unavailable"}, nil
 	}
 	ep := endpointForPod(pod)
 	// (1) UNLOAD the (poisoned) adapter — the base model stays clean.
@@ -337,13 +340,11 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	case uerr == nil:
 		note = "adapter " + adapter + " unloaded"
 	case errors.Is(uerr, errAdapterAbsent):
-		// [DEADLOCK FIX] The stack answered: the flagged adapter is NOT loaded, so the eviction goal
-		// is ALREADY met. This used to fall through to the hard error below, and because the poison
-		// marker is only cleared on success, the pod stayed flagged forever: the brain re-selected
-		// adapter-rotate every tick (it outranks kv-reset on coverage), the unload 404'd every tick,
-		// nothing ever converged, and every other AI move on that pod — kv-reset included — was
-		// starved. Converging here is what lets the workload return to normal hygiene.
-		note = "adapter " + adapter + " already absent from the serving stack — eviction goal already met"
+		// The detector assertion persists until it is removed or expires. An HTTP
+		// 404 confirms the adapter is already absent, but no new eviction occurred.
+		// Crediting this as a fresh mutation on every tick would fabricate repeats.
+		return HandlerResult{Emitted: false, MutationKind: "none",
+			Note: "adapter-rotate: adapter " + adapter + " already absent from the serving stack; eviction goal already met, no new mitigation credited"}, nil
 	case errors.Is(uerr, errStackUnreachable):
 		// [FAIL-CLOSED FIX] The unload did not return a confirmed success. A dial failure means the
 		// stack never received it; a timeout can leave the outcome unknown. In either case we must not
@@ -368,7 +369,9 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	// poisoned path — that re-pulls the poison). No clean source => degrade to the base model.
 	if clean := pod.Annotations[annoLoRACleanSource]; clean != "" && uerr == nil {
 		if lerr := ec.vllm().LoadAdapter(ctx, ep, adapter, clean); lerr != nil {
-			return HandlerResult{}, fmt.Errorf("adapter-rotate reload-clean %q from %q: %w", adapter, clean, lerr)
+			return HandlerResult{Emitted: true, MutationKind: "forward-only",
+					Note: "adapter-rotate partial: " + adapter + " was unloaded; clean reload failed and no epoch was recorded"},
+				fmt.Errorf("adapter-rotate reload-clean %q from %q: %w", adapter, clean, lerr)
 		}
 		note += "; reloaded clean from " + clean
 	} else if uerr == nil {
@@ -385,15 +388,12 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	// annotation (the contract readers use) and keep the label for selector-based consumers.
 	pod.Annotations["phorvex.ai/adapter-epoch"] = pod.ResourceVersion
 	pod.Labels["phorvex.ai/adapter-epoch"] = pod.ResourceVersion
-	// [CONVERGENCE] The poison marker names the adapter to evict. Once it is gone from the serving
-	// stack, the threat is resolved: clear the marker so recon stops minting the adapter-integrity
-	// fact and the pod returns to normal hygiene (a NEW poison re-flags it via the detector). The
-	// lora-enabled LABEL is a capability ("--enable-lora"), not a threat, so it stays.
-	if uerr == nil || errors.Is(uerr, errAdapterAbsent) {
-		delete(pod.Annotations, annoLoRAAdapter)
-	}
+	// Tenant operational configuration is not a poison marker. A new detector
+	// assertion remains visible until its event expires or is removed.
 	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("adapter-rotate epoch %s/%s: %w", req.Namespace, req.Pod, err)
+		return HandlerResult{Emitted: true, MutationKind: "forward-only",
+			Note: "adapter-rotate partial: " + note + "; Pod epoch write failed"},
+			fmt.Errorf("adapter-rotate epoch %s/%s: %w", req.Namespace, req.Pod, err)
 	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
@@ -513,7 +513,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 		return HandlerResult{}, orGone(err, ok, "guardrail-rotate", req)
 	}
 	if pod.Labels[labelGuardrailTier] != "true" || pod.Annotations[annoGuardrailAlts] == "" {
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate GuardrailUnavailable: pod %s/%s is not %s / declares no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelGuardrailTier, annoGuardrailAlts)
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate GuardrailUnavailable: pod %s/%s is not %s / declares no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelGuardrailTier, annoGuardrailAlts))
 	}
 	cur := pod.Annotations[annoGuardrailVariant]
 	// PREMORTEM: pick a DISTINCT variant (same blind spot = no MTD diversity = no help).
@@ -525,7 +525,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 		}
 	}
 	if next == "" {
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur)
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur))
 	}
 	// (1) apply the variant to the live guardrail first. A K8s annotation is only a
 	// forensic record; it must never turn an unconfirmed filter change into a

@@ -10,7 +10,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// TestAdapterRotateConvergesWhenAdapterAlreadyAbsent pins the fix for a live DEADLOCK.
+// TestAdapterRotateConvergesWhenAdapterAlreadyAbsent pins the old marker path's
+// fail-closed migration: a Pod annotation alone may no longer authorize eviction.
 //
 // A stale poison marker (phorvex.ai/lora-adapter=evil) named an adapter vLLM did not have.
 // adapter-rotate treated the resulting 404 as a hard failure, so it never emitted and never
@@ -28,20 +29,20 @@ func TestAdapterRotateConvergesWhenAdapterAlreadyAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an already-absent adapter is the goal state, not an error: %v", err)
 	}
-	if !hr.Emitted {
-		t.Error("must emit: the eviction goal is met")
+	if hr.Emitted {
+		t.Error("tenant marker alone must not authorize adapter eviction")
 	}
 
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err != nil {
 		t.Fatal(err)
 	}
-	// CONVERGENCE: the marker must be cleared, else the brain re-selects adapter-rotate forever.
-	if _, still := p.Annotations[annoLoRAAdapter]; still {
-		t.Error("poison marker still set — the pod stays flagged and adapter-rotate loops forever")
+	// The operational annotation remains independent of detector evidence.
+	if p.Annotations[annoLoRAAdapter] != "evil" {
+		t.Error("operational adapter name was mutated by a refused dispatch")
 	}
 	// DETECTION: the attack watcher reads the epoch as an ANNOTATION, not a label.
-	if p.Annotations["phorvex.ai/adapter-epoch"] == "" {
-		t.Error("adapter-epoch annotation not written — the attack watcher cannot see the defence")
+	if p.Annotations["phorvex.ai/adapter-epoch"] != "" {
+		t.Error("refused dispatch wrote an adapter epoch")
 	}
 }

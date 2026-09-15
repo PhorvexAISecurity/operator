@@ -94,6 +94,13 @@ phorvex:
     # securityevents rights its own ServiceAccount never had.
     console:
       enabled: true
+      allowWorkloadMutations: true
+      auditTransport:
+        port: 8445
+        serverSecretName: phorvex-audit-server
+        clientSecretName: phorvex-audit-client
+        serverDNSName: phorvex-stack-phorvex-audit-source.phorvex-system.svc
+        clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
         tag: "0.4.117"          # ci:console-tag

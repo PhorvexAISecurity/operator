@@ -112,6 +112,27 @@ func aiPod(ns, name string, labels map[string]string) *corev1.Pod {
 	}
 }
 func fakeC(objs ...client.Object) client.Client {
+	var old, next *corev1.Pod
+	for _, obj := range objs {
+		p, ok := obj.(*corev1.Pod)
+		if !ok {
+			continue
+		}
+		if p.Labels[labelRole] == roleLeader {
+			old = p
+		}
+		if p.Labels[labelRole] == roleShadow {
+			next = p
+		}
+	}
+	if old != nil && next != nil && old.Labels[labelParallelGroup] == "" && next.Labels[labelParallelGroup] == "" {
+		for _, key := range []string{labelSwapGroup, labelModelShard} {
+			if old.Labels[key] != "" && old.Labels[key] == next.Labels[key] {
+				objs = append(objs, m066FakePool(old, next, key)...)
+				break
+			}
+		}
+	}
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace)}}}}
 	objs = append(objs, policy, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
@@ -130,17 +151,14 @@ func boundReq(p *corev1.Pod, a model.Action) Request {
 }
 
 // ---- warm-swap ----
-func TestWarmSwapPromotesRetiresAndRewarms(t *testing.T) {
+func TestWarmSwapPromotesRetiresAndAwaitsController(t *testing.T) {
 	leader := aiPod("ns", "leader", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	shadow := aiPod("ns", "shadow", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{loaded: true}
 	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
-	if err != nil {
-		t.Fatalf("warm-swap: %v", err)
-	}
-	if !hr.Emitted || hr.MutationKind != "swap" {
-		t.Errorf("warm-swap result: %+v", hr)
+	if err == nil || hr.MutationKind != "swap" {
+		t.Fatalf("fake controller cannot replenish pool: result=%+v err=%v", hr, err)
 	}
 	// shadow promoted to leader
 	var s corev1.Pod
@@ -153,11 +171,11 @@ func TestWarmSwapPromotesRetiresAndRewarms(t *testing.T) {
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "leader"}, &old); err == nil {
 		t.Errorf("old leader not retired (still present)")
 	}
-	// REWARM: a new warm-shadow exists
+	// A fake client does not run the ReplicaSet controller. No synthetic Pod is created.
 	var pods corev1.PodList
 	_ = c.List(context.Background(), &pods, client.InNamespace("ns"), client.MatchingLabels{labelRole: roleShadow})
-	if len(pods.Items) != 1 {
-		t.Errorf("REWARM: expected 1 new warm-shadow, got %d", len(pods.Items))
+	if len(pods.Items) != 0 {
+		t.Errorf("Phorvex created a competing shadow: %d", len(pods.Items))
 	}
 }
 
@@ -181,8 +199,8 @@ func TestWarmSwapStackUnreachableFallsBackToK8sGate(t *testing.T) {
 	c := fakeC(leader, shadow)
 	mv := &mockVLLM{readyErr: errStackUnreachable} // no vLLM stack
 	hr, err := warmSwapHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(leader, model.ActionWarmSwap))
-	if err != nil {
-		t.Fatalf("warm-swap (unreachable stack, K8s gate): %v", err)
+	if err == nil {
+		t.Fatal("fake controller cannot replenish after cutover")
 	}
 	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
 		t.Errorf("unreachable stack must be flagged PENDING-GPU-VALIDATION, note=%q", hr.Note)
@@ -366,11 +384,8 @@ func TestModelShardReplaceWarmCutover(t *testing.T) {
 	shadow := aiPod("ns", "shard0b", map[string]string{labelModelShard: "s", labelRole: roleShadow, labelModelLoaded: "true"})
 	c := fakeC(leader, shadow)
 	hr, err := modelShardReplaceHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, boundReq(leader, model.ActionModelShardReplace))
-	if err != nil {
-		t.Fatalf("model-shard-replace: %v", err)
-	}
-	if !hr.Emitted {
-		t.Error("shard replace should emit")
+	if err == nil || hr.MutationKind != "swap" {
+		t.Fatalf("controller observation must remain pending in fake: result=%+v err=%v", hr, err)
 	}
 	var s corev1.Pod
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "shard0b"}, &s)

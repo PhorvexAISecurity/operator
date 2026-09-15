@@ -8,7 +8,7 @@ import { PageHead, SectionLabel, Skeleton, ErrorState } from "./effectiveness";
 import { ShieldCheck, CheckCircle2, RotateCcw, Lock, Building2, Boxes } from "lucide-react";
 
 export function OwnerPanel({ lens }: { lens: Lens }) {
-  const [data, setData] = React.useState<{ events: OwnerEvent[]; empty: boolean; note: string } | null>(null);
+  const [data, setData] = React.useState<{ events: OwnerEvent[]; empty: boolean; note: string; partial: boolean; coveredFrom?: string; coveredTo?: string } | null>(null);
   const [err, setErr] = React.useState("");
   React.useEffect(() => {
     api.ownerEvents(lens).then(setData).catch((e) => setErr(String(e.message || e)));
@@ -29,6 +29,8 @@ export function OwnerPanel({ lens }: { lens: Lens }) {
         <Lock className="h-3.5 w-3.5 text-primary" />
         <span><span className="font-medium text-foreground">IP-protected view.</span> Served by a server-side whitelist — Phorvex's decision internals are never sent to this view (enforced by a redaction test that is the eligibility gate).</span>
       </div>
+
+      {data.partial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">Actions and totals cover only the latest audit window{data.coveredFrom ? ` (${new Date(data.coveredFrom).toLocaleString()} to ${new Date(data.coveredTo || data.coveredFrom).toLocaleString()})` : ""}. Older actions remain in paged Live Ops history.</div>}
 
       <OwnerSummary events={ev} />
 

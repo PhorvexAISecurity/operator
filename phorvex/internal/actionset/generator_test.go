@@ -25,6 +25,15 @@ func testPolicy() model.Policy {
 	}
 }
 
+func setDetectorAdapter(v *model.WorkloadView, name string) {
+	if v.Pod.UID == "" {
+		v.Pod.UID = "synthetic-pod-uid"
+	}
+	v.Pod.SuspectAdapter = name
+	v.Pod.AdapterObservation = &model.AdapterObservation{EventName: "detected", EventUID: "synthetic-event-uid",
+		CreatorIdentity: "system:serviceaccount:ns:detector", TargetPodUID: v.Pod.UID, AdapterName: name}
+}
+
 func baseView(name string) *model.WorkloadView {
 	return &model.WorkloadView{
 		Pod: model.Pod{
@@ -184,7 +193,7 @@ func TestAdapterRotateWithSuspectAdapterHasNonEmptyCover(t *testing.T) {
 	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
 	poisoned := baseView("poisoned-lora")
 	poisoned.Pod.ModelID = "model-a"
-	poisoned.Pod.SuspectAdapter = "evil-adapter"
+	setDetectorAdapter(poisoned, "evil-adapter")
 
 	set := d.Generate([]*model.WorkloadView{poisoned}, pol)
 	if len(set.Candidates) != 1 {
@@ -206,7 +215,7 @@ func TestExtendedActionIsPrunedAboveImportedCostCeiling(t *testing.T) {
 	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
 	view := baseView("costly-adapter")
 	view.Pod.ModelID = "model-a"
-	view.Pod.SuspectAdapter = "evil-adapter"
+	setDetectorAdapter(view, "evil-adapter")
 
 	set := d.Generate([]*model.WorkloadView{view}, pol)
 	if len(set.Candidates) != 0 {
@@ -233,7 +242,7 @@ func TestNaNCostIsDistinctUnfooledExclusion(t *testing.T) {
 	pol.EnabledActions = map[model.Action]bool{model.ActionAdapterRotate: true}
 	view := baseView("nan-adapter")
 	view.Pod.ModelID = "model-a"
-	view.Pod.SuspectAdapter = "evil-adapter"
+	setDetectorAdapter(view, "evil-adapter")
 
 	set := d.Generate([]*model.WorkloadView{view}, pol)
 	if len(set.Candidates) != 0 || len(set.Excluded) != 1 {
@@ -256,7 +265,7 @@ func TestGenerateNeverEmitsAnEmptyCoverCandidate(t *testing.T) {
 	v.Pod.HasGPU = true
 	v.Pod.ModelID = "model-a"
 	v.Pod.MIGDevice = "1g.10gb"
-	v.Pod.SuspectAdapter = "evil-adapter"
+	setDetectorAdapter(v, "evil-adapter")
 
 	set := d.Generate([]*model.WorkloadView{v}, pol)
 	if len(set.Candidates) == 0 {
