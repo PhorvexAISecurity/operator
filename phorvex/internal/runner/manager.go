@@ -1961,16 +1961,17 @@ func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		res, err := m.Actuator.Actuate(ctx, actuator.Request{
-			PolicyName:    pol.PolicyName,
-			PolicyUID:     pol.PolicyUID,
-			Tenant:        pol.Tenant,
-			Namespace:     decisions[i].Namespace,
-			Pod:           decisions[i].Pod,
-			Action:        decisions[i].Action,
-			Reason:        decisions[i].Reason,
-			Score:         score,
-			CoverageValue: coverageValue,
-			TargetUID:     v.Pod.UID,
+			AdapterObservation: v.Pod.AdapterObservation,
+			PolicyName:         pol.PolicyName,
+			PolicyUID:          pol.PolicyUID,
+			Tenant:             pol.Tenant,
+			Namespace:          decisions[i].Namespace,
+			Pod:                decisions[i].Pod,
+			Action:             decisions[i].Action,
+			Reason:             decisions[i].Reason,
+			Score:              score,
+			CoverageValue:      coverageValue,
+			TargetUID:          v.Pod.UID,
 		})
 		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch,
 		// so a result carrying real identifiers alongside an error keeps the facts the

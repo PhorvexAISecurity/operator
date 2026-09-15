@@ -34,7 +34,8 @@ func (okActuator) SupportsAction(context.Context, model.Action, actuator.Target)
 func capFleet() ([]*model.WorkloadView, Witness) {
 	leader := model.Pod{
 		Namespace: "ns", Name: "leader", HasGPU: true, MIGDevice: "1g.10gb", ModelID: "model",
-		Node: "gpu-a", MIGGPUID: "0", MIGTargetProfile: "2g.20gb", SuspectAdapter: "adapter-a",
+		Node: "gpu-a", MIGGPUID: "0", MIGTargetProfile: "2g.20gb", UID:"uid-leader", SuspectAdapter: "adapter-a",
+		AdapterObservation:&model.AdapterObservation{EventName:"detected",EventUID:"event-uid",CreatorIdentity:"system:serviceaccount:ns:detector",TargetPodUID:"uid-leader",AdapterName:"adapter-a"},
 		Ready: true, ServingEndpointReady: true, RouteService: "infer", GuardrailVariants: 2,
 		Labels: map[string]string{
 			"app": "infer", labelServing: "true", labelLoRAEnabled: "true", labelGuardrailTier: "true",

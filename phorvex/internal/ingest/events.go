@@ -57,13 +57,11 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 		}
 		// M-27: age per event. A CR with no usable CreationTimestamp is NOT a fresh event —
 		// its age is untrusted, so it is recorded present=false and carries weight 0.
-		missing := se.CreationTimestamp.IsZero()
+		missing := se.CreationTimestamp.IsZero() || se.CreationTimestamp.Time.After(now) || se.DeletionTimestamp != nil
 		age := time.Duration(0)
 		if !missing {
 			age = now.Sub(se.CreationTimestamp.Time)
-			if age < 0 {
-				age = 0
-			}
+			// A future or deleting object is marked timestamp-unusable above.
 		}
 		base := model.SecurityEventInfo{
 			CreatedAt:        se.CreationTimestamp.Time,
@@ -78,6 +76,8 @@ func collectEvents(ctx context.Context, c client.Client, now time.Time) ([]model
 			Description:      se.Spec.Description,
 			AnomalyScore:     score,
 			Age:              age,
+			AdapterName:      se.Annotations["phorvex.ai/adapter-name"],
+			AdapterTargetUID: se.Annotations["phorvex.ai/target-pod-uid"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
 		// It used to be turned into a bare name that matched no key — silently dropped. It is

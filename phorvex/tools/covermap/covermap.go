@@ -201,7 +201,7 @@ func Fixtures() []Fixture {
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-mig"; p.MIGDevice = "1g.10gb"; return p }(), Ctx: gpuCtx},
 		{Name: "cpu-served-model", Why: "Ready CPU served model: both session erasers share the produced serving-endpoint prerequisite while the non-GPU session weight remains 0.6.",
 			Pod: PodSpec{Namespace: ns, Name: "cpu-served-model", Node: "node-a", ModelID: "model-x", RouteService: "svc", ServingEndpointReady: true}, Ctx: unit},
-		{Name: "gpu-adapter", Why: "Detector-stamped SuspectAdapter: adapterIntegrity appears at 3x weight and only adapter-rotate covers it.",
+		{Name: "gpu-adapter", Why: "UID-bound trusted detector observation: adapterIntegrity appears at 3x weight and only adapter-rotate covers it.",
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-adapter"; p.SuspectAdapter = "evil"; return p }(), Ctx: gpuCtx},
 		{Name: "gpu-phold-zero", Why: "PHold=0: every weight is 0 (base = 0.001*pHold), facts and cover sets are still emitted, nothing can carry gain.",
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-phold-zero"; return p }(), Ctx: func() CtxSpec { c := gpuCtx; c.PHold = 0; return c }()},
@@ -211,7 +211,7 @@ func Fixtures() []Fixture {
 		vector("gpu-vector-kv", "Trusted pod-targeting phorvex.attack.kv event: session weight x3; cover sets unchanged.", model.AttackVectorKV, true, 0),
 		vector("gpu-vector-guardrail", "Trusted pod-targeting phorvex.attack.guardrail event: guardrailBypass weight x3; cover sets unchanged.", model.AttackVectorGuardrail, true, 0),
 		vector("gpu-vector-inflight", "Trusted pod-targeting phorvex.attack.inflight event: inflightRequests weight x3; cover sets unchanged.", model.AttackVectorInflight, true, 0),
-		vector("gpu-vector-adapter", "Trusted pod-targeting phorvex.attack.adapter event: NO recon boost — adapter steering only comes from the SuspectAdapter marker.", model.AttackVectorAdapter, true, 0),
+		vector("gpu-vector-adapter", "Adapter vector without event-owned adapter name and Pod UID: no adapter-integrity fact or boost.", model.AttackVectorAdapter, true, 0),
 		vector("gpu-vector-kv-neighbor", "KV vector event propagated from a neighbour (TargetsPod=false): no boost.", model.AttackVectorKV, false, 0),
 		vector("gpu-vector-kv-aged", "KV vector event 10h old: recon does not read Age, so the x3 persists while the event is still in the snapshot; only the kill-chain evidence weight ages.", model.AttackVectorKV, true, 36000),
 		{Name: "plain-vector-kv", Why: "CPU pod with a KV vector event: the boost lives inside the AI branch, so a non-serving pod is not steered.",
@@ -227,6 +227,11 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		HasGPU: f.Pod.HasGPU, MIGDevice: f.Pod.MIGDevice, ModelID: f.Pod.ModelID,
 		SuspectAdapter: f.Pod.SuspectAdapter, RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
+	}
+	if pod.SuspectAdapter != "" {
+		pod.UID = "fixture-pod-uid"
+		pod.AdapterObservation = &model.AdapterObservation{EventName:"fixture-detector",EventUID:"fixture-event-uid",
+			CreatorIdentity:"system:serviceaccount:fixture:detector",TargetPodUID:pod.UID,AdapterName:pod.SuspectAdapter}
 	}
 	ph := model.NeutralPhysics()
 	if f.Physics != nil {

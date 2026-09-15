@@ -163,8 +163,13 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// 1 + clamp01(...) and is therefore bounded by 2 (ModelRarity and CoResidency both), while this
 		// one is 3. So a poisoned adapter outranks any other fact on the same asset structurally,
 		// rather than by an additive constant that happens to be large.
-		if view.Pod.SuspectAdapter != "" {
+		if o := view.Pod.AdapterObservation; o != nil && view.Pod.SuspectAdapter != "" &&
+			o.AdapterName == view.Pod.SuspectAdapter && o.TargetPodUID == view.Pod.UID &&
+			o.EventUID != "" && o.CreatorIdentity != "" {
 			ai := Fact{Scope: ScopePod, Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
+			ai.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorAdapter, AppliedMultiplier: 3.0,
+				Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorAdapter,
+					TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID, AdapterName: o.AdapterName}}}
 			af.Facts = append(af.Facts, ai)
 			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 		}

@@ -33,6 +33,8 @@ func adversarialTopology() []*model.WorkloadView {
 			Neighbors: []model.NeighborRef{{Key: "adversarial/shared-target", Value: 1}},
 			Physics:   physics,
 		})
+		views[len(views)-1].Pod.AdapterObservation = &model.AdapterObservation{EventName: "detected", EventUID: fmt.Sprintf("event-%d", i),
+			CreatorIdentity: "system:serviceaccount:adversarial:detector", TargetPodUID: views[len(views)-1].Pod.UID, AdapterName: "suspect"}
 	}
 	return views
 }
