@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 12
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -31,13 +31,55 @@ checks:
     source_sha: 19c0f3d195bb51e1906af6cc961558ef99d28145
     at: '2026-09-15T07:03:12+00:00'
     baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  preflight:
+    result: PASS
+    by: sol-t3-m132
+    artifact: evidence/preflight-final/receipt.json
+    sha256: 42c504ccddaaf1eb1ed02cc0e932a3fc948dcecbf9ae7bffc731e8f3218c37ac
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:26:22+00:00'
+  implementation:
+    result: PASS
+    by: sol-t3-m132
+    artifact: 04-diff.patch
+    sha256: 7c2c14d1ba69f057c7926079516a917710bf12cd42f09d0a742d968545c3ac4e
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:26:22+00:00'
+  l0:
+    result: PASS
+    by: sol-t3-m132
+    artifact: evidence/l0.md
+    sha256: 4a66c8335dda197180683a572b62af36cde3b980f500f5459654854cfd9aa7c3
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:26:22+00:00'
+  l1:
+    result: PASS
+    by: sol-t3-m132
+    artifact: evidence/l1.md
+    sha256: efce27b057a4047a3a452edc0338f69e47fdc51a6740d843089a6023aba7bbfc
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:26:22+00:00'
+  l2:
+    result: PASS
+    by: sol-t3-m132
+    artifact: evidence/l2.md
+    sha256: b261821fa7e1ab9daff219480e58ce4ebf7c9514ec7e54c70252166d60c42427
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:26:22+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t3-m132
+    artifact: evidence/positive-control.md
+    sha256: 181c503ae60c6023ab912aaa29aa49107dfb266ab7cb41494bf1c1f1f1a2b5c1
+    source_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
+    at: '2026-09-15T07:26:22+00:00'
 fix_id: T3-M132
 issues:
 - M-132
 title: AMTD guest list ignores matchExpressions; empty MatchLabels suppresses the
   whole tick
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -61,7 +103,7 @@ blind_derivation:
 implementation:
   branch: fix/t3-m132
   base_sha: 19c0f3d195bb51e1906af6cc961558ef99d28145
-  head_sha: null
+  head_sha: cd87497a541270f110b1c2b983c22be26cf1ffe5
   stacked_on:
   - T3-M169
 pull_request:
@@ -84,12 +126,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -99,10 +141,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t3-m132
-  action: Implement signed full-selector and per-route preparation contract when worker
-    slot opens
-updated_at: '2026-09-15T07:03:12+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-15T07:26:25+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:42+00:00'
   by: codex-lead
@@ -130,6 +172,21 @@ configuration_history:
   fields:
   - implementation
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T07:04:11+00:00'
+  by: sol-t3-m132
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T07:15:25+00:00'
+  by: sol-t3-m132
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T07:26:22+00:00'
+  by: sol-t3-m132
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -147,3 +204,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T07:26:22+00:00'
+  by: sol-t3-m132
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T07:26:24+00:00'
+  by: sol-t3-m132
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T3-M132:12:submit
+  from: sol-t3-m132
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 12
