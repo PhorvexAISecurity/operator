@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -22,67 +22,61 @@ checks:
     artifact: evidence/preflight-r2/receipt.json
     sha256: dc73dea5b0a44eee09219976b6ad06d106acfdf481c9436933885e2cdbf54f8d
     source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:37+00:00'
   implementation:
     result: PASS
     by: sol-t5-m146
     artifact: 04-diff.patch
     sha256: d0422bc81bb24df24c71fa62cc2ca099e9b86c1a2d9ef9ab98fef8b2f6a8a2ab
     source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:37+00:00'
   red:
     result: PASS
-    by: sol-t5-m146
+    by: codex-lead
     artifact: evidence/lead-baseline-r2.log
     sha256: 42cca2f5b3200d59a6271397f655e0cde702f4cf0abb21020e0332f3602ffb98
     source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:03+00:00'
   l0:
     result: PASS
     by: sol-t5-m146
     artifact: evidence/preflight-r2/run-1789505224369567669/go-phorvex.log
     sha256: 25c6c6b2d722369fcc72d27e3e6cb27c54d46b5fcd1ad74fa06ba521dadcd5f2
     source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:37+00:00'
     inputs:
     - phorvex
     inputs_sha256: 58e6f2cee986e987df6df65ab082be8f5d11a5e11d0d3afc5c8577486747c5d5
   l1:
     result: PASS
     by: sol-t5-m146
-    artifact: evidence/lead-head-r2.log
-    sha256: 8367f9f4a20304b7562a31a67730add9e328b74de5f75a71367fb8244efdd4a6
+    artifact: evidence/preflight-r2/run-1789505224369567669/go-phorvex.log
+    sha256: 25c6c6b2d722369fcc72d27e3e6cb27c54d46b5fcd1ad74fa06ba521dadcd5f2
     source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:37+00:00'
     inputs:
-    - phorvex/internal/audit
-    - phorvex/internal/decision
-    - phorvex/internal/model
-    inputs_sha256: ec1e690eced9832ecb8fb7fce11a71ce9cdda9cd57ca9bbe9fa846a6a2737c40
+    - phorvex
+    inputs_sha256: 58e6f2cee986e987df6df65ab082be8f5d11a5e11d0d3afc5c8577486747c5d5
   l2:
     result: PASS
     by: sol-t5-m146
-    artifact: evidence/lead-consumer-r1.log
-    sha256: d7184b20cdb36fb16fd5a71ff37f1e78c9b2811329d703b7cb654bbe2e5b6cc3
+    artifact: evidence/preflight-r2/run-1789505224369567669/go-phorvex.log
+    sha256: 25c6c6b2d722369fcc72d27e3e6cb27c54d46b5fcd1ad74fa06ba521dadcd5f2
     source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:37+00:00'
     inputs:
-    - phorvex/internal/audit
-    - phorvex/internal/console
-    - phorvex/internal/model
-    inputs_sha256: b595cf1d4429080a987c6e4e530c67315cca2c928031483cc92f23ad9f91f3d1
+    - phorvex
+    inputs_sha256: 58e6f2cee986e987df6df65ab082be8f5d11a5e11d0d3afc5c8577486747c5d5
   positive_control:
     result: PASS
     by: sol-t5-m146
-    artifact: evidence/lead-head-r2.log
-    sha256: 8367f9f4a20304b7562a31a67730add9e328b74de5f75a71367fb8244efdd4a6
+    artifact: evidence/preflight-r2/run-1789505224369567669/go-phorvex.log
+    sha256: 25c6c6b2d722369fcc72d27e3e6cb27c54d46b5fcd1ad74fa06ba521dadcd5f2
     source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
-    at: '2026-09-15T20:57:24+00:00'
+    at: '2026-09-15T20:59:37+00:00'
     inputs:
-    - phorvex/internal/audit
-    - phorvex/internal/decision
-    - phorvex/internal/model
-    inputs_sha256: ec1e690eced9832ecb8fb7fce11a71ce9cdda9cd57ca9bbe9fa846a6a2737c40
+    - phorvex
+    inputs_sha256: 58e6f2cee986e987df6df65ab082be8f5d11a5e11d0d3afc5c8577486747c5d5
 fix_id: T5-M146
 issues:
 - M-146
@@ -153,7 +147,7 @@ next_action:
   owner: skeptic
   action: Independently review the source delta, incident and submitted checks; return
     review-verdict.
-updated_at: '2026-09-15T20:57:26+00:00'
+updated_at: '2026-09-15T20:59:37+00:00'
 configuration_history:
 - at: '2026-09-15T19:28:13+00:00'
   by: codex-lead
@@ -178,6 +172,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-15T20:57:23+00:00'
+  by: sol-t5-m146
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T20:59:37+00:00'
   by: sol-t5-m146
   fields:
   - implementation
@@ -216,9 +215,77 @@ transitions:
   approval_ref: null
   forced: false
 handoff:
-  id: T5-M146:7:submit
+  id: T5-M146:9:submit
   from: sol-t5-m146
   to: codex-lead
   role: skeptic
   kind: submit
-  revision: 7
+  revision: 9
+check_history:
+- check: red
+  result: PASS
+  by: sol-t5-m146
+  artifact: evidence/lead-baseline-r2.log
+  sha256: 42cca2f5b3200d59a6271397f655e0cde702f4cf0abb21020e0332f3602ffb98
+  source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  at: '2026-09-15T20:57:24+00:00'
+- check: preflight
+  result: PASS
+  by: sol-t5-m146
+  artifact: evidence/preflight-r2/receipt.json
+  sha256: dc73dea5b0a44eee09219976b6ad06d106acfdf481c9436933885e2cdbf54f8d
+  source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  at: '2026-09-15T20:57:24+00:00'
+- check: implementation
+  result: PASS
+  by: sol-t5-m146
+  artifact: 04-diff.patch
+  sha256: d0422bc81bb24df24c71fa62cc2ca099e9b86c1a2d9ef9ab98fef8b2f6a8a2ab
+  source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  at: '2026-09-15T20:57:24+00:00'
+- check: l0
+  result: PASS
+  by: sol-t5-m146
+  artifact: evidence/preflight-r2/run-1789505224369567669/go-phorvex.log
+  sha256: 25c6c6b2d722369fcc72d27e3e6cb27c54d46b5fcd1ad74fa06ba521dadcd5f2
+  source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  at: '2026-09-15T20:57:24+00:00'
+  inputs:
+  - phorvex
+  inputs_sha256: 58e6f2cee986e987df6df65ab082be8f5d11a5e11d0d3afc5c8577486747c5d5
+- check: l1
+  result: PASS
+  by: sol-t5-m146
+  artifact: evidence/lead-head-r2.log
+  sha256: 8367f9f4a20304b7562a31a67730add9e328b74de5f75a71367fb8244efdd4a6
+  source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  at: '2026-09-15T20:57:24+00:00'
+  inputs:
+  - phorvex/internal/audit
+  - phorvex/internal/decision
+  - phorvex/internal/model
+  inputs_sha256: ec1e690eced9832ecb8fb7fce11a71ce9cdda9cd57ca9bbe9fa846a6a2737c40
+- check: l2
+  result: PASS
+  by: sol-t5-m146
+  artifact: evidence/lead-consumer-r1.log
+  sha256: d7184b20cdb36fb16fd5a71ff37f1e78c9b2811329d703b7cb654bbe2e5b6cc3
+  source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  at: '2026-09-15T20:57:24+00:00'
+  inputs:
+  - phorvex/internal/audit
+  - phorvex/internal/console
+  - phorvex/internal/model
+  inputs_sha256: b595cf1d4429080a987c6e4e530c67315cca2c928031483cc92f23ad9f91f3d1
+- check: positive_control
+  result: PASS
+  by: sol-t5-m146
+  artifact: evidence/lead-head-r2.log
+  sha256: 8367f9f4a20304b7562a31a67730add9e328b74de5f75a71367fb8244efdd4a6
+  source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+  at: '2026-09-15T20:57:24+00:00'
+  inputs:
+  - phorvex/internal/audit
+  - phorvex/internal/decision
+  - phorvex/internal/model
+  inputs_sha256: ec1e690eced9832ecb8fb7fce11a71ce9cdda9cd57ca9bbe9fa846a6a2737c40
