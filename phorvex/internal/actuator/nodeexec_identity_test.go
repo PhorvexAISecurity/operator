@@ -158,20 +158,28 @@ func TestPreparedMIGCarriesOneIdentityAcrossAllCommands(t *testing.T) {
 	c.PrependReactor("list", "pods", func(ktesting.Action) (bool, runtime.Object, error) { lists++; return false, nil, nil })
 	var calls [][]string
 	var targets []string
+	configured := false
 	exec := func(_ context.Context, ns, name, container string, argv []string) (string, error) {
 		targets = append(targets, ns+"/"+name+"["+container+"]")
 		calls = append(calls, append([]string(nil), argv...))
-		return "", nil
+		if strings.Contains(strings.Join(argv, " "), "-cgi") {
+			configured = true
+		}
+		return migTestCommandOutput(argv, configured), nil
 	}
 	mig := &nvidiaSMIMIG{run: execNodeRunner{client: c, exec: exec, policy: testAgentPolicy()}}
 	prepared, err := mig.Prepare(context.Background(), "node-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err != nil {
+	if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if lists != 1 || len(calls) != 3 || !reflect.DeepEqual(targets, []string{"gpu-system/agent-a[agent]", "gpu-system/agent-a[agent]", "gpu-system/agent-a[agent]"}) {
+	wantTargets := make([]string, 8)
+	for i := range wantTargets {
+		wantTargets[i] = "gpu-system/agent-a[agent]"
+	}
+	if lists != 1 || len(calls) != 8 || !reflect.DeepEqual(targets, wantTargets) {
 		t.Fatalf("lists=%d targets=%v calls=%v", lists, targets, calls)
 	}
 }
@@ -203,21 +211,21 @@ func TestPreparedMIGAbortsWhenBoundIdentityChangesBetweenSteps(t *testing.T) {
 			ds, pod := testAgentObjects("agent-a")
 			c := fake.NewSimpleClientset(ds, pod)
 			calls := 0
-			exec := func(ctx context.Context, _, _, _ string, _ []string) (string, error) {
+			exec := func(ctx context.Context, _, _, _ string, argv []string) (string, error) {
 				calls++
 				if calls == 1 {
 					if err := mutate(ctx, c, ds.DeepCopy(), pod.DeepCopy()); err != nil {
 						return "", err
 					}
 				}
-				return "", nil
+				return migTestCommandOutput(argv, false), nil
 			}
 			mig := &nvidiaSMIMIG{run: execNodeRunner{client: c, exec: exec, policy: testAgentPolicy()}}
 			prepared, err := mig.Prepare(context.Background(), "node-1")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err == nil {
+			if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err == nil {
 				t.Fatal("identity drift did not abort")
 			}
 			if calls != 1 {
@@ -259,14 +267,14 @@ func TestPreparedMIGRevalidatesBeforeFirstAndEveryFollowingExec(t *testing.T) {
 			ds, pod := testAgentObjects("agent-a")
 			c := fake.NewSimpleClientset(ds, pod)
 			calls := 0
-			exec := func(ctx context.Context, _, _, _ string, _ []string) (string, error) {
+			exec := func(ctx context.Context, _, _, _ string, argv []string) (string, error) {
 				calls++
 				if calls == tc.afterCalls {
 					if err := tc.mutate(ctx, c, ds.DeepCopy(), pod.DeepCopy()); err != nil {
 						return "", err
 					}
 				}
-				return "", nil
+				return migTestCommandOutput(argv, false), nil
 			}
 			mig := &nvidiaSMIMIG{run: execNodeRunner{client: c, exec: exec, policy: testAgentPolicy()}}
 			prepared, err := mig.Prepare(context.Background(), "node-1")
@@ -278,7 +286,7 @@ func TestPreparedMIGRevalidatesBeforeFirstAndEveryFollowingExec(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err == nil {
+			if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err == nil {
 				t.Fatal("identity/read drift did not abort")
 			}
 			if calls != tc.wantCalls {

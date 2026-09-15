@@ -233,7 +233,7 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		pod := m069Create(t, c, migPod(ns, "infer"))
 		wc, r := m069Wrap(t, c, "infer")
 		mm := &mockMIG{}
-		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: wc, MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
+		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 		m069Rejected(t, hr, err)
 		m069Survived(t, c, r)
 		if len(mm.calls) != 0 {
@@ -245,7 +245,7 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		ns := m069Namespace(t, c, "m069-mig-ok")
 		pod := m069Create(t, c, migPod(ns, "infer"))
 		mm := &mockMIG{}
-		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
+		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 		if err != nil || !hr.Emitted || len(mm.calls) != 1 {
 			t.Fatalf("unchanged identity must evict and repartition: %+v %v calls=%v", hr, err, mm.calls)
 		}

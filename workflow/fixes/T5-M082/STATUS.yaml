@@ -1,0 +1,240 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 7
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 03d38e7721ffbdee377fb50468739bde1b23487bbc00418319d5d52aac4af6a8
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T19:36:09+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-baseline.log
+    sha256: 1d1648b448170f0b443b6809718b1f8fc310a24faaa139fb72665717cbb11d7e
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T21:02:20+00:00'
+  preflight:
+    result: PASS
+    by: sol-t5-m082
+    artifact: evidence/preflight/receipt.json
+    sha256: 91a0b33efc9c78d741f39373f3f8f77980c792a6e033ee1a99ea71a5df16e5d4
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:18:37+00:00'
+  implementation:
+    result: PASS
+    by: sol-t5-m082
+    artifact: 04-diff.patch
+    sha256: dbe7f7f78788713a7365b3b7a673c7d9aa9d2558f94527e9cc76a1d530183ea5
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:18:37+00:00'
+  l0:
+    result: PASS
+    by: sol-t5-m082
+    artifact: evidence/preflight/receipt.json
+    sha256: 91a0b33efc9c78d741f39373f3f8f77980c792a6e033ee1a99ea71a5df16e5d4
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:18:37+00:00'
+    inputs:
+    - phorvex
+    - workflow
+    inputs_sha256: 22623e9b8df71aa9f76d6d3b571401a41a29a253bd863147f62e6eb8ed57d42b
+  l1:
+    result: PASS
+    by: sol-t5-m082
+    artifact: evidence/worker/focused.log
+    sha256: aba188d78d283c5a9feee6828181a4bf5af14df61015c8c723abe5440a3eea6e
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:18:37+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: 808af9ec8b4ec2f5e8bf46c8b74bfc4ad8e554ac498f6262886d5b3de91b45cf
+  l2:
+    result: PASS
+    by: sol-t5-m082
+    artifact: evidence/preflight/receipt.json
+    sha256: 91a0b33efc9c78d741f39373f3f8f77980c792a6e033ee1a99ea71a5df16e5d4
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:18:37+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 8182a0cba6a009a08ffec487145752122b114ba5929c222d6eacc59b289dbb6e
+  positive_control:
+    result: PASS
+    by: sol-t5-m082
+    artifact: evidence/worker/focused.log
+    sha256: aba188d78d283c5a9feee6828181a4bf5af14df61015c8c723abe5440a3eea6e
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:18:37+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: 808af9ec8b4ec2f5e8bf46c8b74bfc4ad8e554ac498f6262886d5b3de91b45cf
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 0579dd1b9dff0906d4e58dc96016c340c7b258f21e9bcd15814b8fe42eae8153
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:23:14+00:00'
+    baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: c616715b551efa529f23550da4f51443d40d6df7d662d69e104549264951b5ab
+    source_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+    at: '2026-09-15T21:23:14+00:00'
+    incident_sha256: 0579dd1b9dff0906d4e58dc96016c340c7b258f21e9bcd15814b8fe42eae8153
+fix_id: T5-M082
+issues:
+- M-82
+title: MIG repartition destroys before creating, with no rollback
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t5-m082
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t5-m082
+  base_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  head_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T21:23:17+00:00'
+configuration_history:
+- at: '2026-09-15T19:36:07+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - title
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T21:18:37+00:00'
+  by: sol-t5-m082
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-15T19:36:08+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T19:36:09+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T21:18:37+00:00'
+  by: sol-t5-m082
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T21:18:39+00:00'
+  by: sol-t5-m082
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T21:23:15+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T21:23:16+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T5-M082:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
