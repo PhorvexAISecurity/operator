@@ -731,11 +731,11 @@ fixes:
     issues:
     - M-95
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t4-m095
-    head_sha: null
+    head_sha: 68cef80025fb867ca700f3c291c5452360a4916c
   T4-M171:
     directory: fixes/T4-M171
     aliases: []
