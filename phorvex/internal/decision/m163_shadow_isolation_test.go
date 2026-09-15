@@ -6,10 +6,10 @@
  * The producers are REAL. platform.Derive supplies the production physics witness and
  * calib.Runtime.ShadowViews supplies the counterfactual one, from a calibration snapshot the
  * runtime legitimately retains under its DEFAULT 30-minute refresh cadence. Every Pod is
- * Running: the divergence is a real rescheduling (a second tenant moved from n2 to n1 ten
- * minutes after the last refresh), not an unset Phase. The two witnesses then land on
- * opposite sides of killchain's `CoResidency > 1` AI-stage predicate, which is what let the
- * shadow pass fold a stage transition into the production stage clock.
+ * Running: the divergence is a real rescheduling (a second namespace moved from n2 to n1 ten
+ * minutes after the last refresh), not an unset Phase. T5-M150 removed the invalid
+ * `CoResidency > 1` AI-stage predicate; these tests retain the stale-witness isolation checks
+ * without treating namespace dispersion as a stage transition.
  *
  * The retained baseline characterization is preserved separately at
  * workflow/fixes/V3-M163/evidence/baseline-repro/r2_shadow_stageclock_test.go (executed
@@ -169,6 +169,16 @@ func m163StaleShadowViews(t *testing.T, rt *calib.Runtime, snap *ingest.Snapshot
 	return shadowViews
 }
 
+// m163TransitioningShadowViews supplies a supported, evidence-backed hypothetical stage change
+// after the real calibration producer has built the stale shadow. It exercises shadow stage-clock
+// isolation without reviving the removed namespace-to-GPU-threat inference.
+func m163TransitioningShadowViews(t *testing.T, rt *calib.Runtime, snap *ingest.Snapshot) []*model.WorkloadView {
+	t.Helper()
+	views := m163StaleShadowViews(t, rt, snap)
+	views[0].Events = []model.SecurityEventInfo{{Type: "Panic", ThreatLevel: "high", TargetsPod: true}}
+	return views
+}
+
 // m163Belief is the part of the production record the kill-chain belief writes.
 type m163Belief struct {
 	stage    string
@@ -216,9 +226,8 @@ func m163Shadow(t *testing.T, e *CoverageEngine, views []*model.WorkloadView, po
 // Fixture relevance: the incident condition must actually be produced.
 // ---------------------------------------------------------------------------
 
-// The bug needs the two REAL witnesses to straddle killchain's AI-stage predicate. If a
-// producer changes and they stop disagreeing, the regression below would pass vacuously —
-// so this test fails instead, loudly.
+// The real producers still yield different namespace-dispersion witnesses, but neither witness
+// may manufacture a GPU attack stage (T5-M150 compatibility control).
 func TestM163_FixtureCrossesTheStagePredicateThroughRealProducers(t *testing.T) {
 	snap := m163Snapshot(t)
 	_, physicsByKey := platform.Derive(snap)
@@ -228,24 +237,21 @@ func TestM163_FixtureCrossesTheStagePredicateThroughRealProducers(t *testing.T) 
 	if !(production.CoResidency > 1) {
 		t.Fatalf("fixture stale: production CoResidency %.4f is not > 1", production.CoResidency)
 	}
-	if !(production.ModelRarity > 1) {
-		t.Fatalf("fixture stale: production ModelRarity %.4f is not > 1, arm (2) cannot fire", production.ModelRarity)
-	}
 	if shadow.CoResidency > 1 {
-		t.Fatalf("fixture stale: shadow CoResidency %.4f is also > 1, the arms no longer disagree", shadow.CoResidency)
+		t.Fatalf("fixture stale: shadow CoResidency %.4f is also > 1", shadow.CoResidency)
 	}
 
-	// Confirm the disagreement reaches the STAGE, not just the physics field.
+	// Namespace-count disagreement remains context and must not reach the stage.
 	km := killchain.NewModel()
 	pol := m163Policy()
 	prodView := m163View(t, snap)
-	shadowView := m163StaleShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap)[0]
+	shadowView := m163TransitioningShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap)[0]
 	prodStage := km.AssessMode(prodView, pol, 1200, pol.ProactiveFloor.Seconds(), killchain.EvalShadow).StageName
 	shadowStage := km.AssessMode(shadowView, pol, 1200, pol.ProactiveFloor.Seconds(), killchain.EvalShadow).StageName
-	if prodStage == shadowStage {
-		t.Fatalf("fixture stale: production and shadow agree on stage %q; the incident needs disagreement", prodStage)
+	if prodStage != "recon" || shadowStage != "exploit" {
+		t.Fatalf("supported event producer did not create the intended stage disagreement: production=%q shadow=%q", prodStage, shadowStage)
 	}
-	t.Logf("fixture live: production stage=%s (coResidency %.4f) vs shadow stage=%s (coResidency %.4f)",
+	t.Logf("fixture live: production stage=%s (namespace proxy %.4f) vs shadow stage=%s (namespace proxy %.4f)",
 		prodStage, production.CoResidency, shadowStage, shadow.CoResidency)
 }
 
@@ -269,7 +275,7 @@ func TestM163_StaleShadowLeavesNextProductionDecisionIdentical(t *testing.T) {
 	// Arm B — the shipped ordering: on tick 2 the shadow arm runs FIRST.
 	subject := m163Engine(t)
 	m163Decide(t, subject, snap, pol)
-	m163Shadow(t, subject, m163StaleShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap), pol)
+	m163Shadow(t, subject, m163TransitioningShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap), pol)
 	subjectDecisions := m163Decide(t, subject, snap, pol)
 
 	want, got := m163Read(t, controlDecisions[0]), m163Read(t, subjectDecisions[0])
@@ -314,7 +320,7 @@ func TestM163_SameStageShadowAndStaleShadowAreEquallyInert(t *testing.T) {
 			m163Read(t, controlDecisions[0]), m163Read(t, benignDecisions[0]))
 	}
 	if !reflect.DeepEqual(benignDecisions, staleDecisions) {
-		t.Fatalf("a stage-changing shadow is not as inert as a same-stage one: benign=%+v stale=%+v",
+		t.Fatalf("a stale same-stage shadow is not inert: benign=%+v stale=%+v",
 			m163Read(t, benignDecisions[0]), m163Read(t, staleDecisions[0]))
 	}
 }
@@ -413,14 +419,15 @@ func TestM163_ProductionStageTransitionStillResetsDwell(t *testing.T) {
 		t.Fatalf("fixture: first tick accrued no dwell (%v)", before.inStage)
 	}
 
-	// Move the co-resident tenant off n1: the REAL platform witness now falls below the
-	// AI-stage predicate, so production genuinely transitions.
+	// A trusted persist event is a supported production stage transition.
 	moved := m163Snapshot(t)
-	moved.Pods[1].Node = "n2"
-	moved.PodByKey["ns-b/neighbour"] = &moved.Pods[1]
-	moved.Nodes = append(moved.Nodes, ingest.NodeInfo{Name: "n2", Schedulable: true})
-
-	after := m163Read(t, m163Decide(t, e, moved, pol)[0])
+	afterViews := m163Views(t, moved)
+	afterViews[0].Events = []model.SecurityEventInfo{{Type: "Panic", ThreatLevel: "high", TargetsPod: true}}
+	afterDecisions, err := e.DecideChecked(afterViews, pol)
+	if err != nil {
+		t.Fatalf("production transition decide: %v", err)
+	}
+	after := m163Read(t, afterDecisions[0])
 	if after.stage == before.stage {
 		t.Fatalf("fixture: production did not transition; both ticks read stage %q", before.stage)
 	}
@@ -621,6 +628,10 @@ func TestM163_ShadowPricesFromLearnedStateAndPreservesIt(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		m163Decide(t, trained, snap, pol)
 	}
+	// Selection is not required to train this isolation fixture; seed the existing owner prior
+	// directly so the test can distinguish it from a fresh model after T5-M150 removed the false
+	// namespace-driven threat selection.
+	trained.Killchain.Memory.Observe(pol.Owner(), 0.5)
 	for i := 0; i < 8; i++ {
 		trained.ObserveRotation(pol.Owner(), m163View(t, snap), 0.5)
 	}

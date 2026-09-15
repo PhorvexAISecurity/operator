@@ -2235,7 +2235,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-150 · `CoResidency` counts namespaces, and DaemonSets count as namespaces — the `> 1` conjunct is vacuous fleet-wide · **OPEN** · `SENSING`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: T5-M150
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ingest

@@ -1,6 +1,6 @@
 /*
  * Phorvex — P-VCLUSTER O8/O9: fleet-relative physics disclosure bound.
- *  O8 — co-residency reveals at most the COUNT of co-resident tenants, never their IDENTITIES.
+ *  O8 — the historical co-residency field reveals only a running namespace count.
  *  O9 — image/model-rarity (and slack) are IDENTITY-FREE bounded magnitudes; the magnitude DOES shift
  *       with fleet composition — a bounded, coarse, DISCLOSED membership-inference residual (same class
  *       as the co-residency count, R2), NOT identity disclosure. Physics is fleet-relative by nature, so
@@ -18,7 +18,7 @@ import (
 
 func snapWith(pods ...model.Pod) *ingest.Snapshot { return &ingest.Snapshot{Pods: pods} }
 
-// O8 — CoResidency is a function of the COUNT only; co-tenant IDENTITIES never affect it.
+// O8 — CoResidency is a function of namespace COUNT only; namespace names never affect it.
 func TestO8_CoResidencyCountOnlyIdentityFree(t *testing.T) {
 	g := genericK8s{}
 	// Same COUNT (2 co-tenants), different IDENTITIES.
@@ -39,6 +39,25 @@ func TestO8_CoResidencyCountOnlyIdentityFree(t *testing.T) {
 	alone := g.Derive(snapWith(model.Pod{Namespace: "X", Name: "x", Node: "n1"}))
 	if !(alone["X/x"].CoResidency <= a["X/x"].CoResidency && a["X/x"].CoResidency <= 2.0) {
 		t.Errorf("O8: co-residency must be a bounded [1,2] coarse count disclosure: alone=%.4f shared=%.4f", alone["X/x"].CoResidency, a["X/x"].CoResidency)
+	}
+}
+
+func TestM150NamespaceProxyCountsRunningNamespacesOnly(t *testing.T) {
+	g := genericK8s{}
+	got := g.Derive(snapWith(
+		model.Pod{Namespace: "app", Name: "serve", Node: "n1", Phase: "Running"},
+		model.Pod{Namespace: "app", Name: "worker", Node: "n1", Phase: "Running"},
+		model.Pod{Namespace: "kube-system", Name: "device-plugin", Node: "n1", Phase: "Running"},
+		model.Pod{Namespace: "monitoring", Name: "node-exporter", Node: "n1", Phase: "Running"},
+		model.Pod{Namespace: "completed", Name: "old", Node: "n1", Phase: "Succeeded"},
+	))
+	w := got["app/serve"]
+	want := 1 + float64(3-1)/CoResidencyCap
+	if w.CoResidency != want || w.CoResidencyBasis != CoResidencyBasisNamespaceCount {
+		t.Fatalf("namespace proxy = %.2f basis=%q, want %.2f basis=%q", w.CoResidency, w.CoResidencyBasis, want, CoResidencyBasisNamespaceCount)
+	}
+	if nilGot := g.Derive(nil); len(nilGot) != 0 {
+		t.Fatalf("nil snapshot produced witnesses: %+v", nilGot)
 	}
 }
 

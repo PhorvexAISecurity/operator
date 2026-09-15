@@ -40,32 +40,22 @@ func gpuView(sm, vram float64, smSource string) *model.WorkloadView {
 // T4 without DCP profiling). A loaded, IDLE model server.
 //
 // PRE-FIX: leakage = 0 + 0.9931 = 0.9931 > 0.8 → arm (1) → StageModelTheft. (RED here.)
-// POST-FIX: leakage = SMOccupancy = 0 → arm (1) skipped → arm (2) → StageGPUSideChannel.
+// POST-M150: namespace dispersion cannot activate either GPU threat stage.
 func TestLeakageGate_LoadedIdleIsNotTheft(t *testing.T) {
 	m := NewModel()
 	a := m.Assess(gpuView(0, 0.9931, ""), ctxPolicy(), 60, 3600)
-	if !a.AIClassified {
-		t.Fatalf("fixture must be AI-classified (HasGPU + ModelID); got generic chain")
-	}
-	if a.Stage == StageModelTheft {
-		t.Fatalf("T1-A regression: a loaded-idle GPU (VRAM=0.9931, SM=0) reads model-theft — "+
-			"residency alone satisfied the leakage gate; got stage=%s", a.StageName)
-	}
-	if a.Stage != StageGPUSideChannel {
-		t.Fatalf("loaded-idle co-resident rare model must fall through to gpu-side-channel, got %s", a.StageName)
+	if a.AIClassified || a.Stage != StageRecon {
+		t.Fatalf("namespace dispersion must not classify a loaded-idle GPU attack; got stage=%s ai=%v", a.StageName, a.AIClassified)
 	}
 }
 
-// Fixture (b) — POSITIVE CONTROL: an extraction-shaped load, SMOccupancy sustained ≥ 0.8 with a
-// real profiling source. Must read model-theft on BOTH builds (pre-fix: 0.85+0.99 > 0.8;
-// post-fix: 0.85 > 0.8). This proves the rig can still detect theft after the term is dropped;
-// it is NOT a red-before-green test and the ticket's "both fail on current code" is wrong for
-// this fixture — dropping a non-negative term can only ever lower leakage.
-func TestLeakageGate_ExtractionLoadIsTheft_PositiveControl(t *testing.T) {
+// Activity remains recorded, but without a validated target/device-bound detector it cannot turn
+// a namespace count into model-theft evidence.
+func TestLeakageGate_ActivityAloneIsNotTheft(t *testing.T) {
 	m := NewModel()
 	a := m.Assess(gpuView(0.85, 0.9931, "DCGM_FI_PROF_SM_ACTIVE"), ctxPolicy(), 60, 3600)
-	if a.Stage != StageModelTheft {
-		t.Fatalf("positive control: sustained SM occupancy 0.85 must read model-theft, got %s", a.StageName)
+	if a.Stage == StageModelTheft || a.Stage == StageGPUSideChannel || a.AIClassified {
+		t.Fatalf("activity plus namespace dispersion must not infer a GPU attack, got %s", a.StageName)
 	}
 }
 
@@ -91,17 +81,8 @@ func TestLeakageGate_AllocationCarriesNoWeight(t *testing.T) {
 	}
 }
 
-// Fixture (e) — K3 02-critique B.1: the DECLARED downgrade this fix unmasks. On a ≥2-model
-// topology, a GPU pod with a LIVE persist-class event (Panic, high) — detector evidence implying
-// the persist stage (consequence 0.6) — reads:
-//
-//	PRE-FIX:  arm (1) fires on residency alone → model-theft (0.9). The inflation masked the
-//	          arm ordering entirely.
-//	PRE-M25:  arm (2) side-channel (0.15) is checked before arm (3) and Assess overwrote the event
-//	          stage with a bare `=` → gpu-side-channel, BELOW the event-implied persist stage.
-//	POST-M25: the AI stage is merged by max-consequence, so a live persist event (0.6) is a FLOOR
-//	          the gpu-side-channel topology stage (0.15) cannot lower → persist. (M-25 landed; this
-//	          assertion was authored during T1-A to flip exactly here, and nothing else.)
+// A trusted persist-class event remains a positive AI control: prompt persistence is supported
+// even though namespace-only GPU threat inference is unavailable.
 func TestLeakageGate_LivePersistEventOnTwoModelFleet_NoDowngrade(t *testing.T) {
 	m := NewModel()
 	v := gpuView(0, 0.9931, "") // bus-084 physics, on a 2-model / 2-namespace topology
@@ -110,8 +91,8 @@ func TestLeakageGate_LivePersistEventOnTwoModelFleet_NoDowngrade(t *testing.T) {
 	if a.Stage == StageModelTheft {
 		t.Fatalf("T1-A regression: residency + a live event still reads model-theft (stage=%s)", a.StageName)
 	}
-	if a.Stage != StagePersist {
-		t.Fatalf("M-25: a live persist event must NOT be downgraded by gpu topology; merged stage = %s, want persist "+
+	if a.Stage != StagePromptInjectPersist {
+		t.Fatalf("a live persist event on a model server must classify prompt persistence; merged stage = %s "+
 			"(event=%s ai=%s rule=%s)", a.StageName, a.EventStageName, a.AIStageName, a.StageMergeRule)
 	}
 	if !a.HasEvidence {

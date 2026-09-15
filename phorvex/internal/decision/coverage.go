@@ -1206,6 +1206,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 		ImageRarity:       traceOptional(v.Physics.ImageRarityPresent, v.Physics.ImageRarity),
 		ModelRarity:       traceOptional(v.Physics.ModelRarityPresent, v.Physics.ModelRarity),
 		CoResidency:       traceOptional(v.Physics.CoResidencyPresent, v.Physics.CoResidency),
+		CoResidencyBasis:  v.Physics.CoResidencyBasis,
 		EPSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSScore),
 		CVSS:              traceOptional(v.Physics.EPSSPresent, v.Physics.CVSS),
 		EPSSMultiplier:    traceOptional(v.Physics.EPSSPresent, v.Physics.EPSSMultiplier),
