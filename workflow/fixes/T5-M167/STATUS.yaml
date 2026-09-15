@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -79,13 +79,29 @@ checks:
     - phorvex/charts/phorvex
     - phorvex/internal/console
     inputs_sha256: 67101f831207837a327595212723edda6c8fd6bf8d262be79e1e9bba889df994
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: d36f9c719c33eab5ff2f70b8f07ed86b839c6ad5247abafb157f4a3ecfa7828d
+    source_sha: 2f56dfe1e987aed00ad01bfbc70b740ce77d9a1c
+    at: '2026-09-15T20:46:52+00:00'
+    baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 341505dac06cb6e4ae46892603884d30713d37a8c2d25b24f0b5d372ea5e014f
+    source_sha: 2f56dfe1e987aed00ad01bfbc70b740ce77d9a1c
+    at: '2026-09-15T20:46:52+00:00'
+    incident_sha256: d36f9c719c33eab5ff2f70b8f07ed86b839c6ad5247abafb157f4a3ecfa7828d
 fix_id: T5-M167
 issues:
 - M-167
 title: Shipped console storage configuration silently drops mutation and experiment
   records
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -130,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -146,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T20:44:52+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T20:46:55+00:00'
 configuration_history:
 - at: '2026-09-15T19:32:52+00:00'
   by: codex-lead
@@ -201,10 +217,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T20:46:53+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T20:46:54+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T5-M167:5:submit
-  from: sol-t5-m167
+  id: T5-M167:6:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 5
+  role: coordinator
+  kind: review
+  revision: 6
