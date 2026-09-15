@@ -44,7 +44,7 @@ func TestMIG_RepartitionSequenceAndOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err != nil {
+	if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err != nil {
 		t.Fatalf("repartition: %v", err)
 	}
 	want := [][]string{
@@ -62,7 +62,7 @@ func TestMIG_RepartitionEmptyProfileRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepared.Repartition(context.Background(), "0", ""); err == nil {
+	if _, err := prepared.Repartition(context.Background(), migTestPrior(), "", func(context.Context) error { return nil }); err == nil {
 		t.Error("empty target profile must be rejected")
 	}
 }

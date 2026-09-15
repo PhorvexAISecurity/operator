@@ -168,7 +168,7 @@ func TestPreparedMIGCarriesOneIdentityAcrossAllCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err != nil {
+	if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if lists != 1 || len(calls) != 3 || !reflect.DeepEqual(targets, []string{"gpu-system/agent-a[agent]", "gpu-system/agent-a[agent]", "gpu-system/agent-a[agent]"}) {
@@ -217,7 +217,7 @@ func TestPreparedMIGAbortsWhenBoundIdentityChangesBetweenSteps(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err == nil {
+			if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err == nil {
 				t.Fatal("identity drift did not abort")
 			}
 			if calls != 1 {
@@ -278,7 +278,7 @@ func TestPreparedMIGRevalidatesBeforeFirstAndEveryFollowingExec(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := prepared.Repartition(context.Background(), "0", "1g.10gb"); err == nil {
+			if _, err := prepared.Repartition(context.Background(), migTestPrior(), "1g.10gb", func(context.Context) error { return nil }); err == nil {
 				t.Fatal("identity/read drift did not abort")
 			}
 			if calls != tc.wantCalls {

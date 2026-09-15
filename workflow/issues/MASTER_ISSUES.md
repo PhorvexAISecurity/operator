@@ -1032,7 +1032,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-82 · MIG repartition destroys before creating, with no rollback · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M082
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.mig_agent
