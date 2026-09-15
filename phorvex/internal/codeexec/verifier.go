@@ -52,7 +52,7 @@ const (
 	PolicyName = "phorvex-codeexec-ephemeral"
 	// PolicyVersion is the value of the phorvex.ai/policy-version annotation (a cheap signal,
 	// NOT the check — the full spec comparison is). A chart/policy change bumps it.
-	PolicyVersion = "m6-1"
+	PolicyVersion = "m6-2"
 	// ManagedLabelKey/Val is the installer-set namespace label the Binding selects on.
 	ManagedLabelKey = "phorvex.ai/codeexec-managed"
 	ManagedLabelVal = "true"

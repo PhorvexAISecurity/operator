@@ -709,11 +709,11 @@ fixes:
     issues:
     - M-57
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t4-m057
-    head_sha: null
+    head_sha: 0d684248db781e6113f4ce143c4a7480042ae627
   T4-M066:
     directory: fixes/T4-M066
     aliases: []

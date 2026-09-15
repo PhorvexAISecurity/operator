@@ -52,7 +52,7 @@ func vapContent(t *testing.T, name, text string) {
 	mustContain(t, name, text,
 		"failurePolicy: Fail",
 		`validationActions: ["Deny"]`,
-		`phorvex.ai/policy-version: "m6-1"`,
+		`phorvex.ai/policy-version: "m6-2"`,
 		`phorvex.ai/codeexec-managed: "true"`,
 		"pods/ephemeralcontainers",
 		`operations: ["UPDATE"]`,
@@ -64,7 +64,9 @@ func vapContent(t *testing.T, name, text string) {
 		"'RuntimeDefault'",
 		"['sh', '-c']",
 		"['echo phorvex-custom-action; sleep 1']",
-		// Option A: debugger command AND args required empty.
+		// Bounded debugger command and existing ordinary target are required.
+		"ec.command == ['sleep', '300']",
+		"object.spec.containers.exists",
 		"ec.name == 'phorvex-debugger'",
 	)
 }

@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,77 @@ checks:
     at: '2026-09-15T10:52:46+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: sol-t4-m057
+    artifact: evidence/baseline-producer-red.log
+    sha256: 2b9ca2502a140cd7e04dd46c9198afccb1b9575d115a052e7154da80c1911297
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T12:37:41+00:00'
+  preflight:
+    result: PASS
+    by: sol-t4-m057
+    artifact: evidence/preflight-r2/receipt.json
+    sha256: dbba7eb33b642ef12264f1fec6a2060e825e9336520b3213816c44b64a5880c9
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:48:59+00:00'
+  implementation:
+    result: PASS
+    by: sol-t4-m057
+    artifact: 04-diff.patch
+    sha256: f47acbf55d22b916bab4f2f6b0f9560f0e6f17009c7824e8d27108be489adfec
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:48:59+00:00'
+  l0:
+    result: PASS
+    by: sol-t4-m057
+    artifact: evidence/head-focused.log
+    sha256: d6228168e2cbbf74cc617cd1332a1bbedf5cabd91630e69c4b491e4babf6ecba
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:48:59+00:00'
+  l1:
+    result: PASS
+    by: sol-t4-m057
+    artifact: evidence/head-focused.log
+    sha256: d6228168e2cbbf74cc617cd1332a1bbedf5cabd91630e69c4b491e4babf6ecba
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:48:59+00:00'
+  l2:
+    result: PASS
+    by: sol-t4-m057
+    artifact: evidence/head-focused.log
+    sha256: d6228168e2cbbf74cc617cd1332a1bbedf5cabd91630e69c4b491e4babf6ecba
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:48:59+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t4-m057
+    artifact: evidence/head-focused.log
+    sha256: d6228168e2cbbf74cc617cd1332a1bbedf5cabd91630e69c4b491e4babf6ecba
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:48:59+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: c74ae7d015d6545aae1dd728dbbe3976e2b82c98f1de47bc875ab0701808851d
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:50:10+00:00'
+    baseline_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 1f0de11e351a97049527f9c2e966661ff53c9ffb2478881a51e4f86e3a863126
+    source_sha: 0d684248db781e6113f4ce143c4a7480042ae627
+    at: '2026-09-15T12:50:10+00:00'
+    incident_sha256: c74ae7d015d6545aae1dd728dbbe3976e2b82c98f1de47bc875ab0701808851d
 fix_id: T4-M057
 issues:
 - M-57
 title: '`debugger` injects a corpse'
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +110,7 @@ blind_derivation:
 implementation:
   branch: fix/t4-m057
   base_sha: ecac2d7229a9701be64ed90886393906e2c4f067
-  head_sha: null
+  head_sha: 0d684248db781e6113f4ce143c4a7480042ae627
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +131,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t4-m057
-  action: Implement signed plan; await heavy-test slot; submit-review with no notification
-updated_at: '2026-09-15T10:52:47+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T12:50:13+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:12+00:00'
   by: codex-lead
@@ -97,6 +163,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T12:37:30+00:00'
+  by: sol-t4-m057
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T12:48:59+00:00'
+  by: sol-t4-m057
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -114,3 +190,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T12:48:59+00:00'
+  by: sol-t4-m057
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T12:49:00+00:00'
+  by: sol-t4-m057
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T12:50:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T12:50:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T4-M057:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
