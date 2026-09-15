@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,7 +20,7 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires local envtest API-server binaries")
 	}
-	e := &envtest.Environment{}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}}
 	cfg, err := e.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +35,9 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +45,24 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	ctx := context.Background()
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "m46-test"}}
 	if err := c.Create(ctx, ns); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}); err != nil {
+		t.Fatal(err)
+	}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: "policy"}, Spec: v1alpha1.PhorvexPolicySpec{
+		Mode: v1alpha1.ModeActive,
+		Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{
+			Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist,
+		}}},
+		Budget: v1alpha1.BudgetSpec{
+			TickInterval:           metav1.Duration{Duration: 20 * time.Second},
+			AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute},
+			ProactiveFloor:         metav1.Duration{Duration: time.Hour},
+		},
+		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionMIGRebind)}},
+	}}
+	if err := c.Create(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
 	pod := &corev1.Pod{
@@ -79,16 +102,18 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	}
 
 	mig := &mockMIG{}
-	result, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, MIG: mig, VLLM: &mockVLLM{}}, Request{
-		Namespace: pod.Namespace,
-		Pod:       pod.Name,
-		TargetUID: string(admitted.UID),
-		Action:    model.ActionMIGRebind,
+	result, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mig, VLLM: &mockVLLM{}}, Request{
+		Namespace:  pod.Namespace,
+		Pod:        pod.Name,
+		TargetUID:  string(admitted.UID),
+		Action:     model.ActionMIGRebind,
+		PolicyName: policy.Name,
+		PolicyUID:  string(policy.UID),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Emitted || len(mig.calls) != 1 || mig.calls[0] != ([3]string{"gpu-a", "0", "2g.20gb"}) {
+	if !result.Emitted || len(mig.calls) != 1 || mig.calls[0] != ([3]string{"gpu-a", testGPUUUID, "2g.20gb"}) {
 		t.Fatalf("admitted MIG path did not reach repartition: result=%+v calls=%v", result, mig.calls)
 	}
 	if err := c.Get(ctx, client.ObjectKeyFromObject(control), &corev1.Pod{}); err != nil {
