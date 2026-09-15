@@ -698,11 +698,11 @@ fixes:
     issues:
     - M-19
     related_issues: []
-    state: IMPLEMENTED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t4-m019
-    head_sha: dce36e3a17cf258e90f9960bd4d87462d0ac2826
+    head_sha: 0e05348544a4b7de0d7f2984913ce1fdbf09f9e4
   T4-M057:
     directory: fixes/T4-M057
     aliases: []
