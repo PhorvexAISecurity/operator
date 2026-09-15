@@ -72,8 +72,8 @@ func recoveryFixture(t *testing.T, names ...string) (*NativeActuator, client.Cli
 		enactQuarantine(t, c, "ns", name)
 	}
 	for _, obj := range []client.Object{
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: metav1.NamespaceSystem, UID: "cluster-uid", ResourceVersion: "1"}},
-		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: RecoveryHoldName, UID: "hold-uid", ResourceVersion: "1"}, Data: map[string]string{"engaged": "true"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: metav1.NamespaceSystem}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: RecoveryHoldName}, Data: map[string]string{"engaged": "true"}},
 	} {
 		if err := c.Create(ctx, obj); err != nil {
 			t.Fatal(err)
@@ -376,7 +376,7 @@ func TestAdministrativeRecoveryIntentWriteFailurePreventsEffects(t *testing.T) {
 
 func TestAdministrativeRecoveryBoundsMalformedInventoryAndPlanParser(t *testing.T) {
 	n, c := recoveryFixture(t, "victim")
-	bad := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: "bad", UID: "bad-uid", ResourceVersion: "1", Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": "{"}}
+	bad := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: "bad", Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": "{"}}
 	if err := c.Create(context.Background(), bad); err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestAdministrativeRecoveryBoundsMalformedInventoryAndPlanParser(t *testing.
 func unrelatedRecoveryReceipt(name string) *corev1.ConfigMap {
 	r := operationReceipt{Version: 1, Kind: "warm-swap", Phase: "prepared", PolicyNamespace: "other", PolicyName: "other-policy", PolicyUID: "other-policy-uid", TargetName: name, TargetUID: "uid-" + name, OldName: name, OldUID: "uid-" + name, NewName: name + "-new", NewUID: "uid-" + name + "-new", GroupKey: labelSwapGroup, GroupValue: "group"}
 	b, _ := json.Marshal(r)
-	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: receiptName(r), UID: types.UID("cm-" + name), ResourceVersion: "1", Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: receiptName(r), Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
 }
 
 func TestAdministrativeRecoveryScopedLimitIgnoresUnrelatedReceipts(t *testing.T) {
@@ -423,7 +423,9 @@ func TestAdministrativeRecoveryPaginatesWithinFixedScanCap(t *testing.T) {
 			matching = list.Items[i].DeepCopy()
 		}
 	}
-	reader := &pagedRecoveryReader{Reader: c, pages: map[string]corev1.ConfigMapList{"": {Items: []corev1.ConfigMap{*unrelatedRecoveryReceipt("other")}, ListMeta: metav1.ListMeta{Continue: "next"}}, "next": {Items: []corev1.ConfigMap{*matching}}}}
+	unrelated := unrelatedRecoveryReceipt("other")
+	unrelated.UID, unrelated.ResourceVersion = types.UID("synthetic-other"), "1"
+	reader := &pagedRecoveryReader{Reader: c, pages: map[string]corev1.ConfigMapList{"": {Items: []corev1.ConfigMap{*unrelated}, ListMeta: metav1.ListMeta{Continue: "next"}}, "next": {Items: []corev1.ConfigMap{*matching}}}}
 	n.Reader = reader
 	inv, err := n.InventoryRecovery(context.Background(), recoveryScope(1))
 	if err != nil || len(inv.Items) != 1 || reader.calls != 3 || len(reader.limits) != 3 || reader.limits[0] != recoveryJournalPageSize || reader.limits[1] != recoveryJournalPageSize || reader.limits[2] != recoveryJournalPageSize {
@@ -434,7 +436,7 @@ func TestAdministrativeRecoveryPaginatesWithinFixedScanCap(t *testing.T) {
 func standaloneMIGReceipt(name, policy string) *corev1.ConfigMap {
 	body := map[string]any{"version": 1, "phase": "unresolved", "policyNamespace": "ns", "policyName": policy, "policyUID": "policy-uid", "targetName": "victim", "targetUID": "uid-victim", "node": "node-a", "gpuUUID": "GPU-a", "targetLabels": map[string]string{"app": "victim"}, "targetProfile": "1g.10gb", "prior": map[string]any{"gpuUUID": "GPU-a"}}
 	b, _ := json.Marshal(body)
-	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: name, UID: types.UID("uid-" + name), ResourceVersion: "1", Labels: map[string]string{recoveryMIGLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: name, Labels: map[string]string{recoveryMIGLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
 }
 
 func TestAdministrativeRecoveryInventoriesMIGReceiptsAsManualOnly(t *testing.T) {
