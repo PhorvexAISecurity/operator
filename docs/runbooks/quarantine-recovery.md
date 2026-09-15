@@ -11,7 +11,7 @@ This procedure restores selected Pods from Phorvex quarantine. It does not asser
    phorvex-recovery --operator-namespace phorvex-system --namespace TENANT --policy POLICY --max-items 10
    ```
 
-   Review receipt UID/resourceVersion/hash, policy and target UIDs, phase, supported operation, and every refusal/manual status. `--max-items` limits results in the exact policy scope; the authoritative paginated protected-journal scan has a separate fixed 1000-object ceiling and refuses incomplete or overflowing scans. Tenant Pod annotations are not recovery authority.
+   Review receipt UID/resourceVersion/hash, policy and target UIDs, phase, supported operation, and every refusal/manual status. `--max-items` limits results in the exact policy scope; the authoritative paginated scans across operation-journal and MIG-recovery receipt labels share a separate fixed 1000-object ceiling and refuse incomplete, conflicting-label, or overflowing collections. MIG receipts are informational `manual` entries only and cannot enter a quarantine plan. Tenant Pod annotations are not recovery authority.
 5. Create a small versioned plan in a new protected file, then review it:
 
    ```sh

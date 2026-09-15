@@ -31,6 +31,7 @@ const (
 	RecoveryPlanMaxBytes    = 1 << 20
 	RecoveryJournalScanMax  = 1000
 	recoveryJournalPageSize = 100
+	recoveryMIGLabel        = "phorvex.ai/mig-recovery"
 )
 
 type RecoveryScope struct {
@@ -59,6 +60,8 @@ type RecoveryInventoryItem struct {
 	PolicyUID          string        `json:"policyUID,omitempty"`
 	TargetName         string        `json:"targetName,omitempty"`
 	TargetUID          string        `json:"targetUID,omitempty"`
+	Node               string        `json:"node,omitempty"`
+	GPUUUID            string        `json:"gpuUUID,omitempty"`
 	SupportedOperation string        `json:"supportedOperation,omitempty"`
 	Status             string        `json:"status"`
 	Reason             string        `json:"reason,omitempty"`
@@ -164,13 +167,34 @@ func validateProtectedReceipt(cm *corev1.ConfigMap, operatorNS string) (operatio
 	return r, nil
 }
 
-func (n *NativeActuator) listRecoveryJournal(ctx context.Context, operatorNS string) ([]corev1.ConfigMap, error) {
+type recoveryMIGSummary struct {
+	Version         int    `json:"version"`
+	Phase           string `json:"phase"`
+	PolicyNamespace string `json:"policyNamespace"`
+	PolicyName      string `json:"policyName"`
+	PolicyUID       string `json:"policyUID"`
+	TargetName      string `json:"targetName"`
+	TargetUID       string `json:"targetUID"`
+	Node            string `json:"node"`
+	GPUUUID         string `json:"gpuUUID"`
+}
+
+func (r recoveryMIGSummary) validSummary() bool {
+	return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "destructive" || r.Phase == "unresolved") && r.PolicyNamespace != "" && r.PolicyName != "" && r.PolicyUID != "" && r.TargetName != "" && r.TargetUID != "" && r.Node != "" && r.GPUUUID != ""
+}
+
+func recoveryMIGName(node, gpuUUID string) string {
+	h := sha256.Sum256([]byte(node + "\x00" + gpuUUID))
+	return fmt.Sprintf("phorvex-mig-recovery-%x", h[:20])
+}
+
+func (n *NativeActuator) listRecoveryLabel(ctx context.Context, operatorNS, label string) ([]corev1.ConfigMap, error) {
 	items := make([]corev1.ConfigMap, 0)
 	continueToken := ""
 	seenTokens := map[string]bool{}
 	for {
 		var page corev1.ConfigMapList
-		opts := []client.ListOption{client.InNamespace(operatorNS), client.MatchingLabels{journalLabel: "v1"}, client.Limit(recoveryJournalPageSize)}
+		opts := []client.ListOption{client.InNamespace(operatorNS), client.MatchingLabels{label: "v1"}, client.Limit(recoveryJournalPageSize)}
 		if continueToken != "" {
 			opts = append(opts, client.Continue(continueToken))
 		}
@@ -179,7 +203,7 @@ func (n *NativeActuator) listRecoveryJournal(ctx context.Context, operatorNS str
 		}
 		items = append(items, page.Items...)
 		if len(items) > RecoveryJournalScanMax || (len(items) == RecoveryJournalScanMax && page.Continue != "") {
-			return nil, fmt.Errorf("protected journal exceeds fixed scan cap=%d", RecoveryJournalScanMax)
+			return nil, fmt.Errorf("protected receipt collection for label %s exceeds fixed scan cap=%d", label, RecoveryJournalScanMax)
 		}
 		if page.Continue == "" {
 			return items, nil
@@ -201,22 +225,91 @@ func (n *NativeActuator) InventoryRecovery(ctx context.Context, scope RecoverySc
 	if err != nil {
 		return RecoveryInventory{}, err
 	}
-	cms, err := n.listRecoveryJournal(ctx, scope.OperatorNamespace)
+	journalCMs, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, journalLabel)
 	if err != nil {
 		return RecoveryInventory{}, err
 	}
-	sort.Slice(cms, func(i, j int) bool { return cms[i].Name < cms[j].Name })
+	migCMs, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, recoveryMIGLabel)
+	if err != nil {
+		return RecoveryInventory{}, err
+	}
+	if len(journalCMs)+len(migCMs) > RecoveryJournalScanMax {
+		return RecoveryInventory{}, fmt.Errorf("combined protected receipt scan exceeds fixed cap=%d", RecoveryJournalScanMax)
+	}
+	type discovered struct {
+		cm           corev1.ConfigMap
+		journal, mig bool
+	}
+	byKey := map[string]discovered{}
+	for _, source := range []struct {
+		items   []corev1.ConfigMap
+		journal bool
+	}{{journalCMs, true}, {migCMs, false}} {
+		for i := range source.items {
+			cm := source.items[i]
+			key := cm.Namespace + "/" + cm.Name
+			d := byKey[key]
+			if d.cm.Name == "" {
+				d.cm = cm
+			}
+			if source.journal {
+				d.journal = true
+			} else {
+				d.mig = true
+			}
+			byKey[key] = d
+		}
+	}
+	keys := make([]string, 0, len(byKey))
+	for key := range byKey {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	inv := RecoveryInventory{Contract: RecoveryContractVersion, Cluster: cluster, Operator: operator, Scope: scope, Generated: time.Now().UTC()}
-	for i := range cms {
-		cm := &cms[i]
+	appendScoped := func(item RecoveryInventoryItem) error {
+		inv.Items = append(inv.Items, item)
+		if len(inv.Items) > scope.MaxItems {
+			return fmt.Errorf("scoped inventory exceeds maxItems=%d", scope.MaxItems)
+		}
+		return nil
+	}
+	for _, key := range keys {
+		d := byKey[key]
+		cm := &d.cm
 		raw := cm.Data["receipt"]
 		item := RecoveryInventoryItem{Receipt: binding(cm, "v1", "ConfigMap"), ReceiptSHA256: digestJSON(raw), Status: "refused"}
+		if d.journal && d.mig {
+			item.Reason = "protected receipt has conflicting operation labels"
+			if err := appendScoped(item); err != nil {
+				return RecoveryInventory{}, err
+			}
+			continue
+		}
+		if d.mig {
+			var summary recoveryMIGSummary
+			if cm.Namespace != scope.OperatorNamespace || cm.UID == "" || cm.ResourceVersion == "" || cm.DeletionTimestamp != nil || cm.Labels[recoveryMIGLabel] != "v1" || json.Unmarshal([]byte(raw), &summary) != nil || !summary.validSummary() || cm.Name != recoveryMIGName(summary.Node, summary.GPUUUID) {
+				item.Reason = "malformed or identity-invalid protected MIG receipt"
+				if err := appendScoped(item); err != nil {
+					return RecoveryInventory{}, err
+				}
+				continue
+			}
+			if summary.PolicyNamespace != scope.Namespace || summary.PolicyName != scope.PolicyName {
+				continue
+			}
+			item.Kind, item.Phase, item.PolicyNamespace, item.PolicyName, item.PolicyUID = "mig-rebind", summary.Phase, summary.PolicyNamespace, summary.PolicyName, summary.PolicyUID
+			item.TargetName, item.TargetUID, item.Node, item.GPUUUID = summary.TargetName, summary.TargetUID, summary.Node, summary.GPUUUID
+			item.Status, item.Reason = "manual", "MIG hardware recovery is unavailable through quarantine recovery; use operation-specific investigation"
+			if err := appendScoped(item); err != nil {
+				return RecoveryInventory{}, err
+			}
+			continue
+		}
 		receipt, receiptErr := validateProtectedReceipt(cm, scope.OperatorNamespace)
 		if receiptErr != nil {
 			item.Reason = "malformed or identity-invalid protected receipt"
-			inv.Items = append(inv.Items, item)
-			if len(inv.Items) > scope.MaxItems {
-				return RecoveryInventory{}, fmt.Errorf("scoped inventory exceeds maxItems=%d", scope.MaxItems)
+			if err := appendScoped(item); err != nil {
+				return RecoveryInventory{}, err
 			}
 			continue
 		}
@@ -234,9 +327,8 @@ func (n *NativeActuator) InventoryRecovery(ctx context.Context, scope RecoverySc
 		} else {
 			item.Status, item.SupportedOperation = "ready", RecoveryOperation
 		}
-		inv.Items = append(inv.Items, item)
-		if len(inv.Items) > scope.MaxItems {
-			return RecoveryInventory{}, fmt.Errorf("scoped inventory exceeds maxItems=%d", scope.MaxItems)
+		if err := appendScoped(item); err != nil {
+			return RecoveryInventory{}, err
 		}
 	}
 	return inv, nil

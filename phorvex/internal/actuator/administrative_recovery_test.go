@@ -21,9 +21,10 @@ type recoveryReader struct {
 
 type pagedRecoveryReader struct {
 	client.Reader
-	pages  map[string]corev1.ConfigMapList
-	calls  int
-	limits []int64
+	pages    map[string]corev1.ConfigMapList
+	migPages map[string]corev1.ConfigMapList
+	calls    int
+	limits   []int64
 }
 
 func (r *pagedRecoveryReader) List(_ context.Context, list client.ObjectList, opts ...client.ListOption) error {
@@ -33,7 +34,14 @@ func (r *pagedRecoveryReader) List(_ context.Context, list client.ObjectList, op
 	}
 	r.calls++
 	r.limits = append(r.limits, lo.Limit)
-	page, ok := r.pages[lo.Continue]
+	pages := r.pages
+	if lo.LabelSelector.String() == recoveryMIGLabel+"=v1" {
+		pages = r.migPages
+		if pages == nil {
+			pages = map[string]corev1.ConfigMapList{"": {}}
+		}
+	}
+	page, ok := pages[lo.Continue]
 	if !ok {
 		return errors.New("unexpected continuation token")
 	}
@@ -418,8 +426,63 @@ func TestAdministrativeRecoveryPaginatesWithinFixedScanCap(t *testing.T) {
 	reader := &pagedRecoveryReader{Reader: c, pages: map[string]corev1.ConfigMapList{"": {Items: []corev1.ConfigMap{*unrelatedRecoveryReceipt("other")}, ListMeta: metav1.ListMeta{Continue: "next"}}, "next": {Items: []corev1.ConfigMap{*matching}}}}
 	n.Reader = reader
 	inv, err := n.InventoryRecovery(context.Background(), recoveryScope(1))
-	if err != nil || len(inv.Items) != 1 || reader.calls != 2 || len(reader.limits) != 2 || reader.limits[0] != recoveryJournalPageSize || reader.limits[1] != recoveryJournalPageSize {
+	if err != nil || len(inv.Items) != 1 || reader.calls != 3 || len(reader.limits) != 3 || reader.limits[0] != recoveryJournalPageSize || reader.limits[1] != recoveryJournalPageSize || reader.limits[2] != recoveryJournalPageSize {
 		t.Fatalf("pagination calls=%d limits=%v inventory=%+v err=%v", reader.calls, reader.limits, inv.Items, err)
+	}
+}
+
+func standaloneMIGReceipt(name, policy string) *corev1.ConfigMap {
+	body := map[string]any{"version": 1, "phase": "unresolved", "policyNamespace": "ns", "policyName": policy, "policyUID": "policy-uid", "targetName": "victim", "targetUID": "uid-victim", "node": "node-a", "gpuUUID": "GPU-a", "targetLabels": map[string]string{"app": "victim"}, "targetProfile": "1g.10gb", "prior": map[string]any{"gpuUUID": "GPU-a"}}
+	b, _ := json.Marshal(body)
+	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: name, UID: types.UID("uid-" + name), ResourceVersion: "1", Labels: map[string]string{recoveryMIGLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+}
+
+func TestAdministrativeRecoveryInventoriesMIGReceiptsAsManualOnly(t *testing.T) {
+	n, c := recoveryFixture(t, "victim")
+	cm := standaloneMIGReceipt(recoveryMIGName("node-a", "GPU-a"), "policy")
+	if err := c.Create(context.Background(), cm); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := n.InventoryRecovery(context.Background(), recoveryScope(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range inv.Items {
+		if item.Kind == "mig-rebind" {
+			found = true
+			if item.Status != "manual" || item.SupportedOperation != "" || item.Node != "node-a" || item.GPUUUID != "GPU-a" {
+				t.Fatalf("MIG receipt gained apply authority: %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("MIG receipt absent: %+v", inv.Items)
+	}
+	plan, err := n.PlanRecovery(context.Background(), recoveryScope(2))
+	if err != nil || len(plan.Items) != 1 || plan.Items[0].Pod.Name != "victim" {
+		t.Fatalf("MIG receipt entered quarantine plan: %+v %v", plan.Items, err)
+	}
+}
+
+func TestAdministrativeRecoveryMIGInvalidAndLabelConflictRefuse(t *testing.T) {
+	for _, mode := range []string{"invalid", "conflict"} {
+		t.Run(mode, func(t *testing.T) {
+			n, c := recoveryFixture(t)
+			cm := standaloneMIGReceipt(recoveryMIGName("node-a", "GPU-a"), "policy")
+			if mode == "invalid" {
+				cm.Name = "forged"
+			} else {
+				cm.Labels[journalLabel] = "v1"
+			}
+			if err := c.Create(context.Background(), cm); err != nil {
+				t.Fatal(err)
+			}
+			inv, err := n.InventoryRecovery(context.Background(), recoveryScope(1))
+			if err != nil || len(inv.Items) != 1 || inv.Items[0].Status != "refused" || inv.Items[0].SupportedOperation != "" {
+				t.Fatalf("%s inventory=%+v err=%v", mode, inv.Items, err)
+			}
+		})
 	}
 }
 
