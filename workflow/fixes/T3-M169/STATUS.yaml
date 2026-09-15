@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -13,15 +13,15 @@ checks:
     artifact: 03-decision.md
     sha256: 901b4f98b7be1b019a3054c22cbd736cbf6536a5cd55052ca0e04ab4ea32f53f
     source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
-    at: '2026-09-15T06:00:03+00:00'
-    contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
+    at: '2026-09-15T06:01:03+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
 fix_id: T3-M169
 issues:
 - M-169
 title: Attack watcher and HTTP result readers race on shared mutable outcome records
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -63,6 +63,7 @@ verification:
   - L0
   - L1
   - L2
+  - L3
   live_required: true
   soak_required: false
   p3: pending
@@ -81,9 +82,9 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Investigate current source and sign plan
-updated_at: '2026-09-15T06:00:03+00:00'
+  owner: sol-t3-m169
+  action: Implement signed plan, test and submit review; no individual PR
+updated_at: '2026-09-15T06:01:03+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:46+00:00'
   by: codex-lead
@@ -101,6 +102,11 @@ configuration_history:
   fields:
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T06:01:02+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -109,6 +115,14 @@ transitions:
   artifact: null
   note: null
   approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T06:01:03+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
   forced: false
 check_history:
 - check: decision
@@ -119,4 +133,13 @@ check_history:
   source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
   at: '2026-09-15T05:59:27+00:00'
   contract_sha256: 23156f984707c19cca4a8e2102df2173de485e8a2bd294cd1c7e4553442ab181
+  approval_ref: AUTHORIZATION.md
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 901b4f98b7be1b019a3054c22cbd736cbf6536a5cd55052ca0e04ab4ea32f53f
+  source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  at: '2026-09-15T06:00:03+00:00'
+  contract_sha256: 647917912b918ba56096a3cd214dc20fac4f0ae1dcbca1afa8a9304dfac59322
   approval_ref: AUTHORIZATION.md

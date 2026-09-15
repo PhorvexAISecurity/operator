@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 3
+revision: 4
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -55,6 +55,7 @@ verification:
   - L0
   - L1
   - L2
+  - L3
   live_required: true
   soak_required: false
   p3: pending
@@ -75,7 +76,7 @@ residuals: []
 next_action:
   owner: codex-lead
   action: Investigate current source and sign plan
-updated_at: '2026-09-15T05:59:55+00:00'
+updated_at: '2026-09-15T06:00:56+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:35+00:00'
   by: codex-lead
@@ -89,6 +90,11 @@ configuration_history:
   - roles
   approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
 - at: '2026-09-15T05:59:55+00:00'
+  by: codex-lead
+  fields:
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T06:00:56+00:00'
   by: codex-lead
   fields:
   - verification

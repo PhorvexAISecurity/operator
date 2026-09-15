@@ -649,7 +649,7 @@ fixes:
     issues:
     - M-169
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m169
