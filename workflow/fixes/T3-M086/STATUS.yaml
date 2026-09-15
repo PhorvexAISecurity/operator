@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,9 +11,9 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: d5711b2f549068e8310958ee929d569b4eec7cb96205767b9bcb2d0a477db091
+    sha256: 5d65c8aaf6e962500dd4562c80add4ba7efd6af15fce5c21305478b07a6fcf8e
     source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
-    at: '2026-09-15T06:09:56+00:00'
+    at: '2026-09-15T06:11:50+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
 fix_id: T3-M086
@@ -86,7 +86,7 @@ next_action:
   owner: sol-t3-m086
   action: Implement signed authoritative operation recovery plan; coordinate M148
     overlap and test slot
-updated_at: '2026-09-15T06:09:57+00:00'
+updated_at: '2026-09-15T06:11:50+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:38+00:00'
   by: codex-lead
@@ -126,3 +126,13 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: d5711b2f549068e8310958ee929d569b4eec7cb96205767b9bcb2d0a477db091
+  source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  at: '2026-09-15T06:09:56+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
