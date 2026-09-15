@@ -17,6 +17,10 @@ app.kubernetes.io/part-of: phorvex
 {{ include "phorvex.fullname" . }}-manager
 {{- end -}}
 
+{{- define "phorvex.consoleServiceAccountName" -}}
+{{ include "phorvex.fullname" . }}-console
+{{- end -}}
+
 {{/* Cluster-scoped guard names include namespace plus a hash of untruncated scope. */}}
 {{- define "phorvex.auditVolumeGuardName" -}}
 {{- $scope := printf "%s/%s" .Release.Namespace (include "phorvex.fullname" .) -}}

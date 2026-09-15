@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/audittransport"
 )
 
 // isVClusterContext reports whether a kubeconfig context names a vCluster (vs the EKS host). The ONE
@@ -37,6 +38,12 @@ func isVClusterContext(ctxName string) bool {
 // phorvex-live-vcluster.jsonl (alongside the default), everything else (EKS) reads the default
 // AuditPath. An empty/unknown context falls back to the default — never a mixed cross-provider view.
 func (c Config) auditPathForContext(ctxName string) string {
+	if c.AuditSource != nil {
+		if isVClusterContext(ctxName) {
+			return "audit://vcluster-live"
+		}
+		return "audit://live"
+	}
 	base := c.AuditPath
 	if base == "" {
 		return base
@@ -160,6 +167,10 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		tail = 1000
 		notice("Replay is limited to 1000 records; use /api/live/history for older decisions.")
 	}
+	if s.cfg.AuditSource != nil {
+		s.remoteLive(r, path, tail, visible, emit, notice)
+		return
+	}
 	var previous os.FileInfo
 	var offset int64
 	var anchor string
@@ -202,6 +213,115 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) remoteLive(r *http.Request, path string, tail int, visible func(audit.Record) bool, emit func(audit.Record), notice func(string)) {
+	ctx := r.Context()
+	source := s.cfg.AuditSource
+	id := strings.TrimPrefix(path, "audit://")
+	find := func(m audittransport.Manifest, id string) (audittransport.Segment, bool) {
+		for _, seg := range m.Segments {
+			if seg.ID == id {
+				return seg, true
+			}
+		}
+		return audittransport.Segment{}, false
+	}
+	m, e := source.Manifest(ctx)
+	if e != nil {
+		notice("Live audit source unavailable: " + e.Error())
+		return
+	}
+	live, ok := find(m, id)
+	if !ok {
+		notice("Configured provider audit source unavailable.")
+		return
+	}
+	f := source.Open(ctx, live)
+	var offset int64
+	var anchor string
+	skipping := false
+	if tail <= 0 {
+		offset, anchor = streamAuditFile(f, 0, &skipping, emit, notice)
+	} else {
+		offset, anchor = replayAuditFile(f, tail, visible, emit, notice)
+	}
+	if e = f.Verify(); e != nil {
+		notice("Live audit replay changed; reconnect to recover history.")
+		return
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		m, e = source.Manifest(ctx)
+		if e != nil {
+			notice("Live audit source unavailable; reconnect after recovery.")
+			return
+		}
+		newLive, found := find(m, id)
+		if !found {
+			notice("Configured provider audit source unavailable.")
+			return
+		}
+		if newLive.Generation != live.Generation {
+			// Finish any records committed just before rotation from the retained
+			// copy, then start the new live file at zero. A missing old segment is
+			// a visible retention gap, never an empty verified replay.
+			old, retained := audittransport.Segment{}, false
+			for _, seg := range m.Segments {
+				if seg.Generation == live.Generation && strings.HasPrefix(seg.ID, strings.TrimSuffix(id, "live")+"backup-") {
+					old = seg
+					retained = true
+					break
+				}
+			}
+			if !retained {
+				notice("Audit generation lost before reconnect; refresh retained history.")
+				return
+			}
+			if old.ID != strings.TrimSuffix(id, "live")+"backup-1" {
+				notice("More than one audit rotation occurred between live polls; refresh paged retained history to recover intervening decisions.")
+				return
+			}
+			oldReader := source.Open(ctx, old)
+			if offset > old.Size {
+				notice("Audit generation truncated during rotation.")
+				return
+			}
+			offset, _ = streamAuditFile(oldReader, offset, &skipping, emit, notice)
+			if e = oldReader.Verify(); e != nil {
+				notice("Retained audit generation changed during rotation.")
+				return
+			}
+			live = newLive
+			offset = 0
+			anchor = ""
+			skipping = false
+		} else if newLive.Size < offset {
+			notice("Audit truncated; reconnect and refresh history.")
+			return
+		} else {
+			live = newLive
+		}
+		reader := source.Open(ctx, live)
+		if offset > 0 {
+			current, ae := auditAnchor(reader, offset)
+			if ae != nil || current != anchor {
+				notice("Audit append boundary changed; reconnect and refresh history.")
+				return
+			}
+		}
+		offset, anchor = streamAuditFile(reader, offset, &skipping, emit, notice)
+		if e = reader.Verify(); e != nil {
+			notice("Live audit generation changed during read; reconnect.")
+			return
+		}
+	}
+}
+
 // tailReplay emits only the last n phorvex.decision records from the audit and returns the byte
 // offset at end-of-file so the caller can tail from there. It reads ONLY the tail chunk of the
 // file (not the whole thing) — on a multi-hundred-MB audit this is the difference between an
@@ -223,7 +343,7 @@ func replayAudit(path string, n int, visible func(audit.Record) bool, emit func(
 	return offset
 }
 
-func replayAuditFile(f *os.File, n int, visible func(audit.Record) bool, emit func(audit.Record), notice func(string)) (int64, string) {
+func replayAuditFile(f auditHandle, n int, visible func(audit.Record) bool, emit func(audit.Record), notice func(string)) (int64, string) {
 	st, err := f.Stat()
 	if err != nil {
 		return 0, ""
@@ -289,6 +409,10 @@ func (s *Server) liveClear(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
 		return
 	}
+	if s.cfg.AuditSource != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "audit clear is unavailable in remote read-only mode; use the manager's retention procedure"})
+		return
+	}
 	path := s.cfg.auditPathForContext(r.URL.Query().Get("context"))
 	if path == "" {
 		path = s.newestAudit()
@@ -323,7 +447,7 @@ func streamAudit(path string, offset int64, skipping *bool, emit func(audit.Reco
 	return n
 }
 
-func streamAuditFile(f *os.File, offset int64, skipping *bool, emit func(audit.Record), notice func(string)) (int64, string) {
+func streamAuditFile(f auditHandle, offset int64, skipping *bool, emit func(audit.Record), notice func(string)) (int64, string) {
 	if st, e := f.Stat(); e == nil && st.Size() < offset {
 		offset = 0
 		*skipping = false

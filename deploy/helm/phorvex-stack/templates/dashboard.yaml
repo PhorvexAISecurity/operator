@@ -61,7 +61,7 @@ spec:
     # In sidecar mode the console runs inside the operator's pod (it has to share the audit
     # file), so this Service selects the OPERATOR's labels. The Service name, and therefore
     # the console.phorvex.ai Ingress in front of it, are unchanged.
-    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/name: phorvex-console
     app.kubernetes.io/instance: {{ .Release.Name }}
     {{- else }}
     app.kubernetes.io/name: phorvex-console

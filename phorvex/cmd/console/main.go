@@ -41,22 +41,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/console"
 )
 
 func main() {
 	var (
-		root         string
-		addr         string
-		auditPath    string
-		web          string
-		metricsAllow string
-		grantsPath   string
-		origins      string
+		root            string
+		addr            string
+		auditPath       string
+		web             string
+		metricsAllow    string
+		grantsPath      string
+		origins         string
+		auditSourceURL  string
+		auditServerDNS  string
+		auditClientCert string
+		auditClientKey  string
+		auditSourceCA   string
 	)
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
 	flag.StringVar(&auditPath, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
+	flag.StringVar(&auditSourceURL, "audit-source-url", "", "Optional mTLS manager audit source HTTPS origin.")
+	flag.StringVar(&auditServerDNS, "audit-source-server-dns", "", "[audit-source-url] exact server certificate DNS SAN.")
+	flag.StringVar(&auditClientCert, "audit-source-client-cert", "", "[audit-source-url] client leaf certificate file.")
+	flag.StringVar(&auditClientKey, "audit-source-client-key", "", "[audit-source-url] client private key file.")
+	flag.StringVar(&auditSourceCA, "audit-source-ca", "", "[audit-source-url] trusted server CA file.")
 	flag.StringVar(&web, "web", "", "Static SPA dir (default <root>/dashboard-web/out).")
 	flag.StringVar(&metricsAllow, "metrics-allow", "", "Comma-separated host[:port] allowlist for /api/metrics?url= SSRF guard (loopback always allowed; metadata/link-local always blocked).")
 	flag.StringVar(&grantsPath, "auth-grants", "", "Path to the subject grant table (JSON). Overrides PHORVEX_CONSOLE_GRANTS.")
@@ -72,6 +83,15 @@ func main() {
 	cfg.Addr = addr
 	if auditPath != "" {
 		cfg.AuditPath = auditPath
+	}
+	var source *audittransport.Client
+	if auditSourceURL != "" {
+		client, err := audittransport.NewClient(audittransport.ClientConfig{URL: auditSourceURL, ServerDNSName: auditServerDNS, CertFile: auditClientCert, KeyFile: auditClientKey, CAFile: auditSourceCA})
+		if err != nil {
+			log.Fatalf("audit source configuration: %v", err)
+		}
+		source = client
+		cfg.AuditSource = client
 	}
 	if web != "" {
 		cfg.Web = web
@@ -151,12 +171,78 @@ func main() {
 	// deadline would sever mid-stream.
 	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           srv.Handler(),
+		Handler:           auditGate(srv.Handler(), source),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 	if err := httpSrv.ListenAndServe(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func auditGate(next http.Handler, source *audittransport.Client) http.Handler {
+	if source == nil {
+		return next
+	}
+	return boundedAuditGate(next, source.ProbeContext, 5*time.Second, 30*time.Second)
+}
+
+// Admission happens before source probes, 16 MiB allocations, and segment scans.
+// Long live SSE subscriptions have their own slots; they cannot occupy all
+// short-read capacity needed by paged history and derived readers.
+func boundedAuditGate(next http.Handler, probe func(context.Context) error, probeTimeout, requestTimeout time.Duration) http.Handler {
+	shortReads := make(chan struct{}, 4)
+	streams := make(chan struct{}, 2)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !auditDependentRoute(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		limit := shortReads
+		stream := r.URL.Path == "/api/live"
+		if stream {
+			limit = streams
+		}
+		select {
+		case limit <- struct{}{}:
+			defer func() { <-limit }()
+		case <-r.Context().Done():
+			return
+		default:
+			http.Error(w, "remote audit reader limit reached", http.StatusServiceUnavailable)
+			return
+		}
+		ctx := r.Context()
+		cancelRequest := func() {}
+		if !stream {
+			ctx, cancelRequest = context.WithTimeout(ctx, requestTimeout)
+			defer cancelRequest()
+		}
+		probeCtx, cancelProbe := context.WithTimeout(ctx, probeTimeout)
+		err := probe(probeCtx)
+		cancelProbe()
+		if err != nil {
+			http.Error(w, "live audit source unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if ctx.Err() != nil {
+			http.Error(w, "remote audit request timed out", http.StatusServiceUnavailable)
+			return
+		}
+		if stream {
+			next.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func auditDependentRoute(path string) bool {
+	switch path {
+	case "/api/live", "/api/live/history", "/api/owner/events", "/api/owner/tenants", "/api/cost-timeseries", "/api/cost", "/api/uptime", "/api/effectiveness", "/api/posture":
+		return true
+	default:
+		return false
 	}
 }
 
