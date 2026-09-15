@@ -67,6 +67,13 @@ represented as merge-ready. Do not start the next tier's implementation.
 The user and DevOps retain merge/deployment ownership. Do not merge, deploy,
 change ArgoCD settings or update shared infrastructure to unblock the process.
 
+CI account, billing, runner and pipeline administration belong to DevOps. Record
+missing CI execution honestly and hand the concrete diagnostic to that owner;
+continue source review, appropriate local tests and live controls that do not
+depend on it. An infrastructure job failure is not a product-test failure and
+must not become a blanket reason to stop the agent's independent work. Do not
+ask the user to debug CI or represent missing test execution as a pass.
+
 When the user reports deployment, observe the actual deployed identities and
 verify every member's acceptance conditions, including relevant regression and
 composition tests. Main/merge status and a matching image tag alone do not prove
