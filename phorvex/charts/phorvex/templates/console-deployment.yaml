@@ -5,6 +5,9 @@
 {{- if not .Values.phorvex.console.auditTransport.serverDNSName }}
 {{- fail "console.auditTransport.serverDNSName required" }}
 {{- end }}
+{{- if and (not .Values.phorvex.console.state.persistence.enabled) (not .Values.phorvex.console.state.allowEphemeral) }}
+{{- fail "console state persistence is required; set console.state.allowEphemeral=true explicitly for nondurable development use" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -46,6 +49,7 @@ spec:
         - -root={{ .Values.phorvex.console.root }}
         - -web={{ .Values.phorvex.console.web }}
         - -addr=:{{ .Values.phorvex.console.port }}
+        - -state-dir={{ .Values.phorvex.console.state.mountPath }}
         {{- if .Values.phorvex.audit.enabled }}
         - -audit-source-url=https://{{ include "phorvex.fullname" . }}-audit-source.{{ .Release.Namespace }}.svc:{{ .Values.phorvex.console.auditTransport.port }}
         - -audit-source-server-dns={{ .Values.phorvex.console.auditTransport.serverDNSName }}
@@ -142,6 +146,8 @@ spec:
         # an emptyDir keeps the root filesystem read-only while allowing it.
         - name: console-tmp
           mountPath: /tmp
+        - name: console-state
+          mountPath: {{ .Values.phorvex.console.state.mountPath }}
         {{- if .Values.phorvex.console.auth.grants.enabled }}
         - name: console-grants
           mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
@@ -150,6 +156,14 @@ spec:
       volumes:
       - name: console-tmp
         emptyDir: {}
+      - name: console-state
+        {{- if .Values.phorvex.console.state.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.phorvex.console.state.persistence.existingClaim | default (printf "%s-console-state" (include "phorvex.fullname" .)) }}
+        {{- else }}
+        # Explicitly nondurable: all console mutation/experiment/uptime state is lost with the Pod.
+        emptyDir: {}
+        {{- end }}
       {{- if .Values.phorvex.audit.enabled }}
       - name: audit-client
         secret:

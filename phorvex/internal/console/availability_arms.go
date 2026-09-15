@@ -24,8 +24,6 @@ package console
 import (
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -45,18 +43,18 @@ type armExperiment struct {
 
 // armResult is one defender's measured availability over its window.
 type armResult struct {
-	Arm            string  `json:"arm"`
-	Label          string  `json:"label"`
-	Samples        int     `json:"samples"`
-	MeanPct        float64 `json:"meanPct"`
-	MinPct         float64 `json:"minPct"`
-	DipCount       int     `json:"dipCount"`       // how many separate times it fell below full
-	SecondsDegrade float64 `json:"secondsDegraded"` // wall-clock seconds spent below full capacity
-	ReplicaSeconds float64 `json:"replicaSeconds"`  // capacity actually missing
-	DowntimeUSD    float64 `json:"downtimeUsd"`
-	AttackerStopped string `json:"attackerStopped"` // yes | no | by-luck-only
-	Verdict        string  `json:"verdict"`
-	Complete       bool    `json:"complete"`
+	Arm             string  `json:"arm"`
+	Label           string  `json:"label"`
+	Samples         int     `json:"samples"`
+	MeanPct         float64 `json:"meanPct"`
+	MinPct          float64 `json:"minPct"`
+	DipCount        int     `json:"dipCount"`        // how many separate times it fell below full
+	SecondsDegrade  float64 `json:"secondsDegraded"` // wall-clock seconds spent below full capacity
+	ReplicaSeconds  float64 `json:"replicaSeconds"`  // capacity actually missing
+	DowntimeUSD     float64 `json:"downtimeUsd"`
+	AttackerStopped string  `json:"attackerStopped"` // yes | no | by-luck-only
+	Verdict         string  `json:"verdict"`
+	Complete        bool    `json:"complete"`
 }
 
 // armRun is ONE three-arm experiment: which app, when, and the three measured arms.
@@ -71,25 +69,21 @@ type armRun struct {
 
 type armsResponse struct {
 	Running   []armsJob `json:"running"` // experiments in flight right now, with live progress
-	Runs      []armRun `json:"runs"`
-	Available bool     `json:"available"`
-	Note      string   `json:"note"`
-	HowItRan  string   `json:"howItRan"`
-	WhyNoDrop string   `json:"whyNoDrop"`
+	Runs      []armRun  `json:"runs"`
+	Available bool      `json:"available"`
+	Note      string    `json:"note"`
+	HowItRan  string    `json:"howItRan"`
+	WhyNoDrop string    `json:"whyNoDrop"`
 }
 
 func armsPath(cfg Config) string {
-	base := cfg.AuditPath
-	if base == "" {
-		base = filepath.Join(cfg.Root, "phorvex-live.jsonl")
-	}
-	return filepath.Join(filepath.Dir(base), "three-arm-runs.jsonl")
+	return cfg.statePath("three-arm-runs.jsonl")
 }
 
 func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 	nsFilter := r.URL.Query().Get("ns") // optional; empty = every app
 
-	b, err := os.ReadFile(armsPath(s.cfg))
+	b, err := readStateLedger(armsPath(s.cfg))
 	if err != nil || len(b) == 0 {
 		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshot(),
 			Note: "no three-arm experiment has been run yet. It is a real, disruptive procedure (it puts " +
@@ -106,13 +100,15 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		var e armExperiment
-		if json.Unmarshal([]byte(ln), &e) == nil {
-			if !p.TenantWildcard() && !p.AllowsTenant(e.Namespace) {
-				continue
-			}
-			if nsFilter == "" || e.Namespace == nsFilter {
-				exps = append(exps, e)
-			}
+		if err := json.Unmarshal([]byte(ln), &e); err != nil {
+			writeJSON(w, 503, armsResponse{Available: false, Note: "retained experiment record is malformed: " + err.Error()})
+			return
+		}
+		if !p.TenantWildcard() && !p.AllowsTenant(e.Namespace) {
+			continue
+		}
+		if nsFilter == "" || e.Namespace == nsFilter {
+			exps = append(exps, e)
 		}
 	}
 	if len(exps) == 0 {
@@ -120,7 +116,11 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	samples := readUptimeSamples(uptimePath(s.cfg))
+	samples, sampleErr := readUptimeSamples(uptimePath(s.cfg))
+	if sampleErr != nil {
+		writeJSON(w, 503, armsResponse{Available: false, Note: sampleErr.Error()})
+		return
+	}
 	resolve := s.buildRateResolver("")
 
 	out := armsResponse{Available: true, Running: armsJobSnapshot(),

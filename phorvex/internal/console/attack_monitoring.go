@@ -85,13 +85,22 @@ const (
 
 // attackMonitoringHandler builds the before/during/after picture for every recorded attack.
 func (s *Server) attackMonitoringHandler(w http.ResponseWriter, r *http.Request) {
-	s.loadAttacks()
+	if err := s.loadAttacks(); err != nil {
+		s.recordStateError(err)
+		writeJSON(w, 503, map[string]any{"error": err.Error()})
+		return
+	}
 	// [M-136] Same cross-tenant control as /api/attack-results: the ledger is cluster-wide, so a
 	// tenant-limited grant monitors only its own namespaces.
 	p := principalOf(r)
 	recs := attackSnapshots(p)
 
-	samples := readUptimeSamples(uptimePath(s.cfg))
+	samples, sampleErr := readUptimeSamples(uptimePath(s.cfg))
+	if sampleErr != nil {
+		s.recordStateError(sampleErr)
+		writeJSON(w, 503, map[string]any{"error": sampleErr.Error()})
+		return
+	}
 	// index samples by (ns, workload) with parsed timestamps, sorted by time
 	type ts struct {
 		at time.Time

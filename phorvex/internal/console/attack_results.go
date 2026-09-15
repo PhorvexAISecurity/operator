@@ -100,7 +100,8 @@ type attackRecord struct {
 	UptimeDip    float64 `json:"uptimeDip"`
 	UptimeAfter  float64 `json:"uptimeAfter"`
 
-	Cost attackCost `json:"cost"`
+	Cost             attackCost `json:"cost"`
+	PersistenceError string     `json:"persistenceError,omitempty"`
 
 	started     time.Time       // unexported, for elapsed timing
 	baseEpoch   string          // pre-attack adapter epoch (poison detection)
@@ -196,45 +197,52 @@ func attackSnapshots(p *Principal) []*attackRecord {
 }
 
 func (s *Server) attacksPath() string {
-	base := s.cfg.AuditPath
-	if base == "" {
-		base = filepath.Join(s.cfg.Root, "phorvex-live.jsonl")
+	if p := s.cfg.statePath("phorvex-attacks.jsonl"); p != "" {
+		return p
 	}
-	return filepath.Join(filepath.Dir(base), "phorvex-attacks.jsonl")
+	if s.cfg.Root != "" {
+		return filepath.Join(s.cfg.Root, "phorvex-attacks.jsonl")
+	}
+	return ""
 }
 
-func (s *Server) loadAttacks() {
+func (s *Server) loadAttacks() error {
 	attackLoadMu.Lock()
 	defer attackLoadMu.Unlock()
 	attackMu.Lock()
 	if attackLoaded {
 		attackMu.Unlock()
-		return
+		return nil
 	}
 	attackMu.Unlock()
 	attackFileMu.Lock()
-	b, err := os.ReadFile(s.attacksPath())
+	b, err := readStateLedger(s.attacksPath())
 	attackFileMu.Unlock()
 	loaded := []*attackRecord{}
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read retained attack results: %w", err)
+	}
 	if err == nil {
 		for _, ln := range strings.Split(string(b), "\n") {
 			if ln = strings.TrimSpace(ln); ln == "" {
 				continue
 			}
 			var r attackRecord
-			if json.Unmarshal([]byte(ln), &r) == nil {
-				r.Status = "done"
-				if r.Containment == "" { // (re)classify records persisted before the field existed
-					classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
-				}
-				loaded = append(loaded, cloneAttackRecord(&r))
+			if err := json.Unmarshal([]byte(ln), &r); err != nil {
+				return fmt.Errorf("malformed retained attack result: %w", err)
 			}
+			r.Status = "done"
+			if r.Containment == "" { // (re)classify records persisted before the field existed
+				classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
+			}
+			loaded = append(loaded, cloneAttackRecord(&r))
 		}
 	}
 	attackMu.Lock()
 	attackList = append(loaded, attackList...)
 	attackLoaded = true
 	attackMu.Unlock()
+	return nil
 }
 
 // classifyContainment sets Containment + the honest dwell. `elapsed` is the observation window used as
@@ -258,25 +266,20 @@ func classifyContainment(r *attackRecord, elapsed float64) {
 	}
 }
 
-func (s *Server) persistAttack(r *attackRecord) {
+func (s *Server) persistAttack(r *attackRecord) error {
 	b, err := json.Marshal(cloneAttackRecord(r))
 	if err != nil {
-		return
+		return err
 	}
-	attackFileMu.Lock()
-	defer attackFileMu.Unlock()
-	f, err := os.OpenFile(s.attacksPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_, _ = f.Write(append(b, '\n'))
+	return s.cfg.appendState(s.attacksPath(), b)
 }
 
 // startAttackRecord registers a running attack and launches the ground-truth watcher. Called by the
 // attack handlers immediately after the real attack is applied to the cluster.
 func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline) {
-	s.loadAttacks()
+	if err := s.loadAttacks(); err != nil {
+		s.recordStateError(err)
+	}
 	now := time.Now()
 	deploy := s.firstDeploy(ns)
 	r := &attackRecord{
@@ -385,7 +388,12 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	s.fillCost(ctxName, r)
 	r.Status = "done"
 	publishAttack(r)
-	s.persistAttack(r)
+	if err := s.persistAttack(r); err != nil {
+		r.Status = "partial"
+		r.PersistenceError = "effect observed but outcome evidence unavailable; unsafe to retry: " + err.Error()
+		s.recordStateError(fmt.Errorf("persist attack outcome: %w", err))
+		publishAttack(r)
+	}
 }
 
 // --- ground-truth probes (real kubectl) ---
@@ -684,7 +692,11 @@ func (s *Server) fillCost(ctxName string, r *attackRecord) {
 }
 
 func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
-	s.loadAttacks()
+	if err := s.loadAttacks(); err != nil {
+		s.recordStateError(err)
+		writeJSON(w, 503, map[string]any{"attacks": []*attackRecord{}, "error": err.Error()})
+		return
+	}
 	// [M-136] The attack ledger spans every namespace the console has ever fired at, so it is
 	// filtered to the tenants this identity is granted. A cross-tenant grant sees all of it.
 	p := principalOf(r)

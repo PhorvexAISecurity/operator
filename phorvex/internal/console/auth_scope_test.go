@@ -80,7 +80,7 @@ func TestSuiteRunAuthorizesItsEffectiveDestination(t *testing.T) {
 		wantLaunched bool
 	}{
 		{"no target grant at all", []string{}, []string{wildcardScope}, false, http.StatusForbidden, false},
-		{"host granted, no config to read (positive control)", []string{defaultTargetID}, []string{wildcardScope}, false, http.StatusOK, true},
+		{"host granted, no config to read is refused before launch", []string{defaultTargetID}, []string{wildcardScope}, false, http.StatusBadRequest, false},
 		{"config names a cluster the grant excludes", []string{defaultTargetID}, []string{wildcardScope}, true, http.StatusForbidden, false},
 		{"config's cluster and namespace granted (positive control)", []string{defaultTargetID, "kind-amtd-test"}, []string{"amtd-attack-test"}, true, http.StatusOK, true},
 	}
