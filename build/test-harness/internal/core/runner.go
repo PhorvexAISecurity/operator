@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -1016,7 +1017,7 @@ func (t *trialRun) finalize() Metric {
 
 func requiresAttributedNegativeObservation(name string) bool {
 	switch name {
-	case "c1-lateral", "c2-lateral-disrupt", "c2-supplychain-foothold", "c2-stealth-foothold", "c3-admission-bypass", "c3-cicd", "c3-cryptomining", "c3-imds-theft", "c3-secrets-sprawl", "c3-sidecar-inject", "c3-supplychain":
+	case "c1-lateral", "c2-lateral-disrupt", "c2-supplychain-foothold", "c2-stealth-foothold", "c3-admission-bypass", "c3-cicd", "c3-cryptomining", "c3-imds-theft", "c3-secrets-sprawl", "c3-sidecar-inject", "c3-supplychain", "ai2-data-model-poisoning", "ai2-poisoned-model-registry", "ai2-agent-rogue-tool-persistence":
 		return true
 	}
 	return false
@@ -1028,14 +1029,45 @@ func requiresAttributedNegativeObservation(name string) bool {
 // measured negatives remain usable raw facts and unscored comparisons.
 func (t *trialRun) attributedNegativeObservation() bool {
 	ev := t.or.Evidence
-	if !t.v.CostObserved || t.actCount <= 0 || ev["defensiveEffectAttributed"] != "true" || ev["originalPodUID"] == "" || ev["defensiveActionTargetUID"] != ev["originalPodUID"] || ev["defensiveEffectObjective"] != t.spec.scenario.Metadata().Name {
+	targetUID := ev["originalPodUID"]
+	if isAIObjectiveAttribution(t.spec.scenario.Metadata().Name) {
+		targetUID = ev["initialTargetUID"]
+		if ev["effectAttempt"] == "" || ev["defensiveActionAttempt"] != ev["effectAttempt"] {
+			return false
+		}
+	}
+	if !t.v.CostObserved || t.actCount <= 0 || ev["defensiveEffectAttributed"] != "true" || targetUID == "" || ev["defensiveActionTargetUID"] != targetUID || ev["defensiveEffectObjective"] != t.spec.scenario.Metadata().Name {
 		return false
+	}
+	if isAIObjectiveAttribution(t.spec.scenario.Metadata().Name) {
+		receiptAt, err := strconv.ParseFloat(ev["defensiveActionAtUnix"], 64)
+		if err != nil || math.IsNaN(receiptAt) || math.IsInf(receiptAt, 0) || receiptAt <= 0 {
+			return false
+		}
+		matched := false
+		for _, at := range t.actTimes {
+			if math.Abs(at-receiptAt) < 0.001 {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
 	}
 	for _, at := range t.actTimes {
 		when := time.Unix(0, int64(at*float64(time.Second)))
 		if !when.Before(t.attackStart) && !when.After(t.oracleEnd) {
 			return true
 		}
+	}
+	return false
+}
+
+func isAIObjectiveAttribution(name string) bool {
+	switch name {
+	case "ai2-data-model-poisoning", "ai2-poisoned-model-registry", "ai2-agent-rogue-tool-persistence":
+		return true
 	}
 	return false
 }

@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-15T10:31:26+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: sol-t4-m171
+    artifact: evidence/red-baseline.txt
+    sha256: 76110aea8a8c08d42ac5bef56f99563db8e55880ac65cb49436b234aad0c4cce
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T11:29:26+00:00'
 fix_id: T4-M171
 issues:
 - M-171
@@ -84,7 +91,7 @@ residuals: []
 next_action:
   owner: sol-t4-m171
   action: Implement signed plan; await heavy-test slot; submit-review with no notification
-updated_at: '2026-09-15T10:31:26+00:00'
+updated_at: '2026-09-15T11:29:26+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:20+00:00'
   by: codex-lead

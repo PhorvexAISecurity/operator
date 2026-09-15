@@ -32,22 +32,18 @@ live (Go 1.26.3, exit 0). Clean teardown: namespace gone, no leftover process.
 Every tag is DERIVED per-arm from the oracle outcome, never assumed (the review's
 hardcoding defect is fixed — §5). Disruption% is mean over n=21 with 95% CI.
 
-### MTD-NEUTRALIZES — `d-fullphoenix` only, the 4 genuine-trigger scenarios
+### MTD-NEUTRALIZES — historical run, attribution correction
 
-The harness injects a matching `SecurityEvent` so the **real `matcher.go` action**
-removes the foothold (the mechanism Pass A proved with `c2-persistence-evict`):
+The table below is historical output. Three rows credited a scripted scenario repair after event delivery; those percentages are withdrawn until a defender-owned substrate action is independently observed:
 
 | Scenario | d-fullphoenix | d-r6blindtimer | d-randomequal |
 |---|---|---|---|
-| ai2-poisoned-model-registry | **NEUTRALIZES 100% [100,100]** | 0% | 0% |
-| ai2-data-model-poisoning | **NEUTRALIZES 100% [100,100]** | 0% | 0% |
-| ai2-agent-rogue-tool-persistence | **NEUTRALIZES 100% [100,100]** | 0% | 0% |
+| ai2-poisoned-model-registry | **WITHDRAWN: observer repair** | 0% | 0% |
+| ai2-data-model-poisoning | **WITHDRAWN: observer repair** | 0% | 0% |
+| ai2-agent-rogue-tool-persistence | **WITHDRAWN: observer repair** | 0% | 0% |
 | ai2-malicious-model-artifact | **NEUTRALIZES 100% [100,100]** | BOUNDS 71% [50,93] | BOUNDS 67% [45,89] |
 
-Only `d-fullphoenix` neutralizes (the only arm firing the genuine trigger). For
-`malicious-model-artifact` the foothold is also pod-resident, so blind/random rotation
-*additionally* bound it — the audit-predicted "NEUTRALIZE by the genuine arm, BOUND by
-blind rotation" split, measured.
+The remaining `malicious-model-artifact` row concerns a pod-resident foothold. Blind and random rotation also bounded that foothold in the historical run.
 
 ### MTD-BOUNDS-ONLY — rotating arms bound a pod-resident foothold (no detector)
 
@@ -121,10 +117,12 @@ AI-specific honest path). **`d-phorvex-slot` is the TO-BE-FILLED comparison** co
    `injected`, no hardcoded name map (generic-core invariant).
 4–5. **MTD-effect MEASURED** → the 5 previously-hardcoded scenarios compute
    `armRotates(env) && !<live check>` per arm (de-risked on the rebuilt binary).
-6. **Harness-completed-restore seam disclosed** → for NEUTRALIZE scenarios the
-   operator fires the real action on the matched pod; the scenario completes the
-   operator's effect on the *mock* substrate gated on the genuine trigger (faithful
-   stand-in; the real-workload action is proven by Pass A's `c2-persistence-evict`).
+6. **Historical restore seam corrected** → the three registry/tool scenarios
+   previously completed golden restoration in scenario code after a matching
+   event. Those percentages are withdrawn. The current scenarios keep the
+   synthetic before/after fixture observations and require a target/attempt
+   matched defender action for any effect credit; event delivery alone cannot
+   repair the mock substrate.
 
 ---
 

@@ -112,6 +112,10 @@ type Env struct {
 	ScenarioName string
 	// DefenderName is the current defender arm (for labels/provenance).
 	DefenderName string
+	// EffectAttemptID is set by scenarios after observing the initial attacker
+	// outcome and before delivering a response trigger. Defender-owned receipts
+	// must match this attempt to avoid credit from a previous trial.
+	EffectAttemptID string
 	// RestConfigHost is the live apiserver host (provenance/debug).
 	RestConfigHost string
 }
