@@ -2,17 +2,26 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 3
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 901b4f98b7be1b019a3054c22cbd736cbf6536a5cd55052ca0e04ab4ea32f53f
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T05:59:27+00:00'
+    contract_sha256: 23156f984707c19cca4a8e2102df2173de485e8a2bd294cd1c7e4553442ab181
+    approval_ref: AUTHORIZATION.md
 fix_id: T3-M169
 issues:
 - M-169
 title: Attack watcher and HTTP result readers race on shared mutable outcome records
 profile: standard
-state: TRIAGED
+state: DESIGNING
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -73,9 +82,8 @@ blockers: []
 residuals: []
 next_action:
   owner: codex-lead
-  action: Reconcile current source and sign implementation plan; no issue PR, compose
-    into tier3
-updated_at: '2026-09-15T05:57:46+00:00'
+  action: Investigate current source and sign plan
+updated_at: '2026-09-15T05:59:27+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:46+00:00'
   by: codex-lead
@@ -88,3 +96,12 @@ configuration_history:
   - next_action
   - roles
   approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-15T05:59:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+  forced: false

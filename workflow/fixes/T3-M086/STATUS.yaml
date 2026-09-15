@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 1
+revision: 2
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -13,7 +13,7 @@ issues:
 title: 'The wedge-reconciler family: dry-run bypass, selector-blind, unconditional,
   error-swallowed, unaudited'
 profile: standard
-state: TRIAGED
+state: DESIGNING
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -74,9 +74,8 @@ blockers: []
 residuals: []
 next_action:
   owner: codex-lead
-  action: Reconcile current source and sign implementation plan; no issue PR, compose
-    into tier3
-updated_at: '2026-09-15T05:57:38+00:00'
+  action: Investigate current source and sign plan
+updated_at: '2026-09-15T05:59:18+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:38+00:00'
   by: codex-lead
@@ -89,3 +88,12 @@ configuration_history:
   - next_action
   - roles
   approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-15T05:59:18+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+  forced: false
