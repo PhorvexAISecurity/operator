@@ -248,7 +248,7 @@ func TestM163_FixtureCrossesTheStagePredicateThroughRealProducers(t *testing.T) 
 	shadowView := m163TransitioningShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap)[0]
 	prodStage := km.AssessMode(prodView, pol, 1200, pol.ProactiveFloor.Seconds(), killchain.EvalShadow).StageName
 	shadowStage := km.AssessMode(shadowView, pol, 1200, pol.ProactiveFloor.Seconds(), killchain.EvalShadow).StageName
-	if prodStage != "recon" || shadowStage != "prompt-inject-persist" {
+	if prodStage != "recon" || shadowStage != "exploit" {
 		t.Fatalf("supported event producer did not create the intended stage disagreement: production=%q shadow=%q", prodStage, shadowStage)
 	}
 	t.Logf("fixture live: production stage=%s (namespace proxy %.4f) vs shadow stage=%s (namespace proxy %.4f)",

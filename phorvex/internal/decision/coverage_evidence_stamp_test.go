@@ -32,6 +32,7 @@ func TestAssembleSetStampsHasEventEvidenceOntoView(t *testing.T) {
 	// Telemetry-only LLM-jacking: aiClassified ⇒ broad HasEvidence=true, but ZERO events ⇒
 	// HasEventEvidence MUST be false.
 	physicsOnly := covView("physics", true, 2*time.Hour, false)
+	physicsOnly.Pod.ModelID = "served-model"
 	physicsOnly.Pod.EndpointPath = "/v1"
 	physicsOnly.Telemetry.GPUUtil = model.PresentSignal(0.9, "dcgm")
 
