@@ -38,7 +38,7 @@ build/CI-enforced completeness theorem**, and is the candidate that does not ove
 | 1 | `rotate` (=Phoenix Delete) | K8s | `Pods().Delete` w/ UID precondition; owner respawns clean | none (respawn IS recovery) | no |
 | 2 | `quarantine` (=Phoenix Quarantine, **lead demo**) | K8s | deny-all NetworkPolicy + relabel-out-of-owner-selector (ReplicaSet/StatefulSet/DaemonSet/Job; matching Services when no owner selector is readable) + **ownerRef re-parent** (both, or the owner re-adopts) | reversible (snapshot labels/ownerRefs) | no |
 | 3 | `debugger` (=Phoenix Debugger, NEW const) | K8s | `pods/ephemeralcontainers` Update | **irreversible** (K8s can't remove an ephemeral container) | no |
-| 4 | `custom-inject` (=Phoenix CustomAction, NEW) | K8s | parameterized ephemeral-container Update; **doubles as the KV-reset carrier** | irreversible | no |
+| 4 | `custom-inject` (=Phoenix CustomAction, NEW) | K8s | fixed bounded marker ephemeral-container (`echo phorvex-custom-action; sleep 1`); does not flush KV state | irreversible | no |
 | 5 | `disable` (=Phoenix declaration, NEW) | K8s | declared-not-implemented (matches Phoenix's posture); EXCLUDED from emittable set, but the handler exists so completeness stays green | n/a | no |
 
 **Advanced K8s** (native-only — Phoenix cannot):
@@ -48,7 +48,7 @@ build/CI-enforced completeness theorem**, and is the candidate that does not ove
 **Advanced AI/GPU** (native-only; structure ships now, **magnitudes `[SP-0-PENDING]`** under `GPUPresent=false`):
 | 8 | `warm-swap` | AI/GPU | 5-phase restart-safe state machine: verify Ready shadow → flip leader → drain → retire old → rewarm | **provision-before-retire** (failed cutover re-flips to the alive old leader) | yes (ColdLoadSec) |
 | 9 | `MIG-rebind` | AI/GPU | patch MIG device-request + affinity off the co-resident partition, then warm-swap cutover | re-flip to alive original | yes |
-| 10 | `KV/session-reset` | AI | flush KV-cache/agent-session in-process (admin endpoint / inject carrier); **no pod kill** — the only move that defeats a wipe-surviving prompt-inject implant | none needed (dropping poisoned state IS the goal) | yes (KVRebuildSec) |
+| 10 | `KV/session-reset` | AI | flush KV-cache/agent-session through the serving-client reset surface; **no pod kill** — the only move that defeats a wipe-surviving prompt-inject implant | none needed (dropping poisoned state IS the goal) | yes (KVRebuildSec) |
 | 11 | `endpoint-rotate` | AI | re-key the served-model route / Service fronting `EndpointPath` | snapshot prior route | yes |
 | 12 | `model-shard-replace` | AI/GPU | warm-swap-style replace a shard on target model-id/version | re-flip to alive original | yes |
 
@@ -182,10 +182,10 @@ with a determinism test since `bestNet` ties break first-seen); **lead demo + P3
 1. **Per-action feasibility laws are unwritten** (the load-bearing gap) — the completeness test enforces a constraint *exists*, not that its *body* is correct.
 2. **Privilege widening** — native writes core/networking objects directly; needs a separate namespaced least-privilege SA; review before GA.
 3. **Quarantine fidelity is assertion-dependent** — miss the ownerRef re-parent and the lead demo regresses with no compile error; assert live.
-4. **Debugger/custom-inject/inject-based KV-reset are irreversible** (K8s can't remove an ephemeral container) — only audit-flagging, no rollback.
+4. **Debugger/custom-inject are irreversible** (K8s can't remove an ephemeral container) — only audit-flagging, no rollback. KV-reset is separate and does not inject an ephemeral container.
 5. **All 5 AI/GPU magnitudes `[SP-0-PENDING]`**, unvalidated on real hardware; the provision-before-retire argument is sound in design, unproven against real cold-load/drain timing.
 6. **Warm-swap's restart-safe state machine** (persisted phase, RequestID dedupe, crash-resume) adds distributed-systems complexity the codebase doesn't currently carry; needs failure-injection beyond the happy path.
-7. **KV-reset depends on the model server exposing a flush surface**; else it degrades to the (slower, irreversible) inject carrier — so prompt-inject coverage is model-server-dependent.
+7. **KV-reset depends on the model server exposing the serving-client flush surface**; without it the action is unavailable rather than degrading to custom-inject, which never flushes KV state.
 8. **The 1.62×/P3 parity holds ONLY while AI moves add zero selectable cover** (GPUPresent=false); once GPU magnitudes activate and AI facts enter CoverByAction, the baseline must be **re-established, not assumed**.
 9. **License is engineering posture, not legal clearance** — a lawyer must clear the SSPL question before standalone GA.
 

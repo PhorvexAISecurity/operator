@@ -93,8 +93,9 @@ with Phorvex's own hands; phorvex build/vet/test green; **extended Phoenix build
 3. **Privilege widening** — native writes Pods/NetworkPolicies/Services/ephemeral-containers directly; the
    `rbac.go` markers scope a **namespaced least-privilege Role**, but the widening must be security-reviewed
    before standalone GA.
-4. **Debugger/custom-inject/inject-carrier KV-reset are irreversible** (K8s can't remove an ephemeral
-   container) — audit-flagged `MutationKind=irreversible`, no rollback.
+4. **Debugger/custom-inject are irreversible** (K8s can't remove an ephemeral container) — audit-flagged
+   `MutationKind=irreversible`, no rollback. Custom-inject is the fixed bounded marker profile; it does not
+   flush KV state. KV-reset is a separate serving-client action.
 5. **Warm-swap's restart-safe state machine** (persisted phase, provision-before-retire) is proven on the
    kind happy path; real cold-load/drain timing + crash-resume need failure-injection on GPU.
 6. **The 1.62×/P3 parity holds while AI moves add zero selectable cover** (`GPUPresent=false`); once GPU

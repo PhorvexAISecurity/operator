@@ -14,7 +14,7 @@
  * scoped per-resource to the verbs actually called — nothing broader.
  *
  * pods                          : rotate (get/delete), quarantine/identity/route/kv/endpoint (get/update), warm-swap (list/update/delete)
- * pods/ephemeralcontainers      : debugger / custom-inject / inject-carrier kv-reset (update)
+ * pods/ephemeralcontainers      : debugger / fixed custom-inject marker profile (update)
  * networkpolicies               : quarantine create/reconcile + migration/cleanup (create/get/list/delete/update)
  * replicasets/statefulsets/daemonsets, jobs : quarantine reads the owning controller's selector to detach (get)
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update);
