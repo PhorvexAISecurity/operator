@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 17
+revision: 18
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -85,22 +85,23 @@ checks:
     artifact: evidence/incident.md
     sha256: eba5ac2dd922f02bb511a4323466fd71bc50c96e7fa7d274b071487a506f0ddc
     source_sha: b63ca37b27612a9cfa10f261b74ea3db54e20ec9
-    at: '2026-09-15T21:59:55+00:00'
+    at: '2026-09-15T22:08:27+00:00'
     baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 554e6f3de20ed8bc6af8f4e5750ca6074f36e3330b72540c86cf8b4444ad1b41
-    source_sha: 2f56dfe1e987aed00ad01bfbc70b740ce77d9a1c
-    at: '2026-09-15T21:21:44+00:00'
+    sha256: d86f36dbd373a8b37af2bd77168bb574724fe9a2a8cdb3fe1e9ad01a55d69852
+    source_sha: b63ca37b27612a9cfa10f261b74ea3db54e20ec9
+    at: '2026-09-15T22:08:27+00:00'
+    incident_sha256: eba5ac2dd922f02bb511a4323466fd71bc50c96e7fa7d274b071487a506f0ddc
 fix_id: T5-M167
 issues:
 - M-167
 title: Shipped console storage configuration silently drops mutation and experiment
   records
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -145,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -161,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T22:07:19+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T22:08:30+00:00'
 configuration_history:
 - at: '2026-09-15T19:32:52+00:00'
   by: codex-lead
@@ -258,13 +259,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T22:08:28+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T22:08:29+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T5-M167:17:submit
-  from: sol-t5-m167
+  id: T5-M167:18:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 17
+  role: coordinator
+  kind: review
+  revision: 18
 check_history:
 - check: p3
   result: PASS
@@ -401,3 +418,18 @@ check_history:
   inputs:
   - phorvex
   inputs_sha256: 5692207017c4a319aae369ad8a7c09d8fb638300268e51529b632ff7deb62dd0
+- check: incident
+  result: PASS
+  by: codex-lead
+  artifact: evidence/incident.md
+  sha256: eba5ac2dd922f02bb511a4323466fd71bc50c96e7fa7d274b071487a506f0ddc
+  source_sha: b63ca37b27612a9cfa10f261b74ea3db54e20ec9
+  at: '2026-09-15T21:59:55+00:00'
+  baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 554e6f3de20ed8bc6af8f4e5750ca6074f36e3330b72540c86cf8b4444ad1b41
+  source_sha: 2f56dfe1e987aed00ad01bfbc70b740ce77d9a1c
+  at: '2026-09-15T21:21:44+00:00'
