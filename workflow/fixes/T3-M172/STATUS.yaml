@@ -2,18 +2,27 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e6dc142ace7280ee5ff2c0c21607a1d42251eb4368140b3ddc3b38247718fae1
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T06:27:08+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
 fix_id: T3-M172
 issues:
 - M-172
 title: Scenario oracles conflate missing targets and failed observations with attack
   disruption
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -74,9 +83,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Investigate current source and sign plan
-updated_at: '2026-09-15T06:01:02+00:00'
+  owner: sol-t3-m172
+  action: Implement signed local scenario observation validity contract when slot
+    opens
+updated_at: '2026-09-15T06:27:08+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:47+00:00'
   by: codex-lead
@@ -107,4 +117,12 @@ transitions:
   artifact: null
   note: null
   approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T06:27:08+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
   forced: false
