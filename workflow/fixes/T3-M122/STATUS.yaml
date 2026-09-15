@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 17
+revision: 19
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -101,7 +101,7 @@ issues:
 - M-122
 title: The actuator demo CLI is stale after the fail-closed fixes
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -134,11 +134,11 @@ implementation:
   - T3-M158
   - T3-M033
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/210
+  reviewed_head: b9f0bba66f73e5c694979d74cfac40504eec33ce
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -168,10 +168,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-15T09:15:35+00:00'
+  owner: human_owner
+  action: Review shared draft PR210; M92 remains incomplete, and the whole-tier deployment
+    barrier is not met.
+updated_at: '2026-09-15T09:19:19+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:40+00:00'
   by: codex-lead
@@ -218,6 +218,11 @@ configuration_history:
   by: sol-t3-m122
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-15T09:19:18+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -267,6 +272,15 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-15T09:19:19+00:00'
+  by: codex-lead
+  artifact: https://github.com/PhorvexSecurity/operator/pull/210
+  note: One shared draft PR for nine independently reviewed fixes; no issue closure,
+    missing-evidence waiver, merge or deployment.
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: base_review

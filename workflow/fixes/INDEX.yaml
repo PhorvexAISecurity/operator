@@ -561,7 +561,7 @@ fixes:
     issues:
     - M-26
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t3-m026
@@ -572,7 +572,7 @@ fixes:
     issues:
     - M-33
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T3-M169
@@ -585,7 +585,7 @@ fixes:
     issues:
     - M-86
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t3-m086
@@ -607,7 +607,7 @@ fixes:
     issues:
     - M-122
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T3-M169
@@ -624,7 +624,7 @@ fixes:
     issues:
     - M-132
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T3-M169
@@ -636,7 +636,7 @@ fixes:
     issues:
     - M-148
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T3-M169
@@ -651,7 +651,7 @@ fixes:
     issues:
     - M-158
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T3-M169
@@ -663,7 +663,7 @@ fixes:
     issues:
     - M-169
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t3-m169
@@ -674,7 +674,7 @@ fixes:
     issues:
     - M-172
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on:
     - T3-M169
