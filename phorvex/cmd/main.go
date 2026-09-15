@@ -306,6 +306,7 @@ func main() {
 		os.Exit(1)
 	}
 	rmgr.OwnershipReader = mgr.GetAPIReader()
+	rmgr.VocabularyReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
 	}

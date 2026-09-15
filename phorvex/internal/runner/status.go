@@ -108,6 +108,12 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 			Message:            actions.message,
 			ObservedGeneration: p.Generation,
 		})
+		vocabularyStatus, vocabularyReason, vocabularyMessage := m.VocabularySnapshot().diagnostic()
+		meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
+			Type: "PolicyActionVocabulary", Status: vocabularyStatus,
+			Reason: vocabularyReason, Message: vocabularyMessage,
+			ObservedGeneration: p.Generation,
+		})
 
 		// [PHVX-17] The CRD documents a "KillSwitch" condition ("Conditions includes Ready, DryRun,
 		// ValidationError, KillSwitch") and nothing ever wrote one. A condition carries a reason and a

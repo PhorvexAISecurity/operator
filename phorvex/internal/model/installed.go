@@ -4,9 +4,8 @@
 
 package model
 
-// installed.go holds ONLY the installability set + its membership test + a pure set-diff
-// (R3): model stays a leaf package. The CRD DISCOVERY that reads the deployed enum and
-// populates NotInstallable lives at the wiring layer, not here.
+// installed.go holds only the installability set and a pure set difference. Discovery
+// and its manager-owned knowledge state live at the wiring layer.
 
 // InstallSet is a set of actions. Used for NotInstallable — the actions the installed
 // CRD does not admit.
@@ -14,14 +13,6 @@ type InstallSet map[Action]struct{}
 
 // Has reports membership.
 func (s InstallSet) Has(a Action) bool { _, ok := s[a]; return ok }
-
-// NotInstallable is the boot-computed set of actions ABSENT from the installed CRD's
-// action enum: (AllKnownActions − installedEnum). Empty (the healthy case, e.g. an
-// installed CRD carrying all 17 values) means every action is installable, so the gate's
-// first check never fires. "not-installable" is the one exclusion reason that is a
-// property of the cluster, not the asset. The wiring layer assigns this at boot from
-// ComputeNotInstallable(discoveredEnum); the capability gate only READS it.
-var NotInstallable = InstallSet{}
 
 // AllKnownActions is the full action vocabulary the installed enum is diffed against —
 // MutatingActions ∪ {noop, disable} (mirrors the action-completeness vocabulary).

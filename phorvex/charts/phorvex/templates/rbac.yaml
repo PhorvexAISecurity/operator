@@ -15,6 +15,11 @@ metadata:
   labels:
     {{- include "phorvex.labels" . | nindent 4 }}
 rules:
+- apiGroups: ["apiextensions.k8s.io"]
+  # M-158: uncached, read-only discovery of the installed policy action enum.
+  resources: ["customresourcedefinitions"]
+  resourceNames: ["phorvexpolicies.phorvex.ai"]
+  verbs: ["get"]
 - apiGroups: ["admissionregistration.k8s.io"]
   resources: ["mutatingwebhookconfigurations"]
   verbs: ["get", "list"]
