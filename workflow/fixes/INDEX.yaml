@@ -687,11 +687,11 @@ fixes:
     issues:
     - M-4
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t4-m004
-    head_sha: null
+    head_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
   T4-M019:
     directory: fixes/T4-M019
     aliases: []
