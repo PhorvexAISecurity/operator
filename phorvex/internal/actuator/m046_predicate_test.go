@@ -3,6 +3,7 @@ package actuator
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -37,6 +40,7 @@ func TestM46HandlerUsesCanonicalMIGPredicate(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns",
 					Name:      "infer-" + tt.name,
+					UID:       types.UID("m046-" + tt.name),
 					Annotations: map[string]string{
 						annoGPUID:      "0",
 						annoMIGProfile: "2g.20gb",
@@ -57,9 +61,17 @@ func TestM46HandlerUsesCanonicalMIGPredicate(t *testing.T) {
 			_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{
 				Client: c,
 				MIG:    &mockMIG{availErr: errors.New("probe stopped before mutation")},
-			}, Request{Namespace: pod.Namespace, Pod: pod.Name, Action: model.ActionMIGRebind})
+			}, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
 			if err == nil || !strings.Contains(err.Error(), tt.wantReason) {
 				t.Fatalf("reason = %v, want substring %q", err, tt.wantReason)
+			}
+			var after corev1.Pod
+			if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), &after); err != nil {
+				t.Fatalf("MIG predicate mutated or removed the pod: %v", err)
+			}
+			if after.UID != pod.UID || !reflect.DeepEqual(after.Spec, pod.Spec) ||
+				!reflect.DeepEqual(after.Labels, pod.Labels) || !reflect.DeepEqual(after.Annotations, pod.Annotations) {
+				t.Fatalf("MIG predicate mutated the pod: before=%+v after=%+v", pod, &after)
 			}
 		})
 	}
