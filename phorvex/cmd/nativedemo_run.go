@@ -625,10 +625,10 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 }
 
 func runDemoWarmCase(ctx context.Context, run *demoRun, n *actuator.NativeActuator, ns string, policy *v1alpha1.PhorvexPolicy) demoRow {
-	row := demoRow{action: "warm-swap", expected: "RS-owned cutover submitted; replacement capacity requires controller observation", verdict: demoSetupFailure}
+	row := demoRow{action: "warm-swap", expected: "configured RS/Service scaffold; controller membership and serving readiness required before cutover", verdict: demoSetupFailure}
 	labels := map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/native-demo": "true", "phorvex.ai/native-demo-run": run.token}
 	replicas := int32(2)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "wsg", Namespace: ns}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/native-demo": "true", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36", Command: []string{"sh", "-c", "sleep 3600"}}}}}}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "wsg", Namespace: ns}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/native-demo": "true", "phorvex.ai/native-demo-run": run.token, "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": "wsg"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36", Command: []string{"sh", "-c", "sleep 3600"}}}}}}}
 	if err := run.create(ctx, rs); err != nil {
 		row.observed = err.Error()
 		return row

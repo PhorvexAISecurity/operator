@@ -215,7 +215,7 @@ func TestDemoRouteSameNameServiceReplacementIsNotCreditedOrCleaned(t *testing.T)
 	}
 }
 
-func TestDemoWarmCaseUsesPolicyJournalAndRealCutoverBoundary(t *testing.T) {
+func TestDemoWarmCaseBuildsConfiguredPoolScaffoldWithoutClaimingCutover(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
