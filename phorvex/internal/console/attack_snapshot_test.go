@@ -129,17 +129,20 @@ func TestAttackWatcherHTTPPersistenceConcurrent(t *testing.T) {
 		t.Fatalf("landed control: %+v", got)
 	}
 	var wg sync.WaitGroup
+	watchDone := make(chan struct{})
+	var sawTerminal atomic.Bool
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defended.Store(true)
 		s.watchAttackUntil("", r, time.Now().Add(45*time.Millisecond), time.Millisecond)
+		close(watchDone) // includes the terminal JSONL append
 	}()
 	for i := 0; i < 4; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 80; j++ {
+			for j := 0; j < 10000; j++ {
 				got := attackHTTP(t, s, []string{"tenant-a"})
 				if len(got) != 1 || got[0].ID != r.ID {
 					t.Errorf("HTTP reader: %+v", got)
@@ -153,10 +156,27 @@ func TestAttackWatcherHTTPPersistenceConcurrent(t *testing.T) {
 					t.Errorf("partial terminal: %+v", got[0])
 					return
 				}
+				if got[0].Status == "done" {
+					sawTerminal.Store(true)
+				}
+				select {
+				case <-watchDone:
+					// Read after the append as well, so these readers span both publication
+					// and persistence even when the watcher wins the scheduler.
+					for k := 0; k < 3; k++ {
+						_ = attackHTTP(t, s, []string{"tenant-a"})
+					}
+					return
+				default:
+				}
 			}
+			t.Error("reader exhausted before watcher completed")
 		}()
 	}
 	wg.Wait()
+	if !sawTerminal.Load() {
+		t.Fatal("no concurrent HTTP reader observed terminal publication")
+	}
 	got := attackHTTP(t, s, []string{"tenant-a"})
 	if len(got) != 1 || got[0].Outcome != "DEFENDED" || got[0].Status != "done" || got[0].Containment != "flushed" {
 		t.Fatalf("terminal producer: %+v", got)
