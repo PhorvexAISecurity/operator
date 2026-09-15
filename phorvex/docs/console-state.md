@@ -10,6 +10,14 @@ The Helm chart creates a dedicated `console-state` PVC by default. Set
 only that claim writable. Its audit client certificate, grant table, and root filesystem remain
 read-only; the manager audit PVC is mounted only by the manager Pod.
 
+The console Deployment is a singleton with the `Recreate` update strategy. An ordinary Helm or
+Deployment upgrade stops the old console Pod before starting the new one, so only one console
+process writes these ledgers during that upgrade. This causes a brief period when the console is
+unavailable. `Recreate` governs Deployment upgrades only: it does not fence a force-deleted Pod
+that is still running on a partitioned node, nor independently created or manually replaced Pods.
+Operators must avoid manual overlap and resolve uncertain termination before starting another
+console writer against the same claim.
+
 The storage operator owns StorageClass and claim provisioning, capacity alerts, snapshots,
 restore tests, and retention across upgrades. The chart-managed claim is retained on Helm delete
 by default; after uninstall it must be reattached deliberately or deleted by the storage owner.

@@ -18,6 +18,10 @@ metadata:
     app.kubernetes.io/component: console
 spec:
   replicas: 1
+  # State ledgers use process-local serialization. Recreate prevents ordinary upgrades from
+  # overlapping old and new console writers on the same claim.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: phorvex-console
