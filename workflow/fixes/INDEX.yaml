@@ -649,11 +649,11 @@ fixes:
     issues:
     - M-169
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t3-m169
-    head_sha: null
+    head_sha: ad9c56c9a4685d44cd3673f60a698b5960bba327
   T3-M172:
     directory: fixes/T3-M172
     aliases: []
