@@ -367,18 +367,18 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	}
 	// (2) optional RELOAD from a TRUSTED PINNED source ONLY (premortem: NEVER reload from the same
 	// poisoned path — that re-pulls the poison). No clean source => degrade to the base model.
-	if clean := pod.Annotations[annoLoRACleanSource]; clean != "" && uerr == nil {
+	if clean, approved := ec.AdapterSources.source(req.Namespace, adapter); approved && uerr == nil {
 		if lerr := ec.vllm().LoadAdapter(ctx, ep, adapter, clean); lerr != nil {
 			return HandlerResult{Emitted: true, MutationKind: "forward-only",
 					Note: "adapter-rotate partial: " + adapter + " was unloaded; clean reload failed and no epoch was recorded"},
-				fmt.Errorf("adapter-rotate reload-clean %q from %q: %w", adapter, clean, lerr)
+				fmt.Errorf("adapter-rotate configured reload %q failed: %w", adapter, lerr)
 		}
-		note += "; reloaded clean from " + clean
+		note += "; reloaded from operator-approved serving-local source"
 	} else if uerr == nil {
-		note += "; no clean source — degraded to base model (poison evicted)"
+		note += "; no operator-approved source for namespace and adapter — degraded to base model (poison evicted)"
 	}
-	// snapshot for rollback (reload from the clean source); record the epoch.
-	snap, _ := json.Marshal(map[string]string{"adapter": adapter, "clean": pod.Annotations[annoLoRACleanSource]})
+	// The snapshot records what was evicted, never tenant-provided reload authority.
+	snap, _ := json.Marshal(map[string]string{"adapter": adapter})
 	pod.Annotations = ensureMap(pod.Annotations)
 	pod.Annotations[annoAdapterSnapshot] = string(snap)
 	pod.Labels = ensureMap(pod.Labels)
@@ -392,11 +392,11 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	// assertion remains visible until its event expires or is removed.
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		return HandlerResult{Emitted: true, MutationKind: "forward-only",
-			Note: "adapter-rotate partial: " + note + "; Pod epoch write failed"},
+				Note: "adapter-rotate partial: " + note + "; Pod epoch write failed"},
 			fmt.Errorf("adapter-rotate epoch %s/%s: %w", req.Namespace, req.Pod, err)
 	}
 	return HandlerResult{
-		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
+		Emitted: true, MutationKind: "forward-only", RollbackRef: req.Namespace + "/" + req.Pod,
 		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
 		Note:           "adapter-rotate: " + note,
 	}, nil
@@ -409,12 +409,22 @@ func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Reque
 	if err != nil || !ok {
 		return orGone(err, ok, "adapter-rotate-rollback", req)
 	}
-	var snap struct{ Adapter, Clean string }
-	_ = json.Unmarshal([]byte(pod.Annotations[annoAdapterSnapshot]), &snap)
-	if snap.Adapter == "" || snap.Clean == "" {
-		return nil // nothing safe to restore
+	if req.TargetUID == "" || req.TargetUID != string(pod.UID) {
+		return fmt.Errorf("adapter-rotate rollback refused: target UID unavailable or changed")
 	}
-	return ec.vllm().LoadAdapter(ctx, endpointForPod(pod), snap.Adapter, snap.Clean)
+	adapter, evidenceErr := validateAdapterDispatch(ctx, ec, req, string(pod.UID))
+	if evidenceErr != nil {
+		return fmt.Errorf("adapter-rotate rollback refused: %w", evidenceErr)
+	}
+	var snap struct{ Adapter string }
+	if err := json.Unmarshal([]byte(pod.Annotations[annoAdapterSnapshot]), &snap); err != nil || snap.Adapter == "" || snap.Adapter != adapter {
+		return fmt.Errorf("adapter-rotate rollback refused: snapshot adapter identity invalid")
+	}
+	clean, approved := ec.AdapterSources.source(req.Namespace, adapter)
+	if !approved {
+		return fmt.Errorf("adapter-rotate rollback unsupported: no operator-approved source")
+	}
+	return ec.vllm().LoadAdapter(ctx, endpointForPod(pod), adapter, clean)
 }
 
 // --- 14. request-drain — request-granular in-flight eviction ------------------------------

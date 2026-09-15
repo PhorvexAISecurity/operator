@@ -64,6 +64,9 @@ spec:
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
         {{- end }}
+        {{- if .Values.phorvex.loraCleanSources.content }}
+        - --lora-clean-sources-file={{ .Values.phorvex.loraCleanSources.mountPath }}
+        {{- end }}
         - --gpu-envelope-max={{ .Values.phorvex.gpuEnvelopeMax }}
         {{- with .Values.phorvex.pcieClassCapacity }}
         - --pcie-class-table={{ toJson . }}
@@ -177,7 +180,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -202,13 +205,27 @@ spec:
           mountPath: {{ .Values.phorvex.admissionWebhook.certDir }}
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.loraCleanSources.content }}
+        - name: lora-clean-sources
+          mountPath: {{ .Values.phorvex.loraCleanSources.mountPath }}
+          subPath: sources.json
+          readOnly: true
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled }}
+        {{- end }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
         configMap:
           name: {{ .Values.phorvex.epss.configMapName }}
+      {{- end }}
+      {{- if .Values.phorvex.loraCleanSources.content }}
+      - name: lora-clean-sources
+        configMap:
+          name: {{ include "phorvex.fullname" . }}-lora-clean-sources
+          items:
+          - key: sources.json
+            path: sources.json
       {{- end }}
       {{- if .Values.phorvex.audit.enabled }}
       - name: audit

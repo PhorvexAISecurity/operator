@@ -28,6 +28,7 @@ type mockVLLM struct {
 	loaded                                           bool
 	drained                                          int
 	resetCalls, unloadCalls, loadCalls, drainCalls   int
+	loadedAdapter, loadedSource                      string
 }
 
 func (m *mockVLLM) ModelReady(_ context.Context, _ servingEndpoint) (bool, error) {
@@ -41,8 +42,9 @@ func (m *mockVLLM) UnloadAdapter(_ context.Context, _ servingEndpoint, _ string)
 	m.unloadCalls++
 	return m.unloadErr
 }
-func (m *mockVLLM) LoadAdapter(_ context.Context, _ servingEndpoint, _, _ string) error {
+func (m *mockVLLM) LoadAdapter(_ context.Context, _ servingEndpoint, adapter, source string) error {
 	m.loadCalls++
+	m.loadedAdapter, m.loadedSource = adapter, source
 	return m.loadErr
 }
 func (m *mockVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, error) {
