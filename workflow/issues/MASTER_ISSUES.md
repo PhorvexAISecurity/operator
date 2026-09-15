@@ -1143,7 +1143,7 @@ Severity: HIGH · Tier: parallel · Fixes: T2-M134
 
 ### M-138 · There is no recovery path: no bulk undo, no "revert last tick", no DR runbook · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M138
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
