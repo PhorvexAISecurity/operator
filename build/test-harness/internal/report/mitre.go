@@ -46,31 +46,49 @@ var mitreNames = map[string]string{
 	"T1573": "Encrypted Channel", "T1008": "Fallback Channels", "T1105": "Ingress Tool Transfer",
 	"T1496": "Resource Hijacking", "T1496.001": "Resource Hijacking: Compute Hijacking",
 	"T1496.002": "Resource Hijacking: Bandwidth Hijacking",
-	"T1485": "Data Destruction", "T1499": "Endpoint Denial of Service",
+	"T1485":     "Data Destruction", "T1499": "Endpoint Denial of Service",
 	"T1490": "Inhibit System Recovery", "T1498": "Network Denial of Service",
 }
 
-// RenderMitreMatrix builds a coverage matrix of which scenarios exercise which
-// ATT&CK techniques. It is GENERIC: it reads each registered scenario's
-// AttackTechniqueIDs, so a new scenario's techniques appear with no edit here.
+// RenderMitreMatrix separates declared narrative mappings from IDs directly
+// supported by executable mechanisms. Neither table is evidence that a live
+// defense succeeded; that requires valid trial output and controls.
 func RenderMitreMatrix(scenarios []core.Scenario) string {
-	// Collect technique -> scenarios.
-	tech := map[string][]string{}
+	declared := map[string][]string{}
+	exercised := map[string][]string{}
 	for _, s := range scenarios {
 		m := s.Metadata()
 		for _, id := range m.AttackTechniqueIDs {
-			tech[id] = append(tech[id], m.Name)
+			declared[id] = append(declared[id], m.Name)
+		}
+		if m.EffectiveRealism() == core.RealismExecutable {
+			for _, id := range m.ExercisedTechniqueIDs {
+				exercised[id] = append(exercised[id], m.Name)
+			}
 		}
 	}
+
+	var b strings.Builder
+	b.WriteString("# MITRE ATT&CK for Containers — Coverage Matrix\n\n")
+	b.WriteString("Declared mappings are narrative context. Exercised mappings require an explicitly executable mechanism. Neither table proves a successful live defense.\n\n")
+	b.WriteString(fmt.Sprintf("%d declared technique mappings and %d executable-mechanism technique mappings across %d scenarios.\n\n", len(declared), len(exercised), len(scenarios)))
+	b.WriteString("## Declared narrative mappings\n\n")
+	renderTechniqueTable(&b, declared)
+	b.WriteString("\n## Executed mechanism inventory\n\n")
+	if len(exercised) == 0 {
+		b.WriteString("No registered scenario explicitly supports a technique-level executable claim. Legacy scenarios remain unassessed.\n")
+	} else {
+		renderTechniqueTable(&b, exercised)
+	}
+	return b.String()
+}
+
+func renderTechniqueTable(b *strings.Builder, tech map[string][]string) {
 	ids := make([]string, 0, len(tech))
 	for id := range tech {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-
-	var b strings.Builder
-	b.WriteString("# MITRE ATT&CK for Containers — Coverage Matrix\n\n")
-	b.WriteString(fmt.Sprintf("%d techniques exercised across %d scenarios.\n\n", len(ids), len(scenarios)))
 	b.WriteString("| Technique | Name | Scenarios |\n|---|---|---|\n")
 	for _, id := range ids {
 		name := mitreNames[id]
@@ -78,7 +96,27 @@ func RenderMitreMatrix(scenarios []core.Scenario) string {
 		sort.Strings(scs)
 		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", id, name, strings.Join(dedupe(scs), ", ")))
 	}
+}
+
+// RenderScenarioInventory documents the registered implementation surface.
+func RenderScenarioInventory(scenarios []core.Scenario) string {
+	sort.Slice(scenarios, func(i, j int) bool { return scenarios[i].Metadata().Name < scenarios[j].Metadata().Name })
+	var b strings.Builder
+	b.WriteString("# Scenario mechanism inventory\n\n")
+	b.WriteString("`marker-simulation` rows measure only their stated marker oracle. `unassessed` is the legacy default and makes no executable-coverage claim. Declared technique mappings are context until a concrete mechanism supports them.\n\n")
+	b.WriteString("| Stable ID | Status | Actual mechanism | Actual capabilities | Oracle | Cleanup | Claim limits |\n|---|---|---|---|---|---|---|\n")
+	for _, s := range scenarios {
+		m := s.Metadata()
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n", m.Name, m.EffectiveRealism(), inventoryCell(m.Mechanism), inventoryCell(fmt.Sprint(m.CapabilityRequirements)), inventoryCell(m.OracleDescription), inventoryCell(m.CleanupDescription), inventoryCell(m.ClaimLimits)))
+	}
 	return b.String()
+}
+
+func inventoryCell(s string) string {
+	if strings.TrimSpace(s) == "" || s == "[]" {
+		return "—"
+	}
+	return strings.ReplaceAll(s, "|", "\\|")
 }
 
 func dedupe(in []string) []string {

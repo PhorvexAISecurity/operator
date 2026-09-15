@@ -61,6 +61,16 @@ const (
 	CapMIG Capability = "CapMIG"
 )
 
+// ScenarioRealism states what the implementation actually exercises. An empty
+// value is deliberately treated as unassessed for legacy plugins and records.
+type ScenarioRealism string
+
+const (
+	RealismUnassessed       ScenarioRealism = "unassessed"
+	RealismMarkerSimulation ScenarioRealism = "marker-simulation"
+	RealismExecutable       ScenarioRealism = "executable-mechanism"
+)
+
 // ScenarioMeta is the static descriptor every scenario advertises.
 type ScenarioMeta struct {
 	// Name is the stable plugin identifier (e.g. "c1-escape-persist").
@@ -71,8 +81,23 @@ type ScenarioMeta struct {
 	Source string
 	// R6ResponseTag is the honest, code-grounded R6 verdict.
 	R6ResponseTag R6Tag
-	// AttackTechniqueIDs are the MITRE ATT&CK for Containers technique IDs exercised.
+	// AttackTechniqueIDs are declared narrative mappings. They are not exercise
+	// or defense-coverage claims; ExercisedTechniqueIDs carries the smaller set
+	// directly supported by the implemented mechanism.
 	AttackTechniqueIDs []string
+	// ExercisedTechniqueIDs are supported by the executable mechanism. Empty is
+	// honest for marker simulations and for legacy, unassessed scenarios.
+	ExercisedTechniqueIDs []string
+	// Realism classifies the implementation. Empty means unassessed.
+	Realism ScenarioRealism
+	// Mechanism describes the concrete setup/stimulus/oracle under test.
+	Mechanism string
+	// ClaimLimits states what a successful result cannot establish.
+	ClaimLimits string
+	// OracleDescription and CleanupDescription make the catalogue independently
+	// reviewable without executing a scenario.
+	OracleDescription  string
+	CleanupDescription string
 	// CapabilityRequirements are the cluster capabilities REQUIRED to run; unmet
 	// requirements cause a skip-with-note (never a failure).
 	CapabilityRequirements []Capability
@@ -80,11 +105,21 @@ type ScenarioMeta struct {
 	R6Justification string
 }
 
-// AttackResult is what Execute reports: the kill-chain stages it performed and
+// EffectiveRealism converts legacy empty metadata to the explicit unassessed
+// state. Callers must never infer executable coverage from an absent descriptor.
+func (m ScenarioMeta) EffectiveRealism() ScenarioRealism {
+	if m.Realism == "" {
+		return RealismUnassessed
+	}
+	return m.Realism
+}
+
+// AttackResult is what Execute reports: the concrete stages it performed and
 // the commands it issued (for provenance). It is intentionally evidence-rich and
 // oracle-agnostic; the verdict lives in OracleResult.
 type AttackResult struct {
-	// Stages are the ordered kill-chain stages the attack performed.
+	// Stages are the ordered implementation stages actually performed. Narrative
+	// phases that were not executed must not appear here.
 	Stages []string
 	// Commands are the concrete commands/API calls issued (provenance).
 	Commands []string

@@ -91,6 +91,7 @@ type ArmSummary struct {
 	Defender string
 	Category core.Category
 	R6Tag    core.R6Tag
+	Realism  core.ScenarioRealism
 	// Kind is the trial kind this summary aggregates (ordinary or adaptive).
 	Kind core.TrialKind
 	// Trials is the number of SCORED trials behind the statistics below.
@@ -152,6 +153,7 @@ type armAcc struct {
 	oracleHits, oracleObserved       int
 	category                         core.Category
 	r6                               core.R6Tag
+	realism                          core.ScenarioRealism
 	negTotal, negUsable, negUnusable int
 	negFalseMax                      int
 	control                          string
@@ -184,7 +186,7 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 		if !ok {
 			// negFalseMax starts at -1 (UNOBSERVED) so an arm that never observed a
 			// negative control can never present a zero.
-			a = &armAcc{category: m.Category, r6: m.R6Tag, negFalseMax: -1}
+			a = &armAcc{category: m.Category, r6: m.R6Tag, realism: effectiveMetricRealism(m), negFalseMax: -1}
 			byArm[k] = a
 			order = append(order, k)
 		}
@@ -321,6 +323,7 @@ func aggregate(metrics []core.Metric, ciLevel float64, kind core.TrialKind, anch
 			Defender:             k.Defender,
 			Category:             a.category,
 			R6Tag:                a.r6,
+			Realism:              a.realism,
 			Kind:                 kind,
 			Trials:               a.validity.Scored,
 			Skipped:              a.validity.Scored == 0,
@@ -377,6 +380,8 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	summaries := Aggregate(metrics, ciLevel)
 	adaptive := AggregateAdaptive(metrics, ciLevel)
 	anchors := AggregateAnchorControls(metrics, ciLevel)
+	realAdaptive, markerAdaptive := splitMarkerSummaries(adaptive)
+	realAnchors, markerAnchors := splitMarkerSummaries(anchors)
 
 	b.WriteString("# Phoenix / Phorvex Attack-Harness Report\n\n")
 	b.WriteString(fmt.Sprintf("Confidence level: %.0f%%. Disruption is measured STRICTLY against each scenario's concrete observable oracle, anchored to the undefended positive control OBSERVED AT THE SAME TRIAL INDEX AND KIND.\n\n", ciLevel*100))
@@ -396,9 +401,16 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 		b.WriteString("\n")
 	}
 
-	b.WriteString("## Per-arm results (scenario x defender)\n\n")
+	realSummaries, markerSummaries := splitMarkerSummaries(summaries)
+	b.WriteString("## Per-arm results — executable/unassessed scenarios\n\n")
 	b.WriteString("Trials counts SCORED trials only; see Measurement validity for what the arm emitted.\n\n")
-	b.WriteString(renderArmTable(summaries))
+	b.WriteString("Legacy `unassessed` rows remain visible but do not establish technique-level realism.\n\n")
+	b.WriteString(renderArmTable(realSummaries))
+	if len(markerSummaries) > 0 {
+		b.WriteString("## Marker-simulation results (excluded from real attack-defense percentages)\n\n")
+		b.WriteString("These percentages measure disruption of the stated marker fixture only. They do not measure the declared operation, ATT&CK/ATLAS techniques, or GPU mechanisms.\n\n")
+		b.WriteString(renderArmTable(markerSummaries))
+	}
 
 	b.WriteString(renderValidityTable("Measurement validity", summaries))
 
@@ -407,20 +419,25 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	b.WriteString("- **Positive control (undefended):** every attack MUST achieve its oracle on the undefended arm (OracleHit% should be ~100). A comparison is scored ONLY against a control that was observed, valid and successful at the same trial index and kind.\n")
 	b.WriteString("- **Negative control (no-attack):** each defender arm should show ~0 disruption and a MEASURED 0 false defensive moves. `not-run` and `unobserved` are reported as such and never as a measured 0.\n")
 	b.WriteString("- **Pairing scope:** `TrialSeed` includes the defender identity, so the baseline arm's trial *i* and a defended arm's trial *i* are seeded differently. Read a scored comparison as \"this arm vs the undefended arm at the same index\", NOT as the same trial re-run with the defense removed.\n\n")
-	if len(anchors) > 0 {
+	if len(realAnchors) > 0 {
 		b.WriteString("### Force-included anchor-only control arms\n\n")
 		b.WriteString("These arms were excluded by the DefenderFilter and run for their positive trials ONLY. Their negative-control and adaptive passes were NOT run and are reported as `not-run`.\n\n")
-		b.WriteString(renderArmTable(anchors))
-		b.WriteString(renderValidityTable("Anchor-only control validity", anchors))
+		b.WriteString(renderArmTable(realAnchors))
+		b.WriteString(renderValidityTable("Anchor-only control validity", realAnchors))
 	}
 
 	// Adaptive observations, reported separately from the ordinary comparison.
-	if len(adaptive) > 0 {
+	if len(realAdaptive) > 0 {
 		b.WriteString("## Adaptive-attacker observations (reported separately)\n\n")
 		b.WriteString("The adaptive pass runs at trial index TrialsPerArm+1 and is comparable ONLY to the baseline arm's own adaptive pass at that index. Where that control was not observed, the row is UNSCORED with an explicit missing-control reason and never borrows an ordinary baseline.\n\n")
 		b.WriteString("EXPERIMENTAL LIMITATION: even when an adaptive control exists, the undefended control has no rotation rhythm to learn and therefore strikes immediately. A scored adaptive comparison contrasts a lull-timed attack against an undefended immediate attack; it does NOT isolate the value of the learned strategy. Redesigning that comparison is out of scope here.\n\n")
-		b.WriteString(renderArmTable(adaptive))
-		b.WriteString(renderValidityTable("Adaptive measurement validity", adaptive))
+		b.WriteString(renderArmTable(realAdaptive))
+		b.WriteString(renderValidityTable("Adaptive measurement validity", realAdaptive))
+	}
+	if len(markerAdaptive)+len(markerAnchors) > 0 {
+		b.WriteString("## Additional marker-simulation control/adaptive observations\n\n")
+		b.WriteString("These remain fixture-only observations and are excluded from real attack-defense percentages and economics.\n\n")
+		b.WriteString(renderArmTable(append(markerAnchors, markerAdaptive...)))
 	}
 
 	// Pass-B AI split-oracle / MTD-effect surface (only rows that stamped it).
@@ -434,6 +451,37 @@ func RenderMarkdownRun(metrics []core.Metric, ciLevel float64, capNotes map[stri
 	}
 	b.WriteString("\nEvery number above traces to a raw log + command via provenance.json.\n")
 	return b.String()
+}
+
+// ExcludeMarkerSimulations returns rows eligible for reports that present real
+// attack-defense economics. Simulation rows remain in raw metrics/provenance and
+// in the explicitly labelled marker sections of the main report.
+func ExcludeMarkerSimulations(metrics []core.Metric) []core.Metric {
+	out := make([]core.Metric, 0, len(metrics))
+	for _, m := range metrics {
+		if effectiveMetricRealism(m) != core.RealismMarkerSimulation {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func effectiveMetricRealism(m core.Metric) core.ScenarioRealism {
+	if m.ScenarioRealism == "" {
+		return core.RealismUnassessed
+	}
+	return m.ScenarioRealism
+}
+
+func splitMarkerSummaries(in []ArmSummary) (other, marker []ArmSummary) {
+	for _, s := range in {
+		if s.Realism == core.RealismMarkerSimulation {
+			marker = append(marker, s)
+		} else {
+			other = append(other, s)
+		}
+	}
+	return other, marker
 }
 
 func renderRunCompleteness(run *core.RunOutcome) string {

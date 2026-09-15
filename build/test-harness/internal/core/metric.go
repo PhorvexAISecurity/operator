@@ -100,7 +100,12 @@ type Metric struct {
 	// R6Tag mirrors the scenario's honest R6 verdict (carried for reporting).
 	R6Tag R6Tag `json:"r6Tag"`
 	// Category mirrors the scenario category (carried for reporting).
-	Category Category `json:"category"`
+	Category              Category        `json:"category"`
+	ScenarioRealism       ScenarioRealism `json:"scenarioRealism"`
+	ScenarioMechanism     string          `json:"scenarioMechanism,omitempty"`
+	ScenarioClaimLimits   string          `json:"scenarioClaimLimits,omitempty"`
+	DeclaredTechniqueIDs  []string        `json:"declaredTechniqueIds,omitempty"`
+	ExercisedTechniqueIDs []string        `json:"exercisedTechniqueIds,omitempty"`
 
 	// ---- PASS-B ADDITIVE FIELDS (all omitempty / zero-valued so the 1980 Pass-A
 	// rows decode UNCHANGED; the SAME struct is emitted on every environment) ----
@@ -150,7 +155,7 @@ type Metric struct {
 // transparent and recomputable from the config knobs (see internal/config).
 type ROIMetric struct {
 	// GpuCount / DollarsPerGpuHour are the swappable inputs (echoed for audit).
-	GpuCount         int     `json:"gpuCount"`
+	GpuCount          int     `json:"gpuCount"`
 	DollarsPerGpuHour float64 `json:"dollarsPerGpuHour"`
 	// GpuOverheadDollarsPerYearSaved is the GPU-overhead $/yr the MTD avoids vs a
 	// static-but-unprotected baseline (GpuCount*$/hr*8760*overheadPercent).
