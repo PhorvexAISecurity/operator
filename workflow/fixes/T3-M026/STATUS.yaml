@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -73,13 +73,29 @@ checks:
     sha256: 4698913c345ffe5de8c10721438ad8bb3b5917e8372f5a3eb4ed5bd13d168a57
     source_sha: 47d5b5750d243b3a91a25553596304b8600be468
     at: '2026-09-15T07:00:05+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 23e982d01b63853f61309717043e418c3ce6d90a06a1878272f42f56ad3ca6c8
+    source_sha: 47d5b5750d243b3a91a25553596304b8600be468
+    at: '2026-09-15T07:01:31+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e7b9a3a4c85dcb51889f55969ae7e325cbcae6c375b5957adafb3ca479803aa9
+    source_sha: 47d5b5750d243b3a91a25553596304b8600be468
+    at: '2026-09-15T07:01:31+00:00'
+    incident_sha256: 23e982d01b63853f61309717043e418c3ce6d90a06a1878272f42f56ad3ca6c8
 fix_id: T3-M026
 issues:
 - M-26
 title: The anti-decoy gate (HasEvidence) is tautologically open on multi-namespace
   GPU nodes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -124,7 +140,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -140,10 +156,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T07:00:07+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T07:01:33+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:35+00:00'
   by: codex-lead
@@ -219,10 +235,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T07:01:31+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T07:01:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T3-M026:12:submit
-  from: sol-t3-m026
+  id: T3-M026:13:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 12
+  role: coordinator
+  kind: review
+  revision: 13

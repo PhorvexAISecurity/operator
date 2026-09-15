@@ -561,7 +561,7 @@ fixes:
     issues:
     - M-26
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t3-m026
