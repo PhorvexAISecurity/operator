@@ -11,6 +11,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -47,9 +48,10 @@ type actionGap struct {
 func (g actionGap) unsupportedEverywhere() bool { return g.unsupported >= g.total }
 
 type actionsSupportStatus struct {
-	status  metav1.ConditionStatus
-	reason  string
-	message string
+	status      metav1.ConditionStatus
+	reason      string
+	message     string
+	preparation *actuator.RoutePreparation
 }
 
 // capabilityReport is ONE tick's capability picture for one policy: the per-action gaps

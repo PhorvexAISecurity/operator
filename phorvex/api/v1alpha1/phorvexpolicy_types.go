@@ -69,7 +69,7 @@ type PhorvexPolicySpec struct {
 	// even if enabled while its weight and execution prerequisites are unresolved.
 	Cover CoverSpec `json:"cover,omitempty"`
 
-	// Selector chooses the pods this policy protects (PRD: selector.matchLabels).
+	// Selector chooses the pods this policy protects, including matchExpressions.
 	// Only pods in this policy's namespace (tenant) that match are considered.
 	// +kubebuilder:validation:Required
 	Selector metav1.LabelSelector `json:"selector"`
@@ -484,7 +484,8 @@ type PhorvexPolicyStatus struct {
 	// +kubebuilder:validation:Optional
 	KillSwitchEngaged bool `json:"killSwitchEngaged"`
 
-	// Conditions includes Ready, DryRun, ValidationError, KillSwitch, ActionsSupported.
+	// Conditions includes Ready, DryRun, ValidationError, KillSwitch,
+	// ActionsSupported, and ActuationPrepared (current tick's backend preparation).
 	// +kubebuilder:validation:Optional
 	// +listType=map
 	// +listMapKey=type

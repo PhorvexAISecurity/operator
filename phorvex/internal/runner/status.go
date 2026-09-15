@@ -6,6 +6,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -26,6 +27,16 @@ func metav1SelAsSel(sel *metav1.LabelSelector) (labels.Selector, error) {
 		return labels.Everything(), nil
 	}
 	return metav1.LabelSelectorAsSelector(sel)
+}
+
+func preparationRouteDetail(err error, skipped bool) string {
+	if skipped {
+		return "not required"
+	}
+	if err != nil {
+		return "refused (" + err.Error() + ")"
+	}
+	return "prepared"
 }
 
 // updateStatus writes the operational tick result back onto the PhorvexPolicy status
@@ -107,6 +118,36 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 			Reason:             actions.reason,
 			Message:            actions.message,
 			ObservedGeneration: p.Generation,
+		})
+		prepStatus, prepReason, prepMessage := metav1.ConditionUnknown, "NotAttempted", "actuator preparation was not attempted this tick"
+		if actions.preparation != nil && e.generation != p.Generation {
+			prepReason, prepMessage = "StalePreparation", fmt.Sprintf("preparation was for generation %d; current policy generation is %d", e.generation, p.Generation)
+		} else if actions.preparation != nil && m.Actuator != nil {
+			prepStatus, prepReason, prepMessage = metav1.ConditionTrue, "Prepared", "selected actuator route prepared this tick"
+			prep := actions.preparation
+			switch m.Actuator.Name() {
+			case "hybrid":
+				if prep.PhoenixSkipped && prep.NativeSkipped {
+					prepStatus, prepReason, prepMessage = metav1.ConditionUnknown, "NoEnabledRoutes", "no enabled action route required preparation this tick"
+				} else if prep.PhoenixSkipped || prep.NativeSkipped {
+					prepMessage = fmt.Sprintf("Phoenix route: %s; native route: %s", preparationRouteDetail(prep.PhoenixErr, prep.PhoenixSkipped), preparationRouteDetail(prep.NativeErr, prep.NativeSkipped))
+				}
+				if prep.PhoenixErr != nil || prep.NativeErr != nil {
+					prepStatus, prepReason = metav1.ConditionFalse, "RoutePreparationRefused"
+					prepMessage = fmt.Sprintf("Phoenix route: %s; native route: %s. Existing AMTD objects, if any, are retained; refused routes emit no new event", preparationRouteDetail(prep.PhoenixErr, prep.PhoenixSkipped), preparationRouteDetail(prep.NativeErr, prep.NativeSkipped))
+				}
+			case "native":
+				if prep.NativeErr != nil {
+					prepStatus, prepReason, prepMessage = metav1.ConditionFalse, "NativePreparationRefused", prep.NativeErr.Error()
+				}
+			default:
+				if prep.PhoenixErr != nil {
+					prepStatus, prepReason, prepMessage = metav1.ConditionFalse, "PhoenixPreparationRefused", prep.PhoenixErr.Error()+"; existing AMTD objects, if any, are retained"
+				}
+			}
+		}
+		meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
+			Type: "ActuationPrepared", Status: prepStatus, Reason: prepReason, Message: prepMessage, ObservedGeneration: p.Generation,
 		})
 
 		// [PHVX-17] The CRD documents a "KillSwitch" condition ("Conditions includes Ready, DryRun,

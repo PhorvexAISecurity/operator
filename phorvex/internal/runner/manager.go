@@ -1666,12 +1666,13 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
+	var currentPreparation *actuator.RoutePreparation
 	if !effectiveDryRun && !killEngaged && m.Actuator != nil {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
 		}
-		m.actuate(ctx, e, pol, decisions, viewByKey)
+		_, currentPreparation = m.actuatePrepared(ctx, e, pol, decisions, viewByKey)
 	}
 
 	assessmentInput := colocationInput(snap, e)
@@ -1713,6 +1714,7 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
 	}
 	m.updateExistentialStatus(ctx, e, decisions, inventory)
+	actionsSupport.preparation = currentPreparation
 	m.updateStatus(ctx, e, len(views), selected, 0, killEngaged, time.Now(), actionsSupport)
 
 	m.creditCadence(e, snap.Now)
@@ -1791,6 +1793,11 @@ func shadowSafetyViolations(decisions []model.Decision, views []*model.WorkloadV
 }
 
 func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) int {
+	count, _ := m.actuatePrepared(ctx, e, pol, decisions, tickViewByKey)
+	return count
+}
+
+func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) (int, *actuator.RoutePreparation) {
 	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -1807,10 +1814,33 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 	target := actuator.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
-		MatchLabels:    e.spec.Selector.MatchLabels,
+		PolicyName:     e.key.Name,
+		PolicyUID:      e.uid,
+		Generation:     e.generation,
+		Selector:       e.spec.Selector.DeepCopy(),
 		EnabledActions: pol.EnabledActions,
 	}
-	if err := m.Actuator.EnsurePolicy(ctx, target); err != nil {
+	var preparation actuator.RoutePreparation
+	var err error
+	if routed, ok := m.Actuator.(interface {
+		PrepareRoutes(context.Context, actuator.TenantTarget) actuator.RoutePreparation
+	}); ok {
+		preparation = routed.PrepareRoutes(ctx, target)
+		if preparation.PhoenixErr != nil {
+			m.Log.Error(preparation.PhoenixErr, "Phoenix route preparation refused", "tenant", pol.Tenant, "namespace", e.namespace)
+		}
+		if preparation.NativeErr != nil {
+			m.Log.Error(preparation.NativeErr, "native route preparation refused", "tenant", pol.Tenant, "namespace", e.namespace)
+		}
+	} else {
+		err = m.Actuator.EnsurePolicy(ctx, target)
+		if m.Actuator.Name() == "native" {
+			preparation.NativeErr = err
+		} else {
+			preparation.PhoenixErr = err
+		}
+	}
+	if err != nil {
 		m.Log.Error(err, "actuator EnsurePolicy failed; suppressing actuation this tick", "tenant", pol.Tenant)
 		// T0-C: a tick-level pre-dispatch guard — every selected move is refused here.
 		for i := range decisions {
@@ -1819,7 +1849,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 				decisions[i].Trace.DispatchReason = "ensure-policy-failed"
 			}
 		}
-		return 0
+		return 0, &preparation
 	}
 	actuated := 0
 	for i := range decisions {
@@ -1841,6 +1871,11 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			m.Log.Error(nil, "INVARIANT VIOLATION: a selected move was infeasible/noop; refusing to emit",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			stampDispatch(model.DispatchNotAttempted, "inviolability-guard")
+			continue
+		}
+		if prepErr := preparation.ForAction(decisions[i].Action); prepErr != nil {
+			m.Log.Error(prepErr, "action route preparation refused; suppressing dispatch", "tenant", pol.Tenant, "namespace", decisions[i].Namespace, "pod", decisions[i].Pod, "action", decisions[i].Action)
+			stampDispatch(model.DispatchNotAttempted, "route-preparation-failed: "+prepErr.Error())
 			continue
 		}
 		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
@@ -1988,7 +2023,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}
-	return actuated
+	return actuated, &preparation
 }
 
 // phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision

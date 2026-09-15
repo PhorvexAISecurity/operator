@@ -7,6 +7,7 @@ package actuator
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -69,6 +70,15 @@ func (*NativeActuator) Name() string { return "native" }
 // EnsurePolicy records the tenant→namespace binding (O7) and pre-stages per-tenant native state where a
 // handler needs it. The base K8s moves need no standing CR, so beyond the binding this is a no-op.
 func (n *NativeActuator) EnsurePolicy(_ context.Context, target TenantTarget) error {
+	if target.Selector != nil {
+		sel := targetSelector(target)
+		if len(sel.MatchLabels)+len(sel.MatchExpressions) == 0 {
+			return fmt.Errorf("native actuator: active tenant %q has empty selector", target.Tenant)
+		}
+		if _, err := metav1.LabelSelectorAsSelector(&sel); err != nil {
+			return fmt.Errorf("native actuator: tenant %q invalid selector: %w", target.Tenant, err)
+		}
+	}
 	if target.Tenant == "" || target.Namespace == "" {
 		return nil
 	}
