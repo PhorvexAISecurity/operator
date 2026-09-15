@@ -25,6 +25,11 @@ These are four DIFFERENT properties and the table keeps them apart on purpose:
 A historical live result (for example the 2026-08-21 Phoenix rotate observation under
 M-9) is evidence about ONE build, target and configuration. It is not a standing
 guarantee for any other deployment and is deliberately absent from this table.
+`identity-rotate` is retained as stored policy vocabulary and for cleanup of historical
+epoch-label snapshots. It is declared-only for new dispatch: it cannot rotate UID, IP
+or ServiceAccount credentials. `route-rotate` is a real Service-selector restitch;
+the per-target capability gate requires its declared Service to select the target
+route-key with the target Ready and at least two Ready backends.
 
 ## phoenix
 
@@ -58,7 +63,7 @@ guarantee for any other deployment and is deliberately absent from this table.
 | `quarantine` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `identity-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `identity-rotate` | native | no | backend-unsupported: native cannot enact "identity-rotate" (declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials) | — | — |
 | `route-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `warm-swap` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
@@ -80,7 +85,7 @@ guarantee for any other deployment and is deliberately absent from this table.
 | `quarantine` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `identity-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `identity-rotate` | native | no | backend-unsupported: native cannot enact "identity-rotate" (declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials) | — | — |
 | `route-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `warm-swap` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |

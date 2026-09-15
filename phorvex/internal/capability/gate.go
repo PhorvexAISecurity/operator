@@ -88,6 +88,7 @@ type Index struct {
 	shardShadow      map[string]bool // "ns\x00shard" -> a ready promotable shadow exists (independent shard)
 	parallelRanks    map[string]int  // "ns\x00shard\x00parallel" -> distinct ready shadow ranks
 	servingByNS      map[string][]ingest.ServiceInfo
+	readyByService   map[string]int
 	schedulableGPU   int
 }
 
@@ -109,6 +110,17 @@ func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.Se
 		shardShadow:      map[string]bool{},
 		parallelRanks:    map[string]int{},
 		servingByNS:      map[string][]ingest.ServiceInfo{},
+		readyByService:   map[string]int{},
+	}
+	readyByNS := map[string][]model.Pod{}
+	declaredRoutes := map[string]bool{}
+	for _, pod := range fleet {
+		if pod.RouteService != "" {
+			declaredRoutes[poolKey(pod.Namespace, pod.RouteService)] = true
+		}
+		if pod.Ready {
+			readyByNS[pod.Namespace] = append(readyByNS[pod.Namespace], pod)
+		}
 	}
 	// Bucket ready promotable shadows once.
 	seenRank := map[string]map[string]bool{} // parallelKey -> set of ranks
@@ -144,6 +156,14 @@ func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.Se
 	}
 	for _, svc := range services {
 		idx.servingByNS[svc.Namespace] = append(idx.servingByNS[svc.Namespace], svc)
+		if !declaredRoutes[poolKey(svc.Namespace, svc.Name)] {
+			continue
+		}
+		for _, pod := range readyByNS[svc.Namespace] {
+			if selectorMatches(svc.Selector, pod.Labels) {
+				idx.readyByService[poolKey(svc.Namespace, svc.Name)]++
+			}
+		}
 	}
 	return idx
 }
@@ -209,6 +229,9 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 	if w.notInstall.Has(action) {
 		return &Reason{Excluded: true, Kind: ReasonNotInstallable, Detail: "action not in installed CRD action enum"}
 	}
+	if action == model.ActionIdentityRotate {
+		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: model.IdentityRotateUnsupportedReason}
+	}
 	if len(coverKeys) == 0 {
 		return &Reason{Excluded: true, Kind: ReasonNoCover, Detail: "recon-cover: action invalidates no facts for this asset"}
 	}
@@ -262,6 +285,11 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 			return false, "pod advertises no GPU or model identity"
 		}
 		if why := w.configWhy(pod, action); why != "" {
+			return false, why
+		}
+	}
+	if action == model.ActionRouteRotate {
+		if why := w.configWhy(&v.Pod, action); why != "" {
 			return false, why
 		}
 	}
@@ -335,6 +363,23 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if pod.RouteService == "" {
 			return "pod declares no phorvex.ai/route-service"
 		}
+	case model.ActionRouteRotate:
+		if pod.RouteService == "" {
+			return "pod declares no phorvex.ai/route-service"
+		}
+		for _, svc := range w.idx.servingByNS[pod.Namespace] {
+			if svc.Name != pod.RouteService {
+				continue
+			}
+			if svc.Selector["phorvex.ai/route-key"] == "" || !selectorMatches(svc.Selector, pod.Labels) {
+				return "declared route Service selector does not select the target route-key"
+			}
+			if !pod.Ready || w.idx.readyByService[poolKey(pod.Namespace, svc.Name)] < 2 {
+				return "declared route Service requires target Ready and at least two Ready backends"
+			}
+			return ""
+		}
+		return "declared route Service is absent from the namespace"
 	case model.ActionRequestDrain:
 		if !w.servingServiceSelects(pod) {
 			return "no target Service selects on phorvex.ai/serving for this pod"
@@ -414,7 +459,8 @@ func selectorMatches(selector, podLabels map[string]string) bool {
 		return false
 	}
 	for key, value := range selector {
-		if podLabels[key] != value {
+		actual, present := podLabels[key]
+		if !present || actual != value {
 			return false
 		}
 	}

@@ -204,15 +204,11 @@ func (disableHandler) Enact(_ context.Context, _ EnactCtx, _ Request) (HandlerRe
 	return HandlerResult{Emitted: false, MutationKind: "declared", Note: "disable is declared-not-implemented (matches Phoenix posture); no fabricated behaviour"}, nil
 }
 
-// --- 6. identity-rotate (advanced K8s; native-only) — reversible -------------------------
+// --- 6. identity-rotate (declared-only; historical metadata rollback) ------------------
 //
-// Relabel the pod with a fresh identity epoch. Reversible (prior labels snapshotted).
-//
-// SCOPE — read before granting this action recon cover: it writes a `phorvex.ai/identity-epoch`
-// LABEL. Projected tokens rotate on their own on modern K8s, and nothing selects on the label,
-// so the pod's UID, SA token, IP and EndpointSlice
-// membership are UNCHANGED. It does not invalidate the podIdentity recon fact — see
-// recon/profile.go, where the cover grant was removed for exactly this reason.
+// The old handler only relabeled identity-epoch. No UID, IP, projected credential or
+// EndpointSlice membership changed, so new dispatch refuses before any Pod access.
+// Rollback remains registered solely to restore snapshots left by older builds.
 
 type identityRotateHandler struct{}
 
@@ -221,24 +217,7 @@ func (identityRotateHandler) Name() string { return string(model.ActionIdentityR
 const identitySnapAnno = "phorvex.ai/identity-snapshot"
 
 func (identityRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "identity-rotate", req)
-	}
-	snap, _ := json.Marshal(copyLabels(pod.Labels))
-	pod.Labels = ensureMap(pod.Labels)
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[identitySnapAnno] = string(snap)
-	epoch := pod.ResourceVersion // a fresh identity-epoch token each rotate
-	pod.Labels["phorvex.ai/identity-epoch"] = epoch
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("identity-rotate %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "identity-epoch relabel only; ServiceAccount token, pod UID and pod IP unchanged",
-	}, nil
+	return HandlerResult{}, fmt.Errorf("%s", model.IdentityRotateUnsupportedReason)
 }
 
 func (identityRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
@@ -264,6 +243,19 @@ type routeSnapshot struct {
 	ServiceSelector map[string]string `json:"serviceSelector"`
 }
 
+func selectorMatchesPod(selector, podLabels map[string]string) bool {
+	if len(selector) == 0 {
+		return false
+	}
+	for key, value := range selector {
+		actual, present := podLabels[key]
+		if !present || actual != value {
+			return false
+		}
+	}
+	return true
+}
+
 func (routeRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
@@ -281,12 +273,15 @@ func (routeRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (
 	if err := ec.Client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: svcName}, &svc); err != nil {
 		return HandlerResult{}, fmt.Errorf("route-rotate get Service %s/%s: %w", req.Namespace, svcName, err)
 	}
+	if svc.Spec.Selector[labelRouteKey] == "" || !selectorMatchesPod(svc.Spec.Selector, pod.Labels) {
+		return HandlerResult{}, fmt.Errorf("route-rotate refused: declared Service %s/%s does not select the target route-key", req.Namespace, svcName)
+	}
 	ready, err := readyPodsMatchingService(ctx, ec.Client, &svc)
 	if err != nil {
 		return HandlerResult{}, fmt.Errorf("route-rotate count Ready backends for Service %s/%s: %w", req.Namespace, svcName, err)
 	}
-	if ready == 1 {
-		return HandlerResult{}, fmt.Errorf("route-rotate refused: Service %s/%s has exactly one Ready backend", req.Namespace, svcName)
+	if !podReady(pod) || ready < 2 {
+		return HandlerResult{}, fmt.Errorf("route-rotate refused: Service %s/%s requires target Ready and at least two Ready backends (found %d)", req.Namespace, svcName, ready)
 	}
 
 	snap := routeSnapshot{

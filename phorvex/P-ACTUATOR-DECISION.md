@@ -42,7 +42,7 @@ build/CI-enforced completeness theorem**, and is the candidate that does not ove
 | 5 | `disable` (=Phoenix declaration, NEW) | K8s | declared-not-implemented (matches Phoenix's posture); EXCLUDED from emittable set, but the handler exists so completeness stays green | n/a | no |
 
 **Advanced K8s** (native-only — Phoenix cannot):
-| 6 | `identity-rotate` | K8s | relabel to a new identity-epoch + rotate SA-token + CNI re-IP | snapshot prior labels | no |
+| 6 | `identity-rotate` | K8s | declared-only for new execution; historical identity-epoch relabel did not rotate SA-token, UID or IP | restore historical label snapshots only | no |
 | 7 | `route-rotate` | K8s | `Services()`/`EndpointSlices()` selector repoint — stales the learned route without denying all traffic | snapshot prior selector | no |
 
 **Advanced AI/GPU** (native-only; structure ships now, **magnitudes `[SP-0-PENDING]`** under `GPUPresent=false`):
@@ -155,7 +155,7 @@ additive with zero schema/brain change.
 ---
 
 ## 8. Both products + prove-on-kind plan
-**K8s (live, measured on kind):** rotate/quarantine/debugger/custom-inject/identity-rotate/route-rotate
+**K8s (historically measured on kind):** rotate/quarantine/debugger/custom-inject/identity-rotate/route-rotate. The identity entry observed only an epoch relabel; it did not prove UID, IP or credential rotation and is declared-only for new execution.
 are pure client-go, deterministic, no GPU. **AI (definition-complete now, magnitudes `[SP-0-PENDING]`):**
 warm-swap/MIG-rebind/KV-reset/endpoint-rotate/model-shard-replace handlers self-register and the
 feasibility *structure* ships, but every magnitude reads the `GPUPresent`-gated `PhysicsWitness`
