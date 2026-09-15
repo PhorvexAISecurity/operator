@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -86,13 +86,29 @@ checks:
     - phorvex/internal/killchain
     - phorvex/internal/model
     inputs_sha256: 94d89f89d490391fb4095bcab980a05c74b0f20b055c7cee57f6d354432768a8
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 63d5a53e3829535c6eb8c9838f5cb48723b77a9c24fff9ce4dd5c3fa58306f00
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:49:10+00:00'
+    baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: b0f867586143405baf12803c95e681f4f51e4808364990e42268a34f74b16c9d
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:49:10+00:00'
+    incident_sha256: 63d5a53e3829535c6eb8c9838f5cb48723b77a9c24fff9ce4dd5c3fa58306f00
 fix_id: T5-M150
 issues:
 - M-150
 title: '`CoResidency` counts namespaces, and DaemonSets count as namespaces — the
   `> 1` conjunct is vacuous fleet-wide'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -137,7 +153,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -153,10 +169,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T21:48:03+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T21:49:13+00:00'
 configuration_history:
 - at: '2026-09-15T19:32:45+00:00'
   by: codex-lead
@@ -208,10 +224,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T21:49:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T21:49:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T5-M150:6:submit
-  from: sol-t5-m150
+  id: T5-M150:7:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 6
+  role: coordinator
+  kind: review
+  revision: 7
