@@ -630,11 +630,15 @@ fixes:
     issues:
     - M-148
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
-    stacked_on: []
+    stacked_on:
+    - T3-M169
+    - T3-M026
+    - T3-M132
+    - T3-M086
     branch: fix/t3-m148
-    head_sha: null
+    head_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
   T3-M158:
     directory: fixes/T3-M158
     aliases: []

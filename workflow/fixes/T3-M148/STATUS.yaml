@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 13
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,69 @@ checks:
     at: '2026-09-15T06:24:45+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review-m086.md
+    sha256: 519ceaabd7579dacb6a4c2490f7f5493407645792e4e406ff0e00bec4b1fa2a8
+    source_sha: 2e45c9903262827253dff0c21a7b1fb94fe9b511
+    at: '2026-09-15T08:02:41+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  red:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/worker/red-original-main-final.log
+    sha256: 0daf99e6742c3405b4cf5de676ab347df547823a1795d6eb7f1e8db47367340f
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T08:37:55+00:00'
+  preflight:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/preflight/receipt.json
+    sha256: 06a533739370d2f08e549334a92ded2b62ca993fe9f3ab35c50e19f324d61851
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  implementation:
+    result: PASS
+    by: sol-t3-m148
+    artifact: 04-diff.patch
+    sha256: c0e150b62ee29a72fc12ed7ee4b6a967c7039661bbb5328a659096e016dda6e3
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  l0:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/preflight/receipt.json
+    sha256: 06a533739370d2f08e549334a92ded2b62ca993fe9f3ab35c50e19f324d61851
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  l1:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/preflight/run-1789461224020171744/go-phorvex.log
+    sha256: 89bed5a02f0a8d10dcb87281f70b474015915b705bafe3e6819510a1a8ed8912
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  l2:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/worker/head-focused-final.log
+    sha256: 808e66dd512c2c64c6225a521f0bb7ca0ef58e40e4f2708f1bbd817a87ed0776
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t3-m148
+    artifact: evidence/worker/head-focused-final.log
+    sha256: 808e66dd512c2c64c6225a521f0bb7ca0ef58e40e4f2708f1bbd817a87ed0776
+    source_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+    at: '2026-09-15T08:39:32+00:00'
 fix_id: T3-M148
 issues:
 - M-148
 title: Three compensation writes discard their error — a failed rollback is silent
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -44,9 +101,13 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: fix/t3-m148
-  base_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
-  head_sha: null
-  stacked_on: []
+  base_sha: 2e45c9903262827253dff0c21a7b1fb94fe9b511
+  head_sha: ce0946c60f09d3aa0f639357c1b7c535c2d3aaf7
+  stacked_on:
+  - T3-M169
+  - T3-M026
+  - T3-M132
+  - T3-M086
 pull_request:
   url: null
   reviewed_head: null
@@ -67,12 +128,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +143,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t3-m148
-  action: Implement remaining compensation contracts; compose M86 warm changes
-updated_at: '2026-09-15T06:24:45+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-15T08:39:34+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:43+00:00'
   by: codex-lead
@@ -107,6 +169,26 @@ configuration_history:
   fields:
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T07:37:00+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T08:02:41+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T08:31:14+00:00'
+  by: sol-t3-m148
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T08:39:32+00:00'
+  by: sol-t3-m148
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -124,3 +206,35 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T08:39:32+00:00'
+  by: sol-t3-m148
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T08:39:33+00:00'
+  by: sol-t3-m148
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: base_review
+  result: PASS
+  by: codex-lead
+  artifact: evidence/base-review.md
+  sha256: ec9e4987649510fe9960d7b15bd408fc7a6a368fd956228cdd230ecbeae0f26c
+  source_sha: 1c8bd4e75abf3d03c7ec28fc5ed64ad71192d5c2
+  at: '2026-09-15T07:37:00+00:00'
+  baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+handoff:
+  id: T3-M148:13:submit
+  from: sol-t3-m148
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 13
