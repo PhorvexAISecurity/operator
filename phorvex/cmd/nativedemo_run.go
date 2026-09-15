@@ -625,70 +625,23 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 }
 
 func runDemoWarmCase(ctx context.Context, run *demoRun, n *actuator.NativeActuator, ns string, policy *v1alpha1.PhorvexPolicy) demoRow {
-	row := demoRow{action: "warm-swap", expected: "old UID gone; same Ready shadow UID promoted; owned replacement shadow", verdict: demoSetupFailure}
-	mk := func(name, role string) (*corev1.Pod, error) {
-		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/role": role, "phorvex.ai/model-loaded": "true", "phorvex.ai/native-demo": "true"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36", Command: []string{"sh", "-c", "sleep 3600"}}}}}
-		if err := run.create(ctx, p); err != nil {
-			return nil, err
-		}
-		observed, err := waitPodRunning(ctx, run.client, ns, name)
-		if err != nil {
-			return nil, err
-		}
-		if observed.UID != p.UID || observed.Status.Phase != corev1.PodRunning || observed.Labels["phorvex.ai/native-demo-run"] != run.token {
-			return nil, fmt.Errorf("warm Pod %s lost owned UID/Running state", name)
-		}
-		return observed, nil
-	}
-	leader, err := mk("wsg-leader", "leader")
-	if err != nil {
+	row := demoRow{action: "warm-swap", expected: "RS-owned cutover submitted; replacement capacity requires controller observation", verdict: demoSetupFailure}
+	labels := map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/native-demo": "true", "phorvex.ai/native-demo-run": run.token}
+	replicas := int32(2)
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "wsg", Namespace: ns}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/native-demo": "true", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36", Command: []string{"sh", "-c", "sleep 3600"}}}}}}}
+	if err := run.create(ctx, rs); err != nil {
 		row.observed = err.Error()
 		return row
 	}
-	shadow, err := mk("wsg-shadow", "warm-shadow")
-	if err != nil {
+	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "wsg", Namespace: ns}, Spec: corev1.ServiceSpec{Selector: map[string]string{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/native-demo-run": run.token, "phorvex.ai/role": "leader"}, Ports: []corev1.ServicePort{{Name: "http", Port: 80}}}}
+	if err := run.create(ctx, service); err != nil {
 		row.observed = err.Error()
 		return row
 	}
-	ready := false
-	for _, condition := range shadow.Status.Conditions {
-		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-			ready = true
-		}
-	}
-	if !ready {
-		row.verdict = demoUnavailable
-		row.observed = "shadow lacks Kubernetes Ready condition"
-		return row
-	}
-	request := actuator.Request{Tenant: ns, Namespace: ns, Pod: leader.Name, TargetUID: string(leader.UID), Action: model.ActionWarmSwap, Reason: "native-demo", Score: 0.9, PolicyName: policy.Name, PolicyUID: string(policy.UID)}
-	result, actErr := demoActuate(ctx, n, request)
-	oldGone, oldRead := demoUIDGone(ctx, run.client, ns, leader.Name, leader.UID)
-	var promoted corev1.Pod
-	promotedErr := run.client.Get(ctx, client.ObjectKeyFromObject(shadow), &promoted)
-	promotedReady := false
-	for _, condition := range promoted.Status.Conditions {
-		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-			promotedReady = true
-		}
-	}
-	promotedOK := promotedErr == nil && promoted.UID == shadow.UID && promoted.Labels["phorvex.ai/role"] == "leader" && promotedReady
-	var pods corev1.PodList
-	listErr := run.client.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{"phorvex.ai/swap-group": "native-demo-warm", "phorvex.ai/role": "warm-shadow"})
-	replacement := false
-	if listErr == nil {
-		for i := range pods.Items {
-			p := &pods.Items[i]
-			if p.UID != "" && p.UID != shadow.UID && run.ownsUID(string(p.UID)) && p.Labels["phorvex.ai/native-demo-run"] == run.token && p.Labels["phorvex.ai/model-loaded"] == "false" && strings.HasPrefix(p.Name, leader.Name+"-rw-") {
-				replacement = true
-			}
-		}
-	}
-	row.verdict = demoConfirmed
-	receiptDone, receiptRead := demoReceiptFinished(ctx, run.client, n.JournalNamespace, "warm-swap", string(policy.UID), string(leader.UID))
-	if actErr != nil || oldRead != nil || promotedErr != nil || listErr != nil || receiptRead != nil || !receiptDone || !result.Emitted || !oldGone || !promotedOK || !replacement {
-		row.verdict = demoObservationFailure
-	}
-	row.observed = fmt.Sprintf("emitted=%v oldUIDGone=%v originalShadowReadyLeader=%v ownedReplacement=%v receiptFinished=%v act=%v oldRead=%v promoteRead=%v list=%v receiptRead=%v; model-load/traffic unmeasured", result.Emitted, oldGone, promotedOK, replacement, receiptDone, actErr, oldRead, promotedErr, listErr, receiptRead)
+	// This bounded demo does not run or impersonate the ReplicaSet controller.
+	// The dedicated local-KCM test exercises the positive replenishment path.
+	row.verdict = demoUnavailable
+	row.observed = "configuredPool=true controllerMembers=unobserved; cutover not submitted"
 	return row
+
 }
