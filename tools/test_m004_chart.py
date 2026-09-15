@@ -31,6 +31,31 @@ def allowed(role, group, resource, verb):
 
 
 class M004ChartTest(unittest.TestCase):
+    def test_eks_audit_identity_provisioner_matches_live_values(self):
+        overlay = yaml.safe_load(
+            (ROOT / "deploy/helm/phorvex-stack/values-eks.yaml").read_text()
+        )
+        transport = overlay["phorvex"]["phorvex"]["console"]["auditTransport"]
+        script_path = ROOT / "deploy/eks/provision-audit-mtls.sh"
+        script = script_path.read_text()
+        syntax = subprocess.run(
+            ["bash", "-n", str(script_path)], cwd=ROOT, text=True,
+            capture_output=True
+        )
+        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+        defaults = {
+            "SERVER_SECRET": "serverSecretName",
+            "CLIENT_SECRET": "clientSecretName",
+            "SERVER_DNS": "serverDNSName",
+            "CLIENT_DNS": "clientDNSName",
+        }
+        for variable, value_key in defaults.items():
+            self.assertIn(f'{variable}="${{{variable}:-{transport[value_key]}}}"', script)
+        self.assertIn('--from-file=ca.crt=', script)
+        self.assertNotIn('--from-file=ca.key=', script)
+        self.assertIn('openssl verify -purpose "$purpose"', script)
+        self.assertIn('cmp -s "$tmp/stored-server/ca.crt"', script)
+
     def test_standalone_enabled_isolation(self):
         docs = render(ROOT / "phorvex/charts/phorvex",
                       "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",

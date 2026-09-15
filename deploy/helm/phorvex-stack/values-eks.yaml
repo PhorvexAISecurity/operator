@@ -87,11 +87,10 @@ phorvex:
         storageClass: gp2-csi
         size: 5Gi
 
-    # ── console, co-located ──────────────────────────────────────────────────
-    # Runs in this pod so it can read the audit file above. This is also what makes
-    # /api/workload/attack work in-cluster for the first time: the console image now
-    # carries kubectl, and here it inherits the operator's ServiceAccount, which holds the
-    # securityevents rights its own ServiceAccount never had.
+    # ── console, identity-isolated ────────────────────────────────────────────
+    # Runs in its own Pod and ServiceAccount. It reads the manager-owned audit file only
+    # through the mutually authenticated transport below. Before the first rollout,
+    # provision these exact identities with deploy/eks/provision-audit-mtls.sh.
     console:
       enabled: true
       allowWorkloadMutations: true

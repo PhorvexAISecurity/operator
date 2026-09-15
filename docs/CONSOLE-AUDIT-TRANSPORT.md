@@ -4,6 +4,23 @@ With `phorvex.console.enabled=true`, manager and console use separate Deployment
 
 Provision independent Secrets before enabling the feature. `serverSecretName` and `clientSecretName` each contain `tls.crt`, `tls.key`, and `ca.crt`. The server certificate SAN must match `serverDNSName`; the client SAN must match `clientDNSName`. Never put a CA signing key in these Secrets. Keep these leaves and keys separate from the admission webhook identity. The source checks the client chain and exact SAN; the console checks the server chain and exact SAN. This transport also works when `admissionWebhook.enabled=false`.
 
+For the EKS stack, provision or validate those identities before the first split-console
+rollout from a host with the selected `kubectl` context:
+
+```sh
+bash deploy/eks/provision-audit-mtls.sh
+```
+
+Set `FORCE_ROTATE=true` only for incident-response replacement of both identities; it
+intentionally bypasses the valid-Secret no-op check.
+
+The command is idempotent when both Secrets contain valid, unexpired leaves for the
+configured identities under the same CA. If either identity is missing, invalid, or
+expired, it replaces both leaves under a fresh ephemeral CA. The CA signing key exists
+only in a mode-0700 temporary directory for the duration of the command and is never
+stored in Kubernetes. Replacing identities interrupts audit reads briefly, so use the
+overlap procedure below for planned CA rotation while the transport is healthy.
+
 For certificate rollover, first distribute trust bundles that include the old and new CA, wait for Secret projection, then replace each leaf/key and verify new TLS handshakes before removing the old CA. Each audit request opens a fresh authenticated connection and reloads projected files. An invalid Secret, source outage, or manager relocation makes audit-derived API reads unavailable until the source reconnects; the console does not silently use an image snapshot or local decision file.
 
 An audit listener configuration or certificate error at manager startup is logged and leaves manager reconciliation running; console audit endpoints fail closed because the listener is absent. Correct the Secret/configuration and restart the manager Pod to start the listener. A later certificate projection error rejects new handshakes while the manager keeps reconciling. Slow audit readers have an independent four-reader limit and deadlines; they cannot occupy the brain tick loop.
