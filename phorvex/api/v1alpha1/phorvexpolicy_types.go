@@ -395,10 +395,11 @@ type ActionsSpec struct {
 	Enabled []ActionType `json:"enabled,omitempty"`
 }
 
-// ActionType is one enabled mutation. The native actuator (P-ACTUATOR) enacts the full
-// vocabulary; rotate/quarantine also map to Phoenix Delete/Quarantine via the optional
-// adapter. The advanced/AI moves are native-only and opt-in (a nil/empty Enabled set
-// defaults to rotate+quarantine — the historical behaviour).
+// ActionType is stored policy vocabulary. Runtime support is separate: identity-rotate
+// remains admitted for existing objects but is declared-only for a security effect and
+// refused for new native/hybrid dispatch. rotate/quarantine also map to Phoenix
+// Delete/Quarantine; advanced/AI moves are opt-in. A nil/empty Enabled set defaults
+// to rotate+quarantine.
 // +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;disable
 type ActionType string
 
@@ -411,8 +412,9 @@ const (
 	ActionNoop ActionType = "noop"
 
 	// --- P-ACTUATOR native vocabulary (advanced K8s + AI/GPU; native-only, opt-in) ---
-	ActionDebugger            ActionType = "debugger"
-	ActionCustomInject        ActionType = "custom-inject"
+	ActionDebugger     ActionType = "debugger"
+	ActionCustomInject ActionType = "custom-inject"
+	// ActionIdentityRotate is retained for stored policy compatibility, not execution.
 	ActionIdentityRotate      ActionType = "identity-rotate"
 	ActionRouteRotate         ActionType = "route-rotate"
 	ActionWarmSwap            ActionType = "warm-swap"

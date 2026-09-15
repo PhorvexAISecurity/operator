@@ -50,6 +50,11 @@ func renderRepertoire() string {
 	b.WriteString("A historical live result (for example the 2026-08-21 Phoenix rotate observation under\n")
 	b.WriteString("M-9) is evidence about ONE build, target and configuration. It is not a standing\n")
 	b.WriteString("guarantee for any other deployment and is deliberately absent from this table.\n")
+	b.WriteString("`identity-rotate` is retained as stored policy vocabulary and for cleanup of historical\n")
+	b.WriteString("epoch-label snapshots. It is declared-only for new dispatch: it cannot rotate UID, IP\n")
+	b.WriteString("or ServiceAccount credentials. `route-rotate` is a real Service-selector restitch;\n")
+	b.WriteString("the per-target capability gate requires its declared Service to select the target\n")
+	b.WriteString("route-key with the target Ready and at least two Ready backends.\n")
 	for _, backend := range Backends() {
 		fmt.Fprintf(&b, "\n## %s\n\n", backend)
 		b.WriteString("| Action | Route | Adapter acceptance | Reason / qualification | Prerequisite | Unverified |\n")

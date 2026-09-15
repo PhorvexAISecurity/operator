@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 // from /api/workload/attacks — so a serving-only actuator like route-rotate is never offered on a
 // plain workload, which is what stops the brain from selecting an actuator it can't actuate. The
 // brain still decides WHICH of the enabled actuators to run.
-const GENERIC_ACTUATORS = ["rotate", "quarantine", "noop", "identity-rotate", "debugger", "custom-inject"];
+const GENERIC_ACTUATORS = ["rotate", "quarantine", "noop", "debugger", "custom-inject"];
 
 type Draft = { mode: string; maxMovesPerTick: string; enabled: string[] };
 

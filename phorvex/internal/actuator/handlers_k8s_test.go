@@ -108,6 +108,72 @@ func TestRouteRotateWithoutServiceAnnotationEmitsNothing(t *testing.T) {
 	}
 }
 
+func TestM033RouteRotateRefusesMismatchedServiceSelector(t *testing.T) {
+	target := routePod("ns", "target", true)
+	sibling := routePod("ns", "sibling", true)
+	svc := routeService()
+	svc.Spec.Selector[labelRouteKey] = "different-route"
+	c := fakeC(target, sibling, svc)
+	result, err := (routeRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c}, Request{
+		Namespace: "ns", Pod: "target", Action: model.ActionRouteRotate,
+	})
+	if err == nil || result.Emitted || !strings.Contains(err.Error(), "does not select") {
+		t.Fatalf("mismatched Service result=%+v err=%v", result, err)
+	}
+	var got corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "target"}, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Labels[labelRouteKey] != "route-old" || got.Annotations[routeSnapAnno] != "" {
+		t.Fatalf("mismatched Service mutated target: %+v", got)
+	}
+}
+
+func TestM033RouteRotateRequiresEmptySelectorLabelPresence(t *testing.T) {
+	for _, present := range []bool{false, true} {
+		name := "missing"
+		if present {
+			name = "present-empty"
+		}
+		t.Run(name, func(t *testing.T) {
+			target := routePod("ns", "target", true)
+			if present {
+				target.Labels["track"] = ""
+			}
+			first := routePod("ns", "first", true)
+			second := routePod("ns", "second", true)
+			first.Labels["track"] = ""
+			second.Labels["track"] = ""
+			svc := routeService()
+			svc.Spec.Selector["track"] = ""
+			c := fakeC(target, first, second, svc)
+			result, err := (routeRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c}, Request{
+				Namespace: "ns", Pod: "target", Action: model.ActionRouteRotate,
+			})
+			var gotPod corev1.Pod
+			if getErr := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "target"}, &gotPod); getErr != nil {
+				t.Fatal(getErr)
+			}
+			var gotService corev1.Service
+			if getErr := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "web-route"}, &gotService); getErr != nil {
+				t.Fatal(getErr)
+			}
+			if !present {
+				if err == nil || result.Emitted || !strings.Contains(err.Error(), "does not select") {
+					t.Fatalf("missing label result=%+v err=%v, want selector refusal", result, err)
+				}
+				if !reflect.DeepEqual(gotPod.Labels, target.Labels) || gotPod.Annotations[routeSnapAnno] != "" || !reflect.DeepEqual(gotService.Spec.Selector, svc.Spec.Selector) {
+					t.Fatalf("missing label mutated Pod or Service: pod=%v annotations=%v Service=%v", gotPod.Labels, gotPod.Annotations, gotService.Spec.Selector)
+				}
+				return
+			}
+			if err != nil || !result.Emitted || gotPod.Labels[labelRouteKey] == "route-old" || gotService.Spec.Selector[labelRouteKey] != gotPod.Labels[labelRouteKey] {
+				t.Fatalf("present-empty label result=%+v err=%v Pod=%v Service=%v", result, err, gotPod.Labels, gotService.Spec.Selector)
+			}
+		})
+	}
+}
+
 func TestRouteRotateRefusesSingleReadyBackend(t *testing.T) {
 	target := routePod("ns", "target", true)
 	unreadySibling := routePod("ns", "sibling", false)
@@ -116,7 +182,7 @@ func TestRouteRotateRefusesSingleReadyBackend(t *testing.T) {
 	result, err := (routeRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c}, Request{
 		Namespace: "ns", Pod: "target", Action: model.ActionRouteRotate,
 	})
-	if err == nil || !strings.Contains(err.Error(), "exactly one Ready backend") {
+	if err == nil || !strings.Contains(err.Error(), "at least two Ready backends") {
 		t.Fatalf("single-backend result = %+v, err=%v; want refusal", result, err)
 	}
 	var got corev1.Pod
@@ -158,23 +224,21 @@ func TestRouteRotateCompensatesWhenServiceUpdateFails(t *testing.T) {
 	}
 }
 
-func TestIdentityRotateMakesNoCredentialOrPodIdentityClaim(t *testing.T) {
+func TestIdentityRotateDeclaredHandlerRefusesWithoutWrites(t *testing.T) {
 	pod := aiPod("ns", "target", map[string]string{"app": "web"})
 	pod.Spec.ServiceAccountName = "workload-sa"
 	c := fakeC(pod)
 	result, err := (identityRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c}, Request{
 		Namespace: "ns", Pod: "target", Action: model.ActionIdentityRotate,
 	})
-	if err != nil {
+	if err == nil || result.Emitted || !strings.Contains(err.Error(), "declared-only") {
+		t.Fatalf("identity handler result=%+v err=%v, want declared refusal", result, err)
+	}
+	var got corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "target"}, &got); err != nil {
 		t.Fatal(err)
 	}
-	note := strings.ToLower(result.Note)
-	if strings.Contains(note, "re-issue") || strings.Contains(note, "stale the attacker's identity") {
-		t.Fatalf("identity-rotate still claims an effect it does not perform: %q", result.Note)
-	}
-	for _, unchanged := range []string{"token", "uid", "ip"} {
-		if !strings.Contains(note, unchanged+" unchanged") && !strings.Contains(note, "token, pod uid and pod ip unchanged") {
-			t.Errorf("identity-rotate note does not disclose unchanged %s: %q", unchanged, result.Note)
-		}
+	if got.Annotations[identitySnapAnno] != "" || got.Labels["phorvex.ai/identity-epoch"] != "" || got.Spec.ServiceAccountName != "workload-sa" {
+		t.Fatalf("identity refusal changed pod: %+v", got)
 	}
 }

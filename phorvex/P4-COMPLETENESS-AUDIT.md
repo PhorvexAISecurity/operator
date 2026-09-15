@@ -41,7 +41,7 @@ state classes, maps each to an actuator (or a gap), then premortems "what surviv
 |---|---|---|---|---|
 | 1 | **Serving replica** (base weights in VRAM, the running process) | pod / engine replica | **warm-swap** | ✅ covered |
 | 2 | **Cross-session prefix cache** (poisoned shared prefix leaks to other users) | vLLM **APC** `--enable-prefix-caching` | **kv-reset** (`/reset_prefix_cache`) | ✅ covered (this is the dangerous one) |
-| 3 | **Network route / endpoint** (learned inference URL, selector) | K8s Service / EndpointSlice | **endpoint-rotate** + base route-/identity-rotate | ✅ covered |
+| 3 | **Network route / endpoint** (learned inference URL, selector) | K8s Service / EndpointSlice | **endpoint-rotate** + route-rotate Service restitch; identity-rotate is declared-only | route path implemented; target fixture required |
 | 4 | **GPU partition / co-residency** (MIG-slice neighbor, side-channel) | NVIDIA MIG geometry | **mig-rebind** | ◐ designed, transport unbuilt (Q3) |
 | 5 | **Model shard** (a replica / a TP-PP rank) | TP/PP sharded serving | **model-shard-replace** | ◐ partial — independent-shard only (Q3) |
 | 6 | **LoRA / adapter** (poisoned fine-tune adapter in the multi-LoRA cache) | vLLM `/v1/{load,unload}_lora_adapter`, LoRAX, Triton EXPLICIT load/unload, TGI `--lora-adapters` | **— NONE —** | ❌ **MISSING (survival gap)** |

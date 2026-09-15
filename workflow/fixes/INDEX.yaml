@@ -572,13 +572,13 @@ fixes:
     issues:
     - M-33
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on:
     - T3-M169
     - T3-M026
     branch: fix/t3-m033
-    head_sha: null
+    head_sha: 8e151790df7350243a630f9d8b3b92fc66e92001
   T3-M086:
     directory: fixes/T3-M086
     aliases: []

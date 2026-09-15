@@ -78,6 +78,9 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	if ec.DryRun {
 		return Result{}, errDryRunGuard
 	}
+	if req.Action == model.ActionIdentityRotate {
+		return Result{}, fmt.Errorf("native actuator: %s", model.IdentityRotateUnsupportedReason)
+	}
 	h, ok := HandlerRegistry.Get(string(req.Action))
 	if !ok {
 		return Result{}, fmt.Errorf("native actuator: no handler for action %q (completeness violation)", req.Action)

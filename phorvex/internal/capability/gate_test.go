@@ -63,6 +63,89 @@ func TestCapable_AllPredicatesGreen(t *testing.T) {
 	}
 }
 
+func TestM033RouteCapabilityRequiresActualServiceContract(t *testing.T) {
+	base := model.Pod{Namespace: "ns", Name: "target", Ready: true, RouteService: "route",
+		Labels: map[string]string{"app": "web", "phorvex.ai/route-key": "old"}}
+	peer := base
+	peer.Name = "peer"
+	service := ingest.ServiceInfo{Namespace: "ns", Name: "route", Selector: map[string]string{"app": "web", "phorvex.ai/route-key": "old"}}
+	check := func(target model.Pod, fleet []model.Pod, services []ingest.ServiceInfo) (bool, string) {
+		w := BuildWitness(context.Background(), BuildIndex(fleet, nil, services), nil, nil, okActuator{})
+		return w.Capable(&model.WorkloadView{Pod: target}, model.ActionRouteRotate)
+	}
+	if ok, why := check(base, []model.Pod{base, peer}, []ingest.ServiceInfo{service}); !ok {
+		t.Fatalf("valid route excluded: %s", why)
+	}
+	for _, tc := range []struct {
+		name     string
+		pod      model.Pod
+		fleet    []model.Pod
+		services []ingest.ServiceInfo
+	}{
+		{"no declaration", func() model.Pod { p := base; p.RouteService = ""; return p }(), []model.Pod{base, peer}, []ingest.ServiceInfo{service}},
+		{"absent Service", base, []model.Pod{base, peer}, nil},
+		{"selector mismatch", base, []model.Pod{base, peer}, []ingest.ServiceInfo{{Namespace: "ns", Name: "route", Selector: map[string]string{"app": "other", "phorvex.ai/route-key": "old"}}}},
+		{"single backend", base, []model.Pod{base}, []ingest.ServiceInfo{service}},
+		{"target unready", func() model.Pod { p := base; p.Ready = false; return p }(), []model.Pod{base, peer}, []ingest.ServiceInfo{service}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if ok, why := check(tc.pod, tc.fleet, tc.services); ok || why == "" {
+				t.Fatalf("invalid route capable=%v why=%q", ok, why)
+			}
+		})
+	}
+}
+
+func TestM033UnrelatedServicesDoNotBuildRouteBackendCounts(t *testing.T) {
+	fleet := []model.Pod{{Namespace: "ns", Name: "ordinary", Ready: true, Labels: map[string]string{"app": "web"}}}
+	services := []ingest.ServiceInfo{{Namespace: "ns", Name: "unrelated", Selector: map[string]string{"app": "web"}}}
+	idx := BuildIndex(fleet, nil, services)
+	if len(idx.readyByService) != 0 || len(idx.servingByNS["ns"]) != 1 {
+		t.Fatalf("unrelated Service built route count=%v or disappeared from ordinary Service index", idx.readyByService)
+	}
+}
+
+func TestM033RouteCapabilityRequiresEmptySelectorLabelPresence(t *testing.T) {
+	selected := model.Pod{Namespace: "ns", Name: "selected-a", Ready: true, RouteService: "route",
+		Labels: map[string]string{"app": "web", "phorvex.ai/route-key": "old", "track": ""}}
+	other := selected
+	other.Name = "selected-b"
+	service := ingest.ServiceInfo{Namespace: "ns", Name: "route", Selector: map[string]string{
+		"app": "web", "phorvex.ai/route-key": "old", "track": "",
+	}}
+	for _, present := range []bool{false, true} {
+		name := "missing"
+		if present {
+			name = "present-empty"
+		}
+		t.Run(name, func(t *testing.T) {
+			target := selected
+			target.Name = "target"
+			target.Labels = map[string]string{"app": "web", "phorvex.ai/route-key": "old"}
+			if present {
+				target.Labels["track"] = ""
+			}
+			fleet := []model.Pod{target, selected, other}
+			idx := BuildIndex(fleet, nil, []ingest.ServiceInfo{service})
+			want := 2
+			if present {
+				want = 3
+			}
+			if idx.readyByService[poolKey("ns", "route")] != want {
+				t.Fatalf("Ready selected backends=%d, want %d", idx.readyByService[poolKey("ns", "route")], want)
+			}
+			w := BuildWitness(context.Background(), idx, nil, nil, okActuator{})
+			ok, why := w.Capable(&model.WorkloadView{Pod: target}, model.ActionRouteRotate)
+			if present && (!ok || why != "") {
+				t.Fatalf("present-empty selected target capable=%v why=%q", ok, why)
+			}
+			if !present && (ok || !strings.Contains(why, "does not select")) {
+				t.Fatalf("missing label target capable=%v why=%q", ok, why)
+			}
+		})
+	}
+}
+
 // TestCapable_ConfigPredicates ports the per-action config predicates (M-20 era) onto the
 // extracted per-pod predicate: break one fixture on the leader (rebuild the witness so a
 // pool break re-indexes), assert exactly that action goes uncapable.

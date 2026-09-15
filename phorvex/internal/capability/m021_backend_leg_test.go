@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -35,13 +36,40 @@ func TestCapableConsultsBackendForNonAIActions(t *testing.T) {
 		if AICapabilityActions[a] {
 			t.Fatalf("fixture: %s must be a non-AI action", a)
 		}
-		if ok, why := phoenixWitness().Capable(v, a); ok {
+		query := v
+		phoenix := phoenixWitness()
+		native := nativeWitness()
+		if a == model.ActionRouteRotate {
+			target := model.Pod{Namespace: "ns", Name: "p", Ready: true, RouteService: "route",
+				Labels: map[string]string{"app": "web", "phorvex.ai/route-key": "old"}}
+			peer := target
+			peer.Name = "peer"
+			service := ingest.ServiceInfo{Namespace: "ns", Name: "route", Selector: map[string]string{
+				"app": "web", "phorvex.ai/route-key": "old",
+			}}
+			index := BuildIndex([]model.Pod{target, peer}, nil, []ingest.ServiceInfo{service})
+			query = &model.WorkloadView{Pod: target}
+			phoenix = BuildWitness(context.Background(), index, nil, nil, actuator.NewPhoenixActuator(nil))
+			native = BuildWitness(context.Background(), index, nil, nil, actuator.NewNativeActuator(nil))
+		}
+		if ok, why := phoenix.Capable(query, a); ok {
 			t.Fatalf("phoenix cannot enact %s; Capable must say so (why=%q)", a, why)
 		} else if !strings.Contains(why, actuator.ReasonBackendUnsupported) {
 			t.Fatalf("%s must be attributed to the backend, got %q", a, why)
 		}
-		// Positive control: the native backend implements all four.
-		if ok, why := nativeWitness().Capable(v, a); !ok {
+		if a == model.ActionIdentityRotate {
+			if ok, why := native.Capable(query, a); ok || !strings.Contains(why, "declared-only") {
+				t.Fatalf("native declared identity must refuse %s, got capable=%v why=%q", a, ok, why)
+			}
+			continue
+		}
+		if a == model.ActionRouteRotate {
+			if ok, why := native.Capable(query, a); !ok {
+				t.Fatalf("native valid route must stay capable, got %q", why)
+			}
+			continue
+		}
+		if ok, why := native.Capable(query, a); !ok {
 			t.Fatalf("native implements %s; Capable must agree, got %q", a, why)
 		}
 	}

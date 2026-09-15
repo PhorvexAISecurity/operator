@@ -536,6 +536,7 @@ func Render(rep Report) ([]byte, error) {
 	w("## Declared vocabulary\n\n")
 	w("- Action constants in `internal/model/types.go` (%d): %s\n", len(rep.Declared.Actions), codeList(rep.Declared.Actions))
 	w("- `model.MutatingActions` (generatable, in the engine's tie-break order): %s\n", codeList(rep.Declared.Mutating))
+	w("- `identity-rotate` remains known stored vocabulary, but native/hybrid support and new dispatch declare it unimplemented for a security effect. A generatable spelling is not proof of runtime support or cover. Historical epoch-label rollback remains metadata cleanup.\n")
 	w("- Declared but never generatable: %s\n", codeList(rep.Declared.DeclaredOnly))
 	w("- Fact kind constants in `internal/recon/facts.go` (%d): %s\n", len(rep.Declared.FactKinds), codeList(rep.Declared.FactKinds))
 	if len(rep.Declared.NeverEmitted) == 0 {

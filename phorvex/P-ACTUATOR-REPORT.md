@@ -42,14 +42,16 @@ Removing one handler's registration (`kvResetHandler`) and rebuilding:
 Restored ⇒ green. **Full real-time coverage is a CI+startup-enforced theorem** — described precisely
 as "fails CI + fails binary startup," not "fails the compiler."
 
-### 2b. Live native actuation on kind — **13 PASS / 0 FAIL** (`phorvex --native-demo`)
+### 2b. Historical live native actuation on kind — **13 recorded PASS / 0 FAIL** (`phorvex --native-demo`)
+
+The old pass count includes an identity-epoch label observation. It did not establish credential or pod identity rotation and is not a head test result.
 | Action | Verified live | Verdict |
 |---|---|---|
 | rotate | pod UID deleted | PASS |
 | **quarantine** | **deny-all NP + detach + POD ALIVE** (lead-demo fidelity) | PASS |
 | quarantine.rollback | labels/ownerRefs restored + NP deleted | PASS |
 | debugger / custom-inject | ephemeral container injected | PASS |
-| identity-rotate / route-rotate | identity/route epoch label set | PASS |
+| identity-rotate / route-rotate | Historical T10/T11 epoch-label observation; identity relabel changed no UID, IP or credential and is now declared-only. Route Service-selector restitch remains implemented and requires its own target/Service validation. | historical observation; identity security effect unverified |
 | kv-reset | **pod ALIVE** + flush epoch (no kill) | PASS |
 | endpoint-rotate | endpoint epoch set | PASS |
 | warm-swap | shadow promoted to leader + old leader retired | PASS |

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -55,15 +56,15 @@ func m087Client(spy *m087Spy, objs ...client.Object) client.Client {
 	}).Build()
 }
 
-// m087Rotate performs a REAL identity-rotate through Actuate on a permissive (legacy, non-dry-run)
+// m087Rotate performs a real route-rotate through Actuate on a permissive actuator.
 // actuator so the pod carries the handler-produced snapshot + rollback ref. The actuator under test
 // is then built separately with the case's bindings and DryRun.
 func m087Rotate(t *testing.T, c client.Client, ns, pod string) (Request, string) {
 	t.Helper()
-	req := Request{Tenant: "t", Namespace: ns, Pod: pod, Action: model.ActionIdentityRotate, TargetUID: "uid-" + pod}
+	req := Request{Tenant: "t", Namespace: ns, Pod: pod, Action: model.ActionRouteRotate, TargetUID: "uid-" + pod}
 	res, err := NewNativeActuator(c).Actuate(context.Background(), req)
 	if err != nil || !res.Emitted || res.RollbackRef == "" {
-		t.Fatalf("identity-rotate setup: emitted=%v ref=%q err=%v", res.Emitted, res.RollbackRef, err)
+		t.Fatalf("route-rotate setup: emitted=%v ref=%q err=%v", res.Emitted, res.RollbackRef, err)
 	}
 	return req, res.RollbackRef
 }
@@ -77,11 +78,40 @@ func m087Pod(t *testing.T, c client.Client, ns, name string) corev1.Pod {
 	return p
 }
 
-// m087Rotated asserts the pod is still in its rotated state (epoch label + snapshot annotation).
+// m087Rotated asserts the pod is still in its restitched route state.
 func m087Rotated(t *testing.T, p corev1.Pod, what string) {
 	t.Helper()
-	if p.Labels["phorvex.ai/identity-epoch"] == "" || p.Annotations[identitySnapAnno] == "" || p.Labels["app"] != "orig" {
+	if p.Labels[labelRouteKey] == "" || p.Labels[labelRouteKey] == "route-old" || p.Annotations[routeSnapAnno] == "" || p.Labels["app"] != "orig" {
 		t.Fatalf("%s: pod %s/%s is no longer in its rotated state: labels=%v annotations=%v", what, p.Namespace, p.Name, p.Labels, p.Annotations)
+	}
+}
+
+func TestM033IdentityDirectDispatchRefusesWithoutPodAccess(t *testing.T) {
+	for _, backend := range []Backend{BackendNative, BackendHybrid} {
+		t.Run(string(backend), func(t *testing.T) {
+			spy := &m087Spy{}
+			pod := aiPod("ns", "target", map[string]string{"app": "orig"})
+			pod.UID = "stable-uid"
+			pod.Spec.ServiceAccountName = "stable-sa"
+			pod.Status.PodIP = "10.0.0.7"
+			c := m087Client(spy, pod)
+			act, err := New(backend, c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok, why := act.SupportsAction(t.Context(), model.ActionIdentityRotate, Target{Namespace: "ns", Pod: "target"}); ok || !strings.Contains(why, "declared-only") {
+				t.Fatalf("identity support=%v why=%q, want declared-only refusal", ok, why)
+			}
+			spy.reset()
+			res, err := act.Actuate(t.Context(), Request{Namespace: "ns", Pod: "target", Action: model.ActionIdentityRotate})
+			if err == nil || !strings.Contains(err.Error(), "declared-only") || res.Emitted || spy.reads != 0 || spy.writes != 0 {
+				t.Fatalf("identity dispatch result=%+v err=%v reads=%d writes=%d", res, err, spy.reads, spy.writes)
+			}
+			got := m087Pod(t, c, "ns", "target")
+			if got.UID != "stable-uid" || got.Status.PodIP != "10.0.0.7" || got.Spec.ServiceAccountName != "stable-sa" || got.Labels["phorvex.ai/identity-epoch"] != "" {
+				t.Fatalf("identity refusal changed pod identity: %+v", got)
+			}
+		})
 	}
 }
 
@@ -110,9 +140,19 @@ func TestM087RollbackEnforcesTenantAndDryRunBoundary(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			spy := &m087Spy{}
+			routeFixture := func(name, service string) *corev1.Pod {
+				p := aiPod("ns", name, map[string]string{"app": "orig", labelRouteKey: "route-old", "route-group": service})
+				p.Annotations[annoRouteService] = service
+				return p
+			}
+			serviceFixture := func(name string) *corev1.Service {
+				return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name},
+					Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "orig", "route-group": name, labelRouteKey: "route-old"}}}
+			}
 			c := m087Client(spy,
-				aiPod("ns", "target", map[string]string{"app": "orig"}),
-				aiPod("ns", "bystander", map[string]string{"app": "orig"}))
+				routeFixture("target", "target-route"), routeFixture("target-peer", "target-route"),
+				routeFixture("bystander", "bystander-route"), routeFixture("bystander-peer", "bystander-route"),
+				serviceFixture("target-route"), serviceFixture("bystander-route"))
 			// Real producer: both pods are actually rotated, so a rollback that reaches the handler WRITES.
 			req, ref := m087Rotate(t, c, "ns", "target")
 			m087Rotate(t, c, "ns", "bystander")
@@ -134,7 +174,7 @@ func TestM087RollbackEnforcesTenantAndDryRunBoundary(t *testing.T) {
 				if !tc.refuse(err) {
 					after := m087Pod(t, c, "ns", "target")
 					t.Fatalf("rollback must be refused by the boundary guard, got err=%v; effects: reads=%d writes=%d; target labels=%v snapshot-present=%v",
-						err, spy.reads, spy.writes, after.Labels, after.Annotations[identitySnapAnno] != "")
+						err, spy.reads, spy.writes, after.Labels, after.Annotations[routeSnapAnno] != "")
 				}
 				if spy.reads != 0 || spy.writes != 0 {
 					t.Fatalf("refused rollback crossed the boundary: reads=%d writes=%d", spy.reads, spy.writes)
@@ -158,8 +198,15 @@ func TestM087RollbackEnforcesTenantAndDryRunBoundary(t *testing.T) {
 				t.Fatal("allowed rollback wrote nothing — the fixture does not mutate, so refusal assertions would be vacuous")
 			}
 			got := m087Pod(t, c, "ns", "target")
-			if got.Labels["phorvex.ai/identity-epoch"] != "" || got.Annotations[identitySnapAnno] != "" || got.Labels["app"] != "orig" || len(got.Labels) != 1 {
+			if got.Labels[labelRouteKey] != "route-old" || got.Annotations[routeSnapAnno] != "" || got.Labels["app"] != "orig" {
 				t.Fatalf("allowed rollback did not restore the snapshot: labels=%v annotations=%v", got.Labels, got.Annotations)
+			}
+			var restoredService corev1.Service
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "target-route"}, &restoredService); err != nil {
+				t.Fatal(err)
+			}
+			if restoredService.Spec.Selector[labelRouteKey] != "route-old" {
+				t.Fatalf("allowed rollback did not restore Service selector: %v", restoredService.Spec.Selector)
 			}
 			// Untouched-object control: the rollback restores only its own target.
 			m087Rotated(t, m087Pod(t, c, "ns", "bystander"), "bystander")
