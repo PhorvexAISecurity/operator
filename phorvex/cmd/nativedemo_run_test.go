@@ -59,6 +59,39 @@ func (c *demoRouteReadFault) Get(ctx context.Context, key client.ObjectKey, obj 
 	return c.demoUIDClient.Get(ctx, key, obj, opts...)
 }
 
+// The native Service update succeeds, then the API boundary replaces that
+// Service under the same name and selector before independent demo readback.
+type demoRouteReplacementClient struct {
+	*demoUIDClient
+	replacementUID types.UID
+}
+
+func (c *demoRouteReplacementClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if err := c.demoUIDClient.Update(ctx, obj, opts...); err != nil {
+		return err
+	}
+	svc, ok := obj.(*corev1.Service)
+	if !ok || c.replacementUID != "" {
+		return nil
+	}
+	var current corev1.Service
+	if err := c.demoUIDClient.Get(ctx, client.ObjectKeyFromObject(svc), &current); err != nil {
+		return err
+	}
+	replacement := current.DeepCopy()
+	if err := c.demoUIDClient.Delete(ctx, &current); err != nil {
+		return err
+	}
+	replacement.UID = ""
+	replacement.ResourceVersion = ""
+	replacement.CreationTimestamp = metav1.Time{}
+	if err := c.demoUIDClient.Create(ctx, replacement); err != nil {
+		return err
+	}
+	c.replacementUID = replacement.UID
+	return nil
+}
+
 // This controlled Kubernetes boundary materializes Deployment-owned Pods and
 // garbage collection. NativeActuator itself remains the real implementation.
 type demoControllerClient struct{ *demoUIDClient }
@@ -160,6 +193,25 @@ func TestDemoRouteFailedIndependentServiceReadNeverPasses(t *testing.T) {
 	row := runDemoRouteCase(context.Background(), run, newDemoActuator(c), "demo", model.ActionRouteRotate)
 	if row.verdict != demoObservationFailure || !strings.Contains(row.observed, "injected postcondition") {
 		t.Fatalf("read failure credited: %+v", row)
+	}
+}
+
+func TestDemoRouteSameNameServiceReplacementIsNotCreditedOrCleaned(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = corev1.AddToScheme(s)
+	c := &demoRouteReplacementClient{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).Build()}}
+	run := &demoRun{client: c, token: "replacement-run"}
+	ctx := context.Background()
+	row := runDemoRouteCase(ctx, run, newDemoActuator(c), "demo", model.ActionRouteRotate)
+	if c.replacementUID == "" || row.verdict != demoObservationFailure || !strings.Contains(row.observed, "restitched=false") {
+		t.Fatalf("same-name replacement credited: replacement=%s row=%+v", c.replacementUID, row)
+	}
+	if errs := run.cleanup(ctx); len(errs) == 0 {
+		t.Fatal("cleanup did not report replaced owned Service")
+	}
+	var foreign corev1.Service
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "demo", Name: "svc-route-rotate"}, &foreign); err != nil || foreign.UID != c.replacementUID {
+		t.Fatalf("cleanup touched foreign Service uid=%s want=%s err=%v", foreign.UID, c.replacementUID, err)
 	}
 }
 

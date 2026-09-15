@@ -77,17 +77,17 @@ func demoQuarantineRolledBack(ctx context.Context, r client.Reader, before *core
 
 // Capacity is a precondition, not an after-effect claim: the scalar restitch
 // deliberately pins the Service to the selected target.
-func demoRouteRestitched(ctx context.Context, r client.Reader, before *corev1.Pod, service string) (bool, error) {
+func demoRouteRestitched(ctx context.Context, r client.Reader, before *corev1.Pod, service *corev1.Service) (bool, error) {
 	var pod corev1.Pod
 	if err := r.Get(ctx, client.ObjectKeyFromObject(before), &pod); err != nil {
 		return false, err
 	}
 	var svc corev1.Service
-	if err := r.Get(ctx, client.ObjectKey{Namespace: before.Namespace, Name: service}, &svc); err != nil {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(service), &svc); err != nil {
 		return false, err
 	}
 	key := pod.Labels[demoRouteKey]
-	if pod.UID != before.UID || key == "" || key == before.Labels[demoRouteKey] || svc.Spec.Selector[demoRouteKey] != key {
+	if before.UID == "" || service.UID == "" || pod.UID != before.UID || pod.DeletionTimestamp != nil || svc.UID != service.UID || svc.DeletionTimestamp != nil || key == "" || key == before.Labels[demoRouteKey] || svc.Spec.Selector[demoRouteKey] != key {
 		return false, nil
 	}
 	var pods corev1.PodList

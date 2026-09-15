@@ -599,10 +599,13 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 	}
 	request := actuator.Request{Tenant: ns, Namespace: ns, Pod: target.Name, TargetUID: string(target.UID), Action: action, Reason: "native-demo", Score: 0.9}
 	result, actErr := demoActuate(ctx, n, request)
-	mutated, readErr := demoRouteRestitched(ctx, run.client, target, svcName)
+	mutated, readErr := demoRouteRestitched(ctx, run.client, target, svc)
 	var afterSvc corev1.Service
 	if e := run.client.Get(ctx, client.ObjectKeyFromObject(svc), &afterSvc); e != nil && readErr == nil {
 		readErr = e
+	}
+	if readErr == nil && (afterSvc.UID != svc.UID || afterSvc.DeletionTimestamp != nil) {
+		mutated = false
 	}
 	afterReady := 0
 	if readErr == nil {
