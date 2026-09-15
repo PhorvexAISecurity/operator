@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -77,13 +77,29 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: 58e6f2cee986e987df6df65ab082be8f5d11a5e11d0d3afc5c8577486747c5d5
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: ff09484a31105184e5ed2205d14061d56d7bb22ad07a627c50faa49dfc3a3dea
+    source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+    at: '2026-09-15T21:00:30+00:00'
+    baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 1c59b69db41073b15c9cf409480d1713f212f8abeb320498343cec64613da92a
+    source_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
+    at: '2026-09-15T21:00:30+00:00'
+    incident_sha256: ff09484a31105184e5ed2205d14061d56d7bb22ad07a627c50faa49dfc3a3dea
 fix_id: T5-M146
 issues:
 - M-146
 title: '`omitempty` on eleven numeric audit fields erases measured zeros — the audit
   record cannot distinguish "0" from "not computed"'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -128,7 +144,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -144,10 +160,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T20:59:37+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T21:00:33+00:00'
 configuration_history:
 - at: '2026-09-15T19:28:13+00:00'
   by: codex-lead
@@ -214,13 +230,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T21:00:30+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T21:00:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T5-M146:9:submit
-  from: sol-t5-m146
+  id: T5-M146:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 10
 check_history:
 - check: red
   result: PASS
