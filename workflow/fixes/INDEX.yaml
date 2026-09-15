@@ -747,3 +747,14 @@ fixes:
     stacked_on: []
     branch: fix/t4-m171
     head_sha: 3dce7453831749d16e9ae4d4773ddc3fc1b02772
+  T5-M096:
+    directory: fixes/T5-M096
+    aliases: []
+    issues:
+    - M-96
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m096
+    head_sha: ddd9408e717405dd4d6ebc4330cd4d149387abe9
