@@ -349,6 +349,48 @@ func TestOperationJournalWarmRecoveryRefusalControls(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		{"policy-uid-replaced", func(t *testing.T, c client.Client, _ *corev1.Pod) {
+			p := &v1alpha1.PhorvexPolicy{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, p); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Delete(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+			p.UID, p.ResourceVersion = "replacement-policy-uid", ""
+			if err := c.Create(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"policy-deleted", func(t *testing.T, c client.Client, _ *corev1.Pod) {
+			p := &v1alpha1.PhorvexPolicy{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, p); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Delete(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"policy-dry-run", func(t *testing.T, c client.Client, _ *corev1.Pod) {
+			p := &v1alpha1.PhorvexPolicy{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, p); err != nil {
+				t.Fatal(err)
+			}
+			p.Spec.Mode = v1alpha1.ModeDryRun
+			if err := c.Update(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"policy-action-disabled", func(t *testing.T, c client.Client, _ *corev1.Pod) {
+			p := &v1alpha1.PhorvexPolicy{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, p); err != nil {
+				t.Fatal(err)
+			}
+			p.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate)}
+			if err := c.Update(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{"namespace-dry-run", func(t *testing.T, c client.Client, _ *corev1.Pod) {
 			ns := &corev1.Namespace{}
 			if err := c.Get(ctx, client.ObjectKey{Name: "ns"}, ns); err != nil {
@@ -418,6 +460,69 @@ func TestOperationJournalWarmRecoveryRefusalControls(t *testing.T) {
 				t.Fatalf("refusal changed receipt: %v", err)
 			}
 		})
+	}
+}
+
+func TestOperationJournalGlobalAndNativeDryRunLeaveInterruptedPair(t *testing.T) {
+	ctx := context.Background()
+	for _, mode := range []string{"global-kill", "native-dry-run"} {
+		t.Run(mode, func(t *testing.T) {
+			c, n, old, newPod := interruptedWarmReceiptFixture(t)
+			beforeOld, beforeNew, beforeCM := &corev1.Pod{}, &corev1.Pod{}, &corev1.ConfigMap{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: old.Name}, beforeOld); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: newPod.Name}, beforeNew); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "warm-swap", PolicyUID: "policy-uid", TargetUID: string(old.UID)})}, beforeCM); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "native-dry-run" {
+				n.DryRun = true
+			}
+			events, err := n.RecoverOperations(ctx, mode == "global-kill")
+			if err != nil || len(events) != 0 {
+				t.Fatalf("dry-run/kill attempted maintenance: %+v %v", events, err)
+			}
+			afterOld, afterNew, afterCM := &corev1.Pod{}, &corev1.Pod{}, &corev1.ConfigMap{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(beforeOld), afterOld); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(beforeNew), afterNew); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(beforeCM), afterCM); err != nil {
+				t.Fatal(err)
+			}
+			if beforeOld.ResourceVersion != afterOld.ResourceVersion || beforeNew.ResourceVersion != afterNew.ResourceVersion || beforeCM.ResourceVersion != afterCM.ResourceVersion {
+				t.Fatal("dry-run/kill changed Pod or receipt")
+			}
+		})
+	}
+}
+
+func TestOperationJournalCurrentExpressionSelectorAllowsAuthorizedRecovery(t *testing.T) {
+	ctx := context.Background()
+	c, n, old, newPod := interruptedWarmReceiptFixture(t)
+	pol := &v1alpha1.PhorvexPolicy{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "policy"}, pol); err != nil {
+		t.Fatal(err)
+	}
+	pol.Spec.Selector = metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: labelSwapGroup, Operator: metav1.LabelSelectorOpIn, Values: []string{"g"}}}}
+	if err := c.Update(ctx, pol); err != nil {
+		t.Fatal(err)
+	}
+	events, err := n.RecoverOperations(ctx, false)
+	if err != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+		t.Fatalf("valid expression selector refused real recovery: %+v %v", events, err)
+	}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: old.Name}, &corev1.Pod{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("old leader not retired under expression selector: %v", err)
+	}
+	promoted := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: newPod.Name}, promoted); err != nil || promoted.UID != newPod.UID || promoted.Labels[labelRole] != roleLeader {
+		t.Fatalf("wrong expression-selector survivor: %v %+v", err, promoted)
 	}
 }
 
@@ -614,6 +719,73 @@ func TestOperationJournalQuarantineProducerGC(t *testing.T) {
 	var np corev1.ConfigMap
 	if err := c.Get(ctx, client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "quarantine", PolicyUID: "policy-uid", TargetUID: string(pod.UID)})}, &np); !apierrors.IsNotFound(err) {
 		t.Fatalf("receipt not completed: %v", err)
+	}
+}
+
+func TestOperationJournalQuarantineGCRefusesIdentityAndSpecDrift(t *testing.T) {
+	ctx := context.Background()
+	for _, mode := range []string{"canonical-uid-replaced", "canonical-spec-drift", "target-name-recreated"} {
+		t.Run(mode, func(t *testing.T) {
+			pod := aiPod("ns", "victim", map[string]string{"app": "victim"})
+			c := qtnClient(pod)
+			_, current := enactQuarantine(t, c, "ns", pod.Name)
+			canonical := &networkingv1.NetworkPolicy{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: quarantinePolicy(pod).Name}, canonical); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Delete(ctx, current); err != nil {
+				t.Fatal(err)
+			}
+			switch mode {
+			case "canonical-uid-replaced":
+				if err := c.Delete(ctx, canonical); err != nil {
+					t.Fatal(err)
+				}
+				canonical.UID, canonical.ResourceVersion = "foreign-policy-uid", ""
+				if err := c.Create(ctx, canonical); err != nil {
+					t.Fatal(err)
+				}
+			case "canonical-spec-drift":
+				canonical.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{{}}
+				if err := c.Update(ctx, canonical); err != nil {
+					t.Fatal(err)
+				}
+			case "target-name-recreated":
+				recreated := pod.DeepCopy()
+				recreated.UID, recreated.ResourceVersion = "replacement-target-uid", ""
+				if err := c.Create(ctx, recreated); err != nil {
+					t.Fatal(err)
+				}
+			}
+			beforeNP, beforeCM := &networkingv1.NetworkPolicy{}, &corev1.ConfigMap{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(canonical), beforeNP); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: "operator", Name: receiptName(operationReceipt{Kind: "quarantine", PolicyUID: "policy-uid", TargetUID: string(pod.UID)})}, beforeCM); err != nil {
+				t.Fatal(err)
+			}
+			n := NewNativeActuator(c)
+			n.Reader, n.JournalNamespace = c, "operator"
+			events, err := n.RecoverOperations(ctx, false)
+			if err != nil || len(events) != 1 || events[0].Err == nil || events[0].Outcome != "refused" {
+				t.Fatalf("GC accepted ambiguous operation scope: %+v %v", events, err)
+			}
+			afterNP, afterCM := &networkingv1.NetworkPolicy{}, &corev1.ConfigMap{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(beforeNP), afterNP); err != nil || afterNP.UID != beforeNP.UID || afterNP.ResourceVersion != beforeNP.ResourceVersion {
+				t.Fatalf("GC changed canonical NP on refusal: %v %+v", err, afterNP)
+			}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(beforeCM), afterCM); err != nil || afterCM.ResourceVersion != beforeCM.ResourceVersion {
+				t.Fatalf("GC changed receipt on refusal: %v %+v", err, afterCM)
+			}
+			if mode == "target-name-recreated" {
+				replacement := &corev1.Pod{}
+				if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: pod.Name}, replacement); err != nil || replacement.UID != "replacement-target-uid" {
+					t.Fatalf("GC changed recreated target: %v %+v", err, replacement)
+				}
+			} else if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: pod.Name}, &corev1.Pod{}); !apierrors.IsNotFound(err) {
+				t.Fatalf("GC recreated old target: %v", err)
+			}
+		})
 	}
 }
 
