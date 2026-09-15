@@ -17,7 +17,6 @@ const m170ScenarioName = "m170-cli-producer"
 
 func init() {
 	core.RegisterScenario(m170CLIScenario{})
-	core.RegisterDefender(m170CLIDefender{name: "m170-cli-baseline", baseline: true})
 	core.RegisterDefender(m170CLIDefender{name: "m170-cli-arm"})
 }
 
@@ -28,7 +27,7 @@ func TestDollarsOnlyExcludesMarkerRowsInEitherFileOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: dir, ScenarioFilter: map[string]bool{m170ScenarioName: true}, DefenderFilter: map[string]bool{"m170-cli-baseline": true, "m170-cli-arm": true}}, func(s, d string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
+	r := core.NewRunner(core.RunnerOptions{TrialsPerArm: 1, OutDir: dir, ScenarioFilter: map[string]bool{m170ScenarioName: true}, DefenderFilter: map[string]bool{"d-nomtd": true, "m170-cli-arm": true}}, func(s, d string, trial int, _ int64, _ string) (*core.Env, func() error, error) {
 		return &core.Env{Log: &m170CLILogger{}, ScenarioName: s, DefenderName: d, Trial: trial, Config: config.WithDollarDefaults(config.TargetConfig{})}, func() error { return nil }, nil
 	}, mw, nil)
 	if _, err := r.Run(context.Background()); err != nil {
@@ -88,17 +87,14 @@ func (m170CLIScenario) Execute(_ context.Context, env *core.Env) (core.AttackRes
 	return core.AttackResult{Commands: []string{"marker-producer"}}, nil
 }
 func (m170CLIScenario) SuccessOracle(_ context.Context, env *core.Env) (core.OracleResult, error) {
-	return core.OracleResult{Achieved: env.DefenderName == "m170-cli-baseline", ObservedState: "runner-produced"}, nil
+	return core.OracleResult{Achieved: env.DefenderName == "d-nomtd", ObservedState: "runner-produced"}, nil
 }
 func (m170CLIScenario) Teardown(context.Context, *core.Env) error { return nil }
 
-type m170CLIDefender struct {
-	name     string
-	baseline bool
-}
+type m170CLIDefender struct{ name string }
 
 func (d m170CLIDefender) Metadata() core.DefenderMeta {
-	return core.DefenderMeta{Name: d.name, IsNegativeControlBaseline: d.baseline}
+	return core.DefenderMeta{Name: d.name}
 }
 func (m170CLIDefender) Setup(context.Context, *core.Env) error    { return nil }
 func (m170CLIDefender) Start(context.Context, *core.Env) error    { return nil }
