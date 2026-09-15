@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -46,7 +46,7 @@ blind_derivation:
 implementation:
   branch: fix/t5-m146
   base_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
-  head_sha: d7a1925c72345f789e8a96d2ce80e3a9c4c2b72d
+  head_sha: f8c7d81cb0c777ef61863867250dd676e2a30892
   stacked_on: []
 pull_request:
   url: null
@@ -85,7 +85,7 @@ residuals: []
 next_action:
   owner: sol-t5-m146
   action: Implement signed plan; coordinate heavy-test slot; submit-review --no-notify
-updated_at: '2026-09-15T20:18:38+00:00'
+updated_at: '2026-09-15T20:46:43+00:00'
 configuration_history:
 - at: '2026-09-15T19:28:13+00:00'
   by: codex-lead
@@ -100,6 +100,11 @@ configuration_history:
   - verification
   approval_ref: AUTHORIZATION.md
 - at: '2026-09-15T20:18:38+00:00'
+  by: sol-t5-m146
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T20:46:43+00:00'
   by: sol-t5-m146
   fields:
   - implementation
