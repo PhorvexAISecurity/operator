@@ -29,6 +29,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/capability"
+	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -116,7 +117,20 @@ func TestNonAIActionsConsultTheBackend(t *testing.T) {
 			t.Fatalf("fixture: %s must be a NON-AI action for this test to mean anything", a)
 		}
 		pol := model.Policy{EnabledActions: map[model.Action]bool{a: true}}
-		rep := capabilityGaps(pol, views, backendWitness([]model.Pod{pod}, backend))
+		witness := backendWitness([]model.Pod{pod}, backend)
+		query := views
+		if a == model.ActionRouteRotate {
+			routePod := model.Pod{Namespace: "ns", Name: "app-0", Ready: true, RouteService: "app-route",
+				Labels: map[string]string{"app": "web", "phorvex.ai/route-key": "old"}}
+			peer := routePod
+			peer.Name = "app-1"
+			service := ingest.ServiceInfo{Namespace: "ns", Name: "app-route", Selector: map[string]string{
+				"app": "web", "phorvex.ai/route-key": "old",
+			}}
+			query = []*model.WorkloadView{{Pod: routePod}}
+			witness = capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{routePod, peer}, nil, []ingest.ServiceInfo{service}), nil, nil, backend)
+		}
+		rep := capabilityGaps(pol, query, witness)
 		if len(rep.gaps) != 1 || rep.gaps[0].action != a {
 			t.Fatalf("%s must be reported unsupported on phoenix, got %+v", a, rep.gaps)
 		}
@@ -160,13 +174,26 @@ func TestMixedPolicyCannotClaimAllSupported(t *testing.T) {
 func TestSupportedActionsRemainSupported(t *testing.T) {
 	backend := nativeBackend()
 	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
+	pod.Ready = true
+	pod.RouteService = "app-route"
+	pod.Labels = map[string]string{"app": "web", "phorvex.ai/route-key": "old"}
 	views := []*model.WorkloadView{{Pod: pod}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{
-		model.ActionKVReset: true, model.ActionIdentityRotate: true, model.ActionRotate: true,
+		model.ActionKVReset: true, model.ActionRouteRotate: true, model.ActionRotate: true,
 	}}
-	rep := capabilityGaps(pol, views, backendWitness([]model.Pod{pod}, backend))
+	peer := pod
+	peer.Name = "vllm-1"
+	service := ingest.ServiceInfo{Namespace: "ns", Name: "app-route", Selector: map[string]string{
+		"app": "web", "phorvex.ai/route-key": "old",
+	}}
+	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod, peer}, nil, []ingest.ServiceInfo{service}), nil, nil, backend)
+	rep := capabilityGaps(pol, views, witness)
 	if len(rep.gaps) != 0 {
-		t.Fatalf("native implements all three; want no gaps, got %+v", rep.gaps)
+		t.Fatalf("native implements configured kv-reset, route-rotate and rotate; want no gaps, got %+v", rep.gaps)
+	}
+	identity := capabilityGaps(model.Policy{EnabledActions: map[model.Action]bool{model.ActionIdentityRotate: true}}, views, witness)
+	if len(identity.gaps) != 1 || identity.gaps[0].action != model.ActionIdentityRotate || !strings.Contains(identity.gaps[0].why, "declared-only") {
+		t.Fatalf("declared identity must be a visible native status gap, got %+v", identity.gaps)
 	}
 	m, entry := newEntryManager(t, "green")
 	got := m.debounceActionsSupported(entry, rep)
