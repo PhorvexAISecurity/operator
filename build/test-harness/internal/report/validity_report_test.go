@@ -471,7 +471,7 @@ func TestValidityEconomicsRenderNAForAnUnmeasuredArm(t *testing.T) {
 	if strings.Contains(md, "| $0 |") {
 		t.Errorf("unmeasured arm rendered a $0 figure:\n%s", md)
 	}
-	if !strings.Contains(md, "| d-fullphoenix | 0 | n/a |") {
+	if !strings.Contains(md, "| d-fullphoenix | unassessed | 0 | n/a |") {
 		t.Errorf("unmeasured arm not rendered as n/a:\n%s", md)
 	}
 }

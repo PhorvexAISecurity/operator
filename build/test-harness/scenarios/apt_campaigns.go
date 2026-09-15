@@ -1,13 +1,9 @@
 package scenarios
 
-// apt_campaigns.go (P-REDTEAM Step 2) — the REALISTIC ATTACK CATALOG: all 52 scenarios transformed
-// to production-grade, real-TTP, multi-step APT campaigns (the persona-panel design). Each is an
-// 8-phase kill-chain mapped to a NAMED real operation + the full MITRE ATT&CK (incl. Containers) /
-// ATLAS technique IDs, registered as a "<id>-apt" scenario. ADDITIVE: one self-registering file; the
-// original 52 are left UNTOUCHED as the frozen baseline (P3/P3-DEEP/1.62x/lead-demo reproduce
-// byte-identically). The oracle is REAL + measured (foothold retention vs the defender's response,
-// via the existing measureSurvival); GPU-microarch campaigns are CapGPU-gated => skip-with-note on
-// kind ([SP-0-PENDING-P4]). Continuously extensible: add a row to aptTable.
+// apt_campaigns.go registers marker simulations derived from the P-REDTEAM
+// narrative catalogue. Every row executes the same bounded persistence-marker
+// fixture. Operation names, phases and technique IDs are context, not executed
+// attack stages or claims of technique/GPU coverage.
 
 import (
 	"context"
@@ -15,6 +11,7 @@ import (
 	"time"
 
 	"github.com/r6security/phoenix-test-harness/internal/core"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type aptSpec struct {
@@ -26,23 +23,24 @@ type aptSpec struct {
 }
 
 type aptCampaign struct {
-	spec aptSpec
-	app  string
+	spec      aptSpec
+	app       string
+	targetUID types.UID
 }
 
 func (c *aptCampaign) Metadata() core.ScenarioMeta {
-	caps := []core.Capability{}
-	if c.spec.gpu {
-		caps = append(caps, core.CapGPU)
-	}
 	return core.ScenarioMeta{
-		Name:                   c.spec.id + "-apt",
-		Category:               core.CategoryR6Claimed,
-		Source:                 "P-REDTEAM realistic campaign: " + c.spec.op,
-		R6ResponseTag:          core.R6Partial,
-		AttackTechniqueIDs:     c.spec.ttps,
-		CapabilityRequirements: caps,
-		R6Justification:        "Realistic multi-step APT campaign (" + c.spec.op + "): an 8-phase kill-chain chaining real TTPs with LOTL + evasion. Rotation partially disrupts the foothold; off-surface objectives persist (honest R6Partial).",
+		Name:               c.spec.id + "-apt",
+		Category:           core.CategoryR6Claimed,
+		Source:             "P-REDTEAM narrative catalogue: " + c.spec.op,
+		R6ResponseTag:      core.R6Partial,
+		AttackTechniqueIDs: c.spec.ttps,
+		Realism:            core.RealismMarkerSimulation,
+		Mechanism:          "deploy one target pod, exec a bounded in-container persistence marker, then poll marker and pod-UID survival",
+		ClaimLimits:        "does not execute the named operation, narrative phases, ATT&CK/ATLAS techniques, GPU behavior, or prove live defensive success",
+		OracleDescription:  "marker/target UID remains observable after the fixed response window",
+		CleanupDescription: "delete objects owned by the scenario app label and verify teardown",
+		R6Justification:    "Marker survival can measure disruption of this fixture only; off-surface narrative objectives and named techniques are not exercised.",
 	}
 }
 
@@ -60,19 +58,31 @@ func (c *aptCampaign) Execute(ctx context.Context, env *core.Env) (core.AttackRe
 	if err != nil {
 		return core.AttackResult{}, err
 	}
-	cmds := plantBackdoor(ctx, env, pod.Name, firstContainer(pod))
-	notes := map[string]string{"namedOperation": c.spec.op, "attackTechniqueIDs": fmt.Sprintf("%v", c.spec.ttps), "killChainPhases": fmt.Sprintf("%d", len(c.spec.killChain))}
-	for i, ph := range c.spec.killChain {
-		env.Log.Logf("apt[%s] phase %d/%d: %s", c.spec.id, i+1, len(c.spec.killChain), ph)
+	c.targetUID = pod.UID
+	container := firstContainer(pod)
+	cmds, err := plantBackdoorObserved(ctx, env, pod.Name, container)
+	if err != nil {
+		return core.AttackResult{Stages: []string{"plant bounded in-container persistence marker"}, Commands: cmds}, err
 	}
-	return core.AttackResult{Stages: c.spec.killChain, Commands: cmds, Notes: notes}, nil
+	notes := map[string]string{"narrativeOperation": c.spec.op, "declaredTechniqueIDs": fmt.Sprintf("%v", c.spec.ttps), "narrativePhaseCount": fmt.Sprintf("%d", len(c.spec.killChain)), "realism": string(core.RealismMarkerSimulation)}
+	env.Log.Logf("apt[%s]: executed persistence-marker simulation; narrative operation and mappings were not executed", c.spec.id)
+	return core.AttackResult{Stages: []string{"plant bounded in-container persistence marker"}, Commands: cmds, Notes: notes}, nil
 }
 
 func (c *aptCampaign) SuccessOracle(ctx context.Context, env *core.Env) (core.OracleResult, error) {
-	_, survived := measureSurvival(ctx, env, c.app, 10*time.Second)
-	state := fmt.Sprintf("realistic campaign %q [%s]: foothold retained past defender response = %v", c.spec.op, c.spec.product, survived)
+	observationPause(10 * time.Second)
+	pod, err := observationTarget(ctx, env, c.app, c.targetUID)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	markerPresent, err := observedMarker(ctx, env.Exec(ctx, pod.Name, firstContainer(pod), markerReadCommand(BackdoorMarkerPath)), BackdoorMarker)
+	if err != nil {
+		return core.OracleResult{}, err
+	}
+	survived := markerPresent && pod.UID == c.targetUID
+	state := fmt.Sprintf("marker simulation [%s]: persistence marker retained past response window = %v", c.spec.product, survived)
 	return core.OracleResult{Achieved: survived, ObservedState: state, Evidence: map[string]string{
-		"product": c.spec.product, "namedOperation": c.spec.op, "killChainPhases": fmt.Sprintf("%d", len(c.spec.killChain)),
+		"product": c.spec.product, "narrativeOperation": c.spec.op, "narrativePhaseCount": fmt.Sprintf("%d", len(c.spec.killChain)), "realism": string(core.RealismMarkerSimulation), "originalPodUID": string(c.targetUID), "observedPodUID": string(pod.UID),
 	}}, nil
 }
 
