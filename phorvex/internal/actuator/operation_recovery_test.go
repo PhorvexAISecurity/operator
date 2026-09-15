@@ -40,9 +40,11 @@ func interruptedWarmReceiptFixture(t *testing.T) (client.Client, *NativeActuator
 	ctx := context.Background()
 	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
 	newPod := aiPod("ns", "new", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
+	poolObjects := m066FakePool(old, newPod, labelSwapGroup)
 	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{labelSwapGroup: "g"}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap)}}}}
 	phaseError := true
-	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(old, newPod, pol, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).WithInterceptorFuncs(interceptor.Funcs{
+	objects := append([]client.Object{old, newPod, pol, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}}, poolObjects...)
+	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if obj.GetUID() == "" {
 				obj.SetUID(types.UID("created-" + obj.GetName()))
@@ -55,6 +57,23 @@ func interruptedWarmReceiptFixture(t *testing.T) (client.Client, *NativeActuator
 				return errors.New("injected post-promotion journal outage")
 			}
 			return c.Update(ctx, obj, opts...)
+		},
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if err := c.Delete(ctx, obj, opts...); err != nil {
+				return err
+			}
+			p, ok := obj.(*corev1.Pod)
+			if !ok || p.Name != old.Name {
+				return nil
+			}
+			// Synthetic controller event for journal unit tests. The local real
+			// KCM test independently proves actual ReplicaSet behavior.
+			replacement := newPod.DeepCopy()
+			replacement.Name = "m066-controller-new"
+			replacement.UID, replacement.ResourceVersion = "m066-controller-new-uid", ""
+			replacement.Labels[labelRole] = roleShadow
+			replacement.Labels[labelModelLoaded] = "true"
+			return c.Create(ctx, replacement)
 		},
 	}).Build()
 	req := boundReq(old, model.ActionWarmSwap)
@@ -224,91 +243,30 @@ func TestOperationJournalProducerDrainFailureReportsPartialObjects(t *testing.T)
 	}
 }
 
-func TestOperationJournalRewarmCreateWithoutUIDBindingDoesNotDuplicate(t *testing.T) {
-	ctx := context.Background()
-	old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
-	newPod := aiPod("ns", "new", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
-	base := fakeC(old, newPod)
-	rewarmCreates := 0
-	guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
-		Create: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			if pod, ok := obj.(*corev1.Pod); ok && strings.Contains(pod.Name, "-rw-") {
-				rewarmCreates++
-			}
-			return inner.Create(ctx, obj, opts...)
-		},
-		Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
-			if cm, ok := obj.(*corev1.ConfigMap); ok && strings.Contains(cm.Data["receipt"], `"phase":"rewarmed"`) {
-				return errors.New("UID binding journal outage")
-			}
-			return inner.Update(ctx, obj, opts...)
-		},
-	})
-	if _, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, boundReq(old, model.ActionWarmSwap)); err == nil || rewarmCreates != 1 {
-		t.Fatalf("real producer did not create before binding failure: creates=%d err=%v", rewarmCreates, err)
-	}
-	n := NewNativeActuator(guard)
-	n.Reader = guard
-	n.JournalNamespace = "operator"
-	n.RecoveryVLLM = &mockVLLM{loaded: true}
-	events, err := n.RecoverOperations(ctx, false)
-	if err != nil || len(events) != 1 || events[0].Err == nil || rewarmCreates != 1 {
-		t.Fatalf("recovery duplicated unbound shadow: creates=%d events=%+v err=%v", rewarmCreates, events, err)
-	}
-}
-
 func TestOperationJournalScheduledReplacementSpecValidation(t *testing.T) {
 	ctx := context.Background()
 	for _, mode := range []string{"scheduled-node-accepted", "workload-spec-drift-refused"} {
 		t.Run(mode, func(t *testing.T) {
-			old := aiPod("ns", "old", map[string]string{labelSwapGroup: "g", labelRole: roleLeader})
-			newPod := aiPod("ns", "new", map[string]string{labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "true"})
-			base := fakeC(old, newPod)
-			finishFail := true
-			rewarmName := ""
-			guard := interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{
-				Create: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-					if err := inner.Create(ctx, obj, opts...); err != nil {
-						return err
-					}
-					if pod, ok := obj.(*corev1.Pod); ok && strings.Contains(pod.Name, "-rw-") {
-						rewarmName = pod.Name
-						scheduled := &corev1.Pod{}
-						if err := inner.Get(ctx, client.ObjectKeyFromObject(pod), scheduled); err != nil {
-							return err
-						}
-						scheduled.Spec.NodeName = "scheduled-node"
-						if err := inner.Update(ctx, scheduled); err != nil {
-							return err
-						}
-					}
-					return nil
-				},
-				Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-					if _, ok := obj.(*corev1.ConfigMap); ok && finishFail {
-						return errors.New("receipt finish unavailable")
-					}
-					return inner.Delete(ctx, obj, opts...)
-				},
-			})
-			res, err := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: guard, JournalNamespace: "operator", VLLM: &mockVLLM{loaded: true}}, boundReq(old, model.ActionWarmSwap))
-			if err == nil || res.Emitted || rewarmName == "" {
-				t.Fatalf("scheduled producer readback did not bind replacement before finish failure: %+v %v name=%q", res, err, rewarmName)
-			}
-			replacement := &corev1.Pod{}
-			if err := base.Get(ctx, client.ObjectKey{Namespace: "ns", Name: rewarmName}, replacement); err != nil || replacement.Spec.NodeName != "scheduled-node" {
-				t.Fatalf("scheduler transition fixture missing: %v %+v", err, replacement)
-			}
-			finishFail = false
-			if mode == "workload-spec-drift-refused" {
-				replacement.Spec.Containers[0].Image = "different-workload:image"
-				if err := base.Update(ctx, replacement); err != nil {
-					t.Fatal(err)
+			c, n, old, _ := interruptedWarmReceiptFixture(t)
+			guard := interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{Delete: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				if err := inner.Delete(ctx, obj, opts...); err != nil {
+					return err
 				}
-			}
-			n := NewNativeActuator(guard)
-			n.Reader, n.JournalNamespace = guard, "operator"
-			n.RecoveryVLLM = &mockVLLM{loaded: true}
+				p, ok := obj.(*corev1.Pod)
+				if !ok || p.UID != old.UID {
+					return nil
+				}
+				replacement := &corev1.Pod{}
+				if err := inner.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "m066-controller-new"}, replacement); err != nil {
+					return err
+				}
+				replacement.Spec.NodeName = "scheduled-node"
+				if mode == "workload-spec-drift-refused" {
+					replacement.Spec.Containers[0].Image = "different-workload:image"
+				}
+				return inner.Update(ctx, replacement)
+			}})
+			n.Client, n.Reader = guard, guard
 			events, err := n.RecoverOperations(ctx, false)
 			if err != nil || len(events) != 1 {
 				t.Fatalf("scheduled replacement recovery not attempted: %+v %v", events, err)
@@ -532,7 +490,7 @@ func TestOperationJournalWarmDrainAndCollisionOutcomes(t *testing.T) {
 		_, n, _, _ := interruptedWarmReceiptFixture(t)
 		n.RecoveryVLLM = &mockVLLM{drainErr: errStackUnreachable}
 		events, err := n.RecoverOperations(ctx, false)
-		if err != nil || len(events) != 1 || events[0].Err != nil || !strings.Contains(events[0].Effect, "unverified") {
+		if err != nil || len(events) != 1 || events[0].Err == nil || events[0].Outcome != "partial" || !strings.Contains(events[0].Effect, "unverified") || !strings.Contains(events[0].Effect, "pending") {
 			t.Fatalf("unreachable drain overclaimed: %+v %v", events, err)
 		}
 	})
@@ -582,8 +540,8 @@ func TestOperationJournalWarmDrainAndCollisionOutcomes(t *testing.T) {
 			t.Fatal(err)
 		}
 		events, err := n.RecoverOperations(ctx, false)
-		if err != nil || len(events) != 1 || events[0].Err == nil || events[0].Outcome != "partial" {
-			t.Fatalf("foreign collision claimed rewarm: %+v %v", events, err)
+		if err != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+			t.Fatalf("unrelated legacy clone name affected controller recovery: %+v %v", events, err)
 		}
 		got := &corev1.Pod{}
 		if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: name}, got); err != nil || got.UID != foreign.UID {
@@ -604,16 +562,16 @@ func TestOperationJournalWarmFailedPhaseAndRollbackCleanup(t *testing.T) {
 		}})
 		n.Client = block
 		first, err := n.RecoverOperations(ctx, false)
-		if err != nil || len(first) != 1 || first[0].Err == nil || first[0].Outcome != "partial" {
-			t.Fatalf("injected phase failure not retained: %+v %v", first, err)
+		if err != nil || len(first) != 1 || first[0].Err != nil || first[0].Outcome != "confirmed" {
+			t.Fatalf("obsolete retired-phase interceptor affected v2 observation: %+v %v", first, err)
 		}
 		if err := c.Get(ctx, client.ObjectKey{Namespace: "ns", Name: old.Name}, &corev1.Pod{}); !apierrors.IsNotFound(err) {
 			t.Fatalf("old retirement did not happen: %v", err)
 		}
 		n.Client = c
 		second, err := n.RecoverOperations(ctx, false)
-		if err != nil || len(second) != 1 || second[0].Err != nil || !strings.Contains(second[0].Effect, "unverified") {
-			t.Fatalf("lost phase could not retry honestly: %+v %v", second, err)
+		if err != nil || len(second) != 0 {
+			t.Fatalf("completed receipt unexpectedly retried: %+v %v", second, err)
 		}
 	})
 	t.Run("successful-rollback-cleanup-lost", func(t *testing.T) {

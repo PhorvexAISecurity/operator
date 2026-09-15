@@ -6,6 +6,7 @@ package ingest
 
 import (
 	"context"
+	appsv1 "k8s.io/api/apps/v1"
 	"strconv"
 	"strings"
 	"time"
@@ -140,6 +141,9 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	pods := make([]model.Pod, 0, len(podList.Items))
 	for i := range podList.Items {
 		p := projectPod(&podList.Items[i], now)
+		if o := metav1.GetControllerOf(&podList.Items[i]); o != nil && o.APIVersion == "apps/v1" && o.Kind == "ReplicaSet" && len(podList.Items[i].OwnerReferences) == 1 {
+			p.WarmPoolOwnerUID = string(o.UID)
+		}
 		if relevant == nil || relevant(&podList.Items[i]) {
 			p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
 		} else {
@@ -233,7 +237,134 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	snap.Nodes = collectNodes(ctx, c)
 	snap.PDBs = collectPDBs(ctx, c)
 	snap.Services = collectServices(ctx, c)
+	warmConfig := newWarmPoolSnapshotCache(ownerReader, snap.Services)
+	for i := range snap.Pods {
+		p := &snap.Pods[i]
+		if p.WarmPoolOwnerUID == "" || p.OwnerKind != "ReplicaSet" || p.RouteService == "" {
+			continue
+		}
+		if warmConfig.Configured(ctx, *p) {
+			p.WarmPoolConfigured = true
+		}
+	}
 	return snap, nil
+}
+
+// Snapshot checks are deliberately conservative and bounded. One immutable
+// controller/template fact is fetched per distinct namespace/RS identity; each
+// Pod still gets its own selector, group and route check. Dispatch uses the
+// authoritative Reader again and never trusts this cache for mutation.
+const warmPoolSnapshotMaxControllers = 128
+
+type warmPoolSnapshotController struct {
+	valid    bool
+	uid      string
+	selector labels.Selector
+	template corev1.PodTemplateSpec
+	route    string
+}
+type warmPoolSnapshotCache struct {
+	reader      client.Reader
+	controllers map[string]warmPoolSnapshotController
+	services    map[string]ServiceInfo
+}
+
+func newWarmPoolSnapshotCache(r client.Reader, services []ServiceInfo) *warmPoolSnapshotCache {
+	c := &warmPoolSnapshotCache{reader: r, controllers: map[string]warmPoolSnapshotController{}, services: map[string]ServiceInfo{}}
+	for _, svc := range services {
+		c.services[svc.Namespace+"\x00"+svc.Name] = svc
+	}
+	return c
+}
+func (c *warmPoolSnapshotCache) Configured(ctx context.Context, p model.Pod) bool {
+	if c == nil || c.reader == nil || p.WarmPoolOwnerUID == "" || p.OwnerKind != "ReplicaSet" || p.OwnerName == "" || p.RouteService == "" {
+		return false
+	}
+	key := p.Namespace + "\x00" + p.OwnerName + "\x00" + p.WarmPoolOwnerUID
+	fact, ok := c.controllers[key]
+	if !ok {
+		if len(c.controllers) >= warmPoolSnapshotMaxControllers {
+			return false
+		}
+		fact = c.loadController(ctx, p)
+		c.controllers[key] = fact
+	}
+	if !fact.valid || fact.uid != p.WarmPoolOwnerUID || fact.route != p.RouteService || !fact.selector.Matches(labels.Set(p.Labels)) {
+		return false
+	}
+	groupPresent := false
+	for _, key := range []string{"phorvex.ai/swap-group", "phorvex.ai/model-shard"} {
+		if p.Labels[key] == "" {
+			continue
+		}
+		groupPresent = true
+		if fact.template.Labels[key] != p.Labels[key] {
+			return false
+		}
+	}
+	if !groupPresent {
+		return false
+	}
+	svc, ok := c.services[p.Namespace+"\x00"+p.RouteService]
+	if !ok || svc.Selector["phorvex.ai/role"] != "leader" {
+		return false
+	}
+	for _, key := range []string{"phorvex.ai/swap-group", "phorvex.ai/model-shard"} {
+		if p.Labels[key] != "" && svc.Selector[key] != p.Labels[key] {
+			return false
+		}
+	}
+	roleSelector := labels.SelectorFromSet(svc.Selector)
+	for _, actual := range []map[string]string{p.Labels, fact.template.Labels} {
+		for _, role := range []string{"leader", "warm-shadow", "retiring"} {
+			projected := make(map[string]string, len(actual))
+			for k, v := range actual {
+				projected[k] = v
+			}
+			projected["phorvex.ai/role"] = role
+			if roleSelector.Matches(labels.Set(projected)) != (role == "leader") {
+				return false
+			}
+		}
+	}
+	return true
+}
+func (c *warmPoolSnapshotCache) loadController(ctx context.Context, p model.Pod) warmPoolSnapshotController {
+	var out warmPoolSnapshotController
+	rs := &appsv1.ReplicaSet{}
+	if err := c.reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: p.OwnerName}, rs); err != nil || string(rs.UID) != p.WarmPoolOwnerUID || rs.DeletionTimestamp != nil || rs.Spec.Replicas == nil || *rs.Spec.Replicas < 2 || *rs.Spec.Replicas > 128 || rs.Status.ObservedGeneration != rs.Generation || rs.Spec.Selector == nil {
+		return out
+	}
+	if parent := metav1.GetControllerOf(rs); parent != nil {
+		if len(rs.OwnerReferences) != 1 || parent.APIVersion != "apps/v1" || parent.Kind != "Deployment" || parent.UID == "" {
+			return out
+		}
+		d := &appsv1.Deployment{}
+		if err := c.reader.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: parent.Name}, d); err != nil || d.UID != parent.UID || d.DeletionTimestamp != nil {
+			return out
+		}
+	} else if len(rs.OwnerReferences) != 0 {
+		return out
+	}
+	for _, key := range []string{"phorvex.ai/role", "phorvex.ai/model-loaded"} {
+		if _, ok := rs.Spec.Selector.MatchLabels[key]; ok {
+			return out
+		}
+	}
+	for _, req := range rs.Spec.Selector.MatchExpressions {
+		if req.Key == "phorvex.ai/role" || req.Key == "phorvex.ai/model-loaded" {
+			return out
+		}
+	}
+	sel, err := metav1.LabelSelectorAsSelector(rs.Spec.Selector)
+	if err != nil || sel.Empty() || !sel.Matches(labels.Set(rs.Spec.Template.Labels)) || rs.Spec.Template.Labels["phorvex.ai/role"] != "warm-shadow" || rs.Spec.Template.Labels["phorvex.ai/model-loaded"] != "false" || len(rs.Spec.Template.Spec.EphemeralContainers) != 0 {
+		return out
+	}
+	route := rs.Spec.Template.Annotations["phorvex.ai/route-service"]
+	if route == "" {
+		return out
+	}
+	return warmPoolSnapshotController{valid: true, uid: string(rs.UID), selector: sel, template: *rs.Spec.Template.DeepCopy(), route: route}
 }
 
 // collectNodes projects node allocatable capacity (CPU/mem/GPU/MIG) — the conservation

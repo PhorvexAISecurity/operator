@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,7 +24,7 @@ import (
 func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, networkingv1.AddToScheme, v1alpha1.AddToScheme} {
+	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, networkingv1.AddToScheme, appsv1.AddToScheme, v1alpha1.AddToScheme} {
 		if err := add(s); err != nil {
 			t.Fatal(err)
 		}
@@ -32,9 +33,20 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 	old := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "old", UID: "old-uid", ResourceVersion: "7", Labels: map[string]string{"phorvex.ai/swap-group": "g", "phorvex.ai/role": "leader"}}, Status: corev1.PodStatus{Conditions: ready}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "serve", Image: "fixture"}}}}
 	shadow := old.DeepCopy()
 	shadow.Name, shadow.UID, shadow.Labels["phorvex.ai/role"], shadow.Labels["phorvex.ai/model-loaded"] = "new", "new-uid", "warm-shadow", "true"
+	for _, p := range []*corev1.Pod{old, shadow} {
+		p.Labels["app"] = "pool"
+		p.Annotations = map[string]string{"phorvex.ai/route-service": "pool"}
+	}
+	controller := true
+	owner := metav1.OwnerReference{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "pool", UID: "pool-uid", Controller: &controller}
+	old.OwnerReferences, shadow.OwnerReferences = []metav1.OwnerReference{owner}, []metav1.OwnerReference{owner}
+	replicas := int32(2)
+	templateLabels := map[string]string{"app": "pool", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pool", UID: "pool-uid", Generation: 1}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "pool", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: templateLabels, Annotations: map[string]string{"phorvex.ai/route-service": "pool"}}, Spec: old.Spec}}, Status: appsv1.ReplicaSetStatus{ObservedGeneration: 1, Replicas: 2}}
+	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pool", UID: "service-uid"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "pool", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "leader"}, Ports: []corev1.ServicePort{{Port: 80}}}}
 	pol := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"phorvex.ai/swap-group": "g"}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap)}}}}
 	failPhase := true
-	base := fake.NewClientBuilder().WithScheme(s).WithObjects(old, shadow, pol, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).WithInterceptorFuncs(interceptor.Funcs{
+	base := fake.NewClientBuilder().WithScheme(s).WithObjects(old, shadow, rs, service, pol, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if obj.GetUID() == "" {
 				obj.SetUID(types.UID("created-" + obj.GetName()))
@@ -47,6 +59,19 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 				return errors.New("post-promotion journal outage")
 			}
 			return c.Update(ctx, obj, opts...)
+		},
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if err := c.Delete(ctx, obj, opts...); err != nil {
+				return err
+			}
+			p, ok := obj.(*corev1.Pod)
+			if !ok || p.UID != old.UID {
+				return nil
+			}
+			replacement := shadow.DeepCopy()
+			replacement.Name, replacement.UID, replacement.ResourceVersion = "controller-new", "controller-new-uid", ""
+			replacement.Labels["phorvex.ai/model-loaded"] = "true"
+			return c.Create(ctx, replacement)
 		},
 	}).Build()
 	native := actuator.NewNativeActuator(base)

@@ -52,6 +52,27 @@ func (d *m069Delete) fn() func(ctx context.Context, c client.WithWatch, obj clie
 }
 
 func m069Client(d *m069Delete, fns interceptor.Funcs, objs ...client.Object) client.Client {
+	var old, next *corev1.Pod
+	for _, obj := range objs {
+		p, ok := obj.(*corev1.Pod)
+		if !ok {
+			continue
+		}
+		if p.Labels[labelRole] == roleLeader {
+			old = p
+		}
+		if p.Labels[labelRole] == roleShadow {
+			next = p
+		}
+	}
+	if old != nil && next != nil && old.Labels[labelParallelGroup] == "" && next.Labels[labelParallelGroup] == "" {
+		for _, key := range []string{labelSwapGroup, labelModelShard} {
+			if old.Labels[key] != "" && old.Labels[key] == next.Labels[key] {
+				objs = append(objs, m066FakePool(old, next, key)...)
+				break
+			}
+		}
+	}
 	fns.Delete = d.fn()
 	originalCreate := fns.Create
 	fns.Create = func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
@@ -230,7 +251,8 @@ func TestM069DeleteCarriesObservedUIDPrecondition(t *testing.T) {
 			ec.Client = c
 			ec.Reader, ec.JournalNamespace = c, "operator"
 			hr, err := tc.handler.Enact(context.Background(), ec, boundReq(objs[0].(*corev1.Pod), tc.action))
-			if err != nil || !hr.Emitted {
+			scalarPending := tc.name == "warm-swap" || tc.name == "model-shard-replace"
+			if (!scalarPending && (err != nil || !hr.Emitted)) || (scalarPending && (err == nil || hr.MutationKind != "swap")) {
 				t.Fatalf("positive control: %+v %v", hr, err)
 			}
 			if len(d.opts) == 0 {

@@ -299,24 +299,28 @@ type RotationOwnership struct {
 type Pod struct {
 	RotationOwnership RotationOwnership
 
-	Namespace       string
-	Name            string
-	UID             string
-	Labels          map[string]string
-	Node            string
-	Phase           string // raw K8s pod phase
-	Ready           bool
-	StartedAt       time.Time
-	ReadyAt         time.Time // PodReady=True transition; zero when unavailable/not Ready
-	Age             time.Duration
-	MountedSecrets  []string // distinct Secret names referenced by the pod spec (names only)
-	ServiceAccount  string
-	OwnerKind       string
-	OwnerName       string
-	DesiredReplicas int
-	ReadyReplicas   int
-	HasGPU          bool
-	MIGDevice       string
+	Namespace      string
+	Name           string
+	UID            string
+	Labels         map[string]string
+	Node           string
+	Phase          string // raw K8s pod phase
+	Ready          bool
+	StartedAt      time.Time
+	ReadyAt        time.Time // PodReady=True transition; zero when unavailable/not Ready
+	Age            time.Duration
+	MountedSecrets []string // distinct Secret names referenced by the pod spec (names only)
+	ServiceAccount string
+	OwnerKind      string
+	OwnerName      string
+	// WarmPoolConfigured is a conservative read-only snapshot witness for the
+	// scalar ReplicaSet warm-pool contract. Final dispatch rechecks live objects.
+	WarmPoolConfigured bool
+	WarmPoolOwnerUID   string
+	DesiredReplicas    int
+	ReadyReplicas      int
+	HasGPU             bool
+	MIGDevice          string
 	// SessionEpoch is the concatenated kv-reset / kv-migrate epoch annotations. It changes every
 	// time an actuator flushes this pod's KV-cache or agent session, and is what clocks
 	// model.VarSession — WITHOUT it, a session-affecting action has no exposure clock of its own

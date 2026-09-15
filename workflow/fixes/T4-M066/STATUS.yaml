@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,94 @@ checks:
     at: '2026-09-15T11:14:20+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t4-m066
+    artifact: evidence/preflight-r3/receipt.json
+    sha256: cdee65c9f25a342f61207fc51cbef40cc3f245558564ece7c2098041ce47ca27
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:44:37+00:00'
+  implementation:
+    result: PASS
+    by: sol-t4-m066
+    artifact: 04-diff.patch
+    sha256: 9740b9e3e828536eba4b5a6c492e7dd881e939b6d161d287a020da44c7438fd4
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:44:37+00:00'
+  red:
+    result: PASS
+    by: sol-t4-m066
+    artifact: evidence/worker/incident.md
+    sha256: 6ff325b801dcc16199eed9e4285452d96cfce33628545d56e2a31e6d8d68d940
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T17:44:37+00:00'
+  l0:
+    result: PASS
+    by: sol-t4-m066
+    artifact: evidence/worker/broad-relevant-corrected.log
+    sha256: 1089a3d74df16bde1dd5da78c4f85e781ef7b53ea91ffc23c2316ba0d017b078
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:44:37+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/capability
+    - phorvex/internal/ingest
+    - phorvex/internal/model
+    inputs_sha256: 90e02f251a0db5c2ef3ec8d0d92452b0912620f2ee6958b87379ea7851709e93
+  l1:
+    result: PASS
+    by: sol-t4-m066
+    artifact: evidence/worker/head-real-kcm-final.log
+    sha256: 6fa547d6bb47fcf1180c6039cbbccda6358ea179d2dca715d9f0ed8ab1661887
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:44:37+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/model
+    inputs_sha256: e4293f2dc254864acb29e55d374c4501da64692776fe402b9b5e386eade9f30a
+  l2:
+    result: PASS
+    by: sol-t4-m066
+    artifact: evidence/worker/focused-recovery-final.log
+    sha256: 974bbada84571e9fa787ae2425882ae9014ae3c877fe19f29c9e748104e4ddea
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:44:37+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/model
+    inputs_sha256: e4293f2dc254864acb29e55d374c4501da64692776fe402b9b5e386eade9f30a
+  positive_control:
+    result: PASS
+    by: sol-t4-m066
+    artifact: evidence/l0/original-adoption-control.log
+    sha256: 138b23ba8c5afda1be63f8f5ad5a8265af00a810514de025e42fcc6872025cd9
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:44:37+00:00'
+    inputs:
+    - workflow/fixes/T4-M066/evidence/l0
+    inputs_sha256: cf4934e260ad7bc41677ec8ffd9742e8b6a4a218e1aab3f9e2bfa8c5479b4111
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 8c9c35ebad211ca980493bbc5ba1fa42d5f85bffc21c9eeb5aabfd6ab1bfcf6e
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:45:25+00:00'
+    baseline_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 27d0a07f9f94b80b2f2d1ca0c5c40bea506fc6d1cd117bdb6b539bb86c7db595
+    source_sha: edea622430d3804331090077d7283b4aa0ca77b3
+    at: '2026-09-15T17:45:25+00:00'
+    incident_sha256: 8c9c35ebad211ca980493bbc5ba1fa42d5f85bffc21c9eeb5aabfd6ab1bfcf6e
 fix_id: T4-M066
 issues:
 - M-66
 title: '`rewarmShadow` creates an ownerless pod (and copies ephemeral containers)'
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +127,7 @@ blind_derivation:
 implementation:
   branch: fix/t4-m066
   base_sha: ecac2d7229a9701be64ed90886393906e2c4f067
-  head_sha: null
+  head_sha: edea622430d3804331090077d7283b4aa0ca77b3
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +148,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +164,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t4-m066
-  action: Implement signed controller-managed scalar pool plan; await heavy test slot;
-    no live changes
-updated_at: '2026-09-15T11:14:20+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T17:45:28+00:00'
 configuration_history:
 - at: '2026-09-15T10:30:14+00:00'
   by: codex-lead
@@ -98,6 +180,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T17:44:37+00:00'
+  by: sol-t4-m066
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +202,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T17:44:37+00:00'
+  by: sol-t4-m066
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T17:44:38+00:00'
+  by: sol-t4-m066
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T17:45:26+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T17:45:27+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T4-M066:6:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 6

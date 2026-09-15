@@ -84,12 +84,13 @@ type Reason struct {
 // Index is the per-tick precompute: fleet/pool facts bucketed once so per-candidate
 // capability is O(1). Built by BuildIndex from the tick snapshot.
 type Index struct {
-	warmShadowGroups map[string]bool // "ns\x00swapGroup" -> a ready promotable warm shadow exists
-	shardShadow      map[string]bool // "ns\x00shard" -> a ready promotable shadow exists (independent shard)
-	parallelRanks    map[string]int  // "ns\x00shard\x00parallel" -> distinct ready shadow ranks
-	servingByNS      map[string][]ingest.ServiceInfo
-	readyByService   map[string]int
-	schedulableGPU   int
+	warmShadowGroups  map[string]bool // "ns\x00swapGroup" -> a ready promotable warm shadow exists
+	shardShadow       map[string]bool // "ns\x00shard" -> a ready promotable shadow exists (independent shard)
+	scalarPoolShadows map[string]bool // ns/group/RS UID/Service -> configured ready scalar member
+	parallelRanks     map[string]int  // "ns\x00shard\x00parallel" -> distinct ready shadow ranks
+	servingByNS       map[string][]ingest.ServiceInfo
+	readyByService    map[string]int
+	schedulableGPU    int
 }
 
 func poolKey(parts ...string) string {
@@ -106,11 +107,12 @@ func poolKey(parts ...string) string {
 // BuildIndex precomputes the fleet/pool indices from the tick snapshot ONCE (R1).
 func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.ServiceInfo) Index {
 	idx := Index{
-		warmShadowGroups: map[string]bool{},
-		shardShadow:      map[string]bool{},
-		parallelRanks:    map[string]int{},
-		servingByNS:      map[string][]ingest.ServiceInfo{},
-		readyByService:   map[string]int{},
+		warmShadowGroups:  map[string]bool{},
+		shardShadow:       map[string]bool{},
+		scalarPoolShadows: map[string]bool{},
+		parallelRanks:     map[string]int{},
+		servingByNS:       map[string][]ingest.ServiceInfo{},
+		readyByService:    map[string]int{},
 	}
 	readyByNS := map[string][]model.Pod{}
 	declaredRoutes := map[string]bool{}
@@ -131,6 +133,9 @@ func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.Se
 		}
 		if g := s.Labels[labelSwapGroup]; g != "" {
 			idx.warmShadowGroups[poolKey(s.Namespace, g)] = true
+			if s.WarmPoolConfigured {
+				idx.scalarPoolShadows[poolKey(s.Namespace, labelSwapGroup, g, s.WarmPoolOwnerUID, s.RouteService)] = true
+			}
 		}
 		if sh := s.Labels[labelModelShard]; sh != "" {
 			if p := s.Labels[labelParallelGroup]; p != "" {
@@ -146,6 +151,9 @@ func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.Se
 				}
 			} else {
 				idx.shardShadow[poolKey(s.Namespace, sh)] = true
+				if s.WarmPoolConfigured {
+					idx.scalarPoolShadows[poolKey(s.Namespace, labelModelShard, sh, s.WarmPoolOwnerUID, s.RouteService)] = true
+				}
 			}
 		}
 	}
@@ -396,6 +404,12 @@ func (w Witness) warmPoolWhy(pod *model.Pod, group string, shadows map[string]bo
 	if group == "" {
 		return "pod declares no " + label
 	}
+	if !pod.WarmPoolConfigured || pod.WarmPoolOwnerUID == "" || pod.RouteService == "" {
+		return "ReplicaSet warm-pool template/route configuration unverified"
+	}
+	if !w.idx.scalarPoolShadows[poolKey(pod.Namespace, labelSwapGroup, group, pod.WarmPoolOwnerUID, pod.RouteService)] {
+		return "no configured same-ReplicaSet warm shadow"
+	}
 	if !shadows[poolKey(pod.Namespace, group)] {
 		return "no Ready warm shadow exists for a " + label + " pool"
 	}
@@ -419,6 +433,9 @@ func (w Witness) shardPoolWhy(pod *model.Pod) string {
 		}
 	} else if !w.idx.shardShadow[poolKey(pod.Namespace, shard)] {
 		return "no Ready warm shadow exists for a matching model-shard pool"
+	}
+	if pod.Labels[labelParallelGroup] == "" && (!pod.WarmPoolConfigured || !w.idx.scalarPoolShadows[poolKey(pod.Namespace, labelModelShard, shard, pod.WarmPoolOwnerUID, pod.RouteService)]) {
+		return "scalar ReplicaSet warm-pool template/route configuration unverified"
 	}
 	if w.idx.schedulableGPU < 2 {
 		return "fewer than 2 schedulable GPU nodes"

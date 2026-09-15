@@ -76,6 +76,9 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 }
 
 func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (string, error) {
+	if r.Version == 1 {
+		return recoverLegacyScalarCutover(ctx, ec, cm, r)
+	}
 	newPod := &corev1.Pod{}
 	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.NewName}, newPod); err != nil {
 		return "", err
@@ -99,6 +102,9 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 		if e := warmCurrentScope(pol, *r, old, newPod); e != nil {
 			return "", e
 		}
+		if e := warmPoolRecheck(ctx, ec.Reader, *r, old, newPod); e != nil {
+			return "", e
+		}
 		if e := journalFinish(ctx, ec, cm); e != nil {
 			return "", e
 		}
@@ -117,6 +123,9 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 			return effect, e
 		}
 		if e := warmCurrentScope(pol, *r, old, newPod); e != nil {
+			return effect, e
+		}
+		if e := warmPoolRecheck(ctx, ec.Reader, *r, old, newPod); e != nil {
 			return effect, e
 		}
 		if old.Labels[labelRole] == roleLeader {
@@ -144,6 +153,9 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 		if e := warmCurrentScope(pol, *r, old, newPod); e != nil {
 			return effect, e
 		}
+		if e := warmPoolRecheck(ctx, ec.Reader, *r, old, newPod); e != nil {
+			return effect, e
+		}
 		_, drainPending, e := drainInflight(ctx, ec, old)
 		if e != nil {
 			return effect, e
@@ -162,6 +174,9 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 		if e := warmCurrentScope(pol, *r, freshOld, freshNew); e != nil {
 			return effect, e
 		}
+		if e := warmPoolRecheck(ctx, ec.Reader, *r, freshOld, freshNew); e != nil {
+			return effect, e
+		}
 		if freshOld.Labels[labelRole] != roleRetiring || freshOld.DeletionTimestamp != nil || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) || freshNew.DeletionTimestamp != nil {
 			return effect, fmt.Errorf("recorded pair changed before retirement")
 		}
@@ -174,8 +189,8 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 			effect = "old leader in-flight drained and retired"
 		}
 	}
-	if r.Phase != "rewarmed" && r.Phase != "rewarm-intent" && r.Phase != "retired" {
-		r.Phase = "retired"
+	if r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" {
+		r.Phase = "retired-awaiting-controller"
 		if e := journalAdvance(ctx, ec, cm, *r); e != nil {
 			return effect, e
 		}
@@ -189,57 +204,94 @@ func recoverScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap
 		return effect, e
 	}
 	if freshNew.UID != newPod.UID || freshNew.Labels[labelRole] != roleLeader || !podReady(freshNew) {
-		return effect, fmt.Errorf("survivor changed before rewarm")
+		return effect, fmt.Errorf("recorded serving survivor changed")
 	}
 	if e := warmSurvivorScope(pol, *r, freshNew); e != nil {
 		return effect, e
 	}
-	if r.Phase == "rewarmed" {
-		bound := &corev1.Pod{}
-		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.RewarmName}, bound); e != nil {
+	if e := warmPoolRecheck(ctx, ec.Reader, *r, nil, freshNew); e != nil {
+		return effect, e
+	}
+	var candidate *corev1.Pod
+	if r.Phase == "pool-observed" || r.Phase == "pool-warm-ready" {
+		candidate = &corev1.Pod{}
+		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.RewarmName}, candidate); e != nil {
 			return effect, e
 		}
-		if string(bound.UID) != r.RewarmUID || bound.Labels[r.GroupKey] != r.GroupValue || bound.Labels[labelRole] != roleShadow || bound.Labels[labelModelLoaded] != "false" || rewarmSpecDigest(bound) != r.RewarmSpecHash {
-			return effect, fmt.Errorf("recorded replacement shadow identity/spec drift")
+		if string(candidate.UID) != r.RewarmUID {
+			return effect, fmt.Errorf("recorded controller member UID changed")
 		}
-	} else {
-		if r.Phase != "rewarm-intent" {
-			r.RewarmName = truncName(freshNew.Name + "-rw-" + freshNew.ResourceVersion)
-			r.RewarmSpecHash = rewarmSpecDigest(freshNew)
-			r.Phase = "rewarm-intent"
-			if e := journalAdvance(ctx, ec, cm, *r); e != nil {
-				return effect, fmt.Errorf("rewarm intent not persisted; replacement not created: %w", e)
-			}
-		}
-		if rewarmSpecDigest(freshNew) != r.RewarmSpecHash {
-			return effect, fmt.Errorf("rewarm source spec differs from persisted intent")
-		}
-		existing := &corev1.Pod{}
-		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.RewarmName}, existing); !apierrors.IsNotFound(e) {
-			return effect, fmt.Errorf("replacement intent name occupied or read uncertain; UID not bound: %v", e)
-		}
-		uid, e := rewarmShadowNamed(ctx, ec, freshNew, r.RewarmName, r.GroupKey, r.GroupValue)
-		if e != nil {
-			return effect, fmt.Errorf("retired; rewarm unresolved: %w", e)
-		}
-		bound := &corev1.Pod{}
-		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.RewarmName}, bound); e != nil {
-			return effect, e
-		}
-		if string(bound.UID) != uid || bound.Labels[r.GroupKey] != r.GroupValue || bound.Labels[labelRole] != roleShadow || bound.Labels[labelModelLoaded] != "false" || rewarmSpecDigest(bound) != r.RewarmSpecHash {
-			return effect, fmt.Errorf("replacement shadow readback identity/scope mismatch")
-		}
-		r.RewarmUID, r.Phase = uid, "rewarmed"
+	}
+	observed, e := warmPoolObserve(ctx, ec.Reader, *r)
+	if e != nil {
+		return effect + "; controller pool observation pending", e
+	}
+	if candidate != nil && candidate.UID != observed.UID {
+		return effect, fmt.Errorf("recorded controller member identity drift")
+	}
+	if r.Phase == "retired-awaiting-controller" {
+		r.RewarmName, r.RewarmUID, r.Phase = observed.Name, string(observed.UID), "pool-observed"
 		if e := journalAdvance(ctx, ec, cm, *r); e != nil {
 			return effect, e
 		}
-		effect += "; replacement shadow created"
 	}
-	effect += "; replacement shadow UID/spec verified"
+	ready, fallback := shadowModelReady(ctx, ec, observed)
+	if !ready {
+		return effect + "; controller Pod observed; warm capacity pending", fmt.Errorf("controller Pod observed but warm capacity not ready")
+	}
+	if r.Phase != "pool-warm-ready" {
+		r.Phase = "pool-warm-ready"
+		if e := journalAdvance(ctx, ec, cm, *r); e != nil {
+			return effect, e
+		}
+	}
 	if e := journalFinish(ctx, ec, cm); e != nil {
 		return effect, e
 	}
+	effect += "; controller pool replenished and warm capacity ready"
+	if fallback {
+		effect += " [PENDING-GPU-VALIDATION]: K8s/model-loaded fallback"
+	}
 	return effect, nil
+}
+
+// Legacy warm receipts are kept as evidence. They never acquire a missing
+// pre-retirement controller intent or replay the unsafe synthetic Pod Create.
+func recoverLegacyScalarCutover(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (string, error) {
+	old, next := &corev1.Pod{}, &corev1.Pod{}
+	if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.NewName}, next); e != nil {
+		return "", e
+	}
+	if string(next.UID) != r.NewUID {
+		return "", fmt.Errorf("legacy survivor UID changed")
+	}
+	oldErr := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.OldName}, old)
+	if oldErr == nil && string(old.UID) != r.OldUID {
+		return "", fmt.Errorf("legacy old UID changed")
+	}
+	if oldErr != nil && !apierrors.IsNotFound(oldErr) {
+		return "", oldErr
+	}
+	if (r.Phase == "prepared" || r.Phase == "promoted") && oldErr == nil && old.Labels[labelRole] == roleLeader && podReady(old) && next.Labels[labelRole] == roleShadow {
+		pol, e := receiptAuthority(ctx, ec.Reader, *r, model.Action(r.Kind))
+		if e != nil {
+			return "", e
+		}
+		if e := warmCurrentScope(pol, *r, old, next); e != nil {
+			return "", e
+		}
+		if e := journalFinish(ctx, ec, cm); e != nil {
+			return "", e
+		}
+		return "legacy pair UID-verified unpromoted/rolled back; receipt finished", nil
+	}
+	if r.Phase == "rewarmed" && r.RewarmUID != "" {
+		bound := &corev1.Pod{}
+		if e := ec.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.RewarmName}, bound); e == nil && string(bound.UID) == r.RewarmUID {
+			return "legacy UID-bound clone observed; lifecycle safety uncertified", fmt.Errorf("legacy warm receipt requires explicit reconciliation")
+		}
+	}
+	return "legacy serving survivor retained; no synthetic clone retry", fmt.Errorf("legacy warm receipt requires explicit reconciliation")
 }
 
 func recoverQuarantineGC(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt) (string, error) {
