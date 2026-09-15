@@ -409,8 +409,22 @@ func TestAuditVolumeGuardEKSUsesVendoredChartAndSystemPool(t *testing.T) {
 	if !found || d["strategy"].(object)["type"] != "Recreate" || d["replicas"] != float64(1) {
 		t.Fatal("preserve CriticalAddonsOnly toleration, Recreate and one replica")
 	}
-	pvc := resource(t, docs, "PersistentVolumeClaim", false)
-	if pvc["metadata"].(object)["name"] != "phorvex-phorvex-audit" || !reflect.DeepEqual(pvc["spec"].(object)["accessModes"], []any{"ReadWriteOnce"}) {
+	var auditPVC, consolePVC object
+	for _, candidate := range docs {
+		if candidate["kind"] != "PersistentVolumeClaim" {
+			continue
+		}
+		switch candidate["metadata"].(object)["name"] {
+		case "phorvex-phorvex-audit":
+			auditPVC = candidate
+		case "phorvex-phorvex-console-state":
+			consolePVC = candidate
+		}
+	}
+	if auditPVC == nil || !reflect.DeepEqual(auditPVC["spec"].(object)["accessModes"], []any{"ReadWriteOnce"}) {
 		t.Fatal("audit PVC name and RWO access mode must remain unchanged")
+	}
+	if consolePVC == nil || consolePVC["metadata"].(object)["name"] == auditPVC["metadata"].(object)["name"] {
+		t.Fatal("console state must use a separate PVC from the protected manager audit")
 	}
 }
