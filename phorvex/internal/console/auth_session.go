@@ -28,9 +28,10 @@ type sessionResponse struct {
 	Modes   []string `json:"authModes"`
 	// GrantsConfigured is false when the deployment has bound no subjects at all — the visible
 	// form of the rollout prerequisite ("DevOps must supply the subject grants").
-	GrantsConfigured bool     `json:"grantsConfigured"`
-	TrustedOrigins   []string `json:"trustedOrigins"`
-	Note             string   `json:"note"`
+	GrantsConfigured    bool     `json:"grantsConfigured"`
+	AuditClearAvailable bool     `json:"auditClearAvailable"`
+	TrustedOrigins      []string `json:"trustedOrigins"`
+	Note                string   `json:"note"`
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +51,8 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 		Targets: append([]string(nil), p.Targets...),
 		Lens:    lensOfRequest(r),
 		CanRead: p.CanRead(), CanEdit: p.CanOperate(),
-		Note: "Roles and scope are server-side grants. A lens may narrow this view; it can never widen it.",
+		AuditClearAvailable: s.cfg.AuditSource == nil,
+		Note:                "Roles and scope are server-side grants. A lens may narrow this view; it can never widen it.",
 	}
 	if s.auth != nil {
 		resp.Modes = s.auth.Modes()

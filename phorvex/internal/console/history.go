@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/audittransport"
 )
 
 const (
@@ -36,7 +37,15 @@ type auditSegment struct {
 	generation string
 }
 
-type auditOpener func(string) (*os.File, error)
+type auditHandle interface {
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Closer
+	Stat() (os.FileInfo, error)
+	Name() string
+}
+type auditOpener func(string) (auditHandle, error)
 
 var errAuditChanged = errors.New("audit retention changed; refresh latest history")
 
@@ -144,6 +153,9 @@ func validateAuditSegments(segments []auditSegment, openFile auditOpener) bool {
 			return false
 		}
 		generation, e := auditGeneration(f)
+		if remote, ok := f.(interface{ Verify() error }); ok && e == nil {
+			e = remote.Verify()
+		}
 		f.Close()
 		if e != nil || generation != seg.generation {
 			return false
@@ -152,13 +164,16 @@ func validateAuditSegments(segments []auditSegment, openFile auditOpener) bool {
 	return true
 }
 
-func auditGeneration(f *os.File) (string, error) {
+func auditGeneration(f auditHandle) (string, error) {
 	st, err := f.Stat()
 	if err != nil {
 		return "", err
 	}
 	if !st.Mode().IsRegular() {
 		return "", errors.New("audit is not a regular file")
+	}
+	if remote, ok := f.(interface{ Generation() string }); ok {
+		return remote.Generation(), nil
 	}
 	// File identity survives rename to a retained numeric segment (Linux/macOS).
 	id, ok := st.Sys().(*syscall.Stat_t)
@@ -168,7 +183,7 @@ func auditGeneration(f *os.File) (string, error) {
 	return fmt.Sprintf("%x-%x", id.Dev, id.Ino), nil
 }
 
-func openAuditFile(path string) (*os.File, error) {
+func openAuditFile(path string) (auditHandle, error) {
 	// Never block on a FIFO or follow a substituted symlink while inspecting
 	// retained segments. O_NONBLOCK is inert for the regular files we accept.
 	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
@@ -182,7 +197,7 @@ func openAuditFile(path string) (*os.File, error) {
 	return f, nil
 }
 
-func auditAnchor(f *os.File, offset int64) (string, error) {
+func auditAnchor(f auditHandle, offset int64) (string, error) {
 	st, err := f.Stat()
 	if err != nil {
 		return "", err
@@ -209,7 +224,7 @@ func encodeHistoryCursor(c historyCursor) string {
 // reverseAuditReader never holds more than one bounded record plus a 64KiB block.
 // pos is an exclusive byte boundary. skip discards an incomplete/oversized suffix.
 type reverseAuditReader struct {
-	f          *os.File
+	f          auditHandle
 	pos, read  int64
 	skip       bool
 	block      []byte
@@ -364,7 +379,46 @@ func (s *Server) liveHistoryWithOpener(w http.ResponseWriter, r *http.Request, o
 			return
 		}
 	}
-	segments, err := retainedAuditSegments(path, openFile)
+	var segments []auditSegment
+	var err error
+	if s.cfg.AuditSource != nil {
+		manifest, sourceErr := s.cfg.AuditSource.Manifest(r.Context())
+		if sourceErr != nil {
+			writeJSON(w, 503, map[string]string{"error": "audit source unavailable: " + sourceErr.Error()})
+			return
+		}
+		pinned := map[string]audittransport.Segment{}
+		prefix := ""
+		if path == "audit://vcluster-live" {
+			prefix = "vcluster-"
+		}
+		for _, remote := range manifest.Segments {
+			if remote.ID != prefix+"live" && !strings.HasPrefix(remote.ID, prefix+"backup-") {
+				continue
+			}
+			number := 0
+			if remote.ID != prefix+"live" {
+				number, _ = strconv.Atoi(strings.TrimPrefix(remote.ID, prefix+"backup-"))
+			}
+			logical := "audit://" + remote.ID
+			pinned[logical] = remote
+			segments = append(segments, auditSegment{path: logical, number: number, generation: remote.Generation})
+		}
+		if len(segments) == 0 {
+			writeJSON(w, 503, map[string]string{"error": "configured provider audit source unavailable"})
+			return
+		}
+		sort.Slice(segments, func(i, j int) bool { return segments[i].number < segments[j].number })
+		openFile = func(path string) (auditHandle, error) {
+			seg, ok := pinned[path]
+			if !ok {
+				return nil, errAuditChanged
+			}
+			return s.cfg.AuditSource.Open(r.Context(), seg), nil
+		}
+	} else {
+		segments, err = retainedAuditSegments(path, openFile)
+	}
 	if err != nil {
 		if errors.Is(err, errAuditChanged) {
 			writeJSON(w, 409, map[string]string{"error": err.Error()})

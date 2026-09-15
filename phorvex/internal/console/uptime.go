@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"github.com/phorvex/phorvex/internal/audittransport"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -247,7 +248,12 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 
 	// 2) actuation markers from the SELECTED provider's decision audit (moments Phorvex acted).
 	//    Mapped pod -> workload by name prefix (deploy/sts owns name-<hash>-<hash> / name-<ordinal>).
-	for _, mk := range readActuationMarkers(s.cfg.auditPathForContext(reqCtx), cutoff) {
+	markers, markerPartial, auditErr := readActuationMarkers(r.Context(), s.cfg.auditPathForContext(reqCtx), s.cfg.AuditSource, cutoff)
+	if auditErr != nil && s.cfg.AuditSource != nil {
+		writeJSON(w, 503, map[string]string{"error": "remote uptime audit source unavailable: " + auditErr.Error()})
+		return
+	}
+	for _, mk := range markers {
 		// attach to the workload whose name is the longest prefix of the acted pod.
 		var best *uptimeWorkload
 		bestLen := 0
@@ -300,6 +306,7 @@ func (s *Server) uptime(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"windowSeconds":    int(window.Seconds()),
 		"workloads":        out,
+		"markerPartial":    markerPartial,
 		"strategies":       benchStrategies(s.cfg, reqCtx),
 		"scenarios":        benchScenarios(s.cfg, reqCtx), // per-app three-way breakdown (attack landed / Phorvex / R6Blind)
 		"strategiesSource": stratSource,                   // "latest run" | "benchmark"
@@ -542,19 +549,32 @@ type actMarker struct {
 // decision audit (selected + action != noop). The jump-server operator runs the same brain on the
 // same cluster as the in-cluster actuator, so its selected decisions are a faithful marker of when
 // the enacting operator acts.
-func readActuationMarkers(auditPath string, cutoff time.Time) []actMarker {
+func readActuationMarkers(ctx context.Context, auditPath string, source *audittransport.Client, cutoff time.Time) ([]actMarker, bool, error) {
 	if auditPath == "" {
-		return nil
+		return nil, false, nil
 	}
-	f, err := os.Open(auditPath)
+	f, err := openDecisionSource(ctx, auditPath, source)
 	if err != nil {
-		return nil
+		return nil, false, err
 	}
 	defer f.Close()
+	partial := false
 	if st, e := f.Stat(); e == nil {
 		chunk := int64(24 << 20)
 		if st.Size() > chunk {
-			_, _ = f.Seek(st.Size()-chunk, 0)
+			partial = true
+			if _, e = f.Seek(st.Size()-chunk, 0); e != nil {
+				return nil, true, e
+			}
+			var skip [1]byte
+			for {
+				if _, e = f.Read(skip[:]); e != nil || skip[0] == '\n' {
+					break
+				}
+			}
+			if e != nil {
+				return nil, true, e
+			}
 		}
 	}
 	var out []actMarker
@@ -585,7 +605,15 @@ func readActuationMarkers(auditPath string, cutoff time.Time) []actMarker {
 		}
 		out = append(out, actMarker{t: rec.Time, ns: rec.Namespace, pod: rec.Pod, action: rec.Action})
 	}
-	return out
+	if e := sc.Err(); e != nil {
+		return nil, partial, e
+	}
+	if remote, ok := f.(interface{ Verify() error }); ok {
+		if e := remote.Verify(); e != nil {
+			return nil, partial, e
+		}
+	}
+	return out, partial, nil
 }
 
 func round2(f float64) float64 { return float64(int64(f*100+0.5)) / 100 }

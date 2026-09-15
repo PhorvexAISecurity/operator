@@ -257,7 +257,7 @@ type Posture struct {
 // source (no fixed 1.0). A sub with Score < 0 is honestly "pending/not-yet-computed" and is
 // EXCLUDED from the average. AI validation is tracked by PHORVEXSEC-87; the grade never
 // inflates it.
-func (c *Config) PostureScore() Posture {
+func (c *Config) PostureScore(ctx context.Context) Posture {
 	full, hasFull := readMetrics(c.harnessOut("out-p3-full"))
 	pact, hasPact := readMetrics(c.harnessOut("out-pactuator"))
 	var subs []PostureSub
@@ -285,7 +285,9 @@ func (c *Config) PostureScore() Posture {
 		}
 	}
 	// Explainability <- the real decision audit.
-	if exp, tot := explainabilityFromAudit(c.auditFile()); tot > 0 {
+	if exp, tot, sourceErr := explainabilityFromAuditContext(ctx, c.auditFile(), c.AuditSource); sourceErr != nil && c.AuditSource != nil {
+		subs = append(subs, PostureSub{"Explainability", -1, "remote audit source unavailable: " + sourceErr.Error()})
+	} else if tot > 0 {
 		subs = append(subs, PostureSub{"Explainability", float64(exp) / float64(tot), fmt.Sprintf("%d/%d decisions explained (audit, computed)", exp, tot)})
 	}
 	// Actuator coverage <- the real registry completeness invariant (covered / generatable).

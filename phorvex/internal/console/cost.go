@@ -17,6 +17,7 @@ package console
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -153,31 +154,39 @@ type CostScenario struct {
 // tenantAllowed filters which tenants' actuations are counted. [M-136] The decision audit is
 // tenant data, so an identity limited to some tenants must not have another tenant's actuation
 // volume priced into its own "cost of running Phorvex".
-func (c *Config) actuationCostPerYear(perActionCost float64, tenantAllowed func(string) bool) (costYr, ratePerHr float64) {
+func (c *Config) actuationCostPerYear(ctx context.Context, perActionCost float64, tenantAllowed func(string) bool) (costYr, ratePerHr float64, partial bool, sourceErr error) {
 	if tenantAllowed == nil {
 		tenantAllowed = func(string) bool { return false } // fail closed rather than count everything
 	}
-	path := c.AuditPath
+	path := c.auditPathForContext("")
 	if path == "" {
-		return 0, 0
+		return 0, 0, false, nil
 	}
-	f, err := os.Open(path)
+	f, err := openDecisionSource(ctx, path, c.AuditSource)
 	if err != nil {
-		return 0, 0
+		return 0, 0, false, err
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return 0, 0
+		return 0, 0, false, err
 	}
 	size := st.Size()
 	chunk := int64(8 << 20) // last 8 MiB is plenty to estimate a rate, even on a 100MB+ audit
 	if chunk > size {
 		chunk = size
 	}
+	partial = chunk < size
 	buf := make([]byte, chunk)
 	if _, err := f.ReadAt(buf, size-chunk); err != nil && err.Error() != "EOF" {
-		return 0, 0
+		return 0, 0, partial, err
+	}
+	if partial {
+		if i := strings.IndexByte(string(buf), '\n'); i >= 0 {
+			buf = buf[i+1:]
+		} else {
+			return 0, 0, true, nil
+		}
 	}
 	var actuated int
 	var first, last int64 // unix-nanos of first/last decision in the window
@@ -213,10 +222,15 @@ func (c *Config) actuationCostPerYear(perActionCost float64, tenantAllowed func(
 	}
 	spanHr := float64(last-first) / 3.6e12 // nanos -> hours
 	if spanHr <= 0 || actuated == 0 {
-		return 0, 0
+		return 0, 0, partial, nil
 	}
 	ratePerHr = float64(actuated) / spanHr
-	return ratePerHr * 8760 * perActionCost, ratePerHr
+	if remote, ok := f.(interface{ Verify() error }); ok {
+		if e := remote.Verify(); e != nil {
+			return 0, 0, partial, e
+		}
+	}
+	return ratePerHr * 8760 * perActionCost, ratePerHr, partial, nil
 }
 
 // CostComparison reads the benchmark metrics and returns the with/without-Phorvex cost per

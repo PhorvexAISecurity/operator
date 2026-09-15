@@ -86,6 +86,8 @@ export function CostPanel({ lens }: { lens: Lens }) {
     <div className="space-y-5">
       <PageHead title="Cost — three strategies (real AWS prices)" sub="Grounded entirely in your live AWS on-demand pricing — no fabricated breach figures. The value at risk is your cluster's real infrastructure cost/yr; under No defense it is fully exposed, the Blind R6 timer barely helps, and Phorvex shrinks the residual by the measured disruption for a small real defense cost." />
 
+      {d.actuationPartial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">The annual actuation-cost estimate uses only the latest 8 MiB decision window. It is an extrapolated recent rate and does not summarize the full retained audit. Page older decisions in Live Ops history.</div>}
+
       {/* SOURCE — live run vs static benchmark */}
       <div className="flex items-center gap-2 text-[11px]">
         {d.source === "latest run"
@@ -205,6 +207,7 @@ export function CostPanel({ lens }: { lens: Lens }) {
               <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm bg-success/20" /> savings</span>
             </div>
           </div>
+          {ts.partial && <div role="status" className="rounded-md border border-warning/40 p-3 text-[12px] text-warning">This trend and its totals cover only the latest audit window{ts.coveredFrom ? ` (${new Date(ts.coveredFrom).toLocaleString()} to ${new Date(ts.coveredTo || ts.coveredFrom).toLocaleString()})` : ""}. Older decisions remain in paged Live Ops history.</div>}
           {ts.points.length === 1 ? (
             <div className="rounded-md border border-border bg-elevated/40 p-4 text-center text-[12px] text-muted-foreground">
               Only one decision so far — cumulative cost: Phorvex <span className="text-primary">{fmtCost(ts.totalPhorvex)}</span> vs blind R6 <span className="text-danger">{fmtCost(ts.totalBlind)}</span> (saving <span className="text-success">{fmtCost(ts.totalSavings)}</span>). The trend line appears once more decisions land.

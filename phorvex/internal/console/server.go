@@ -26,6 +26,8 @@ package console
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -92,7 +94,7 @@ func (s *Server) threatMatrix(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"techniques": s.cfg.ThreatMatrix()})
 }
 func (s *Server) posture(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, s.cfg.PostureScore())
+	writeJSON(w, 200, s.cfg.PostureScore(r.Context()))
 }
 func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -184,7 +186,7 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) effectiveness(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"stats": s.cfg.Effectiveness()})
+	writeJSON(w, 200, map[string]any{"stats": s.cfg.Effectiveness(r.Context())})
 }
 
 // effectiveCostTarget resolves the ONE cluster /api/cost prices and reports on, including the
@@ -256,11 +258,19 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 
 	if localSource {
 		// The audit is tenant data as well as local-source data: count only granted tenants.
-		actuationCost, actuationRatePerHr := s.cfg.actuationCostPerYear(perActionCost, tenantFilterFor(r))
+		actuationCost, actuationRatePerHr, actuationPartial, auditErr := s.cfg.actuationCostPerYear(r.Context(), perActionCost, tenantFilterFor(r))
+		if auditErr != nil && s.cfg.AuditSource != nil {
+			writeJSON(w, 503, map[string]string{"error": "remote audit cost source unavailable: " + auditErr.Error()})
+			return
+		}
 		defenseCost += actuationCost
 		body["actuationCost"] = actuationCost
 		body["actuationRatePerHr"] = actuationRatePerHr
+		body["actuationPartial"] = actuationPartial
 		note += " Defense overhead = operator footprint (" + overheadBasis + ") + actuation compute (measured action rate × per-action AWS compute)."
+		if actuationPartial {
+			note += " Actuation rate is extrapolated from only the latest 8 MiB of decisions, not the full retained history."
+		}
 	} else {
 		withheld = append(withheld, "actuationCost", "actuationRatePerHr")
 		note += " Actuation compute is withheld: it is measured from this console's own decision audit, which this identity is not granted."
@@ -307,7 +317,11 @@ func (s *Server) costTimeseries(w http.ResponseWriter, r *http.Request) {
 	// [M-136] Decision records are TENANT data. Summing the whole audit handed a tenant-limited
 	// operator another tenant's cost and decision count, so the series is built only from the
 	// tenants this identity is granted.
-	live := s.readScopedAudit(r)
+	live, partial, auditErr := s.readScopedAudit(r)
+	if auditErr != nil && s.cfg.AuditSource != nil {
+		writeJSON(w, 503, map[string]string{"error": "remote cost trend audit unavailable: " + auditErr.Error()})
+		return
+	}
 	// defensive: the file is append-only/chronological, but resilient to clock skew / merged files.
 	sort.Slice(live, func(i, j int) bool { return live[i].Time.Before(live[j].Time) })
 
@@ -315,6 +329,8 @@ func (s *Server) costTimeseries(w http.ResponseWriter, r *http.Request) {
 	if len(live) == 0 {
 		writeJSON(w, 200, map[string]any{
 			"available": false, "points": points,
+			"partial":     partial,
+			"coveredFrom": "", "coveredTo": "",
 			"totalPhorvex": 0.0, "totalBlind": 0.0, "totalSavings": 0.0, "decisions": 0,
 			"note": "No live operator decisions in the audit yet — run a live operator (or an Attack Lab scenario) to populate the cost-over-time trend.",
 		})
@@ -342,8 +358,10 @@ func (s *Server) costTimeseries(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{
 		"available": true, "points": points,
+		"partial":     partial,
+		"coveredFrom": live[0].Time, "coveredTo": live[len(live)-1].Time,
 		"totalPhorvex": cumP, "totalBlind": cumB, "totalSavings": cumB - cumP, "decisions": len(live),
-		"note": "Cumulative cost from the live decision audit: each decision's actual Phorvex cost vs the blind R6 fixed-timer's per-cycle rotate cost, summed over time. The blind line climbs every cycle; Phorvex pays only when net-positive.",
+		"note": map[bool]string{true: "Cumulative cost for the latest verified 16 MiB audit window; older records remain available through paged history and are excluded from this trend.", false: "Cumulative cost from the live decision audit: each decision's actual Phorvex cost vs the blind R6 fixed-timer's per-cycle rotate cost, summed over time."}[partial],
 	})
 }
 
@@ -486,9 +504,17 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "tenant is outside this identity's scope"})
 		return
 	}
-	recs := s.readAudit()
+	recs, partial, auditErr := s.readAudit(r.Context())
+	if auditErr != nil && s.cfg.AuditSource != nil {
+		writeJSON(w, 503, map[string]string{"error": "remote owner audit unavailable: " + auditErr.Error()})
+		return
+	}
 	var events []OwnerEvent
+	var covered []audit.Record
 	for _, rec := range recs {
+		if tenant != "" && rec.Tenant == tenant {
+			covered = append(covered, rec)
+		}
 		if !rec.Selected && !rec.Actuated {
 			continue // owners see ACTIONS, not every evaluated candidate
 		}
@@ -519,7 +545,9 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, 200, map[string]any{
-		"events": events,
+		"events":      events,
+		"partial":     partial,
+		"coveredFrom": auditCoveredFrom(covered), "coveredTo": auditCoveredTo(covered),
 		"empty":  len(events) == 0,
 		"rollup": map[string]int{"actions": len(events), "attacksPrevented": prevented, "workPreserved": preserved, "sloKept": sloKept, "dispatched": dispatched, "isolationAttempts": isolationAttempts},
 		"note":   "Tenant scoping is enforced against this identity's server-side grant; only granted tenants are selectable.",
@@ -532,10 +560,18 @@ func (s *Server) ownerEvents(w http.ResponseWriter, r *http.Request) {
 // audit, which leaked the customer list to anyone who could ask.
 func (s *Server) ownerTenants(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r)
-	recs := s.readAudit()
+	recs, partial, auditErr := s.readAudit(r.Context())
+	if auditErr != nil && s.cfg.AuditSource != nil {
+		writeJSON(w, 503, map[string]string{"error": "remote tenant audit unavailable: " + auditErr.Error()})
+		return
+	}
 	seen := map[string]bool{}
 	tenants := []string{}
+	var covered []audit.Record
 	for _, rec := range recs {
+		if p.AllowsTenant(rec.Tenant) {
+			covered = append(covered, rec)
+		}
 		if !rec.Selected && !rec.Actuated {
 			continue
 		}
@@ -557,7 +593,33 @@ func (s *Server) ownerTenants(w http.ResponseWriter, r *http.Request) {
 		}
 		sort.Strings(tenants)
 	}
-	writeJSON(w, 200, map[string]any{"tenants": tenants})
+	writeJSON(w, 200, map[string]any{"tenants": tenants, "partial": partial,
+		"coveredFrom": auditCoveredFrom(covered), "coveredTo": auditCoveredTo(covered)})
+}
+
+func auditCoveredFrom(recs []audit.Record) any {
+	if len(recs) == 0 {
+		return nil
+	}
+	first := recs[0].Time
+	for _, rec := range recs[1:] {
+		if rec.Time.Before(first) {
+			first = rec.Time
+		}
+	}
+	return first
+}
+func auditCoveredTo(recs []audit.Record) any {
+	if len(recs) == 0 {
+		return nil
+	}
+	last := recs[0].Time
+	for _, rec := range recs[1:] {
+		if rec.Time.After(last) {
+			last = rec.Time
+		}
+	}
+	return last
 }
 
 // reports lists the curated evidence reports, or (with ?id=) returns one's live markdown.
@@ -589,31 +651,113 @@ func tenantFilterFor(r *http.Request) func(string) bool {
 // readScopedAudit is readAudit confined to the tenants this request is granted. Every aggregate
 // built from the decision audit uses it; readAudit itself stays unscoped for the handlers that
 // apply their own per-tenant projection (the owner surfaces).
-func (s *Server) readScopedAudit(r *http.Request) []audit.Record {
+func (s *Server) readScopedAudit(r *http.Request) ([]audit.Record, bool, error) {
 	allowed := tenantFilterFor(r)
-	all := s.readAudit()
+	all, partial, e := s.readAudit(r.Context())
+	if e != nil {
+		return nil, false, e
+	}
 	out := make([]audit.Record, 0, len(all))
 	for _, rec := range all {
 		if allowed(rec.Tenant) {
 			out = append(out, rec)
 		}
 	}
-	return out
+	return out, partial, nil
 }
 
 // readAudit loads decision Records from the configured audit JSONL (or the newest one found
 // under the harness out dirs / a console-data dir). Read-only.
-func (s *Server) readAudit() []audit.Record {
+func (s *Server) readAudit(ctx context.Context) ([]audit.Record, bool, error) {
+	if s.cfg.AuditSource != nil {
+		f, e := openDecisionSource(ctx, "audit://live", s.cfg.AuditSource)
+		if e != nil {
+			return nil, false, e
+		}
+		defer f.Close()
+		st, e := f.Stat()
+		if e != nil {
+			return nil, false, e
+		}
+		const window = 16 << 20
+		start := max(int64(0), st.Size()-window)
+		b := make([]byte, st.Size()-start)
+		if len(b) > 0 {
+			if _, e = f.ReadAt(b, start); e != nil {
+				return nil, false, e
+			}
+		}
+		if remote, ok := f.(interface{ Verify() error }); ok {
+			if e = remote.Verify(); e != nil {
+				return nil, false, e
+			}
+		}
+		partial := start > 0
+		if len(b) > 0 && b[len(b)-1] != '\n' {
+			partial = true
+			if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
+				b = b[:i+1]
+			} else {
+				b = nil
+			}
+		}
+		if partial {
+			if start == 0 { /* only the last record was partial */
+			} else if i := bytes.IndexByte(b, '\n'); i >= 0 {
+				b = b[i+1:]
+			} else {
+				return nil, true, nil
+			}
+		}
+		const maxDecodedRecords = 5000
+		out := make([]audit.Record, 0, maxDecodedRecords)
+		ringPos := 0
+		for len(b) > 0 {
+			i := bytes.IndexByte(b, '\n')
+			if i < 0 {
+				partial = true
+				break
+			}
+			line := b[:i]
+			b = b[i+1:]
+			if len(line) == 0 {
+				continue
+			}
+			if len(line) > liveRecordBytes {
+				partial = true
+				continue
+			}
+			var rec audit.Record
+			if json.Unmarshal(line, &rec) == nil && rec.Kind == "phorvex.decision" {
+				if len(out) < maxDecodedRecords {
+					out = append(out, rec)
+				} else {
+					out[ringPos] = rec
+					ringPos = (ringPos + 1) % maxDecodedRecords
+					partial = true
+				}
+			} else {
+				partial = true
+			}
+		}
+		if ringPos > 0 {
+			ordered := make([]audit.Record, len(out))
+			copy(ordered, out[ringPos:])
+			copy(ordered[len(out)-ringPos:], out[:ringPos])
+			out = ordered
+		}
+		return out, partial, nil
+	}
 	path := s.cfg.AuditPath
 	if path == "" {
 		path = s.newestAudit()
 	}
 	if path == "" {
-		return nil
+		return nil, false, nil
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, false, nil
 	}
 	defer f.Close()
 	var out []audit.Record
@@ -629,7 +773,7 @@ func (s *Server) readAudit() []audit.Record {
 			out = append(out, rec)
 		}
 	}
-	return out
+	return out, false, nil
 }
 
 func (s *Server) newestAudit() string {

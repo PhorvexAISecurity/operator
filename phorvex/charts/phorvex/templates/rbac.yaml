@@ -54,38 +54,13 @@ rules:
   verbs: ["create"]
 - apiGroups: ["amtd.r6security.com"]
   resources: ["securityevents"]
-  {{- if .Values.phorvex.console.enabled }}
-  # update/patch/delete are granted ONLY when the console shares this ServiceAccount by
-  # running in this pod. Each backs one thing the console does:
-  #   /api/workload/attack  `kubectl apply` a SecurityEvent — apply PATCHES when the object
-  #                         already exists, and redteam-<ns> survives between runs
-  #   action=clear          `kubectl delete securityevent` — without delete the signal can
-  #                         be fired but never withdrawn, leaving the workload under attack
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  {{- else }}
   verbs: ["get", "list", "watch", "create"]
-  {{- end }}
-{{- if .Values.phorvex.console.enabled }}
-# ── console-only subresources ────────────────────────────────────────────────
-# Deliberately gated. The operator alone never needs these, and pods/exec in particular
-# is a real escalation — it is the difference between "reads the cluster graph" and "can
-# run a command in any pod". They exist because the console is a container in this pod and
-# a pod has exactly one ServiceAccount.
-- apiGroups: [""]
-  # attack_results.go reads the operator's own logs to measure the outcome of an attack.
-  resources: ["pods/log"]
-  verbs: ["get"]
-- apiGroups: [""]
-  # vllm_attack.go runs curl inside the vLLM pod to fire the KV-cache / poison signals.
-  resources: ["pods/exec"]
-  verbs: ["create"]
-{{- end }}
 - apiGroups: ["amtd.r6security.com"]
   resources: ["adaptivemovingtargetdefenses"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
-  verbs: ["get", "list", "watch", "update", "patch"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies/status"]
   verbs: ["get", "update", "patch"]

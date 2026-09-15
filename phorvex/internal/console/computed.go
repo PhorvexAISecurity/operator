@@ -12,16 +12,22 @@ package console
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
-	"os"
+	"errors"
 	"path/filepath"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/audittransport"
 )
 
 // auditFile resolves the decision-audit JSONL (the same source the live SSE tails).
 func (c *Config) auditFile() string {
+	if c.AuditSource != nil {
+		return "audit://live"
+	}
 	if c.AuditPath != "" {
 		return c.AuditPath
 	}
@@ -39,13 +45,13 @@ func (c *Config) auditFile() string {
 // RegistryView is the REAL native actuator registry + the completeness invariant — read
 // from actuator.HandlerRegistry, not a hardcoded list.
 type RegistryView struct {
-	Names       []string `json:"names"`
-	Generatable []string `json:"generatable"`
-	Missing     []string `json:"missing"`
-	Orphans     []string `json:"orphans"`
-	Count       int      `json:"count"`
-	Generatables int     `json:"generatables"`
-	Complete    bool     `json:"complete"`
+	Names        []string `json:"names"`
+	Generatable  []string `json:"generatable"`
+	Missing      []string `json:"missing"`
+	Orphans      []string `json:"orphans"`
+	Count        int      `json:"count"`
+	Generatables int      `json:"generatables"`
+	Complete     bool     `json:"complete"`
 }
 
 func HandlerRegistryView() RegistryView {
@@ -73,15 +79,32 @@ func HandlerRegistryView() RegistryView {
 
 // explainabilityFromAudit counts decisions that carry a machine explanation (a Reason or a
 // SHAP attribution) vs total decisions — the REAL audit, not a stated 100%.
-func explainabilityFromAudit(path string) (explained, total int) {
-	f, err := os.Open(path)
+func explainabilityFromAudit(path string, source *audittransport.Client) (explained, total int, sourceErr error) {
+	return explainabilityFromAuditContext(context.Background(), path, source)
+}
+func explainabilityFromAuditContext(parent context.Context, path string, source *audittransport.Client) (explained, total int, sourceErr error) {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	f, err := openDecisionSource(ctx, path, source)
 	if err != nil {
-		return 0, 0
+		return 0, 0, err
 	}
 	defer f.Close()
+	if source != nil {
+		st, e := f.Stat()
+		if e != nil {
+			return 0, 0, e
+		}
+		if st.Size() > 16<<20 {
+			return 0, 0, errors.New("full-range explainability unavailable: audit exceeds 16 MiB derived-reader budget; use paged history")
+		}
+	}
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
 	for sc.Scan() {
+		if e := ctx.Err(); e != nil {
+			return 0, 0, e
+		}
 		var r struct {
 			Kind        string `json:"kind"`
 			Reason      string `json:"reason"`
@@ -95,7 +118,15 @@ func explainabilityFromAudit(path string) (explained, total int) {
 			explained++
 		}
 	}
-	return
+	if e := sc.Err(); e != nil {
+		return 0, 0, e
+	}
+	if remote, ok := f.(interface{ Verify() error }); ok {
+		if e := remote.Verify(); e != nil {
+			return 0, 0, e
+		}
+	}
+	return explained, total, nil
 }
 
 // preventionRows returns (prevented, n) for a scenario/defender from real harness rows:
@@ -112,4 +143,3 @@ func preventionRows(rows []metricRow, scenario, defender string) (prevented, n i
 	}
 	return
 }
-

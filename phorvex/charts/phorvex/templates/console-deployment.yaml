@@ -1,0 +1,163 @@
+{{- if .Values.phorvex.console.enabled }}
+{{- if not .Values.phorvex.audit.enabled }}
+{{- fail "console.enabled requires audit.enabled: separate console Pod cannot serve live history without authenticated manager audit source" }}
+{{- end }}
+{{- if not .Values.phorvex.console.auditTransport.serverDNSName }}
+{{- fail "console.auditTransport.serverDNSName required" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex-console
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phorvex-console
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: console
+    spec:
+      serviceAccountName: {{ include "phorvex.consoleServiceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+      {{- with .Values.phorvex.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.phorvex.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: console
+        image: "{{ .Values.phorvex.console.image.repository }}:{{ .Values.phorvex.console.image.tag }}"
+        imagePullPolicy: {{ .Values.phorvex.console.image.pullPolicy }}
+        args:
+        - -root={{ .Values.phorvex.console.root }}
+        - -web={{ .Values.phorvex.console.web }}
+        - -addr=:{{ .Values.phorvex.console.port }}
+        {{- if .Values.phorvex.audit.enabled }}
+        - -audit-source-url=https://{{ include "phorvex.fullname" . }}-audit-source.{{ .Release.Namespace }}.svc:{{ .Values.phorvex.console.auditTransport.port }}
+        - -audit-source-server-dns={{ .Values.phorvex.console.auditTransport.serverDNSName }}
+        - -audit-source-client-cert=/etc/audit-client/tls.crt
+        - -audit-source-client-key=/etc/audit-client/tls.key
+        - -audit-source-ca=/etc/audit-client/ca.crt
+        {{- end }}
+        {{- if .Values.phorvex.prometheusUrl }}
+        # Let `phorvex --scan` (the console's Scan / Physics tab) reach the live DCGM/GPU feed.
+        # The scan's SSRF guard only fetches a Prometheus whose host is allow-listed here, so
+        # without this the URL is dropped and the GPU half of physics stays "unmeasured (no
+        # GPU/DCGM scan)" even though dcgm-exporter is scraping. host[:port], scheme stripped.
+        - -metrics-allow={{ .Values.phorvex.prometheusUrl | trimPrefix "https://" | trimPrefix "http://" }}
+        {{- end }}
+        {{- if .Values.phorvex.console.auth.grants.enabled }}
+        # M-136: the DevOps-supplied subject grant table. Without it the console still starts and
+        # still authenticates callers, but authorizes NOBODY — the fail-closed rollout state.
+        - -auth-grants={{ .Values.phorvex.console.auth.grants.mountPath }}/{{ .Values.phorvex.console.auth.grants.fileName }}
+        {{- end }}
+        {{- if or .Values.phorvex.prometheusUrl .Values.phorvex.console.auth.alb.signerArn .Values.phorvex.console.auth.oidc.issuer .Values.phorvex.console.auth.trustedOrigins }}
+        env:
+        {{- if .Values.phorvex.prometheusUrl }}
+        # The scan reads PHORVEX_PROM_URL as its default Prometheus when a request carries no
+        # ?prometheus-url (subsystems.go Scan), so the browser Physics tab measures GPU physics.
+        - name: PHORVEX_PROM_URL
+          value: {{ .Values.phorvex.prometheusUrl | quote }}
+        {{- end }}
+        # ── M-136 console identity ─────────────────────────────────────────────
+        # The console refuses to start unless at least one credential path is configured. These
+        # are CONFIGURATION IDENTIFIERS (a load-balancer ARN, a user-pool issuer, an app-client
+        # id) — not secrets — and they are per-deployment: never reuse one environment's signer
+        # in another, or that environment's ALB becomes a trusted issuer for this one.
+        {{- with .Values.phorvex.console.auth.alb }}
+        {{- if .signerArn }}
+        - name: PHORVEX_CONSOLE_ALB_SIGNER_ARN
+          value: {{ .signerArn | quote }}
+        - name: PHORVEX_CONSOLE_ALB_ISSUER
+          value: {{ required "console.auth.alb.issuer is required when signerArn is set" .issuer | quote }}
+        - name: PHORVEX_CONSOLE_ALB_CLIENT_ID
+          value: {{ required "console.auth.alb.clientId is required when signerArn is set" .clientId | quote }}
+        {{- if .region }}
+        - name: PHORVEX_CONSOLE_ALB_REGION
+          value: {{ .region | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.phorvex.console.auth.oidc }}
+        {{- if .issuer }}
+        - name: PHORVEX_CONSOLE_OIDC_ISSUER
+          value: {{ .issuer | quote }}
+        - name: PHORVEX_CONSOLE_OIDC_AUDIENCE
+          value: {{ required "console.auth.oidc.audience is required when issuer is set" .audience | quote }}
+        - name: PHORVEX_CONSOLE_OIDC_JWKS_URL
+          value: {{ required "console.auth.oidc.jwksUrl is required when issuer is set" .jwksUrl | quote }}
+        {{- if .algorithms }}
+        - name: PHORVEX_CONSOLE_OIDC_ALGS
+          value: {{ join "," .algorithms | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.phorvex.console.auth.trustedOrigins }}
+        # The same-origin/CSRF boundary for browser-driven state changes. Exact origins only;
+        # there is no wildcard, and an unlisted origin gets no CORS grant either.
+        - name: PHORVEX_CONSOLE_TRUSTED_ORIGINS
+          value: {{ join "," .Values.phorvex.console.auth.trustedOrigins | quote }}
+        {{- end }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.phorvex.console.port }}
+        readinessProbe:
+          httpGet: { path: /, port: http }
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: { path: /, port: http }
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.phorvex.console.resources | nindent 10 }}
+        volumeMounts:
+        {{- if .Values.phorvex.audit.enabled }}
+        - name: audit-client
+          mountPath: /etc/audit-client
+          readOnly: true
+        {{- end }}
+        # workload_attack.go writes the SecurityEvent manifest with os.CreateTemp before
+        # applying it. With readOnlyRootFilesystem that fails, so /tmp must be writable —
+        # an emptyDir keeps the root filesystem read-only while allowing it.
+        - name: console-tmp
+          mountPath: /tmp
+        {{- if .Values.phorvex.console.auth.grants.enabled }}
+        - name: console-grants
+          mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
+          readOnly: true
+        {{- end }}
+      volumes:
+      - name: console-tmp
+        emptyDir: {}
+      {{- if .Values.phorvex.audit.enabled }}
+      - name: audit-client
+        secret:
+          secretName: {{ required "console.auditTransport.clientSecretName required" .Values.phorvex.console.auditTransport.clientSecretName }}
+      {{- end }}
+      {{- if .Values.phorvex.console.auth.grants.enabled }}
+      - name: console-grants
+        configMap:
+          name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
+      {{- end }}
+{{- end }}

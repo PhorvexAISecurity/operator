@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,17 +11,82 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: ea154322fe87091bd264c76b71ba150477904843d6c3d8fe64d19ec604ef4381
+    sha256: 7f21243e6f24250647080c80c65c21e63f39c0170df26e890457d82ee94a8b1b
     source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
-    at: '2026-09-15T10:52:45+00:00'
+    at: '2026-09-15T11:39:50+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t4-m004
+    artifact: evidence/preflight-r2/receipt.json
+    sha256: 94689ca117f487a956197b541146419f48883a417229bac3a6d908b5bdf320ec
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:10:17+00:00'
+  implementation:
+    result: PASS
+    by: sol-t4-m004
+    artifact: 04-diff.patch
+    sha256: 313797464413f65a13ff4582c22f905616561ae805a054a5955ac0e58e810b6d
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:10:17+00:00'
+  red:
+    result: PASS
+    by: sol-t4-m004
+    artifact: evidence/worker-incident.md
+    sha256: eed640c79aad1afaa69e24a406fc73503422a5f563f94cd23fc7616f1f3b4400
+    source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+    at: '2026-09-15T17:10:17+00:00'
+  l0:
+    result: PASS
+    by: sol-t4-m004
+    artifact: evidence/preflight-r2/receipt.json
+    sha256: 94689ca117f487a956197b541146419f48883a417229bac3a6d908b5bdf320ec
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:10:17+00:00'
+  l1:
+    result: PASS
+    by: sol-t4-m004
+    artifact: evidence/preflight-r2/run-1789491666616178448/go-phorvex.log
+    sha256: 4ac596da77533eaf3e1d8038b64093c1828b4206e792d43bc8d98168ea52a961
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:10:17+00:00'
+  l2:
+    result: PASS
+    by: sol-t4-m004
+    artifact: evidence/lead-review/head.txt
+    sha256: 762321925bf042b679d9fe63cc11453b4282e7875446e8ca1ac4f5d0e426d473
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:10:17+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t4-m004
+    artifact: evidence/worker-incident.md
+    sha256: eed640c79aad1afaa69e24a406fc73503422a5f563f94cd23fc7616f1f3b4400
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:10:17+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 5ba5624df97fb53aed21dde5af27f6c552cd4fab9ef3967772d47d5b77ab720a
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:11:12+00:00'
+    baseline_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 489fe6b70f3fc1c65bdf82ea13873365e91c3a20ce380858856ca1bd1df128d3
+    source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+    at: '2026-09-15T17:11:12+00:00'
+    incident_sha256: 5ba5624df97fb53aed21dde5af27f6c552cd4fab9ef3967772d47d5b77ab720a
 fix_id: T4-M004
 issues:
 - M-4
 title: The brain's own SA is over-privileged when the console is enabled
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +110,7 @@ blind_derivation:
 implementation:
   branch: fix/t4-m004
   base_sha: ecac2d7229a9701be64ed90886393906e2c4f067
-  head_sha: null
+  head_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +131,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t4-m004
-  action: Implement signed plan; await heavy-test slot; submit-review with no notification
-updated_at: '2026-09-15T10:52:45+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T17:11:14+00:00'
 configuration_history:
 - at: '2026-09-15T10:28:50+00:00'
   by: codex-lead
@@ -97,6 +163,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T17:05:37+00:00'
+  by: sol-t4-m004
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T17:10:17+00:00'
+  by: sol-t4-m004
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -114,3 +190,101 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T17:05:37+00:00'
+  by: sol-t4-m004
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T17:05:38+00:00'
+  by: sol-t4-m004
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T17:11:12+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T17:11:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: ea154322fe87091bd264c76b71ba150477904843d6c3d8fe64d19ec604ef4381
+  source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  at: '2026-09-15T10:52:45+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
+- check: preflight
+  result: PASS
+  by: sol-t4-m004
+  artifact: evidence/preflight-r2/receipt.json
+  sha256: 94689ca117f487a956197b541146419f48883a417229bac3a6d908b5bdf320ec
+  source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  at: '2026-09-15T17:05:37+00:00'
+- check: implementation
+  result: PASS
+  by: sol-t4-m004
+  artifact: 04-diff.patch
+  sha256: 313797464413f65a13ff4582c22f905616561ae805a054a5955ac0e58e810b6d
+  source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  at: '2026-09-15T17:05:37+00:00'
+- check: red
+  result: PASS
+  by: sol-t4-m004
+  artifact: evidence/incident.md
+  sha256: eed640c79aad1afaa69e24a406fc73503422a5f563f94cd23fc7616f1f3b4400
+  source_sha: ecac2d7229a9701be64ed90886393906e2c4f067
+  at: '2026-09-15T17:05:37+00:00'
+- check: l0
+  result: PASS
+  by: sol-t4-m004
+  artifact: evidence/preflight-r2/receipt.json
+  sha256: 94689ca117f487a956197b541146419f48883a417229bac3a6d908b5bdf320ec
+  source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  at: '2026-09-15T17:05:37+00:00'
+- check: l1
+  result: PASS
+  by: sol-t4-m004
+  artifact: evidence/preflight-r2/run-1789491666616178448/go-phorvex.log
+  sha256: 4ac596da77533eaf3e1d8038b64093c1828b4206e792d43bc8d98168ea52a961
+  source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  at: '2026-09-15T17:05:37+00:00'
+- check: l2
+  result: PASS
+  by: sol-t4-m004
+  artifact: evidence/lead-review/head.txt
+  sha256: 762321925bf042b679d9fe63cc11453b4282e7875446e8ca1ac4f5d0e426d473
+  source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  at: '2026-09-15T17:05:37+00:00'
+- check: positive_control
+  result: PASS
+  by: sol-t4-m004
+  artifact: evidence/incident.md
+  sha256: eed640c79aad1afaa69e24a406fc73503422a5f563f94cd23fc7616f1f3b4400
+  source_sha: f0b319e46c8054bc8433f513c6e9f173c379a2f5
+  at: '2026-09-15T17:05:37+00:00'
+handoff:
+  id: T4-M004:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8

@@ -37,6 +37,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/codeexec"
@@ -76,57 +77,63 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr          string
-		probeAddr            string
-		enableLeader         bool
-		baseInterval         time.Duration
-		promURL              string
-		epssCachePath        string
-		epssCacheRefresh     time.Duration
-		epssFeed             bool
-		epssFeedApply        bool
-		epssFeedPartial      bool
-		epssFeedNS           string
-		epssFeedCM           string
-		epssFeedKey          string
-		epssFeedFIRSTURL     string
-		epssFeedTrivy        string
-		epssFeedTimeout      time.Duration
-		killSwitch           bool
-		auditJSON            string
-		operatorNS           string
-		integrationEmit      bool
-		emitNamespace        string
-		emitPod              string
-		emitAction           string
-		emitTenant           string
-		emitMatchLabels      string
-		engineName           string
-		ablation             bool
-		ablationNS           string
-		ablationSelector     string
-		ablationBudget       int
-		ablationSeeds        int
-		scan                 bool
-		scanNS               string
-		kubeContext          string
-		nativeDemo           bool
-		nativeDemoNS         string
-		auditMaxBytes        int64
-		auditMaxBackups      int
-		gpuEnvelopeMax       float64
-		supportDebounce      int
-		calibrationShadow    bool
-		calibrationRefresh   time.Duration
-		calibrationSample    time.Duration
-		calibrationLookback  time.Duration
-		calibrationExportDir string
-		admissionWebhook     bool
-		webhookPort          int
-		webhookCertDir       string
-		pcieClassTableRaw    string
-		flowClasses          string
-		trustedDetectors     string
+		metricsAddr             string
+		probeAddr               string
+		enableLeader            bool
+		baseInterval            time.Duration
+		promURL                 string
+		epssCachePath           string
+		epssCacheRefresh        time.Duration
+		epssFeed                bool
+		epssFeedApply           bool
+		epssFeedPartial         bool
+		epssFeedNS              string
+		epssFeedCM              string
+		epssFeedKey             string
+		epssFeedFIRSTURL        string
+		epssFeedTrivy           string
+		epssFeedTimeout         time.Duration
+		killSwitch              bool
+		auditJSON               string
+		operatorNS              string
+		integrationEmit         bool
+		emitNamespace           string
+		emitPod                 string
+		emitAction              string
+		emitTenant              string
+		emitMatchLabels         string
+		engineName              string
+		ablation                bool
+		ablationNS              string
+		ablationSelector        string
+		ablationBudget          int
+		ablationSeeds           int
+		scan                    bool
+		scanNS                  string
+		kubeContext             string
+		nativeDemo              bool
+		nativeDemoNS            string
+		auditMaxBytes           int64
+		auditMaxBackups         int
+		gpuEnvelopeMax          float64
+		supportDebounce         int
+		calibrationShadow       bool
+		calibrationRefresh      time.Duration
+		calibrationSample       time.Duration
+		calibrationLookback     time.Duration
+		calibrationExportDir    string
+		admissionWebhook        bool
+		webhookPort             int
+		webhookCertDir          string
+		pcieClassTableRaw       string
+		flowClasses             string
+		trustedDetectors        string
+		auditSourceAddr         string
+		auditSourceCert         string
+		auditSourceKey          string
+		auditSourceCA           string
+		auditSourceClientDNS    string
+		auditSourceVClusterPath string
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -170,6 +177,12 @@ func main() {
 	flag.DurationVar(&epssFeedTimeout, "epss-feed-scan-timeout", 10*time.Minute, "[epss-feed] maximum duration for each image scan.")
 	flag.BoolVar(&killSwitch, "global-kill-switch", false, "Engage the global actuation kill-switch at startup.")
 	flag.StringVar(&auditJSON, "audit-json", "", "Optional path to append the JSON-Lines decision audit trail.")
+	flag.StringVar(&auditSourceAddr, "audit-source-addr", "", "Optional mTLS read-only audit listener; disabled when empty.")
+	flag.StringVar(&auditSourceCert, "audit-source-cert", "", "[audit-source-addr] server leaf certificate file.")
+	flag.StringVar(&auditSourceKey, "audit-source-key", "", "[audit-source-addr] server private key file.")
+	flag.StringVar(&auditSourceCA, "audit-source-ca", "", "[audit-source-addr] trusted audit-client CA file.")
+	flag.StringVar(&auditSourceClientDNS, "audit-source-client-dns", "", "[audit-source-addr] required audit client certificate DNS SAN.")
+	flag.StringVar(&auditSourceVClusterPath, "audit-source-vcluster-path", "", "[audit-source-addr] optional fixed vCluster audit JSONL path.")
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", defaultAuditMaxBytes, "[audit-json] target live-segment size in bytes (0 = unbounded). Whole records are preserved, so a segment may exceed this nominal cap. Default 512 MiB.")
 	flag.IntVar(&auditMaxBackups, "audit-max-backups", defaultAuditMaxBackups, "[audit-json] number of rotated segments to keep. Nominal budget is max-bytes*(backups+1); oversized records and pre-existing files can exceed it.")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
@@ -400,6 +413,16 @@ func main() {
 			}()
 			rmgr.Audit = audit.New(ctrl.Log, f)
 			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
+		}
+	}
+	if auditSourceAddr != "" {
+		server, sourceErr := (audittransport.ServerConfig{Addr: auditSourceAddr, AuditPath: auditJSON, VClusterAuditPath: auditSourceVClusterPath,
+			CertFile: auditSourceCert, KeyFile: auditSourceKey, CAFile: auditSourceCA,
+			ClientDNSName: auditSourceClientDNS, MaxBackups: auditMaxBackups}).Start()
+		if sourceErr != nil {
+			setupLog.Error(sourceErr, "audit source unavailable; manager reconciliation continues and remote console audit reads fail closed")
+		} else {
+			defer server.Close()
 		}
 	}
 

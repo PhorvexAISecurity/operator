@@ -1,0 +1,63 @@
+{{- if .Values.phorvex.console.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console
+---
+# This identity is for the authenticated console only. It has no manager
+# journal, lease, admission, AMTD, actuator or webhook-secret binding.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-role
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "namespaces", "services"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "deployments", "replicasets", "daemonsets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get", "list", "patch"]
+{{- if .Values.phorvex.console.allowWorkloadMutations }}
+# The console's vLLM attack adapters label Pods, patch Services and can
+# delete test Pods. This is explicit opt-in; it grants no journal or SA writes.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["patch"]
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-rolebinding
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" . }}-console-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
