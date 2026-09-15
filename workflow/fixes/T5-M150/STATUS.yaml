@@ -1,0 +1,217 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 6
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 33a9d918328210dd6d1ab9950007b545004b272ba11e2c161ccef73416d3d1a0
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T19:32:47+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-baseline-r3.log
+    sha256: 3e548e51318090a5d3980af2eb13f791690daf54dd59d34ea974db9879c83fa2
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T21:02:20+00:00'
+  preflight:
+    result: PASS
+    by: sol-t5-m150
+    artifact: evidence/preflight-r2/receipt.json
+    sha256: f4e27a2b56f0057fe7589e5fd0cdbba76cb38d745d8c16bd5e6f98f1adea084b
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:48:00+00:00'
+  implementation:
+    result: PASS
+    by: sol-t5-m150
+    artifact: 04-diff.patch
+    sha256: 7d577ae28174d387ef7e8db12e9f6eb625da67d27f29e06d229e068ceac8d6d3
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:48:01+00:00'
+  l0:
+    result: PASS
+    by: sol-t5-m150
+    artifact: evidence/worker/run-b7010d33/l0.log
+    sha256: c0a8172569c92e8c2d41a273b4b8e798bc5353fa4c5ef3c8f6ecbccffbc67c23
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:48:01+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 0357f0bfe1c6755f5b9edefab389560a38becd238abb5a499b266a90453bbc1d
+  l1:
+    result: PASS
+    by: sol-t5-m150
+    artifact: evidence/worker/run-b7010d33/l1.log
+    sha256: c8498b32d5eccd6c16234380b0c601afbc7fc889ef37df78f3e886ab3ba89965
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:48:01+00:00'
+    inputs:
+    - phorvex/internal/decision/coverage.go
+    - phorvex/internal/killchain/hazard.go
+    - phorvex/internal/model/decision_trace.go
+    - phorvex/internal/model/types.go
+    - phorvex/internal/platform/platform.go
+    inputs_sha256: 7c378c52c01da0a10452075b786b35d542bb107c728b2c22f59df3c7e884e3bc
+  l2:
+    result: PASS
+    by: sol-t5-m150
+    artifact: evidence/worker/run-b7010d33/l2.log
+    sha256: 5e5d90df08bf9eec3058fc361c9791dc2ffbce3171f5e2547aac499b2fa35b5a
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:48:01+00:00'
+    inputs:
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/platform
+    inputs_sha256: ce37a6d75796aedaa2050a1193caff2668b41b0313d3d114ca0f4a09ad115200
+  positive_control:
+    result: PASS
+    by: sol-t5-m150
+    artifact: evidence/worker/run-b7010d33/positive-control.log
+    sha256: 45adcedc9bfd2f98a49f8f924faaee815fe203f1c216d1386200d0820b755380
+    source_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+    at: '2026-09-15T21:48:01+00:00'
+    inputs:
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    inputs_sha256: 94d89f89d490391fb4095bcab980a05c74b0f20b055c7cee57f6d354432768a8
+fix_id: T5-M150
+issues:
+- M-150
+title: '`CoResidency` counts namespaces, and DaemonSets count as namespaces — the
+  `> 1` conjunct is vacuous fleet-wide'
+profile: standard
+state: OFFLINE_VERIFIED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t5-m150
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t5-m150
+  base_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  head_sha: b7010d339b7304b00dd01191b6af2138475b26f3
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-15T21:48:03+00:00'
+configuration_history:
+- at: '2026-09-15T19:32:45+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - title
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T21:48:00+00:00'
+  by: sol-t5-m150
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-15T19:32:46+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T19:32:47+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T21:48:01+00:00'
+  by: sol-t5-m150
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T21:48:02+00:00'
+  by: sol-t5-m150
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T5-M150:6:submit
+  from: sol-t5-m150
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 6
