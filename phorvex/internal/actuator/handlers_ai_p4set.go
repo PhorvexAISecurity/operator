@@ -402,8 +402,10 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 	}, nil
 }
 
-// Rollback reloads the adapter from the CLEAN source only (never re-introduces the poison; no-op if no
-// clean source was declared).
+// Rollback is guarded compensation, not restoration from tenant state. It reloads only when the
+// current Pod UID and trusted assertion still identify the snapshotted adapter and the immutable
+// operator mapping still supplies an exact local path. Missing authority is an explicit refusal.
+// Mapping approval does not prove the serving-local artifact's contents are clean.
 func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, _ string) error {
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {

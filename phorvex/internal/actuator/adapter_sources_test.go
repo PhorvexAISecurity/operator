@@ -28,12 +28,17 @@ func TestLoadAdapterSourcesFileStrictAndCopied(t *testing.T) {
 
 func TestLoadAdapterSourcesFileRefusals(t *testing.T) {
 	for name, body := range map[string]string{
-		"unknown":   `{"version":1,"sources":[],"extra":true}`,
-		"duplicate": `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/a"},{"namespace":"n","adapter":"a","source":"/b"}]}`,
-		"relative":  `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"../a"}]}`,
-		"traversal": `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/x/../a"}]}`,
-		"url":       `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"https://example/a"}]}`,
-		"control":   "{\"version\":1,\"sources\":[{\"namespace\":\"n\",\"adapter\":\"a\",\"source\":\"/a\\u0001\"}]}",
+		"unknown":                   `{"version":1,"sources":[],"extra":true}`,
+		"duplicate-mapping":         `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/a"},{"namespace":"n","adapter":"a","source":"/b"}]}`,
+		"duplicate-version-field":   `{"version":9,"version":1,"sources":[]}`,
+		"duplicate-source-field":    `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/a","source":"/b"}]}`,
+		"duplicate-namespace-field": `{"version":1,"sources":[{"namespace":"n","namespace":"other","adapter":"a","source":"/a"}]}`,
+		"relative":                  `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"../a"}]}`,
+		"traversal":                 `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/x/../a"}]}`,
+		"url":                       `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"https://example/a"}]}`,
+		"wildcard":                  `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/models/*"}]}`,
+		"question-pattern":          `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/models/a?"}]}`,
+		"control":                   "{\"version\":1,\"sources\":[{\"namespace\":\"n\",\"adapter\":\"a\",\"source\":\"/a\\u0001\"}]}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			p := filepath.Join(t.TempDir(), "x")
