@@ -55,9 +55,15 @@ RUN HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /manager ./cmd
 
+# Administrative recovery is a separate, explicit invocation. The image entrypoint
+# remains the manager; operators must override it to run this bounded CLI.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -a -o /phorvex-recovery ./cmd/recovery
+
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /manager .
+COPY --from=builder /phorvex-recovery .
 USER 65532:65532
 ENTRYPOINT ["/manager"]

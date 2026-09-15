@@ -1,0 +1,243 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 7
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 61c6283f654c83111f3610d2a1e1fdcda31e39f88a6275c5ee6e6813c343882f
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T19:33:02+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead-baseline-capability.log
+    sha256: d5aa9946e66a5a1d931d56aa9a41eed765d70494ccc17939d6681aa76b59592a
+    source_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+    at: '2026-09-15T21:03:41+00:00'
+  preflight:
+    result: PASS
+    by: sol-t5-m138
+    artifact: evidence/preflight/receipt.json
+    sha256: c60afb231a5abfe91a0010f5a92d9112c1cf49e52bc92901ceede9ef0e6b6ce7
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:34:04+00:00'
+  implementation:
+    result: PASS
+    by: sol-t5-m138
+    artifact: 04-diff.patch
+    sha256: c6e7d997fa2f4240104c381b389acafbf0eba8c0ae95ed087b51aa1e9df0a533
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:34:04+00:00'
+  l0:
+    result: PASS
+    by: sol-t5-m138
+    artifact: evidence/worker-head-da40d66e/l0-go-test-all.txt
+    sha256: f3fdd4c8ba87898d2902bb085c78d7e0d17791b06ff0a3fe276d67d1bc299ea2
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:34:04+00:00'
+    inputs:
+    - build/metricvalidity
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 3ed3720fb034cc810cb17c057e9abc43411f8e7cef8c7e2a5850aac6f921659c
+  l1:
+    result: PASS
+    by: sol-t5-m138
+    artifact: evidence/worker-head-da40d66e/focused-fake.txt
+    sha256: cd7c8e7249e9711b729c691a2575d80573eada29dbc062217775352ea7035a85
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:34:04+00:00'
+    inputs:
+    - phorvex/cmd/recovery
+    - phorvex/internal/actuator
+    inputs_sha256: 14e2e2cef087e5530a56f36a355dfcc6f7b3ab456fd5736788ef76cf1e328cba
+  l2:
+    result: PASS
+    by: sol-t5-m138
+    artifact: evidence/worker-head-da40d66e/local-api.txt
+    sha256: b896cefc6cee6016de2ba649e8a12bf106d8bccbefac4ce91efb8208ca14376c
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:34:04+00:00'
+    inputs:
+    - phorvex/config/crd/bases
+    - phorvex/internal/actuator
+    inputs_sha256: 51f1b1026c7cb7fd70faf0e0c9f1c4b16de0e89df39317141f84866d030c6f81
+  positive_control:
+    result: PASS
+    by: sol-t5-m138
+    artifact: evidence/worker-head-da40d66e/cli.txt
+    sha256: 714f6cba22afebc7a911da22b60e73188e3357a5a1e1507f0d3f54541367b412
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:34:04+00:00'
+    inputs:
+    - phorvex/cmd/recovery
+    inputs_sha256: 5e6526c0aa46d768e548d0bbdc9aeb51402c9a98a2257e65538ff04406306b6d
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 48f81e2afb929bb98b133bae31d7db47623750e540aa20664d59657b1afe9c6b
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:35:24+00:00'
+    baseline_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 355942ffe0253b5235f2c9737617c1154890e67a4e6b190c0aaed7e23da06b59
+    source_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+    at: '2026-09-15T21:35:24+00:00'
+    incident_sha256: 48f81e2afb929bb98b133bae31d7db47623750e540aa20664d59657b1afe9c6b
+fix_id: T5-M138
+issues:
+- M-138
+title: 'There is no recovery path: no bulk undo, no "revert last tick", no DR runbook'
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t5-m138
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t5-m138
+  base_sha: c53b04cbf9019665e4c1b05f607f70df9690e598
+  head_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T21:35:26+00:00'
+configuration_history:
+- at: '2026-09-15T19:32:59+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - title
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T21:34:04+00:00'
+  by: sol-t5-m138
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-15T19:33:00+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-15T19:33:02+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T21:34:04+00:00'
+  by: sol-t5-m138
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T21:34:05+00:00'
+  by: sol-t5-m138
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T21:35:24+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T21:35:25+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T5-M138:7:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 7
