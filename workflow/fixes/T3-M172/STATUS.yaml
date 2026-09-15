@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 11
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,13 +16,82 @@ checks:
     at: '2026-09-15T06:27:08+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review.md
+    sha256: e98f64793835e22e49379734fda300feb365f6f11528e6d12c11a59402bf7521
+    source_sha: a84c54b7ee5143a9894ece8eda649592cdecf879
+    at: '2026-09-15T07:19:13+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  red:
+    result: PASS
+    by: sol-t3-m172
+    artifact: evidence/red-output/red.txt
+    sha256: ce7e3c5edd4c9c098309a3f2ff0d6de9cfcd375dc8e13ca389497e83a2c9744d
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T08:46:32+00:00'
+  preflight:
+    result: PASS
+    by: sol-t3-m172
+    artifact: evidence/preflight/receipt.json
+    sha256: 868ad8701751ce83ce7565af65078f151e26375bfb85ba7994c9d7786eba708d
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:56:19+00:00'
+  implementation:
+    result: PASS
+    by: sol-t3-m172
+    artifact: 04-diff.patch
+    sha256: aca214c9ece5117049d25c8d73246f59bfd1b08281cfe58eabf93c2cd16599d7
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:56:19+00:00'
+  l0:
+    result: PASS
+    by: sol-t3-m172
+    artifact: evidence/preflight/receipt.json
+    sha256: 868ad8701751ce83ce7565af65078f151e26375bfb85ba7994c9d7786eba708d
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:56:20+00:00'
+  l1:
+    result: PASS
+    by: sol-t3-m172
+    artifact: evidence/head-output/focused.txt
+    sha256: a78c4d8ab0c516b0576eb3cc30716adb127b3c0bada8c88fe8d25b8ff6690c10
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:56:20+00:00'
+    inputs:
+    - build/test-harness
+    - workflow/fixes/T3-M172/evidence/run-head.sh
+    inputs_sha256: a2f3e9022cde0433833b2da0448c7e964bbebe641d6bfa6b0909290ace2aa4c0
+  l2:
+    result: PASS
+    by: sol-t3-m172
+    artifact: evidence/head-output/regression.txt
+    sha256: 05c5375201d05fcb193a7e8e5425c441a871543f38e5e718c2c492f9cce3154c
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:56:20+00:00'
+    inputs:
+    - build/test-harness
+    - workflow/fixes/T3-M172/evidence/run-head.sh
+    inputs_sha256: a2f3e9022cde0433833b2da0448c7e964bbebe641d6bfa6b0909290ace2aa4c0
+  positive_control:
+    result: PASS
+    by: sol-t3-m172
+    artifact: evidence/red-output/control.txt
+    sha256: 53f79a41dad2a7a1c5ad9bf6c1576bacb05dee99cfcffa875ac3c20f6695cb51
+    source_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
+    at: '2026-09-15T08:56:20+00:00'
+    inputs:
+    - workflow/assessments/20260910-readiness/fresh-catalogue/revision2-overlays/scenarios
+    - workflow/fixes/T3-M172/evidence/red-probe
+    inputs_sha256: f966e196fd65b1f91a45fbd5ea97f1a382316c7b44e1c7af67c79e764ea3907d
 fix_id: T3-M172
 issues:
 - M-172
 title: Scenario oracles conflate missing targets and failed observations with attack
   disruption
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -46,7 +115,7 @@ blind_derivation:
 implementation:
   branch: fix/t3-m172
   base_sha: a84c54b7ee5143a9894ece8eda649592cdecf879
-  head_sha: null
+  head_sha: 6b9de2ddd33677fdaf2c5a3cac7e0458a62bd9fb
   stacked_on:
   - T3-M169
   - T3-M026
@@ -70,12 +139,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -85,10 +154,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t3-m172
-  action: Implement signed local scenario observation validity contract when slot
-    opens
-updated_at: '2026-09-15T07:17:27+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-15T08:56:22+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:47+00:00'
   by: codex-lead
@@ -116,6 +185,16 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-15T08:45:54+00:00'
+  by: sol-t3-m172
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T08:56:19+00:00'
+  by: sol-t3-m172
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -133,3 +212,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T08:56:20+00:00'
+  by: sol-t3-m172
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T08:56:21+00:00'
+  by: sol-t3-m172
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T3-M172:11:submit
+  from: sol-t3-m172
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 11
