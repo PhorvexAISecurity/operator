@@ -11,19 +11,28 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-func TestM026DerivedSharedGPUTopologyCannotSupplySelectionObservation(t *testing.T) {
+func TestM150NamespaceDispersionCannotSupplyGPUThreatEvidence(t *testing.T) {
 	physicsPod := model.Pod{Namespace: "physics", Name: "serve", UID: "physics", Node: "gpu-1", HasGPU: true,
 		ModelID: "qwen", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, Labels: map[string]string{"role": "physics"},
 		MountedSecrets: []string{"creds"}}
 	duePod := model.Pod{Namespace: "due", Name: "serve", UID: "due", Node: "gpu-1", HasGPU: true,
 		ModelID: "llama", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, Labels: map[string]string{"role": "due"},
 		MountedSecrets: []string{"creds"}}
-	snap := &ingest.Snapshot{Pods: []model.Pod{physicsPod, duePod}, Nodes: []ingest.NodeInfo{{Name: "gpu-1", AllocatableGPU: 1}}}
+	snap := &ingest.Snapshot{Pods: []model.Pod{
+		physicsPod,
+		duePod,
+		{Namespace: "physics", Name: "worker", UID: "worker", Node: "gpu-1", Phase: "Running"},
+		{Namespace: "kube-system", Name: "device-plugin", UID: "device-plugin", Node: "gpu-1", Phase: "Running"},
+		{Namespace: "monitoring", Name: "node-exporter", UID: "node-exporter", Node: "gpu-1", Phase: "Running"},
+	}, Nodes: []ingest.NodeInfo{{Name: "gpu-1", AllocatableGPU: 1}}}
 	_, witnesses := Derive(snap)
 	physicsWitness := witnesses["physics/serve"]
 	if !physicsWitness.Scanned || !physicsWitness.CoResidencyPresent || !physicsWitness.ModelRarityPresent ||
 		physicsWitness.CoResidency <= 1 || physicsWitness.ModelRarity <= 1 {
 		t.Fatalf("derived shared namespace/model topology did not generate the AI context: %+v", physicsWitness)
+	}
+	if physicsWitness.CoResidencyBasis != CoResidencyBasisNamespaceCount {
+		t.Fatalf("namespace proxy basis = %q, want %q", physicsWitness.CoResidencyBasis, CoResidencyBasisNamespaceCount)
 	}
 	floor := 15 * time.Minute
 	clocks := func(d time.Duration) map[string]time.Duration {
@@ -43,8 +52,8 @@ func TestM026DerivedSharedGPUTopologyCannotSupplySelectionObservation(t *testing
 			return 40
 		}, TraceEnabled: true}
 	a := killchain.NewModel().Assess(physics, pol, 90, floor.Seconds())
-	if !a.HasEvidence || a.HasEventEvidence || a.AIStageName == "" {
-		t.Fatalf("derived topology must produce broad inference without strict observation: %+v", a)
+	if a.HasEvidence || a.HasEventEvidence || a.AIStageName != "" || a.Stage != killchain.StageRecon {
+		t.Fatalf("derived namespace topology must not produce GPU threat evidence: %+v", a)
 	}
 	engine := decision.NewCoverageEngine()
 	decisions := engine.Decide([]*model.WorkloadView{physics, due}, pol)
@@ -55,6 +64,14 @@ func TestM026DerivedSharedGPUTopologyCannotSupplySelectionObservation(t *testing
 		}
 		if d.Namespace == "physics" && math.Abs(d.Provenance-.406) > 1e-9 {
 			t.Fatalf("derived physics-only topology received provenance=%v, want 0.406; decision=%+v", d.Provenance, d)
+		}
+		if d.Namespace == "physics" && d.Trace != nil {
+			if d.Trace.Inputs.CoResidencyBasis != CoResidencyBasisNamespaceCount {
+				t.Fatalf("decision trace omitted namespace-count basis: %+v", d.Trace.Inputs)
+			}
+			if d.Trace.Inputs.Stage == "model-theft" || d.Trace.Inputs.Stage == "gpu-side-channel" {
+				t.Fatalf("namespace-only topology reached unsupported GPU stage: %+v", d.Trace.Inputs)
+			}
 		}
 		if d.Namespace == "due" && d.Provenance != 1 {
 			t.Fatalf("overdue control lost full provenance: %+v", d)

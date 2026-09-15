@@ -155,11 +155,9 @@ type Assessment struct {
 	// HasEventEvidence is the STRICTER, event-only discriminator (M-28): TRUE only when a
 	// TRUSTED, RECENT (age-weighted) SecurityEvent bears on this pod — a targeting event
 	// (eventAlpha>0) or a compromised neighbour (lateralPressure>0). Unlike HasEvidence it
-	// EXCLUDES the physics/topology AI classification (aiClassified) and the SuspectAdapter
-	// detector flag, because those are true for a healthy busy GPU/model server with ZERO
-	// events (physics model-theft, LLM-jacking-via-GPU-util) — the exact false-alarm source of
-	// the M-28 churn. The proactive-cadence cap keys on THIS so a physics-pinned, event-less pod
-	// is still capped. Selection provenance also uses this strict observation signal; broad
+	// EXCLUDES contextual AI classification (aiClassified) and the SuspectAdapter detector flag.
+	// The proactive-cadence cap keys on THIS so an event-less pod is still capped. Selection
+	// provenance also uses this strict observation signal; broad
 	// HasEvidence remains available for contextual assessment. Also age-weighted, so an EXPIRED
 	// event does not keep it true.
 	HasEventEvidence bool
@@ -273,9 +271,9 @@ func maxByConsequence(a, b Stage) Stage {
 // signals + the event stream — sensed off EXISTING fields, NEVER a new SecurityEvent
 // type. Returns (stage, true) on a match. HONEST-ABSENT: returns false when the pod is
 // not an AI workload (ModelID=="" && !HasGPU), so the generic chain is byte-identical.
-// Precedence is by consequence/specificity (theft > side-channel > persist > jacking).
-// GPU-leakage stages need HasGPU (so they stay absent on a CPU-only cluster);
-// PHORVEXSEC-115 owns their magnitude calibration.
+// GPU model-theft and side-channel stages are deliberately unavailable: the current snapshot
+// has no validated target/device-bound evidence contract for either threat. In particular, the
+// historical CoResidency field is only a running-namespace count and cannot activate them.
 // ModelID/EndpointPath stages fire on a model-annotated pod + the event stream (live).
 // leakageOf is the model-theft gate's activity term (T1-A). Allocation (VRAMFraction) is
 // deliberately NOT a summand: residency is eligibility/context, never activity. Weights on
@@ -286,7 +284,6 @@ func leakageOf(ph model.PhysicsWitness) float64 {
 
 func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 	p := view.Pod
-	ph := view.Physics
 	if p.ModelID == "" && !p.HasGPU {
 		return 0, false
 	}
@@ -306,28 +303,12 @@ func aiStageFromView(view *model.WorkloadView) (Stage, bool) {
 			exploitEvent = true
 		}
 	}
-	// T1-A: leakage is ACTIVITY only. VRAMFraction is allocation (model residency) and carries
-	// no weight here at any value — a loaded, idle model server must not read as extraction
-	// (bus 084: VRAM=0.9931, SM=0 satisfied the old sum permanently). Threshold 0.8 and the
-	// zero weights on LinkBandwidth/PCIe are untouched: INSUFFICIENT EVIDENCE (Tier 3).
-	// SMOccupancy is honest-absent (0 with SMSource=="") on stacks without DCP profiling; the
-	// decision trace records SMSource so absent is distinguishable from measured zero.
-	leakage := leakageOf(ph) // [0,1]; 0 on kind; PHORVEXSEC-115
-
-	// (1) model theft in progress: co-resident GPU reconstructing a rare model.
-	if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1.3 && leakage > 0.8 {
-		return StageModelTheft, true
-	}
-	// (2) GPU side-channel recon primitive: co-resident on a shared GPU, no theft yet.
-	if p.HasGPU && ph.CoResidency > 1 && ph.ModelRarity > 1 {
-		return StageGPUSideChannel, true
-	}
-	// (3) prompt-injection persistence: a served model + a persist-class event (the
+	// (1) prompt-injection persistence: a served model + a persist-class event (the
 	// injected agent state survives a wipe). KVRebuildSec only gates the recover scale.
 	if p.ModelID != "" && persistEvent {
 		return StagePromptInjectPersist, true
 	}
-	// (4) LLM-jacking: an exposed endpoint + a compute-abuse / exploit signal.
+	// (2) LLM-jacking: an exposed endpoint + a compute-abuse / exploit signal.
 	if p.EndpointPath != "" && (exploitEvent || (view.Telemetry.GPUUtil.Usable() && view.Telemetry.GPUUtil.Value > 0.8)) {
 		return StageLLMJacking, true
 	}

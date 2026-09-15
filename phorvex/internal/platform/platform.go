@@ -11,7 +11,7 @@
 // field. The optimizer/proactive engine/actuation never import this package — the runner
 // stamps view.Physics and the recon-EMR + feasibility layers read it through model.
 //
-// HONESTY: every value is honest-absent. The K8s half (image-rarity, co-residency,
+// HONESTY: every value is honest-absent. The K8s half (image-rarity, namespace dispersion,
 // scheduler-slack, live PDB, MIG-geometry) is MEASURABLE on any real cluster TODAY. The
 // AI/GPU half is populated from live DCGM values when an adapter answers. With no DCGM
 // series GPUPresent=false, so consumers degrade to neutral values and the 1.62x baseline
@@ -43,9 +43,14 @@ type PlatformPhysics interface {
 // Registry holds the registered platform adapters.
 var Registry = registry.New[PlatformPhysics]()
 
-// CoResidencyCap is the documented denominator for the co-residency multiplier: a node
-// with CoResidencyCap+1 distinct tenants saturates at the max +1.0 surcharge.
+// CoResidencyCap is the compatibility denominator for the namespace-dispersion multiplier: a
+// node with CoResidencyCap+1 distinct running namespaces saturates at the max +1.0 surcharge.
+// CoResidency is the historical field name; this count does not identify tenants or GPU sharing.
 const CoResidencyCap = 4.0
+
+// CoResidencyBasisNamespaceCount is recorded with the historical CoResidency field so consumers
+// can distinguish its actual input from authenticated tenancy or target/device-bound evidence.
+const CoResidencyBasisNamespaceCount = "running-namespace-count-on-node"
 
 // Derive runs the most specific Detected() adapter (generic-K8s is the fallback).
 func Derive(snap *ingest.Snapshot) (string, map[string]model.PhysicsWitness) {
@@ -87,15 +92,15 @@ func contributesToFleetPhysics(p *model.Pod) bool {
 }
 
 func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness {
-	out := make(map[string]model.PhysicsWitness, len(snap.Pods))
 	if snap == nil {
-		return out
+		return map[string]model.PhysicsWitness{}
 	}
+	out := make(map[string]model.PhysicsWitness, len(snap.Pods))
 
 	// --- fleet dispersion statistics (ONE O(pods) pass; NFR1-safe) ---
 	imgFreq := map[string]int{}
 	modelFreq := map[string]int{}
-	nodeTenants := map[string]map[string]struct{}{}
+	nodeNamespaces := map[string]map[string]struct{}{}
 	withImage := 0
 	for i := range snap.Pods {
 		p := &snap.Pods[i]
@@ -110,10 +115,10 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 			modelFreq[p.ModelID]++
 		}
 		if p.Node != "" {
-			if nodeTenants[p.Node] == nil {
-				nodeTenants[p.Node] = map[string]struct{}{}
+			if nodeNamespaces[p.Node] == nil {
+				nodeNamespaces[p.Node] = map[string]struct{}{}
 			}
-			nodeTenants[p.Node][p.Namespace] = struct{}{}
+			nodeNamespaces[p.Node][p.Namespace] = struct{}{}
 		}
 	}
 
@@ -170,10 +175,12 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 			w.ModelRarity = rarity(modelFreq[p.ModelID], tot)
 			w.ModelRarityPresent = true
 		}
-		// co-residency (distinct tenants sharing the node)
-		if t := nodeTenants[p.Node]; t != nil {
-			w.CoResidency = 1 + clamp01(float64(len(t)-1)/CoResidencyCap)
+		// Historical CoResidency proxy: distinct running namespaces on the node. This includes
+		// system/DaemonSet namespaces and is not tenant identity or physical GPU-sharing proof.
+		if namespaces := nodeNamespaces[p.Node]; namespaces != nil {
+			w.CoResidency = 1 + clamp01(float64(len(namespaces)-1)/CoResidencyCap)
 			w.CoResidencyPresent = true
+			w.CoResidencyBasis = CoResidencyBasisNamespaceCount
 		}
 		// scheduler slack of the pod's node
 		if s, ok := nodeSlack[p.Node]; ok {
