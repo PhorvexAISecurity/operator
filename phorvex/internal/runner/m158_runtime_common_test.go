@@ -98,11 +98,12 @@ func TestM158ReaderToProcessTenantTrace(t *testing.T) {
 			present = row
 		}
 	}
-	if absent == nil || absent.Status != model.ActionStatusNotInstallable || absent.ExclusionKind != model.ExclusionNotInstallable {
-		t.Fatalf("reader did not reach runtime not-installable candidate: %+v", absent)
-	}
 	if present == nil || present.Status == model.ActionStatusNotInstallable {
 		t.Fatalf("present action falsely absent: %+v", present)
+	}
+	t.Logf("positive control reached: installed rotate status=%s", present.Status)
+	if absent == nil || absent.Status != model.ActionStatusNotInstallable || absent.ExclusionKind != model.ExclusionNotInstallable {
+		t.Fatalf("reader did not reach runtime not-installable candidate: %+v", absent)
 	}
 	if m158AssertFailedReadTrace != nil {
 		m158AssertFailedReadTrace(t, m, entry, snap, &auditSink, trace)
