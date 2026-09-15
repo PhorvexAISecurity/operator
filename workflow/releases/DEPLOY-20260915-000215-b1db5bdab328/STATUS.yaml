@@ -1,0 +1,38 @@
+schema_version: 1
+sync_id: DEPLOY-20260915-000215-b1db5bdab328
+kind: deployment
+state: DEPLOY_OBSERVED
+created_at: '2026-09-15T00:02:15+00:00'
+updated_at: '2026-09-15T00:02:15+00:00'
+approval_ref: workflow/assessments/20260914-tier2-live/REPORT.md
+code_repository:
+  previous_main_sha: null
+  observed_main_sha: null
+  source_release: null
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.116
+  digest: sha256:a7e592cd9e8101a0a05210f3405a28d98fcdd673c4cfeb8064e75ac4ce968064
+  embedded_git_sha: b1db5bdab328dc9c006e45c9171c3e7e35330285
+  release_commit: 72b3663ae1dccfb7adb3be358bc7cd201df5695d
+  observed_at: '2026-09-14T23:48:39Z'
+  observed_by: codex-lead
+  environment: dev
+  source_release: 0.4.116
+  issues: &id002 []
+  fixes: &id001 []
+included_fixes: *id001
+included_issues: *id002
+issue_results: {}
+anatomy:
+  source_commit: b1db5bdab328dc9c006e45c9171c3e7e35330285
+  status: pending
+next_action:
+  owner: release-synchronizer
+  action: Publish Anatomy at the observed SHA, run scoped verifiers, then finalize
+    DEPLOY-20260915-000215-b1db5bdab328.
+transitions:
+- from: DRAFT
+  to: DEPLOY_OBSERVED
+  at: '2026-09-15T00:02:15+00:00'
+  by: codex-lead
+  approval_ref: workflow/assessments/20260914-tier2-live/REPORT.md
