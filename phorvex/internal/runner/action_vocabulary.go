@@ -128,6 +128,9 @@ func installedPolicyActions(crd *apiextv1.CustomResourceDefinition) ([]model.Act
 			return nil, fmt.Errorf("served version %s lacks schema", version.Name)
 		}
 		schema := version.Schema.OpenAPIV3Schema
+		if schema.Type != "object" {
+			return nil, fmt.Errorf("served version %s lacks root object schema", version.Name)
+		}
 		spec, ok := schema.Properties["spec"]
 		if !ok || spec.Type != "object" {
 			return nil, fmt.Errorf("served version %s lacks spec object", version.Name)
