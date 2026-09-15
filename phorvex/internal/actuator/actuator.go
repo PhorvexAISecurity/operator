@@ -12,11 +12,28 @@ package actuator
 
 import (
 	"context"
+	"errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
+
+// NoEffectRefusal marks a handler's positively established pre-mutation refusal.
+// Callers may consider a different action only when this explicit contract is
+// returned and the result carries no effect evidence. Ordinary errors, including
+// timeouts and ambiguous API responses, make no such promise.
+type NoEffectRefusal struct{ Err error }
+
+func (e NoEffectRefusal) Error() string { return e.Err.Error() }
+func (e NoEffectRefusal) Unwrap() error { return e.Err }
+func RefusedWithoutEffect(err error) error {
+	if err == nil {
+		return nil
+	}
+	return NoEffectRefusal{Err: err}
+}
+func IsNoEffectRefusal(err error) bool { var e NoEffectRefusal; return errors.As(err, &e) }
 
 // Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH the SecurityEvent
 // and the AMTD strategy that matches it, it bypasses Phoenix's brittle exact-match
