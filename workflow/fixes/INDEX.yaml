@@ -758,3 +758,36 @@ fixes:
     stacked_on: []
     branch: fix/t5-m061
     head_sha: 9fc6cea5c95f5f64d01fb987173c1d0e9c364767
+  T5-M082:
+    directory: fixes/T5-M082
+    aliases: []
+    issues:
+    - M-82
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m082
+    head_sha: 20c40f0bfe77d1f176d206ab3b7c049ec70ddcf9
+  T5-M096:
+    directory: fixes/T5-M096
+    aliases: []
+    issues:
+    - M-96
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m096
+    head_sha: ddd9408e717405dd4d6ebc4330cd4d149387abe9
+  T5-M138:
+    directory: fixes/T5-M138
+    aliases: []
+    issues:
+    - M-138
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-m138
+    head_sha: da40d66e6dde41e4c3f698de4b5132741e18e1e8
