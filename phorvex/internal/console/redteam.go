@@ -33,15 +33,15 @@ type findingDecision struct {
 	At     string `json:"at"`
 }
 type redteamState struct {
-	mu             sync.Mutex
-	loaded         bool
-	runState       string // idle | running | done | error
-	runMsg         string
-	runStartedAt   string
-	continuous     bool
-	continuousGen  int
-	cancel         context.CancelFunc
-	decisions      map[string]findingDecision
+	mu            sync.Mutex
+	loaded        bool
+	runState      string // idle | running | done | error
+	runMsg        string
+	runStartedAt  string
+	continuous    bool
+	continuousGen int
+	cancel        context.CancelFunc
+	decisions     map[string]findingDecision
 }
 
 var rtState = &redteamState{runState: "idle", decisions: map[string]findingDecision{}}
@@ -177,13 +177,15 @@ func (s *Server) redteamCampaigns(w http.ResponseWriter, r *http.Request) {
 // ---- /api/redteam/live : the end-to-end live-actuation proof (real pod rotated) ----
 func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 	type proof struct {
-		Attack          string  `json:"attack"`
-		FootholdRotated bool    `json:"footholdRotated"`
-		Action          string  `json:"action"`
-		PerDollar       float64 `json:"perDollar"`
-		LambdaMax       float64 `json:"lambdaMax"`
-		Actuations      int     `json:"footholdActuations"`
-		Note            string  `json:"note"`
+		Attack             string  `json:"attack"`
+		FootholdRotated    bool    `json:"footholdRotated"`
+		Action             string  `json:"action"`
+		PerDollar          float64 `json:"perDollar"`
+		PerDollarAvailable bool    `json:"perDollarAvailable"`
+		LambdaMax          float64 `json:"lambdaMax"`
+		LambdaAvailable    bool    `json:"lambdaAvailable"`
+		Actuations         int     `json:"footholdActuations"`
+		Note               string  `json:"note"`
 	}
 	read := func(dir, attack, note string) (proof, bool) {
 		path := filepath.Join(s.cfg.HarnessDir, dir, "phorvex-audit-d-phorvex.jsonl")
@@ -201,8 +203,11 @@ func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 			if json.Unmarshal([]byte(line), &rec) != nil {
 				continue
 			}
-			if l, ok := rec["lambda"].(float64); ok && l > p.LambdaMax {
-				p.LambdaMax = l
+			if auditFieldAvailable(rec, "lambda") {
+				p.LambdaAvailable = true
+				if l, ok := rec["lambda"].(float64); ok && l > p.LambdaMax {
+					p.LambdaMax = l
+				}
 			}
 			pod, _ := rec["pod"].(string)
 			act, _ := rec["actuated"].(bool)
@@ -210,8 +215,9 @@ func (s *Server) redteamLive(w http.ResponseWriter, r *http.Request) {
 				p.Actuations++
 				if p.Action == "" {
 					p.Action, _ = rec["action"].(string)
-					if pd, ok := rec["perDollar"].(float64); ok {
+					if pd, ok := rec["perDollar"].(float64); ok && auditFieldAvailable(rec, "perDollar") {
 						p.PerDollar = pd
+						p.PerDollarAvailable = true
 					}
 				}
 			}
@@ -243,16 +249,16 @@ func (s *Server) redteamFindings(w http.ResponseWriter, r *http.Request) {
 		neutralized["dispersion-steer"] = res.SteerFixNeutralizes
 	}
 	type finding struct {
-		ID          string `json:"id"`
-		Title       string `json:"title"`
-		Product     string `json:"product"`
-		Category    string `json:"category"`
-		Source      string `json:"source"`
-		Reasoning   string `json:"reasoning"`
-		Cycle       string `json:"cycle"`
-		Fix         string `json:"fix"`
-		FixFile     string `json:"fixFile"`
-		Neutralized bool   `json:"neutralized"`
+		ID           string `json:"id"`
+		Title        string `json:"title"`
+		Product      string `json:"product"`
+		Category     string `json:"category"`
+		Source       string `json:"source"`
+		Reasoning    string `json:"reasoning"`
+		Cycle        string `json:"cycle"`
+		Fix          string `json:"fix"`
+		FixFile      string `json:"fixFile"`
+		Neutralized  bool   `json:"neutralized"`
 		ReviewStatus string `json:"reviewStatus"`
 		ReviewNote   string `json:"reviewNote"`
 		ApplyNote    string `json:"applyNote"`

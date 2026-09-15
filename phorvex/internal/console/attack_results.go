@@ -86,14 +86,17 @@ type attackRecord struct {
 	Containment string `json:"containment"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
-	Why          string  `json:"why"`
-	PerDollar    float64 `json:"perDollar"`
-	Stage        string  `json:"stage"`
-	CoveredFacts int     `json:"coveredFacts"`
-	PHold        float64 `json:"pHold"`
-	Lambda       float64 `json:"lambda"`
-	R6Would      string  `json:"r6Would"`
-	R6Note       string  `json:"r6Note"`
+	Why                   string  `json:"why"`
+	PerDollar             float64 `json:"perDollar"`
+	PerDollarAvailable    bool    `json:"perDollarAvailable"`
+	Stage                 string  `json:"stage"`
+	CoveredFacts          int     `json:"coveredFacts"`
+	CoveredFactsAvailable bool    `json:"coveredFactsAvailable"`
+	PHold                 float64 `json:"pHold"`
+	Lambda                float64 `json:"lambda"`
+	LambdaAvailable       bool    `json:"lambdaAvailable"`
+	R6Would               string  `json:"r6Would"`
+	R6Note                string  `json:"r6Note"`
 
 	// real uptime, sampled around the attack (ready/desired * 100)
 	UptimeBefore float64 `json:"uptimeBefore"`
@@ -572,11 +575,33 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 	r.Stage, _ = best["stage"].(string)
 	r.R6Would, _ = best["r6Would"].(string)
 	r.R6Note, _ = best["r6Note"].(string)
-	r.PerDollar = numf(best["perDollar"])
+	r.PerDollarAvailable = auditFieldAvailable(best, "perDollar")
+	if r.PerDollarAvailable {
+		r.PerDollar = numf(best["perDollar"])
+	}
 	r.PHold = numf(best["pHold"])
-	r.Lambda = numf(best["lambda"])
-	r.CoveredFacts = int(numf(best["coveredFacts"]))
+	r.LambdaAvailable = auditFieldAvailable(best, "lambda")
+	if r.LambdaAvailable {
+		r.Lambda = numf(best["lambda"])
+	}
+	r.CoveredFactsAvailable = auditFieldAvailable(best, "coveredFacts")
+	if r.CoveredFactsAvailable {
+		r.CoveredFacts = int(numf(best["coveredFacts"]))
+	}
 	s.parseDescReasoning(r) // backfill any numbers the audit line lacked (e.g. per-$ from the event desc)
+}
+
+func auditFieldAvailable(rec map[string]any, name string) bool {
+	if measurements, ok := rec["measurements"].(map[string]any); ok {
+		optional, ok := measurements[name].(map[string]any)
+		if !ok {
+			return false
+		}
+		present, _ := optional["present"].(bool)
+		return present
+	}
+	v, ok := rec[name]
+	return ok && v != nil
 }
 
 var (
@@ -592,9 +617,10 @@ func (s *Server) parseDescReasoning(r *attackRecord) {
 	if r.Why == "" {
 		return
 	}
-	if r.PerDollar == 0 {
+	if !r.PerDollarAvailable {
 		if m := reDescPerDollar.FindStringSubmatch(r.Why); len(m) == 2 {
 			r.PerDollar = atof(m[1])
+			r.PerDollarAvailable = true
 		}
 	}
 	if r.PHold == 0 {
