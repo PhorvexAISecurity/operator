@@ -639,12 +639,12 @@ fixes:
     issues:
     - M-158
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on:
     - T3-M169
     branch: fix/t3-m158
-    head_sha: null
+    head_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
   T3-M169:
     directory: fixes/T3-M169
     aliases: []
