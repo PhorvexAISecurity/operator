@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 16
+revision: 17
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -73,13 +73,29 @@ checks:
     sha256: 2015db97750d0935d6a93dda5ced4d247923aa9923de86a60d9df5effbe92ed6
     source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
     at: '2026-09-15T08:12:19+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: aa7ab75f3a7662b409d35138b29a9309ec552373a683bfc582aaf6409346ab82
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:15:04+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f3e9ab937989fdee20d7d8d7a6058ae0ae72a55c96e63702e8ecbc3c529f9530
+    source_sha: 7ed3686025326b54d44c2dc767d61e9a524ca500
+    at: '2026-09-15T08:15:04+00:00'
+    incident_sha256: aa7ab75f3a7662b409d35138b29a9309ec552373a683bfc582aaf6409346ab82
 fix_id: T3-M158
 issues:
 - M-158
 title: 'T1-E follow-up: boot DISCOVERY of the deployed CRD action enum into `model.NotInstallable`
   is unwired — the not-installable gate is live but its set is populated empty'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -125,7 +141,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -141,10 +157,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-15T08:12:22+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T08:15:06+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:44+00:00'
   by: codex-lead
@@ -230,6 +246,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T08:15:04+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T08:15:05+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: red
   result: PASS
@@ -239,9 +271,9 @@ check_history:
   source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
   at: '2026-09-15T07:19:13+00:00'
 handoff:
-  id: T3-M158:16:submit
-  from: sol-t3-m158
+  id: T3-M158:17:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 16
+  role: coordinator
+  kind: review
+  revision: 17
