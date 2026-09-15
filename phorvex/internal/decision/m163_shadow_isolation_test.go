@@ -169,6 +169,16 @@ func m163StaleShadowViews(t *testing.T, rt *calib.Runtime, snap *ingest.Snapshot
 	return shadowViews
 }
 
+// m163TransitioningShadowViews supplies a supported, evidence-backed hypothetical stage change
+// after the real calibration producer has built the stale shadow. It exercises shadow stage-clock
+// isolation without reviving the removed namespace-to-GPU-threat inference.
+func m163TransitioningShadowViews(t *testing.T, rt *calib.Runtime, snap *ingest.Snapshot) []*model.WorkloadView {
+	t.Helper()
+	views := m163StaleShadowViews(t, rt, snap)
+	views[0].Events = []model.SecurityEventInfo{{Type: "Panic", ThreatLevel: "high", TargetsPod: true}}
+	return views
+}
+
 // m163Belief is the part of the production record the kill-chain belief writes.
 type m163Belief struct {
 	stage    string
@@ -235,11 +245,11 @@ func TestM163_FixtureCrossesTheStagePredicateThroughRealProducers(t *testing.T) 
 	km := killchain.NewModel()
 	pol := m163Policy()
 	prodView := m163View(t, snap)
-	shadowView := m163StaleShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap)[0]
+	shadowView := m163TransitioningShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap)[0]
 	prodStage := km.AssessMode(prodView, pol, 1200, pol.ProactiveFloor.Seconds(), killchain.EvalShadow).StageName
 	shadowStage := km.AssessMode(shadowView, pol, 1200, pol.ProactiveFloor.Seconds(), killchain.EvalShadow).StageName
-	if prodStage != "recon" || shadowStage != "recon" {
-		t.Fatalf("namespace dispersion manufactured stages: production=%q shadow=%q", prodStage, shadowStage)
+	if prodStage != "recon" || shadowStage != "prompt-inject-persist" {
+		t.Fatalf("supported event producer did not create the intended stage disagreement: production=%q shadow=%q", prodStage, shadowStage)
 	}
 	t.Logf("fixture live: production stage=%s (namespace proxy %.4f) vs shadow stage=%s (namespace proxy %.4f)",
 		prodStage, production.CoResidency, shadowStage, shadow.CoResidency)
@@ -265,7 +275,7 @@ func TestM163_StaleShadowLeavesNextProductionDecisionIdentical(t *testing.T) {
 	// Arm B — the shipped ordering: on tick 2 the shadow arm runs FIRST.
 	subject := m163Engine(t)
 	m163Decide(t, subject, snap, pol)
-	m163Shadow(t, subject, m163StaleShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap), pol)
+	m163Shadow(t, subject, m163TransitioningShadowViews(t, m163StaleRuntime(t, snap, physicsByKey), snap), pol)
 	subjectDecisions := m163Decide(t, subject, snap, pol)
 
 	want, got := m163Read(t, controlDecisions[0]), m163Read(t, subjectDecisions[0])
@@ -310,7 +320,7 @@ func TestM163_SameStageShadowAndStaleShadowAreEquallyInert(t *testing.T) {
 			m163Read(t, controlDecisions[0]), m163Read(t, benignDecisions[0]))
 	}
 	if !reflect.DeepEqual(benignDecisions, staleDecisions) {
-		t.Fatalf("a stage-changing shadow is not as inert as a same-stage one: benign=%+v stale=%+v",
+		t.Fatalf("a stale same-stage shadow is not inert: benign=%+v stale=%+v",
 			m163Read(t, benignDecisions[0]), m163Read(t, staleDecisions[0]))
 	}
 }
