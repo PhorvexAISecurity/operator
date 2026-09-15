@@ -741,6 +741,32 @@ type Decision struct {
 	// Trace is populated only after selection. It is observational and never fed
 	// back into candidate generation, scoring, feasibility or actuation.
 	Trace *DecisionTraceV2
+	// Measurements records which legacy scalar audit fields were actually computed.
+	// Scalar zero values alone cannot carry that distinction.
+	Measurements *DecisionMeasurementsV1
+}
+
+const DecisionMeasurementsSchemaV1 = "phorvex.decision-measurements.v1"
+
+// DecisionMeasurementsV1 is producer-owned presence for optional top-level audit
+// scalars. Values are repeated here deliberately: old readers retain the scalar
+// fields, while new readers can distinguish a measured zero from unavailable.
+type DecisionMeasurementsV1 struct {
+	SchemaVersion         string        `json:"schemaVersion"`
+	Source                string        `json:"source"`
+	ThreatRisk            OptionalFloat `json:"threatRisk"`
+	PerDollar             OptionalFloat `json:"perDollar"`
+	CoveredWeight         OptionalFloat `json:"coveredWeight"`
+	CoveredFacts          OptionalInt   `json:"coveredFacts"`
+	StageHazard           OptionalFloat `json:"stageHazard"`
+	Lambda                OptionalFloat `json:"lambda"`
+	ProactiveRate         OptionalFloat `json:"proactiveRate"`
+	PreemptMargin         OptionalFloat `json:"preemptMargin"`
+	ProjectedNextStageSec OptionalFloat `json:"projectedNextStageSec"`
+	KillSwitch            OptionalBool  `json:"killSwitch"`
+	AIClassified          OptionalBool  `json:"aiClassified"`
+	EventEvidence         OptionalFloat `json:"eventEvidence"`
+	Provenance            OptionalFloat `json:"provenance"`
 }
 
 // PhoenixForensics is the forensic identity of ONE Phoenix emission attempt: enough to

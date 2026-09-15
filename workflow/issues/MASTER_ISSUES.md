@@ -1994,7 +1994,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-146 · `omitempty` on eleven numeric audit fields erases measured zeros — the audit record cannot distinguish "0" from "not computed" · **OPEN** · `RECORD`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T5-M146
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · audit

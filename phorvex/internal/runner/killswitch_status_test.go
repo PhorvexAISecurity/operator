@@ -216,6 +216,9 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	if recorded.Actuated {
 		t.Fatal("claim metadata bypassed kill-switch")
 	}
+	if recorded.Measurements == nil || !recorded.Measurements.KillSwitch.Present || !recorded.Measurements.KillSwitch.Value {
+		t.Fatalf("engaged kill-switch measurement missing: %+v", recorded.Measurements)
+	}
 
 	if fa.calls != 0 {
 		t.Fatalf("kill-switch engaged: actuator called %d times, want 0", fa.calls)
@@ -253,6 +256,12 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	}
 	snap.Now = now.Add(time.Second)
 	m.processTenant(context.Background(), snap, e, engaged)
+	if err := json.NewDecoder(&auditSink).Decode(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if recorded.Measurements == nil || !recorded.Measurements.KillSwitch.Present || recorded.Measurements.KillSwitch.Value {
+		t.Fatalf("disengaged kill-switch false missing: %+v", recorded.Measurements)
+	}
 	if len(notifications.Events) != 1 {
 		t.Fatalf("active attempt events = %d", len(notifications.Events))
 	}

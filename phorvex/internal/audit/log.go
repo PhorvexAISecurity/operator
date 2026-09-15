@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
@@ -116,7 +117,8 @@ type Record struct {
 
 	// DecisionTrace is the complete, versioned decision-reconstruction payload.
 	// It is nested to preserve the existing phorvex.audit.v2 top-level contract.
-	DecisionTrace *model.DecisionTraceV2 `json:"decisionTrace,omitempty"`
+	DecisionTrace *model.DecisionTraceV2        `json:"decisionTrace,omitempty"`
+	Measurements  *model.DecisionMeasurementsV1 `json:"measurements,omitempty"`
 }
 
 // MarshalJSON is the only write direction: canonical v2. Legacy compatibility is intentionally
@@ -125,7 +127,49 @@ func (r Record) MarshalJSON() ([]byte, error) {
 	type recordAlias Record
 	r.SchemaVersion = SchemaVersionCurrent
 	r.Attribution = canonicalizeAttribution(r.Attribution)
-	return json.Marshal(recordAlias(r))
+	if err := validateMeasurements(r.Measurements); err != nil {
+		return nil, err
+	}
+	if err := measurementsMatch(r); err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(recordAlias(r))
+	if err != nil || r.Measurements == nil {
+		return b, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return nil, err
+	}
+	put := func(name string, present bool, value any) error {
+		if !present {
+			return nil
+		}
+		v, err := json.Marshal(value)
+		if err == nil {
+			fields[name] = v
+		}
+		return err
+	}
+	m := r.Measurements
+	for _, item := range []struct {
+		name    string
+		present bool
+		value   any
+	}{
+		{"threatRisk", m.ThreatRisk.Present, r.ThreatRisk}, {"perDollar", m.PerDollar.Present, r.PerDollar},
+		{"coveredWeight", m.CoveredWeight.Present, r.CoveredWeight}, {"coveredFacts", m.CoveredFacts.Present, r.CoveredFacts},
+		{"stageHazard", m.StageHazard.Present, r.StageHazard}, {"lambda", m.Lambda.Present, r.Lambda},
+		{"proactiveRate", m.ProactiveRate.Present, r.ProactiveRate}, {"preemptMargin", m.PreemptMargin.Present, r.PreemptMargin},
+		{"projectedNextStageSec", m.ProjectedNextStageSec.Present, r.ProjectedNextStageSec}, {"killSwitch", m.KillSwitch.Present, r.KillSwitch},
+		{"aiClassified", m.AIClassified.Present, r.AIClassified}, {"eventEvidence", m.EventEvidence.Present, r.EventEvidence},
+		{"provenance", m.Provenance.Present, r.Provenance},
+	} {
+		if err := put(item.name, item.present, item.value); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
 }
 
 // UnmarshalJSON translates v0/v1 records into the canonical v2 in-memory shape. The shim expires
@@ -184,6 +228,18 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	decoded.SchemaVersion = SchemaVersionCurrent
 	decoded.SourceSchemaVersion = sourceVersion
 	decoded.Attribution = canonicalizeAttribution(decoded.Attribution)
+	if decoded.Measurements == nil {
+		decoded.Measurements = legacyMeasurements(fields, Record(decoded))
+	}
+	if err := validateMeasurements(decoded.Measurements); err != nil {
+		return err
+	}
+	if err := measurementsHaveFields(decoded.Measurements, fields); err != nil {
+		return err
+	}
+	if err := measurementsMatch(Record(decoded)); err != nil {
+		return err
+	}
 	*r = Record(decoded)
 	return nil
 }
@@ -227,7 +283,7 @@ func ToRecord(d model.Decision) Record {
 		claim = model.NewClaimScope(d.Claim.DetectorSet, d.Claim.DetectorSetKnown, d.Claim.BrainImage, d.Claim.GitSHA)
 	}
 	return Record{
-		AdapterObservation: d.AdapterObservation,
+		AdapterObservation:    d.AdapterObservation,
 		Representation:        cloneRepresentation(d.Representation),
 		Existential:           d.Existential,
 		Claim:                 &claim,
@@ -288,7 +344,132 @@ func ToRecord(d model.Decision) Record {
 		ProjectedNextStageSec: round4(d.ProjectedNextStageSec),
 		AIClassified:          d.AIClassified,
 		DecisionTrace:         d.Trace,
+		Measurements:          recordMeasurements(d.Measurements),
 	}
+}
+
+func recordMeasurements(in *model.DecisionMeasurementsV1) *model.DecisionMeasurementsV1 {
+	if in == nil {
+		return nil
+	}
+	m := *in
+	for _, v := range []*model.OptionalFloat{&m.ThreatRisk, &m.PerDollar, &m.CoveredWeight, &m.StageHazard, &m.Lambda, &m.ProactiveRate, &m.PreemptMargin, &m.ProjectedNextStageSec, &m.EventEvidence, &m.Provenance} {
+		if v.Present && !math.IsNaN(v.Value) && !math.IsInf(v.Value, 0) {
+			v.Value = round4(v.Value)
+		}
+	}
+	return &m
+}
+
+func legacyMeasurements(fields map[string]json.RawMessage, r Record) *model.DecisionMeasurementsV1 {
+	m := &model.DecisionMeasurementsV1{SchemaVersion: model.DecisionMeasurementsSchemaV1, Source: "legacy-recorded"}
+	seen := false
+	present := func(name string) bool { raw, ok := fields[name]; return ok && string(raw) != "null" }
+	setF := func(name string, dst *model.OptionalFloat) {
+		if present(name) {
+			dst.Present = true
+			seen = true
+		}
+	}
+	setI := func(name string, dst *model.OptionalInt) {
+		if present(name) {
+			dst.Present = true
+			seen = true
+		}
+	}
+	setB := func(name string, dst *model.OptionalBool) {
+		if present(name) {
+			dst.Present = true
+			seen = true
+		}
+	}
+	setF("threatRisk", &m.ThreatRisk)
+	setF("perDollar", &m.PerDollar)
+	setF("coveredWeight", &m.CoveredWeight)
+	setI("coveredFacts", &m.CoveredFacts)
+	setF("stageHazard", &m.StageHazard)
+	setF("lambda", &m.Lambda)
+	setF("proactiveRate", &m.ProactiveRate)
+	setF("preemptMargin", &m.PreemptMargin)
+	setF("projectedNextStageSec", &m.ProjectedNextStageSec)
+	setB("killSwitch", &m.KillSwitch)
+	setB("aiClassified", &m.AIClassified)
+	setF("eventEvidence", &m.EventEvidence)
+	setF("provenance", &m.Provenance)
+	if present("risk") && r.Engine == "p0-greedy" {
+		m.ThreatRisk.Present = true
+		seen = true
+	}
+	if !seen {
+		return nil
+	}
+	m.ThreatRisk.Value = r.ThreatRisk
+	m.PerDollar.Value = r.PerDollar
+	m.CoveredWeight.Value = r.CoveredWeight
+	m.CoveredFacts.Value = r.CoveredFacts
+	m.StageHazard.Value = r.StageHazard
+	m.Lambda.Value = r.Lambda
+	m.ProactiveRate.Value = r.ProactiveRate
+	m.PreemptMargin.Value = r.PreemptMargin
+	m.ProjectedNextStageSec.Value = r.ProjectedNextStageSec
+	m.KillSwitch.Value = r.KillSwitch
+	m.AIClassified.Value = r.AIClassified
+	m.EventEvidence.Value = r.EventEvidence
+	m.Provenance.Value = r.Provenance
+	return m
+}
+
+func measurementsHaveFields(m *model.DecisionMeasurementsV1, fields map[string]json.RawMessage) error {
+	if m == nil {
+		return nil
+	}
+	for name, present := range map[string]bool{"threatRisk": m.ThreatRisk.Present, "perDollar": m.PerDollar.Present, "coveredWeight": m.CoveredWeight.Present, "coveredFacts": m.CoveredFacts.Present, "stageHazard": m.StageHazard.Present, "lambda": m.Lambda.Present, "proactiveRate": m.ProactiveRate.Present, "preemptMargin": m.PreemptMargin.Present, "projectedNextStageSec": m.ProjectedNextStageSec.Present, "killSwitch": m.KillSwitch.Present, "aiClassified": m.AIClassified.Present, "eventEvidence": m.EventEvidence.Present, "provenance": m.Provenance.Present} {
+		raw, ok := fields[name]
+		if name == "threatRisk" && m.Source == "legacy-recorded" && !ok {
+			raw, ok = fields["risk"]
+		}
+		if present && (!ok || string(raw) == "null") {
+			return fmt.Errorf("measurements %s is present without a recorded top-level value", name)
+		}
+	}
+	return nil
+}
+
+func validateMeasurements(m *model.DecisionMeasurementsV1) error {
+	if m == nil {
+		return nil
+	}
+	if m.SchemaVersion != model.DecisionMeasurementsSchemaV1 {
+		return fmt.Errorf("unsupported measurements schemaVersion %q", m.SchemaVersion)
+	}
+	if m.Source == "" {
+		return fmt.Errorf("measurements source is required")
+	}
+	for name, v := range map[string]model.OptionalFloat{"threatRisk": m.ThreatRisk, "perDollar": m.PerDollar, "coveredWeight": m.CoveredWeight, "stageHazard": m.StageHazard, "lambda": m.Lambda, "proactiveRate": m.ProactiveRate, "preemptMargin": m.PreemptMargin, "projectedNextStageSec": m.ProjectedNextStageSec, "eventEvidence": m.EventEvidence, "provenance": m.Provenance} {
+		if v.Present && (math.IsNaN(v.Value) || math.IsInf(v.Value, 0)) {
+			return fmt.Errorf("measurements %s is non-finite", name)
+		}
+	}
+	return nil
+}
+
+func measurementsMatch(r Record) error {
+	if r.Measurements == nil {
+		return nil
+	}
+	m := r.Measurements
+	for name, item := range map[string]struct {
+		p    bool
+		a, b float64
+	}{"threatRisk": {m.ThreatRisk.Present, m.ThreatRisk.Value, r.ThreatRisk}, "perDollar": {m.PerDollar.Present, m.PerDollar.Value, r.PerDollar}, "coveredWeight": {m.CoveredWeight.Present, m.CoveredWeight.Value, r.CoveredWeight}, "stageHazard": {m.StageHazard.Present, m.StageHazard.Value, r.StageHazard}, "lambda": {m.Lambda.Present, m.Lambda.Value, r.Lambda}, "proactiveRate": {m.ProactiveRate.Present, m.ProactiveRate.Value, r.ProactiveRate}, "preemptMargin": {m.PreemptMargin.Present, m.PreemptMargin.Value, r.PreemptMargin}, "projectedNextStageSec": {m.ProjectedNextStageSec.Present, m.ProjectedNextStageSec.Value, r.ProjectedNextStageSec}, "eventEvidence": {m.EventEvidence.Present, m.EventEvidence.Value, r.EventEvidence}, "provenance": {m.Provenance.Present, m.Provenance.Value, r.Provenance}} {
+		if item.p && item.a != item.b {
+			return fmt.Errorf("measurements %s does not match top-level value", name)
+		}
+	}
+	if (m.CoveredFacts.Present && m.CoveredFacts.Value != r.CoveredFacts) || (m.KillSwitch.Present && m.KillSwitch.Value != r.KillSwitch) || (m.AIClassified.Present && m.AIClassified.Value != r.AIClassified) {
+		return fmt.Errorf("measurements do not match top-level values")
+	}
+	return nil
 }
 
 // phoenixRecord deep-copies the decision's Phoenix payload into the record (M-18).

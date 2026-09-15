@@ -110,6 +110,13 @@ func TestM019CleanRefusalGetsOneReservedAlternative(t *testing.T) {
 	if len(m.fallbackDecisions) != 1 || !m.fallbackDecisions[0].Actuated || m.fallbackDecisions[0].Trace.DispatchOutcome != model.DispatchEmitted || ds[0].Trace.DispatchOutcome != model.DispatchError {
 		t.Fatalf("attempt evidence lost: initial=%+v fallback=%+v", ds[0], m.fallbackDecisions)
 	}
+	fallback := m.fallbackDecisions[0]
+	if fallback.Measurements == nil || !fallback.Measurements.PerDollar.Present ||
+		fallback.Measurements.PerDollar.Value != fallback.PerDollar ||
+		!fallback.Measurements.CoveredWeight.Present || fallback.Measurements.CoveredWeight.Value != fallback.CoveredWeight ||
+		!fallback.Measurements.CoveredFacts.Present || fallback.Measurements.CoveredFacts.Value != fallback.CoveredFacts {
+		t.Fatalf("fallback measurement provenance stale: %+v", fallback.Measurements)
+	}
 	if ds[0].Existential.EffectStatus != "failed-or-unconfirmed" || m.fallbackDecisions[0].Existential.EffectStatus != "attempted-unconfirmed" {
 		t.Fatalf("existential effects crossed attempts: first=%+v fallback=%+v", ds[0].Existential, m.fallbackDecisions[0].Existential)
 	}

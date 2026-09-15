@@ -250,6 +250,31 @@ func TestCoverageZeroDayProactiveNoEvents(t *testing.T) {
 	if d.Stage == "" || d.Lambda == 0 && d.PerDollar == 0 {
 		t.Errorf("P1 decision should carry stage/lambda/perDollar; got stage=%q lambda=%.3f perDollar=%.3f", d.Stage, d.Lambda, d.PerDollar)
 	}
+	if d.Measurements == nil || !d.Measurements.Lambda.Present || !d.Measurements.PerDollar.Present ||
+		!d.Measurements.AIClassified.Present || !d.Measurements.EventEvidence.Present {
+		t.Fatalf("real coverage producer did not attest computed fields: %+v", d.Measurements)
+	}
+	if d.Measurements.ThreatRisk.Present {
+		t.Fatal("P1 producer falsely attested deprecated P0 threat risk")
+	}
+}
+
+func TestCoverageNoCandidateKeepsComputedInputsDistinct(t *testing.T) {
+	e := NewCoverageEngine()
+	p := covPolicy(1)
+	p.EnabledActions = map[model.Action]bool{}
+	d := e.Decide([]*model.WorkloadView{covView("no-candidate", false, 10*time.Minute, false)}, p)[0]
+	if d.Measurements == nil {
+		t.Fatal("coverage assessment omitted measurement contract")
+	}
+	if d.Measurements.PerDollar.Present || d.Measurements.CoveredWeight.Present ||
+		d.Measurements.CoveredFacts.Present || d.Measurements.ProactiveRate.Present {
+		t.Fatalf("no-candidate defaults reported as computed: %+v", d.Measurements)
+	}
+	if !d.Measurements.StageHazard.Present || !d.Measurements.Lambda.Present ||
+		!d.Measurements.PreemptMargin.Present || !d.Measurements.AIClassified.Present {
+		t.Fatalf("assessment-owned values reported unavailable: %+v", d.Measurements)
+	}
 }
 
 func TestCoverageStatefulNeverRotated(t *testing.T) {

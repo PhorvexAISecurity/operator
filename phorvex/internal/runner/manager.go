@@ -1656,6 +1656,12 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 	// namespace is annotated phorvex.ai/dry-run; the global kill-switch suppresses on top.
 	nsDryRun := snap.DryRunNamespaces[e.namespace]
 	effectiveDryRun := pol.DryRun || nsDryRun
+	for i := range decisions {
+		if decisions[i].Measurements == nil {
+			decisions[i].Measurements = &model.DecisionMeasurementsV1{SchemaVersion: model.DecisionMeasurementsSchemaV1, Source: "runner-gates"}
+		}
+		decisions[i].Measurements.KillSwitch = model.OptionalBool{Present: true, Value: killEngaged}
+	}
 	if effectiveDryRun {
 		for i := range decisions {
 			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
@@ -1677,6 +1683,9 @@ func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Sna
 			// run with --global-kill-switch to feed a dashboard) distinguishable from an
 			// operator whose actuator is failing. Both otherwise emit the identical record.
 			decisions[i].KillSwitch = true
+			if decisions[i].Measurements != nil {
+				decisions[i].Measurements.KillSwitch = model.OptionalBool{Present: true, Value: true}
+			}
 			if decisions[i].Trace != nil {
 				decisions[i].Trace.KillSwitchEngaged = true
 				if decisions[i].Selected {
@@ -1878,6 +1887,10 @@ func cloneExistential(in *model.ExistentialDecision) *model.ExistentialDecision 
 
 func fallbackDecision(original model.Decision, a decision.Alternative) model.Decision {
 	d := original
+	if original.Measurements != nil {
+		measurements := *original.Measurements
+		d.Measurements = &measurements
+	}
 	d.Existential = cloneExistential(original.Existential)
 	if d.Existential != nil {
 		d.Existential.EffectStatus = "not-attempted"
@@ -1908,6 +1921,12 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		d.ProactiveRate = d.PerDollar - d.Lambda
 	}
 	d.CoveredFacts = len(a.CoverKeys)
+	if d.Measurements != nil {
+		d.Measurements.PerDollar = model.OptionalFloat{Present: a.Cost > 0, Value: d.PerDollar}
+		d.Measurements.CoveredWeight = model.OptionalFloat{Present: true, Value: d.CoveredWeight}
+		d.Measurements.CoveredFacts = model.OptionalInt{Present: true, Value: d.CoveredFacts}
+		d.Measurements.ProactiveRate = model.OptionalFloat{Present: a.Cost > 0, Value: d.ProactiveRate}
+	}
 	d.Reason = fmt.Sprintf("same-tick alternative after explicit no-effect refusal of %s; reserved marginal gain %.6g", original.Action, a.Gain)
 	d.Actuated, d.Phoenix = false, nil
 	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
