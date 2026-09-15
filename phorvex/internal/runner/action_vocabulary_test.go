@@ -9,12 +9,14 @@ import (
 
 	"github.com/go-logr/logr"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
@@ -202,6 +204,38 @@ func TestFullVocabularyAndCancelledRead(t *testing.T) {
 	result := m.refreshVocabulary(cancelled, now.Add(vocabularyRefreshInterval))
 	if result.Known || result.Error == "" || result.NotInstallable != nil {
 		t.Fatalf("cancelled read treated as known: %+v", result)
+	}
+}
+
+func TestVocabularyUnknownIsPublishedOnPolicyStatus(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", Generation: 1}}
+	policyClient := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(policy).Build()
+	m := &Manager{Client: policyClient, VocabularyReader: failureReader{err: errors.New("forbidden")}, Log: logr.Discard()}
+	entry := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "policy"}}
+	now := time.Now()
+	m.refreshVocabulary(context.Background(), now)
+	m.updateStatus(context.Background(), entry, 1, 0, 0, false, now)
+	var got v1alpha1.PhorvexPolicy
+	if err := policyClient.Get(context.Background(), entry.key, &got); err != nil {
+		t.Fatal(err)
+	}
+	cond := meta.FindStatusCondition(got.Status.Conditions, "PolicyActionVocabulary")
+	if cond == nil || cond.Status != metav1.ConditionUnknown || cond.Reason != "DiscoveryUnavailable" {
+		t.Fatalf("unverified read hidden from status: %+v", cond)
+	}
+	m.VocabularyReader = fakeVocabularyReader(t, policySchemaCRD("known", "rotate"))
+	m.refreshVocabulary(context.Background(), now.Add(vocabularyRefreshInterval))
+	m.updateStatus(context.Background(), entry, 1, 0, 0, false, now.Add(vocabularyRefreshInterval))
+	if err := policyClient.Get(context.Background(), entry.key, &got); err != nil {
+		t.Fatal(err)
+	}
+	cond = meta.FindStatusCondition(got.Status.Conditions, "PolicyActionVocabulary")
+	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != "SchemaObserved" {
+		t.Fatalf("recovered status not verified: %+v", cond)
 	}
 }
 
