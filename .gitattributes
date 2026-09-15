@@ -5,6 +5,9 @@ workflow/**/*.patch -whitespace
 # the exactness that makes it attestable.
 workflow/**/evidence/**/*.log -whitespace
 
+# Signed original CLI output includes indented blank lines; retain exact bytes.
+workflow/fixes/T3-M122/evidence/lead/original-red.txt -whitespace
+
 # Retain exact independent test output, including negative-control diagnostics.
 workflow/coordination/lead-runner-r4-tests.log -whitespace
 
