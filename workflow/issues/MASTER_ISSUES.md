@@ -1216,7 +1216,7 @@ Severity: MINOR · Tier: parallel · Fixes: none
 
 ### M-61 · custom-inject's "KV-reset carrier" role is a comment, not code · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T5-M061
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · custom-inject Update @ internal/actuator/handlers_k8s.go:235
