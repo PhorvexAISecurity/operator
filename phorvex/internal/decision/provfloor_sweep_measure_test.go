@@ -111,8 +111,8 @@ func gateThresholdAt(tau float64) func(killchain.Assessment, float64, float64) f
 		return rampProv(e, f)
 	}
 }
-func gateEvidence(a killchain.Assessment, e, f float64) float64 { // what shipped
-	if e >= f || a.HasEvidence {
+func gateEvidence(a killchain.Assessment, e, f float64) float64 { // trusted observation gate
+	if e >= f || a.HasEventEvidence {
 		return 1
 	}
 	return rampProv(e, f)
@@ -122,7 +122,7 @@ func gateEvidence(a killchain.Assessment, e, f float64) float64 { // what shippe
 // (antiOverRotationWindow 90s, proactiveFloor 15m) rather than the fixture's 5m/1h.
 func TestSweepTableSection6(t *testing.T) {
 	floor, antiOver := 15*time.Minute, 90*time.Second
-	fmt.Printf("\nSWEEP — live tenant policy (antiOverRotation=%v, proactiveFloor=%v), gate = HasEvidence\n", antiOver, floor)
+	fmt.Printf("\nSWEEP — live tenant policy (antiOverRotation=%v, proactiveFloor=%v), gate = HasEventEvidence\n", antiOver, floor)
 	fmt.Printf("%8s %8s %8s %9s %-8s %-9s %10s %8s %11s %6s %6s\n",
 		"exposure", "pHold", "hazard", "urgency", "stage", "next", "rawCover", "prov", "provCover", "feas", "decoy?")
 	var firstPositive, firstCompetitive time.Duration = -1, -1
@@ -206,7 +206,7 @@ func TestGateComparisonAgainstBaseline(t *testing.T) {
 		{"t.0625", "threshold 0.0625 (midpoint of 0.05 and 0.075)", gateThresholdAt(0.0625)},
 		{"t.0649", "threshold 0.0649 (S7 formula on the MEASURED U_competitive 0.0548)", gateThresholdAt(0.0649)},
 		{"t.0700", "threshold 0.0700 (just under the weakest evidenced stage)", gateThresholdAt(0.0700)},
-		{"EVIDNCE", "SHIPPED: HasEvidence", gateEvidence},
+		{"EVIDNCE", "TRUSTED: HasEventEvidence", gateEvidence},
 	}
 
 	fmt.Printf("\nPER-ASSET provenance factor (1.000 = full weight, lower = discounted as a decoy)\n")

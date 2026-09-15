@@ -44,14 +44,14 @@ func TestBaselineStageUrgencyIsNotZero(t *testing.T) {
 	}
 }
 
-// provOf rebuilds the gate exactly as Decide does, for an asset with the given exposure and urgency.
-// provOf drives the real gate. `hasEvidence` is what the gate now reads: StageUrgency was rejected
+// provOf rebuilds the gate exactly as Decide does, for an asset with the given exposure and observation.
+// provOf drives the real gate. `hasEventEvidence` is what the gate now reads: StageUrgency was rejected
 // as a proxy because weak-but-genuine evidence leaves it identical to no evidence at all (see
 // TestStageUrgencyCannotDiscriminateEvidence).
-func provOf(t *testing.T, floorSec, exposure float64, hasEvidence bool) float64 {
+func provOf(t *testing.T, floorSec, exposure float64, hasEventEvidence bool) float64 {
 	t.Helper()
 	ctxByKey := map[string]assetCtx{
-		"ns/p": {assess: killchain.Assessment{HasEvidence: hasEvidence}, exposure: exposure},
+		"ns/p": {assess: killchain.Assessment{HasEventEvidence: hasEventEvidence}, exposure: exposure},
 	}
 	return provFn(ctxByKey, floorSec)("ns/p")
 }
@@ -157,7 +157,7 @@ func TestProvGateMatchesBetweenCopies(t *testing.T) {
 	floorSec := pol.ProactiveFloor.Seconds()
 	for key, ac := range ctxByKey {
 		want := 1.0
-		if !(ac.exposure >= floorSec || ac.assess.StageUrgency > killchain.BaselineStageUrgency) {
+		if !(ac.exposure >= floorSec || ac.assess.HasEventEvidence) {
 			r := ac.exposure / floorSec
 			if r < 0 {
 				r = 0

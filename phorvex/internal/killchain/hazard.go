@@ -147,8 +147,9 @@ type Assessment struct {
 	StageUrgency float64 // [0,1] current-consequence blended with predictive (hazard*next)
 	// HasEvidence is TRUE when this assessment rests on a REAL observation rather than on the
 	// passage of time: a SecurityEvent on this pod, a compromised graph neighbour, an AI kill-chain
-	// signature, or a poisoned adapter. It is the anti-decoy discriminator (PHVX-72): StageUrgency
-	// CANNOT serve that role, because a low/medium direct event and a compromised neighbour both
+	// signature, or a poisoned adapter. It is broad inference/context; selection provenance uses
+	// HasEventEvidence, whose trusted observation contract excludes topology-only context. StageUrgency
+	// CANNOT substitute for observation presence, because a low/medium direct event and a compromised neighbour both
 	// leave the stage at Recon, giving them the SAME urgency as an asset with no evidence at all.
 	HasEvidence bool
 	// HasEventEvidence is the STRICTER, event-only discriminator (M-28): TRUE only when a
@@ -158,8 +159,9 @@ type Assessment struct {
 	// detector flag, because those are true for a healthy busy GPU/model server with ZERO
 	// events (physics model-theft, LLM-jacking-via-GPU-util) — the exact false-alarm source of
 	// the M-28 churn. The proactive-cadence cap keys on THIS so a physics-pinned, event-less pod
-	// is still capped; HasEvidence stays the anti-decoy discriminator (M-110), which correctly
-	// wants the broader signal. Also age-weighted, so an EXPIRED event does not keep it true.
+	// is still capped. Selection provenance also uses this strict observation signal; broad
+	// HasEvidence remains available for contextual assessment. Also age-weighted, so an EXPIRED
+	// event does not keep it true.
 	HasEventEvidence bool
 	LateralUrgency   float64 // [0,1] specifically the about-to-pivot-here pressure
 
