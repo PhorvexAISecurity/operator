@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 16
 change_class: A
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -16,12 +16,85 @@ checks:
     at: '2026-09-15T06:24:46+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  base_review:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/base-review-m033.md
+    sha256: 3904cf32ba2265ecdeaff916c881dbb2c71cd7b3700d206d63b554362a2ca158
+    source_sha: 050f2bd57a90dec4925d2b76ac7b898b528a2032
+    at: '2026-09-15T08:33:51+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  preflight:
+    result: PASS
+    by: sol-t3-m122
+    artifact: evidence/preflight/receipt.json
+    sha256: 2cfdb247a21708b6f6b3891ed74f5348110158b658ae56762807ad11950c4ffc
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:02:35+00:00'
+  implementation:
+    result: PASS
+    by: sol-t3-m122
+    artifact: 04-diff.patch
+    sha256: 7d6f9dc83beb3e2547cf7ef270b31b6bd9180749c587d6c6198b50f3b018be8b
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:02:35+00:00'
+  red:
+    result: PASS
+    by: sol-t3-m122
+    artifact: evidence/worker/l1.md
+    sha256: f2b4bf8e637e983ed59718e01afa9771253125e8524e21cfbef8615beeb5d527
+    source_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+    at: '2026-09-15T09:02:35+00:00'
+  l0:
+    result: PASS
+    by: sol-t3-m122
+    artifact: evidence/worker/l0.md
+    sha256: 370dffa4ba3db04a28f28bc10bb4087cc39d3754fec8d84045b7fd2b1697c053
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:02:35+00:00'
+  l1:
+    result: PASS
+    by: sol-t3-m122
+    artifact: evidence/worker/l1.md
+    sha256: f2b4bf8e637e983ed59718e01afa9771253125e8524e21cfbef8615beeb5d527
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:02:35+00:00'
+  l2:
+    result: PASS
+    by: sol-t3-m122
+    artifact: evidence/worker/l2.md
+    sha256: 911f67372a6e66e1b4b1cff251001842e37d0d776553e6d82ade2c4fec89b331
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:02:35+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t3-m122
+    artifact: evidence/worker/positive-control.md
+    sha256: 03aa31bb6e0c841b52d7ac3489e869d28dc12bfd1e3fc81ddbdfadc2a2733387
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:02:35+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 3d06d7eb3626594fb4484b5af74dfde48cb0b4857178dba01c343b3dda997975
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:03:41+00:00'
+    baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: cb6ec4daa409262b18f55d0ae3e47760ab03fa558a5eaa51c972a3e1522b419d
+    source_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+    at: '2026-09-15T09:03:42+00:00'
+    incident_sha256: 3d06d7eb3626594fb4484b5af74dfde48cb0b4857178dba01c343b3dda997975
 fix_id: T3-M122
 issues:
 - M-122
 title: The actuator demo CLI is stale after the fail-closed fixes
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -44,9 +117,15 @@ blind_derivation:
   sealed_at: null
 implementation:
   branch: fix/t3-m122
-  base_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
-  head_sha: null
-  stacked_on: []
+  base_sha: 050f2bd57a90dec4925d2b76ac7b898b528a2032
+  head_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
+  stacked_on:
+  - T3-M169
+  - T3-M026
+  - T3-M132
+  - T3-M086
+  - T3-M158
+  - T3-M033
 pull_request:
   url: null
   reviewed_head: null
@@ -66,13 +145,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +161,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t3-m122
-  action: Implement truthful owned native demo after journal and repertoire contract
-    composition
-updated_at: '2026-09-15T06:24:46+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-15T09:03:44+00:00'
 configuration_history:
 - at: '2026-09-15T05:57:40+00:00'
   by: codex-lead
@@ -108,6 +187,31 @@ configuration_history:
   fields:
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T07:43:53+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T08:02:40+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: assessments/20260915-tier3/AUTHORIZATION.md
+- at: '2026-09-15T08:33:51+00:00'
+  by: codex-lead
+  fields:
+  - implementation
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-15T08:43:04+00:00'
+  by: sol-t3-m122
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-15T08:52:07+00:00'
+  by: sol-t3-m122
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -125,3 +229,59 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-15T09:02:35+00:00'
+  by: sol-t3-m122
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-15T09:02:37+00:00'
+  by: sol-t3-m122
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-15T09:03:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-15T09:03:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: base_review
+  result: PASS
+  by: codex-lead
+  artifact: evidence/base-review.md
+  sha256: 58687bff48cbc533d1e1a649de173d7bd31e62fd869f9ab6e5f3ff71377a8ad5
+  source_sha: 1c8bd4e75abf3d03c7ec28fc5ed64ad71192d5c2
+  at: '2026-09-15T07:43:54+00:00'
+  baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+- check: base_review
+  result: PASS
+  by: codex-lead
+  artifact: evidence/base-review-m086.md
+  sha256: d89cde679439ba9613adf3f687c603eaf2d459f7d0e98e34c7a5e0a6059f7a0a
+  source_sha: 2e45c9903262827253dff0c21a7b1fb94fe9b511
+  at: '2026-09-15T08:02:41+00:00'
+  baseline_sha: 3906776ffcd04d6c44357f7adbc6809b49c6dfb2
+handoff:
+  id: T3-M122:16:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 16

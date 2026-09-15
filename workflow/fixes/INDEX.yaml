@@ -607,11 +607,17 @@ fixes:
     issues:
     - M-122
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
-    stacked_on: []
+    stacked_on:
+    - T3-M169
+    - T3-M026
+    - T3-M132
+    - T3-M086
+    - T3-M158
+    - T3-M033
     branch: fix/t3-m122
-    head_sha: null
+    head_sha: 0a0735722946b5bc7c729228bffb4fcb59708986
   T3-M132:
     directory: fixes/T3-M132
     aliases: []

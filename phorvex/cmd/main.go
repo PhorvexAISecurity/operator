@@ -268,7 +268,7 @@ func main() {
 	}
 
 	if nativeDemo {
-		if err := runNativeActuatorDemo(nativeDemoNS); err != nil {
+		if err := runNativeActuatorDemo(nativeDemoNS, operatorNS); err != nil {
 			setupLog.Error(err, "native-demo failed")
 			os.Exit(1)
 		}
