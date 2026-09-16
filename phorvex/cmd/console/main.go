@@ -116,10 +116,11 @@ func main() {
 	}
 	if arn := strings.TrimSpace(os.Getenv("PHORVEX_CONSOLE_ALB_SIGNER_ARN")); arn != "" {
 		authCfg.ALB = &console.ALBConfig{
-			SignerARN: arn,
-			Issuer:    os.Getenv("PHORVEX_CONSOLE_ALB_ISSUER"),
-			ClientID:  os.Getenv("PHORVEX_CONSOLE_ALB_CLIENT_ID"),
-			Region:    os.Getenv("PHORVEX_CONSOLE_ALB_REGION"),
+			SignerARN:            arn,
+			AdditionalSignerARNs: splitList(os.Getenv("PHORVEX_CONSOLE_ALB_ADDITIONAL_SIGNER_ARNS")),
+			Issuer:               os.Getenv("PHORVEX_CONSOLE_ALB_ISSUER"),
+			ClientID:             os.Getenv("PHORVEX_CONSOLE_ALB_CLIENT_ID"),
+			Region:               os.Getenv("PHORVEX_CONSOLE_ALB_REGION"),
 		}
 	}
 	if iss := strings.TrimSpace(os.Getenv("PHORVEX_CONSOLE_OIDC_ISSUER")); iss != "" {

@@ -258,6 +258,7 @@ phorvex:
       # x-amzn-oidc-data against this exact load balancer, user pool and app client.
       alb:
         signerArn: ""   # arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>
+        additionalSignerArns: [] # explicit ALB allowlist, same account/region and issuer/client
         issuer: ""      # https://cognito-idp.<region>.amazonaws.com/<user-pool-id>
         clientId: ""    # the user-pool app-client id
         region: ""      # optional; defaults to the region inside signerArn

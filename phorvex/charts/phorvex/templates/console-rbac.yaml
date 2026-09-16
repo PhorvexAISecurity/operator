@@ -60,4 +60,38 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.consoleServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+---
+# Separate read-only scan inputs so existing console installations can add them safely.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-scan-role
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+# Read-only inputs for the live snapshot and reachability graph.
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-scan-rolebinding
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" . }}-console-scan-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
 {{- end }}

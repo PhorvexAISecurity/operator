@@ -134,7 +134,12 @@ func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
 	if prom == "" {
 		prom = os.Getenv("PHORVEX_PROM_URL") // console-default DCGM/GPU telemetry feed (live GPU physics)
 	}
-	writeJSON(w, 200, s.cfg.Scan(q.Get("ns"), q.Get("context"), prom))
+	result, err := s.cfg.Scan(q.Get("ns"), q.Get("context"), prom)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 func (s *Server) ablation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.cfg.Ablation(r.URL.Query().Get("ns")))

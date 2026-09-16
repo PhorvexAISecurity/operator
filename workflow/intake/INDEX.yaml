@@ -125,3 +125,10 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20260916-094500-console-recovery:
+    directory: intake/RPT-20260916-094500-console-recovery
+    kind: INCIDENT
+    title: Console production login and scan recovery
+    state: FILED
+    issue_id: M-176
+    aliases: []

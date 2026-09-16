@@ -10,6 +10,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -118,7 +119,7 @@ var (
 // contextRe validates a kubeconfig context name (EKS ARNs carry :/@.-) for the exec arg.
 var contextRe = regexp.MustCompile(`^[a-zA-Z0-9._:@/-]{1,200}$`)
 
-func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
+func (c *Config) Scan(ns, kubeContext, promURL string) (ScanResult, error) {
 	if !scenarioRe.MatchString(ns) { // reuse the safe-name guard for the namespace arg
 		ns = ""
 	}
@@ -126,7 +127,7 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	if ns != "" {
 		args = append(args, "--scan-namespace", ns)
 	}
-	if kubeContext != "" && contextRe.MatchString(kubeContext) {
+	if !isLocalTargetAlias(kubeContext) && contextRe.MatchString(kubeContext) {
 		args = append(args, "--context", kubeContext) // DERIVED by the console, never hardcoded
 	}
 	if promURL != "" {
@@ -141,7 +142,14 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	if p := os.Getenv("PHORVEX_EPSS_CACHE"); p != "" {
 		args = append(args, "--epss-cache", p)
 	}
-	raw, _ := c.execText(90*time.Second, c.PhorvexBin, args...)
+	raw, err := c.execText(90*time.Second, c.PhorvexBin, args...)
+	if err != nil {
+		return ScanResult{}, fmt.Errorf("live scan unavailable: %w: %s", err, strings.TrimSpace(raw))
+	}
+	// A successful process with an unrecognised report is not evidence of an empty cluster.
+	if !rePlatform.MatchString(raw) || !reNodesPods.MatchString(raw) {
+		return ScanResult{}, fmt.Errorf("live scan unavailable: scanner returned no valid cluster snapshot")
+	}
 	res := ScanResult{Raw: raw}
 	for _, ln := range strings.Split(raw, "\n") {
 		if m := reWitness.FindStringSubmatch(ln); m != nil {
@@ -199,7 +207,7 @@ func (c *Config) Scan(ns, kubeContext, promURL string) ScanResult {
 	if res.NodeList == nil {
 		res.NodeList = []NodeInfo{}
 	}
-	return res
+	return res, nil
 }
 
 // --- Live ablation (GET /api/ablation?ns=) ----------------------------------------------

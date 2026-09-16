@@ -38,7 +38,7 @@ export default function Page() {
         if (!live) return;
         setSessionError(
           isUnauthenticated(e)
-            ? "session expired — reload to sign in"
+            ? "authentication could not be verified — sign in again; if this persists, contact your administrator"
             : String((e as Error).message || e),
         );
       });

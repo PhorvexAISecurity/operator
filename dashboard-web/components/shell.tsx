@@ -157,6 +157,12 @@ export function Shell({
         </div>
       </header>
 
+      {signals.diagnosticsError && (
+        <div role="status" className="mx-auto max-w-[1400px] px-4 py-2 text-sm text-warning">
+          Navigation data unavailable: {signals.diagnosticsError}
+        </div>
+      )}
+
       {/* journey bar (the navigation) */}
       <div className="sticky top-16 z-20 border-b border-border bg-panel/40 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1400px] items-center gap-1 overflow-x-auto px-4 py-2.5">

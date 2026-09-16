@@ -102,7 +102,7 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.119"          # ci:console-tag
+        tag: "0.4.119-console-recovery-20260916" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
       # ── console identity and authorization (M-136) ────────────────────────
@@ -119,12 +119,15 @@ phorvex:
       auth:
         alb:
           signerArn: arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-phorvexc-a8e81988e6/46c1992f6311801f
+          additionalSignerArns:
+            - arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/phorvex-prd-console/41c2083aa2e1ebba
           issuer: https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB
           clientId: 2ms9uge9hm4uap1h0ida3it9on
           region: us-east-2
         # The public console origin, for the same-origin/CSRF boundary on browser mutations.
         trustedOrigins:
           - https://console.phorvex.ai
+          - https://console-prd.phorvex.ai
         # Approved 2026-09-16: the verified Cognito identity below may operate across
         # namespaces on this cluster only. "default" also covers the in-cluster alias.
         # Changing this mounted policy requires a console restart; grants load at startup.
