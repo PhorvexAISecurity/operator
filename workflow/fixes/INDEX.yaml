@@ -940,8 +940,8 @@ fixes:
     issues:
     - M-40
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t7-m040
-    head_sha: null
+    head_sha: b609df7d68a8b3d4b285f23b3eb4683753eae33d

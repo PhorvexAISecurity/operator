@@ -1441,7 +1441,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-40 · `request-drain`'s K8s half stops nothing the attacker is doing · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T7-M040
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · request-drain Update @ internal/actuator/handlers_ai_p4set.go:268
