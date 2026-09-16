@@ -70,6 +70,7 @@ REQUIRED = {
         'TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
         'TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController',
+        'TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController',
     ),
     'github.com/phorvex/phorvex/internal/authz': (
         'TestClusterScopedReviewRejectsNamespacedOnlyGrant',

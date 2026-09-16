@@ -31,7 +31,7 @@ func TestM032CoverageAPIServerReadback(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := 12.3456789012345
-	result, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "default", Pod: "fixture", Action: model.ActionRotate, CoverageValue: &value})
+	result, err := NewPhoenixActuator(c).Actuate(context.Background(), Request{Namespace: "default", Pod: "fixture", TargetUID: "pod-uid", Action: model.ActionRotate, CoverageValue: &value})
 	if err != nil {
 		t.Fatal(err)
 	}

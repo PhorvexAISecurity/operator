@@ -147,48 +147,65 @@ type CostScenario struct {
 }
 
 // actuationCostPerYear measures the REAL annual compute Phorvex's responses consume: it reads the
-// tail of the live decision audit, counts actuated decisions over their time span to get the live
-// actuation rate, and prices it at perActionCost (the measured per-action AWS compute). This is
-// the "Phorvex actually doing the work" cost that the bare operator-pod footprint omits. Returns
-// (0,0) if no audit / no actuations. perActionCost is $ per single actuation.
+// tail of the live audit and counts synchronous native actions plus exactly correlated Phoenix
+// execution confirmations over the decision time span. It then prices that rate at perActionCost
+// (the measured per-action AWS compute). This is the "Phorvex actually doing the work" cost that
+// the bare operator-pod footprint omits. Returns (0,0) if no audit / no confirmed actuations.
+// perActionCost is $ per single actuation.
 // tenantAllowed filters which tenants' actuations are counted. [M-136] The decision audit is
 // tenant data, so an identity limited to some tenants must not have another tenant's actuation
 // volume priced into its own "cost of running Phorvex".
-func (c *Config) actuationCostPerYear(ctx context.Context, perActionCost float64, tenantAllowed func(string) bool) (costYr, ratePerHr float64, partial bool, sourceErr error) {
+type actuationCostCoverage struct {
+	Truncated      bool `json:"truncated"`
+	TypedNative    int  `json:"typedNative"`
+	UntypedLegacy  int  `json:"untypedLegacy"`
+	PendingPhoenix int  `json:"pendingPhoenix"`
+}
+
+func (c actuationCostCoverage) Partial() bool {
+	return c.Truncated || c.UntypedLegacy > 0 || c.PendingPhoenix > 0
+}
+
+func (c *Config) actuationCostPerYear(ctx context.Context, perActionCost float64, tenantAllowed func(string) bool) (costYr, ratePerHr float64, coverage actuationCostCoverage, sourceErr error) {
 	if tenantAllowed == nil {
 		tenantAllowed = func(string) bool { return false } // fail closed rather than count everything
 	}
 	path := c.auditPathForContext("")
 	if path == "" {
-		return 0, 0, false, nil
+		return 0, 0, coverage, nil
 	}
 	f, err := openDecisionSource(ctx, path, c.AuditSource)
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, coverage, err
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, coverage, err
 	}
 	size := st.Size()
 	chunk := int64(8 << 20) // last 8 MiB is plenty to estimate a rate, even on a 100MB+ audit
 	if chunk > size {
 		chunk = size
 	}
-	partial = chunk < size
+	coverage.Truncated = chunk < size
 	buf := make([]byte, chunk)
 	if _, err := f.ReadAt(buf, size-chunk); err != nil && err.Error() != "EOF" {
-		return 0, 0, partial, err
+		return 0, 0, coverage, err
 	}
-	if partial {
+	if coverage.Truncated {
 		if i := strings.IndexByte(string(buf), '\n'); i >= 0 {
 			buf = buf[i+1:]
 		} else {
-			return 0, 0, true, nil
+			return 0, 0, coverage, nil
 		}
 	}
 	var actuated int
+	type receiptKey struct {
+		tenant, action, decisionID, namespace, pod, targetUID, eventName, eventUID string
+	}
+	submitted := map[receiptKey]struct{}{}
+	confirmed := map[receiptKey]struct{}{}
 	var first, last int64 // unix-nanos of first/last decision in the window
 	for _, ln := range strings.Split(string(buf), "\n") {
 		ln = strings.TrimSpace(ln)
@@ -196,41 +213,105 @@ func (c *Config) actuationCostPerYear(ctx context.Context, perActionCost float64
 			continue
 		}
 		var rec struct {
-			Time     string `json:"time"`
-			Kind     string `json:"kind"`
-			Tenant   string `json:"tenant"`
-			Actuated bool   `json:"actuated"`
+			Time               string `json:"time"`
+			Kind               string `json:"kind"`
+			Tenant             string `json:"tenant"`
+			Action             string `json:"action"`
+			Actuated           bool   `json:"actuated"`
+			Outcome            string `json:"outcome"`
+			ExecutionConfirmed bool   `json:"executionConfirmed"`
+			EventUID           string `json:"eventUID"`
+			EventName          string `json:"eventName"`
+			TargetUID          string `json:"targetUID"`
+			Backend            string `json:"backend"`
+			DecisionID         string `json:"decisionID"`
+			Namespace          string `json:"namespace"`
+			Pod                string `json:"pod"`
+			Handler            string `json:"handler"`
+			Phoenix            *struct {
+				EventName string `json:"eventName"`
+				EventUID  string `json:"eventUID"`
+			} `json:"phoenix"`
+			DecisionTrace *struct {
+				DecisionID string `json:"decisionID"`
+				AssetUID   string `json:"assetUID"`
+			} `json:"decisionTrace"`
 		}
-		if json.Unmarshal([]byte(ln), &rec) != nil || rec.Kind != "phorvex.decision" {
+		if json.Unmarshal([]byte(ln), &rec) != nil || (rec.Kind != "phorvex.decision" && rec.Kind != "phorvex.actuation-observation") {
 			continue
 		}
 		if !tenantAllowed(rec.Tenant) {
 			continue
 		}
-		pt, err := time.Parse(time.RFC3339Nano, rec.Time)
-		if err != nil {
+		switch rec.Kind {
+		case "phorvex.decision":
+			pt, err := time.Parse(time.RFC3339Nano, rec.Time)
+			if err != nil {
+				continue
+			}
+			t := pt.UnixNano()
+			if first == 0 {
+				first = t
+			}
+			last = t
+			if !rec.Actuated {
+				continue
+			}
+			if rec.Phoenix == nil {
+				actuated++
+				if rec.Handler != "" {
+					// Native handler identity is synchronous result evidence already
+					// preserved by the decision audit.
+					coverage.TypedNative++
+				} else {
+					// Preserve the historical numeric series, but label these rows as
+					// evidence-untyped. They may be older native or Phoenix dispatches;
+					// absence of both payloads cannot distinguish them.
+					coverage.UntypedLegacy++
+				}
+				continue
+			}
+			decisionID := ""
+			targetUID := ""
+			if rec.DecisionTrace != nil {
+				decisionID = rec.DecisionTrace.DecisionID
+				targetUID = rec.DecisionTrace.AssetUID
+			}
+			if rec.Phoenix.EventName == "" || rec.Phoenix.EventUID == "" || decisionID == "" || targetUID == "" || rec.Namespace == "" || rec.Pod == "" {
+				// This row identifies Phoenix as the backend, so it is not an
+				// evidence-untyped legacy action. Missing correlation fields make its
+				// execution cost unknown and cannot be repaired by a loose audit join.
+				coverage.PendingPhoenix++
+				continue
+			}
+			submitted[receiptKey{rec.Tenant, rec.Action, decisionID, rec.Namespace, rec.Pod, targetUID, rec.Phoenix.EventName, rec.Phoenix.EventUID}] = struct{}{}
+		case "phorvex.actuation-observation":
+			if rec.ExecutionConfirmed && rec.EventUID != "" && rec.TargetUID != "" && rec.Backend == "phoenix" &&
+				rec.Action == "rotate" && strings.HasPrefix(rec.Outcome, "confirmed-execution-") {
+				confirmed[receiptKey{rec.Tenant, rec.Action, rec.DecisionID, rec.Namespace, rec.Pod, rec.TargetUID, rec.EventName, rec.EventUID}] = struct{}{}
+			}
+		}
+	}
+	for submit := range submitted {
+		if _, ok := confirmed[submit]; ok && submit.action == "rotate" {
+			actuated++
 			continue
 		}
-		t := pt.UnixNano()
-		if first == 0 {
-			first = t
-		}
-		last = t
-		if rec.Actuated {
-			actuated++
-		}
+		// A Phoenix submission without an exact correlated execution observation has
+		// unknown action cost. Recovery remains a separate field on that observation.
+		coverage.PendingPhoenix++
 	}
 	spanHr := float64(last-first) / 3.6e12 // nanos -> hours
 	if spanHr <= 0 || actuated == 0 {
-		return 0, 0, partial, nil
+		return 0, 0, coverage, nil
 	}
 	ratePerHr = float64(actuated) / spanHr
 	if remote, ok := f.(interface{ Verify() error }); ok {
 		if e := remote.Verify(); e != nil {
-			return 0, 0, partial, e
+			return 0, 0, coverage, e
 		}
 	}
-	return ratePerHr * 8760 * perActionCost, ratePerHr, partial, nil
+	return ratePerHr * 8760 * perActionCost, ratePerHr, coverage, nil
 }
 
 // CostComparison reads the benchmark metrics and returns the with/without-Phorvex cost per

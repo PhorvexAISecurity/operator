@@ -30,6 +30,9 @@ const (
 	PHORVEX_QUARANTINE_NAMESPACE_UID string = "phorvex.ai/quarantine-namespace-uid"
 	PHORVEX_QUARANTINE_OPERATION     string = "phorvex.ai/quarantine-operation"
 	PHORVEX_QUARANTINE_RULE_TYPE     string = "phorvex.quarantine"
+	PHORVEX_ROTATE_TARGET_UID        string = "phorvex.ai/rotate-target-uid"
+	PHORVEX_ROTATE_RULE_TYPE         string = "phorvex.rotate"
+	PHORVEX_ROTATE_THREAT_LEVEL      string = "high"
 	PHORVEX_CONTROLLED_RULE_SOURCE   string = "PhorvexController"
 
 	// R6Security label for AMTD-managed pods (GitHub issue #15)

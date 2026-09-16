@@ -170,6 +170,9 @@ func TestPhoenixSupportMatchesDispatch(t *testing.T) {
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable}, model.MutatingActions...) {
 		ok, why := pa.SupportsAction(ctx, a, Target{Namespace: "ns", Pod: "p"})
 		req := Request{Tenant: "t", Namespace: "ns", Pod: "p", Action: a, Score: 0.9}
+		if a == model.ActionRotate {
+			req.TargetUID = "pod-uid"
+		}
 		if a == model.ActionQuarantine {
 			// M52's controlled Phoenix route requires the durable reservation envelope.
 			// Supply it here so this M21 contract continues to compare backend
