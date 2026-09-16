@@ -50,6 +50,7 @@ import (
 	"github.com/phorvex/phorvex/internal/physics"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/runner"
+	"github.com/phorvex/phorvex/internal/startupauthz"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -351,11 +352,28 @@ func main() {
 	if admissionWebhook {
 		managerOptions.WebhookServer = webhook.NewServer(webhook.Options{Port: webhookPort, CertDir: webhookCertDir})
 	}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
+	restConfig := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConfig, managerOptions)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	cs, csErr := kubernetes.NewForConfig(restConfig)
+	var bootReviews startupauthz.SSARClient
+	if csErr == nil {
+		bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
+	}
+	bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews, startupauthz.Config{
+		Backend: backend.Backend, OperatorNamespace: operatorNS,
+	})
+	if bootErr != nil {
+		setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
+		os.Exit(1)
+	}
+	setupLog.Info("startup authorization preflight passed",
+		"policies", bootReport.Policies, "activePolicies", bootReport.ActivePolicies,
+		"dryRunPolicies", bootReport.DryRunPolicies, "namespaces", bootReport.Namespaces,
+		"requirements", bootReport.Requirements, "noPolicies", bootReport.NoPolicies)
 
 	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
 	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
@@ -393,7 +411,6 @@ func main() {
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
 	// unpermitted action: the actuation itself still fails closed on real RBAC).
-	cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
 	if csErr == nil {
 		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
 	} else {

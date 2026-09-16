@@ -37,12 +37,24 @@ const DefaultTTL = 5 * time.Minute
 // It is the SINGLE source of truth for the SSAR verb-set — handlers declare their verbs
 // via RequiredVerbs(), and this gate reviews exactly those.
 type Verb struct {
-	Group    string // API group ("" for core)
-	Resource string // e.g. "pods", "networkpolicies"
-	Verb     string // e.g. "delete", "create", "patch"
+	Group         string // API group ("" for core)
+	Resource      string // e.g. "pods", "networkpolicies"
+	Subresource   string // e.g. "ephemeralcontainers"; never folded into Resource
+	Name          string // optional resourceName for an exact named authorization check
+	Verb          string // e.g. "delete", "create", "patch"
+	ClusterScoped bool   // use an empty namespace in authorization attributes
 }
 
-func (v Verb) String() string { return v.Group + "/" + v.Resource + ":" + v.Verb }
+func (v Verb) String() string {
+	resource := v.Resource
+	if v.Subresource != "" {
+		resource += "/" + v.Subresource
+	}
+	if v.Name != "" {
+		resource += "[" + v.Name + "]"
+	}
+	return v.Group + "/" + resource + ":" + v.Verb
+}
 
 // SSARClient is the minimal SelfSubjectAccessReview surface the Checker needs. The real
 // implementation is a kubernetes.Interface (see NewChecker); tests inject a fake.
@@ -67,6 +79,9 @@ type Checker struct {
 
 // NewChecker builds a Checker over the cluster's SelfSubjectAccessReviews client.
 func NewChecker(cs kubernetes.Interface, ttl time.Duration) *Checker {
+	if cs == nil {
+		return NewCheckerWithClient(nil, ttl)
+	}
 	return NewCheckerWithClient(cs.AuthorizationV1().SelfSubjectAccessReviews(), ttl)
 }
 
@@ -97,6 +112,9 @@ func NewCheckerWithClock(cli SSARClient, ttl time.Duration, now func() time.Time
 // On a cache hit no apiserver call is made. Errors are never cached (so a transient blip
 // self-heals on the next tick); allows and denies are cached for ttl.
 func (c *Checker) Allowed(ctx context.Context, ns string, verbs []Verb) (allowed, unknown bool, why string) {
+	if c == nil || c.cli == nil {
+		return false, true, "authorization-unavailable: no checker client"
+	}
 	for _, v := range verbs {
 		ok, unk, w := c.allowedOne(ctx, ns, v)
 		if unk {
@@ -141,6 +159,7 @@ func (c *Checker) Observed(ns string, verbs []Verb) (allowed, unknown bool, why 
 }
 
 func (c *Checker) observedOne(ns string, v Verb) (allowed, unknown bool, why string) {
+	ns = v.namespace(ns)
 	e, held, fresh := c.lookup(ns, v)
 	if !fresh {
 		state := "never-reviewed"
@@ -159,6 +178,7 @@ func (c *Checker) observedOne(ns string, v Verb) (allowed, unknown bool, why str
 // the two can never disagree about what counts as current evidence. It takes the lock to read
 // consistently and writes nothing.
 func (c *Checker) lookup(ns string, v Verb) (e entry, held, fresh bool) {
+	ns = v.namespace(ns)
 	key := ns + "|" + v.String()
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -167,6 +187,7 @@ func (c *Checker) lookup(ns string, v Verb) (e entry, held, fresh bool) {
 }
 
 func (c *Checker) allowedOne(ctx context.Context, ns string, v Verb) (allowed, unknown bool, why string) {
+	ns = v.namespace(ns)
 	key := ns + "|" + v.String()
 	if e, _, fresh := c.lookup(ns, v); fresh {
 		if !e.allowed {
@@ -178,7 +199,7 @@ func (c *Checker) allowedOne(ctx context.Context, ns string, v Verb) (allowed, u
 	sar := &authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
-				Namespace: ns, Group: v.Group, Resource: v.Resource, Verb: v.Verb,
+				Namespace: ns, Group: v.Group, Resource: v.Resource, Subresource: v.Subresource, Name: v.Name, Verb: v.Verb,
 			},
 		},
 	}
@@ -187,6 +208,12 @@ func (c *Checker) allowedOne(ctx context.Context, ns string, v Verb) (allowed, u
 		// Fail-open: an errored review is NOT a measured deny. Do not cache.
 		return false, true, "ssar-error " + v.String() + " in " + ns + ": " + err.Error()
 	}
+	if res == nil {
+		return false, true, "ssar-error " + v.String() + " in " + ns + ": empty response"
+	}
+	if res.Status.EvaluationError != "" || (res.Status.Allowed && res.Status.Denied) {
+		return false, true, "ssar-error " + v.String() + " in " + ns + ": malformed status"
+	}
 	c.mu.Lock()
 	c.cache[key] = entry{allowed: res.Status.Allowed, at: c.now()}
 	c.mu.Unlock()
@@ -194,6 +221,13 @@ func (c *Checker) allowedOne(ctx context.Context, ns string, v Verb) (allowed, u
 		return false, false, "denied " + v.String() + " in " + ns
 	}
 	return true, false, ""
+}
+
+func (v Verb) namespace(candidate string) string {
+	if v.ClusterScoped {
+		return ""
+	}
+	return candidate
 }
 
 // SortVerbs returns verbs in a stable order (for deterministic verb-set keys / logs).

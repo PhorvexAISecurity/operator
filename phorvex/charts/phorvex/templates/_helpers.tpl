@@ -14,7 +14,7 @@ app.kubernetes.io/part-of: phorvex
 {{- end -}}
 
 {{- define "phorvex.serviceAccountName" -}}
-{{ include "phorvex.fullname" . }}-manager
+{{- default (printf "%s-manager" (include "phorvex.fullname" .)) .Values.phorvex.serviceAccountName -}}
 {{- end -}}
 
 {{- define "phorvex.consoleServiceAccountName" -}}

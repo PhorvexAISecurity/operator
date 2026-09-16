@@ -21,7 +21,7 @@ func m007Expected(codeexec bool) map[string]bool {
 			out[g+"/"+r+"/"+v] = true
 		}
 	}
-	add("", "pods", "get", "list", "delete", "update")
+	add("", "pods", "get", "list", "delete", "update", "patch")
 	add("", "services", "get", "list", "update")
 	add("", "replicationcontrollers", "get")
 	for _, r := range []string{"replicasets", "deployments", "statefulsets", "daemonsets"} {
@@ -110,12 +110,12 @@ func TestM007GeneratedAndRoutineContracts(t *testing.T) {
 	}
 	// Negative controls exercise the semantic check in both directions, including
 	// grouped resource/verb Cartesian expansion and scope expansion.
-	for _, kind := range []string{"pod-patch", "remove-update", "cluster-scope", "wildcard"} {
+	for _, kind := range []string{"pod-create", "remove-update", "cluster-scope", "wildcard"} {
 		t.Run(kind, func(t *testing.T) {
 			r := generated.DeepCopy()
 			switch kind {
-			case "pod-patch":
-				r.Rules = append(r.Rules, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"patch"}})
+			case "pod-create":
+				r.Rules = append(r.Rules, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"create"}})
 			case "remove-update":
 				for i := range r.Rules {
 					var vs []string

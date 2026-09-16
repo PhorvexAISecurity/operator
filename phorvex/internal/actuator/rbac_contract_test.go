@@ -32,7 +32,7 @@ func TestNativeRBACMarkersAreLeastPrivilege(t *testing.T) {
 	}
 	sort.Strings(got)
 	want := []string{
-		`namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update`,
+		`namespace=phorvex-tenant,groups="",resources=pods,verbs=get;list;delete;update;patch`,
 		`namespace=phorvex-tenant,groups="",resources=pods/ephemeralcontainers,verbs=update`,
 		`namespace=phorvex-tenant,groups="",resources=services,verbs=get;list;update`,
 		`namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get`,

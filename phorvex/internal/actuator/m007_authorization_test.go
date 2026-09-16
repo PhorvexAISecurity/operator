@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -86,13 +87,55 @@ func TestM007RestrictedRequests(t *testing.T) {
 	if err := admin.Get(ctx, client.ObjectKeyFromObject(pod), persisted); err != nil || persisted.Labels["m007"] != "updated" {
 		t.Fatalf("update not persisted: %v", err)
 	}
+	beforePatch := persisted.DeepCopy()
+	persisted.Labels["m007-patch"] = "allowed"
+	if err := c.Patch(ctx, persisted, client.MergeFrom(beforePatch)); err != nil {
+		t.Fatalf("warm/model recovery patch denied for the configured manager identity: %v", err)
+	}
+	noPatchRole := role.DeepCopy()
+	noPatchRole.ObjectMeta = metav1.ObjectMeta{Name: "routine-without-recovery-patch", Namespace: "m007"}
+	for i := range noPatchRole.Rules {
+		if len(noPatchRole.Rules[i].APIGroups) == 1 && noPatchRole.Rules[i].APIGroups[0] == "" {
+			verbs := noPatchRole.Rules[i].Verbs[:0]
+			for _, verb := range noPatchRole.Rules[i].Verbs {
+				if verb != "patch" {
+					verbs = append(verbs, verb)
+				}
+			}
+			noPatchRole.Rules[i].Verbs = verbs
+		}
+	}
+	create(noPatchRole)
+	create(&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "without-patch", Namespace: "m007"}})
+	create(&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "without-patch", Namespace: "m007"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: noPatchRole.Name}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "without-patch", Namespace: "m007"}}})
+	noPatchConfig := rest.CopyConfig(cfg)
+	noPatchConfig.Impersonate = rest.ImpersonationConfig{UserName: "system:serviceaccount:m007:without-patch", Groups: []string{"system:authenticated", "system:serviceaccounts", "system:serviceaccounts:m007"}}
+	noPatchClient, err := client.New(noPatchConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutPatch := &corev1.Pod{}
+	for {
+		err = noPatchClient.Get(ctx, client.ObjectKeyFromObject(pod), withoutPatch)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	beforeDeniedPatch := withoutPatch.DeepCopy()
+	withoutPatch.Labels["m007-patch"] = "must-not-persist"
+	if err := noPatchClient.Patch(ctx, withoutPatch, client.MergeFrom(beforeDeniedPatch)); !apierrors.IsForbidden(err) {
+		t.Fatalf("manager identity without recovery patch grant: err=%v, want forbidden", err)
+	}
 	var nps networkingv1.NetworkPolicyList
 	if err := c.List(ctx, &nps, client.InNamespace("m007")); err != nil {
 		t.Fatal("GC list denied:", err)
 	}
 	// Sensitive negatives use authorization reviews, never real Secret reads/deletes.
 	for _, a := range []authv1.ResourceAttributes{
-		{Namespace: "m007", Verb: "patch", Resource: "pods"},
 		{Namespace: "m007", Verb: "get", Resource: "secrets"},
 		{Namespace: "m007", Verb: "delete", Resource: "serviceaccounts"},
 		{Namespace: "m007", Verb: "update", Group: "discovery.k8s.io", Resource: "endpointslices"},
@@ -107,5 +150,5 @@ func TestM007RestrictedRequests(t *testing.T) {
 			t.Fatalf("unexpected grant: %+v", a)
 		}
 	}
-	t.Log("restricted Pod GET/UPDATE persisted, NetworkPolicy LIST succeeded, six sensitive/cross-scope authorization negatives denied")
+	t.Log("restricted Pod GET/UPDATE/PATCH persisted, NetworkPolicy LIST succeeded, five sensitive/cross-scope authorization negatives denied")
 }
