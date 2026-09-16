@@ -214,6 +214,9 @@ func TestCheckRefusesOmittedReadPermissionsByAction(t *testing.T) {
 	}{
 		{name: "quarantine network policy identity", action: v1alpha1.ActionQuarantine, group: "networking.k8s.io", resource: "networkpolicies", verb: "get"},
 		{name: "quarantine policy authority", action: v1alpha1.ActionQuarantine, group: "phorvex.ai", resource: "phorvexpolicies", verb: "get"},
+		{name: "quarantine StatefulSet owner", action: v1alpha1.ActionQuarantine, group: "apps", resource: "statefulsets", verb: "get"},
+		{name: "quarantine DaemonSet owner", action: v1alpha1.ActionQuarantine, group: "apps", resource: "daemonsets", verb: "get"},
+		{name: "quarantine Job owner", action: v1alpha1.ActionQuarantine, group: "batch", resource: "jobs", verb: "get"},
 		{name: "warm pool inventory", action: v1alpha1.ActionWarmSwap, resource: "pods", verb: "list"},
 		{name: "warm controller binding", action: v1alpha1.ActionWarmSwap, group: "apps", resource: "replicasets", verb: "get"},
 		{name: "route backend inventory", action: v1alpha1.ActionRouteRotate, resource: "pods", verb: "list"},

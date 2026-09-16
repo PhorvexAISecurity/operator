@@ -200,7 +200,16 @@ func addActionRequirements(out map[string]Requirement, cfg Config, namespace str
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Group: "phorvex.ai", Resource: "phorvexpolicies", Verb: "get"}, Reason: string(action) + " current policy authority"})
 		add(out, Requirement{Verb: authz.Verb{Resource: "namespaces", Name: namespace, Verb: "get", ClusterScoped: true}, Reason: string(action) + " current namespace authority"})
 	}
-	if action == model.ActionRotate || action == model.ActionQuarantine {
+	if action == model.ActionRotate {
+		for _, owner := range []authz.Verb{
+			{Group: "apps", Resource: "replicasets", Verb: "get"},
+			{Group: "apps", Resource: "deployments", Verb: "get"},
+			{Resource: "replicationcontrollers", Verb: "get"},
+		} {
+			add(out, Requirement{Namespace: namespace, Verb: owner, Reason: "rotate owner safety"})
+		}
+	}
+	if action == model.ActionQuarantine {
 		for _, owner := range []authz.Verb{
 			{Group: "apps", Resource: "replicasets", Verb: "get"},
 			{Group: "apps", Resource: "statefulsets", Verb: "get"},

@@ -230,6 +230,42 @@ func TestRenderedManagerIdentityDrivesBootAdmission(t *testing.T) {
 	waitBoot(managerReader, managerReviews, Config{Backend: actuator.BackendHybrid, OperatorNamespace: "operator"}, true, "")
 	deletePolicy(configured)
 
+	// Native rotate reads only the target Pod and the three owner kinds supported by
+	// ownership.Check. A real manager identity with exactly that reduced owner scope must
+	// pass; this prevents startup admission from demanding quarantine-only owner reads.
+	for _, namespace := range []string{"control-minimal", "operator-minimal", "tenant-minimal"} {
+		createNamespace(namespace)
+	}
+	minimalSubject := rbacv1.Subject{Kind: "ServiceAccount", Name: "minimal-rotate", Namespace: "control-minimal"}
+	minimalObjects := []client.Object{
+		&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: minimalSubject.Name, Namespace: minimalSubject.Namespace}},
+		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-boot"}, Rules: []rbacv1.PolicyRule{
+			{APIGroups: []string{"phorvex.ai"}, Resources: []string{"phorvexpolicies"}, Verbs: []string{"list"}},
+			{APIGroups: []string{"authorization.k8s.io"}, Resources: []string{"selfsubjectaccessreviews"}, Verbs: []string{"create"}},
+		}},
+		&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-boot"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "minimal-rotate-boot"}, Subjects: []rbacv1.Subject{minimalSubject}},
+		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate", Namespace: "tenant-minimal"}, Rules: []rbacv1.PolicyRule{
+			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"replicationcontrollers"}, Verbs: []string{"get"}},
+			{APIGroups: []string{"apps"}, Resources: []string{"replicasets", "deployments"}, Verbs: []string{"get"}},
+		}},
+		&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate", Namespace: "tenant-minimal"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "minimal-rotate"}, Subjects: []rbacv1.Subject{minimalSubject}},
+		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-journal", Namespace: "operator-minimal"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"list"}}}},
+		&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-journal", Namespace: "operator-minimal"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: "minimal-rotate-journal"}, Subjects: []rbacv1.Subject{minimalSubject}},
+	}
+	for _, object := range minimalObjects {
+		if err := admin.Create(ctx, object); err != nil {
+			t.Fatalf("create minimal rotate %T %s/%s: %v", object, object.GetNamespace(), object.GetName(), err)
+		}
+	}
+	minimalReader, minimalReviews, err := bootIdentity(cfg, scheme, minimalSubject.Namespace, minimalSubject.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	minimalPolicy := createPolicy("tenant-minimal", "minimal", v1alpha1.ActionRotate)
+	waitBoot(minimalReader, minimalReviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator-minimal"}, true, "")
+	deletePolicy(minimalPolicy)
+
 	for _, namespace := range []string{"control-no-journal", "operator-no-journal", "tenant-no-journal"} {
 		createNamespace(namespace)
 	}
