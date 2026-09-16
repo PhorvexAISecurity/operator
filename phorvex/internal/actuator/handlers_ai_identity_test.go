@@ -192,7 +192,7 @@ func m069Cases() []m069Case {
 
 func m069Stack() (EnactCtx, *mockMIG) {
 	mm := &mockMIG{}
-	return EnactCtx{VLLM: &mockVLLM{loaded: true, readyErr: nil}, MIG: mm}, mm
+	return EnactCtx{VLLM: &mockVLLM{loaded: true, readyErr: nil}, MIG: mm, MIGProfiles: testMIGProfiles()}, mm
 }
 
 // A request without a bound identity, with a mismatched identity, or an observed Pod that

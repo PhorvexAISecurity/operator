@@ -7,10 +7,13 @@ package actuator
 import (
 	"context"
 	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -31,6 +34,7 @@ type NativeActuator struct {
 	JournalNamespace string
 	RecoveryVLLM     vLLMClient // optional serving-stack seam for recovery tests; nil uses live client
 	AdapterSources   AdapterSources
+	migProfiles      *MIGProfiles
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -47,22 +51,44 @@ type NativeActuator struct {
 // NewNativeActuator constructs the native actuator over a controller-runtime client.
 func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator{Client: c} }
 
-// SupportsAction answers only the fixtures the ACTUATOR PACKAGE itself knows — the
-// per-target CONFIG predicates (MIG tuple, guardrail variants, serving endpoint, route
-// Service, warm-shadow pool) are computed by the capability layer from the model's typed
-// witnesses, so they are not re-derived here. The one thing only this package knows is
-// whether the node-exec TRANSPORT is wired: mig-rebind fail-closes without it, yet the
-// old status reported it supported (M-79). This makes that absence visible before scoring.
-func (n *NativeActuator) SupportsAction(_ context.Context, a model.Action, _ Target) (bool, string) {
+// SupportsAction answers package-owned runtime prerequisites. MIG support requires the
+// configured transport, an exact operator profile, a current authoritative Pod identity,
+// and node-grouped PodResources/inventory evidence; the handler independently revalidates.
+func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t Target) (bool, string) {
 	// [M-21] Repertoire first, from the SAME handler registry `dispatch` routes through:
 	// an unknown action, the noop sentinel, and the declared-not-implemented `disable`
 	// are rejected here rather than accepted and then refused at the dispatch boundary.
 	if ok, detail := nativeAccepts(a); !ok {
 		return false, unsupportedWhy(BackendNative, a, detail)
 	}
-	// Then the one runtime prerequisite only this package knows (M-79), unchanged.
+	// Transport is checked before its dependent allocation evidence.
 	if a == model.ActionMIGRebind && !NodeExecWired() {
 		return false, ReasonTransportUnwired
+	}
+	if a == model.ActionMIGRebind {
+		ctx = migCapabilityProbe(ctx)
+		rule, err := n.migProfiles.Resolve(t.Namespace, t.MIGResource)
+		if err != nil {
+			return false, "mig-profile-authority: " + err.Error()
+		}
+		if n.Reader == nil || t.NodeName == "" || t.UID == "" {
+			return false, "mig-allocation-authority: target identity or reader unavailable"
+		}
+		fresh := &corev1.Pod{}
+		if err := n.Reader.Get(ctx, client.ObjectKey{Namespace: t.Namespace, Name: t.Pod}, fresh); err != nil || string(fresh.UID) != t.UID || fresh.Spec.NodeName != t.NodeName || gpudevice.MIGResourceName(fresh) != t.MIGResource {
+			return false, "mig-allocation-authority: current Pod identity, node or resource changed"
+		}
+		mig, err := (&nvidiaSMIMIG{run: pkgNodeRunner}).Prepare(ctx, t.NodeName)
+		if err != nil {
+			return false, "mig-allocation-authority: " + err.Error()
+		}
+		auth, ok := mig.(migAllocationAuthority)
+		if !ok {
+			return false, "mig-allocation-authority: prepared runner cannot query PodResources"
+		}
+		if _, err := auth.BindAllocation(ctx, migAllocationTarget{Namespace: t.Namespace, Pod: t.Pod, UID: t.UID, Node: t.NodeName, Resource: t.MIGResource}, rule); err != nil {
+			return false, "mig-allocation-authority: " + err.Error()
+		}
 	}
 	return true, ""
 }
@@ -115,7 +141,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
@@ -154,3 +180,4 @@ func (n *NativeActuator) SetBoundaryReader(r client.Reader) { n.Reader = r }
 func (n *NativeActuator) SetAdapterSources(s AdapterSources) {
 	n.AdapterSources = copyAdapterSources(s)
 }
+func (n *NativeActuator) SetMIGProfiles(p *MIGProfiles) { n.migProfiles = snapshotMIGProfiles(p) }

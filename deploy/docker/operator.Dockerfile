@@ -60,10 +60,16 @@ RUN HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -a -o /phorvex-recovery ./cmd/recovery
 
+# Node-local read-only kubelet PodResources helper. The optional MIG agent runs this
+# binary in a separate container from vendor GPU tooling.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -a -o /phorvex-mig-allocation-helper ./cmd/mig-allocation-helper
+
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /manager .
 COPY --from=builder /phorvex-recovery .
+COPY --from=builder /phorvex-mig-allocation-helper .
 USER 65532:65532
 ENTRYPOINT ["/manager"]

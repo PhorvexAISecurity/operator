@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -443,20 +444,21 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	if reason := triggerIdentityRefusal(req, pod); reason != "" {
 		return refuseAI("mig-rebind", reason)
 	}
-	// FAIL-CLOSED preconditions: a MIG device, a node, and a declared target profile (you never pick a
-	// MIG geometry blindly, and you never fabricate a rebind without a real device).
-	if gpudevice.MIGResourceName(pod) == "" {
+	// The current resource request identifies the device-plugin class. Desired geometry comes only
+	// from the operator-owned exact namespace/resource policy below.
+	resource := gpudevice.MIGResourceName(pod)
+	if resource == "" {
 		return HandlerResult{}, fmt.Errorf("mig-rebind MIGUnavailable: pod %s/%s has no MIG device [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod)
 	}
 	node := pod.Spec.NodeName
-	gpuID := pod.Annotations[annoGPUID]
-	profile := pod.Annotations[annoMIGProfile]
-	if node == "" || gpuID == "" || profile == "" {
-		return HandlerResult{}, fmt.Errorf("mig-rebind blocked: need node(%q)+%s+%s annotations for the requested MIG operation (fail-closed)", node, annoGPUID, annoMIGProfile)
+	if node == "" {
+		return HandlerResult{}, fmt.Errorf("mig-rebind blocked: target has no scheduled node")
 	}
-	if !profilePattern.MatchString(profile) {
-		return HandlerResult{}, fmt.Errorf("mig-rebind blocked: unsupported target profile %q (no workload mutation)", profile)
+	rule, err := ec.MIGProfiles.Resolve(req.Namespace, resource)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("mig-rebind profile authority (no workload mutation): %w", err)
 	}
+	profile := rule.Profile
 	if ec.Reader == nil {
 		return HandlerResult{}, fmt.Errorf("mig-rebind blocked: authoritative reader unavailable (no workload mutation)")
 	}
@@ -467,14 +469,31 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	if err != nil {
 		return HandlerResult{}, fmt.Errorf("mig-rebind transport unavailable (no eviction performed): %w", err)
 	}
-	prior, err := mig.Capture(ctx, gpuID, profile)
+	auth, ok := mig.(migAllocationAuthority)
+	if !ok {
+		return HandlerResult{}, fmt.Errorf("mig-rebind allocation authority unavailable (no workload mutation)")
+	}
+	binding, err := auth.BindAllocation(ctx, migAllocationTarget{Namespace: pod.Namespace, Pod: pod.Name, UID: string(pod.UID), Node: node, Resource: resource}, rule)
+	if err != nil {
+		return HandlerResult{}, fmt.Errorf("mig-rebind allocation authority (no workload mutation): %w", err)
+	}
+	if asserted := pod.Annotations[annoGPUID]; asserted != "" && asserted != binding.DeviceID && asserted != binding.GPUUUID {
+		return HandlerResult{}, fmt.Errorf("mig-rebind legacy GPU assertion %q conflicts with allocated device %q", asserted, binding.DeviceID)
+	}
+	if asserted := pod.Annotations[annoMIGProfile]; asserted != "" && asserted != profile {
+		return HandlerResult{}, fmt.Errorf("mig-rebind tenant profile assertion %q conflicts with operator profile %q", asserted, profile)
+	}
+	prior, err := mig.Capture(ctx, binding.GPUUUID, profile)
 	if err != nil {
 		return HandlerResult{}, fmt.Errorf("mig-rebind unsupported or unavailable geometry (no workload mutation): %w", err)
 	}
-	receipt := migRecoveryReceipt{Version: 1, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels), Node: node, GPUUUID: prior.GPUUUID, TargetProfile: profile, Prior: prior}
+	receipt := migRecoveryReceipt{Version: 2, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels), Node: node, GPUUUID: prior.GPUUUID, TargetProfile: profile, Binding: binding, Prior: prior}
 	fresh := &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, fresh); err != nil || fresh.UID != pod.UID || fresh.Spec.NodeName != node || fresh.Annotations[annoGPUID] != gpuID || fresh.Annotations[annoMIGProfile] != profile {
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, fresh); err != nil || fresh.UID != pod.UID || fresh.Spec.NodeName != node || gpudevice.MIGResourceName(fresh) != resource {
 		return HandlerResult{}, fmt.Errorf("mig-rebind target identity/configuration changed before recovery intent (no workload mutation): %v", err)
+	}
+	if err := auth.RevalidateAllocation(ctx, binding, true); err != nil {
+		return HandlerResult{}, fmt.Errorf("mig-rebind allocation changed before recovery intent: %w", err)
 	}
 	receipt.TargetLabels = copyLabels(fresh.Labels)
 	if err := migRecoveryAuthority(ctx, ec, receipt, receipt.TargetLabels); err != nil {
@@ -486,6 +505,9 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	}
 	if err := migRecoveryRequireOwned(ctx, ec, journal, receipt, receipt.TargetLabels); err != nil {
 		return HandlerResult{}, fmt.Errorf("mig-rebind recovery ownership before route removal: %w", err)
+	}
+	if err := auth.RevalidateAllocation(ctx, binding, true); err != nil {
+		return HandlerResult{}, errors.Join(fmt.Errorf("mig-rebind allocation changed before route removal: %w", err), migRecoveryFinish(ctx, ec, journal))
 	}
 	// Route out, confirm the serving drain, then submit the UID-bound Pod deletion before the GPU
 	// operation. Pod deletion is workload evidence only; it does not prove CUDA process state.
@@ -516,10 +538,17 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	if err := migRecoveryRequireOwned(ctx, ec, journal, receipt, receipt.TargetLabels); err != nil {
 		return HandlerResult{Emitted: true, MutationKind: "partial", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "pod relabeled and drained; recovery ownership lost; eviction and GPU repartition refused"}, fmt.Errorf("mig-rebind recovery ownership before eviction: %w", err)
 	}
+	current := &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, current); err != nil || current.UID != pod.UID || current.Spec.NodeName != node || gpudevice.MIGResourceName(current) != resource {
+		return HandlerResult{Emitted: true, MutationKind: "partial", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "pod relabeled and drained; target identity changed; eviction and GPU repartition refused"}, fmt.Errorf("mig-rebind target identity/configuration changed before eviction: %v", err)
+	}
+	if err := auth.RevalidateAllocation(ctx, binding, true); err != nil {
+		return HandlerResult{Emitted: true, MutationKind: "partial", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "pod relabeled and drained; allocation authority changed; eviction and GPU repartition refused"}, fmt.Errorf("mig-rebind allocation authority before eviction: %w", err)
+	}
 	// [M-69] Evict exactly the observed Pod (UID-bound Delete). A rejected eviction — a same-name
 	// replacement, or any other API refusal — means the GPU was NOT freed by this move, so the
 	// repartition is NOT attempted; the relabel already applied to the name is reported as-is.
-	alreadyGone, delErr := deleteObservedPod(ctx, ec.Client, pod)
+	alreadyGone, delErr := deleteObservedPod(ctx, ec.Client, current)
 	if delErr != nil {
 		return HandlerResult{Emitted: true, MutationKind: "partial", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "pod relabeled retiring; recovery receipt retained; GPU untouched"},
 			fmt.Errorf("mig-rebind GPU-context eviction (delete %s/%s, observed uid %s) rejected; repartition NOT attempted (pod name relabeled %s): %w", req.Namespace, req.Pod, pod.UID, roleRetiring, delErr)
@@ -527,6 +556,14 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	receipt.Phase = "destructive"
 	if err := migRecoveryAdvance(ctx, ec, journal, receipt); err != nil {
 		return HandlerResult{Emitted: true, MutationKind: "partial", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "pod eviction submitted; recovery phase acknowledgement failed; GPU untouched"}, fmt.Errorf("mig-rebind recovery phase update after eviction: %w", err)
+	}
+	releaseTimeout := defaultAllocationWait
+	if provider, ok := auth.(interface{ allocationReleaseTimeout() time.Duration }); ok {
+		releaseTimeout = provider.allocationReleaseTimeout()
+	}
+	if err := waitAllocationRelease(ctx, auth, binding, releaseTimeout); err != nil {
+		receipt.Phase, receipt.Outcome = "unresolved", "allocation-release-unconfirmed"
+		return HandlerResult{Emitted: true, MutationKind: "partial", ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}, Note: "pod eviction submitted; allocation release unconfirmed; GPU untouched"}, errors.Join(err, migRecoveryAdvance(ctx, ec, journal, receipt))
 	}
 	recheck, err := mig.Capture(ctx, prior.GPUUUID, profile)
 	if err != nil || !sameMIGGeometry(recheck, prior) {
@@ -538,7 +575,10 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	// prepared execNodeRunner transport. Preparation already bound one validated agent identity, so
 	// reaching here means the pod was evicted for a real attempt through that same session.
 	stillOwned := func(guardCtx context.Context) error {
-		return migRecoveryRequireOwned(guardCtx, ec, journal, receipt, receipt.TargetLabels)
+		if err := migRecoveryRequireOwned(guardCtx, ec, journal, receipt, receipt.TargetLabels); err != nil {
+			return err
+		}
+		return auth.RevalidateAllocation(guardCtx, binding, false)
 	}
 	effect, repErr := mig.Repartition(ctx, prior, profile, stillOwned)
 	if repErr != nil {
@@ -572,7 +612,7 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	return HandlerResult{
 		Emitted: true, MutationKind: "swap", RollbackRef: req.Namespace + "/" + req.Pod,
 		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod), objRef("Node", "", node)},
-		Note:           fmt.Sprintf("mig-rebind: %s, GPU %s geometry verified as %s [PENDING-GPU-VALIDATION]: workload placement, CUDA state, serving health, and VRAM magnitudes unvalidated", evictNote, gpuID, profile),
+		Note:           fmt.Sprintf("mig-rebind: %s, allocated device %s on physical GPU %s verified as %s [PENDING-GPU-VALIDATION]: allocation observation is not an atomic scheduler reservation; workload placement, CUDA state, serving health, and VRAM magnitudes unvalidated", evictNote, binding.DeviceID, binding.GPUUUID, profile),
 	}, nil
 }
 

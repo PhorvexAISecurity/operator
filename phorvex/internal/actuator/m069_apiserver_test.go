@@ -235,7 +235,7 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		pod := m069Create(t, c, fixture)
 		wc, r := m069Wrap(t, c, "infer")
 		mm := &mockMIG{}
-		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, m069Request(t, c, pod, model.ActionMIGRebind))
+		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: wc, Reader: wc, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfilesFor(ns)}, m069Request(t, c, pod, model.ActionMIGRebind))
 		if err == nil || !errors.Is(err, errPodReplaced) || !hr.Emitted || hr.MutationKind != "partial" {
 			t.Fatalf("rejected MIG eviction must report the prior relabel as a truthful partial effect: err=%v hr=%+v", err, hr)
 		}
@@ -251,7 +251,7 @@ func TestM069APIServerNameReuse(t *testing.T) {
 		fixture.Spec.NodeName = ns
 		pod := m069Create(t, c, fixture)
 		mm := &mockMIG{}
-		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, m069Request(t, c, pod, model.ActionMIGRebind))
+		hr, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfilesFor(ns)}, m069Request(t, c, pod, model.ActionMIGRebind))
 		if err != nil || !hr.Emitted || len(mm.calls) != 1 {
 			t.Fatalf("unchanged identity must evict and repartition: %+v %v calls=%v", hr, err, mm.calls)
 		}

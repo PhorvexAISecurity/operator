@@ -348,8 +348,8 @@ func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action
 func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 	switch action {
 	case model.ActionMIGRebind:
-		if !(pod.MIGDevice != "" && pod.Node != "" && pod.MIGGPUID != "" && pod.MIGTargetProfile != "") {
-			return "pod has no MIG device, scheduled node, GPU id, and target profile"
+		if !(pod.MIGDevice != "" && pod.Node != "") {
+			return "pod has no MIG resource allocation or scheduled node"
 		}
 	case model.ActionWarmSwap:
 		return w.warmPoolWhy(pod, pod.Labels[labelSwapGroup], w.idx.warmShadowGroups, "matching swap-group")
@@ -487,7 +487,7 @@ func selectorMatches(selector, podLabels map[string]string) bool {
 
 func targetFrom(v *model.WorkloadView) actuator.Target {
 	return actuator.Target{
-		Namespace: v.Pod.Namespace, Pod: v.Pod.Name,
-		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU,
+		Namespace: v.Pod.Namespace, Pod: v.Pod.Name, UID: v.Pod.UID,
+		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU, MIGResource: v.Pod.MIGDevice,
 	}
 }

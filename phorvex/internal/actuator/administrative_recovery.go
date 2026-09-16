@@ -180,7 +180,7 @@ type recoveryMIGSummary struct {
 }
 
 func (r recoveryMIGSummary) validSummary() bool {
-	return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "destructive" || r.Phase == "unresolved") && r.PolicyNamespace != "" && r.PolicyName != "" && r.PolicyUID != "" && r.TargetName != "" && r.TargetUID != "" && r.Node != "" && r.GPUUUID != ""
+	return (r.Version == 1 || r.Version == 2) && (r.Phase == "prepared" || r.Phase == "destructive" || r.Phase == "unresolved") && r.PolicyNamespace != "" && r.PolicyName != "" && r.PolicyUID != "" && r.TargetName != "" && r.TargetUID != "" && r.Node != "" && r.GPUUUID != ""
 }
 
 func recoveryMIGName(node, gpuUUID string) string {
@@ -188,13 +188,13 @@ func recoveryMIGName(node, gpuUUID string) string {
 	return fmt.Sprintf("phorvex-mig-recovery-%x", h[:20])
 }
 
-func (n *NativeActuator) listRecoveryLabel(ctx context.Context, operatorNS, label string) ([]corev1.ConfigMap, error) {
+func (n *NativeActuator) listRecoveryLabel(ctx context.Context, operatorNS, label, value string) ([]corev1.ConfigMap, error) {
 	items := make([]corev1.ConfigMap, 0)
 	continueToken := ""
 	seenTokens := map[string]bool{}
 	for {
 		var page corev1.ConfigMapList
-		opts := []client.ListOption{client.InNamespace(operatorNS), client.MatchingLabels{label: "v1"}, client.Limit(recoveryJournalPageSize)}
+		opts := []client.ListOption{client.InNamespace(operatorNS), client.MatchingLabels{label: value}, client.Limit(recoveryJournalPageSize)}
 		if continueToken != "" {
 			opts = append(opts, client.Continue(continueToken))
 		}
@@ -225,14 +225,19 @@ func (n *NativeActuator) InventoryRecovery(ctx context.Context, scope RecoverySc
 	if err != nil {
 		return RecoveryInventory{}, err
 	}
-	journalCMs, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, journalLabel)
+	journalCMs, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, journalLabel, "v1")
 	if err != nil {
 		return RecoveryInventory{}, err
 	}
-	migCMs, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, recoveryMIGLabel)
+	migV1, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, recoveryMIGLabel, "v1")
 	if err != nil {
 		return RecoveryInventory{}, err
 	}
+	migV2, err := n.listRecoveryLabel(ctx, scope.OperatorNamespace, recoveryMIGLabel, "v2")
+	if err != nil {
+		return RecoveryInventory{}, err
+	}
+	migCMs := append(migV1, migV2...)
 	if len(journalCMs)+len(migCMs) > RecoveryJournalScanMax {
 		return RecoveryInventory{}, fmt.Errorf("combined protected receipt scan exceeds fixed cap=%d", RecoveryJournalScanMax)
 	}
@@ -287,7 +292,7 @@ func (n *NativeActuator) InventoryRecovery(ctx context.Context, scope RecoverySc
 		}
 		if d.mig {
 			var summary recoveryMIGSummary
-			if cm.Namespace != scope.OperatorNamespace || cm.UID == "" || cm.ResourceVersion == "" || cm.DeletionTimestamp != nil || cm.Labels[recoveryMIGLabel] != "v1" || json.Unmarshal([]byte(raw), &summary) != nil || !summary.validSummary() || cm.Name != recoveryMIGName(summary.Node, summary.GPUUUID) {
+			if cm.Namespace != scope.OperatorNamespace || cm.UID == "" || cm.ResourceVersion == "" || cm.DeletionTimestamp != nil || (cm.Labels[recoveryMIGLabel] != "v1" && cm.Labels[recoveryMIGLabel] != "v2") || json.Unmarshal([]byte(raw), &summary) != nil || !summary.validSummary() || cm.Name != recoveryMIGName(summary.Node, summary.GPUUUID) {
 				item.Reason = "malformed or identity-invalid protected MIG receipt"
 				if err := appendScoped(item); err != nil {
 					return RecoveryInventory{}, err

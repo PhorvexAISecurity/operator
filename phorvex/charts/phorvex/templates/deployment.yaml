@@ -67,6 +67,27 @@ spec:
         {{- if .Values.phorvex.loraCleanSources.content }}
         - --lora-clean-sources-file={{ .Values.phorvex.loraCleanSources.mountPath }}
         {{- end }}
+        {{- if .Values.phorvex.mig.profiles.content }}
+        - --mig-profiles-file={{ .Values.phorvex.mig.profiles.mountPath }}
+        {{- end }}
+        {{- if .Values.phorvex.mig.nodeExec.enabled }}
+        {{- if not .Values.phorvex.mig.nodeExec.exclusiveMaintenance }}{{ fail "phorvex.mig.nodeExec.exclusiveMaintenance=true is required when enabling destructive MIG node exec" }}{{- end }}
+        {{- $agentNS := required "phorvex.mig.nodeExec.namespace is required when enabled" .Values.phorvex.mig.nodeExec.namespace }}
+        {{- $agentDS := required "phorvex.mig.nodeExec.daemonSetName is required when enabled" .Values.phorvex.mig.nodeExec.daemonSetName }}
+        {{- $agentSA := required "phorvex.mig.nodeExec.serviceAccountName is required when enabled" .Values.phorvex.mig.nodeExec.serviceAccountName }}
+        - --mig-node-exec=true
+        - --mig-agent-namespace={{ $agentNS }}
+        - --mig-agent-service-accounts={{ $agentSA }}
+        - --mig-agent-daemonset={{ $agentDS }}
+        - --mig-agent-gpu-container={{ .Values.phorvex.mig.nodeExec.gpuContainer }}
+        - --mig-agent-helper-container={{ .Values.phorvex.mig.nodeExec.helperContainer }}
+        - --mig-allocation-helper={{ .Values.phorvex.mig.nodeExec.allocationHelperPath }}
+        - --mig-allocation-socket={{ printf "%s/kubelet.sock" (.Values.phorvex.mig.nodeExec.podResourcesMountPath | trimSuffix "/") }}
+        - --mig-agent-exec-timeout={{ .Values.phorvex.mig.nodeExec.execTimeout }}
+        - --mig-allocation-read-timeout={{ .Values.phorvex.mig.nodeExec.allocationReadTimeout }}
+        - --mig-allocation-release-timeout={{ .Values.phorvex.mig.nodeExec.allocationReleaseTimeout }}
+        - --mig-exclusive-maintenance=true
+        {{- end }}
         - --gpu-envelope-max={{ .Values.phorvex.gpuEnvelopeMax }}
         {{- with .Values.phorvex.pcieClassCapacity }}
         - --pcie-class-table={{ toJson . }}
@@ -180,7 +201,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -211,8 +232,14 @@ spec:
           subPath: sources.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.mig.profiles.content }}
+        - name: mig-profiles
+          mountPath: {{ .Values.phorvex.mig.profiles.mountPath }}
+          subPath: profiles.json
+          readOnly: true
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content }}
+        {{- end }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -226,6 +253,14 @@ spec:
           items:
           - key: sources.json
             path: sources.json
+      {{- end }}
+      {{- if .Values.phorvex.mig.profiles.content }}
+      - name: mig-profiles
+        configMap:
+          name: {{ include "phorvex.fullname" . }}-mig-profiles
+          items:
+          - key: profiles.json
+            path: profiles.json
       {{- end }}
       {{- if .Values.phorvex.audit.enabled }}
       - name: audit

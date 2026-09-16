@@ -918,11 +918,11 @@ fixes:
     issues:
     - M-83
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t6-m083
-    head_sha: null
+    head_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
   T6-M168:
     directory: fixes/T6-M168
     aliases: []

@@ -18,26 +18,28 @@ import (
 const migRecoveryLabel = "phorvex.ai/mig-recovery"
 
 type migRecoveryReceipt struct {
-	Version         int               `json:"version"`
-	Phase           string            `json:"phase"`
-	PolicyNamespace string            `json:"policyNamespace"`
-	PolicyName      string            `json:"policyName"`
-	PolicyUID       string            `json:"policyUID"`
-	TargetName      string            `json:"targetName"`
-	TargetUID       string            `json:"targetUID"`
-	TargetLabels    map[string]string `json:"targetLabels"`
-	Node            string            `json:"node"`
-	GPUUUID         string            `json:"gpuUUID"`
-	TargetProfile   string            `json:"targetProfile"`
-	Prior           migGeometry       `json:"prior"`
-	Outcome         string            `json:"outcome,omitempty"`
+	Version         int                  `json:"version"`
+	Phase           string               `json:"phase"`
+	PolicyNamespace string               `json:"policyNamespace"`
+	PolicyName      string               `json:"policyName"`
+	PolicyUID       string               `json:"policyUID"`
+	TargetName      string               `json:"targetName"`
+	TargetUID       string               `json:"targetUID"`
+	TargetLabels    map[string]string    `json:"targetLabels"`
+	Node            string               `json:"node"`
+	GPUUUID         string               `json:"gpuUUID"`
+	TargetProfile   string               `json:"targetProfile"`
+	Binding         migAllocationBinding `json:"allocationBinding"`
+	Prior           migGeometry          `json:"prior"`
+	Outcome         string               `json:"outcome,omitempty"`
 }
 
 func (r migRecoveryReceipt) valid() bool {
-	return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "destructive" || r.Phase == "unresolved") &&
+	return r.Version == 2 && (r.Phase == "prepared" || r.Phase == "destructive" || r.Phase == "unresolved") &&
 		r.PolicyNamespace != "" && r.PolicyName != "" && r.PolicyUID != "" && r.TargetName != "" && r.TargetUID != "" && r.TargetLabels != nil &&
 		r.Node != "" && r.GPUUUID == r.Prior.GPUUUID && validMIGGeometry(r.Prior) &&
-		profilePattern.MatchString(r.TargetProfile)
+		profilePattern.MatchString(r.TargetProfile) && r.Binding.valid() && r.Binding.GPUUUID == r.GPUUUID && r.Binding.TargetProfile == r.TargetProfile &&
+		r.Binding.Namespace == r.PolicyNamespace && r.Binding.Pod == r.TargetName && r.Binding.PodUID == r.TargetUID && r.Binding.Node == r.Node
 }
 
 func migRecoveryName(node, uuid string) string {
@@ -62,7 +64,7 @@ func migRecoveryWrite(ctx context.Context, ec EnactCtx, r migRecoveryReceipt) (*
 	if err != nil {
 		return nil, err
 	}
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: ec.JournalNamespace, Name: name, Labels: map[string]string{migRecoveryLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: ec.JournalNamespace, Name: name, Labels: map[string]string{migRecoveryLabel: "v2"}}, Data: map[string]string{"receipt": string(b)}}
 	if err := ec.Client.Create(ctx, cm); err != nil {
 		return nil, err
 	}
@@ -103,7 +105,7 @@ func migRecoveryRequireOwned(ctx context.Context, ec EnactCtx, cm *corev1.Config
 	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: cm.Namespace, Name: cm.Name}, current); err != nil {
 		return err
 	}
-	if current.UID != cm.UID || current.ResourceVersion != cm.ResourceVersion || current.DeletionTimestamp != nil || current.Labels[migRecoveryLabel] != "v1" || current.Name != migRecoveryName(expected.Node, expected.GPUUUID) {
+	if current.UID != cm.UID || current.ResourceVersion != cm.ResourceVersion || current.DeletionTimestamp != nil || current.Labels[migRecoveryLabel] != "v2" || current.Name != migRecoveryName(expected.Node, expected.GPUUUID) {
 		return fmt.Errorf("MIG recovery receipt identity changed")
 	}
 	var recorded migRecoveryReceipt
