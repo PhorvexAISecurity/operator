@@ -35,7 +35,7 @@ export class ApiError extends Error {
   }
 }
 
-/** unauthenticated: the session is missing or expired — the ALB login has to run again. */
+/** unauthenticated: identity could not be verified (missing, expired, or rejected credentials). */
 export const isUnauthenticated = (e: unknown) => e instanceof ApiError && e.status === 401;
 /** unauthorized: signed in, but the server-side grant does not cover this. */
 export const isUnauthorized = (e: unknown) => e instanceof ApiError && e.status === 403;

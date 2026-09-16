@@ -1,0 +1,158 @@
+schema_version: 1
+intake_id: RPT-20260916-094500-console-recovery
+kind: INCIDENT
+title: Console production login and scan recovery
+state: FILED
+reporter: user
+approval_ref: User 2026-09-16 explicitly requests console-prd authentication, scans
+  and 0.4.119 deployment repair
+created_at: '2026-09-16T09:47:53+00:00'
+updated_at: '2026-09-16T09:50:26+00:00'
+pins:
+  source_main_sha: edb1caf15656b81441bd6a76ed66413e408855f0
+  source_release: 0.4.119
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console:0.4.118
+  deployed_digest: null
+  deployed_git_sha: null
+  environment: phorvex-dev-eks
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-167
+    score: 16
+    overlap:
+    - artifacts
+    - claim
+    - console
+    - errors
+    - evidence
+    - mutation
+    - not
+    - recovery
+    - required
+    - results
+    - separate
+    - zero
+    title: Shipped console storage configuration silently drops mutation and experiment
+      records
+  - issue_id: M-168
+    score: 15
+    overlap:
+    - console
+    - contract
+    - evidence
+    - not
+    - observation
+    - outcome
+    - recovery
+    - required
+    - results
+    title: Console availability experiment claims attack results despite failed stimulus
+      and unsafe restart recovery
+  - issue_id: M-146
+    score: 14
+    overlap:
+    - any
+    - claim
+    - evidence
+    - here
+    - inputs
+    - missing
+    - not
+    - raw
+    - record
+    - zero
+    title: '`omitempty` on eleven numeric audit fields erases measured zeros — the
+      audit record cannot distinguish "0" from "not computed"'
+  - issue_id: M-136
+    score: 13
+    overlap:
+    - any
+    - console
+    - evidence
+    - logs
+    - mutation
+    - not
+    - production
+    - read
+    - zero
+    title: The console's authentication is optional and fails OPEN — with mutation
+      endpoints that shell out to kubectl
+  - issue_id: M-144
+    score: 12
+    overlap:
+    - any
+    - claim
+    - evidence
+    - first
+    - not
+    - observation
+    - observed
+    - production
+    - read
+    - retained
+    - separate
+    - zero
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-176
+  fix_id: CONSOLE-RECOVERY
+  approval_ref: User 2026-09-16 console recovery and deployment repair request
+roles:
+  human_owner: human-owner
+  investigator: console-recovery-lead
+  coordinator: console-recovery-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-176.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-09-16T09:49:22+00:00'
+  by: console-recovery-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-09-16T09:49:22+00:00'
+  by: console-recovery-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-09-16T09:49:34+00:00'
+  by: console-recovery-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-09-16T09:49:34+00:00'
+  by: console-recovery-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-09-16T09:50:26+00:00'
+  by: console-recovery-lead
+  artifact: issues/entries/M-176.md
+  approval_ref: User 2026-09-16 console recovery and deployment repair request
+  human_ruling_ref: null
+  forced: false
+revision: 4

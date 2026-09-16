@@ -835,3 +835,14 @@ fixes:
     stacked_on: []
     branch: fix/t5-m170
     head_sha: e42b23def1398b84e42be9536c0c4d0370afa7d8
+  CONSOLE-RECOVERY:
+    directory: fixes/CONSOLE-RECOVERY
+    aliases: []
+    issues:
+    - M-176
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/console-session-scan-recovery
+    head_sha: null

@@ -22,6 +22,8 @@ spec:
   # overlapping old and new console writers on the same claim.
   strategy:
     type: Recreate
+    # Explicitly clear the old RollingUpdate fields during an in-place migration.
+    rollingUpdate: null
   selector:
     matchLabels:
       app.kubernetes.io/name: phorvex-console
@@ -90,6 +92,10 @@ spec:
         {{- if .signerArn }}
         - name: PHORVEX_CONSOLE_ALB_SIGNER_ARN
           value: {{ .signerArn | quote }}
+        {{- if .additionalSignerArns }}
+        - name: PHORVEX_CONSOLE_ALB_ADDITIONAL_SIGNER_ARNS
+          value: {{ join "," .additionalSignerArns | quote }}
+        {{- end }}
         - name: PHORVEX_CONSOLE_ALB_ISSUER
           value: {{ required "console.auth.alb.issuer is required when signerArn is set" .issuer | quote }}
         - name: PHORVEX_CONSOLE_ALB_CLIENT_ID

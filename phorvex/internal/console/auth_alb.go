@@ -78,6 +78,9 @@ type ALBConfig struct {
 	// SignerARN is the exact load-balancer ARN whose signature is trusted, e.g.
 	// arn:aws:elasticloadbalancing:us-east-2:<account>:loadbalancer/app/<name>/<id>
 	SignerARN string
+	// AdditionalSignerARNs explicitly trusts other ALBs for the same issuer/client,
+	// restricted to the primary signer account, partition and region.
+	AdditionalSignerARNs []string
 	// Issuer is the Cognito user-pool issuer URL the ALB stamps into `iss`.
 	Issuer string
 	// ClientID is the user-pool app-client id the ALB stamps into `client`.
@@ -97,7 +100,7 @@ func (c ALBConfig) validate() (ALBConfig, error) {
 	if c.SignerARN == "" {
 		return c, fmt.Errorf("alb config: signer ARN is required")
 	}
-	if !strings.HasPrefix(c.SignerARN, "arn:") || !strings.Contains(c.SignerARN, ":loadbalancer/app/") {
+	if !validALBARN(c.SignerARN) {
 		return c, fmt.Errorf("alb config: signer %q is not an application load balancer ARN", c.SignerARN)
 	}
 	if c.Issuer == "" {
@@ -112,6 +115,23 @@ func (c ALBConfig) validate() (ALBConfig, error) {
 	if !awsRegionRe.MatchString(c.Region) {
 		return c, fmt.Errorf("alb config: region %q is not a valid AWS region", c.Region)
 	}
+	if c.Region != regionFromARN(c.SignerARN) {
+		return c, fmt.Errorf("alb config: region must match signer ARN")
+	}
+	primary := strings.Split(c.SignerARN, ":")
+	additional := make([]string, 0, len(c.AdditionalSignerARNs))
+	for _, signer := range c.AdditionalSignerARNs {
+		signer = strings.TrimSpace(signer)
+		if !validALBARN(signer) {
+			return c, fmt.Errorf("alb config: invalid additional signer ARN %q", signer)
+		}
+		parts := strings.Split(signer, ":")
+		if parts[1] != primary[1] || parts[3] != primary[3] || parts[4] != primary[4] {
+			return c, fmt.Errorf("alb config: additional signer must share primary partition, region and account")
+		}
+		additional = append(additional, signer)
+	}
+	c.AdditionalSignerARNs = additional
 	if c.Leeway <= 0 {
 		c.Leeway = 60 * time.Second
 	}
@@ -119,6 +139,29 @@ func (c ALBConfig) validate() (ALBConfig, error) {
 		return c, fmt.Errorf("alb config: leeway %s exceeds the 5m bound", c.Leeway)
 	}
 	return c, nil
+}
+
+func validALBARN(arn string) bool {
+	parts := strings.Split(arn, ":")
+	if len(parts) != 6 || parts[0] != "arn" || parts[1] == "" || parts[2] != "elasticloadbalancing" || !awsRegionRe.MatchString(parts[3]) {
+		return false
+	}
+	if !regexp.MustCompile(`^[0-9]{12}$`).MatchString(parts[4]) {
+		return false
+	}
+	return regexp.MustCompile(`^loadbalancer/app/[A-Za-z0-9-]+/[A-Za-z0-9]+$`).MatchString(parts[5])
+}
+
+func (c ALBConfig) trustsSigner(signer string) bool {
+	if signer == c.SignerARN {
+		return true
+	}
+	for _, allowed := range c.AdditionalSignerARNs {
+		if signer == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 // regionFromARN extracts field 4 of an ARN (arn:partition:service:region:account:resource).
@@ -230,7 +273,7 @@ func (v *ALBVerifier) Verify(ctx context.Context, token string) (issuer, subject
 		return "", "", errALBAlg
 	}
 	// (2)(3) the trust fields: this load balancer, this user pool, this app client.
-	if h.Signer != v.cfg.SignerARN {
+	if !v.cfg.trustsSigner(h.Signer) {
 		return "", "", errALBSigner
 	}
 	if h.Iss != v.cfg.Issuer {
