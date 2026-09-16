@@ -397,6 +397,33 @@ jobs:
           fi
           echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
 
+      - name: Open the console tunnel on the jump host and mint the E2E credential
+        # CONSOLE-AUTH.md "DevOps handoff" items 1-4, automated per run and owned by this
+        # workflow, not by the pipeline: a loopback port-forward to the in-cluster console
+        # on the SSH transport host (the only place the bearer may travel over plain HTTP),
+        # and a short-lived projected token for the chart's console-e2e ServiceAccount with
+        # the console audience. The token never touches argv, a file or a log: it is minted
+        # remotely, masked, and handed to the pipeline through the environment only. The
+        # tunnel is closed by the step at the end of this job whether the run passed or not.
+        id: console
+        env:
+          SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
+          USER_:   ${{ secrets.PHORVEX_SSH_USER }}
+          PORT:    "18090"
+        run: |
+          set -euo pipefail
+          SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
+          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80' 2>/dev/null; \
+                nohup kubectl -n phorvex-system port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80 >/dev/null 2>&1 & \
+                for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q '"ok":true' && exit 0; done; \
+                echo 'console tunnel did not come up' >&2; exit 1"
+          TOKEN="$($SSH "kubectl -n phorvex-system create token phorvex-phorvex-console-e2e --audience phorvex-console --duration 1h")"
+          [ -n "$TOKEN" ] || { echo "::error::could not mint the console E2E token"; exit 1; }
+          echo "::add-mask::$TOKEN"
+          echo "PHORVEX_CONSOLE_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "PHORVEX_CONSOLE_BASE=http://127.0.0.1:${PORT}" >> "$GITHUB_ENV"
+
       - name: Run End-to-End
         id: e2e
         env:
@@ -406,9 +433,9 @@ jobs:
           # The console credential and endpoint (see the secrets block at the top). The
           # pipeline scrubs the token from every child environment and sends it to curl on
           # stdin; it is never an argument. Unset inputs fail preflight closed.
-          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE }}
+          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE || env.PHORVEX_CONSOLE_BASE }}
           PHORVEX_CONSOLE_CA_FILE: ${{ vars.PHORVEX_CONSOLE_CA_FILE }}
-          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN }}
+          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN || env.PHORVEX_CONSOLE_TOKEN }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
         working-directory: End-to-End
@@ -431,6 +458,16 @@ jobs:
           RC="${STATUS[0]}"
           if [ "${STATUS[1]}" != "0" ] && [ "$RC" = "0" ]; then RC=2; fi
           echo "verdict_rc=$RC" >> "$GITHUB_OUTPUT"
+
+      - name: Close the console tunnel on the jump host
+        if: always() && steps.console.outcome != 'skipped'
+        env:
+          SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
+          USER_:   ${{ secrets.PHORVEX_SSH_USER }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
+            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console 18090:80' 2>/dev/null || true"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -782,6 +819,33 @@ jobs:
           fi
           echo "PHORVEX_SSH_KNOWN_HOSTS=$KH" >> "$GITHUB_ENV"
 
+      - name: Open the console tunnel on the jump host and mint the E2E credential
+        # CONSOLE-AUTH.md "DevOps handoff" items 1-4, automated per run and owned by this
+        # workflow, not by the pipeline: a loopback port-forward to the in-cluster console
+        # on the SSH transport host (the only place the bearer may travel over plain HTTP),
+        # and a short-lived projected token for the chart's console-e2e ServiceAccount with
+        # the console audience. The token never touches argv, a file or a log: it is minted
+        # remotely, masked, and handed to the pipeline through the environment only. The
+        # tunnel is closed by the step at the end of this job whether the run passed or not.
+        id: console
+        env:
+          SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
+          USER_:   ${{ secrets.PHORVEX_SSH_USER }}
+          PORT:    "18090"
+        run: |
+          set -euo pipefail
+          SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
+          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80' 2>/dev/null; \
+                nohup kubectl -n phorvex-system port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80 >/dev/null 2>&1 & \
+                for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q '"ok":true' && exit 0; done; \
+                echo 'console tunnel did not come up' >&2; exit 1"
+          TOKEN="$($SSH "kubectl -n phorvex-system create token phorvex-phorvex-console-e2e --audience phorvex-console --duration 1h")"
+          [ -n "$TOKEN" ] || { echo "::error::could not mint the console E2E token"; exit 1; }
+          echo "::add-mask::$TOKEN"
+          echo "PHORVEX_CONSOLE_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "PHORVEX_CONSOLE_BASE=http://127.0.0.1:${PORT}" >> "$GITHUB_ENV"
+
       - name: Run End-to-End against the deployed version
         id: e2e
         env:
@@ -790,9 +854,9 @@ jobs:
           PHORVEX_SSH_PASSWORD: ${{ secrets.PHORVEX_SSH_PASSWORD }}
           # The console credential and endpoint (see the secrets block at the top); the same
           # inputs as the PR-time job. Unset inputs fail preflight closed.
-          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE }}
+          PHORVEX_CONSOLE_BASE:    ${{ vars.PHORVEX_CONSOLE_BASE || env.PHORVEX_CONSOLE_BASE }}
           PHORVEX_CONSOLE_CA_FILE: ${{ vars.PHORVEX_CONSOLE_CA_FILE }}
-          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN }}
+          PHORVEX_CONSOLE_TOKEN:   ${{ secrets.PHORVEX_CONSOLE_TOKEN || env.PHORVEX_CONSOLE_TOKEN }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
           V:                    ${{ needs.deploy.outputs.version }}
@@ -810,6 +874,16 @@ jobs:
           RC="${STATUS[0]}"
           if [ "${STATUS[1]}" != "0" ] && [ "$RC" = "0" ]; then RC=2; fi
           echo "verdict_rc=$RC" >> "$GITHUB_OUTPUT"
+
+      - name: Close the console tunnel on the jump host
+        if: always() && steps.console.outcome != 'skipped'
+        env:
+          SSHPASS: ${{ secrets.PHORVEX_SSH_PASSWORD }}
+          HOST:    ${{ secrets.PHORVEX_SSH_HOST }}
+          USER_:   ${{ secrets.PHORVEX_SSH_USER }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
+            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console 18090:80' 2>/dev/null || true"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish

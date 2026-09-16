@@ -313,6 +313,12 @@ phorvex:
         audience: ""
         jwksUrl: ""
         algorithms: []  # default ["RS256"]; RS256/384/512 and ES256/384/512 are supported
+      # The End-to-End pipeline's machine identity: a token-less ServiceAccount whose
+      # short-lived projected tokens (audience = oidc.audience) CI mints per run. Requires
+      # oidc.* to point at the cluster's own OIDC issuer and a grant for
+      # system:serviceaccount:<namespace>:<fullname>-console-e2e (see values-eks.yaml).
+      e2eIdentity:
+        enabled: false
       # Exact browser origins allowed to drive state changes (the same-origin/CSRF boundary).
       # There is no wildcard: an unlisted origin gets neither a CORS grant nor a mutation.
       trustedOrigins: []
