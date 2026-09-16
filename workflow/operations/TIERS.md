@@ -90,6 +90,12 @@ implementation while unavailable Tier1/2 live controls remain pending. See
 assessments/20260915-tier3/AUTHORIZATION.md. This changes scheduling for Tier3
 only; it grants no live evidence waiver or shared deployment authority.
 
+The owner's September 16 instruction also explicitly starts Tier6 while the
+remaining Tier5 behavioral live controls are pending. See
+assessments/20260916-tier6/AUTHORIZATION.md. This is a Tier6 scheduling exception;
+the pending controls and production HOLD remain in force. It does not waive
+live evidence or authorize deployment or shared infrastructure changes.
+
 ## Durable handover and final evidence
 
 Persist assessment coverage, source/deployment pins, issue reconciliation, the
