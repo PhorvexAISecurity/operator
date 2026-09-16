@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/phorvex/phorvex/internal/podresources"
 )
 
 // Configurable serving-stack routes (per-pod annotations override; defaults are vLLM-shaped and
@@ -38,7 +42,7 @@ const (
 	annoKVInvalidate  = "phorvex.ai/kv-invalidate-path"
 	defaultUnloadPath = "/v1/unload_lora_adapter"
 	defaultLoadPath   = "/v1/load_lora_adapter"
-	defaultDrainPath  = "/v1/drain"           // [PENDING-GPU-VALIDATION] no standard vLLM drain-all; deployment-specific
+	defaultDrainPath  = "/v1/drain"            // [PENDING-GPU-VALIDATION] no standard vLLM drain-all; deployment-specific
 	defaultGuardPath  = "/v1/guardrail/reload" // [PENDING-GPU-VALIDATION] guardrail-service specific
 	defaultKVInvPath  = "/v1/kv/invalidate"    // [PENDING-GPU-VALIDATION] disaggregation-connector specific
 )
@@ -226,11 +230,104 @@ type execNodeRunner struct {
 	client kubernetes.Interface
 	exec   execInPodFunc
 	policy MIGAgentPolicy
+	cache  *migObservationCache
+}
+
+type migObservationCache struct {
+	mu          sync.Mutex
+	allocations map[string]cachedAllocations
+	inventories map[string]cachedInventory
+}
+type cachedAllocations struct {
+	at    time.Time
+	value podresources.Snapshot
+}
+type cachedInventory struct {
+	at    time.Time
+	value string
+}
+
+const (
+	migObservationCacheTTL        = 2 * time.Second
+	maxMIGObservationCacheEntries = 32
+)
+
+func (c *migObservationCache) pruneLocked(now time.Time) {
+	for key, cached := range c.allocations {
+		if now.Sub(cached.at) > migObservationCacheTTL {
+			delete(c.allocations, key)
+		}
+	}
+	for key, cached := range c.inventories {
+		if now.Sub(cached.at) > migObservationCacheTTL {
+			delete(c.inventories, key)
+		}
+	}
+}
+
+func (c *migObservationCache) allocation(key string) (podresources.Snapshot, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	c.pruneLocked(now)
+	cached, ok := c.allocations[key]
+	return cached.value, ok && now.Sub(cached.at) <= migObservationCacheTTL
+}
+
+func (c *migObservationCache) inventory(key string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	c.pruneLocked(now)
+	cached, ok := c.inventories[key]
+	return cached.value, ok && now.Sub(cached.at) <= migObservationCacheTTL
+}
+
+func (c *migObservationCache) storeAllocation(key string, value podresources.Snapshot) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.allocations == nil {
+		c.allocations = make(map[string]cachedAllocations)
+	}
+	now := time.Now()
+	c.pruneLocked(now)
+	if _, exists := c.allocations[key]; !exists && len(c.allocations) >= maxMIGObservationCacheEntries {
+		return
+	}
+	c.allocations[key] = cachedAllocations{at: now, value: value}
+}
+
+func (c *migObservationCache) storeInventory(key, value string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.inventories == nil {
+		c.inventories = make(map[string]cachedInventory)
+	}
+	now := time.Now()
+	c.pruneLocked(now)
+	if _, exists := c.inventories[key]; !exists && len(c.inventories) >= maxMIGObservationCacheEntries {
+		return
+	}
+	c.inventories[key] = cachedInventory{at: now, value: value}
+}
+
+type migCapabilityProbeKey struct{}
+
+func migCapabilityProbe(ctx context.Context) context.Context {
+	return context.WithValue(ctx, migCapabilityProbeKey{}, true)
+}
+func isMIGCapabilityProbe(ctx context.Context) bool {
+	v, _ := ctx.Value(migCapabilityProbeKey{}).(bool)
+	return v
+}
+
+func (r *boundNodeRunner) observationCacheKey() string {
+	return r.ref.node + "\x00" + string(r.ref.daemonSetUID) + "\x00" + string(r.ref.uid)
 }
 
 type agentRef struct {
-	namespace, name, container, node string
-	uid, daemonSetUID                types.UID
+	namespace, name, container, allocationContainer, node string
+	uid, daemonSetUID                                     types.UID
 }
 
 type boundNodeRunner struct {
@@ -238,6 +335,7 @@ type boundNodeRunner struct {
 	exec   execInPodFunc
 	policy MIGAgentPolicy
 	ref    agentRef
+	cache  *migObservationCache
 }
 
 // Prepare resolves exactly one trusted pod through direct API reads and binds its identity for the
@@ -269,13 +367,13 @@ func (r execNodeRunner) Prepare(ctx context.Context, node string) (preparedNodeR
 	for i := range pods.Items {
 		p := &pods.Items[i]
 		if r.validPod(p, ds, selector, node, "") == nil {
-			matches = append(matches, agentRef{namespace: p.Namespace, name: p.Name, uid: p.UID, container: r.policy.Container, node: node, daemonSetUID: ds.UID})
+			matches = append(matches, agentRef{namespace: p.Namespace, name: p.Name, uid: p.UID, container: r.policy.Container, allocationContainer: r.policy.AllocationContainer, node: node, daemonSetUID: ds.UID})
 		}
 	}
 	if len(matches) != 1 {
 		return nil, fmt.Errorf("MIG node-agent selection on node %q: require exactly one trusted candidate, got %d", node, len(matches))
 	}
-	return &boundNodeRunner{client: r.client, exec: r.exec, policy: r.policy, ref: matches[0]}, nil
+	return &boundNodeRunner{client: r.client, exec: r.exec, policy: r.policy, ref: matches[0], cache: r.cache}, nil
 }
 
 func (r execNodeRunner) validPod(p *corev1.Pod, ds *appsv1.DaemonSet, selector labels.Selector, node string, uid types.UID) error {
@@ -292,7 +390,7 @@ func (r execNodeRunner) validPod(p *corev1.Pod, ds *appsv1.DaemonSet, selector l
 			break
 		}
 	}
-	if !allowed || !podHasContainer(p, r.policy.Container) || !migAgentReady(p) {
+	if !allowed || !podHasContainer(p, r.policy.Container) || !podHasContainer(p, r.policy.AllocationContainer) || !migAgentReady(p) {
 		return fmt.Errorf("pod service account, container, or readiness mismatch")
 	}
 	for _, owner := range p.OwnerReferences {
@@ -301,6 +399,22 @@ func (r execNodeRunner) validPod(p *corev1.Pod, ds *appsv1.DaemonSet, selector l
 		}
 	}
 	return fmt.Errorf("pod is not controlled by configured DaemonSet UID")
+}
+
+func (r *boundNodeRunner) revalidate(ctx context.Context) error {
+	ds, err := r.client.AppsV1().DaemonSets(r.ref.namespace).Get(ctx, r.policy.DaemonSet, metav1.GetOptions{})
+	if err != nil || ds.UID != r.ref.daemonSetUID || ds.DeletionTimestamp != nil {
+		return fmt.Errorf("revalidate MIG agent DaemonSet identity: uid=%q err=%v", daemonSetUID(ds), err)
+	}
+	pod, err := r.client.CoreV1().Pods(r.ref.namespace).Get(ctx, r.ref.name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("revalidate MIG agent pod %s/%s: %w", r.ref.namespace, r.ref.name, err)
+	}
+	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
+	if err != nil || (execNodeRunner{policy: r.policy}).validPod(pod, ds, selector, r.ref.node, r.ref.uid) != nil {
+		return fmt.Errorf("revalidate MIG agent pod %s/%s: bound identity or readiness changed", r.ref.namespace, r.ref.name)
+	}
+	return nil
 }
 
 func podHasContainer(p *corev1.Pod, name string) bool {
@@ -322,23 +436,53 @@ func migAgentReady(p *corev1.Pod) bool {
 }
 
 func (r *boundNodeRunner) Run(ctx context.Context, argv ...string) (string, error) {
-	ds, err := r.client.AppsV1().DaemonSets(r.ref.namespace).Get(ctx, r.policy.DaemonSet, metav1.GetOptions{})
-	if err != nil || ds.UID != r.ref.daemonSetUID || ds.DeletionTimestamp != nil {
-		return "", fmt.Errorf("revalidate MIG agent DaemonSet identity: uid=%q err=%v", daemonSetUID(ds), err)
+	if err := r.revalidate(ctx); err != nil {
+		return "", err
 	}
-	pod, err := r.client.CoreV1().Pods(r.ref.namespace).Get(ctx, r.ref.name, metav1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("revalidate MIG agent pod %s/%s: %w", r.ref.namespace, r.ref.name, err)
-	}
-	selector, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
-	if err != nil || (execNodeRunner{policy: r.policy}).validPod(pod, ds, selector, r.ref.node, r.ref.uid) != nil {
-		return "", fmt.Errorf("revalidate MIG agent pod %s/%s: bound identity or readiness changed", r.ref.namespace, r.ref.name)
+	capabilityInventory := isMIGCapabilityProbe(ctx) && len(argv) == 2 && argv[0] == "nvidia-smi" && argv[1] == "-L" && r.cache != nil
+	if capabilityInventory {
+		key := r.observationCacheKey()
+		if cached, ok := r.cache.inventory(key); ok {
+			return cached, nil
+		}
 	}
 	execCtx, cancel := context.WithTimeout(ctx, r.policy.ExecTimeout)
 	defer cancel()
 	// pods/exec is name-addressed and has no UID precondition. This direct GET narrows but cannot
 	// eliminate the GET-to-POST replacement race; the configured namespace must be protected.
-	return r.exec(execCtx, r.ref.namespace, r.ref.name, r.ref.container, argv)
+	out, err := r.exec(execCtx, r.ref.namespace, r.ref.name, r.ref.container, argv)
+	if err == nil && capabilityInventory {
+		r.cache.storeInventory(r.observationCacheKey(), out)
+	}
+	return out, err
+}
+
+func (r *boundNodeRunner) Allocations(ctx context.Context) (podresources.Snapshot, error) {
+	if err := r.revalidate(ctx); err != nil {
+		return podresources.Snapshot{}, err
+	}
+	if isMIGCapabilityProbe(ctx) && r.cache != nil {
+		key := r.observationCacheKey()
+		if cached, ok := r.cache.allocation(key); ok {
+			return cached, nil
+		}
+	}
+	execCtx, cancel := context.WithTimeout(ctx, r.policy.ExecTimeout)
+	defer cancel()
+	out, err := r.exec(execCtx, r.ref.namespace, r.ref.name, r.ref.allocationContainer,
+		[]string{r.policy.AllocationHelper, "--socket", r.policy.AllocationSocket, "--timeout", r.policy.ExecTimeout.String()})
+	if err != nil {
+		return podresources.Snapshot{}, fmt.Errorf("read node PodResources: %w", err)
+	}
+	s, err := podresources.Decode([]byte(out))
+	if err == nil && isMIGCapabilityProbe(ctx) && r.cache != nil {
+		r.cache.storeAllocation(r.observationCacheKey(), s)
+	}
+	return s, err
+}
+
+func (r *boundNodeRunner) allocationReleaseTimeout() time.Duration {
+	return r.policy.AllocationReleaseTimeout
 }
 
 func daemonSetUID(ds *appsv1.DaemonSet) types.UID {
@@ -351,7 +495,7 @@ func daemonSetUID(ds *appsv1.DaemonSet) types.UID {
 // ---- EnactCtx resolvers (injected client or real default) ----
 
 var (
-	pkgGuardrail guardrailController = httpGuardrail{v: newHTTPVLLM()}
+	pkgGuardrail guardrailController  = httpGuardrail{v: newHTTPVLLM()}
 	pkgKVXfer    kvTransferController = httpKVTransfer{v: newHTTPVLLM()}
 )
 

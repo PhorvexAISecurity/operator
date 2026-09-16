@@ -1,0 +1,111 @@
+{{- if .Values.phorvex.mig.nodeExec.enabled }}
+{{- $cfg := .Values.phorvex.mig.nodeExec }}
+{{- $ns := required "phorvex.mig.nodeExec.namespace is required when enabled" $cfg.namespace }}
+{{- $ds := required "phorvex.mig.nodeExec.daemonSetName is required when enabled" $cfg.daemonSetName }}
+{{- $sa := required "phorvex.mig.nodeExec.serviceAccountName is required when enabled" $cfg.serviceAccountName }}
+{{- $repo := required "phorvex.mig.nodeExec.gpuImage.repository is required when enabled; supply a pinned vendor image" $cfg.gpuImage.repository }}
+{{- $digest := required "phorvex.mig.nodeExec.gpuImage.digest is required when enabled; supply the vendor image sha256 digest" $cfg.gpuImage.digest }}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" $digest) }}{{ fail "phorvex.mig.nodeExec.gpuImage.digest must be sha256:<64 lowercase hex>" }}{{- end }}
+{{- if eq (len $cfg.gpuCommand) 0 }}{{ fail "phorvex.mig.nodeExec.gpuCommand is required when enabled" }}{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $ds }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $ds }}
+      phorvex.ai/mig-agent: "true"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $ds }}
+        phorvex.ai/mig-agent: "true"
+    spec:
+      serviceAccountName: {{ $sa }}
+      {{- with $cfg.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
+      containers:
+      - name: {{ $cfg.gpuContainer }}
+        image: "{{ $repo }}@{{ $digest }}"
+        imagePullPolicy: {{ $cfg.gpuImage.pullPolicy }}
+        command:
+{{ toYaml $cfg.gpuCommand | indent 8 }}
+        env:
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        securityContext:
+          privileged: true
+      - name: {{ $cfg.helperContainer }}
+        image: "{{ $.Values.phorvex.image.repository }}:{{ $.Values.phorvex.image.tag }}"
+        imagePullPolicy: {{ $.Values.phorvex.image.pullPolicy }}
+        command: [{{ $cfg.allocationHelperPath | quote }}]
+        args: ["--idle"]
+        securityContext:
+          runAsUser: 0
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: pod-resources
+          mountPath: {{ $cfg.podResourcesMountPath }}
+          readOnly: true
+      volumes:
+      - name: pod-resources
+        hostPath:
+          path: {{ $cfg.podResourcesHostPath }}
+          type: Directory
+      {{- with $cfg.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with $cfg.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+---
+# Exact agent-namespace permission for the manager. No other namespace receives exec.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-mig-agent-client
+  namespace: {{ $ns }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets"]
+  resourceNames: [{{ $ds | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-mig-agent-client
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-mig-agent-client
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

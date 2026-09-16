@@ -249,13 +249,11 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 				t.Fatalf("identity-rotate must remain registered for historical rollback but unsupported for new dispatch: ok=%v registered=%v why=%q", ok, registered, why)
 			}
 		case model.ActionMIGRebind:
-			// The M-79 transport prerequisite is retained verbatim and takes precedence
-			// over a bare "supported" answer.
-			if NodeExecWired() != ok {
-				t.Fatalf("mig-rebind support must track the node-exec transport, wired=%v ok=%v", NodeExecWired(), ok)
+			if ok {
+				t.Fatal("mig-rebind cannot be supported without target allocation/profile evidence")
 			}
-			if !ok && why != ReasonTransportUnwired {
-				t.Fatalf("mig-rebind must keep the retained %q vocabulary, got %q", ReasonTransportUnwired, why)
+			if !NodeExecWired() && why != ReasonTransportUnwired {
+				t.Fatalf("unwired reason=%q", why)
 			}
 		default:
 			if ok != registered {

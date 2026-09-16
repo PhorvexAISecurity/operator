@@ -50,6 +50,7 @@ type EnactCtx struct {
 	Guardrail        guardrailController  // safety/guardrail-tier control plane; nil => real default
 	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
 	AdapterSources   AdapterSources
+	MIGProfiles      *MIGProfiles
 }
 
 // HandlerResult is the native effect record.

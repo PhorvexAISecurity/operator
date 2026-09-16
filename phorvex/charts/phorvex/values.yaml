@@ -122,6 +122,35 @@ phorvex:
   loraCleanSources:
     content: ""
     mountPath: /etc/phorvex-adapters/sources.json
+  # Destructive MIG repartition is disabled unless both an operator-owned exact
+  # profile map and the trusted two-container node agent are explicitly enabled.
+  mig:
+    profiles:
+      content: ""
+      mountPath: /etc/phorvex-mig/profiles.json
+    nodeExec:
+      enabled: false
+      # Explicit acknowledgement that an external scheduler/maintenance process
+      # prevents new allocations during the bounded repartition operation.
+      exclusiveMaintenance: false
+      namespace: ""
+      daemonSetName: ""
+      serviceAccountName: ""
+      gpuContainer: gpu-tools
+      helperContainer: allocation-helper
+      gpuImage:
+        repository: "" # DevOps supplies and pins a vendor image containing nvidia-smi.
+        digest: "" # Required sha256 digest; the chart renders repository@digest.
+        pullPolicy: IfNotPresent
+      gpuCommand: [] # Long-running argv supplied for the selected vendor image.
+      runtimeClassName: ""
+      allocationHelperPath: /phorvex-mig-allocation-helper
+      podResourcesHostPath: /var/lib/kubelet/pod-resources
+      podResourcesMountPath: /var/lib/kubelet/pod-resources
+      execTimeout: 5s
+      allocationReleaseTimeout: 45s
+      nodeSelector: {}
+      tolerations: []
   # M-6 code-exec admission protection. OFF by default: enabling it renders the installer-owned
   # ValidatingAdmissionPolicy + Binding (phorvex-codeexec-ephemeral) that DENIES any
   # pods/ephemeralcontainers UPDATE in a managed namespace unless it exactly matches the approved

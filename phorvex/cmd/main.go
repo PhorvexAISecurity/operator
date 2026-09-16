@@ -135,6 +135,18 @@ func main() {
 		auditSourceClientDNS    string
 		auditSourceVClusterPath string
 		loraCleanSourcesFile    string
+		migProfilesFile         string
+		migNodeExec             bool
+		migAgentNamespace       string
+		migAgentServiceAccounts string
+		migAgentDaemonSet       string
+		migAgentGPUContainer    string
+		migAgentHelperContainer string
+		migAllocationHelper     string
+		migAllocationSocket     string
+		migExecTimeout          time.Duration
+		migReleaseTimeout       time.Duration
+		migExclusiveMaintenance bool
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -157,6 +169,18 @@ func main() {
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
 	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
 	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
+	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
+	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
+	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
+	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
+	flag.StringVar(&migAgentDaemonSet, "mig-agent-daemonset", "", "Exact trusted MIG node-agent DaemonSet name.")
+	flag.StringVar(&migAgentGPUContainer, "mig-agent-gpu-container", "", "Exact GPU tooling container name in the trusted agent.")
+	flag.StringVar(&migAgentHelperContainer, "mig-agent-helper-container", "", "Exact PodResources helper container name in the trusted agent.")
+	flag.StringVar(&migAllocationHelper, "mig-allocation-helper", "/phorvex-mig-allocation-helper", "Fixed absolute helper path inside the trusted helper container.")
+	flag.StringVar(&migAllocationSocket, "mig-allocation-socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "Fixed kubelet PodResources Unix socket path inside the trusted helper container.")
+	flag.DurationVar(&migExecTimeout, "mig-agent-exec-timeout", 5*time.Second, "Deadline for each trusted-agent read or GPU command.")
+	flag.DurationVar(&migReleaseTimeout, "mig-allocation-release-timeout", 45*time.Second, "Deadline to observe target PodResources allocation release after UID-bound deletion.")
+	flag.BoolVar(&migExclusiveMaintenance, "mig-exclusive-maintenance", false, "Declare that MIG repartition runs only under an externally controlled exclusive-maintenance scheduling contract.")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
@@ -254,6 +278,11 @@ func main() {
 		setupLog.Error(sourceErr, "invalid adapter reload source configuration; refusing to start")
 		os.Exit(2)
 	}
+	migProfiles, migProfilesErr := actuator.LoadMIGProfilesFile(migProfilesFile)
+	if migProfilesErr != nil {
+		setupLog.Error(migProfilesErr, "invalid MIG profile authority configuration; refusing to start")
+		os.Exit(2)
+	}
 
 	if epssFeed {
 		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
@@ -334,10 +363,12 @@ func main() {
 		native.SetBoundaryReader(mgr.GetAPIReader())
 		native.JournalNamespace = operatorNS
 		native.SetAdapterSources(adapterSources)
+		native.SetMIGProfiles(migProfiles)
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
 		hybrid.SetAdapterSources(adapterSources)
+		hybrid.SetMIGProfiles(migProfiles)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval
@@ -353,6 +384,23 @@ func main() {
 		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
 	} else {
 		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
+	}
+	if migNodeExec {
+		if csErr != nil {
+			setupLog.Error(csErr, "MIG node-exec enabled but clientset is unavailable; refusing to start")
+			os.Exit(2)
+		}
+		serviceAccounts := strings.Split(migAgentServiceAccounts, ",")
+		if err := actuator.WireRemoteNodeExec(actuator.RemoteExecConfig{Config: ctrl.GetConfigOrDie(), Clientset: cs, Agent: actuator.MIGAgentPolicy{
+			Namespace: migAgentNamespace, ServiceAccounts: serviceAccounts, DaemonSet: migAgentDaemonSet,
+			Container: migAgentGPUContainer, AllocationContainer: migAgentHelperContainer,
+			AllocationHelper: migAllocationHelper, AllocationSocket: migAllocationSocket,
+			ExecTimeout: migExecTimeout, AllocationReleaseTimeout: migReleaseTimeout, ExclusiveMaintenance: migExclusiveMaintenance,
+		}}); err != nil {
+			setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
+			os.Exit(2)
+		}
+		setupLog.Info("trusted MIG node-exec transport wired", "namespace", migAgentNamespace, "daemonSet", migAgentDaemonSet)
 	}
 	// M-6: the code-exec admission-capability verifier. It is ALWAYS wired (never nil at
 	// runtime), starts UNAVAILABLE (fail-closed until the first successful verification), and

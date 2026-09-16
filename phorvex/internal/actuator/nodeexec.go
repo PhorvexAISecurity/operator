@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -47,16 +48,24 @@ type RemoteExecConfig struct {
 // MIGAgentPolicy names the administrative trust boundary and immutable identity attributes used to
 // select a privileged node agent. Deployments must supply it explicitly before M-79 wires transport.
 type MIGAgentPolicy struct {
-	Namespace       string
-	ServiceAccounts []string
-	DaemonSet       string
-	Container       string
-	ExecTimeout     time.Duration
+	Namespace                string
+	ServiceAccounts          []string
+	DaemonSet                string
+	Container                string // GPU tooling container (retained name for config compatibility)
+	AllocationContainer      string
+	AllocationHelper         string
+	AllocationSocket         string
+	ExecTimeout              time.Duration
+	AllocationReleaseTimeout time.Duration
+	ExclusiveMaintenance     bool
 }
 
 const maxMIGExecTimeout = 5 * time.Minute
 
 func (p MIGAgentPolicy) validate() error {
+	if !p.ExclusiveMaintenance {
+		return fmt.Errorf("MIG node agent requires an explicit exclusive-maintenance declaration")
+	}
 	if errs := validation.IsDNS1123Label(p.Namespace); len(errs) > 0 {
 		return fmt.Errorf("MIG agent namespace %q is invalid: %s", p.Namespace, strings.Join(errs, ", "))
 	}
@@ -65,6 +74,18 @@ func (p MIGAgentPolicy) validate() error {
 	}
 	if errs := validation.IsDNS1123Label(p.Container); len(errs) > 0 {
 		return fmt.Errorf("MIG agent container %q is invalid: %s", p.Container, strings.Join(errs, ", "))
+	}
+	if errs := validation.IsDNS1123Label(p.AllocationContainer); len(errs) > 0 {
+		return fmt.Errorf("MIG allocation helper container %q is invalid: %s", p.AllocationContainer, strings.Join(errs, ", "))
+	}
+	if p.AllocationContainer == p.Container {
+		return fmt.Errorf("MIG GPU tooling and allocation helper must use distinct containers")
+	}
+	if !filepath.IsAbs(p.AllocationHelper) || filepath.Clean(p.AllocationHelper) != p.AllocationHelper || strings.ContainsAny(p.AllocationHelper, "\x00\r\n") {
+		return fmt.Errorf("MIG allocation helper must be a fixed absolute path")
+	}
+	if !filepath.IsAbs(p.AllocationSocket) || filepath.Clean(p.AllocationSocket) != p.AllocationSocket || strings.ContainsAny(p.AllocationSocket, "\x00\r\n") {
+		return fmt.Errorf("MIG allocation socket must be a fixed absolute path")
 	}
 	if len(p.ServiceAccounts) == 0 {
 		return fmt.Errorf("MIG agent ServiceAccount allowlist must not be empty")
@@ -82,8 +103,29 @@ func (p MIGAgentPolicy) validate() error {
 	if p.ExecTimeout <= 0 || p.ExecTimeout > maxMIGExecTimeout {
 		return fmt.Errorf("MIG agent exec timeout must be positive and at most %s", maxMIGExecTimeout)
 	}
+	if p.AllocationReleaseTimeout <= 0 || p.AllocationReleaseTimeout > maxMIGExecTimeout {
+		return fmt.Errorf("MIG allocation release timeout must be positive and at most %s", maxMIGExecTimeout)
+	}
 	return nil
 }
+
+type limitedBuffer struct {
+	b     bytes.Buffer
+	limit int
+}
+
+func (w *limitedBuffer) Write(p []byte) (int, error) {
+	if w.b.Len()+len(p) > w.limit {
+		remaining := w.limit - w.b.Len()
+		if remaining > 0 {
+			_, _ = w.b.Write(p[:remaining])
+		}
+		return max(remaining, 0), fmt.Errorf("remote node-exec output exceeds %d bytes", w.limit)
+	}
+	return w.b.Write(p)
+}
+
+func (w *limitedBuffer) String() string { return w.b.String() }
 
 // newRemoteNodeExec returns the real execInPodFunc: a streamed `pods/exec` capturing stdout/stderr.
 func newRemoteNodeExec(cfg RemoteExecConfig) execInPodFunc {
@@ -105,8 +147,9 @@ func newRemoteNodeExec(cfg RemoteExecConfig) execInPodFunc {
 		if err != nil {
 			return "", fmt.Errorf("remote node-exec build %v on %s/%s: %w", argv, ns, pod, err)
 		}
-		var stdout, stderr bytes.Buffer
-		if err := exec.StreamWithContext(ctx, remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+		stdout := &limitedBuffer{limit: 1 << 20}
+		stderr := &limitedBuffer{limit: 1 << 16}
+		if err := exec.StreamWithContext(ctx, remotecommand.StreamOptions{Stdout: stdout, Stderr: stderr}); err != nil {
 			return stdout.String(), fmt.Errorf("remote node-exec %v on %s/%s: %w (stderr: %s)", argv, ns, pod, err, stderr.String())
 		}
 		return stdout.String(), nil
@@ -128,7 +171,7 @@ func WireRemoteNodeExec(cfg RemoteExecConfig) error {
 	}
 	policy := cfg.Agent
 	policy.ServiceAccounts = append([]string(nil), cfg.Agent.ServiceAccounts...)
-	pkgNodeRunner = &execNodeRunner{client: cfg.Clientset, exec: newRemoteNodeExec(cfg), policy: policy}
+	pkgNodeRunner = &execNodeRunner{client: cfg.Clientset, exec: newRemoteNodeExec(cfg), policy: policy, cache: &migObservationCache{allocations: map[string]cachedAllocations{}, inventories: map[string]cachedInventory{}}}
 	return nil
 }
 

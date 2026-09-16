@@ -379,10 +379,15 @@ func TestMIGRecoveryOwnershipRejectsTerminatingAndWrongNamespaceReceipt(t *testi
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator"}
-	r := migRecoveryReceipt{Version: 1, Phase: "prepared", PolicyNamespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels), Node: "node-a", GPUUUID: testGPUUUID, TargetProfile: "2g.20gb", Prior: migTestPrior()}
+	r := migRecoveryReceipt{Version: 2, Phase: "prepared", PolicyNamespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels), Node: "node-a", GPUUUID: testGPUUUID, TargetProfile: "2g.20gb", Binding: migAllocationBinding{Version: 1, Namespace: "ns", Pod: pod.Name, PodUID: string(pod.UID), Node: "node-a", Container: "model", Resource: "nvidia.com/mig-1g.10gb", DeviceID: "MIG-11111111-2222-3333-4444-555555555555", GPUUUID: testGPUUUID, ProfileRule: "ns/nvidia.com/mig-1g.10gb", TargetProfile: "2g.20gb", SnapshotVersion: 1, SnapshotDigest: strings.Repeat("a", 64)}, Prior: migTestPrior()}
 	cm, err := migRecoveryWrite(context.Background(), ec, r)
 	if err != nil {
 		t.Fatal(err)
+	}
+	drifted := r
+	drifted.Binding.TargetProfile = "3g.40gb"
+	if drifted.valid() {
+		t.Fatal("receipt with profile authority drift remained destructive-authority valid")
 	}
 	wrong := cm.DeepCopy()
 	wrong.Namespace = "tenant"

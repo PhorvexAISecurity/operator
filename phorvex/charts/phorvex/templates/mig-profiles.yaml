@@ -1,0 +1,12 @@
+{{- if .Values.phorvex.mig.profiles.content }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex.fullname" . }}-mig-profiles
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+data:
+  profiles.json: |
+{{ .Values.phorvex.mig.profiles.content | indent 4 }}
+{{- end }}
