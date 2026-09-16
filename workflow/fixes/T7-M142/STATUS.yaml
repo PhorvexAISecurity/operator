@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 13
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -95,7 +95,7 @@ issues:
 - M-142
 title: Keep active or uncertain application telemetry out of idle pricing
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -122,11 +122,11 @@ implementation:
   head_sha: a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/218
+  reviewed_head: 70bcab13b5394c07a34fcf5fa990288c48ec7ff7
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -163,9 +163,10 @@ residuals:
   artifact: evidence/source-reconciliation.md
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-16T16:45:38+00:00'
+  action: Await Tier6 PR217 merge, then Tier7 PR218 merge and DevOps deployment; reconcile
+    stacked PR base if needed and execute issue-specific live controls. Production
+    HOLD remains.
+updated_at: '2026-09-16T16:48:58+00:00'
 configuration_history:
 - at: '2026-09-16T15:26:09+00:00'
   by: codex-lead
@@ -198,6 +199,12 @@ configuration_history:
   by: codex-lead
   fields:
   - residuals
+  approval_ref: null
+- at: '2026-09-16T16:48:57+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -247,6 +254,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-16T16:48:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T7-M142:9:review

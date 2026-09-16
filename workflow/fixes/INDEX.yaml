@@ -940,7 +940,7 @@ fixes:
     issues:
     - M-127
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t7-m127
@@ -951,7 +951,7 @@ fixes:
     issues:
     - M-142
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t7-m142
@@ -962,7 +962,7 @@ fixes:
     issues:
     - M-40
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t7-m040

@@ -41,7 +41,7 @@ These remain the detailed checklists. Historical statements such as “next tier
 | 4 | [Signed live plan](20260915-tier4/LIVE-ACCEPTANCE.md), [bounded partial checks](20260915-tier4-live/ACCEPTANCE-MATRIX.md): M4, M19, M57, M66, M95, M171 and M84 reconciliation. Later restored rollout/mTLS evidence below supersedes the old missing-secret diagnosis. |
 | 5 | [Current issue matrix](20260916-tier5-live/REPORT.md#issue-acceptance-matrix), [fixture handoff](20260916-tier5-live/LIVE-CONTROLS-HANDOFF.md): M56, M82, M96, M138, M146, M150, M167, M170. M61 is a deployed wording correction with no new runtime gate. |
 | 6 | [All seven live plans](20260916-tier6/LIVE-PLAN.md): M1, M22, M52, M74, M83, M90, M168. [Local combined validation](20260916-tier6/COMBINED-REVIEW.md) passed; [rollout prerequisites](20260916-tier6/DEVOPS-HANDOFF.md) and post-deployment controls remain. |
-| 7 — implementation underway | [All four member controls](20260916-tier7/LIVE-PLAN.md): M40, M127 and M142 fixes; M80 source reconciliation to Tier6 M83 with hardware verification still pending. |
+| 7 — [PR218 open](https://github.com/PhorvexSecurity/operator/pull/218) | [All four member controls](20260916-tier7/LIVE-PLAN.md): M40, M127 and M142 fixes; M80 source reconciliation to Tier6 M83 with hardware verification still pending. |
 
 ## Resolved operational prerequisites — do not request them again blindly
 
