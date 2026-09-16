@@ -2581,6 +2581,10 @@ Severity: HIGH · Tier: unassigned · Fixes: T6-M168
 
 **Required correction:** Execute a supported authenticated stimulus with explicit outcome checks; derive security claims from causally bound observations; journal experiment-owned mutations with UID/RV/lease identity and bounded fail-closed recovery without overwriting later user changes. Incomplete stimulus, cleanup or observation cannot be a completed comparison.
 
+## Diagnostic residual observed during Tier8 validation
+
+The experiment still fails closed when the observation window cannot establish a result. However, the outer `arms_runner.go` diagnostic calls every partial result `attack observation persistence partial`, including a target-identity read completing after its deadline. Preserve this unresolved distinction when investigating partial runs; the underlying `ObservationError` is the relevant evidence, not proof of a storage failure. See [Tier8 finding and fixture analysis](../../assessments/20260916-tier8/ADDITIONAL-FINDINGS.md). This does not relax the existing live acceptance requirements.
+
 ### M-169 · Attack watcher and HTTP result readers race on shared mutable outcome records · **OPEN** · `CONSOLE`
 
 Severity: MAJOR · Tier: unassigned · Fixes: T3-M169
