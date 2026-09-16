@@ -1393,7 +1393,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T3-M033
 
 ### M-35 · `endpoint-rotate`: unconditional cover, conditional effect · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T9-M035
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
