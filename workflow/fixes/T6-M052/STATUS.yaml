@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,10 +11,14 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 15ac8ce47b88a33232cdcf5ee36bc887700fa136a20644b4f0d3cbe4dab9d9f9
+    sha256: bbbeb56020756d02ec4fa358fd9c782741e0fd00eab9dfc9ab086b0b2f90a052
     source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-    at: '2026-09-16T10:57:25+00:00'
+    at: '2026-09-16T13:02:51+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+    rationale: Worker demonstrated accepted10000 count exceeds single ConfigMap storage;
+      choose128 count and768KiB encoded guard, preserving default1/zero and partial-effect
+      truth
 fix_id: T6-M052
 issues:
 - M-52
@@ -83,7 +87,7 @@ residuals: []
 next_action:
   owner: sol-t6-m052
   action: Implement operator-owned namespace quarantine bound after worker slot opens
-updated_at: '2026-09-16T10:57:25+00:00'
+updated_at: '2026-09-16T13:02:51+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:50+00:00'
   by: codex-lead
@@ -113,3 +117,12 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 15ac8ce47b88a33232cdcf5ee36bc887700fa136a20644b4f0d3cbe4dab9d9f9
+  source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  at: '2026-09-16T10:57:25+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
