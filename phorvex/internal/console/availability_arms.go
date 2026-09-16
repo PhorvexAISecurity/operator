@@ -110,7 +110,7 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 
 	b, err := readStateLedger(armsPath(s.cfg))
 	if err != nil || len(b) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshotFor(p),
+		writeJSON(w, 200, armsResponse{Available: false, Running: s.visibleArmsJobs(p),
 			Note: "no three-arm experiment has been run yet. It is a real, disruptive procedure (it puts " +
 				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."})
 		return
@@ -136,7 +136,7 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(exps) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshotFor(p), Note: "no experiment recorded for that app yet."})
+		writeJSON(w, 200, armsResponse{Available: false, Running: s.visibleArmsJobs(p), Note: "no experiment recorded for that app yet."})
 		return
 	}
 
@@ -147,7 +147,7 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 	}
 	resolve := s.buildRateResolver("")
 
-	out := armsResponse{Available: true, Running: armsJobSnapshotFor(p),
+	out := armsResponse{Available: true, Running: s.visibleArmsJobs(p),
 		HowItRan:  "Each completed arm is bound to its own accepted stimulus and persisted ground-truth observation; availability is measured separately by the 5s sampler.",
 		WhyNoDrop: "Availability alone does not establish attack execution or containment. Security status is shown only when the correlated observation proves it.",
 		Note:      "Unknown or incomplete evidence remains unknown and is not scored as a successful defense.",

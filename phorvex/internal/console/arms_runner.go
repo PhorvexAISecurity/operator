@@ -65,6 +65,21 @@ func armsJobSnapshotFor(p *Principal) []armsJob {
 	return out
 }
 
+func (s *Server) visibleArmsJobs(p *Principal) []armsJob {
+	out := armsJobSnapshotFor(p)
+	seen := map[string]bool{}
+	for _, j := range out {
+		seen[j.Namespace] = true
+	}
+	for _, e := range s.unresolvedExperiments() {
+		if e.Namespace == "" || seen[e.Namespace] || p == nil || (!p.TenantWildcard() && !p.AllowsTenant(e.Namespace)) {
+			continue
+		}
+		out = append(out, armsJob{Namespace: e.Namespace, Attack: e.Attack, StartedAt: e.At, Phase: "recovery-required", Detail: e.Phase, Progress: 100, Error: e.Error})
+	}
+	return out
+}
+
 func (s *Server) setArmsPhase(ns, phase, detail string, pct int) {
 	armsMu.Lock()
 	defer armsMu.Unlock()
