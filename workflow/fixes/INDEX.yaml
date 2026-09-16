@@ -973,8 +973,8 @@ fixes:
     issues:
     - M-34
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t8-m034
-    head_sha: null
+    head_sha: 4c14b6e243ddb6f4d81ea298b7cd8ba00b6b3f4b
