@@ -80,7 +80,7 @@ def _free_port():
 @contextlib.contextmanager
 def serve_app(app):
     port = _free_port()
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", access_log=False))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="critical", access_log=False))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     deadline = time.monotonic() + 5
@@ -244,6 +244,56 @@ class GuardrailHTTPTest(unittest.TestCase):
             self.assertEqual(response.read(), b"second")
             connection.close()
         self.assertEqual(self.call_count(), 1)
+
+    def test_drain_aborts_counted_stream_and_next_request_still_works(self):
+        runtime = self.runtime(scores={"stream benign": 0.1, "ordinary benign": 0.1})
+        received = {}
+
+        def stream_request(base_url):
+            host_port = base_url.removeprefix("http://")
+            host, port = host_port.split(":")
+            connection = http.client.HTTPConnection(host, int(port), timeout=5)
+            try:
+                connection.request(
+                    "POST",
+                    "/v1/completions",
+                    body=json.dumps({"prompt": "stream benign"}),
+                    headers={"Content-Type": "application/json"},
+                )
+                response = connection.getresponse()
+                received["status"] = response.status
+                received["first"] = response.read(5)
+                received["rest"] = response.read()
+            except Exception as exc:
+                received["error"] = type(exc).__name__
+            finally:
+                connection.close()
+
+        with serve_app(self.app(runtime)) as base_url:
+            client_thread = threading.Thread(target=stream_request, args=(base_url,), daemon=True)
+            client_thread.start()
+            self.assertTrue(CountingUpstream.stream_started.wait(timeout=2))
+            deadline = time.monotonic() + 2
+            aborted = 0
+            while aborted == 0 and time.monotonic() < deadline:
+                status, body = request_json(base_url, "/v1/drain", {"abort_inflight": True})
+                self.assertEqual(status, 200)
+                aborted = body["aborted"]
+                if aborted == 0:
+                    time.sleep(0.01)
+            CountingUpstream.stream_release.set()
+            client_thread.join(timeout=5)
+            self.assertEqual(aborted, 1)
+            self.assertFalse(client_thread.is_alive())
+            self.assertEqual(received.get("status"), 202)
+            self.assertEqual(received.get("first"), b"first")
+            self.assertNotEqual(received.get("rest"), b"second")
+
+            status, body = request_json(base_url, "/v1/chat/completions", {
+                "messages": [{"role": "user", "content": "ordinary benign"}],
+            })
+            self.assertEqual((status, body["upstream"]), (201, True))
+        self.assertEqual(self.call_count(), 2)
 
     def test_reload_changes_only_variant_and_preserves_effective_config(self):
         runtime = self.runtime(mode="observe", threshold_pgv1=0.8, threshold_pgv2=0.6)
