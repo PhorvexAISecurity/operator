@@ -467,10 +467,10 @@ func (r *boundNodeRunner) Allocations(ctx context.Context) (podresources.Snapsho
 			return cached, nil
 		}
 	}
-	execCtx, cancel := context.WithTimeout(ctx, r.policy.ExecTimeout)
+	execCtx, cancel := context.WithTimeout(ctx, r.policy.AllocationReadTimeout)
 	defer cancel()
 	out, err := r.exec(execCtx, r.ref.namespace, r.ref.name, r.ref.allocationContainer,
-		[]string{r.policy.AllocationHelper, "--socket", r.policy.AllocationSocket, "--timeout", r.policy.ExecTimeout.String()})
+		[]string{r.policy.AllocationHelper, "--socket", r.policy.AllocationSocket, "--timeout", r.policy.AllocationReadTimeout.String()})
 	if err != nil {
 		return podresources.Snapshot{}, fmt.Errorf("read node PodResources: %w", err)
 	}

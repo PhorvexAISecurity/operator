@@ -77,76 +77,77 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr             string
-		probeAddr               string
-		enableLeader            bool
-		baseInterval            time.Duration
-		promURL                 string
-		epssCachePath           string
-		epssCacheRefresh        time.Duration
-		epssFeed                bool
-		epssFeedApply           bool
-		epssFeedPartial         bool
-		epssFeedNS              string
-		epssFeedCM              string
-		epssFeedKey             string
-		epssFeedFIRSTURL        string
-		epssFeedTrivy           string
-		epssFeedTimeout         time.Duration
-		killSwitch              bool
-		auditJSON               string
-		operatorNS              string
-		integrationEmit         bool
-		emitNamespace           string
-		emitPod                 string
-		emitAction              string
-		emitTenant              string
-		emitMatchLabels         string
-		engineName              string
-		ablation                bool
-		ablationNS              string
-		ablationSelector        string
-		ablationBudget          int
-		ablationSeeds           int
-		scan                    bool
-		scanNS                  string
-		kubeContext             string
-		nativeDemo              bool
-		nativeDemoNS            string
-		auditMaxBytes           int64
-		auditMaxBackups         int
-		gpuEnvelopeMax          float64
-		supportDebounce         int
-		calibrationShadow       bool
-		calibrationRefresh      time.Duration
-		calibrationSample       time.Duration
-		calibrationLookback     time.Duration
-		calibrationExportDir    string
-		admissionWebhook        bool
-		webhookPort             int
-		webhookCertDir          string
-		pcieClassTableRaw       string
-		flowClasses             string
-		trustedDetectors        string
-		auditSourceAddr         string
-		auditSourceCert         string
-		auditSourceKey          string
-		auditSourceCA           string
-		auditSourceClientDNS    string
-		auditSourceVClusterPath string
-		loraCleanSourcesFile    string
-		migProfilesFile         string
-		migNodeExec             bool
-		migAgentNamespace       string
-		migAgentServiceAccounts string
-		migAgentDaemonSet       string
-		migAgentGPUContainer    string
-		migAgentHelperContainer string
-		migAllocationHelper     string
-		migAllocationSocket     string
-		migExecTimeout          time.Duration
-		migReleaseTimeout       time.Duration
-		migExclusiveMaintenance bool
+		metricsAddr              string
+		probeAddr                string
+		enableLeader             bool
+		baseInterval             time.Duration
+		promURL                  string
+		epssCachePath            string
+		epssCacheRefresh         time.Duration
+		epssFeed                 bool
+		epssFeedApply            bool
+		epssFeedPartial          bool
+		epssFeedNS               string
+		epssFeedCM               string
+		epssFeedKey              string
+		epssFeedFIRSTURL         string
+		epssFeedTrivy            string
+		epssFeedTimeout          time.Duration
+		killSwitch               bool
+		auditJSON                string
+		operatorNS               string
+		integrationEmit          bool
+		emitNamespace            string
+		emitPod                  string
+		emitAction               string
+		emitTenant               string
+		emitMatchLabels          string
+		engineName               string
+		ablation                 bool
+		ablationNS               string
+		ablationSelector         string
+		ablationBudget           int
+		ablationSeeds            int
+		scan                     bool
+		scanNS                   string
+		kubeContext              string
+		nativeDemo               bool
+		nativeDemoNS             string
+		auditMaxBytes            int64
+		auditMaxBackups          int
+		gpuEnvelopeMax           float64
+		supportDebounce          int
+		calibrationShadow        bool
+		calibrationRefresh       time.Duration
+		calibrationSample        time.Duration
+		calibrationLookback      time.Duration
+		calibrationExportDir     string
+		admissionWebhook         bool
+		webhookPort              int
+		webhookCertDir           string
+		pcieClassTableRaw        string
+		flowClasses              string
+		trustedDetectors         string
+		auditSourceAddr          string
+		auditSourceCert          string
+		auditSourceKey           string
+		auditSourceCA            string
+		auditSourceClientDNS     string
+		auditSourceVClusterPath  string
+		loraCleanSourcesFile     string
+		migProfilesFile          string
+		migNodeExec              bool
+		migAgentNamespace        string
+		migAgentServiceAccounts  string
+		migAgentDaemonSet        string
+		migAgentGPUContainer     string
+		migAgentHelperContainer  string
+		migAllocationHelper      string
+		migAllocationSocket      string
+		migExecTimeout           time.Duration
+		migAllocationReadTimeout time.Duration
+		migReleaseTimeout        time.Duration
+		migExclusiveMaintenance  bool
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -179,6 +180,7 @@ func main() {
 	flag.StringVar(&migAllocationHelper, "mig-allocation-helper", "/phorvex-mig-allocation-helper", "Fixed absolute helper path inside the trusted helper container.")
 	flag.StringVar(&migAllocationSocket, "mig-allocation-socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "Fixed kubelet PodResources Unix socket path inside the trusted helper container.")
 	flag.DurationVar(&migExecTimeout, "mig-agent-exec-timeout", 5*time.Second, "Deadline for each trusted-agent read or GPU command.")
+	flag.DurationVar(&migAllocationReadTimeout, "mig-allocation-read-timeout", 3*time.Second, "Deadline for each kubelet PodResources helper request (maximum 30s).")
 	flag.DurationVar(&migReleaseTimeout, "mig-allocation-release-timeout", 45*time.Second, "Deadline to observe target PodResources allocation release after UID-bound deletion.")
 	flag.BoolVar(&migExclusiveMaintenance, "mig-exclusive-maintenance", false, "Declare that MIG repartition runs only under an externally controlled exclusive-maintenance scheduling contract.")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
@@ -395,7 +397,7 @@ func main() {
 			Namespace: migAgentNamespace, ServiceAccounts: serviceAccounts, DaemonSet: migAgentDaemonSet,
 			Container: migAgentGPUContainer, AllocationContainer: migAgentHelperContainer,
 			AllocationHelper: migAllocationHelper, AllocationSocket: migAllocationSocket,
-			ExecTimeout: migExecTimeout, AllocationReleaseTimeout: migReleaseTimeout, ExclusiveMaintenance: migExclusiveMaintenance,
+			ExecTimeout: migExecTimeout, AllocationReadTimeout: migAllocationReadTimeout, AllocationReleaseTimeout: migReleaseTimeout, ExclusiveMaintenance: migExclusiveMaintenance,
 		}}); err != nil {
 			setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
 			os.Exit(2)

@@ -77,7 +77,7 @@ func TestMIG_RepartitionEmptyProfileRejected(t *testing.T) {
 }
 
 func testAgentPolicy() MIGAgentPolicy {
-	return MIGAgentPolicy{Namespace: "gpu-system", ServiceAccounts: []string{"mig-agent"}, DaemonSet: "mig-agent", Container: "agent", AllocationContainer: "allocation-helper", AllocationHelper: "/phorvex-mig-allocation-helper", AllocationSocket: "/var/lib/kubelet/pod-resources/kubelet.sock", ExecTimeout: time.Second, AllocationReleaseTimeout: time.Second, ExclusiveMaintenance: true}
+	return MIGAgentPolicy{Namespace: "gpu-system", ServiceAccounts: []string{"mig-agent"}, DaemonSet: "mig-agent", Container: "agent", AllocationContainer: "allocation-helper", AllocationHelper: "/phorvex-mig-allocation-helper", AllocationSocket: "/var/lib/kubelet/pod-resources/kubelet.sock", ExecTimeout: time.Second, AllocationReadTimeout: time.Second, AllocationReleaseTimeout: time.Second, ExclusiveMaintenance: true}
 }
 
 func testAgentObjects(name string) (*appsv1.DaemonSet, *corev1.Pod) {
@@ -148,7 +148,10 @@ func TestBoundNodeRunnerDispatchesFixedAllocationHelper(t *testing.T) {
 	ds, agent := testAgentObjects("mig-agent-xyz")
 	var gotContainer string
 	var gotArgv []string
-	r := execNodeRunner{client: fake.NewSimpleClientset(ds, agent), policy: testAgentPolicy(), exec: func(_ context.Context, _, _, container string, argv []string) (string, error) {
+	policy := testAgentPolicy()
+	policy.ExecTimeout = 31 * time.Second
+	policy.AllocationReadTimeout = 2 * time.Second
+	r := execNodeRunner{client: fake.NewSimpleClientset(ds, agent), policy: policy, exec: func(_ context.Context, _, _, container string, argv []string) (string, error) {
 		gotContainer, gotArgv = container, append([]string(nil), argv...)
 		return `{"version":1,"allocations":[{"namespace":"ns","pod":"p","container":"model","resource":"nvidia.com/mig-1g.10gb","deviceIDs":["MIG-abc"]}]}`, nil
 	}}
@@ -163,7 +166,7 @@ func TestBoundNodeRunnerDispatchesFixedAllocationHelper(t *testing.T) {
 	if _, err := reader.Allocations(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"/phorvex-mig-allocation-helper", "--socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "--timeout", "1s"}
+	want := []string{"/phorvex-mig-allocation-helper", "--socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "--timeout", "2s"}
 	if gotContainer != "allocation-helper" || !reflect.DeepEqual(gotArgv, want) {
 		t.Fatalf("container=%q argv=%v", gotContainer, gotArgv)
 	}

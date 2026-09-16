@@ -26,6 +26,8 @@ read-only. The GPU container image and long-running command are supplied by DevO
 requires that privileged GPU tooling image by `repository@sha256:digest`; it ships no guessed vendor
 image. The manager may exec only in the configured agent namespace, and it binds the DaemonSet UID,
 Pod UID, ServiceAccount, node, labels, readiness, and both container names before every exec.
+PodResources reads use a separate deadline capped at 30 seconds; the GPU command timeout may be
+longer and is never forwarded to the helper.
 The profile file is validated and loaded once at manager startup; a profile change requires a
 manager rollout, so one process never changes desired geometry midway through an operation.
 

@@ -84,6 +84,7 @@ spec:
         - --mig-allocation-helper={{ .Values.phorvex.mig.nodeExec.allocationHelperPath }}
         - --mig-allocation-socket={{ printf "%s/kubelet.sock" (.Values.phorvex.mig.nodeExec.podResourcesMountPath | trimSuffix "/") }}
         - --mig-agent-exec-timeout={{ .Values.phorvex.mig.nodeExec.execTimeout }}
+        - --mig-allocation-read-timeout={{ .Values.phorvex.mig.nodeExec.allocationReadTimeout }}
         - --mig-allocation-release-timeout={{ .Values.phorvex.mig.nodeExec.allocationReleaseTimeout }}
         - --mig-exclusive-maintenance=true
         {{- end }}

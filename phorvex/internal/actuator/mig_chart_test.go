@@ -28,6 +28,7 @@ func TestMIGChartDefaultDisabledAndOptInWired(t *testing.T) {
 	for _, required := range []string{
 		"--mig-node-exec=true", "--mig-profiles-file=/etc/phorvex-mig/profiles.json",
 		"--mig-exclusive-maintenance=true",
+		"--mig-allocation-read-timeout=3s",
 		"kind: DaemonSet", "phorvex.ai/mig-agent: \"true\"", "vendor.example/gpu-tools@" + digest,
 		"name: allocation-helper", "mountPath: /var/lib/kubelet/pod-resources", "readOnly: true",
 		`resources: ["pods/exec"]`, `resourceNames: ["phorvex-mig-agent"]`,

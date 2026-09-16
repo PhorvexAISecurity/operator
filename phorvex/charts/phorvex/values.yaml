@@ -148,6 +148,7 @@ phorvex:
       podResourcesHostPath: /var/lib/kubelet/pod-resources
       podResourcesMountPath: /var/lib/kubelet/pod-resources
       execTimeout: 5s
+      allocationReadTimeout: 3s
       allocationReleaseTimeout: 45s
       nodeSelector: {}
       tolerations: []

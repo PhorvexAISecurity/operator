@@ -56,6 +56,7 @@ type MIGAgentPolicy struct {
 	AllocationHelper         string
 	AllocationSocket         string
 	ExecTimeout              time.Duration
+	AllocationReadTimeout    time.Duration
 	AllocationReleaseTimeout time.Duration
 	ExclusiveMaintenance     bool
 }
@@ -102,6 +103,9 @@ func (p MIGAgentPolicy) validate() error {
 	}
 	if p.ExecTimeout <= 0 || p.ExecTimeout > maxMIGExecTimeout {
 		return fmt.Errorf("MIG agent exec timeout must be positive and at most %s", maxMIGExecTimeout)
+	}
+	if p.AllocationReadTimeout <= 0 || p.AllocationReadTimeout > 30*time.Second {
+		return fmt.Errorf("MIG allocation read timeout must be positive and at most 30s")
 	}
 	if p.AllocationReleaseTimeout <= 0 || p.AllocationReleaseTimeout > maxMIGExecTimeout {
 		return fmt.Errorf("MIG allocation release timeout must be positive and at most %s", maxMIGExecTimeout)

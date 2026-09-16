@@ -38,6 +38,8 @@ func TestMIGAgentPolicyRejectsMissingAndMalformedConfiguration(t *testing.T) {
 		"bad account":             func(p *MIGAgentPolicy) { p.ServiceAccounts = []string{"Bad_Name"} },
 		"duplicate account":       func(p *MIGAgentPolicy) { p.ServiceAccounts = []string{"mig-agent", "mig-agent"} },
 		"zero timeout":            func(p *MIGAgentPolicy) { p.ExecTimeout = 0 },
+		"zero allocation read":    func(p *MIGAgentPolicy) { p.AllocationReadTimeout = 0 },
+		"excess allocation read":  func(p *MIGAgentPolicy) { p.AllocationReadTimeout = 30*time.Second + time.Nanosecond },
 		"zero release":            func(p *MIGAgentPolicy) { p.AllocationReleaseTimeout = 0 },
 		"excess timeout":          func(p *MIGAgentPolicy) { p.ExecTimeout = maxMIGExecTimeout + time.Nanosecond },
 	}
@@ -50,6 +52,15 @@ func TestMIGAgentPolicyRejectsMissingAndMalformedConfiguration(t *testing.T) {
 				t.Fatal("invalid policy accepted")
 			}
 		})
+	}
+}
+
+func TestMIGAgentPolicyAllowsLongGPUExecWithBoundedAllocationRead(t *testing.T) {
+	policy := testAgentPolicy()
+	policy.ExecTimeout = maxMIGExecTimeout
+	policy.AllocationReadTimeout = 30 * time.Second
+	if err := policy.validate(); err != nil {
+		t.Fatalf("independent timeout bounds rejected: %v", err)
 	}
 }
 
