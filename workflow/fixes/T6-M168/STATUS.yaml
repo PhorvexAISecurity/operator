@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,11 +11,13 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: 9377922e4afb2f0c9b25c4cfa9531b637fe6ab6f6b84e161df538e337e155696
+    sha256: 390bbb82cafb6e4e5a73df13d017bc8c81ab80d3ef1dd4d413fe45fead03876b
     source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-    at: '2026-09-16T10:41:17+00:00'
+    at: '2026-09-16T11:07:53+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+    rationale: Lead in-scope amendment under standing operations/AUTONOMY.md delegation
+      and Tier6 AUTHORIZATION.md; no new human signature or evidence waiver
 fix_id: T6-M168
 issues:
 - M-168
@@ -85,7 +87,7 @@ next_action:
   owner: sol-t6-m168
   action: Implement complete evidence-bound experiment and owned recovery plan; coordinate
     test slot and submit for review
-updated_at: '2026-09-16T10:56:12+00:00'
+updated_at: '2026-09-16T11:07:53+00:00'
 configuration_history:
 - at: '2026-09-16T10:38:01+00:00'
   by: codex-lead
@@ -120,3 +122,13 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: 9377922e4afb2f0c9b25c4cfa9531b637fe6ab6f6b84e161df538e337e155696
+  source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  at: '2026-09-16T10:41:17+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  approval_ref: AUTHORIZATION.md
