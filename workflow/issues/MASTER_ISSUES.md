@@ -1541,6 +1541,15 @@ Severity: FEATURE GAP · Tier: parallel · Fixes: T8-M034
 **Fix:** add the anti-affinity/colocation fact it genuinely invalidates, then re-grant.
 *Sources: I-23, A-197.*
 
+
+## Tier8 reviewed source repair — 2026-09-16
+
+T8-M034 at `4c14b6e243ddb6f4d81ea298b7cd8ba00b6b3f4b` restores selectable cover for the existing old-Pod identity, memory and session facts that a supported scalar warm swap retires. It requires the actual verified pool/owner/route witness and preserves independent capability and authorization gates. The two-GPU-node floor is removed only for warm-swap; same-node process retirement is a legitimate supported effect.
+
+Independent baseline RED/rotate positive, fixed recon/optimizer cost competition, and actual API plus ReplicaSet-controller/native lifecycle controls passed. See [incident](../../fixes/T8-M034/evidence/incident.md) and [independent review](../../fixes/T8-M034/evidence/p3/verdict.md). L3 remains pending the deployed serving-pool controls, so this is not issue closure.
+
+The historical anti-affinity proposal is not a prerequisite for this narrower process effect. GPU colocation/peer/device identity, relation-specific evidence and calibrated weight remain a separate explicit research/design residual; no new GPU-isolation or attack-mitigation guarantee is credited.
+
 ### M-105 · C2 — pod-identity exposure enters one fact weight twice, multiplicatively · **OPEN** · `KNOWLEDGE`
 
 Severity: MEDIUM · Tier: parallel · Fixes: none

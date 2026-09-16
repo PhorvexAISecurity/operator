@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -80,12 +80,28 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: fae0802fc062b4cf06416f19886f8cddafd3051791565e66580ccd5d97a2debb
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 6175e7f69e13707832cb4d7a7fdb4e9b4c62f7157404d7fd4e5bbf9a8c84bac1
+    source_sha: 4c14b6e243ddb6f4d81ea298b7cd8ba00b6b3f4b
+    at: '2026-09-16T19:33:30+00:00'
+    baseline_sha: 38f1f18c6211e059217320af9168427a111de8b3
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 37b26dd4ff724b7955eb612433dc51d90c216870572f251249fe77507ef95dd0
+    source_sha: 4c14b6e243ddb6f4d81ea298b7cd8ba00b6b3f4b
+    at: '2026-09-16T19:33:30+00:00'
+    incident_sha256: 6175e7f69e13707832cb4d7a7fdb4e9b4c62f7157404d7fd4e5bbf9a8c84bac1
 fix_id: T8-M034
 issues:
 - M-34
 title: '`warm-swap` has no recon cover — unselectable'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -130,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -146,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T19:32:22+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T19:33:33+00:00'
 configuration_history:
 - at: '2026-09-16T18:53:40+00:00'
   by: codex-lead
@@ -211,10 +227,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T19:33:30+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T19:33:31+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T8-M034:8:submit
-  from: sol-t8-m034
+  id: T8-M034:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9

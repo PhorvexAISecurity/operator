@@ -1,32 +1,16 @@
-# Incident-to-fix evidence
+# M34 independently reproduced incident
 
-Start the reproduction after the independent seal. Either participant may supply
-the fixture and sign its executed baseline RED; skeptic independently runs and signs
-`record-check <fix> incident --by <skeptic> --artifact evidence/incident.md ...`
-before P3. Keep this artifact immutable after signing; corrections require new
-attestations. Inline results or reference retained raw evidence by path/hash.
-For a small local fix, one input/output case can fill this entire record.
+Lead codex-lead independently executed the baseline and head against the actual recon/capability/action-set/optimizer path. Baseline product is `38f1f18c6211e059217320af9168427a111de8b3`; final product is `4c14b6e243ddb6f4d81ea298b7cd8ba00b6b3f4b`. Exact integration commit at baseline execution and head are retained in `lead/pins.log`; `lead/reproduce.sh` and `lead/capability_test.go` retain the test-overlay recipe. Baseline Phorvex source equality was checked before execution.
 
-## Trigger and production path
+| Control | Baseline | Final head |
+| --- | --- | --- |
+| Configured scalar pool, only warm-swap enabled | Actual recon produces no cover; action set reports `recon-cover: action invalidates no facts`; assertion fails | Three existing process-fact keys; candidate admitted and optimizer selects warm-swap |
+| Same workload, rotate enabled | Real rotate candidate survives with three process facts | Positive remains PASS |
+| Rotate and warm-swap compete on same cover | Not part of baseline incident | Both candidates exist; default costs select warm-swap and measured cheap rotate observations change the choice to rotate |
+| Actual API + ReplicaSet controller + snapshot + optimizer + native runner | Not claimed as baseline execution | Real snapshot derives verified pool/owner evidence; partial dispatch stays uncredited; exact old UID removed, shadow promoted, controller creates clean replacement, bounded readiness/recovery confirms and journal clears |
 
-- Incident/request, baseline and implementation SHAs:
-- Reproduction command and realistic inputs; substitutions and coverage limits:
-- Input → producer/classifier → decisive condition → changed behavior:
+Raw independent outputs: `lead/baseline.log`, `lead/head.log`, `lead/api-kcm.log`. Baseline low-level fixture seeds workload values to isolate the recon omission; the separate real-API/KCM control derives pool evidence through the actual snapshot producer and reaches the native handler. The local serving HTTP endpoint emulates the supported serving contract and the test explicitly supplies kubelet/model readiness. These substitutions do not establish real CNI convergence, actual model load, serving request availability, attack mitigation or live GPU isolation.
 
-## Decisive values and outcomes
+The final native lifecycle control is deterministic: replacement readiness is held until the first dispatch returns partial; only then it is released, recovery runs, and exact remaining identities/owner/role/readiness and zero journals are checked. No handler implementation was weakened. The pre-existing same-node pool is now eligible without a two-GPU-node requirement; model-shard's separate floor is preserved.
 
-| Case | Derived values / reached branch | Baseline outcome | Fixed outcome | Evidence |
-|---|---|---|---|---|
-| Original failure | | | | |
-| Legitimate behavior preserved | | | | |
-| Bypass / boundary / missing or stale input (where applicable) | | | | |
-
-Assert the fixture actually produces the bug-triggering values. Do not inject
-the final boolean or mock away the producer being challenged. For compound
-conditions, enumerate every arm and fallback; name justified omissions.
-
-## Independent review
-
-- Skeptic's reproduction, counterexample attempt and result:
-- Regression test names; remaining deployment-only assumptions and live controls:
-- Verdict: PASS / FAIL / UNAVAILABLE / NON_DISCRIMINATING
+Independent incident verdict PASS for the source/selectability claim. Live L3 stays pending the deployed supported serving-pool controls.
