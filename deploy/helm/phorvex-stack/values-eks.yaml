@@ -38,7 +38,7 @@ phorvex:
       # The phorvex subchart has no global-registry helper (unlike the dashboard), so the
       # registry has to be spelled out in the repository here.
       repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
-      tag: "0.4.121"    # ci:phorvex-tag
+      tag: "0.4.123"    # ci:phorvex-tag
       pullPolicy: IfNotPresent
     baseInterval: 10s
     leaderElect: true
@@ -102,7 +102,7 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.121" # ci:console-tag
+        tag: "0.4.123" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
       # ── console identity and authorization (M-136) ────────────────────────
@@ -125,6 +125,16 @@ phorvex:
           clientId: 2ms9uge9hm4uap1h0ida3it9on
           region: us-east-2
         # The public console origin, for the same-origin/CSRF boundary on browser mutations.
+        # ── E2E pipeline machine identity (docs/CONSOLE-AUTH.md, DevOps handoff) ──
+        # Bearer IdP = this cluster's own OIDC issuer (public JWKS, RS256). CI mints a
+        # projected token for the console-e2e ServiceAccount below with this audience and
+        # sends it as `Authorization: Bearer` through a loopback tunnel on the jump host.
+        oidc:
+          issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+          audience: phorvex-console
+          jwksUrl: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys
+        e2eIdentity:
+          enabled: true
         trustedOrigins:
           - https://console.phorvex.ai
           - https://console-prd.phorvex.ai
@@ -145,6 +155,14 @@ phorvex:
                   "tenants": ["*"],
                   "targets": ["default"],
                   "note": "Operator access approved by the deployment owner on 2026-09-16"
+                },
+                {
+                  "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+                  "subject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
+                  "roles": ["operator"],
+                  "tenants": ["voice", "nats", "vllm"],
+                  "targets": ["default"],
+                  "note": "End-to-End pipeline (CI). Operator only on the namespaces End-to-End/config.json fires at; token minted per run, never stored."
                 }
               ]
             }
