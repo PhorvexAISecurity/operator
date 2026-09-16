@@ -261,6 +261,8 @@ type experimentEvent struct {
 	Actor             string           `json:"actor"`
 	Namespace         string           `json:"namespace"`
 	Attack            string           `json:"attack"`
+	Deployment        string           `json:"deployment"`
+	DeploymentUID     string           `json:"deploymentUid"`
 	Policy            experimentPolicy `json:"policy"`
 	OriginalMode      string           `json:"originalMode"`
 	OwnedMode         string           `json:"ownedMode"`
@@ -288,11 +290,10 @@ func (s *Server) appendExperiment(e experimentEvent) error {
 	return s.cfg.appendState(experimentEventsPath(s.cfg), b)
 }
 
-func (s *Server) unresolvedExperiments() map[string]experimentEvent {
-	b, err := readStateLedgerHistory(experimentEventsPath(s.cfg))
+func retainedExperimentEvents(cfg Config) (map[string]experimentEvent, error) {
+	b, err := readStateLedgerHistory(experimentEventsPath(cfg))
 	if err != nil {
-		s.recordStateError(err)
-		return nil
+		return nil, err
 	}
 	latest := map[string]experimentEvent{}
 	for _, line := range strings.Split(string(b), "\n") {
@@ -301,10 +302,18 @@ func (s *Server) unresolvedExperiments() map[string]experimentEvent {
 		}
 		var e experimentEvent
 		if err := json.Unmarshal([]byte(line), &e); err != nil || e.Operation == "" {
-			s.recordStateError(fmt.Errorf("malformed retained experiment journal"))
-			return map[string]experimentEvent{"corrupt": {Operation: "corrupt", Phase: "recovery-required", Error: "malformed retained experiment journal"}}
+			return nil, fmt.Errorf("malformed retained experiment journal")
 		}
 		latest[e.Operation] = e
+	}
+	return latest, nil
+}
+
+func (s *Server) unresolvedExperiments() map[string]experimentEvent {
+	latest, err := retainedExperimentEvents(s.cfg)
+	if err != nil {
+		s.recordStateError(err)
+		return map[string]experimentEvent{"corrupt": {Operation: "corrupt", Phase: "recovery-required", Error: err.Error()}}
 	}
 	for id, e := range latest {
 		if e.Phase == "complete" || e.Phase == "incomplete-restored" || e.Phase == "no-effect" {

@@ -119,19 +119,23 @@ func (s *Server) resettableTarget(ns string) (resettableTargetInfo, error) {
 	if len(r) != 4 || r[0] != p[5] || r[1] != "Deployment" || r[2] == "" || r[3] == "" {
 		return resettableTargetInfo{}, fmt.Errorf("target owner is not a stable Deployment chain")
 	}
-	dep, err := kctl(6*time.Second, "get", "deployment", r[2], "-o", `jsonpath={.metadata.uid}|{.metadata.generation}|{.status.observedGeneration}|{.status.replicas}|{.status.readyReplicas}`)
+	dep, err := kctl(6*time.Second, "get", "deployment", r[2], "-o", `jsonpath={.metadata.uid}|{.metadata.generation}|{.status.observedGeneration}|{.spec.replicas}|{.status.replicas}|{.status.updatedReplicas}|{.status.readyReplicas}|{.status.availableReplicas}`)
 	if err != nil {
 		return resettableTargetInfo{}, fmt.Errorf("resolve deployment readiness: %w", err)
 	}
 	d := strings.Split(strings.TrimSpace(dep), "|")
-	if len(d) != 5 || d[0] != r[3] {
+	if len(d) != 8 || d[0] != r[3] {
 		return resettableTargetInfo{}, fmt.Errorf("deployment identity/readiness is not stable")
 	}
 	generation, genErr := strconv.ParseInt(d[1], 10, 64)
 	observed, observedErr := strconv.ParseInt(d[2], 10, 64)
-	replicas, replicasErr := strconv.Atoi(d[3])
-	ready, readyErr := strconv.Atoi(d[4])
-	if genErr != nil || observedErr != nil || replicasErr != nil || readyErr != nil || generation <= 0 || observed != generation || replicas <= 0 || ready != replicas {
+	desired, desiredErr := strconv.Atoi(d[3])
+	replicas, replicasErr := strconv.Atoi(d[4])
+	updated, updatedErr := strconv.Atoi(d[5])
+	ready, readyErr := strconv.Atoi(d[6])
+	available, availableErr := strconv.Atoi(d[7])
+	if genErr != nil || observedErr != nil || desiredErr != nil || replicasErr != nil || updatedErr != nil || readyErr != nil || availableErr != nil ||
+		generation <= 0 || observed != generation || desired <= 0 || replicas != desired || updated != desired || ready != desired || available != desired {
 		return resettableTargetInfo{}, fmt.Errorf("deployment identity/readiness is not stable")
 	}
 	return resettableTargetInfo{Pod: p[0], UID: p[1], ResourceVersion: p[2], Deploy: r[2], OwnerUID: r[3]}, nil

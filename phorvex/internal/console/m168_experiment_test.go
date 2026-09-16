@@ -30,6 +30,10 @@ type fakeExperimentCluster struct {
 	deletedEventUID string
 	deletedEvents   int
 	eventSeq        int
+	deploymentUID   string
+	deploymentState string
+	targetReads     int
+	replaceAtRead   int
 }
 
 func (f *fakeExperimentCluster) Policy(context.Context, string) (experimentPolicy, error) {
@@ -108,11 +112,15 @@ func (f *fakeExperimentCluster) exec(_ time.Duration, _ string, args ...string) 
 	defer f.mu.Unlock()
 	switch {
 	case strings.Contains(joined, "get pod -l r6th.io/rotation-target=true"):
+		f.targetReads++
+		if f.replaceAtRead > 0 && f.targetReads == f.replaceAtRead {
+			f.deploymentUID = "replacement-deploy-uid"
+		}
 		return fmt.Sprintf("voice-0|%s|pod-rv|ReplicaSet|voice-rs|rs-uid|||True\n", f.podUID), nil
 	case strings.Contains(joined, "get replicaset voice-rs"):
-		return "rs-uid|Deployment|voice|deploy-uid", nil
+		return "rs-uid|Deployment|voice|" + f.currentDeploymentUID(), nil
 	case strings.Contains(joined, "get deployment voice") && strings.Contains(joined, "observedGeneration"):
-		return "deploy-uid|1|1|1|1", nil
+		return f.currentDeploymentUID() + "|" + f.currentDeploymentState(), nil
 	case strings.Contains(joined, "get deploy -o name"):
 		return "deployment.apps/voice", nil
 	case strings.Contains(joined, "get deploy voice --ignore-not-found"):
@@ -144,6 +152,20 @@ func (f *fakeExperimentCluster) exec(_ time.Duration, _ string, args ...string) 
 	default:
 		return "", nil
 	}
+}
+
+func (f *fakeExperimentCluster) currentDeploymentUID() string {
+	if f.deploymentUID == "" {
+		return "deploy-uid"
+	}
+	return f.deploymentUID
+}
+
+func (f *fakeExperimentCluster) currentDeploymentState() string {
+	if f.deploymentState == "" {
+		return "1|1|1|1|1|1|1"
+	}
+	return f.deploymentState
 }
 
 func testExperimentPolicy(mode, rv, marker string) experimentPolicy {
@@ -284,6 +306,62 @@ func TestM168AvailabilityRequiresFullOrderedCoverage(t *testing.T) {
 	}
 }
 
+func TestM168AvailabilityCompletionRequiresDistinctCorrelatedArmIdentity(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name   string
+		mutate func([]armEvidence)
+		bad    map[int]bool
+	}{
+		{name: "missing target UID", mutate: func(arms []armEvidence) { arms[0].TargetUID = "" }, bad: map[int]bool{0: true}},
+		{name: "duplicate attack IDs", mutate: func(arms []armEvidence) { arms[1].AttackID = arms[0].AttackID }, bad: map[int]bool{0: true, 1: true}},
+		{name: "foreign deployment owner", mutate: func(arms []armEvidence) { arms[2].TargetOwnerUID = "replacement-deploy-uid" }, bad: map[int]bool{2: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			f := &fakeExperimentCluster{podUID: "pod-uid-1"}
+			cfg := Config{StateDir: dir, Exec: f.exec}
+			s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+			op := "op-correlated"
+			if err := s.appendExperiment(experimentEvent{Operation: op, Phase: "complete", Namespace: "voice", Deployment: "voice", DeploymentUID: "deploy-uid"}); err != nil {
+				t.Fatal(err)
+			}
+			arms := make([]armEvidence, 3)
+			for i := range arms {
+				start := t0.Add(time.Duration(i) * 20 * time.Second)
+				arms[i] = armEvidence{ID: fmt.Sprintf("arm-%d", i), Label: fmt.Sprintf("Arm %d", i), Start: start.Format(time.RFC3339Nano), End: start.Add(10 * time.Second).Format(time.RFC3339Nano), ObservationSeconds: 10, StimulusAccepted: true, AttackID: fmt.Sprintf("attack-%d", i), TargetPod: "voice-0", TargetUID: fmt.Sprintf("pod-%d", i), TargetOwnerUID: "deploy-uid", ObservationPersisted: true, BaselineReady: true, SignalKind: "synthetic-detector-signal"}
+				for _, at := range []time.Time{start, start.Add(5 * time.Second), start.Add(10 * time.Second)} {
+					b, _ := json.Marshal(uptimeSample{T: at.Format(time.RFC3339Nano), NS: "voice", Workload: "voice", Desired: 1, Ready: 1})
+					if err := cfg.appendState(uptimePath(cfg), b); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			tc.mutate(arms)
+			b, _ := json.Marshal(armExperiment{Operation: op, RunAt: t0.Format(time.RFC3339), Namespace: "voice", Deploy: "voice", Attack: "foothold", Arms: arms, Restored: true})
+			if err := cfg.appendState(armsPath(cfg), b); err != nil {
+				t.Fatal(err)
+			}
+			req := withTestPrincipal(httptest.NewRequest("GET", "/api/availability-arms?ns=voice", nil), testOwnerPrincipal("voice"))
+			rw := httptest.NewRecorder()
+			s.availabilityArms(rw, req)
+			var rendered armsResponse
+			if err := json.Unmarshal(rw.Body.Bytes(), &rendered); err != nil {
+				t.Fatal(err)
+			}
+			if len(rendered.Runs) != 1 || len(rendered.Runs[0].Arms) != 3 {
+				t.Fatalf("unexpected response: %s", rw.Body.String())
+			}
+			for i, arm := range rendered.Runs[0].Arms {
+				wantComplete := !tc.bad[i]
+				if arm.Complete != wantComplete {
+					t.Fatalf("arm %d completion=%v, want %v", i, arm.Complete, wantComplete)
+				}
+			}
+		})
+	}
+}
+
 func resetM168AttackMemory() {
 	attackMu.Lock()
 	attackList = nil
@@ -298,7 +376,7 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
 	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 30 * time.Millisecond, AttackWatchInterval: 2 * time.Millisecond, BlindRotationDelay: 8 * time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
-	op := experimentEvent{Operation: "op-all", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
+	op := experimentEvent{Operation: "op-all", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
 	if err := s.appendExperiment(op); err != nil {
 		t.Fatal(err)
 	}
@@ -376,6 +454,138 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 	}
 }
 
+func TestM168ResettableTargetRequiresFullyObservedDesiredReplicas(t *testing.T) {
+	for _, tc := range []struct {
+		name, state string
+		wantErr     bool
+	}{
+		{name: "stable", state: "4|4|3|3|3|3|3"},
+		{name: "under desired", state: "4|4|3|1|1|1|1", wantErr: true},
+		{name: "stale generation", state: "4|3|3|3|3|3|3", wantErr: true},
+		{name: "malformed count", state: "4|4|3|3|bad|3|3", wantErr: true},
+		{name: "unavailable replica", state: "4|4|3|3|3|3|2", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeExperimentCluster{podUID: "pod-uid-1", deploymentState: tc.state}
+			cfg := Config{StateDir: t.TempDir(), Exec: f.exec}
+			s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
+			_, err := s.resettableTarget("voice")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("resettableTarget error=%v, want error=%v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestM168ArmsWorkerRejectsDeploymentReplacementBetweenArms(t *testing.T) {
+	resetM168AttackMemory()
+	defer resetM168AttackMemory()
+	dir := t.TempDir()
+	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true, replaceAtRead: 4}
+	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 20 * time.Millisecond, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
+	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
+	op := experimentEvent{Operation: "op-replaced-deploy", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
+	if err := s.appendExperiment(op); err != nil {
+		t.Fatal(err)
+	}
+	s.armsWorker(op, "voice")
+	if _, err := os.Stat(armsPath(cfg)); !os.IsNotExist(err) {
+		t.Fatalf("deployment replacement produced a comparable result: %v", err)
+	}
+	latest, err := retainedExperimentEvents(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := latest[op.Operation]; got.Phase != "incomplete-restored" || !strings.Contains(got.Error, "deployment identity changed") {
+		t.Fatalf("replacement was not retained as incomplete: %+v", got)
+	}
+}
+
+func TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		failResult      bool
+		failFinalMarker bool
+		wantResult      bool
+	}{
+		{name: "result write failure", failResult: true},
+		{name: "final marker failure", failFinalMarker: true, wantResult: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetM168AttackMemory()
+			defer resetM168AttackMemory()
+			dir := t.TempDir()
+			f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
+			failed := false
+			cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 20 * time.Millisecond, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
+			cfg.StateAppend = func(path string, record []byte) error {
+				if !failed && tc.failResult && path == armsPath(cfg) {
+					failed = true
+					return errors.New("result fsync failed")
+				}
+				if !failed && tc.failFinalMarker && path == experimentEventsPath(cfg) {
+					var e experimentEvent
+					if json.Unmarshal(record, &e) == nil && e.Phase == "complete" {
+						failed = true
+						return errors.New("completion fsync failed")
+					}
+				}
+				return appendState(path, record)
+			}
+			s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
+			op := experimentEvent{Operation: "op-durability", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
+			if err := s.appendExperiment(op); err != nil {
+				t.Fatal(err)
+			}
+			s.armsWorker(op, "voice")
+			if !failed {
+				t.Fatal("configured persistence failure was not reached")
+			}
+			latest, err := retainedExperimentEvents(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := latest[op.Operation]; got.Phase != "incomplete-restored" {
+				t.Fatalf("persistence failure was marked terminally complete: %+v", got)
+			}
+			b, readErr := readStateLedger(armsPath(cfg))
+			if tc.wantResult != (readErr == nil && len(b) > 0) {
+				t.Fatalf("result presence=%v, want %v (err=%v)", readErr == nil && len(b) > 0, tc.wantResult, readErr)
+			}
+			if !tc.wantResult {
+				return
+			}
+			var run armExperiment
+			if err := json.Unmarshal([]byte(strings.TrimSpace(string(b))), &run); err != nil {
+				t.Fatal(err)
+			}
+			for _, a := range run.Arms {
+				for _, at := range []string{a.Start, a.End} {
+					sample, _ := json.Marshal(uptimeSample{T: at, NS: "voice", Workload: "voice", Desired: 1, Ready: 1})
+					if err := cfg.appendState(uptimePath(cfg), sample); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			req := withTestPrincipal(httptest.NewRequest("GET", "/api/availability-arms?ns=voice", nil), testOwnerPrincipal("voice"))
+			rw := httptest.NewRecorder()
+			s.availabilityArms(rw, req)
+			var rendered armsResponse
+			if err := json.Unmarshal(rw.Body.Bytes(), &rendered); err != nil {
+				t.Fatal(err)
+			}
+			if len(rendered.Runs) != 1 || len(rendered.Runs[0].Arms) != 3 {
+				t.Fatalf("retained result was not rendered as evidence: %s", rw.Body.String())
+			}
+			for _, a := range rendered.Runs[0].Arms {
+				if a.Complete {
+					t.Fatalf("arm was complete without durable final marker: %+v", a)
+				}
+			}
+		})
+	}
+}
+
 func TestM168ArmsWorkerFailureRestoresOriginalMode(t *testing.T) {
 	resetM168AttackMemory()
 	defer resetM168AttackMemory()
@@ -384,7 +594,7 @@ func TestM168ArmsWorkerFailureRestoresOriginalMode(t *testing.T) {
 	f.eventCreateErr = errors.New("create failed")
 	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 5 * time.Millisecond, AttackWatchInterval: time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
-	op := experimentEvent{Operation: "op-fail", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
+	op := experimentEvent{Operation: "op-fail", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
 	_ = s.appendExperiment(op)
 	s.armsWorker(op, "voice")
 	f.mu.Lock()
@@ -510,5 +720,29 @@ func TestM168MalformedJournalFailsClosed(t *testing.T) {
 	s.recoverExperiments()
 	if ok, _ := s.stateStatus(); ok {
 		t.Fatal("malformed journal did not fail closed")
+	}
+}
+
+func TestM168RunEntryRefusesJournalCorruptionBeforeMutation(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "experiment-events.jsonl"), []byte("not-json\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
+	cfg := Config{StateDir: dir, Exec: f.exec}
+	// Construct directly so corruption is first discovered by this request rather
+	// than by NewServer's startup recovery pass.
+	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
+	req := withTestPrincipal(httptest.NewRequest("POST", "/api/availability-arms/run", strings.NewReader(`{"namespace":"voice","attack":"foothold"}`)), testOwnerPrincipal("voice"))
+	rw := httptest.NewRecorder()
+	s.runArmsExperiment(rw, req)
+	if rw.Code != 503 || !strings.Contains(rw.Body.String(), "experiment state unavailable") {
+		t.Fatalf("corrupt journal response = %d %s", rw.Code, rw.Body.String())
+	}
+	f.mu.Lock()
+	sets, events := f.sets, f.eventSeq
+	f.mu.Unlock()
+	if sets != 0 || events != 0 {
+		t.Fatalf("corrupt journal allowed effects: policy sets=%d events=%d", sets, events)
 	}
 }

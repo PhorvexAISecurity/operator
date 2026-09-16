@@ -149,6 +149,11 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, armsResponse{Available: false, Running: s.visibleArmsJobs(p), Note: "no experiment recorded for that app yet."})
 		return
 	}
+	journal, journalErr := retainedExperimentEvents(s.cfg)
+	if journalErr != nil {
+		writeJSON(w, 503, armsResponse{Available: false, Note: "retained experiment journal is unavailable: " + journalErr.Error()})
+		return
+	}
 
 	samples, sampleErr := readUptimeSamples(uptimePath(s.cfg))
 	if sampleErr != nil {
@@ -176,6 +181,12 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		if len(exp.Arms) == 0 { // legacy timestamp-only records are retained but explicitly unknown.
 			exp.Arms = []armEvidence{{ID: "nodefense", Label: "No defense", Start: exp.ArmAStart, End: exp.ArmAEnd, Error: "legacy record has no correlated stimulus evidence"}, {ID: "r6blind", Label: "Blind fixed-interval rotator", Start: exp.ArmBStart, End: exp.ArmBEnd, Error: "legacy record has no correlated stimulus evidence"}, {ID: "phorvex", Label: "Phorvex", Start: exp.ArmCStart, End: exp.ArmCEnd, Error: "legacy record has no correlated stimulus evidence"}}
 		}
+		attackIDs := make(map[string]int, len(exp.Arms))
+		for _, a := range exp.Arms {
+			if a.AttackID != "" {
+				attackIDs[a.AttackID]++
+			}
+		}
 		for _, a := range exp.Arms {
 			if a.SignalKind == "" {
 				a.SignalKind = "synthetic-detector-signal"
@@ -190,7 +201,10 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 				windowDelta = -windowDelta
 			}
 			windowRegistered := startErr == nil && endErr == nil && a.ObservationSeconds > 0 && windowDelta < 0.000001
-			measured.Complete = measured.Complete && windowRegistered && a.StimulusAccepted && a.ObservationPersisted && a.BaselineReady && exp.Restored && a.Error == ""
+			completion := journal[exp.Operation]
+			durableComplete := exp.Operation != "" && completion.Operation == exp.Operation && completion.Phase == "complete" && completion.Deployment == exp.Deploy && completion.DeploymentUID != ""
+			identityBound := a.AttackID != "" && attackIDs[a.AttackID] == 1 && a.TargetPod != "" && a.TargetUID != "" && a.TargetOwnerUID == completion.DeploymentUID
+			measured.Complete = measured.Complete && windowRegistered && identityBound && a.StimulusAccepted && a.ObservationPersisted && a.BaselineReady && exp.Restored && durableComplete && a.Error == ""
 			run.Arms = append(run.Arms, measured)
 		}
 		out.Runs = append(out.Runs, run)

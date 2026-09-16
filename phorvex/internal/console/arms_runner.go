@@ -122,11 +122,21 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "unsupported comparison: only the resettable stateless voice/foothold fixture is currently verified"})
 		return
 	}
-	if _, err := s.resettableTarget(ns); err != nil {
+	target, err := s.resettableTarget(ns)
+	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "comparison preflight: " + err.Error()})
 		return
 	}
-	for _, e := range s.unresolvedExperiments() {
+	unresolved := s.unresolvedExperiments()
+	// The retained journal is parsed by unresolvedExperiments. A corruption may be
+	// discovered after the entry health check above, so recheck before any policy
+	// read or mutation and never let the synthetic "corrupt" entry evade the
+	// namespace filter below.
+	if ok, reason := s.stateStatus(); !ok {
+		writeJSON(w, 503, map[string]string{"error": "experiment state unavailable: " + reason})
+		return
+	}
+	for _, e := range unresolved {
 		if e.Namespace == ns {
 			writeJSON(w, 409, map[string]string{"error": "an experiment in this namespace requires recovery"})
 			return
@@ -142,7 +152,7 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	policyState, policyErr := s.experimentCluster().Policy(ctx, ns)
 	cancel()
-	deploy := s.firstDeploy(ns)
+	deploy := target.Deploy
 	job := &armsJob{Namespace: ns, Deploy: deploy, Attack: attack,
 		StartedAt: time.Now().UTC().Format(time.RFC3339), Phase: "arm-a",
 		Detail: "starting — switching the policy to dryRun", Progress: 1}
@@ -158,7 +168,7 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	op := fmt.Sprintf("exp-%x", s.cfg.now().UnixNano())
-	event := experimentEvent{Operation: op, Phase: "prepared", Actor: actorOf(r), Namespace: ns, Attack: attack, Policy: policyState, OriginalMode: policyState.Mode, OwnedMode: policyState.Mode, OwnedSpecHash: policyState.SpecHash, OwnedMetadataHash: policyState.MetadataHash}
+	event := experimentEvent{Operation: op, Phase: "prepared", Actor: actorOf(r), Namespace: ns, Attack: attack, Deployment: target.Deploy, DeploymentUID: target.OwnerUID, Policy: policyState, OriginalMode: policyState.Mode, OwnedMode: policyState.Mode, OwnedSpecHash: policyState.SpecHash, OwnedMetadataHash: policyState.MetadataHash}
 	if err := s.appendExperiment(event); err != nil {
 		s.failArms(ns, "experiment evidence unavailable: "+err.Error())
 		writeJSON(w, 503, map[string]string{"error": "experiment refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
@@ -259,6 +269,10 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 			fail(fmt.Errorf("%s target preflight: %w", spec.id, err))
 			return
 		}
+		if op.Deployment == "" || op.DeploymentUID == "" || target.Deploy != op.Deployment || target.OwnerUID != op.DeploymentUID {
+			fail(fmt.Errorf("%s target preflight: deployment identity changed since experiment preparation", spec.id))
+			return
+		}
 		event := fmt.Sprintf("redteam-arms-%x", s.cfg.now().UnixNano())
 		window := s.cfg.AttackWatchDuration
 		if window <= 0 {
@@ -343,7 +357,7 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		for j := 0; j < 30; j++ {
 			var post resettableTargetInfo
 			post, postErr = s.resettableTarget(ns)
-			if postErr == nil && post.Deploy == target.Deploy && post.OwnerUID == target.OwnerUID {
+			if postErr == nil && post.Deploy == op.Deployment && post.OwnerUID == op.DeploymentUID {
 				a.BaselineReady = true
 				break
 			}

@@ -61,7 +61,7 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": receipt.Pod,
-			"attackId": receipt.AttackID, "message": "Real foothold signal accepted; measured outcome pending."})
+			"attackId": receipt.AttackID, "message": "Synthetic detector signal accepted; target response observation pending."})
 		return
 	}
 	// Armed = Phorvex actually governs this namespace (it has a PhorvexPolicy). That is the
