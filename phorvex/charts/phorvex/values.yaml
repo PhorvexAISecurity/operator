@@ -1,6 +1,8 @@
 phorvex:
   # Empty uses the release-scoped manager name. A non-empty value names the manager
   # ServiceAccount that this chart creates and binds to the Deployment and all chart Roles.
+  # The optional code-exec admission contract has one fixed, independently verified manager
+  # identity; custom names require codeExecAdmission.enabled=false (see that setting below).
   serviceAccountName: ""
   image:
     repository: phorvex/phorvex
@@ -167,7 +169,12 @@ phorvex:
   # NO injection permission (the ephemeralcontainers write Role stays unbound — a separate,
   # human-gated step) and labels no namespace: an admin opts a namespace in with
   # `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`. Deny-only, so it is safe to enable
-  # ahead of any execution grant, and required to be verified BEFORE one.
+  # ahead of any execution grant, and required to be verified BEFORE one. This installer-owned
+  # singleton contract trusts exactly system:serviceaccount:phorvex-system:phorvex-phorvex-manager,
+  # matching the runtime's embedded full-policy verifier. Enabling it is rejected whenever the
+  # resulting namespace/ServiceAccount identity differs from that exact canonical identity; an
+  # alternate release name is supported when it explicitly selects the canonical ServiceAccount.
+  # Custom manager identities remain supported while this optional admission feature is disabled.
   codeExecAdmission:
     enabled: false
   # EPSS exploit-probability cache. The operator reads it from a file so a scored CVE feed

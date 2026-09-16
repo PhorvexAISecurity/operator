@@ -46,16 +46,27 @@ func chartDir(t *testing.T) string {
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "charts", "phorvex")
 }
 
-func render(t *testing.T, enabled string) string {
+func renderWithIdentity(t *testing.T, release, namespace, enabled, managerSA string) (string, string, error) {
 	t.Helper()
-	cmd := exec.Command(helmBin(t), "template", "codeexec-test", chartDir(t),
-		"--set", "phorvex.codeExecAdmission.enabled="+enabled)
+	args := []string{"template", release, chartDir(t), "--namespace", namespace,
+		"--set", "phorvex.codeExecAdmission.enabled=" + enabled}
+	if managerSA != "" {
+		args = append(args, "--set-string", "phorvex.serviceAccountName="+managerSA)
+	}
+	cmd := exec.Command(helmBin(t), args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("helm template (enabled=%s): %v\n%s", enabled, err, errb.String())
+	err := cmd.Run()
+	return out.String(), errb.String(), err
+}
+
+func render(t *testing.T, enabled string) string {
+	t.Helper()
+	out, errb, err := renderWithIdentity(t, "phorvex", "phorvex-system", enabled, "")
+	if err != nil {
+		t.Fatalf("helm template (enabled=%s): %v\n%s", enabled, err, errb)
 	}
-	return out.String()
+	return out
 }
 
 // docsByKind splits a multi-doc render and returns the raw docs whose `kind:` matches.
@@ -136,5 +147,62 @@ func TestHelmRenderDisabledProducesNothing(t *testing.T) {
 	}
 	if strings.Contains(rendered, "codeexec-managed") || strings.Contains(rendered, `resourceNames: ["phorvex-codeexec-ephemeral"]`) {
 		t.Fatal("disabled render must not contain the code-exec scope label or read grant")
+	}
+}
+
+func TestHelmRenderCodeExecRejectsNonCanonicalManagerIdentity(t *testing.T) {
+	const want = "requires the canonical singleton manager identity system:serviceaccount:phorvex-system:phorvex-phorvex-manager"
+	tests := []struct {
+		name, release, namespace, managerSA string
+	}{
+		{name: "custom-service-account", release: "phorvex", namespace: "phorvex-system", managerSA: "custom-manager"},
+		{name: "alternate-namespace", release: "phorvex", namespace: "control-plane"},
+		{name: "alternate-release-name", release: "other", namespace: "phorvex-system"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, errb, err := renderWithIdentity(t, tc.release, tc.namespace, "true", tc.managerSA)
+			if err == nil {
+				t.Fatal("enabled code-exec admission unexpectedly rendered with a noncanonical manager identity")
+			}
+			if !strings.Contains(errb, want) {
+				t.Fatalf("render failed without the compatibility explanation %q:\n%s", want, errb)
+			}
+		})
+	}
+}
+
+func TestHelmRenderCodeExecAcceptsCanonicalIdentityFromExplicitServiceAccount(t *testing.T) {
+	rendered, errb, err := renderWithIdentity(t, "other-release", "phorvex-system", "true", "phorvex-phorvex-manager")
+	if err != nil {
+		t.Fatalf("explicit canonical manager identity: %v\n%s", err, errb)
+	}
+	if !strings.Contains(rendered, "serviceAccountName: phorvex-phorvex-manager") {
+		t.Fatal("enabled render did not preserve the explicit canonical manager ServiceAccount")
+	}
+	vaps := codeexecDocsByKind(rendered, "ValidatingAdmissionPolicy")
+	if len(vaps) != 1 {
+		t.Fatalf("enabled canonical identity render must contain exactly one ValidatingAdmissionPolicy, got %d", len(vaps))
+	}
+	var vap admissionv1.ValidatingAdmissionPolicy
+	if err := yaml.Unmarshal([]byte(vaps[0]), &vap); err != nil {
+		t.Fatalf("rendered VAP does not parse: %v", err)
+	}
+	if why := validatePolicyContent(&vap); why != "" {
+		t.Fatalf("rendered VAP is not the trusted contract: %s", why)
+	}
+}
+
+func TestHelmRenderCustomManagerAllowedWhenCodeExecAdmissionDisabled(t *testing.T) {
+	rendered, errb, err := renderWithIdentity(t, "custom-release", "custom-control", "false", "custom-manager")
+	if err != nil {
+		t.Fatalf("custom manager with code-exec admission disabled: %v\n%s", err, errb)
+	}
+	if !strings.Contains(rendered, "serviceAccountName: custom-manager") {
+		t.Fatal("disabled render did not preserve the configured custom manager ServiceAccount")
+	}
+	if len(codeexecDocsByKind(rendered, "ValidatingAdmissionPolicy")) != 0 ||
+		len(codeexecDocsByKind(rendered, "ValidatingAdmissionPolicyBinding")) != 0 {
+		t.Fatal("disabled custom-manager render must not contain code-exec admission objects")
 	}
 }
