@@ -1,8 +1,8 @@
 # Outstanding live verification — readiness campaign
 
-Maintainer: `codex-lead`. Updated 2026-09-16 when Tier 7 source work was authorized while Tier 6 deployment was pending. This is the central reminder list; each fix's signed acceptance contract and evidence remain authoritative. **No row below is a live PASS or an accepted risk exception.** Local tests, merged code and healthy Pods do not close these rows.
+Maintainer: `codex-lead`. Updated 2026-09-16 during Tier8 delivery and the authorized combined Tier6–8 live campaign. This is the central reminder list; each fix's signed acceptance contract and evidence remain authoritative. **No row below is a live PASS or an accepted risk exception.** Local tests, merged code and healthy Pods do not close these rows.
 
-Latest retained observation: manager/console 0.4.120, fresh manager audit source `21b9ddac0ab788faee88c24488b0ff530019526c`; see [Tier 6 refresh](20260916-tier6/LIVE-REFRESH.md). Tier 6 [PR #217](https://github.com/PhorvexSecurity/operator/pull/217) was still open at Tier 7 intake. Deployment identities must be refreshed before executing controls.
+Latest retained observation: manager/console0.4.121 Ready; manager source `89f30f99168d09042835bcc1f3e6c8290f32292e` includes Tier6. The manager changed from hybrid to Phoenix with the global brake engaged; this does not verify the earlier hybrid permission refusal. Argo remains Degraded and Tier7 delivery [PR219](https://github.com/PhorvexSecurity/operator/pull/219) remains open. See [Tier8 observations](20260916-tier8/LIVE-OBSERVATIONS.md) and refresh actual identities before controls.
 
 ## How to use this list
 
@@ -42,8 +42,7 @@ These remain the detailed checklists. Historical statements such as “next tier
 | 5 | [Current issue matrix](20260916-tier5-live/REPORT.md#issue-acceptance-matrix), [fixture handoff](20260916-tier5-live/LIVE-CONTROLS-HANDOFF.md): M56, M82, M96, M138, M146, M150, M167, M170. M61 is a deployed wording correction with no new runtime gate. |
 | 6 | [All seven live plans](20260916-tier6/LIVE-PLAN.md): M1, M22, M52, M74, M83, M90, M168. [Local combined validation](20260916-tier6/COMBINED-REVIEW.md) passed; [rollout prerequisites](20260916-tier6/DEVOPS-HANDOFF.md) and post-deployment controls remain. |
 | 7 — PR218 merged into tier6; [PR219 to main](https://github.com/PhorvexSecurity/operator/pull/219) | [All four member controls](20260916-tier7/LIVE-PLAN.md): M40, M127 and M142 fixes; M80 source reconciliation to Tier6 M83 with hardware verification still pending. |
-
-| 8 — source work authorized | [Combined Tier6–8 plan](20260916-tier8/LIVE-PLAN.md): M116 guardrail observation/calibration, M124 namespace/Pod brakes, M34 warm-swap process facts, M8 existing scoped MIG authority reconciliation. |
+| 8 — source reviewed; live pending | [Combined Tier6–8 plan](20260916-tier8/LIVE-PLAN.md): M116 guardrail observation/calibration, M124 namespace/Pod brakes, M34 warm-swap process facts, M8 existing scoped MIG authority reconciliation. |
 
 ## Current grouped verification window
 
