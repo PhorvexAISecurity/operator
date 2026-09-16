@@ -363,9 +363,13 @@ func main() {
 	if csErr == nil {
 		bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
 	}
-	bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews, startupauthz.Config{
+	bootConfig := startupauthz.Config{
 		Backend: backend.Backend, OperatorNamespace: operatorNS,
-	})
+	}
+	if migNodeExec {
+		bootConfig.MIGAgent = &startupauthz.MIGAgentAccess{Namespace: migAgentNamespace, DaemonSet: migAgentDaemonSet}
+	}
+	bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews, bootConfig)
 	if bootErr != nil {
 		setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
 		os.Exit(1)
@@ -422,7 +426,7 @@ func main() {
 			os.Exit(2)
 		}
 		serviceAccounts := strings.Split(migAgentServiceAccounts, ",")
-		if err := actuator.WireRemoteNodeExec(actuator.RemoteExecConfig{Config: ctrl.GetConfigOrDie(), Clientset: cs, Agent: actuator.MIGAgentPolicy{
+		if err := actuator.WireRemoteNodeExec(actuator.RemoteExecConfig{Config: restConfig, Clientset: cs, Agent: actuator.MIGAgentPolicy{
 			Namespace: migAgentNamespace, ServiceAccounts: serviceAccounts, DaemonSet: migAgentDaemonSet,
 			Container: migAgentGPUContainer, AllocationContainer: migAgentHelperContainer,
 			AllocationHelper: migAllocationHelper, AllocationSocket: migAllocationSocket,
