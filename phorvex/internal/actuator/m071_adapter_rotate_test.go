@@ -235,6 +235,40 @@ func TestM071AuthoritativeReplacementRefusesBeforeServingRead(t *testing.T) {
 	}
 }
 
+func TestM071SameUIDEndpointDriftUsesOnlyAuthoritativeServingConfig(t *testing.T) {
+	staleServing := &m71Serving{loaded: true}
+	stale, req, ec, done := m71HTTPFixture(t, staleServing)
+	defer done()
+	currentServing := &m71Serving{loaded: false}
+	currentServer := httptest.NewServer(http.HandlerFunc(currentServing.handler))
+	defer currentServer.Close()
+	currentURL, err := url.Parse(currentServer.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentHost, currentPortText, err := net.SplitHostPort(currentURL.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentPort, err := strconv.Atoi(currentPortText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, event, _ := m95DispatchFixture(t)
+	event.SetCreationTimestamp(metav1.NewTime(req.AdapterObservation.CreatedAt))
+	current.Status.PodIP = currentHost
+	current.Annotations[annoServingPort] = strconv.Itoa(currentPort)
+	authoritative := fakeC(current, event)
+	ec.Client, ec.Reader = stale, authoritative
+	result, err := (adapterRotateHandler{}).Enact(context.Background(), ec, req)
+	if err != nil || result.Emitted || !strings.Contains(result.Note, "already absent") {
+		t.Fatalf("authoritative endpoint result=%+v err=%v", result, err)
+	}
+	if staleServing.inventoryCount() != 0 || currentServing.inventoryCount() != 1 {
+		t.Fatalf("inventory used stale endpoint: stale=%d authoritative=%d", staleServing.inventoryCount(), currentServing.inventoryCount())
+	}
+}
+
 func TestM071UnloadHTTPTimeoutRetainsUnknownRecoveryDebt(t *testing.T) {
 	serving := &m71Serving{loaded: true, unloadDelay: 50 * time.Millisecond}
 	_, req, ec, done := m71HTTPFixture(t, serving)
