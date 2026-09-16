@@ -5,14 +5,18 @@
 package v1alpha1
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
+
+func budgetInt(v int) *int { return &v }
 
 func TestEffectiveDefaults(t *testing.T) {
 	var s PhorvexPolicySpec // all empty => code defaults
@@ -70,7 +74,7 @@ func TestEffectiveOverrides(t *testing.T) {
 		Objective: ObjectiveSpec{Lambda: "0.9", CostWeights: CostWeights{NormSparsity: "0.2", FlowDisruption: "0.8"}},
 		SLO:       SLOSpec{CostCeiling: "1.7"},
 		Budget: BudgetSpec{
-			MaxMovesPerTick:        5,
+			MaxMovesPerTick:        budgetInt(5),
 			TickInterval:           metav1.Duration{Duration: 30 * time.Second},
 			AntiOverRotationWindow: metav1.Duration{Duration: 10 * time.Minute},
 			ProactiveFloor:         metav1.Duration{Duration: 2 * time.Hour},
@@ -97,6 +101,90 @@ func TestEffectiveOverrides(t *testing.T) {
 	}
 	if s.EffectiveSojournScaleSeconds()["exploit"] != 600 {
 		t.Errorf("partial override did not preserve exploit default")
+	}
+}
+
+func TestMaxMovesPerTickPresenceRoundTripsAndDeepCopies(t *testing.T) {
+	tests := []struct {
+		name      string
+		jsonInput string
+		wantPtr   *int
+		want      int
+	}{
+		{name: "omitted", jsonInput: `{}`, want: 3},
+		{name: "zero", jsonInput: `{"budget":{"maxMovesPerTick":0}}`, wantPtr: budgetInt(0), want: 0},
+		{name: "positive", jsonInput: `{"budget":{"maxMovesPerTick":2}}`, wantPtr: budgetInt(2), want: 2},
+		{name: "negative-direct-construction", wantPtr: budgetInt(-1), want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var spec PhorvexPolicySpec
+			if tt.jsonInput != "" {
+				if err := json.Unmarshal([]byte(tt.jsonInput), &spec); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				spec.Budget.MaxMovesPerTick = tt.wantPtr
+			}
+			if (spec.Budget.MaxMovesPerTick == nil) != (tt.wantPtr == nil) {
+				t.Fatalf("pointer presence = %t, want %t", spec.Budget.MaxMovesPerTick != nil, tt.wantPtr != nil)
+			}
+			if tt.wantPtr != nil && *spec.Budget.MaxMovesPerTick != *tt.wantPtr {
+				t.Fatalf("decoded maxMovesPerTick = %d, want %d", *spec.Budget.MaxMovesPerTick, *tt.wantPtr)
+			}
+			if got := spec.EffectiveMaxMovesPerTick(); got != tt.want {
+				t.Fatalf("effective maxMovesPerTick = %d, want %d", got, tt.want)
+			}
+
+			copy := spec.DeepCopy()
+			if (copy.Budget.MaxMovesPerTick == nil) != (spec.Budget.MaxMovesPerTick == nil) {
+				t.Fatal("deep copy changed pointer presence")
+			}
+			if spec.Budget.MaxMovesPerTick != nil {
+				if copy.Budget.MaxMovesPerTick == spec.Budget.MaxMovesPerTick {
+					t.Fatal("deep copy aliased maxMovesPerTick pointer")
+				}
+				*copy.Budget.MaxMovesPerTick++
+				if *copy.Budget.MaxMovesPerTick == *spec.Budget.MaxMovesPerTick {
+					t.Fatal("deep copy mutation changed source")
+				}
+			}
+
+			encoded, err := json.Marshal(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var roundTrip PhorvexPolicySpec
+			if err := json.Unmarshal(encoded, &roundTrip); err != nil {
+				t.Fatal(err)
+			}
+			if (roundTrip.Budget.MaxMovesPerTick == nil) != (spec.Budget.MaxMovesPerTick == nil) {
+				t.Fatalf("JSON round trip changed pointer presence: %s", encoded)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name string
+		yaml string
+		want *int
+	}{
+		{name: "omitted", yaml: "budget: {}\n"},
+		{name: "zero", yaml: "budget:\n  maxMovesPerTick: 0\n", want: budgetInt(0)},
+		{name: "positive", yaml: "budget:\n  maxMovesPerTick: 4\n", want: budgetInt(4)},
+	} {
+		t.Run("yaml-"+tc.name, func(t *testing.T) {
+			var spec PhorvexPolicySpec
+			if err := yaml.Unmarshal([]byte(tc.yaml), &spec); err != nil {
+				t.Fatal(err)
+			}
+			if (spec.Budget.MaxMovesPerTick == nil) != (tc.want == nil) {
+				t.Fatalf("pointer presence = %t, want %t", spec.Budget.MaxMovesPerTick != nil, tc.want != nil)
+			}
+			if tc.want != nil && *spec.Budget.MaxMovesPerTick != *tc.want {
+				t.Fatalf("decoded maxMovesPerTick = %d, want %d", *spec.Budget.MaxMovesPerTick, *tc.want)
+			}
+		})
 	}
 }
 

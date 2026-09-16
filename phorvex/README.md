@@ -92,6 +92,10 @@ go run ./cmd/main.go --integration-emit \
   actuates**. The decision loop calls the actuator ONLY in `mode: active`.
 - **Global kill-switch** (`--global-kill-switch` or the `phorvex-killswitch`
   ConfigMap) suppresses all actuation regardless of mode.
+- **Move budget presence is explicit**: omitting `budget.maxMovesPerTick` uses the
+  default of 3, while `maxMovesPerTick: 0` still runs the decision and audit path
+  but selects no actuation. YAML and JSON continue to use an integer; direct Go
+  construction uses an `*int` so omission and an explicit zero remain distinct.
 - **Anti-over-rotation window** is a hard feasibility constraint (evidence-retention
   guard) — Phorvex never rotates the same pod faster than the forensic window.
 - **Least-privilege RBAC** — the default chart remains read-only on workload objects.

@@ -56,14 +56,15 @@ func decimalStr(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 func applyDelta(spec *phorvexv1alpha1.PhorvexPolicySpec, c model.Policy) {
 	spec.Objective.CostWeights.NormSparsity = decimalStr(c.NormSparsity)
 	spec.Objective.CostWeights.FlowDisruption = decimalStr(c.FlowDisruption)
-	spec.Budget.MaxMovesPerTick = c.MaxMovesPerTick
+	maxMoves := c.MaxMovesPerTick
+	spec.Budget.MaxMovesPerTick = &maxMoves
 	spec.Budget.ProactiveFloor = metav1.Duration{Duration: c.ProactiveFloor}
 }
 
 func specMatches(spec phorvexv1alpha1.PhorvexPolicySpec, c model.Policy) bool {
 	return spec.Objective.CostWeights.NormSparsity == decimalStr(c.NormSparsity) &&
 		spec.Objective.CostWeights.FlowDisruption == decimalStr(c.FlowDisruption) &&
-		spec.Budget.MaxMovesPerTick == c.MaxMovesPerTick &&
+		spec.EffectiveMaxMovesPerTick() == c.MaxMovesPerTick &&
 		spec.Budget.ProactiveFloor.Duration == c.ProactiveFloor
 }
 

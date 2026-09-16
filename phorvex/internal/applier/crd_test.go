@@ -31,17 +31,34 @@ func scheme(t *testing.T) *runtime.Scheme {
 }
 
 func policyFixture(ns, name string) *phorvexv1alpha1.PhorvexPolicy {
+	maxMoves := 3
 	return &phorvexv1alpha1.PhorvexPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
 		Spec: phorvexv1alpha1.PhorvexPolicySpec{
 			Objective: phorvexv1alpha1.ObjectiveSpec{CostWeights: phorvexv1alpha1.CostWeights{NormSparsity: "0.4", FlowDisruption: "0.6"}},
-			Budget:    phorvexv1alpha1.BudgetSpec{MaxMovesPerTick: 3, ProactiveFloor: metav1.Duration{Duration: time.Hour}},
+			Budget:    phorvexv1alpha1.BudgetSpec{MaxMovesPerTick: &maxMoves, ProactiveFloor: metav1.Duration{Duration: time.Hour}},
 		},
 	}
 }
 
 var okGate = func(model.Policy) error { return nil }
 var candidate = model.Policy{NormSparsity: 1.5, FlowDisruption: 1, MaxMovesPerTick: 2, ProactiveFloor: 2 * time.Hour}
+
+func TestSpecMatchesComparesEffectiveMoveBudget(t *testing.T) {
+	spec := phorvexv1alpha1.PhorvexPolicySpec{
+		Objective: phorvexv1alpha1.ObjectiveSpec{CostWeights: phorvexv1alpha1.CostWeights{NormSparsity: "0.4", FlowDisruption: "0.6"}},
+		Budget:    phorvexv1alpha1.BudgetSpec{ProactiveFloor: metav1.Duration{Duration: time.Hour}},
+	}
+	want := model.Policy{NormSparsity: 0.4, FlowDisruption: 0.6, MaxMovesPerTick: 3, ProactiveFloor: time.Hour}
+	if !specMatches(spec, want) {
+		t.Fatal("omitted API budget did not compare equal to its effective default")
+	}
+	zero := 0
+	spec.Budget.MaxMovesPerTick = &zero
+	if specMatches(spec, want) {
+		t.Fatal("explicit zero compared equal to the omitted default")
+	}
+}
 
 func TestCRDApplier_PatchLandsCorrectly(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme(t)).WithObjects(policyFixture("ns-a", "p")).Build()
@@ -51,7 +68,7 @@ func TestCRDApplier_PatchLandsCorrectly(t *testing.T) {
 	}
 	var got phorvexv1alpha1.PhorvexPolicy
 	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns-a", Name: "p"}, &got)
-	if got.Spec.Objective.CostWeights.NormSparsity != "1.5" || got.Spec.Budget.MaxMovesPerTick != 2 || got.Spec.Budget.ProactiveFloor.Duration != 2*time.Hour {
+	if got.Spec.Objective.CostWeights.NormSparsity != "1.5" || got.Spec.Budget.MaxMovesPerTick == nil || *got.Spec.Budget.MaxMovesPerTick != 2 || got.Spec.Budget.ProactiveFloor.Duration != 2*time.Hour {
 		t.Errorf("CRD patch not constructed correctly: %+v", got.Spec)
 	}
 }

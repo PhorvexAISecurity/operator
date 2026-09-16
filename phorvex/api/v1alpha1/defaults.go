@@ -94,14 +94,15 @@ func (s *PhorvexPolicySpec) EffectiveWeightSecrets() float64 {
 
 // EffectiveMaxMovesPerTick is the per-tick move budget B (default 3).
 func (s *PhorvexPolicySpec) EffectiveMaxMovesPerTick() int {
-	if s.Budget.MaxMovesPerTick <= 0 {
-		// 0 is a legitimate "decide+log only" budget; preserve an explicit 0 only when
-		// the field was deliberately set. A negative/unset value falls back to default.
-		if s.Budget.MaxMovesPerTick == 0 {
-			return defaultMaxMovesPerTick
-		}
+	if s.Budget.MaxMovesPerTick == nil {
+		return defaultMaxMovesPerTick
 	}
-	return s.Budget.MaxMovesPerTick
+	if *s.Budget.MaxMovesPerTick < 0 {
+		// Admission rejects negative values. Direct Go construction still fails closed
+		// to a no-mutation budget rather than turning invalid input into the default.
+		return 0
+	}
+	return *s.Budget.MaxMovesPerTick
 }
 
 // EffectiveMinAvailableReplicas is the availability floor (default 1).
