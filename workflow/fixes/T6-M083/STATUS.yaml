@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -86,12 +86,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/podresources
     inputs_sha256: 900d30054cfb76e14b4eac220a53def9a5e98fc43d51f5181bc6ecaa2618c41f
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 47c9b311f66f02943f261770d2c2f1d2faa16b44ae32d1eadc47d566b3a8ae74
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:17:00+00:00'
+    baseline_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 47c9b311f66f02943f261770d2c2f1d2faa16b44ae32d1eadc47d566b3a8ae74
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:17:00+00:00'
+    incident_sha256: 47c9b311f66f02943f261770d2c2f1d2faa16b44ae32d1eadc47d566b3a8ae74
 fix_id: T6-M083
 issues:
 - M-83
 title: Bind MIG operations to authoritative allocated GPU identity
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +152,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +168,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T13:16:09+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T13:17:03+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:56+00:00'
   by: codex-lead
@@ -206,10 +222,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T13:17:00+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T13:17:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T6-M083:6:submit
-  from: sol-t6-m083
+  id: T6-M083:7:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 6
+  role: coordinator
+  kind: review
+  revision: 7
