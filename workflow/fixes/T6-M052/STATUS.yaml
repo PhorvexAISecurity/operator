@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -98,12 +98,28 @@ checks:
     - phorvex/internal/actionset
     - phorvex/internal/actuator
     inputs_sha256: 7b2e50501792319fac8bbee2164c9847c8e453456547f598970948f1165cb1b0
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 5814833c721aef2a6444ba9ede482ac781239cfce4c3b07e6bae5d97f080a37e
+    source_sha: 8c25060a5061dc9532d73ae1ce9ee901bc1fd266
+    at: '2026-09-16T13:55:18+00:00'
+    baseline_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 5814833c721aef2a6444ba9ede482ac781239cfce4c3b07e6bae5d97f080a37e
+    source_sha: 8c25060a5061dc9532d73ae1ce9ee901bc1fd266
+    at: '2026-09-16T13:55:18+00:00'
+    incident_sha256: 5814833c721aef2a6444ba9ede482ac781239cfce4c3b07e6bae5d97f080a37e
 fix_id: T6-M052
 issues:
 - M-52
 title: Bound retained quarantine population across controller replacement
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -148,7 +164,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -164,10 +180,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T13:54:00+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T13:55:22+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:50+00:00'
   by: codex-lead
@@ -228,6 +244,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T13:55:19+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T13:55:20+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -238,9 +270,9 @@ check_history:
   at: '2026-09-16T10:57:25+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
 handoff:
-  id: T6-M052:9:submit
-  from: sol-t6-m052
+  id: T6-M052:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 9
+  role: coordinator
+  kind: review
+  revision: 10

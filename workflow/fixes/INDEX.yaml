@@ -896,7 +896,7 @@ fixes:
     issues:
     - M-52
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t6-m052
