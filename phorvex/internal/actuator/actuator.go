@@ -69,6 +69,8 @@ type TenantTarget struct {
 type Request struct {
 	AdapterObservation *model.AdapterObservation // selection-time detector assertion; runtime rechecks event
 	TargetUID          string                    // Bound identity from the selecting snapshot.
+	TargetNamespaceUID string                    // Bound by the protected quarantine-capacity reservation.
+	OperationID        string                    // Durable quarantine operation identity; empty for other actions.
 	PolicyName         string                    // Selecting PhorvexPolicy identity for recoverable native operations.
 	PolicyUID          string
 
@@ -122,11 +124,13 @@ type Result struct {
 // action on THIS pod?" (labels, annotations, node, GPU) — no fleet/pool state, which the
 // capability layer precomputes once per tick and checks itself (R1).
 type Target struct {
-	Namespace string
-	Pod       string
-	Labels    map[string]string
-	NodeName  string
-	HasGPU    bool
+	Namespace   string
+	Pod         string
+	UID         string
+	Labels      map[string]string
+	NodeName    string
+	HasGPU      bool
+	MIGResource string
 }
 
 // Actuator is the swappable hands behind the brain.

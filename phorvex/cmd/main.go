@@ -50,6 +50,7 @@ import (
 	"github.com/phorvex/phorvex/internal/physics"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/runner"
+	"github.com/phorvex/phorvex/internal/startupauthz"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -77,64 +78,78 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr             string
-		probeAddr               string
-		enableLeader            bool
-		baseInterval            time.Duration
-		promURL                 string
-		epssCachePath           string
-		epssCacheRefresh        time.Duration
-		epssFeed                bool
-		epssFeedApply           bool
-		epssFeedPartial         bool
-		epssFeedNS              string
-		epssFeedCM              string
-		epssFeedKey             string
-		epssFeedFIRSTURL        string
-		epssFeedTrivy           string
-		epssFeedTimeout         time.Duration
-		killSwitch              bool
-		auditJSON               string
-		operatorNS              string
-		integrationEmit         bool
-		emitNamespace           string
-		emitPod                 string
-		emitAction              string
-		emitTenant              string
-		emitMatchLabels         string
-		engineName              string
-		ablation                bool
-		ablationNS              string
-		ablationSelector        string
-		ablationBudget          int
-		ablationSeeds           int
-		scan                    bool
-		scanNS                  string
-		kubeContext             string
-		nativeDemo              bool
-		nativeDemoNS            string
-		auditMaxBytes           int64
-		auditMaxBackups         int
-		gpuEnvelopeMax          float64
-		supportDebounce         int
-		calibrationShadow       bool
-		calibrationRefresh      time.Duration
-		calibrationSample       time.Duration
-		calibrationLookback     time.Duration
-		calibrationExportDir    string
-		admissionWebhook        bool
-		webhookPort             int
-		webhookCertDir          string
-		pcieClassTableRaw       string
-		flowClasses             string
-		trustedDetectors        string
-		auditSourceAddr         string
-		auditSourceCert         string
-		auditSourceKey          string
-		auditSourceCA           string
-		auditSourceClientDNS    string
-		auditSourceVClusterPath string
-		loraCleanSourcesFile    string
+		metricsAddr              string
+		probeAddr                string
+		enableLeader             bool
+		baseInterval             time.Duration
+		promURL                  string
+		epssCachePath            string
+		epssCacheRefresh         time.Duration
+		epssFeed                 bool
+		epssFeedApply            bool
+		epssFeedPartial          bool
+		epssFeedNS               string
+		epssFeedCM               string
+		epssFeedKey              string
+		epssFeedFIRSTURL         string
+		epssFeedTrivy            string
+		epssFeedTimeout          time.Duration
+		killSwitch               bool
+		auditJSON                string
+		operatorNS               string
+		integrationEmit          bool
+		emitNamespace            string
+		emitPod                  string
+		emitAction               string
+		emitTenant               string
+		emitMatchLabels          string
+		engineName               string
+		ablation                 bool
+		ablationNS               string
+		ablationSelector         string
+		ablationBudget           int
+		ablationSeeds            int
+		scan                     bool
+		scanNS                   string
+		kubeContext              string
+		nativeDemo               bool
+		nativeDemoNS             string
+		auditMaxBytes            int64
+		auditMaxBackups          int
+		gpuEnvelopeMax           float64
+		supportDebounce          int
+		calibrationShadow        bool
+		calibrationRefresh       time.Duration
+		calibrationSample        time.Duration
+		calibrationLookback      time.Duration
+		calibrationExportDir     string
+		admissionWebhook         bool
+		webhookPort              int
+		webhookCertDir           string
+		pcieClassTableRaw        string
+		flowClasses              string
+		trustedDetectors         string
+		auditSourceAddr          string
+		auditSourceCert          string
+		auditSourceKey           string
+		auditSourceCA            string
+		auditSourceClientDNS     string
+		auditSourceVClusterPath  string
+		loraCleanSourcesFile     string
+		migProfilesFile          string
+		migNodeExec              bool
+		migAgentNamespace        string
+		migAgentServiceAccounts  string
+		migAgentDaemonSet        string
+		migAgentGPUContainer     string
+		migAgentHelperContainer  string
+		migAllocationHelper      string
+		migAllocationSocket      string
+		migExecTimeout           time.Duration
+		migAllocationReadTimeout time.Duration
+		migReleaseTimeout        time.Duration
+		migExclusiveMaintenance  bool
+		maxRetainedQuarantines   int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -157,6 +172,19 @@ func main() {
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
 	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
 	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
+	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
+	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
+	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
+	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
+	flag.StringVar(&migAgentDaemonSet, "mig-agent-daemonset", "", "Exact trusted MIG node-agent DaemonSet name.")
+	flag.StringVar(&migAgentGPUContainer, "mig-agent-gpu-container", "", "Exact GPU tooling container name in the trusted agent.")
+	flag.StringVar(&migAgentHelperContainer, "mig-agent-helper-container", "", "Exact PodResources helper container name in the trusted agent.")
+	flag.StringVar(&migAllocationHelper, "mig-allocation-helper", "/phorvex-mig-allocation-helper", "Fixed absolute helper path inside the trusted helper container.")
+	flag.StringVar(&migAllocationSocket, "mig-allocation-socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "Fixed kubelet PodResources Unix socket path inside the trusted helper container.")
+	flag.DurationVar(&migExecTimeout, "mig-agent-exec-timeout", 5*time.Second, "Deadline for each trusted-agent read or GPU command.")
+	flag.DurationVar(&migAllocationReadTimeout, "mig-allocation-read-timeout", 3*time.Second, "Deadline for each kubelet PodResources helper request (maximum 30s).")
+	flag.DurationVar(&migReleaseTimeout, "mig-allocation-release-timeout", 45*time.Second, "Deadline to observe target PodResources allocation release after UID-bound deletion.")
+	flag.BoolVar(&migExclusiveMaintenance, "mig-exclusive-maintenance", false, "Declare that MIG repartition runs only under an externally controlled exclusive-maintenance scheduling contract.")
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
@@ -188,6 +216,7 @@ func main() {
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", defaultAuditMaxBytes, "[audit-json] target live-segment size in bytes (0 = unbounded). Whole records are preserved, so a segment may exceed this nominal cap. Default 512 MiB.")
 	flag.IntVar(&auditMaxBackups, "audit-max-backups", defaultAuditMaxBackups, "[audit-json] number of rotated segments to keep. Nominal budget is max-bytes*(backups+1); oversized records and pre-existing files can exceed it.")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
+	flag.IntVar(&maxRetainedQuarantines, "max-retained-quarantines-per-namespace", 1, fmt.Sprintf("Hard namespace-wide bound on retained or pending Phorvex quarantines (0 disables new quarantine, maximum %d).", actuator.MaxRetainedQuarantinesUpperBound))
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -227,6 +256,10 @@ func main() {
 		setupLog.Error(fmt.Errorf("must be at least 1"), "invalid actions-supported-debounce", "value", supportDebounce)
 		os.Exit(2)
 	}
+	if maxRetainedQuarantines < 0 || maxRetainedQuarantines > actuator.MaxRetainedQuarantinesUpperBound {
+		setupLog.Error(fmt.Errorf("must be in [0,%d]", actuator.MaxRetainedQuarantinesUpperBound), "invalid max-retained-quarantines-per-namespace", "value", maxRetainedQuarantines)
+		os.Exit(2)
+	}
 	if calibrationShadow && (calibrationRefresh <= 0 || calibrationSample <= 0 || calibrationLookback <= 0 || calibrationSample > calibrationRefresh) {
 		setupLog.Error(fmt.Errorf("durations must be positive and sample must not exceed refresh"), "invalid calibration cadence",
 			"sample", calibrationSample, "refresh", calibrationRefresh, "lookback", calibrationLookback)
@@ -252,6 +285,11 @@ func main() {
 	adapterSources, sourceErr := actuator.LoadAdapterSourcesFile(loraCleanSourcesFile)
 	if sourceErr != nil {
 		setupLog.Error(sourceErr, "invalid adapter reload source configuration; refusing to start")
+		os.Exit(2)
+	}
+	migProfiles, migProfilesErr := actuator.LoadMIGProfilesFile(migProfilesFile)
+	if migProfilesErr != nil {
+		setupLog.Error(migProfilesErr, "invalid MIG profile authority configuration; refusing to start")
 		os.Exit(2)
 	}
 
@@ -314,11 +352,32 @@ func main() {
 	if admissionWebhook {
 		managerOptions.WebhookServer = webhook.NewServer(webhook.Options{Port: webhookPort, CertDir: webhookCertDir})
 	}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
+	restConfig := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConfig, managerOptions)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	cs, csErr := kubernetes.NewForConfig(restConfig)
+	var bootReviews startupauthz.SSARClient
+	if csErr == nil {
+		bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
+	}
+	bootConfig := startupauthz.Config{
+		Backend: backend.Backend, OperatorNamespace: operatorNS,
+	}
+	if migNodeExec {
+		bootConfig.MIGAgent = &startupauthz.MIGAgentAccess{Namespace: migAgentNamespace, DaemonSet: migAgentDaemonSet}
+	}
+	bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews, bootConfig)
+	if bootErr != nil {
+		setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
+		os.Exit(1)
+	}
+	setupLog.Info("startup authorization preflight passed",
+		"policies", bootReport.Policies, "activePolicies", bootReport.ActivePolicies,
+		"dryRunPolicies", bootReport.DryRunPolicies, "namespaces", bootReport.Namespaces,
+		"requirements", bootReport.Requirements, "noPolicies", bootReport.NoPolicies)
 
 	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
 	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
@@ -328,16 +387,24 @@ func main() {
 		setupLog.Error(err, "cannot construct the resolved actuator; refusing to start")
 		os.Exit(1)
 	}
+	quarantineCapacity, capacityErr := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), operatorNS, maxRetainedQuarantines)
+	if capacityErr != nil {
+		setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
+		os.Exit(1)
+	}
+	rmgr.QuarantineCapacity = quarantineCapacity
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
 		native.SetBoundaryReader(mgr.GetAPIReader())
 		native.JournalNamespace = operatorNS
 		native.SetAdapterSources(adapterSources)
+		native.SetMIGProfiles(migProfiles)
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
 		hybrid.SetAdapterSources(adapterSources)
+		hybrid.SetMIGProfiles(migProfiles)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval
@@ -348,11 +415,27 @@ func main() {
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
 	// unpermitted action: the actuation itself still fails closed on real RBAC).
-	cs, csErr := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
 	if csErr == nil {
 		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
 	} else {
 		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
+	}
+	if migNodeExec {
+		if csErr != nil {
+			setupLog.Error(csErr, "MIG node-exec enabled but clientset is unavailable; refusing to start")
+			os.Exit(2)
+		}
+		serviceAccounts := strings.Split(migAgentServiceAccounts, ",")
+		if err := actuator.WireRemoteNodeExec(actuator.RemoteExecConfig{Config: restConfig, Clientset: cs, Agent: actuator.MIGAgentPolicy{
+			Namespace: migAgentNamespace, ServiceAccounts: serviceAccounts, DaemonSet: migAgentDaemonSet,
+			Container: migAgentGPUContainer, AllocationContainer: migAgentHelperContainer,
+			AllocationHelper: migAllocationHelper, AllocationSocket: migAllocationSocket,
+			ExecTimeout: migExecTimeout, AllocationReadTimeout: migAllocationReadTimeout, AllocationReleaseTimeout: migReleaseTimeout, ExclusiveMaintenance: migExclusiveMaintenance,
+		}}); err != nil {
+			setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
+			os.Exit(2)
+		}
+		setupLog.Info("trusted MIG node-exec transport wired", "namespace", migAgentNamespace, "daemonSet", migAgentDaemonSet)
 	}
 	// M-6: the code-exec admission-capability verifier. It is ALWAYS wired (never nil at
 	// runtime), starts UNAVAILABLE (fail-closed until the first successful verification), and

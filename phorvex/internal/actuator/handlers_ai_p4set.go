@@ -23,9 +23,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,7 +46,7 @@ const (
 	annoGuardrailVariant = "phorvex.ai/guardrail-variant"  // current variant
 	annoGuardrailAlts    = "phorvex.ai/guardrail-variants" // comma-list of DIVERSE alternates
 	annoGuardrailSnap    = "phorvex.ai/guardrail-snapshot" // rollback record
-	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"    // comma-list of P/D peer endpoints
+	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"    // <=32 validated DNS/IP host:port P/D endpoints, <=4096 bytes
 	annoKVEpoch          = "phorvex.ai/kv-migrate-epoch"
 	labelServing         = "phorvex.ai/serving"        // K8s readiness-drain target label
 	labelDrainEpoch      = "phorvex.ai/drain-epoch"    // M-23 A1: event-valued clock for VarDrainEpoch
@@ -598,10 +601,112 @@ func (guardrailRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Req
 type kvMigrateInvalidateHandler struct{}
 
 func (kvMigrateInvalidateHandler) Name() string { return string(model.ActionKVMigrateInvalidate) }
+
+// parseDisaggKVPeers validates the complete tenant declaration before the
+// handler performs any effect. It accepts at most 32 comma-separated host:port
+// endpoints in 4096 bytes: an ASCII DNS name, IPv4 address, or bracketed IPv6
+// address with a numeric port in 1..65535. It only parses and normalizes; it
+// never resolves a name or contacts a declared destination.
+func parseDisaggKVPeers(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	if len(raw) > 4096 {
+		return nil, fmt.Errorf("peer declaration exceeds 4096 bytes")
+	}
+	parts := strings.Split(raw, ",")
+	if len(parts) > 32 {
+		return nil, fmt.Errorf("peer declaration exceeds 32 entries")
+	}
+	peers := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for i, part := range parts {
+		endpoint := strings.TrimSpace(part)
+		if endpoint == "" {
+			return nil, fmt.Errorf("peer %d is empty", i+1)
+		}
+		for _, r := range endpoint {
+			if unicode.IsSpace(r) || unicode.IsControl(r) {
+				return nil, fmt.Errorf("peer %d contains whitespace or control characters", i+1)
+			}
+		}
+		host, portText, err := net.SplitHostPort(endpoint)
+		if err != nil || host == "" || portText == "" {
+			return nil, fmt.Errorf("peer %d must be DNS, IPv4, or bracketed IPv6 host:port", i+1)
+		}
+		for _, r := range portText {
+			if r < '0' || r > '9' {
+				return nil, fmt.Errorf("peer %d has a nonnumeric port", i+1)
+			}
+		}
+		port, err := strconv.ParseUint(portText, 10, 16)
+		if err != nil || port == 0 {
+			return nil, fmt.Errorf("peer %d port must be in 1..65535", i+1)
+		}
+
+		bracketed := strings.HasPrefix(endpoint, "[")
+		normalizedHost := ""
+		if addr, parseErr := netip.ParseAddr(host); parseErr == nil {
+			if (bracketed && addr.Is4()) || addr.Zone() != "" || addr.Unmap().IsUnspecified() {
+				return nil, fmt.Errorf("peer %d uses an unsupported or unspecified address", i+1)
+			}
+			normalizedHost = addr.String()
+		} else {
+			if bracketed {
+				return nil, fmt.Errorf("peer %d brackets are valid only for IPv6", i+1)
+			}
+			var hostErr error
+			normalizedHost, hostErr = normalizeDisaggDNS(host)
+			if hostErr != nil {
+				return nil, fmt.Errorf("peer %d: %w", i+1, hostErr)
+			}
+		}
+		normalized := net.JoinHostPort(normalizedHost, strconv.FormatUint(port, 10))
+		if _, duplicate := seen[normalized]; duplicate {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		peers = append(peers, normalized)
+	}
+	return peers, nil
+}
+
+func normalizeDisaggDNS(host string) (string, error) {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	if host == "" || len(host) > 253 {
+		return "", fmt.Errorf("DNS hostname length is invalid")
+	}
+	looksLikeIPv4 := strings.Contains(host, ".")
+	for _, r := range host {
+		if (r < '0' || r > '9') && r != '.' {
+			looksLikeIPv4 = false
+			break
+		}
+	}
+	if looksLikeIPv4 {
+		return "", fmt.Errorf("malformed IPv4 address")
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return "", fmt.Errorf("DNS hostname label is invalid")
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+				return "", fmt.Errorf("DNS hostname contains an invalid character")
+			}
+		}
+	}
+	return host, nil
+}
+
 func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "kv-migrate-invalidate", req)
+	}
+	peers, err := parseDisaggKVPeers(pod.Annotations[annoDisaggPeers])
+	if err != nil {
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("kv-migrate-invalidate invalid %s: %w", annoDisaggPeers, err))
 	}
 	// FAIL-CLOSED: needs an inference/serving workload (a model id or GPU); you do not KV-invalidate a
 	// plain pod.
@@ -610,11 +715,10 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 	}
 	ep := endpointForPod(pod)
 	// (1) LOCAL KV invalidate (REAL where the connector exists).
-	note := ""
+	note := "local KV invalidated"
 	ierr := ec.kvxfer().InvalidateLocal(ctx, ep)
 	switch {
 	case ierr == nil:
-		note = "local KV invalidated"
 	case errors.Is(ierr, errStackUnreachable):
 		// [FAIL-CLOSED FIX] The local invalidate did not return a confirmed success. A dial failure
 		// means it did not run; a timeout leaves the outcome unknown. In neither case may we claim that
@@ -635,22 +739,33 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 	// (2) CROSS-WORKER migrate/invalidate — DEFERRED [PENDING-GPU-VALIDATION] (premortem: local-only
 	// leaves poisoned KV on REMOTE decode workers). Attempted only if disagg peers are declared; the
 	// real impl returns the deferred sentinel, recorded honestly (never fabricated).
-	if peers := pod.Annotations[annoDisaggPeers]; peers != "" {
-		merr := ec.kvxfer().MigrateRemote(ctx, ep, strings.Split(peers, ","))
-		note += "; cross-worker: " + merr.Error()
+	var remoteErr error
+	if len(peers) > 0 {
+		remoteErr = ec.kvxfer().MigrateRemote(ctx, ep, peers)
+		if remoteErr == nil {
+			note += fmt.Sprintf("; cross-worker connector confirmed its operation for %d validated peer(s)", len(peers))
+		} else {
+			note += "; cross-worker outcome unconfirmed: " + remoteErr.Error()
+		}
 	} else {
 		note += "; cross-worker migrate: not attempted (no disagg peers declared) [PENDING-GPU-VALIDATION]"
 	}
 	pod.Annotations = ensureMap(pod.Annotations)
 	pod.Annotations[annoKVEpoch] = pod.ResourceVersion
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("kv-migrate-invalidate epoch %s/%s: %w", req.Namespace, req.Pod, err)
+	updateErr := ec.Client.Update(ctx, pod)
+	result := HandlerResult{Emitted: true, MutationKind: "forward-only", Note: "kv-migrate-invalidate: " + note}
+	if updateErr == nil {
+		result.ObjectsTouched = []string{objRef("Pod", req.Namespace, req.Pod)}
+	} else {
+		result.MutationKind = "partial"
+		result.Note += "; local effect occurred but the KV epoch record failed"
+		updateErr = fmt.Errorf("kv-migrate-invalidate epoch %s/%s: %w", req.Namespace, req.Pod, updateErr)
 	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "forward-only",
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "kv-migrate-invalidate: " + note,
-	}, nil
+	if remoteErr != nil {
+		result.MutationKind = "partial"
+		remoteErr = fmt.Errorf("kv-migrate-invalidate cross-worker operation: %w", remoteErr)
+	}
+	return result, errors.Join(remoteErr, updateErr)
 }
 
 func init() {

@@ -226,10 +226,13 @@ type CostWeights struct {
 // BudgetSpec bounds availability impact and forensic safety (PRD budget{...} + FR8).
 type BudgetSpec struct {
 	// MaxMovesPerTick is the per-tick mutation budget B (bounds availability impact).
+	// Nil means omitted and defaults to 3; an explicit pointer to 0 means decide and
+	// log without selecting an actuation. YAML/JSON remains maxMovesPerTick: <integer>;
+	// direct Go constructors must supply an *int when overriding the default.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=3
-	MaxMovesPerTick int `json:"maxMovesPerTick,omitempty"`
+	MaxMovesPerTick *int `json:"maxMovesPerTick,omitempty"`
 
 	// TickInterval is the decision cadence. Empty defaults to 20s in code.
 	// +kubebuilder:validation:Optional

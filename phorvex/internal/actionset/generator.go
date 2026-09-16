@@ -271,6 +271,32 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				})
 				continue
 			}
+			// M-52: quarantine capacity is a hard namespace-wide law, evaluated
+			// before feasibility/SLO work so existential SLO override cannot relax it.
+			// The inventory is assembled before tenant selector filtering and counts
+			// both backends plus protected pending reservations.
+			if action == model.ActionQuarantine && pol.QuarantineCapacityConfigured {
+				if !pol.QuarantineCapacityKnown {
+					detail := pol.QuarantineCapacityReason
+					if detail == "" {
+						detail = "complete namespace inventory unavailable"
+					}
+					out.Excluded = append(out.Excluded, Exclusion{
+						GenerationRank: generationRank, Key: key, Action: action,
+						Reason:    "quarantine-capacity-inventory-unknown: " + detail,
+						CoverKeys: append([]string(nil), coverKeys...),
+					})
+					continue
+				}
+				if pol.QuarantineCapacityUsed >= pol.QuarantineCapacityLimit {
+					out.Excluded = append(out.Excluded, Exclusion{
+						GenerationRank: generationRank, Key: key, Action: action,
+						Reason:    fmt.Sprintf("quarantine-capacity-exhausted: used=%d limit=%d", pol.QuarantineCapacityUsed, pol.QuarantineCapacityLimit),
+						CoverKeys: append([]string(nil), coverKeys...),
+					})
+					continue
+				}
+			}
 			// (1) T1-E capability gate — cheapest-first, before any scoring. Exactly one
 			// reason per excluded action; an SSAR error flags-but-does-not-exclude. When
 			// the gate is not wired (legacy/tests), fall back to the pre-T1-E empty-cover

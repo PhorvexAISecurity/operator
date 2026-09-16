@@ -221,16 +221,23 @@ func TestM048APIServerRestrictedRole(t *testing.T) {
 	create(otherPod)
 	otherPolicy := quarantinePolicy(otherPod)
 	create(otherPolicy)
+	if err := updated.Patch(ctx, p, client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"annotations":{"phorvex.ai/recovery-patch":"allowed"}}}`))); err != nil {
+		t.Fatalf("configured namespace Pod patch denied: %v", err)
+	}
+	patched := m048GetPod(t, admin, p)
+	if patched.Annotations["phorvex.ai/recovery-patch"] != "allowed" {
+		t.Fatalf("configured namespace Pod patch not persisted: %+v", patched.Annotations)
+	}
 	denied := map[string]func() error{
 		"policy-patch": func() error {
 			return updated.Patch(ctx, policy, client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"annotations":{"unauthorized":"yes"}}}`)))
 		},
-		"pod-patch": func() error {
-			return updated.Patch(ctx, p, client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"annotations":{"unauthorized":"yes"}}}`)))
-		},
 		"other-namespace-policy-update": func() error {
 			otherPolicy.Spec.PodSelector = metav1.LabelSelector{}
 			return updated.Update(ctx, otherPolicy)
+		},
+		"other-namespace-pod-patch": func() error {
+			return updated.Patch(ctx, otherPod, client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"annotations":{"unauthorized":"yes"}}}`)))
 		},
 		"other-namespace-pod-read": func() error { return updated.Get(ctx, client.ObjectKeyFromObject(otherPod), &corev1.Pod{}) },
 		"secret-read":              func() error { return updated.Get(ctx, client.ObjectKeyFromObject(secret), &corev1.Secret{}) },

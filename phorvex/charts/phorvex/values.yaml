@@ -1,4 +1,9 @@
 phorvex:
+  # Empty uses the release-scoped manager name. A non-empty value names the manager
+  # ServiceAccount that this chart creates and binds to the Deployment and all chart Roles.
+  # The optional code-exec admission contract has one fixed, independently verified manager
+  # identity; custom names require codeExecAdmission.enabled=false (see that setting below).
+  serviceAccountName: ""
   image:
     repository: phorvex/phorvex
     pullPolicy: IfNotPresent
@@ -98,6 +103,10 @@ phorvex:
   # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
   # and its leader-election lease). Empty => the operator's own POD_NAMESPACE.
   operatorNamespace: ""
+  # Hard safety bound shared by every policy and actuator route in a namespace.
+  # Existing and pending quarantine UIDs consume the same protected capacity. Zero
+  # disables new quarantine; values above 128 are rejected at render and startup.
+  maxRetainedQuarantinesPerNamespace: 1
   # Actuator backend. Accepted values are exactly: phoenix, native, hybrid.
   #   phoenix - drives UNMODIFIED Phoenix through SecurityEvent/AMTD CRs
   #   native  - Phorvex's own client-go hands (no Phoenix CRDs)
@@ -122,6 +131,36 @@ phorvex:
   loraCleanSources:
     content: ""
     mountPath: /etc/phorvex-adapters/sources.json
+  # Destructive MIG repartition is disabled unless both an operator-owned exact
+  # profile map and the trusted two-container node agent are explicitly enabled.
+  mig:
+    profiles:
+      content: ""
+      mountPath: /etc/phorvex-mig/profiles.json
+    nodeExec:
+      enabled: false
+      # Explicit acknowledgement that an external scheduler/maintenance process
+      # prevents new allocations during the bounded repartition operation.
+      exclusiveMaintenance: false
+      namespace: ""
+      daemonSetName: ""
+      serviceAccountName: ""
+      gpuContainer: gpu-tools
+      helperContainer: allocation-helper
+      gpuImage:
+        repository: "" # DevOps supplies and pins a vendor image containing nvidia-smi.
+        digest: "" # Required sha256 digest; the chart renders repository@digest.
+        pullPolicy: IfNotPresent
+      gpuCommand: [] # Long-running argv supplied for the selected vendor image.
+      runtimeClassName: ""
+      allocationHelperPath: /phorvex-mig-allocation-helper
+      podResourcesHostPath: /var/lib/kubelet/pod-resources
+      podResourcesMountPath: /var/lib/kubelet/pod-resources
+      execTimeout: 5s
+      allocationReadTimeout: 3s
+      allocationReleaseTimeout: 45s
+      nodeSelector: {}
+      tolerations: []
   # M-6 code-exec admission protection. OFF by default: enabling it renders the installer-owned
   # ValidatingAdmissionPolicy + Binding (phorvex-codeexec-ephemeral) that DENIES any
   # pods/ephemeralcontainers UPDATE in a managed namespace unless it exactly matches the approved
@@ -130,7 +169,12 @@ phorvex:
   # NO injection permission (the ephemeralcontainers write Role stays unbound — a separate,
   # human-gated step) and labels no namespace: an admin opts a namespace in with
   # `kubectl label ns <ns> phorvex.ai/codeexec-managed=true`. Deny-only, so it is safe to enable
-  # ahead of any execution grant, and required to be verified BEFORE one.
+  # ahead of any execution grant, and required to be verified BEFORE one. This installer-owned
+  # singleton contract trusts exactly system:serviceaccount:phorvex-system:phorvex-phorvex-manager,
+  # matching the runtime's embedded full-policy verifier. Enabling it is rejected whenever the
+  # resulting namespace/ServiceAccount identity differs from that exact canonical identity; an
+  # alternate release name is supported when it explicitly selects the canonical ServiceAccount.
+  # Custom manager identities remain supported while this optional admission feature is disabled.
   codeExecAdmission:
     enabled: false
   # EPSS exploit-probability cache. The operator reads it from a file so a scored CVE feed

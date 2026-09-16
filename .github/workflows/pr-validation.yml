@@ -41,8 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # This job tests candidate source, never an existing cluster. The eight
-      # KUBEBUILDER_ASSETS-guarded API-server tests skip here BY DESIGN; the
+      # This job tests candidate source, never an existing cluster. Local-API and
+      # controller-manager-backed tests skip here BY DESIGN; the
       # separate required go-envtest job below executes them against local
       # kube-apiserver/etcd binaries and fails if any of them skips.
       KUBECONFIG: /dev/null
@@ -105,17 +105,19 @@ jobs:
       - name: Prometheus integrator module unit tests (fake clients, no live webhook)
         run: go -C build/prometheus-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
 
-  # Local API-server proof. tools/envtest_gate.py runs the COMPLETE test suites of
-  # phorvex/internal/actuator and phorvex/internal/runner (no -run filter) with
-  # local kube-apiserver/etcd binaries, so every envtest-backed test in those
+  # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
+  # API, actuator, runner, authz, startupauthz and console packages (no -run filter)
+  # with local kube-apiserver/etcd/controller-manager binaries, so every
+  # envtest-backed test in those
   # packages executes whatever helper performs its setup, and requires at least
-  # the eight named there: actuator preconditions, conditional detach, quarantine
-  # lifecycle/RBAC, restricted-role authorization, coverage readback, leader
-  # handoff and the real event sink, against genuine API semantics (admission,
-  # RBAC, conflicts, owner references). Every observed test/subtest must run and
+  # the named M1/M52/M168 controls plus the original eight: actuator preconditions,
+  # conditional detach, quarantine lifecycle/RBAC, restricted-role authorization,
+  # coverage readback, leader handoff and the real event sink, against genuine API
+  # semantics (admission, RBAC, conflicts, owner references and ReplicaSet controller behavior).
+  # Every observed test/subtest must run and
   # pass; any skip fails, so every prerequisite those packages need (envtest
-  # assets, helm for the chart tests) is provisioned here. They are NOT a cluster:
-  # envtest has no kubelet, CNI, garbage collector, cloud API or AI serving
+  # assets, ReplicaSet controller and helm for chart tests) is provisioned here.
+  # They are NOT a cluster: this has no kubelet, CNI, garbage collector, cloud API or AI serving
   # backend, and nothing here mitigates a physical attack. Everything else in
   # go-unit is a unit test with mocks.
   go-envtest:
@@ -155,10 +157,17 @@ jobs:
         run: |
           assets="$(bash tools/provision-envtest.sh "$RUNNER_TEMP/envtest")"
           echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"
+      # The ReplicaSet controller controls real replacement behavior in M52/M66.
+      # Pin the official v1.34.0 binary independently and expose its exact path;
+      # the gate refuses an absent/non-executable value before starting Go.
+      - name: Provision pinned kube-controller-manager v1.34.0 (SHA256-verified)
+        run: |
+          controller_manager="$(bash tools/provision-kube-controller-manager.sh "$RUNNER_TEMP/kubernetes")"
+          echo "KUBE_CONTROLLER_MANAGER=$controller_manager" >> "$GITHUB_ENV"
       # go test -json is started directly by the gate (no shell pipe, exit
       # preserved); the verbatim stream is retained and the verdict is computed
       # from it. Skipped, missing, failed, malformed or empty output fails.
-      - name: Local API-server test packages (full actuator+runner suites; eight required)
+      - name: Local API/controller test packages (six complete suites; required controls)
         run: python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl --summary envtest-evidence/summary.json --timeout 10m
       - name: Retain raw envtest JSON evidence
         if: always()

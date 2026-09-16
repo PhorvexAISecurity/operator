@@ -1,4 +1,8 @@
 {{- if .Values.phorvex.codeExecAdmission.enabled }}
+{{- $managerSA := include "phorvex.serviceAccountName" . }}
+{{- if or (ne .Release.Namespace "phorvex-system") (ne $managerSA "phorvex-phorvex-manager") }}
+{{- fail (printf "phorvex.codeExecAdmission.enabled requires the canonical singleton manager identity system:serviceaccount:phorvex-system:phorvex-phorvex-manager (rendered system:serviceaccount:%s:%s); custom manager identities require phorvex.codeExecAdmission.enabled=false" .Release.Namespace $managerSA) }}
+{{- end }}
 # M-6 — request-level ValidatingAdmissionPolicy + Binding for pods/ephemeralcontainers
 # (code-exec admission). Installer-owned singleton, cluster-scoped, DENY + failurePolicy:Fail.
 # It enforces the SEC-1/SEC-2/PO-1 M-6 admission contract as amended by T4-M057: in a managed

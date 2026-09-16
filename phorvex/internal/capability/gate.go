@@ -256,10 +256,10 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 		}
 	}
 	// RBAC is LAST: only a candidate that passed the free local checks reaches an SSAR.
-	// Both modes derive the verb set from the SAME actuator.RequiredVerbs, so a routing or
+	// Both modes derive the verb set from the SAME resolved-backend requirement plan, so a routing or
 	// permission change to that set lands on the reviewing and the observing path together.
 	if w.az != nil {
-		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
+		if verbs := w.requiredVerbs(action); len(verbs) > 0 {
 			var (
 				allowed bool
 				unknown bool
@@ -324,7 +324,7 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 // CapableAndAuthorized is Capable PLUS the no-rbac leg, per (pod, action) — the check the
 // ActionsSupported status uses (M-160) so the condition reflects RBAC exclusions, not only
 // runtime fixtures. It mirrors the generator gate's RBAC step (routing-aware verbs via
-// actuator.RequiredVerbs; the SSAR is the same cached (ns,verb), so no new SSAR volume).
+// the resolved backend requirement plan; the SSAR is the same cached (scope,verb), so no new SSAR volume).
 // RBAC-unknown fails OPEN (ok=true): an SSAR error is not a status gap (P-NO-FREEZE),
 // matching the gate. On a deny the why is "no-rbac: <detail>" — the same ReasonNoRBAC
 // vocabulary the record's exclusionReason carries, so condition and record don't disagree.
@@ -333,7 +333,7 @@ func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action
 		return false, why
 	}
 	if w.az != nil {
-		if verbs := actuator.RequiredVerbs(action); len(verbs) > 0 {
+		if verbs := w.requiredVerbs(action); len(verbs) > 0 {
 			allowed, unknown, why := w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
 			if !unknown && !allowed {
 				return false, ReasonNoRBAC + ": " + why
@@ -343,13 +343,29 @@ func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action
 	return true, ""
 }
 
+// requiredVerbs follows the backend that this witness will actually dispatch through. The
+// hybrid fallback preserves compatibility for small test actuators whose Name is not a
+// production backend; every production actuator has one of the three exact backend names.
+func (w Witness) requiredVerbs(action model.Action) []authz.Verb {
+	backend := actuator.BackendHybrid
+	if w.act != nil {
+		for _, candidate := range actuator.Backends() {
+			if w.act.Name() == string(candidate) {
+				backend = candidate
+				break
+			}
+		}
+	}
+	return actuator.RequiredVerbsForBackend(backend, action)
+}
+
 // configWhy returns the missing per-target CONFIG fixture for an AI action, from the
 // model's typed witnesses + the pool index; "" means the config fixtures are present.
 func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 	switch action {
 	case model.ActionMIGRebind:
-		if !(pod.MIGDevice != "" && pod.Node != "" && pod.MIGGPUID != "" && pod.MIGTargetProfile != "") {
-			return "pod has no MIG device, scheduled node, GPU id, and target profile"
+		if !(pod.MIGDevice != "" && pod.Node != "") {
+			return "pod has no MIG resource allocation or scheduled node"
 		}
 	case model.ActionWarmSwap:
 		return w.warmPoolWhy(pod, pod.Labels[labelSwapGroup], w.idx.warmShadowGroups, "matching swap-group")
@@ -487,7 +503,7 @@ func selectorMatches(selector, podLabels map[string]string) bool {
 
 func targetFrom(v *model.WorkloadView) actuator.Target {
 	return actuator.Target{
-		Namespace: v.Pod.Namespace, Pod: v.Pod.Name,
-		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU,
+		Namespace: v.Pod.Namespace, Pod: v.Pod.Name, UID: v.Pod.UID,
+		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU, MIGResource: v.Pod.MIGDevice,
 	}
 }

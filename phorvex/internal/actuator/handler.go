@@ -24,9 +24,10 @@ import (
 type ActionHandler interface {
 	registry.Named
 	// Enact performs the native move. It MUST be idempotent (safe to retry) and MUST
-	// refuse to mutate when ec.DryRun is set (belt-and-suspenders — the runner already
-	// skips actuation entirely in dry-run). It returns the objects touched + a rollback
-	// ref + the mutation kind for the per-action audit.
+	// not be invoked in dry-run: dispatch refuses ec.DryRun before handler lookup. Handler
+	// checks may remain as defense in depth for direct internal calls. Native.Rollback has
+	// its own central dry-run refusal before rollback lookup/invocation. Enact returns the
+	// objects touched + a rollback ref + the mutation kind for the per-action audit.
 	Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error)
 }
 
@@ -50,6 +51,7 @@ type EnactCtx struct {
 	Guardrail        guardrailController  // safety/guardrail-tier control plane; nil => real default
 	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
 	AdapterSources   AdapterSources
+	MIGProfiles      *MIGProfiles
 }
 
 // HandlerResult is the native effect record.
@@ -68,8 +70,9 @@ type HandlerResult struct {
 // HandlerRegistry holds every native ActionHandler, one per model.Action it enacts.
 var HandlerRegistry = registry.New[ActionHandler]()
 
-// errDryRunGuard is returned if a handler is ever invoked with DryRun set (it never
-// should be — the runner skips actuation in dry-run; this is defense in depth).
+// errDryRunGuard is returned centrally by dispatch before handler lookup/invocation and
+// by Native.Rollback before rollback lookup/invocation. Individual handler checks protect
+// direct internal calls where retained.
 var errDryRunGuard = fmt.Errorf("native actuator: handler invoked with DryRun set — refusing to mutate")
 
 // dispatch routes a Request to its registered handler. A miss is a LOUD error (the

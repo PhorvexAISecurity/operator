@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -21,10 +22,11 @@ type recoveryReader struct {
 
 type pagedRecoveryReader struct {
 	client.Reader
-	pages    map[string]corev1.ConfigMapList
-	migPages map[string]corev1.ConfigMapList
-	calls    int
-	limits   []int64
+	pages      map[string]corev1.ConfigMapList
+	migPages   map[string]corev1.ConfigMapList
+	migV2Pages map[string]corev1.ConfigMapList
+	calls      int
+	limits     []int64
 }
 
 func (r *pagedRecoveryReader) List(_ context.Context, list client.ObjectList, opts ...client.ListOption) error {
@@ -37,6 +39,11 @@ func (r *pagedRecoveryReader) List(_ context.Context, list client.ObjectList, op
 	pages := r.pages
 	if lo.LabelSelector.String() == recoveryMIGLabel+"=v1" {
 		pages = r.migPages
+		if pages == nil {
+			pages = map[string]corev1.ConfigMapList{"": {}}
+		}
+	} else if lo.LabelSelector.String() == recoveryMIGLabel+"=v2" {
+		pages = r.migV2Pages
 		if pages == nil {
 			pages = map[string]corev1.ConfigMapList{"": {}}
 		}
@@ -429,7 +436,7 @@ func TestAdministrativeRecoveryPaginatesWithinFixedScanCap(t *testing.T) {
 	reader := &pagedRecoveryReader{Reader: c, pages: map[string]corev1.ConfigMapList{"": {Items: []corev1.ConfigMap{*unrelated}, ListMeta: metav1.ListMeta{Continue: "next"}}, "next": {Items: []corev1.ConfigMap{*matching}}}}
 	n.Reader = reader
 	inv, err := n.InventoryRecovery(context.Background(), recoveryScope(1))
-	if err != nil || len(inv.Items) != 1 || reader.calls != 3 || len(reader.limits) != 3 || reader.limits[0] != recoveryJournalPageSize || reader.limits[1] != recoveryJournalPageSize || reader.limits[2] != recoveryJournalPageSize {
+	if err != nil || len(inv.Items) != 1 || reader.calls != 4 || len(reader.limits) != 4 || reader.limits[0] != recoveryJournalPageSize || reader.limits[1] != recoveryJournalPageSize || reader.limits[2] != recoveryJournalPageSize || reader.limits[3] != recoveryJournalPageSize {
 		t.Fatalf("pagination calls=%d limits=%v inventory=%+v err=%v", reader.calls, reader.limits, inv.Items, err)
 	}
 }
@@ -441,30 +448,40 @@ func standaloneMIGReceipt(name, policy string) *corev1.ConfigMap {
 }
 
 func TestAdministrativeRecoveryInventoriesMIGReceiptsAsManualOnly(t *testing.T) {
-	n, c := recoveryFixture(t, "victim")
-	cm := standaloneMIGReceipt(recoveryMIGName("node-a", "GPU-a"), "policy")
-	if err := c.Create(context.Background(), cm); err != nil {
-		t.Fatal(err)
-	}
-	inv, err := n.InventoryRecovery(context.Background(), recoveryScope(2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, item := range inv.Items {
-		if item.Kind == "mig-rebind" {
-			found = true
-			if item.Status != "manual" || item.SupportedOperation != "" || item.Node != "node-a" || item.GPUUUID != "GPU-a" {
-				t.Fatalf("MIG receipt gained apply authority: %+v", item)
+	for _, version := range []int{1, 2} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			n, c := recoveryFixture(t, "victim")
+			cm := standaloneMIGReceipt(recoveryMIGName("node-a", "GPU-a"), "policy")
+			cm.Labels[recoveryMIGLabel] = fmt.Sprintf("v%d", version)
+			var body map[string]any
+			_ = json.Unmarshal([]byte(cm.Data["receipt"]), &body)
+			body["version"] = version
+			b, _ := json.Marshal(body)
+			cm.Data["receipt"] = string(b)
+			if err := c.Create(context.Background(), cm); err != nil {
+				t.Fatal(err)
 			}
-		}
-	}
-	if !found {
-		t.Fatalf("MIG receipt absent: %+v", inv.Items)
-	}
-	plan, err := n.PlanRecovery(context.Background(), recoveryScope(2))
-	if err != nil || len(plan.Items) != 1 || plan.Items[0].Pod.Name != "victim" {
-		t.Fatalf("MIG receipt entered quarantine plan: %+v %v", plan.Items, err)
+			inv, err := n.InventoryRecovery(context.Background(), recoveryScope(2))
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, item := range inv.Items {
+				if item.Kind == "mig-rebind" {
+					found = true
+					if item.Status != "manual" || item.SupportedOperation != "" || item.Node != "node-a" || item.GPUUUID != "GPU-a" {
+						t.Fatalf("MIG receipt gained apply authority: %+v", item)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("MIG receipt absent: %+v", inv.Items)
+			}
+			plan, err := n.PlanRecovery(context.Background(), recoveryScope(2))
+			if err != nil || len(plan.Items) != 1 || plan.Items[0].Pod.Name != "victim" {
+				t.Fatalf("MIG receipt entered quarantine plan: %+v %v", plan.Items, err)
+			}
+		})
 	}
 }
 

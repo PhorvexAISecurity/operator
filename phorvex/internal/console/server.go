@@ -48,10 +48,11 @@ type Server struct {
 	// and in that state every API route answers 503 rather than serving anything.
 	auth *Authenticator
 	// [P-VCLUSTER Pass 2] multi-tenant write-path components:
-	quota    *TenantQuota     // per-tenant DoS limiter on tenant-facing surfaces
-	applyfix *ApplyFixManager // the safe apply-fix write-path
-	stateMu  sync.RWMutex
-	stateErr string
+	quota         *TenantQuota     // per-tenant DoS limiter on tenant-facing surfaces
+	applyfix      *ApplyFixManager // the safe apply-fix write-path
+	stateMu       sync.RWMutex
+	stateErr      string
+	experimentAPI experimentCluster
 }
 
 func (s *Server) recordStateError(err error) {
@@ -81,6 +82,9 @@ func NewServer(cfg Config) *Server {
 		s.stateErr = "console state directory is not configured"
 	} else if s.runs.loadErr != nil {
 		s.stateErr = s.runs.loadErr.Error()
+	}
+	if cfg.StateDir != "" {
+		s.recoverExperiments()
 	}
 	return s
 }

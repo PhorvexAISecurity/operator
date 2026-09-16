@@ -70,7 +70,7 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 			Namespace: ns.Name,
 			Name:      "infer",
 			Annotations: map[string]string{
-				annoGPUID:      "0",
+				annoGPUID:      testGPUUUID,
 				annoMIGProfile: "2g.20gb",
 			},
 		},
@@ -102,7 +102,7 @@ func TestM46APIAdmittedLimitOnlyMIGReachesHandler(t *testing.T) {
 	}
 
 	mig := &mockMIG{}
-	result, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mig, VLLM: &mockVLLM{}}, Request{
+	result, err := migRebindHandler{}.Enact(ctx, EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mig, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfilesFor(pod.Namespace)}, Request{
 		Namespace:  pod.Namespace,
 		Pod:        pod.Name,
 		TargetUID:  string(admitted.UID),

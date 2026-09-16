@@ -69,8 +69,19 @@ class M004ChartTest(unittest.TestCase):
         self.assertEqual([c["name"] for c in manager_pod["containers"]], ["manager"])
         self.assertEqual([c["name"] for c in console_pod["containers"]], ["console"])
         self.assertNotEqual(manager_pod["serviceAccountName"], console_pod["serviceAccountName"])
-        self.assertEqual([v["name"] for v in manager_pod["volumes"] if "persistentVolumeClaim" in v], ["audit"])
-        self.assertFalse(any("persistentVolumeClaim" in v for v in console_pod["volumes"]))
+        manager_pvcs = {v["name"]: v["persistentVolumeClaim"]["claimName"]
+                        for v in manager_pod["volumes"] if "persistentVolumeClaim" in v}
+        console_pvcs = {v["name"]: v["persistentVolumeClaim"]["claimName"]
+                        for v in console_pod["volumes"] if "persistentVolumeClaim" in v}
+        self.assertEqual(manager_pvcs, {"audit": "phorvex-stack-phorvex-audit"})
+        self.assertEqual(console_pvcs, {"console-state": "phorvex-stack-phorvex-console-state"})
+        self.assertTrue(set(manager_pvcs.values()).isdisjoint(console_pvcs.values()))
+        manager_mounts = {v["name"] for v in manager_pod["containers"][0].get("volumeMounts", [])}
+        console_mounts = {v["name"] for v in console_pod["containers"][0].get("volumeMounts", [])}
+        self.assertIn("audit", manager_mounts)
+        self.assertNotIn("console-state", manager_mounts)
+        self.assertIn("console-state", console_mounts)
+        self.assertNotIn("audit", console_mounts)
         self.assertFalse(any(v["name"] == "webhook-cert" for v in console_pod["volumes"]))
         manager_role = obj(docs, "ClusterRole", "-manager-role")
         console_role = obj(docs, "ClusterRole", "-console-role")

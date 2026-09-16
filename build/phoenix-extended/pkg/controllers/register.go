@@ -41,8 +41,9 @@ func RegisterCoreControllers(mgr ctrl.Manager) error {
 	}
 
 	if err := (&internalcontroller.SecurityEventReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		return err
 	}

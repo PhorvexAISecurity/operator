@@ -3,8 +3,10 @@ package actuator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -54,8 +56,39 @@ func (m *mockVLLM) DrainRequests(_ context.Context, _ servingEndpoint) (int, err
 
 type mockMIG struct {
 	repErr, availErr error
+	bindErr          error
+	revalidate       func(bool) error
+	releaseTimeout   time.Duration
 	calls            [][3]string
 	node             string
+}
+
+func (m *mockMIG) BindAllocation(_ context.Context, target migAllocationTarget, rule MIGProfileRule) (migAllocationBinding, error) {
+	if m.bindErr != nil {
+		return migAllocationBinding{}, m.bindErr
+	}
+	return migAllocationBinding{Version: 1, Namespace: target.Namespace, Pod: target.Pod, PodUID: target.UID, Node: target.Node, Container: "model", Resource: target.Resource, DeviceID: "MIG-11111111-2222-3333-4444-555555555555", GPUUUID: "GPU-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", ProfileRule: rule.Namespace + "/" + rule.Resource, TargetProfile: rule.Profile, SnapshotVersion: 1, SnapshotDigest: strings.Repeat("a", 64)}, nil
+}
+func (m *mockMIG) RevalidateAllocation(_ context.Context, _ migAllocationBinding, targetPresent bool) error {
+	if m.revalidate != nil {
+		return m.revalidate(targetPresent)
+	}
+	return nil
+}
+func (m *mockMIG) allocationReleaseTimeout() time.Duration {
+	if m.releaseTimeout > 0 {
+		return m.releaseTimeout
+	}
+	return time.Second
+}
+
+func testMIGProfiles() *MIGProfiles {
+	return testMIGProfilesFor("ns")
+}
+func testMIGProfilesFor(namespace string) *MIGProfiles {
+	p := &MIGProfiles{Version: 1, Rules: []MIGProfileRule{{Namespace: namespace, Resource: "nvidia.com/mig-1g.10gb", Profile: "2g.20gb"}}}
+	_ = p.validate()
+	return p
 }
 
 func (m *mockMIG) Prepare(_ context.Context, node string) (preparedMIG, error) {
@@ -307,7 +340,7 @@ func TestEndpointRotateRestitchesRouteAndRollsBack(t *testing.T) {
 // ---- mig-rebind ----
 func migPod(ns, name string) *corev1.Pod {
 	p := aiPod(ns, name, map[string]string{labelRole: roleLeader})
-	p.Annotations[annoGPUID] = "GPU-0"
+	p.Annotations[annoGPUID] = "GPU-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 	p.Annotations[annoMIGProfile] = "2g.20gb"
 	// an extended resource is non-overcommittable: the API server requires limits == requests.
 	p.Spec.Containers[0].Resources.Requests = corev1.ResourceList{"nvidia.com/mig-1g.10gb": resource.MustParse("1")}
@@ -319,7 +352,7 @@ func TestMIGRebindRealRepartitionEvictsPod(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	mm := &mockMIG{} // Available nil + Repartition succeeds
-	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
+	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles()}, boundReq(pod, model.ActionMIGRebind))
 	if err != nil {
 		t.Fatalf("mig-rebind: %v", err)
 	}
@@ -337,6 +370,58 @@ func TestMIGRebindRealRepartitionEvictsPod(t *testing.T) {
 	}
 }
 
+// Baseline at origin/main: this well-formed tenant assertion selected a foreign GPU directly.
+// The fixed path binds from PodResources and treats the annotation only as a matching assertion.
+func TestMIGRebindConflictingValidGPUAnnotationRejectedBeforeEffects(t *testing.T) {
+	pod := migPod("ns", "infer")
+	pod.Annotations[annoGPUID] = "GPU-ffffffff-bbbb-cccc-dddd-eeeeeeeeeeee"
+	c := fakeC(pod)
+	mm := &mockMIG{}
+	if _, err := (migRebindHandler{}).Enact(t.Context(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles()}, boundReq(pod, model.ActionMIGRebind)); err == nil || !strings.Contains(err.Error(), "conflicts with allocated device") {
+		t.Fatalf("foreign valid annotation was not rejected: %v", err)
+	}
+	if len(mm.calls) != 0 {
+		t.Fatalf("GPU mutation reached: %v", mm.calls)
+	}
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(pod), &corev1.Pod{}); err != nil {
+		t.Fatalf("target changed: %v", err)
+	}
+}
+
+func TestMIGRebindAllocationReleaseAndNewForeignAllocationRefuseGPU(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		revalidate func(bool) error
+		want       string
+	}{
+		{"release-timeout", func(present bool) error {
+			if !present {
+				return errTargetAllocationPresent
+			}
+			return nil
+		}, "wait for target allocation release"},
+		{"new-foreign-allocation", func(present bool) error {
+			if !present {
+				return fmt.Errorf("physical GPU gained a foreign allocation")
+			}
+			return nil
+		}, "foreign allocation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := migPod("ns", "infer")
+			c := fakeC(pod)
+			mm := &mockMIG{revalidate: tc.revalidate, releaseTimeout: 5 * time.Millisecond}
+			hr, err := migRebindHandler{}.Enact(t.Context(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles()}, boundReq(pod, model.ActionMIGRebind))
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !hr.Emitted {
+				t.Fatalf("hr=%+v err=%v", hr, err)
+			}
+			if len(mm.calls) != 0 {
+				t.Fatalf("repartition crossed refusal: %v", mm.calls)
+			}
+		})
+	}
+}
+
 // PHORVEXSEC-121 Mode-C discipline: a failed physical repartition must never be
 // reported as an emitted defence. The optimizer may have selected the candidate,
 // but manager records actuation/credit only for Emitted=true.
@@ -345,8 +430,9 @@ func TestMIGRebindRepartitionFailureEmitsNothing(t *testing.T) {
 	c := fakeC(pod)
 	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{
 		Client: c, Reader: c, JournalNamespace: "operator",
-		MIG:  &mockMIG{repErr: errors.New("live CUDA context blocks repartition")},
-		VLLM: &mockVLLM{},
+		MIG:         &mockMIG{repErr: errors.New("live CUDA context blocks repartition")},
+		VLLM:        &mockVLLM{},
+		MIGProfiles: testMIGProfiles(),
 	}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("failed repartition must return an error")
@@ -369,7 +455,7 @@ func TestMIGRebindFailClosedNoDevice(t *testing.T) {
 func TestMIGRebindFailClosedTransportUnavailable(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{availErr: errors.New("node-exec not wired")}, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{availErr: errors.New("node-exec not wired")}, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles()}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("mig-rebind must FAIL-CLOSED when the node-exec transport is unavailable")
 	}
@@ -383,7 +469,7 @@ func TestMIGRebindUnconfirmedDrainStopsBeforeEvictionAndGPU(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	mm := &mockMIG{}
-	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{drainErr: errStackUnreachable}}, boundReq(pod, model.ActionMIGRebind))
+	hr, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", MIG: mm, VLLM: &mockVLLM{drainErr: errStackUnreachable}, MIGProfiles: testMIGProfiles()}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil || !hr.Emitted || len(mm.calls) != 0 {
 		t.Fatalf("unconfirmed drain crossed boundary: hr=%+v calls=%v err=%v", hr, mm.calls, err)
 	}
@@ -392,7 +478,7 @@ func TestMIGRebindUnconfirmedDrainStopsBeforeEvictionAndGPU(t *testing.T) {
 		t.Fatalf("pod evicted on unconfirmed drain: %v", err)
 	}
 	var receipts corev1.ConfigMapList
-	if err := c.List(context.Background(), &receipts, client.InNamespace("operator"), client.MatchingLabels{migRecoveryLabel: "v1"}); err != nil || len(receipts.Items) != 1 {
+	if err := c.List(context.Background(), &receipts, client.InNamespace("operator"), client.MatchingLabels{migRecoveryLabel: "v2"}); err != nil || len(receipts.Items) != 1 {
 		t.Fatalf("recovery receipt not retained: %v %+v", err, receipts.Items)
 	}
 }

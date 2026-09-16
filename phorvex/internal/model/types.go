@@ -358,8 +358,6 @@ type Pod struct {
 	RouteServiceReady    bool   // declared route Service exists in this namespace and can be restitched
 	GuardrailVariants    int    // distinct current+alternate guardrail variants declared
 	ParallelSize         int    // phorvex.ai/parallel-size; <=0 means absent or invalid
-	MIGGPUID             string // phorvex.ai/gpu-id annotation used by mig-rebind
-	MIGTargetProfile     string // phorvex.ai/mig-target-profile annotation used by mig-rebind
 }
 
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
@@ -594,6 +592,14 @@ type ContextSignals struct {
 // interfaces — so interface packages never import the API package.
 type Policy struct {
 	NativeRotate bool // M47: enforce validated ownership for the native delete path.
+	// Quarantine capacity is operator-owned, namespace-wide state. Configured=false
+	// preserves non-production/offline callers; production always supplies the guard.
+	// Known=false is a hard fail-closed inventory result, never an invented zero.
+	QuarantineCapacityConfigured bool
+	QuarantineCapacityKnown      bool
+	QuarantineCapacityUsed       int
+	QuarantineCapacityLimit      int
+	QuarantineCapacityReason     string
 
 	TrustBoundarySince           time.Time
 	DecisionAssets               map[string]string

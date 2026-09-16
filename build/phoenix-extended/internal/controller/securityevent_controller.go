@@ -43,7 +43,8 @@ import (
 // SecurityEventReconciler reconciles a SecurityEvent object
 type SecurityEventReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	APIReader client.Reader
 }
 
 // defaultRotateGracePeriodSeconds is the pod-delete grace used by the Phase 0
@@ -59,11 +60,63 @@ type preparedSecurityEventTarget struct {
 	management []AMTDManageInfo
 }
 
+func isControlledPhorvexQuarantine(event *amtdv1beta1.SecurityEvent) bool {
+	return event != nil && event.Spec.Rule.Type == PHORVEX_QUARANTINE_RULE_TYPE && event.Spec.Rule.Source == PHORVEX_CONTROLLED_RULE_SOURCE
+}
+
+func (r *SecurityEventReconciler) identityReader() client.Reader {
+	if r.APIReader != nil {
+		return r.APIReader
+	}
+	return r.Client
+}
+
+// boundPhorvexQuarantineTarget validates the operator-owned identity envelope.
+// External/manual Phoenix events retain their existing contract; only the exact
+// Phorvex-controlled quarantine rule requires this binding.
+func (r *SecurityEventReconciler) boundPhorvexQuarantineTarget(ctx context.Context, event *amtdv1beta1.SecurityEvent, namespace, name string) (*corev1.Pod, error) {
+	if !isControlledPhorvexQuarantine(event) {
+		return nil, nil
+	}
+	if len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != namespace+"/"+name {
+		return nil, fmt.Errorf("controlled Phorvex quarantine must bind exactly one target")
+	}
+	targetUID := strings.TrimSpace(event.Annotations[PHORVEX_QUARANTINE_TARGET_UID])
+	namespaceUID := strings.TrimSpace(event.Annotations[PHORVEX_QUARANTINE_NAMESPACE_UID])
+	operationID := strings.TrimSpace(event.Annotations[PHORVEX_QUARANTINE_OPERATION])
+	if targetUID == "" || len(targetUID) > 128 || namespaceUID == "" || len(namespaceUID) > 128 || len(operationID) != 40 {
+		return nil, fmt.Errorf("controlled Phorvex quarantine identity envelope is incomplete")
+	}
+	ns := &corev1.Namespace{}
+	if err := r.identityReader().Get(ctx, types.NamespacedName{Name: namespace}, ns); err != nil {
+		return nil, fmt.Errorf("validate controlled quarantine namespace identity: %w", err)
+	}
+	if ns.UID == "" || string(ns.UID) != namespaceUID || ns.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("controlled Phorvex quarantine namespace UID changed or is terminating")
+	}
+	pod := &corev1.Pod{}
+	if err := r.identityReader().Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
+		return nil, fmt.Errorf("validate controlled quarantine target identity: %w", err)
+	}
+	if pod.UID == "" || string(pod.UID) != targetUID || pod.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("controlled Phorvex quarantine target UID changed or is terminating")
+	}
+	return pod, nil
+}
+
 // prepareSecurityEventTargets validates and snapshots the complete target batch
 // before the reconcile loop performs any action or records an event as applied.
 // Adoption is asynchronous, so absent or empty managed-by metadata is a pending
 // state rather than successful completion.
-func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Context, targets []string) ([]preparedSecurityEventTarget, bool, bool, error) {
+
+func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Context, event *amtdv1beta1.SecurityEvent) ([]preparedSecurityEventTarget, bool, bool, error) {
+	if event == nil {
+		return nil, false, false, fmt.Errorf("SecurityEvent is required")
+	}
+	targets := event.Spec.Targets
+	if isControlledPhorvexQuarantine(event) && len(targets) != 1 {
+		return nil, false, false, fmt.Errorf("controlled Phorvex quarantine must bind exactly one target")
+	}
 	prepared := make([]preparedSecurityEventTarget, 0, len(targets))
 	var pendingAdoption, absentPod bool
 	for _, target := range targets {
@@ -74,7 +127,11 @@ func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Contex
 
 		pod := &corev1.Pod{}
 		key := types.NamespacedName{Namespace: parts[0], Name: parts[1]}
-		if err := r.Client.Get(ctx, key, pod); err != nil {
+		reader := client.Reader(r.Client)
+		if isControlledPhorvexQuarantine(event) {
+			reader = r.identityReader()
+		}
+		if err := reader.Get(ctx, key, pod); err != nil {
 			if errors.IsNotFound(err) {
 				// Preserve the established absent-pod no-action outcome. Because this
 				// is preflight, no earlier target has been mutated yet.
@@ -82,6 +139,13 @@ func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Contex
 				continue
 			}
 			return nil, false, false, fmt.Errorf("retrieve target pod %s: %w", key, err)
+		}
+		if isControlledPhorvexQuarantine(event) {
+			bound, bindErr := r.boundPhorvexQuarantineTarget(ctx, event, parts[0], parts[1])
+			if bindErr != nil {
+				return nil, false, false, bindErr
+			}
+			pod = bound
 		}
 
 		raw, found := pod.Annotations[AMTD_MANAGED_BY]
@@ -114,6 +178,7 @@ func (r *SecurityEventReconciler) prepareSecurityEventTargets(ctx context.Contex
 //+kubebuilder:rbac:groups=amtd.r6security.com,resources=securityevents/finalizers,verbs=update
 //+kubebuilder:rbac:groups=amtd.r6security.com,resources=adaptivemovingtargetdefenses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=amtd.r6security.com,resources=adaptivemovingtargetdefenses/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create
 //+kubebuilder:rbac:groups=apps,resources=deployments;statefulsets;daemonsets,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get;list;watch
@@ -153,7 +218,7 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// ---------------------------------------------------
 	// Process pods in the target list of the SecurityEvent
 	// ---------------------------------------------------
-	preparedTargets, pendingAdoption, absentPod, err := r.prepareSecurityEventTargets(ctx, securityEvent.Spec.Targets)
+	preparedTargets, pendingAdoption, absentPod, err := r.prepareSecurityEventTargets(ctx, securityEvent)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -169,6 +234,15 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	var AMTD *amtdv1beta1.AdaptiveMovingTargetDefense
 	for _, prepared := range preparedTargets {
 		pod := prepared.pod
+		// Re-read and revalidate the controlled identity immediately before the
+		// first annotation or action. A same-name replacement can never consume the
+		// reservation or delayed event intended for the old Pod/namespace UID.
+		if isControlledPhorvexQuarantine(securityEvent) {
+			pod, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, prepared.pod.Namespace, prepared.pod.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 
 		// ---------------------------------------------------
 		// Look for the proper action for the SecurityEvent in AMTDs that manage the pod
@@ -216,6 +290,9 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				break
 			}
 		}
+		if isControlledPhorvexQuarantine(securityEvent) && action.Quarantine == nil {
+			return ctrl.Result{}, fmt.Errorf("controlled Phorvex quarantine event did not resolve to the quarantine action")
+		}
 
 		// ---------------------------------------------------
 		// If a scored strategy clause was inert because the AMTD is in (default)
@@ -224,6 +301,11 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// behavior change).
 		// ---------------------------------------------------
 		if matcherModeWarning && warnAMTD != nil {
+			if isControlledPhorvexQuarantine(securityEvent) {
+				if _, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, pod.Namespace, pod.Name); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
 			r.setMatcherModeWarning(ctx, warnAMTD, log)
 		}
 
@@ -258,6 +340,15 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			if err != nil {
 				log.Error(err, fmt.Sprintf(`appliedSecurityEvents json encoding does not work: %s`, err.Error()))
 			}
+			if isControlledPhorvexQuarantine(securityEvent) {
+				pod, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, pod.Namespace, pod.Name)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+			if pod.Annotations == nil {
+				pod.Annotations = map[string]string{}
+			}
 			pod.ObjectMeta.Annotations[AMTD_APPLIED_SECURITY_EVENTS] = string(appliedSecurityEventsEncoded)
 
 			err = r.Client.Update(ctx, pod)
@@ -288,6 +379,11 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			AMTD.Spec.MatcherMode == amtdv1beta1.MatcherModeScored &&
 			AMTD.Spec.InferenceRotation != nil &&
 			AMTD.Spec.InferenceRotation.AdaptiveRotation != nil {
+			if isControlledPhorvexQuarantine(securityEvent) {
+				if _, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, pod.Namespace, pod.Name); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
 			score = r.applyScoring(ctx, AMTD, securityEvent, log)
 		}
 
@@ -423,11 +519,22 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 						"Namespace", networkPolicy.Namespace,
 					)
 				}
+				if isControlledPhorvexQuarantine(securityEvent) {
+					if _, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, pod.Namespace, pod.Name); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
 
 				if err = r.Create(ctx, networkPolicy); err != nil {
 					log.Error(err, "Failed to create NetworkPolicy in the cluster",
 						"NetworkPolicy", networkPolicy.Name,
 						"Namespace", networkPolicy.Namespace)
+					return ctrl.Result{}, err
+				}
+			}
+			if isControlledPhorvexQuarantine(securityEvent) {
+				pod, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, pod.Namespace, pod.Name)
+				if err != nil {
 					return ctrl.Result{}, err
 				}
 			}
@@ -458,6 +565,12 @@ func (r *SecurityEventReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			// until relabel another owner exists that cannot be updated
 			// Actually since it's not immediate that OwnerReference is deleted
 			// by ReplicaSet or sg. we need to reschedule and check it later
+			if isControlledPhorvexQuarantine(securityEvent) {
+				pod, err = r.boundPhorvexQuarantineTarget(ctx, securityEvent, pod.Namespace, pod.Name)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			}
 			err = ctrl.SetControllerReference(AMTD, pod, r.Scheme)
 			if err != nil {
 				log.Error(err, "Failed to set AMTD as owner and controller reference on Pod - Rescheduling and trying later",

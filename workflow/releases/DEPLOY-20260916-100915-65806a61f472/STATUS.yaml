@@ -1,0 +1,38 @@
+schema_version: 1
+sync_id: DEPLOY-20260916-100915-65806a61f472
+kind: deployment
+state: DEPLOY_OBSERVED
+created_at: '2026-09-16T10:09:15+00:00'
+updated_at: '2026-09-16T10:09:15+00:00'
+approval_ref: assessments/20260916-tier5-live/AUTHORIZATION.md
+code_repository:
+  previous_main_sha: null
+  observed_main_sha: null
+  source_release: null
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.119
+  digest: sha256:97ec2447ba6ae2aba9e9391ebf21dfbc3b5d262ccdfb519b3746dfb77398f48d
+  embedded_git_sha: 65806a61f472835f3c5c4492ab88e059f74157b9
+  release_commit: cacd0f5fe74032677cd798e11bf5418da88abed4
+  observed_at: '2026-09-16T09:49:00Z'
+  observed_by: codex-lead
+  environment: dev
+  source_release: v0.4.119
+  issues: &id002 []
+  fixes: &id001 []
+included_fixes: *id001
+included_issues: *id002
+issue_results: {}
+anatomy:
+  source_commit: 65806a61f472835f3c5c4492ab88e059f74157b9
+  status: pending
+next_action:
+  owner: release-synchronizer
+  action: Publish Anatomy at the observed SHA, run scoped verifiers, then finalize
+    DEPLOY-20260916-100915-65806a61f472.
+transitions:
+- from: DRAFT
+  to: DEPLOY_OBSERVED
+  at: '2026-09-16T10:09:15+00:00'
+  by: codex-lead
+  approval_ref: assessments/20260916-tier5-live/AUTHORIZATION.md

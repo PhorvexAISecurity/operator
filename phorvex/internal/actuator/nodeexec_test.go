@@ -77,7 +77,7 @@ func TestMIG_RepartitionEmptyProfileRejected(t *testing.T) {
 }
 
 func testAgentPolicy() MIGAgentPolicy {
-	return MIGAgentPolicy{Namespace: "gpu-system", ServiceAccounts: []string{"mig-agent"}, DaemonSet: "mig-agent", Container: "agent", ExecTimeout: time.Second}
+	return MIGAgentPolicy{Namespace: "gpu-system", ServiceAccounts: []string{"mig-agent"}, DaemonSet: "mig-agent", Container: "agent", AllocationContainer: "allocation-helper", AllocationHelper: "/phorvex-mig-allocation-helper", AllocationSocket: "/var/lib/kubelet/pod-resources/kubelet.sock", ExecTimeout: time.Second, AllocationReadTimeout: time.Second, AllocationReleaseTimeout: time.Second, ExclusiveMaintenance: true}
 }
 
 func testAgentObjects(name string) (*appsv1.DaemonSet, *corev1.Pod) {
@@ -88,7 +88,7 @@ func testAgentObjects(name string) (*appsv1.DaemonSet, *corev1.Pod) {
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "gpu-system", UID: types.UID(name + "-uid"), Labels: map[string]string{"app": "mig-agent", migAgentLabelKey: "true"}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "DaemonSet", Name: ds.Name, UID: ds.UID, Controller: &controller}}},
-		Spec:       corev1.PodSpec{NodeName: "node-1", ServiceAccountName: "mig-agent", Containers: []corev1.Container{{Name: "agent"}}},
+		Spec:       corev1.PodSpec{NodeName: "node-1", ServiceAccountName: "mig-agent", Containers: []corev1.Container{{Name: "agent"}, {Name: "allocation-helper"}}},
 		Status:     corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
 	}
 	return ds, pod
@@ -141,6 +141,34 @@ func TestExecNodeRunner_ResolvesAgentAndDispatchesExec(t *testing.T) {
 	}
 	if lists != 1 {
 		t.Fatalf("agent discovery lists=%d, want exactly one", lists)
+	}
+}
+
+func TestBoundNodeRunnerDispatchesFixedAllocationHelper(t *testing.T) {
+	ds, agent := testAgentObjects("mig-agent-xyz")
+	var gotContainer string
+	var gotArgv []string
+	policy := testAgentPolicy()
+	policy.ExecTimeout = 31 * time.Second
+	policy.AllocationReadTimeout = 2 * time.Second
+	r := execNodeRunner{client: fake.NewSimpleClientset(ds, agent), policy: policy, exec: func(_ context.Context, _, _, container string, argv []string) (string, error) {
+		gotContainer, gotArgv = container, append([]string(nil), argv...)
+		return `{"version":1,"allocations":[{"namespace":"ns","pod":"p","container":"model","resource":"nvidia.com/mig-1g.10gb","deviceIDs":["MIG-abc"]}]}`, nil
+	}}
+	prepared, err := r.Prepare(t.Context(), "node-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, ok := prepared.(allocationSnapshotReader)
+	if !ok {
+		t.Fatal("prepared runner has no allocation reader")
+	}
+	if _, err := reader.Allocations(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/phorvex-mig-allocation-helper", "--socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "--timeout", "2s"}
+	if gotContainer != "allocation-helper" || !reflect.DeepEqual(gotArgv, want) {
+		t.Fatalf("container=%q argv=%v", gotContainer, gotArgv)
 	}
 }
 

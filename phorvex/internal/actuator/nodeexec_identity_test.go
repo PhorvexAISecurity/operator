@@ -26,14 +26,22 @@ import (
 func TestMIGAgentPolicyRejectsMissingAndMalformedConfiguration(t *testing.T) {
 	valid := testAgentPolicy()
 	tests := map[string]func(*MIGAgentPolicy){
-		"namespace":         func(p *MIGAgentPolicy) { p.Namespace = "" },
-		"daemonset":         func(p *MIGAgentPolicy) { p.DaemonSet = "Bad_Name" },
-		"container":         func(p *MIGAgentPolicy) { p.Container = "" },
-		"service accounts":  func(p *MIGAgentPolicy) { p.ServiceAccounts = nil },
-		"bad account":       func(p *MIGAgentPolicy) { p.ServiceAccounts = []string{"Bad_Name"} },
-		"duplicate account": func(p *MIGAgentPolicy) { p.ServiceAccounts = []string{"mig-agent", "mig-agent"} },
-		"zero timeout":      func(p *MIGAgentPolicy) { p.ExecTimeout = 0 },
-		"excess timeout":    func(p *MIGAgentPolicy) { p.ExecTimeout = maxMIGExecTimeout + time.Nanosecond },
+		"maintenance declaration": func(p *MIGAgentPolicy) { p.ExclusiveMaintenance = false },
+		"namespace":               func(p *MIGAgentPolicy) { p.Namespace = "" },
+		"daemonset":               func(p *MIGAgentPolicy) { p.DaemonSet = "Bad_Name" },
+		"container":               func(p *MIGAgentPolicy) { p.Container = "" },
+		"helper container":        func(p *MIGAgentPolicy) { p.AllocationContainer = "" },
+		"same containers":         func(p *MIGAgentPolicy) { p.AllocationContainer = p.Container },
+		"relative helper":         func(p *MIGAgentPolicy) { p.AllocationHelper = "helper" },
+		"dirty socket":            func(p *MIGAgentPolicy) { p.AllocationSocket = "/var/lib/../kubelet.sock" },
+		"service accounts":        func(p *MIGAgentPolicy) { p.ServiceAccounts = nil },
+		"bad account":             func(p *MIGAgentPolicy) { p.ServiceAccounts = []string{"Bad_Name"} },
+		"duplicate account":       func(p *MIGAgentPolicy) { p.ServiceAccounts = []string{"mig-agent", "mig-agent"} },
+		"zero timeout":            func(p *MIGAgentPolicy) { p.ExecTimeout = 0 },
+		"zero allocation read":    func(p *MIGAgentPolicy) { p.AllocationReadTimeout = 0 },
+		"excess allocation read":  func(p *MIGAgentPolicy) { p.AllocationReadTimeout = 30*time.Second + time.Nanosecond },
+		"zero release":            func(p *MIGAgentPolicy) { p.AllocationReleaseTimeout = 0 },
+		"excess timeout":          func(p *MIGAgentPolicy) { p.ExecTimeout = maxMIGExecTimeout + time.Nanosecond },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -44,6 +52,22 @@ func TestMIGAgentPolicyRejectsMissingAndMalformedConfiguration(t *testing.T) {
 				t.Fatal("invalid policy accepted")
 			}
 		})
+	}
+}
+
+func TestMIGAgentPolicyAllowsLongGPUExecWithBoundedAllocationRead(t *testing.T) {
+	policy := testAgentPolicy()
+	policy.ExecTimeout = maxMIGExecTimeout
+	policy.AllocationReadTimeout = 30 * time.Second
+	if err := policy.validate(); err != nil {
+		t.Fatalf("independent timeout bounds rejected: %v", err)
+	}
+}
+
+func TestRemoteExecOutputBufferIsBounded(t *testing.T) {
+	w := &limitedBuffer{limit: 4}
+	if n, err := w.Write([]byte("abcdef")); err == nil || n != 4 || w.String() != "abcd" {
+		t.Fatalf("oversized write n=%d err=%v contents=%q", n, err, w.String())
 	}
 }
 
@@ -336,7 +360,7 @@ func TestMIGRebindPreparationRefusalDoesNotMutateWorkload(t *testing.T) {
 	c := fakeC(pod)
 	ds, _ := testAgentObjects("agent-a")
 	mig := &nvidiaSMIMIG{run: execNodeRunner{client: fake.NewSimpleClientset(ds), exec: noopExec, policy: testAgentPolicy()}}
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mig}, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mig, MIGProfiles: testMIGProfiles()}, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
 	if err == nil {
 		t.Fatal("selection refusal accepted")
 	}

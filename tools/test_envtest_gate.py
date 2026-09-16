@@ -14,6 +14,10 @@ import envtest_gate as gate  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 ACTUATOR = 'github.com/phorvex/phorvex/internal/actuator'
 RUNNER = 'github.com/phorvex/phorvex/internal/runner'
+AUTHZ = 'github.com/phorvex/phorvex/internal/authz'
+STARTUPAUTHZ = 'github.com/phorvex/phorvex/internal/startupauthz'
+CONSOLE = 'github.com/phorvex/phorvex/internal/console'
+API = 'github.com/phorvex/phorvex/api/v1alpha1'
 
 
 def event(action, package, test=None, **extra):
@@ -25,7 +29,7 @@ def event(action, package, test=None, **extra):
 
 
 def passing_stream(subtests=(), extra=()):
-    """A well-formed report: every required test runs and passes, both packages pass.
+    """A well-formed report: every required test runs and all selected packages pass.
 
     `extra` names additional (package, test) parents that also run and pass, standing in
     for the rest of the full package suites (unit tests and newly added envtest tests).
@@ -57,7 +61,10 @@ class EvaluateTests(unittest.TestCase):
         required = {t for ts in gate.REQUIRED.values() for t in ts}
         self.assertTrue(required <= set(verdicts))
         self.assertEqual(len(verdicts), 3 * len(required))  # parents + two subtests each
-        self.assertEqual(packages, {ACTUATOR: 'pass', RUNNER: 'pass'})
+        self.assertEqual(packages, {
+            API: 'pass', ACTUATOR: 'pass', RUNNER: 'pass', AUTHZ: 'pass',
+            STARTUPAUTHZ: 'pass', CONSOLE: 'pass',
+        })
 
     # Full-package composition (review R2): the whole selected packages run, so tests the
     # required list does not name — unit tests and any newly added envtest test, whatever
@@ -104,11 +111,13 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(problems(lines), [f'{RUNNER} TestM013RealEventSink: required test never ran'])
 
     def test_skipped_test_is_rejected_even_with_green_exit(self):
-        # The baseline CI shape: blank KUBEBUILDER_ASSETS, 8 skips, package pass, exit 0.
+        # The unit-job shape: blank KUBEBUILDER_ASSETS, required controls skip,
+        # packages pass, and go test exits 0.
         lines = [l.replace('"Action": "pass"', '"Action": "skip"') if '"Test"' in l else l
                  for l in passing_stream()]
         found = problems(lines, 0)
-        self.assertEqual(sum('skip' in p for p in found), 8, found)
+        expected = sum(len(tests) for tests in gate.REQUIRED.values())
+        self.assertEqual(sum('skip' in p for p in found), expected, found)
 
     def test_one_skip_among_passes_is_rejected(self):
         lines = passing_stream()
@@ -218,7 +227,7 @@ class SourceBindingTests(unittest.TestCase):
     """Bind the gate to the source tree without claiming a Go call graph from text.
 
     The full-package command is what makes a new envtest test run regardless of which
-    helper performs its setup; these checks only pin that command, the minimum eight,
+    helper performs its setup; these checks only pin that command, the required controls,
     and that no envtest-importing test file lives outside the selected packages.
     """
 
@@ -230,7 +239,8 @@ class SourceBindingTests(unittest.TestCase):
         self.assertIn('-mod=readonly', command)
         self.assertNotIn('-run', command)
         self.assertTrue(all(not arg.startswith('-run') for arg in command))
-        self.assertEqual(command[-2:], ['./internal/actuator', './internal/runner'])
+        self.assertEqual(command[-6:], ['./api/v1alpha1', './internal/actuator', './internal/runner',
+                                        './internal/authz', './internal/startupauthz', './internal/console'])
         self.assertEqual(set(gate.REQUIRED), {'github.com/phorvex/phorvex/' + p[2:] for p in gate.PACKAGES})
 
     def test_required_tests_exist_in_their_packages(self):
@@ -241,7 +251,7 @@ class SourceBindingTests(unittest.TestCase):
                 declared.update(re.findall(r'^func (Test\w+)\(t \*testing\.T\)', path.read_text(), re.M))
             for test in tests:
                 self.assertIn(test, declared, f'{test} is no longer declared in {package}')
-        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 8)
+        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 17)
 
     def test_envtest_importing_test_files_are_all_inside_the_selected_packages(self):
         # Textual import scan only: it flags an envtest-bearing test file the full-package
@@ -304,12 +314,16 @@ class CommandLineTests(unittest.TestCase):
         for name in gate.REQUIRED_BINARIES:
             (assets / name).write_text('#!/bin/sh\nexit 0\n')
             (assets / name).chmod(0o700)
-        return go, assets
+        controller_manager = Path(tmp) / 'kube-controller-manager'
+        controller_manager.write_text('#!/bin/sh\nexit 0\n')
+        controller_manager.chmod(0o700)
+        return go, assets, controller_manager
 
     def run_transport(self, stderr_bytes, exit_code, lines=None, timeout=30):
         with tempfile.TemporaryDirectory() as tmp:
-            go, assets = self.synthetic_go(tmp, stderr_bytes, exit_code, lines)
-            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets), 'USE_EXISTING_CLUSTER': 'false'}
+            go, assets, controller_manager = self.synthetic_go(tmp, stderr_bytes, exit_code, lines)
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets),
+                   'KUBE_CONTROLLER_MANAGER': str(controller_manager), 'USE_EXISTING_CLUSTER': 'false'}
             started = time.monotonic()
             proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run', '--go', str(go),
                                    '--raw-output', f'{tmp}/out/go-test.jsonl', '--summary', f'{tmp}/out/summary.json'],
@@ -372,8 +386,25 @@ class CommandLineTests(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0)
             for name in gate.REQUIRED_BINARIES:
                 self.assertIn(f'missing or non-executable envtest binary: {tmp}/{name}', proc.stderr)
+            self.assertIn('KUBE_CONTROLLER_MANAGER is not set', proc.stderr)
             self.assertIn('USE_EXISTING_CLUSTER=true is not allowed', proc.stderr)
             self.assertEqual(json.loads(Path(tmp, 'summary.json').read_text())['result'], 'FAIL')
+
+    def test_run_mode_refuses_missing_controller_manager(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = Path(tmp) / 'assets'
+            assets.mkdir()
+            for name in gate.REQUIRED_BINARIES:
+                (assets / name).write_text('#!/bin/sh\nexit 0\n')
+                (assets / name).chmod(0o700)
+            missing = Path(tmp) / 'missing-kube-controller-manager'
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets),
+                   'KUBE_CONTROLLER_MANAGER': str(missing), 'USE_EXISTING_CLUSTER': 'false'}
+            proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run',
+                                   '--raw-output', f'{tmp}/raw.jsonl', '--summary', f'{tmp}/summary.json'],
+                                  env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn(f'missing or non-executable kube-controller-manager: {missing}', proc.stderr)
 
 
 if __name__ == '__main__':

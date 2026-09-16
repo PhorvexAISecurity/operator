@@ -5,6 +5,7 @@
 package actionset
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -137,6 +138,54 @@ func TestDynamicActionSetChangesWithState(t *testing.T) {
 	}
 	if !gpuSet[model.ActionQuarantine] {
 		t.Errorf("GPU pod should still offer quarantine")
+	}
+}
+
+func TestQuarantineCapacityIsHardAndLeavesOtherActionsEligible(t *testing.T) {
+	d := testDeps()
+	d.RetainSLO = func(string) bool { return true }
+	view := baseView("capacity")
+	base := testPolicy()
+	base.QuarantineCapacityConfigured = true
+	base.QuarantineCapacityLimit = 1
+
+	cases := []struct {
+		name       string
+		known      bool
+		used       int
+		wantQ      bool
+		wantReason string
+	}{
+		{name: "unknown inventory", known: false, wantReason: "quarantine-capacity-inventory-unknown"},
+		{name: "exhausted", known: true, used: 1, wantReason: "quarantine-capacity-exhausted"},
+		{name: "below cap", known: true, used: 0, wantQ: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pol := base
+			pol.QuarantineCapacityKnown = tc.known
+			pol.QuarantineCapacityUsed = tc.used
+			pol.QuarantineCapacityReason = "fixture inventory unavailable"
+			set := d.Generate([]*model.WorkloadView{view}, pol)
+			actions := actionsFor(set, "ns/capacity")
+			if actions[model.ActionQuarantine] != tc.wantQ {
+				t.Fatalf("quarantine candidate=%v want %v; candidates=%+v excluded=%+v", actions[model.ActionQuarantine], tc.wantQ, set.Candidates, set.Excluded)
+			}
+			if !actions[model.ActionRotate] {
+				t.Fatalf("capacity law must leave non-quarantine actions eligible: %+v", set)
+			}
+			if tc.wantReason != "" {
+				found := false
+				for _, exclusion := range set.Excluded {
+					if exclusion.Action == model.ActionQuarantine && strings.Contains(exclusion.Reason, tc.wantReason) {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("missing %q exclusion: %+v", tc.wantReason, set.Excluded)
+				}
+			}
+		})
 	}
 }
 

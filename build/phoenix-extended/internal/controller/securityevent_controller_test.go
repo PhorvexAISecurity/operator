@@ -20,6 +20,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +42,29 @@ var seTestScheme = runtime.NewScheme()
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(seTestScheme))
 	utilruntime.Must(amtdv1beta1.AddToScheme(seTestScheme))
+}
+
+type replaceOnThirdPodRead struct {
+	crclient.Reader
+	client      crclient.Client
+	oldPod      *corev1.Pod
+	replacement *corev1.Pod
+	podReads    int
+}
+
+func (r *replaceOnThirdPodRead) Get(ctx context.Context, key crclient.ObjectKey, obj crclient.Object, opts ...crclient.GetOption) error {
+	if _, ok := obj.(*corev1.Pod); ok && key.Namespace == r.oldPod.Namespace && key.Name == r.oldPod.Name {
+		r.podReads++
+		if r.podReads == 3 {
+			if err := r.client.Delete(ctx, r.oldPod); err != nil {
+				return err
+			}
+			if err := r.client.Create(ctx, r.replacement); err != nil {
+				return err
+			}
+		}
+	}
+	return r.Reader.Get(ctx, key, obj, opts...)
 }
 
 // managedPod builds an AMTD-managed pod whose managed-by annotation points at the
@@ -173,6 +197,7 @@ func TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod
 		},
 	}
 	pod := managedPod("nats-0", "nats", "nats", "phorvex-nats")
+	pod.UID = "nats-pod-uid"
 	pod.Labels = map[string]string{
 		"app":                     "nats",
 		"r6th.io/rotation-target": "true",
@@ -182,7 +207,11 @@ func TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod
 		APIVersion: "apps/v1", Kind: "StatefulSet", Name: "nats", UID: "statefulset-uid", Controller: &isController,
 	}}
 	event := &amtdv1beta1.SecurityEvent{
-		ObjectMeta: metav1.ObjectMeta{Name: "quarantine-event"},
+		ObjectMeta: metav1.ObjectMeta{Name: "quarantine-event", Annotations: map[string]string{
+			PHORVEX_QUARANTINE_TARGET_UID:    string(pod.UID),
+			PHORVEX_QUARANTINE_NAMESPACE_UID: "nats-namespace-uid",
+			PHORVEX_QUARANTINE_OPERATION:     strings.Repeat("a", 40),
+		}},
 		Spec: amtdv1beta1.SecurityEventSpec{
 			Targets: []string{"nats/nats-0"}, Rule: rule, Description: "stateful quarantine",
 		},
@@ -197,8 +226,9 @@ func TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod
 			Egress:      []networkingv1.NetworkPolicyEgressRule{},
 		},
 	}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "nats", UID: "nats-namespace-uid"}}
 
-	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(amtd, pod, event, policy).Build()
+	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(namespace, amtd, pod, event, policy).Build()
 	r := &SecurityEventReconciler{Client: cl, Scheme: seTestScheme}
 	result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: crclient.ObjectKey{Name: event.Name}})
 	if err != nil {
@@ -228,6 +258,124 @@ func TestSecurityEventReconciler_QuarantineReusesPolicyAndRelabelsReplacementPod
 	}
 	if len(gotPolicy.Spec.Ingress) != 0 || len(gotPolicy.Spec.Egress) != 0 {
 		t.Fatalf("quarantine policy must remain deny-all: ingress=%v egress=%v", gotPolicy.Spec.Ingress, gotPolicy.Spec.Egress)
+	}
+}
+
+func TestSecurityEventReconciler_ControlledQuarantineRejectsSameNameReplacement(t *testing.T) {
+	ctx := context.Background()
+	rule := amtdv1beta1.Rule{Type: PHORVEX_QUARANTINE_RULE_TYPE, ThreatLevel: "high", Source: PHORVEX_CONTROLLED_RULE_SOURCE}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "nats", UID: "namespace-new"}}
+	amtd := &amtdv1beta1.AdaptiveMovingTargetDefense{
+		ObjectMeta: metav1.ObjectMeta{Name: "phorvex-nats", Namespace: "nats", UID: "amtd-uid"},
+		Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
+			PodSelector: map[string]string{"app": "nats"},
+			Strategy:    []amtdv1beta1.ResponseStrategy{{Rule: rule, Action: amtdv1beta1.AMTDAction{Quarantine: &amtdv1beta1.QuarantineAction{}}}},
+		},
+	}
+	replacement := managedPod("nats-0", "nats", "nats", "phorvex-nats")
+	replacement.UID = "pod-new"
+	replacement.Labels = map[string]string{"app": "nats"}
+	event := &amtdv1beta1.SecurityEvent{
+		ObjectMeta: metav1.ObjectMeta{Name: "delayed-quarantine", Annotations: map[string]string{
+			PHORVEX_QUARANTINE_TARGET_UID:    "pod-old",
+			PHORVEX_QUARANTINE_NAMESPACE_UID: "namespace-new",
+			PHORVEX_QUARANTINE_OPERATION:     strings.Repeat("b", 40),
+		}},
+		Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{"nats/nats-0"}, Rule: rule, Description: "delayed controlled quarantine"},
+	}
+	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(namespace, amtd, replacement, event).Build()
+	r := &SecurityEventReconciler{Client: cl, Scheme: seTestScheme}
+	if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: crclient.ObjectKey{Name: event.Name}}); err == nil {
+		t.Fatal("same-name replacement UID must refuse the delayed controlled quarantine")
+	}
+	var got corev1.Pod
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(replacement), &got); err != nil {
+		t.Fatalf("replacement pod disappeared: %v", err)
+	}
+	if got.Labels[AMTD_NETWORK_POLICY] != "" || got.Annotations[AMTD_APPLIED_SECURITY_EVENTS] != "" {
+		t.Fatalf("refused event mutated replacement: labels=%v annotations=%v", got.Labels, got.Annotations)
+	}
+	var policies networkingv1.NetworkPolicyList
+	if err := cl.List(ctx, &policies, crclient.InNamespace("nats")); err != nil {
+		t.Fatalf("list policies: %v", err)
+	}
+	if len(policies.Items) != 0 {
+		t.Fatalf("refused event created quarantine policy: %+v", policies.Items)
+	}
+}
+
+func TestSecurityEventReconciler_ControlledQuarantineRevalidatesImmediatelyBeforeEffect(t *testing.T) {
+	ctx := context.Background()
+	rule := amtdv1beta1.Rule{Type: PHORVEX_QUARANTINE_RULE_TYPE, ThreatLevel: "high", Source: PHORVEX_CONTROLLED_RULE_SOURCE}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "nats", UID: "namespace-uid"}}
+	amtd := &amtdv1beta1.AdaptiveMovingTargetDefense{
+		ObjectMeta: metav1.ObjectMeta{Name: "phorvex-nats", Namespace: "nats", UID: "amtd-uid"},
+		Spec: amtdv1beta1.AdaptiveMovingTargetDefenseSpec{
+			PodSelector: map[string]string{"app": "nats"},
+			Strategy:    []amtdv1beta1.ResponseStrategy{{Rule: rule, Action: amtdv1beta1.AMTDAction{Quarantine: &amtdv1beta1.QuarantineAction{}}}},
+		},
+	}
+	original := managedPod("nats-0", "nats", "nats", "phorvex-nats")
+	original.UID = "pod-old"
+	original.Labels = map[string]string{"app": "nats"}
+	replacement := managedPod("nats-0", "nats", "nats", "phorvex-nats")
+	replacement.UID = "pod-new"
+	replacement.Labels = map[string]string{"app": "nats"}
+	event := &amtdv1beta1.SecurityEvent{
+		ObjectMeta: metav1.ObjectMeta{Name: "delayed-quarantine", Annotations: map[string]string{
+			PHORVEX_QUARANTINE_TARGET_UID:    string(original.UID),
+			PHORVEX_QUARANTINE_NAMESPACE_UID: string(namespace.UID),
+			PHORVEX_QUARANTINE_OPERATION:     strings.Repeat("c", 40),
+		}},
+		Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{"nats/nats-0"}, Rule: rule},
+	}
+	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(namespace, amtd, original, event).Build()
+	boundary := &replaceOnThirdPodRead{Reader: cl, client: cl, oldPod: original.DeepCopy(), replacement: replacement.DeepCopy()}
+	r := &SecurityEventReconciler{Client: cl, APIReader: boundary, Scheme: seTestScheme}
+	if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: crclient.ObjectKey{Name: event.Name}}); err == nil {
+		t.Fatal("same-name replacement between preflight and first effect must be refused")
+	}
+	var got corev1.Pod
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(replacement), &got); err != nil {
+		t.Fatalf("get replacement: %v", err)
+	}
+	if got.Labels[AMTD_NETWORK_POLICY] != "" || got.Annotations[AMTD_APPLIED_SECURITY_EVENTS] != "" {
+		t.Fatalf("replacement was mutated after stale validation: labels=%v annotations=%v", got.Labels, got.Annotations)
+	}
+	var policies networkingv1.NetworkPolicyList
+	if err := cl.List(ctx, &policies, crclient.InNamespace("nats")); err != nil {
+		t.Fatal(err)
+	}
+	if len(policies.Items) != 0 {
+		t.Fatalf("stale controlled event created policies: %+v", policies.Items)
+	}
+}
+
+func TestSecurityEventReconciler_ControlledQuarantineRejectsRecreatedNamespace(t *testing.T) {
+	ctx := context.Background()
+	rule := amtdv1beta1.Rule{Type: PHORVEX_QUARANTINE_RULE_TYPE, ThreatLevel: "high", Source: PHORVEX_CONTROLLED_RULE_SOURCE}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "nats", UID: "namespace-new"}}
+	pod := managedPod("nats-0", "nats", "nats", "phorvex-nats")
+	pod.UID = "pod-uid"
+	event := &amtdv1beta1.SecurityEvent{
+		ObjectMeta: metav1.ObjectMeta{Name: "old-namespace-event", Annotations: map[string]string{
+			PHORVEX_QUARANTINE_TARGET_UID:    string(pod.UID),
+			PHORVEX_QUARANTINE_NAMESPACE_UID: "namespace-old",
+			PHORVEX_QUARANTINE_OPERATION:     strings.Repeat("d", 40),
+		}},
+		Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{"nats/nats-0"}, Rule: rule},
+	}
+	cl := fake.NewClientBuilder().WithScheme(seTestScheme).WithObjects(namespace, pod, event).Build()
+	r := &SecurityEventReconciler{Client: cl, APIReader: cl, Scheme: seTestScheme}
+	if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: crclient.ObjectKey{Name: event.Name}}); err == nil {
+		t.Fatal("same-name recreated namespace must refuse delayed controlled quarantine")
+	}
+	var got corev1.Pod
+	if err := cl.Get(ctx, crclient.ObjectKeyFromObject(pod), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Annotations[AMTD_APPLIED_SECURITY_EVENTS] != "" || got.Labels[AMTD_NETWORK_POLICY] != "" {
+		t.Fatalf("recreated namespace target was mutated: labels=%v annotations=%v", got.Labels, got.Annotations)
 	}
 }
 

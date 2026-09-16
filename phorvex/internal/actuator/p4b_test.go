@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -20,6 +21,7 @@ func p4bScheme() *runtime.Scheme {
 	_ = appsv1.AddToScheme(s)
 	_ = networkingv1.AddToScheme(s)
 	_ = v1alpha1.AddToScheme(s)
+	_ = amtdv1beta1.AddToScheme(s)
 	return s
 }
 

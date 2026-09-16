@@ -34,9 +34,9 @@ func (okActuator) SupportsAction(context.Context, model.Action, actuator.Target)
 func capFleet() ([]*model.WorkloadView, Witness) {
 	leader := model.Pod{
 		Namespace: "ns", Name: "leader", HasGPU: true, MIGDevice: "1g.10gb", ModelID: "model",
-		Node: "gpu-a", MIGGPUID: "0", MIGTargetProfile: "2g.20gb", UID:"uid-leader", SuspectAdapter: "adapter-a",
-		AdapterObservation:&model.AdapterObservation{EventName:"detected",EventUID:"event-uid",CreatorIdentity:"system:serviceaccount:ns:detector",TargetPodUID:"uid-leader",AdapterName:"adapter-a"},
-		Ready: true, ServingEndpointReady: true, RouteService: "infer", GuardrailVariants: 2,
+		Node: "gpu-a", UID: "uid-leader", SuspectAdapter: "adapter-a",
+		AdapterObservation: &model.AdapterObservation{EventName: "detected", EventUID: "event-uid", CreatorIdentity: "system:serviceaccount:ns:detector", TargetPodUID: "uid-leader", AdapterName: "adapter-a"},
+		Ready:              true, ServingEndpointReady: true, RouteService: "infer", GuardrailVariants: 2,
 		WarmPoolConfigured: true, WarmPoolOwnerUID: "pool-uid",
 		Labels: map[string]string{
 			"app": "infer", labelServing: "true", labelLoRAEnabled: "true", labelGuardrailTier: "true",
@@ -159,8 +159,6 @@ func TestCapable_ConfigPredicates(t *testing.T) {
 	}{
 		{"mig-device", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.MIGDevice = "" }, model.ActionMIGRebind},
 		{"mig-node", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.Node = "" }, model.ActionMIGRebind},
-		{"mig-gpu-id", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.MIGGPUID = "" }, model.ActionMIGRebind},
-		{"mig-profile", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.MIGTargetProfile = "" }, model.ActionMIGRebind},
 		{"serving-endpoint", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.ServingEndpointReady = false }, model.ActionKVReset},
 		{"lora", func(p *model.Pod, _ *[]ingest.NodeInfo) { delete(p.Labels, labelLoRAEnabled) }, model.ActionAdapterRotate},
 		{"guardrail-variants", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.GuardrailVariants = 1 }, model.ActionGuardrailRotate},

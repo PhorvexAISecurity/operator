@@ -26,8 +26,7 @@ func TestProjectPodCapabilityWitnesses(t *testing.T) {
 		}}},
 	}
 	got := projectPod(pod, time.Unix(10, 0))
-	if !got.ServingEndpointReady || got.RouteService != "infer" || got.GuardrailVariants != 2 || got.ParallelSize != 2 ||
-		got.MIGGPUID != "0" || got.MIGTargetProfile != "2g.20gb" {
+	if !got.ServingEndpointReady || got.RouteService != "infer" || got.GuardrailVariants != 2 || got.ParallelSize != 2 {
 		t.Fatalf("capability projection = %+v", got)
 	}
 }

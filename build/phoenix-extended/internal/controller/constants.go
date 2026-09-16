@@ -26,6 +26,12 @@ const (
 	AMTD_APPLIED_SECURITY_EVENTS string = "amtd.r6security.com/applied-sec-events"
 	R6_SECURITY_EVENT_RECEIVED   string = "amtd.r6security.event.received"
 
+	PHORVEX_QUARANTINE_TARGET_UID    string = "phorvex.ai/quarantine-target-uid"
+	PHORVEX_QUARANTINE_NAMESPACE_UID string = "phorvex.ai/quarantine-namespace-uid"
+	PHORVEX_QUARANTINE_OPERATION     string = "phorvex.ai/quarantine-operation"
+	PHORVEX_QUARANTINE_RULE_TYPE     string = "phorvex.quarantine"
+	PHORVEX_CONTROLLED_RULE_SOURCE   string = "PhorvexController"
+
 	// R6Security label for AMTD-managed pods (GitHub issue #15)
 	R6_SECURITY_MANAGED_LABEL string = "r6security.com/managed-by-amtd"
 )

@@ -846,3 +846,91 @@ fixes:
     stacked_on: []
     branch: fix/console-session-scan-recovery
     head_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+  T5-M167-ROLLOUT:
+    directory: fixes/T5-M167-ROLLOUT
+    aliases: []
+    issues:
+    - M-167
+    related_issues: []
+    state: BLOCKED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t5-console-rollout
+    head_sha: null
+  T6-M090:
+    directory: fixes/T6-M090
+    aliases: []
+    issues:
+    - M-90
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m090
+    head_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+  T6-M001:
+    directory: fixes/T6-M001
+    aliases: []
+    issues:
+    - M-1
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m001
+    head_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+  T6-M022:
+    directory: fixes/T6-M022
+    aliases: []
+    issues:
+    - M-22
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m022
+    head_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+  T6-M052:
+    directory: fixes/T6-M052
+    aliases: []
+    issues:
+    - M-52
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m052
+    head_sha: 8c25060a5061dc9532d73ae1ce9ee901bc1fd266
+  T6-M074:
+    directory: fixes/T6-M074
+    aliases: []
+    issues:
+    - M-74
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m074
+    head_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+  T6-M083:
+    directory: fixes/T6-M083
+    aliases: []
+    issues:
+    - M-83
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m083
+    head_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+  T6-M168:
+    directory: fixes/T6-M168
+    aliases: []
+    issues:
+    - M-168
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m168
+    head_sha: 52452bfdae9e4cf3cfc5c7ba23d2391fde9c7e16

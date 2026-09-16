@@ -192,6 +192,9 @@ type Manager struct {
 	// K8s-only signals (GPU half stays honest-absent/neutral).
 	PromURL  string
 	Actuator actuator.Actuator
+	// QuarantineCapacity is the production hard bound shared by native, hybrid and
+	// pure-Phoenix routes. It uses the uncached reader and protected operator ledger.
+	QuarantineCapacity *actuator.QuarantineCapacity
 	// Authz is the T1-E SSAR capability checker (cached). nil disables the RBAC leg of the
 	// gate (installability + cover + runtime-capability still apply); the boot layer wires
 	// it from the cluster clientset so no-rbac exclusions become live.
@@ -1456,6 +1459,18 @@ func (m *Manager) creditCadence(e *policyEntry, admittedAt time.Time) {
 func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool, physicsByKey map[string]model.PhysicsWitness) {
 	start := time.Now()
 	pol := buildPolicy(e)
+	if m.QuarantineCapacity != nil {
+		pol.QuarantineCapacityConfigured = true
+		pol.QuarantineCapacityLimit = m.QuarantineCapacity.Limit()
+		inventory, inventoryErr := m.QuarantineCapacity.Inventory(ctx, e.namespace)
+		if inventoryErr != nil {
+			pol.QuarantineCapacityKnown = false
+			pol.QuarantineCapacityReason = inventoryErr.Error()
+		} else {
+			pol.QuarantineCapacityKnown = true
+			pol.QuarantineCapacityUsed = inventory.Used
+		}
+	}
 	pol.NativeRotate = m.Actuator != nil && m.Actuator.Name() == "native"
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
@@ -2143,7 +2158,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		eventTarget := actuationEventTarget(v)
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
-		res, err := m.Actuator.Actuate(ctx, actuator.Request{
+		request := actuator.Request{
 			AdapterObservation: v.Pod.AdapterObservation,
 			PolicyName:         pol.PolicyName,
 			PolicyUID:          pol.PolicyUID,
@@ -2155,7 +2170,14 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			Score:              score,
 			CoverageValue:      coverageValue,
 			TargetUID:          v.Pod.UID,
-		})
+		}
+		var res actuator.Result
+		var err error
+		if m.QuarantineCapacity != nil {
+			res, err = m.QuarantineCapacity.Actuate(ctx, m.Actuator, request)
+		} else {
+			res, err = m.Actuator.Actuate(ctx, request)
+		}
 		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch,
 		// so a result carrying real identifiers alongside an error keeps the facts the
 		// adapter actually supplied while the failure outcome stays exactly as it was.
