@@ -1644,6 +1644,13 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ---
 
+
+## Current-source reconciliation — 2026-09-16
+
+At merged Tier7 source `38f1f18c6211e059217320af9168427a111de8b3`, the missing agent-namespace role and swallowed discovery error are already repaired. The enabled-only chart Role/Binding scopes Pod GET/LIST and exec CREATE to the configured agent namespace/manager identity. Discovery uses that namespace and preserves wrapped Forbidden causes. Independent real API/RBAC and typed-client HTTP controls pass; see [Tier8 reconciliation](../../assessments/20260916-tier8/reconciliation/m008.md).
+
+No duplicate Tier8 source change is required. Current installed authority and real MIG hardware behavior remain pending under [LV-01](../../assessments/LIVE-VERIFICATION-BACKLOG.md) and the [combined live plan](../../assessments/20260916-tier8/LIVE-PLAN.md). Source reconciliation is not live closure.
+
 ### M-21 · The default actuator rejects every AI-native move while reporting `ActionsSupported: True` · **OPEN** · `CONTRACT`
 
 Severity: MAJOR · Tier: parallel · Fixes: M-21
