@@ -52,11 +52,13 @@ func renderBootChart(t *testing.T, release, namespace, managerSA, operatorNS, te
 		args = append(args, "--set-string", "phorvex.actuatorNamespaces[0]="+tenant)
 	}
 	cmd := exec.Command(helm, args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("helm template: %v\n%s", err, out)
+	var rendered, diagnostics bytes.Buffer
+	cmd.Stdout = &rendered
+	cmd.Stderr = &diagnostics
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("helm template: %v\n%s", err, diagnostics.String())
 	}
-	return out
+	return rendered.Bytes()
 }
 
 func installRenderedIdentity(t *testing.T, ctx context.Context, admin client.Client, rendered []byte, omitJournal bool) string {

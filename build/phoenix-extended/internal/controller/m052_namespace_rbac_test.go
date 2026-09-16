@@ -72,9 +72,12 @@ func TestM052StandalonePhoenixNamespaceReadRBAC(t *testing.T) {
 			t.Skip("helm binary unavailable")
 		}
 	}
-	rendered, err := exec.Command(helm, "template", "m052", "../../charts/phoenix").CombinedOutput()
-	if err != nil {
-		t.Fatalf("render Phoenix chart: %v\n%s", err, rendered)
+	cmd := exec.Command(helm, "template", "m052", "../../charts/phoenix")
+	var rendered, diagnostics bytes.Buffer
+	cmd.Stdout = &rendered
+	cmd.Stderr = &diagnostics
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("render Phoenix chart: %v\n%s", err, diagnostics.String())
 	}
-	m052NamespaceGetRule(t, rendered, "operator-manager-role")
+	m052NamespaceGetRule(t, rendered.Bytes(), "operator-manager-role")
 }

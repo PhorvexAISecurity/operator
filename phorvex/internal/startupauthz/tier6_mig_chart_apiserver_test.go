@@ -1,6 +1,7 @@
 package startupauthz
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -52,11 +53,14 @@ func renderTier6MIGChart(t *testing.T, release, controlNamespace, managerSA, ope
 		"--set-string", "phorvex.mig.nodeExec.gpuImage.digest=" + digest,
 		"--set-string", "phorvex.mig.nodeExec.gpuCommand[0]=/gpu-agent",
 	}
-	out, err := exec.Command(helm, args...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("helm template: %v\n%s", err, out)
+	cmd := exec.Command(helm, args...)
+	var rendered, diagnostics bytes.Buffer
+	cmd.Stdout = &rendered
+	cmd.Stderr = &diagnostics
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("helm template: %v\n%s", err, diagnostics.String())
 	}
-	return out
+	return rendered.Bytes()
 }
 
 func TestTier6RenderedCustomManagerMIGAgentBootAuthorization(t *testing.T) {
