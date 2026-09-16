@@ -318,6 +318,49 @@ func TestM034RotatePositiveControl(t *testing.T) {
 	}
 }
 
+func TestM034WarmSwapAndRotateCompeteOnCost(t *testing.T) {
+	views, wit := capFleet()
+	view := views[0]
+	view.Phase = model.PhaseWarm
+	view.Physics = model.NeutralPhysics()
+	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
+	pol := model.Policy{Tenant: "m034-cost", Namespace: "ns", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1,
+		FlowDisruption: 1, CostCeiling: 100, ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second,
+		MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionWarmSwap: true, model.ActionRotate: true}}
+	newEngine := func() *decision.CoverageEngine {
+		engine := decision.NewCoverageEngine()
+		engine.Capability = func(v *model.WorkloadView, a model.Action, cover []string) *actionset.Eligibility {
+			r := wit.Eligible(v, a, cover)
+			if r == nil {
+				return nil
+			}
+			return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+		}
+		return engine
+	}
+	defaultEngine := newEngine()
+	set, _ := defaultEngine.AssembleSet([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 2 {
+		t.Fatalf("both physical erasers must compete: candidates=%+v exclusions=%+v", set.Candidates, set.Excluded)
+	}
+	if strings.Join(set.Candidates[0].CoverKeys, "\x00") != strings.Join(set.Candidates[1].CoverKeys, "\x00") {
+		t.Fatalf("warm-swap and rotate must compete on the same real process facts: %+v", set.Candidates)
+	}
+	defaultDecision, err := defaultEngine.DecideChecked([]*model.WorkloadView{view}, pol)
+	if err != nil || len(defaultDecision) != 1 || defaultDecision[0].Action != model.ActionWarmSwap {
+		t.Fatalf("default cost should prefer cutover: decision=%+v err=%v candidates=%+v", defaultDecision, err, set.Candidates)
+	}
+
+	trained := newEngine()
+	for i := 0; i < 32; i++ {
+		trained.Cost.ObserveRotation(view, 0)
+	}
+	trainedDecision, err := trained.DecideChecked([]*model.WorkloadView{view}, pol)
+	if err != nil || len(trainedDecision) != 1 || trainedDecision[0].Action != model.ActionRotate {
+		t.Fatalf("measured cheap rotation should flip the same-cover choice: decision=%+v err=%v", trainedDecision, err)
+	}
+}
+
 // TestCapable_LabelCanonicality: capability labels must match exactly ("TRUE" != "true").
 func TestCapable_LabelCanonicality(t *testing.T) {
 	views, _ := capFleet()
