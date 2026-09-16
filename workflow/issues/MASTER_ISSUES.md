@@ -214,7 +214,7 @@ Severity: HIGH · Tier: 1 · Fixes: V3-M094
 
 ### M-142 · `Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`'s conservative Warm fallback is dead past the first scrape interval — the fleet is priced Idle under arbitrary load · **OPEN** · `SENSING`
 
-Severity: HIGH · Tier: 1 · Fixes: none
+Severity: HIGH · Tier: 1 · Fixes: T7-M142
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ingest
