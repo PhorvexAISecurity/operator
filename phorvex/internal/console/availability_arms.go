@@ -23,22 +23,46 @@ package console
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 )
 
 type armExperiment struct {
-	RunAt     string `json:"runAt"`
-	Namespace string `json:"namespace"`
-	Deploy    string `json:"deploy"`
-	Attack    string `json:"attack"`
-	ArmAStart string `json:"armA_start"`
-	ArmAEnd   string `json:"armA_end"`
-	ArmBStart string `json:"armB_start"`
-	ArmBEnd   string `json:"armB_end"`
-	ArmCStart string `json:"armC_start"`
-	ArmCEnd   string `json:"armC_end"`
+	Operation string        `json:"operation,omitempty"`
+	RunAt     string        `json:"runAt"`
+	Namespace string        `json:"namespace"`
+	Deploy    string        `json:"deploy"`
+	Attack    string        `json:"attack"`
+	ArmAStart string        `json:"armA_start"`
+	ArmAEnd   string        `json:"armA_end"`
+	ArmBStart string        `json:"armB_start"`
+	ArmBEnd   string        `json:"armB_end"`
+	ArmCStart string        `json:"armC_start"`
+	ArmCEnd   string        `json:"armC_end"`
+	Arms      []armEvidence `json:"arms,omitempty"`
+	Restored  bool          `json:"restored"`
+	Error     string        `json:"error,omitempty"`
+}
+
+type armEvidence struct {
+	ID                   string `json:"id"`
+	Label                string `json:"label"`
+	Start                string `json:"start"`
+	End                  string `json:"end"`
+	StimulusAccepted     bool   `json:"stimulusAccepted"`
+	AttackID             string `json:"attackId,omitempty"`
+	TargetPod            string `json:"targetPod,omitempty"`
+	TargetUID            string `json:"targetUid,omitempty"`
+	Outcome              string `json:"outcome,omitempty"`
+	Action               string `json:"action,omitempty"`
+	Containment          string `json:"containment,omitempty"`
+	DwellOngoing         bool   `json:"dwellOngoing,omitempty"`
+	ObservationPersisted bool   `json:"observationPersisted"`
+	RotationConfirmed    bool   `json:"rotationConfirmed,omitempty"`
+	BaselineReady        bool   `json:"baselineReady"`
+	Error                string `json:"error,omitempty"`
 }
 
 // armResult is one defender's measured availability over its window.
@@ -82,10 +106,11 @@ func armsPath(cfg Config) string {
 
 func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 	nsFilter := r.URL.Query().Get("ns") // optional; empty = every app
+	p := principalOf(r)
 
 	b, err := readStateLedger(armsPath(s.cfg))
 	if err != nil || len(b) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshot(),
+		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshotFor(p),
 			Note: "no three-arm experiment has been run yet. It is a real, disruptive procedure (it puts " +
 				"the policy in dryRun and rotates pods), so it runs on request rather than on every attack."})
 		return
@@ -93,7 +118,6 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 	// [M-136] The experiment log spans every app that has been run. An explicit ?ns= is already
 	// checked against the grant by the boundary; an omitted one is filtered here rather than
 	// returning every tenant's experiments.
-	p := principalOf(r)
 	var exps []armExperiment
 	for _, ln := range strings.Split(string(b), "\n") {
 		if strings.TrimSpace(ln) == "" {
@@ -112,7 +136,7 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(exps) == 0 {
-		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshot(), Note: "no experiment recorded for that app yet."})
+		writeJSON(w, 200, armsResponse{Available: false, Running: armsJobSnapshotFor(p), Note: "no experiment recorded for that app yet."})
 		return
 	}
 
@@ -123,19 +147,10 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 	}
 	resolve := s.buildRateResolver("")
 
-	out := armsResponse{Available: true, Running: armsJobSnapshot(),
-		HowItRan: "Same app, same attack, three times. All three availability series are read from the same " +
-			"5s background sampler, so the arms are measured identically and are directly comparable.",
-		// THE point the previous version buried. The no-defense arm scoring 100% is real, and the
-		// reason it is real is the whole argument for this product.
-		WhyNoDrop: "Why does 'no defense' show full availability? Because this attack is an INTRUSION, " +
-			"not a denial of service: it plants a container-escape foothold — the attacker gains access and " +
-			"stays quiet. Nothing crashes, so your availability dashboard stays perfectly green while someone " +
-			"else is inside. That is exactly why availability alone cannot tell you that you are under attack, " +
-			"and why the 'attacker stopped' column is the one that matters here. The cost of this arm is not " +
-			"downtime — it is unbounded attacker dwell time.",
-		Note: "Read availability TOGETHER with 'attacker stopped'. A defence that never acts wins on " +
-			"availability and loses on security.",
+	out := armsResponse{Available: true, Running: armsJobSnapshotFor(p),
+		HowItRan:  "Each completed arm is bound to its own accepted stimulus and persisted ground-truth observation; availability is measured separately by the 5s sampler.",
+		WhyNoDrop: "Availability alone does not establish attack execution or containment. Security status is shown only when the correlated observation proves it.",
+		Note:      "Unknown or incomplete evidence remains unknown and is not scored as a successful defense.",
 	}
 
 	for i := len(exps) - 1; i >= 0; i-- { // newest first
@@ -148,20 +163,32 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 		run := armRun{RunAt: exp.RunAt, Namespace: exp.Namespace, Deploy: deploy,
 			Attack: exp.Attack, NodeRate: round4(rate)}
 
-		arms := []struct{ id, label, start, end, stopped, verdict string }{
-			{"nodefense", "No defense", exp.ArmAStart, exp.ArmAEnd, "no",
-				"Availability never moved — because nothing was done about the intruder, who kept the pod for the whole window. Full uptime, zero security."},
-			{"r6blind", "Blind fixed-interval rotator", exp.ArmBStart, exp.ArmBEnd, "by-luck-only",
-				"Rotates on a schedule whether or not anything is wrong, so it pays a dip every cycle and only ever catches an attacker by coincidence."},
-			{"phorvex", "Phorvex", exp.ArmCStart, exp.ArmCEnd, "yes",
-				"Acted once, on the signal — one short dip, attacker evicted."},
+		if len(exp.Arms) == 0 { // legacy timestamp-only records are retained but explicitly unknown.
+			exp.Arms = []armEvidence{{ID: "nodefense", Label: "No defense", Start: exp.ArmAStart, End: exp.ArmAEnd, Error: "legacy record has no correlated stimulus evidence"}, {ID: "r6blind", Label: "Blind fixed-interval rotator", Start: exp.ArmBStart, End: exp.ArmBEnd, Error: "legacy record has no correlated stimulus evidence"}, {ID: "phorvex", Label: "Phorvex", Start: exp.ArmCStart, End: exp.ArmCEnd, Error: "legacy record has no correlated stimulus evidence"}}
 		}
-		for _, a := range arms {
-			run.Arms = append(run.Arms, measureArm(samples, exp.Namespace, deploy, a.id, a.label, a.start, a.end, a.stopped, a.verdict, rate))
+		for _, a := range exp.Arms {
+			stopped, verdict := evidenceVerdict(a)
+			measured := measureArm(samples, exp.Namespace, deploy, a.ID, a.Label, a.Start, a.End, stopped, verdict, rate)
+			measured.Complete = measured.Complete && a.StimulusAccepted && a.ObservationPersisted && a.BaselineReady && exp.Restored && a.Error == ""
+			run.Arms = append(run.Arms, measured)
 		}
 		out.Runs = append(out.Runs, run)
 	}
 	writeJSON(w, 200, out)
+}
+
+func evidenceVerdict(a armEvidence) (string, string) {
+	if !a.ObservationPersisted || a.Error != "" {
+		return "unknown", "Outcome unavailable: " + a.Error
+	}
+	stopped := a.Outcome == "DEFENDED" && !a.DwellOngoing && (a.Containment == "evicted" || a.Containment == "contained" || a.Containment == "flushed")
+	if stopped {
+		return "yes", fmt.Sprintf("Observed %s by %s for correlated attack %s.", a.Containment, a.Action, a.AttackID)
+	}
+	if a.Outcome == "LANDED" || a.DwellOngoing || a.Containment == "foothold-active" {
+		return "no", fmt.Sprintf("Observed %s with containment %s for correlated attack %s.", a.Outcome, a.Containment, a.AttackID)
+	}
+	return "unknown", "Terminal observation did not prove containment."
 }
 
 // measureArm windows the availability sampler over one arm and reduces it to the comparable numbers.

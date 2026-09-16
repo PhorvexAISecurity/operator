@@ -18,6 +18,7 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -53,6 +54,17 @@ func armsJobSnapshot() []armsJob {
 	return out
 }
 
+func armsJobSnapshotFor(p *Principal) []armsJob {
+	all := armsJobSnapshot()
+	out := make([]armsJob, 0, len(all))
+	for _, j := range all {
+		if p != nil && (p.TenantWildcard() || p.AllowsTenant(j.Namespace)) {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
 func (s *Server) setArmsPhase(ns, phase, detail string, pct int) {
 	armsMu.Lock()
 	defer armsMu.Unlock()
@@ -65,6 +77,10 @@ func (s *Server) setArmsPhase(ns, phase, detail string, pct int) {
 func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
+		return
+	}
+	if ok, reason := s.stateStatus(); !ok {
+		writeJSON(w, 503, map[string]string{"error": "experiment state unavailable: " + reason})
 		return
 	}
 	var body struct {
@@ -88,6 +104,20 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 	if attack == "" {
 		attack = "foothold"
 	}
+	if ns != "voice" || attack != "foothold" {
+		writeJSON(w, 400, map[string]string{"error": "unsupported comparison: only the resettable stateless voice/foothold fixture is currently verified"})
+		return
+	}
+	if _, _, err := s.resettableTarget(ns); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "comparison preflight: " + err.Error()})
+		return
+	}
+	for _, e := range s.unresolvedExperiments() {
+		if e.Namespace == ns {
+			writeJSON(w, 409, map[string]string{"error": "an experiment in this namespace requires recovery"})
+			return
+		}
+	}
 
 	armsMu.Lock()
 	if j := armsJobs[ns]; j != nil && j.Phase != "done" && j.Phase != "failed" {
@@ -95,7 +125,9 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]string{"error": "an experiment is already running for " + ns})
 		return
 	}
-	policy := strings.TrimSpace(s.kctlOut(ns, "get", "phorvexpolicy", "-o", "jsonpath={.items[0].metadata.name}"))
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	policyState, policyErr := s.experimentCluster().Policy(ctx, ns)
+	cancel()
 	deploy := s.firstDeploy(ns)
 	job := &armsJob{Namespace: ns, Deploy: deploy, Attack: attack,
 		StartedAt: time.Now().UTC().Format(time.RFC3339), Phase: "arm-a",
@@ -103,18 +135,19 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 	armsJobs[ns] = job
 	armsMu.Unlock()
 
-	if policy == "" {
-		s.failArms(ns, "no PhorvexPolicy found in "+ns)
-		writeJSON(w, 400, map[string]string{"error": "no PhorvexPolicy in " + ns})
+	if policyErr != nil || deploy == "" {
+		s.failArms(ns, "comparison preflight failed")
+		writeJSON(w, 400, map[string]string{"error": "comparison preflight failed: " + fmt.Sprint(policyErr)})
 		return
 	}
-	intent, _ := json.Marshal(map[string]any{"kind": "phorvex.console.experiment", "phase": "intent", "time": time.Now().UTC(), "namespace": ns, "deploy": deploy, "attack": attack})
-	if err := s.cfg.appendState(s.cfg.statePath("experiment-events.jsonl"), intent); err != nil {
+	op := fmt.Sprintf("exp-%x", s.cfg.now().UnixNano())
+	event := experimentEvent{Operation: op, Phase: "prepared", Actor: actorOf(r), Namespace: ns, Attack: attack, Policy: policyState, OriginalMode: policyState.Mode, OwnedMode: policyState.Mode, OwnedSpecHash: policyState.SpecHash, OwnedMetadataHash: policyState.MetadataHash}
+	if err := s.appendExperiment(event); err != nil {
 		s.failArms(ns, "experiment evidence unavailable: "+err.Error())
 		writeJSON(w, 503, map[string]string{"error": "experiment refused before effect: " + err.Error(), "verdict": "refused-evidence-unavailable"})
 		return
 	}
-	go s.armsWorker(ns, deploy, policy, attack)
+	go s.armsWorker(event, deploy)
 
 	writeJSON(w, 200, map[string]any{"ok": true, "namespace": ns, "deploy": deploy,
 		"note": "three-arm comparison started (~7 minutes). Watch it in Availability: 3-way."})
@@ -128,81 +161,161 @@ func (s *Server) failArms(ns, msg string) {
 	}
 }
 
-func (s *Server) setMode(ns, policy, mode string) {
-	_, _ = s.cfg.execText(10*time.Second, "kubectl", "-n", ns, "patch", "phorvexpolicy", policy,
-		"--type=merge", "-p", fmt.Sprintf(`{"spec":{"mode":%q}}`, mode))
-}
-
-// armsWorker runs the three arms. Every sleep is real wall-clock time because the availability
-// sampler is what measures the arms — there is nothing to fake or shortcut.
-func (s *Server) armsWorker(ns, deploy, policy, attack string) {
-	origMode := strings.TrimSpace(s.kctlOut(ns, "get", "phorvexpolicy", policy, "-o", "jsonpath={.spec.mode}"))
-	if origMode == "" {
-		origMode = "active"
-	}
-	// SAFETY: never leave a tenant undefended, whatever happens below.
-	defer func() {
-		if rec := recover(); rec != nil {
-			s.failArms(ns, fmt.Sprintf("panic: %v", rec))
+func (s *Server) armsWorker(op experimentEvent, deploy string) {
+	ns := op.Namespace
+	fail := func(err error) {
+		op.Error = err.Error()
+		if op.Phase == "prepared" {
+			op.Phase = "no-effect"
 		}
-		s.setMode(ns, policy, origMode)
+		_ = s.appendExperiment(op)
+		s.failArms(ns, err.Error())
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fail(fmt.Errorf("experiment panic: %v", r))
+		}
 	}()
-
-	mark := func() string { return time.Now().UTC().Format(time.RFC3339) }
-	fire := func() {
-		if ns == "vllm" {
-			_, _ = s.cfg.execText(30*time.Second, "curl", "-s", "-m", "25", "-X", "POST",
-				"-H", "X-Phorvex-Lens: operator", "-H", "Content-Type: application/json",
-				"-d", fmt.Sprintf(`{"action":%q}`, attack), "http://localhost:8095/api/vllm/attack")
+	transition := func(mode string) error {
+		op.OwnedMode = mode
+		op.OwnedSpecHash = specHashWithMode(op.Policy, mode)
+		op.OwnedMetadataHash = op.Policy.MetadataHash
+		op.Phase = "transition-intent"
+		if err := s.appendExperiment(op); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		p, err := s.experimentCluster().SetPolicyMode(ctx, op.Policy, mode, op.Operation, false)
+		if err != nil {
+			return err
+		}
+		op.Policy = p
+		op.OwnedMode = mode
+		op.OwnedSpecHash = p.SpecHash
+		op.OwnedMetadataHash = p.MetadataHash
+		op.Phase = "applied"
+		return s.appendExperiment(op)
+	}
+	observe := func(id string) (*attackRecord, error) {
+		for i := 0; i < 110; i++ {
+			if r := attackSnapshotByID(id); r != nil && (r.Status == "done" || r.Status == "partial") {
+				if r.Status != "done" {
+					return r, fmt.Errorf("attack observation persistence partial")
+				}
+				if persistedAttackByID(s.cfg, id) != nil {
+					return r, nil
+				}
+			}
+			s.cfg.sleep(time.Second)
+		}
+		return nil, fmt.Errorf("attack observation timeout")
+	}
+	ready := func() bool {
+		out, err := s.cfg.execText(8*time.Second, "kubectl", "-n", ns, "get", "deploy", deploy, "-o", `jsonpath={.status.readyReplicas}|{.status.replicas}`)
+		return err == nil && strings.TrimSpace(out) != "" && !strings.HasPrefix(strings.TrimSpace(out), "0|") && strings.Split(strings.TrimSpace(out), "|")[0] == strings.Split(strings.TrimSpace(out), "|")[1]
+	}
+	var arms []armEvidence
+	for i, spec := range []struct{ id, label, mode string }{{"nodefense", "No defense", "dryRun"}, {"r6blind", "Blind fixed-interval rotator", "dryRun"}, {"phorvex", "Phorvex", "active"}} {
+		if err := transition(spec.mode); err != nil {
+			fail(fmt.Errorf("%s mode transition: %w", spec.id, err))
 			return
 		}
-		_, _ = s.cfg.execText(30*time.Second, "curl", "-s", "-m", "25", "-X", "POST",
-			"-H", "X-Phorvex-Lens: operator", "-H", "Content-Type: application/json",
-			"-d", fmt.Sprintf(`{"namespace":%q,"action":%q}`, ns, attack), "http://localhost:8095/api/workload/attack")
-	}
-
-	// ---- ARM A: no defense (policy in dryRun) ----
-	s.setMode(ns, policy, "dryRun")
-	s.setArmsPhase(ns, "arm-a", "arm A — no defense: policy in dryRun, settling", 5)
-	time.Sleep(20 * time.Second)
-	a0 := mark()
-	s.setArmsPhase(ns, "arm-a", "arm A — no defense: attack fired, watching availability", 12)
-	fire()
-	time.Sleep(120 * time.Second)
-	a1 := mark()
-
-	// ---- ARM B: blind fixed-interval rotator ----
-	time.Sleep(25 * time.Second)
-	b0 := mark()
-	for i := 1; i <= 4; i++ {
-		s.setArmsPhase(ns, "arm-b", fmt.Sprintf("arm B — blind rotator: rotation %d of 4 (fires on a timer, not on a signal)", i), 25+i*8)
-		if p := strings.TrimSpace(s.kctlOut(ns, "get", "pods", "-l", "r6th.io/rotation-target=true",
-			"-o", "jsonpath={.items[0].metadata.name}")); p != "" {
-			_, _ = s.cfg.execText(15*time.Second, "kubectl", "-n", ns, "delete", "pod", p, "--wait=false")
+		s.cfg.sleep(2 * time.Second)
+		a := armEvidence{ID: spec.id, Label: spec.label, Start: s.cfg.now().UTC().Format(time.RFC3339)}
+		receipt, err := s.executeResettableFoothold(op.Actor, ns)
+		if err != nil {
+			a.Error = err.Error()
+			arms = append(arms, a)
+			fail(err)
+			return
 		}
-		time.Sleep(30 * time.Second)
+		a.StimulusAccepted = true
+		a.AttackID = receipt.AttackID
+		a.TargetPod = receipt.Pod
+		a.TargetUID = receipt.PodUID
+		if spec.id == "r6blind" {
+			rv := strings.TrimSpace(s.kctlOut(ns, "get", "pod", receipt.Pod, "-o", "jsonpath={.metadata.resourceVersion}"))
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err = s.experimentCluster().DeletePod(ctx, ns, receipt.Pod, receipt.PodUID, rv)
+			cancel()
+			a.RotationConfirmed = err == nil
+			if err != nil {
+				a.Error = "identity-bound timer rotation: " + err.Error()
+			}
+		}
+		obs, oerr := observe(receipt.AttackID)
+		if obs != nil {
+			a.Outcome = obs.Outcome
+			a.Action = obs.Action
+			a.Containment = obs.Containment
+			a.DwellOngoing = obs.DwellOngoing
+			a.ObservationPersisted = obs.Status == "done"
+		}
+		if oerr != nil && a.Error == "" {
+			a.Error = oerr.Error()
+		}
+		if err = s.resetExperimentStimulus(receipt); err != nil && a.Error == "" {
+			a.Error = err.Error()
+		}
+		for j := 0; j < 30 && !ready(); j++ {
+			s.cfg.sleep(time.Second)
+		}
+		a.BaselineReady = ready()
+		a.End = s.cfg.now().UTC().Format(time.RFC3339)
+		if !a.BaselineReady && a.Error == "" {
+			a.Error = "workload baseline not ready after reset"
+		}
+		arms = append(arms, a)
+		op.Arm = &arms[len(arms)-1]
+		op.Phase = "arm-result"
+		if err = s.appendExperiment(op); err != nil {
+			fail(err)
+			return
+		}
+		if a.Error != "" {
+			fail(fmt.Errorf("%s incomplete: %s", spec.id, a.Error))
+			return
+		}
+		_ = i
 	}
-	b1 := mark()
-
-	// ---- ARM C: Phorvex ----
-	time.Sleep(50 * time.Second)
-	s.setMode(ns, policy, "active")
-	s.setArmsPhase(ns, "arm-c", "arm C — Phorvex: policy active again, settling", 70)
-	time.Sleep(25 * time.Second)
-	c0 := mark()
-	s.setArmsPhase(ns, "arm-c", "arm C — Phorvex: attack fired, watching availability", 80)
-	fire()
-	time.Sleep(120 * time.Second)
-	c1 := mark()
-
-	rec := armExperiment{RunAt: mark(), Namespace: ns, Deploy: deploy, Attack: attack,
-		ArmAStart: a0, ArmAEnd: a1, ArmBStart: b0, ArmBEnd: b1, ArmCStart: c0, ArmCEnd: c1}
-	if b, err := json.Marshal(rec); err != nil {
-		s.failArms(ns, "encode experiment result: "+err.Error())
-		return
-	} else if err = s.cfg.appendState(armsPath(s.cfg), b); err != nil {
-		s.failArms(ns, "experiment completed but outcome evidence is unavailable; unsafe to retry: "+err.Error())
+	op.Phase = "restore-intent"
+	op.Arm = nil
+	if err := s.appendExperiment(op); err != nil {
+		fail(err)
 		return
 	}
-	s.setArmsPhase(ns, "done", "complete — results below", 100)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	restored, err := s.experimentCluster().SetPolicyMode(ctx, op.Policy, op.OriginalMode, op.Operation, true)
+	cancel()
+	if err != nil {
+		fail(fmt.Errorf("restore policy: %w", err))
+		return
+	}
+	op.Policy = restored
+	op.OwnedMode = op.OriginalMode
+	op.OwnedSpecHash = restored.SpecHash
+	op.OwnedMetadataHash = restored.MetadataHash
+	op.Phase = "restored"
+	if err = s.appendExperiment(op); err != nil {
+		fail(err)
+		return
+	}
+	rec := armExperiment{Operation: op.Operation, RunAt: s.cfg.now().UTC().Format(time.RFC3339), Namespace: ns, Deploy: deploy, Attack: op.Attack, Arms: arms, Restored: true}
+	if len(arms) == 3 {
+		rec.ArmAStart, rec.ArmAEnd = arms[0].Start, arms[0].End
+		rec.ArmBStart, rec.ArmBEnd = arms[1].Start, arms[1].End
+		rec.ArmCStart, rec.ArmCEnd = arms[2].Start, arms[2].End
+	}
+	b, _ := json.Marshal(rec)
+	if err = s.cfg.appendState(armsPath(s.cfg), b); err != nil {
+		fail(err)
+		return
+	}
+	op.Phase = "complete"
+	if err = s.appendExperiment(op); err != nil {
+		fail(err)
+		return
+	}
+	s.setArmsPhase(ns, "done", "complete — correlated results below", 100)
 }

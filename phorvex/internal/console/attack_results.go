@@ -280,7 +280,7 @@ func (s *Server) persistAttack(r *attackRecord) error {
 
 // startAttackRecord registers a running attack and launches the ground-truth watcher. Called by the
 // attack handlers immediately after the real attack is applied to the cluster.
-func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline) {
+func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline) string {
 	if err := s.loadAttacks(); err != nil {
 		s.recordStateError(err)
 	}
@@ -312,6 +312,36 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 	r = cloneAttackRecord(r) // detach the handler's baseline maps before the watcher owns them
 	publishAttack(r)
 	go s.watchAttack(ctxName, r)
+	return r.ID
+}
+
+func attackSnapshotByID(id string) *attackRecord {
+	attackMu.Lock()
+	defer attackMu.Unlock()
+	for _, r := range attackList {
+		if r.ID == id {
+			return cloneAttackRecord(r)
+		}
+	}
+	return nil
+}
+
+func persistedAttackByID(cfg Config, id string) *attackRecord {
+	b, err := readStateLedgerHistory(cfg.statePath("phorvex-attacks.jsonl"))
+	if err != nil {
+		return nil
+	}
+	var found *attackRecord
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var r attackRecord
+		if json.Unmarshal([]byte(line), &r) == nil && r.ID == id && r.Status == "done" {
+			found = cloneAttackRecord(&r)
+		}
+	}
+	return found
 }
 
 func (s *Server) watchAttack(ctxName string, r *attackRecord) {

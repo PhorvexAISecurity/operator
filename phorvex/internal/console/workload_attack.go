@@ -52,6 +52,18 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	ns := strings.TrimSpace(body.Namespace)
+	// M-168's resettable stateless experiment path and the normal Fire control share
+	// one typed producer. Other legacy demo actions keep their existing path below.
+	if ns == "voice" && (body.Action == "" || body.Action == "foothold") {
+		receipt, err := s.executeResettableFoothold(actorOf(r), ns)
+		if err != nil {
+			writeJSON(w, 502, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "action": "foothold", "pod": receipt.Pod,
+			"attackId": receipt.AttackID, "message": "Real foothold signal accepted; measured outcome pending."})
+		return
+	}
 	// Armed = Phorvex actually governs this namespace (it has a PhorvexPolicy). That is the
 	// honest gate: a foothold at a namespace Phorvex does not watch just lands with no
 	// defense — there is nothing to demonstrate. Any app with a policy is fair game, which

@@ -28,8 +28,27 @@ type Config struct {
 	Exec func(timeout time.Duration, bin string, args ...string) (string, error)
 	// StateAppend is a test seam for storage faults. Production always uses durable appendState.
 	StateAppend func(path string, record []byte) error
+	// Now and Sleep bound the long-running experiment orchestrator in permanent tests.
+	// Production leaves both nil and uses the wall clock.
+	Now   func() time.Time
+	Sleep func(time.Duration)
 	// MutationAuditPath is a compatibility override for the mutation journal. Empty uses StateDir.
 	MutationAuditPath string
+}
+
+func (c Config) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+func (c Config) sleep(d time.Duration) {
+	if c.Sleep != nil {
+		c.Sleep(d)
+		return
+	}
+	time.Sleep(d)
 }
 
 func (c Config) appendState(path string, record []byte) error {
