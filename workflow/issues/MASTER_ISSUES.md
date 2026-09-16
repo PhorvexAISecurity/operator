@@ -1661,6 +1661,12 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 **Fix:** execute a non-mutating probe through the transport; cache briefly.
 *Sources: A-128.*
 
+## Current-source reconciliation — 2026-09-16
+
+At reviewed Tier6 source `669197bf025a446a87ed2923c04dbaa2237ca077`, the original wiring-only probe defect is already addressed by T6-M083. `Native.SupportsAction` requires trusted-agent authority, exact target allocation from kubelet PodResources and a real `nvidia-smi -L` probe through the transport; the brief cache is identity-keyed. The handler repeats uncached authority and complete geometry capture before mutation. [Independent source trace](../../assessments/20260916-tier7/reconciliation/m080-reconciliation.md) and [Tier7 disposition](../../assessments/20260916-tier7/SOURCE-RECONCILIATION.md) retain the exact paths and limitations.
+
+No duplicate Tier7 implementation is needed. This is source reconciliation, not issue closure: Tier6 PR217 was open at intake, and real MIG hardware is unavailable in the current dev fixture. Hardware execution, compensation and serving recovery remain pending under [LV-01](../../assessments/LIVE-VERIFICATION-BACKLOG.md). Historical labels above describe the original finding.
+
 ### M-123 · Documentation drift (the coverage doc contradicts HEAD in its headline AND its master key) · **OPEN** · `CONTRACT`
 
 Severity: MAJOR · Tier: parallel · Fixes: T2-M123
