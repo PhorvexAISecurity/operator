@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 5
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -15,6 +15,13 @@ checks:
     source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
     at: '2026-09-16T10:54:11+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-review.log
+    sha256: 9431c3dcbe8a9f9e42bc7b51336892ef79b8a86745b28d12fdb70ddaa1d8bef3
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T12:55:07+00:00'
 fix_id: T6-M001
 issues:
 - M-1
@@ -83,7 +90,7 @@ residuals: []
 next_action:
   owner: sol-t6-m001
   action: Implement backend-aware startup permission plan when worker slot available
-updated_at: '2026-09-16T10:54:11+00:00'
+updated_at: '2026-09-16T12:55:07+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:44+00:00'
   by: codex-lead
