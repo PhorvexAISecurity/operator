@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -86,13 +86,29 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/runner
     inputs_sha256: e49315463c281d982f9e9960566853d1493ad853e0d4fa5bce73b55e69dbb036
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 454439c7ea7a86333f3758888044f041da3cbb8120cbf1b2e96db3cc3abf8001
+    source_sha: 03d5929784fbee81ef32732a0e64f7691ec1f3e6
+    at: '2026-09-16T23:53:00+00:00'
+    baseline_sha: 3bb0bc14cd78457d8d85078ef717ef8912848adc
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: a23368f6ea8609911ee4dcd229dd3f910cc9a3fd75f2b5fda8c8946e856a1222
+    source_sha: 03d5929784fbee81ef32732a0e64f7691ec1f3e6
+    at: '2026-09-16T23:53:00+00:00'
+    incident_sha256: 454439c7ea7a86333f3758888044f041da3cbb8120cbf1b2e96db3cc3abf8001
 fix_id: T9-M009
 issues:
 - M-9
 title: '`Emitted` is a request-ack, not an effect — the brain never learns what Phoenix
   did'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -137,7 +153,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -153,10 +169,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T23:51:50+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T23:53:04+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:45+00:00'
   by: codex-lead
@@ -212,6 +228,22 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T23:53:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T23:53:02+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -223,9 +255,9 @@ check_history:
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
   approval_ref: AUTHORIZATION.md
 handoff:
-  id: T9-M009:7:submit
-  from: sol-t9-m009
+  id: T9-M009:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
