@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -80,12 +80,15 @@ synchronization:
   permanent_tests: pending
 dependencies: []
 blockers: []
-residuals: []
+residuals:
+- Original strategy/PVC rollout blocker resolved 2026-09-16T09:49Z; see LIVE-ROLLOUT-VERDICT.md
+- M167 full behavioral restart/failure controls remain pending; no product patch in
+  this diagnostic follow-up
 next_action:
-  owner: mehrdad
-  action: DevOps migrate stale console strategy and sync reviewed current Tier5 release;
-    lead then verifies live
-updated_at: '2026-09-16T09:16:05+00:00'
+  owner: codex-lead
+  action: Rollout resolved live by DevOps; preserve administrative migration disposition
+    and complete parent Tier5 live controls without a fabricated source PR
+updated_at: '2026-09-16T10:09:17+00:00'
 follow_up_to: T5-M167
 configuration_history:
 - at: '2026-09-16T09:09:01+00:00'
@@ -99,6 +102,12 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T10:09:17+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - residuals
+  approval_ref: LIVE-ROLLOUT-VERDICT.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
