@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -19,6 +19,16 @@ checks:
     rationale: Worker demonstrated accepted10000 count exceeds single ConfigMap storage;
       choose128 count and768KiB encoded guard, preserving default1/zero and partial-effect
       truth
+  red:
+    result: PASS
+    by: sol-t6-m052
+    artifact: evidence/red/worker-baseline.md
+    sha256: 161b5d6b4d0d7aafdf7889371209fdbe36baf621dba3d041d9b56a5e5006f5ed
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T13:19:13+00:00'
+    rationale: Exact pinned baseline production native quarantine plus real ReplicaSet
+      controller reproduced successive retained-Pod growth while the active replacement
+      control remained healthy.
 fix_id: T6-M052
 issues:
 - M-52
@@ -48,7 +58,7 @@ blind_derivation:
 implementation:
   branch: fix/t6-m052
   base_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-  head_sha: null
+  head_sha: 5954f16e4302b4bc9f6415466b1c38c7e116232b
   stacked_on: []
 pull_request:
   url: null
@@ -87,7 +97,7 @@ residuals: []
 next_action:
   owner: sol-t6-m052
   action: Implement operator-owned namespace quarantine bound after worker slot opens
-updated_at: '2026-09-16T13:02:51+00:00'
+updated_at: '2026-09-16T13:19:13+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:50+00:00'
   by: codex-lead
@@ -100,6 +110,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T13:18:28+00:00'
+  by: sol-t6-m052
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING

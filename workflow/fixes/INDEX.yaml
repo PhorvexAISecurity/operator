@@ -900,7 +900,7 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/t6-m052
-    head_sha: null
+    head_sha: 5954f16e4302b4bc9f6415466b1c38c7e116232b
   T6-M074:
     directory: fixes/T6-M074
     aliases: []
