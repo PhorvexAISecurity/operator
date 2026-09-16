@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -91,12 +91,28 @@ checks:
       native mutation and Phoenix SecurityEvent producer controls plus braked zero-effect
       assertions; this supersedes the earlier 170e2c53 lead/head-http.log implementer
       citation without claiming the lead run.
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 55e9303a41e00c4850073dbbe489f54c2bca40546ce6cf630ef545d1b16014ec
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:57:31+00:00'
+    baseline_sha: 38f1f18c6211e059217320af9168427a111de8b3
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 9b969a33de12ced35dd3c37a9befc93b56022c4e6bd06765d4e56bc445fed97a
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:57:31+00:00'
+    incident_sha256: 55e9303a41e00c4850073dbbe489f54c2bca40546ce6cf630ef545d1b16014ec
 fix_id: T8-M124
 issues:
 - M-124
 title: No per-pod opt-out; the namespace dry-run brake is case-sensitive
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -141,7 +157,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -157,10 +173,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T19:56:59+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T19:57:34+00:00'
 configuration_history:
 - at: '2026-09-16T18:54:53+00:00'
   by: codex-lead
@@ -222,13 +238,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T19:57:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T19:57:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T8-M124:8:submit
-  from: sol-t8-m124
+  id: T8-M124:10:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 10
 check_history:
 - check: positive_control
   result: PASS
