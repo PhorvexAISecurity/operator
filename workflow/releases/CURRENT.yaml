@@ -1,20 +1,20 @@
 schema_version: 1
-recorded_at: '2026-09-15T10:40:41+00:00'
+recorded_at: '2026-09-16T10:09:15+00:00'
 status: deployment-observed-verification-pending
 code_repository:
   canonical_branch: main
   origin_main_sha: 0bc6890acf0c3e3df937ad3bb45b1d99efc9b45a
   source_release: v0.4.88
 deployed:
-  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.117
-  release_commit: ecac2d7229a9701be64ed90886393906e2c4f067
-  embedded_git_sha: b3b9a28ce2a3de17b326d6e0623b88eea92e2457
-  digest: sha256:32593f9d0eeb65b710542410ee3f355be281e7222395c15f854655bc415bf76c
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.119
+  release_commit: cacd0f5fe74032677cd798e11bf5418da88abed4
+  embedded_git_sha: 65806a61f472835f3c5c4492ab88e059f74157b9
+  digest: sha256:97ec2447ba6ae2aba9e9391ebf21dfbc3b5d262ccdfb519b3746dfb77398f48d
   observed_by: codex-lead
-  observed_at: '2026-09-15T10:21:45Z'
+  observed_at: '2026-09-16T09:49:00Z'
   environment: dev
   must_reverify_before_next_live_claim: true
-  sync_record: releases/DEPLOY-20260915-104041-b3b9a28ce2a3/STATUS.yaml
+  sync_record: releases/DEPLOY-20260916-100915-65806a61f472/STATUS.yaml
 anatomy:
   source_commit: fb52e6c976df
   current_for_deployed_release: false

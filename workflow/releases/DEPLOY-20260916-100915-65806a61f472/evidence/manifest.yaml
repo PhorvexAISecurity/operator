@@ -1,0 +1,5 @@
+schema_version: 2
+subject:
+  kind: release
+  id: DEPLOY-20260916-100915-65806a61f472
+artifacts: []
