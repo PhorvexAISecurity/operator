@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -67,12 +67,28 @@ checks:
     sha256: 2125983534d115dc6c2d5ebc0dfbf02bebdf61e8b6d5f1195217d03fa260923f
     source_sha: a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4
     at: '2026-09-16T16:12:51+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: b039c5a89b526f7d77b43290f8ee7657ce81b8d355c871d0c6e7adeef163c879
+    source_sha: a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4
+    at: '2026-09-16T16:14:57+00:00'
+    baseline_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: ee31420c521beadfbc7606a0f13891784941487fbcfd89d09da4d341da8e2865
+    source_sha: a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4
+    at: '2026-09-16T16:14:57+00:00'
+    incident_sha256: b039c5a89b526f7d77b43290f8ee7657ce81b8d355c871d0c6e7adeef163c879
 fix_id: T7-M142
 issues:
 - M-142
 title: Keep active or uncertain application telemetry out of idle pricing
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -117,7 +133,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -131,12 +147,18 @@ synchronization:
   permanent_tests: pending
 dependencies: []
 blockers: []
-residuals: []
+residuals:
+- id: R-M142-NETWORK
+  status: research-design-open
+  summary: Optional network-conflict classifier requires UID/freshness semantics and
+    measured quiet/load/background calibration; existing bare rate deltas are not
+    an implemented classifier.
+  artifact: evidence/source-reconciliation.md
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T16:12:54+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T16:15:02+00:00'
 configuration_history:
 - at: '2026-09-16T15:26:09+00:00'
   by: codex-lead
@@ -164,6 +186,11 @@ configuration_history:
   by: sol-t7-m142
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-16T16:15:02+00:00'
+  by: codex-lead
+  fields:
+  - residuals
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -198,10 +225,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T16:14:58+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T16:14:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T7-M142:8:submit
-  from: sol-t7-m142
+  id: T7-M142:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9
