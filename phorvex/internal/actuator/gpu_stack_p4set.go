@@ -178,6 +178,8 @@ func (g httpGuardrail) ApplyVariant(ctx context.Context, ep servingEndpoint, var
 // kvTransferController invalidates/migrates KV across disaggregated prefill/decode workers. The LOCAL
 // invalidate is real + runnable; the cross-worker MigrateRemote is DEFERRED [PENDING-GPU-VALIDATION]
 // (needs a disaggregated P/D deployment + the connector — vLLM --kv-transfer-config / Dynamo / Mooncake).
+// Handler syntax validation is not destination authorization: any production implementation must
+// enforce a separate operator-owned peer allowlist before dialing tenant-declared endpoints.
 type kvTransferController interface {
 	InvalidateLocal(ctx context.Context, ep servingEndpoint) error
 	MigrateRemote(ctx context.Context, ep servingEndpoint, peers []string) error

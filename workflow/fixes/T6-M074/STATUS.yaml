@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,89 @@ checks:
     at: '2026-09-16T10:44:05+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-review.log
+    sha256: 69a1b07dcb4c68b24b496a3432f7230fbf5182530321e57d1925226f21093001
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T12:34:05+00:00'
+  preflight:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/receipt.json
+    sha256: 8860ae097d6b9df174a17345ff582132925d2ad26b67d03c2fc952015fa9caeb
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+  implementation:
+    result: PASS
+    by: sol-t6-m074
+    artifact: 04-diff.patch
+    sha256: 7bf7d1b331151b3512e635ff77d0207954b8bd149ec6c964905630be94aa741b
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+  l0:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  l1:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  l2:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  positive_control:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: dce5443315ee8e37cbbae9e2be5d5ebde82f873a70d226c410294502fe2a76bf
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:38:09+00:00'
+    baseline_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: dce5443315ee8e37cbbae9e2be5d5ebde82f873a70d226c410294502fe2a76bf
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:38:09+00:00'
+    incident_sha256: dce5443315ee8e37cbbae9e2be5d5ebde82f873a70d226c410294502fe2a76bf
 fix_id: T6-M074
 issues:
 - M-74
 title: Validate disaggregated KV peers before any effect
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +122,7 @@ blind_derivation:
 implementation:
   branch: fix/t6-m074
   base_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-  head_sha: null
+  head_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +143,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +159,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t6-m074
-  action: Implement signed bounded parser and truthful local/remote result contract
-    after worker slot assigned
-updated_at: '2026-09-16T10:44:05+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T13:38:12+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:53+00:00'
   by: codex-lead
@@ -98,6 +175,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T13:01:08+00:00'
+  by: sol-t6-m074
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T13:37:22+00:00'
+  by: sol-t6-m074
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +202,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T13:37:23+00:00'
+  by: sol-t6-m074
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T13:37:24+00:00'
+  by: sol-t6-m074
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T13:38:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T13:38:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T6-M074:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8

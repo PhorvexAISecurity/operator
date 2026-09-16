@@ -907,11 +907,11 @@ fixes:
     issues:
     - M-74
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t6-m074
-    head_sha: null
+    head_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
   T6-M083:
     directory: fixes/T6-M083
     aliases: []

@@ -402,8 +402,8 @@ func TestKVMigrateInvalidatesLocalCrossWorkerDeferred(t *testing.T) {
 	c := fakeC(pod)
 	mk := &mockKVXfer{}
 	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, KVXfer: mk}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVMigrateInvalidate})
-	if err != nil {
-		t.Fatalf("kv-migrate-invalidate: %v", err)
+	if err == nil {
+		t.Fatal("deferred cross-worker result must remain an explicit partial error")
 	}
 	if mk.invCalls != 1 {
 		t.Errorf("must invalidate LOCAL KV once, got %d", mk.invCalls)
@@ -411,6 +411,9 @@ func TestKVMigrateInvalidatesLocalCrossWorkerDeferred(t *testing.T) {
 	// cross-worker is DEFERRED — must be recorded as pending, never claimed done.
 	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") || !containsStr(hr.Note, "cross-worker") {
 		t.Errorf("cross-worker migrate must be recorded as deferred/pending, %q", hr.Note)
+	}
+	if !hr.Emitted || hr.MutationKind != "partial" {
+		t.Fatalf("confirmed local invalidation disappeared after deferred remote result: %+v", hr)
 	}
 }
 
