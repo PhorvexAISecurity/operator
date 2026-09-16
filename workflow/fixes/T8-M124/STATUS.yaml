@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 14
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -119,7 +119,7 @@ issues:
 - M-124
 title: No per-pod opt-out; the namespace dry-run brake is case-sensitive
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -146,11 +146,11 @@ implementation:
   head_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/220
+  reviewed_head: 9a59c363a2ad58a597f0924a88c283db7f7c9e0d
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -181,9 +181,11 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-16T20:09:39+00:00'
+  action: 'DevOps: resolve GitHub billing/spending-limit refusal (hosted jobs did
+    not execute), merge PR219 then PR220, and deploy. Lead: monitor and perform combined
+    Tier6–8 live controls after actual source rollout. Local validation PASS; live/production
+    HOLD remains.'
+updated_at: '2026-09-16T20:12:51+00:00'
 configuration_history:
 - at: '2026-09-16T18:54:53+00:00'
   by: codex-lead
@@ -211,6 +213,18 @@ configuration_history:
   by: sol-t8-m124
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-16T20:11:45+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T20:12:51+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -260,6 +274,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-16T20:11:46+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T8-M124:10:review

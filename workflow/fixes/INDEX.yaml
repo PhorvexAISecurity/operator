@@ -973,7 +973,7 @@ fixes:
     issues:
     - M-116
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t8-m116
@@ -984,7 +984,7 @@ fixes:
     issues:
     - M-34
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t8-m034
@@ -995,7 +995,7 @@ fixes:
     issues:
     - M-124
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t8-m124
