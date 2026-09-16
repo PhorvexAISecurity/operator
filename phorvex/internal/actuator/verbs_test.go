@@ -1,6 +1,7 @@
 package actuator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -36,7 +37,7 @@ func TestRequiredVerbsCoversEveryMutatingAction(t *testing.T) {
 func TestRequiredVerbsRoutingAware(t *testing.T) {
 	for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
 		got := RequiredVerbs(a)
-		if len(got) != 1 || got[0].Group != "amtd.r6security.com" || got[0].Resource != "securityevents" || got[0].Verb != "create" {
+		if len(got) != 1 || got[0].Group != "amtd.r6security.com" || got[0].Resource != "securityevents" || got[0].Verb != "create" || !got[0].ClusterScoped {
 			t.Errorf("Phoenix-routed %q must gate on amtd.r6security.com/securityevents:create, got %+v", a, got)
 		}
 	}
@@ -49,12 +50,39 @@ func TestRequiredVerbsRoutingAware(t *testing.T) {
 	}
 }
 
+func TestRequiredVerbsFollowResolvedBackend(t *testing.T) {
+	nativeRotate := RequiredVerbsForBackend(BackendNative, model.ActionRotate)
+	if len(nativeRotate) != 1 || nativeRotate[0].Resource != "pods" || nativeRotate[0].Verb != "delete" {
+		t.Fatalf("native rotate permissions = %+v", nativeRotate)
+	}
+	hybridRotate := RequiredVerbsForBackend(BackendHybrid, model.ActionRotate)
+	if len(hybridRotate) != 1 || hybridRotate[0].Resource != "securityevents" || !hybridRotate[0].ClusterScoped {
+		t.Fatalf("hybrid rotate permissions = %+v", hybridRotate)
+	}
+	if got := RequiredVerbsForBackend(BackendPhoenix, model.ActionKVReset); len(got) != 0 {
+		t.Fatalf("unsupported Phoenix action acquired permissions: %+v", got)
+	}
+	debugger := RequiredVerbsForBackend(BackendNative, model.ActionDebugger)
+	if len(debugger) != 1 || debugger[0].Resource != "pods" || debugger[0].Subresource != "ephemeralcontainers" || debugger[0].Verb != "update" {
+		t.Fatalf("debugger subresource permissions = %+v", debugger)
+	}
+	for _, action := range []model.Action{model.ActionWarmSwap, model.ActionModelShardReplace} {
+		var patch bool
+		for _, verb := range RequiredVerbsForBackend(BackendNative, action) {
+			patch = patch || (verb.Resource == "pods" && verb.Verb == "patch")
+		}
+		if !patch {
+			t.Fatalf("%s lacks the Pod patch used by compensation/recovery", action)
+		}
+	}
+}
+
 // TestRequiredVerbsAreWellFormed: every declared verb names a resource and a verb (a blank
 // tuple would make the SSAR meaningless / always-allow).
 func TestRequiredVerbsAreWellFormed(t *testing.T) {
 	for action, verbs := range actionVerbs {
 		for _, v := range verbs {
-			if v.Resource == "" || v.Verb == "" {
+			if v.Resource == "" || v.Verb == "" || strings.Contains(v.Resource, "/") {
 				t.Errorf("action %q has a malformed verb %+v (resource and verb are required)", action, v)
 			}
 		}

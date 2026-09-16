@@ -1,4 +1,7 @@
 phorvex:
+  # Empty uses the release-scoped manager name. A non-empty value names the manager
+  # ServiceAccount that this chart creates and binds to the Deployment and all chart Roles.
+  serviceAccountName: ""
   image:
     repository: phorvex/phorvex
     pullPolicy: IfNotPresent

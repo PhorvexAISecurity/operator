@@ -13,19 +13,77 @@ import (
 // fakeSSAR counts Create calls and answers per (namespace) from a table; nil error =
 // definitive allow/deny, non-nil = an errored review (fail-open path).
 type fakeSSAR struct {
-	calls   int
-	allowNS map[string]bool
-	errNS   map[string]bool
+	calls    int
+	allowNS  map[string]bool
+	errNS    map[string]bool
+	nilNS    map[string]bool
+	statusNS map[string]authorizationv1.SubjectAccessReviewStatus
+	last     *authorizationv1.ResourceAttributes
 }
 
 func (f *fakeSSAR) Create(_ context.Context, sar *authorizationv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authorizationv1.SelfSubjectAccessReview, error) {
 	f.calls++
-	ns := sar.Spec.ResourceAttributes.Namespace
+	f.last = sar.Spec.ResourceAttributes.DeepCopy()
+	ns := f.last.Namespace
 	if f.errNS[ns] {
 		return nil, errors.New("apiserver blip")
 	}
+	if f.nilNS[ns] {
+		return nil, nil
+	}
+	if status, ok := f.statusNS[ns]; ok {
+		sar.Status = status
+		return sar, nil
+	}
 	sar.Status.Allowed = f.allowNS[ns]
 	return sar, nil
+}
+
+func TestAllowed_ClusterScopedVerbUsesEmptyNamespace(t *testing.T) {
+	f := &fakeSSAR{allowNS: map[string]bool{"": true}}
+	c := NewCheckerWithClient(f, time.Minute)
+	verb := Verb{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "create", ClusterScoped: true}
+	if allowed, unknown, why := c.Allowed(context.Background(), "tenant-a", []Verb{verb}); !allowed || unknown || why != "" {
+		t.Fatalf("cluster scoped allow: allowed=%v unknown=%v why=%q", allowed, unknown, why)
+	}
+	if f.last.Namespace != "" {
+		t.Fatalf("cluster-scoped review carried namespace %q", f.last.Namespace)
+	}
+}
+
+func TestAllowed_MalformedAndUnavailableResponsesAreUnknown(t *testing.T) {
+	f := &fakeSSAR{statusNS: map[string]authorizationv1.SubjectAccessReviewStatus{
+		"contradictory": {Allowed: true, Denied: true},
+		"evaluation":    {EvaluationError: "authorizer incomplete"},
+	}}
+	c := NewCheckerWithClient(f, time.Minute)
+	for _, ns := range []string{"contradictory", "evaluation"} {
+		if allowed, unknown, why := c.Allowed(context.Background(), ns, testVerbs); allowed || !unknown || why == "" {
+			t.Fatalf("%s: allowed=%v unknown=%v why=%q", ns, allowed, unknown, why)
+		}
+	}
+	if allowed, unknown, _ := NewCheckerWithClient(nil, time.Minute).Allowed(context.Background(), "ns", testVerbs); allowed || !unknown {
+		t.Fatalf("nil client: allowed=%v unknown=%v", allowed, unknown)
+	}
+	var nilChecker *Checker
+	if allowed, unknown, _ := nilChecker.Allowed(context.Background(), "ns", testVerbs); allowed || !unknown {
+		t.Fatalf("nil checker: allowed=%v unknown=%v", allowed, unknown)
+	}
+}
+
+func TestAllowed_EncodesSubresourceSeparatelyAndTreatsEmptyResponseAsUnknown(t *testing.T) {
+	f := &fakeSSAR{allowNS: map[string]bool{"allowed": true}, nilNS: map[string]bool{"empty": true}}
+	c := NewCheckerWithClient(f, time.Minute)
+	verb := Verb{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}
+	if allowed, unknown, why := c.Allowed(context.Background(), "allowed", []Verb{verb}); !allowed || unknown || why != "" {
+		t.Fatalf("subresource allow: allowed=%v unknown=%v why=%q", allowed, unknown, why)
+	}
+	if f.last.Resource != "pods" || f.last.Subresource != "ephemeralcontainers" {
+		t.Fatalf("wire attributes resource=%q subresource=%q", f.last.Resource, f.last.Subresource)
+	}
+	if allowed, unknown, why := c.Allowed(context.Background(), "empty", []Verb{verb}); allowed || !unknown || why == "" {
+		t.Fatalf("empty response: allowed=%v unknown=%v why=%q", allowed, unknown, why)
+	}
 }
 
 var testVerbs = []Verb{{Resource: "pods", Verb: "delete"}}

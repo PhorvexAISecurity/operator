@@ -27,15 +27,15 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionRotate: {{Resource: "pods", Verb: "delete"}},
 	// Includes managed repair and proven legacy retirement; RequiredVerbs routing is unchanged.
 	model.ActionQuarantine:          {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
-	model.ActionDebugger:            {{Resource: "pods/ephemeralcontainers", Verb: "update"}},
-	model.ActionCustomInject:        {{Resource: "pods/ephemeralcontainers", Verb: "update"}},
+	model.ActionDebugger:            {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
+	model.ActionCustomInject:        {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
 	model.ActionIdentityRotate:      {{Resource: "pods", Verb: "update"}},
 	model.ActionRouteRotate:         {{Resource: "pods", Verb: "update"}, {Resource: "services", Verb: "update"}},
-	model.ActionWarmSwap:            {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "delete"}},
+	model.ActionWarmSwap:            {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}},
 	model.ActionMIGRebind:           {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "delete"}},
 	model.ActionKVReset:             {{Resource: "pods", Verb: "update"}},
 	model.ActionEndpointRotate:      {{Resource: "pods", Verb: "update"}, {Resource: "services", Verb: "update"}},
-	model.ActionModelShardReplace:   {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "delete"}},
+	model.ActionModelShardReplace:   {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}},
 	model.ActionAdapterRotate:       {{Resource: "pods", Verb: "update"}},
 	model.ActionRequestDrain:        {{Resource: "pods", Verb: "update"}},
 	model.ActionGuardrailRotate:     {{Resource: "pods", Verb: "update"}},
@@ -47,7 +47,7 @@ var actionVerbs = map[model.Action][]authz.Verb{
 // Phoenix (R6) enacts. The operator holds this grant CLUSTER-WIDE (rbac.yaml base rule
 // amtd.r6security.com/securityevents:[get,list,watch,create]), whereas the native pod
 // verbs are bound only per phorvex.actuatorNamespaces. (M-160.)
-var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "create"}}
+var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "create", ClusterScoped: true}}
 
 // RequiredVerbs returns the RBAC verbs the capability gate must confirm before action a is
 // offered — ROUTING-AWARE (M-160). A Phoenix-routed action (RuleTypeFor != "") is gated on
@@ -56,12 +56,21 @@ var phoenixRuleVerbs = []authz.Verb{{Group: "amtd.r6security.com", Resource: "se
 // rotate/quarantine outside the native-bound namespaces. Native-routed actions keep their
 // own verbs. A non-generatable/unmapped action returns nil (no RBAC gate).
 //
-// This tracks the HYBRID actuator's routing (the production default; hybrid.go delegates by
-// exactly this RuleTypeFor). A pure-native actuator would take the native path for
-// rotate/quarantine; making that precise is the Actuator-interface method (deferred).
-func RequiredVerbs(a model.Action) []authz.Verb {
-	if RuleTypeFor(a) != "" {
+// RequiredVerbsForBackend takes the resolved backend so native, Phoenix and hybrid runtime
+// checks use the same RouteFor decision as dispatch. RequiredVerbs below preserves the
+// established hybrid behavior for compatibility callers.
+func RequiredVerbsForBackend(backend Backend, a model.Action) []authz.Verb {
+	if RouteFor(backend, a) == BackendPhoenix && RuleTypeFor(a) != "" {
 		return phoenixRuleVerbs
 	}
+	if RouteFor(backend, a) != BackendNative {
+		return nil
+	}
 	return actionVerbs[a]
+}
+
+// RequiredVerbs retains the established hybrid routing for compatibility callers. Runtime
+// capability and boot admission pass the resolved backend to RequiredVerbsForBackend.
+func RequiredVerbs(a model.Action) []authz.Verb {
+	return RequiredVerbsForBackend(BackendHybrid, a)
 }
