@@ -2,17 +2,26 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 2
+revision: 4
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: a8aedb5082dfd7a35dda852de3c2bd4b85c499e4ddfbf1cfb15dffe80c543d81
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T10:45:46+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
 fix_id: T6-M083
 issues:
 - M-83
 title: Bind MIG operations to authoritative allocated GPU identity
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -73,9 +82,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Complete source investigation and sign implementation plan
-updated_at: '2026-09-16T10:37:56+00:00'
+  owner: sol-t6-m083
+  action: Implement authoritative allocation/profile and complete disabled-by-default
+    shipping path; request heavy slot before tests
+updated_at: '2026-09-16T10:45:46+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:56+00:00'
   by: codex-lead
@@ -94,6 +104,14 @@ transitions:
   at: '2026-09-16T10:37:56+00:00'
   by: codex-lead
   artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-16T10:45:46+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
   note: null
   approval_ref: null
   forced: false
