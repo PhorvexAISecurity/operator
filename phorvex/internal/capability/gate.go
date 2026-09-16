@@ -429,9 +429,6 @@ func (w Witness) warmPoolWhy(pod *model.Pod, group string, shadows map[string]bo
 	if !shadows[poolKey(pod.Namespace, group)] {
 		return "no Ready warm shadow exists for a " + label + " pool"
 	}
-	if w.idx.schedulableGPU < 2 {
-		return "fewer than 2 schedulable GPU nodes"
-	}
 	return ""
 }
 

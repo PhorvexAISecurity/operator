@@ -72,18 +72,9 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 		t.Errorf("model-shard-replace must have no cover without identity/effect evidence; got %v", got)
 	}
 
-	// [PHVX-26a] warm-swap and mig-rebind were removed from the list above ON PURPOSE, and the
-	// obvious "fix" for this test is to put them back — which would restore exactly the false grants
-	// the split removed. That is the trap PHVX-9e fell into, so both are asserted explicitly:
-	//
-	//   warm-swap  — covers NOTHING until required podAntiAffinity excludes the old node. Without it
-	//                the scheduler may re-place the shadow on the same device, so "may relocate"
-	//                cannot back a binary grant. Both facts stay audit-only.
-	//   mig-rebind — covers gpuContentionChannel ONLY, and only on a pod that has a MIG device.
-	//                It never covers gpuColocation: repartitioning severs the contention path
-	//                without moving the pod, so co-residency knowledge survives.
+	// An ordinary AI pod has no verified scalar pool witness, so warm-swap remains coverless.
 	if got := ac[model.ActionWarmSwap]; len(got) != 0 {
-		t.Errorf("warm-swap must have NO cover until anti-affinity lands (PHVX-26a); got %v", got)
+		t.Errorf("warm-swap must have no cover without a verified scalar pool; got %v", got)
 	}
 	if got := ac[model.ActionMIGRebind]; len(got) != 0 {
 		t.Errorf("mig-rebind must have no cover on a pod with no MIG device; got %v", got)
@@ -110,8 +101,53 @@ func TestDefensiveActuatorsHaveCover(t *testing.T) {
 			FactGPUContentionChannel, kinds)
 	}
 	if len(mc.CoverByAction[model.ActionWarmSwap]) != 0 {
-		t.Errorf("warm-swap must stay coverless even on MIG-capable hardware (PHVX-26a); got %v",
+		t.Errorf("warm-swap must stay coverless without a verified pool even on MIG hardware; got %v",
 			mc.CoverByAction[model.ActionWarmSwap])
+	}
+
+	pool := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "leader", HasGPU: true,
+		ModelID: "m", WarmPoolConfigured: true, WarmPoolOwnerUID: "rs-uid", RouteService: "infer",
+		Labels: map[string]string{"phorvex.ai/role": "leader", "phorvex.ai/swap-group": "g"}}}
+	pf := prof.AssetFacts(pool, fctx)
+	kinds := map[string]string{}
+	for _, f := range pf.Facts {
+		kinds[f.Key()] = f.Kind
+	}
+	gotKinds := map[string]bool{}
+	for _, key := range pf.CoverByAction[model.ActionWarmSwap] {
+		gotKinds[kinds[key]] = true
+	}
+	wantKinds := map[string]bool{FactPodIdentity: true, FactInMemory: true, FactSession: true}
+	if len(gotKinds) != len(wantKinds) {
+		t.Fatalf("configured warm-swap cover kinds = %v, want %v", gotKinds, wantKinds)
+	}
+	for kind := range wantKinds {
+		if !gotKinds[kind] {
+			t.Errorf("configured warm-swap missing %s: %v", kind, gotKinds)
+		}
+	}
+	for _, forbidden := range []string{FactGPUColocation, FactGPUContentionChannel, FactNetworkIdentity, FactModelFingerprint, FactEndpointPath} {
+		if gotKinds[forbidden] {
+			t.Errorf("configured warm-swap unsoundly covers %s", forbidden)
+		}
+	}
+	for name, mutate := range map[string]func(*model.Pod){
+		"unverified-pool": func(p *model.Pod) { p.WarmPoolConfigured = false },
+		"missing-owner":   func(p *model.Pod) { p.WarmPoolOwnerUID = "" },
+		"missing-route":   func(p *model.Pod) { p.RouteService = "" },
+		"missing-group":   func(p *model.Pod) { delete(p.Labels, "phorvex.ai/swap-group") },
+		"warm-shadow":     func(p *model.Pod) { p.Labels["phorvex.ai/role"] = "warm-shadow" },
+		"non-ai":          func(p *model.Pod) { p.HasGPU, p.ModelID = false, "" },
+	} {
+		candidate := pool.Pod
+		candidate.Labels = map[string]string{}
+		for k, v := range pool.Pod.Labels {
+			candidate.Labels[k] = v
+		}
+		mutate(&candidate)
+		if got := prof.AssetFacts(&model.WorkloadView{Pod: candidate}, fctx).CoverByAction[model.ActionWarmSwap]; len(got) != 0 {
+			t.Errorf("%s target must not receive warm-swap cover: %v", name, got)
+		}
 	}
 
 	// debugger + custom-inject are manual-by-design: assert they DO stay coverless (documents intent).
