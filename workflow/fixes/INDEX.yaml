@@ -878,7 +878,7 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/t6-m001
-    head_sha: 3c49d96cc4a14c2ea656cc2b456696f0cb4aead7
+    head_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
   T6-M022:
     directory: fixes/T6-M022
     aliases: []
