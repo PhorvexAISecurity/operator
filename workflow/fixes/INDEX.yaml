@@ -857,3 +857,80 @@ fixes:
     stacked_on: []
     branch: fix/t5-console-rollout
     head_sha: null
+  T6-M090:
+    directory: fixes/T6-M090
+    aliases: []
+    issues:
+    - M-90
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m090
+    head_sha: null
+  T6-M001:
+    directory: fixes/T6-M001
+    aliases: []
+    issues:
+    - M-1
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m001
+    head_sha: null
+  T6-M022:
+    directory: fixes/T6-M022
+    aliases: []
+    issues:
+    - M-22
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m022
+    head_sha: null
+  T6-M052:
+    directory: fixes/T6-M052
+    aliases: []
+    issues:
+    - M-52
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m052
+    head_sha: null
+  T6-M074:
+    directory: fixes/T6-M074
+    aliases: []
+    issues:
+    - M-74
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m074
+    head_sha: null
+  T6-M083:
+    directory: fixes/T6-M083
+    aliases: []
+    issues:
+    - M-83
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m083
+    head_sha: null
+  T6-M168:
+    directory: fixes/T6-M168
+    aliases: []
+    issues:
+    - M-168
+    related_issues: []
+    state: DESIGNING
+    dependencies: []
+    stacked_on: []
+    branch: fix/t6-m168
+    head_sha: null

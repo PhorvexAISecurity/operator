@@ -927,7 +927,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-52 · Quarantine sprawl is unbounded · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T6-M052
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · quarantine Create @ internal/actuator/handlers_k8s.go:122
@@ -1045,7 +1045,7 @@ Severity: HIGH · Tier: parallel · Fixes: T5-M082
 
 ### M-83 · gpu-id / mig-target-profile taken unvalidated from pod annotations · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T6-M083
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.mig_agent
@@ -1305,7 +1305,7 @@ Severity: ADVISORY · Tier: parallel · Fixes: none
 
 ### M-74 · disagg-kv-peers parsed without validation · **OPEN** · `ACTUATION`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T6-M074
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.shadow_validation
@@ -1329,7 +1329,7 @@ Severity: ADVISORY · Tier: parallel · Fixes: none
 
 ### M-90 · Blunt handlers ignore terminating pods and the dry-run contract they document · **OPEN** · `ACTUATION`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T6-M090
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · api.v1alpha1
@@ -1597,7 +1597,7 @@ Severity: CRITICAL · Tier: parallel · Fixes: none
 
 ### M-1 · The shipped RBAC cannot actuate; the live demos ran on a hand-applied ClusterRole · **OPEN** · `CONTRACT`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T6-M001
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · deploy
@@ -1778,7 +1778,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-22 · `maxMovesPerTick: 0` silently becomes 3 · **OPEN** · `CONTROL`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T6-M022
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -2520,7 +2520,7 @@ Severity: HIGH · Tier: unassigned · Fixes: T5-M167, T5-M167-ROLLOUT
 
 ### M-168 · Console availability experiment claims attack results despite failed stimulus and unsafe restart recovery · **OPEN** · `VERIFICATION`
 
-Severity: HIGH · Tier: unassigned · Fixes: none
+Severity: HIGH · Tier: unassigned · Fixes: T6-M168
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `VERIFICATION` — anatomy locus review required.

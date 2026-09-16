@@ -1,0 +1,99 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 2
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks: {}
+fix_id: T6-M168
+issues:
+- M-168
+title: Make console experiment outcomes and recovery evidence-based
+profile: standard
+state: DESIGNING
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t6-m168
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  deployed_image: 0.4.119
+  deployed_git_sha: 65806a61f472835f3c5c4492ab88e059f74157b9
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t6-m168
+  base_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: codex-lead
+  action: Complete source investigation and sign implementation plan
+updated_at: '2026-09-16T10:38:02+00:00'
+configuration_history:
+- at: '2026-09-16T10:38:01+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-16T10:38:02+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
