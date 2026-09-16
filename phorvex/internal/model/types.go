@@ -436,6 +436,23 @@ type SecurityEventInfo struct {
 	UnresolvedTargets []string
 }
 
+// PhoenixExecutionReceipt is the read-only projection of one self-authored
+// SecurityEvent. It is kept outside SecurityEventInfo so an actuator's own event
+// can never become detector evidence. A receipt is correlation/application
+// evidence only; replacement readiness is observed separately by the runner.
+type PhoenixExecutionReceipt struct {
+	EventName     string
+	EventUID      string
+	RuleType      string
+	ThreatLevel   string
+	RuleSource    string
+	Targets       []string
+	TargetUID     string
+	AppliedAction string
+	CreatedAt     time.Time
+	ProcessedAt   time.Time
+}
+
 // VectorSteeringEvent identifies one observation that jointly caused an existing
 // attack-vector multiplier. It carries identity and trust evidence only, never payload.
 type VectorSteeringEvent struct {

@@ -92,6 +92,15 @@ type pendingRotation struct {
 	minAvailableReplicas int
 	selectionBound       slo.Bound
 	costObserved         bool
+	// Phoenix fields bind asynchronous execution feedback to this exact submit.
+	// Empty EventUID denotes the native direct-delete path.
+	decisionID       string
+	phoenixEventName string
+	phoenixEventUID  string
+	phoenixTargetUID string
+	phoenix          bool
+	receiptConfirmed bool
+	censorObserved   bool
 }
 
 // Manager owns the tenant registry and the tick loop.
@@ -837,6 +846,9 @@ func (m *Manager) closePendingForOwner(ev lifecycleEvent) int {
 		if m.Audit != nil {
 			m.Audit.RotationObservationTerminated(p.tenant, ev.owner, p.view.Pod.Namespace, p.view.Pod.Name, p.ledgerRecorded)
 		}
+		if p.phoenix {
+			m.recordRotationObservation(p, "unconfirmed-owner-terminated", p.receiptConfirmed, false, time.Now())
+		}
 		delete(m.pendingRotations, key)
 		dropped++
 	}
@@ -1048,7 +1060,7 @@ func (m *Manager) tick(ctx context.Context) tickResult {
 	if m.Actuator != nil && m.Actuator.Name() == "native" {
 		ownerReader = m.OwnershipReader
 	}
-	snap, err := ingest.CollectSnapshotForRotationTargets(ctx, m.Client, now, genericAssetValue, ownerReader, func(p *corev1.Pod) bool {
+	snap, err := ingest.CollectSnapshotForRotationTargetsWithReceiptReader(ctx, m.Client, now, genericAssetValue, ownerReader, m.BoundaryReader, func(p *corev1.Pod) bool {
 		for _, e := range due {
 			if p.Namespace == e.namespace && (e.selector == nil || e.selector.Matches(labels.Set(p.Labels))) {
 				return true
@@ -1146,8 +1158,12 @@ func (m *Manager) trackRotation(owner, tenant string, view *model.WorkloadView, 
 // start so the disruption ledger can record breach-seconds separately from
 // replica-seconds. A negative floor means the threshold was unavailable.
 func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time) bool {
+	return m.trackRotationReceipt(owner, tenant, view, allViews, minAvailableReplicas, startedAt, actuator.Result{}, "")
+}
+
+func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time, result actuator.Result, decisionID string) bool {
 	_, costObserver := m.Optimizer.(decision.RotationObserver)
-	if (!costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
+	if (result.Actuator != "phoenix" && !costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
 		return false
 	}
 	if view.Pod.OwnerKind == "" || view.Pod.OwnerName == "" || view.Pod.UID == "" {
@@ -1186,6 +1202,43 @@ func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.Workl
 		knownUIDs:            known,
 		minAvailableReplicas: minAvailableReplicas,
 		selectionBound:       selectionBound(model.ActionRotate),
+		decisionID:           decisionID,
+	}
+	if result.Actuator == "phoenix" {
+		p := m.pendingRotations[key]
+		p.phoenix = true
+		p.phoenixEventName = result.EventName
+		p.phoenixEventUID = result.EventUID
+		p.phoenixTargetUID = view.Pod.UID
+		m.pendingRotations[key] = p
+	}
+	return true
+}
+
+func phoenixRotationReceiptConfirmed(p pendingRotation, snap *ingest.Snapshot) bool {
+	if p.phoenixEventName == "" || p.phoenixEventUID == "" || p.phoenixTargetUID == "" || snap == nil || !snap.PhoenixReceiptInventoryComplete {
+		return false
+	}
+	r, ok := snap.PhoenixReceipts[p.phoenixEventName]
+	if !ok || r.EventName != p.phoenixEventName || r.EventUID != p.phoenixEventUID || r.RuleType != actuator.RuleTypeRotate ||
+		r.ThreatLevel != actuator.RuleThreatLevel || r.RuleSource != actuator.RuleSource || len(r.Targets) != 1 ||
+		r.Targets[0] != p.view.Pod.Namespace+"/"+p.view.Pod.Name ||
+		r.TargetUID != p.phoenixTargetUID || r.AppliedAction != "rotate" ||
+		r.CreatedAt.IsZero() || r.ProcessedAt.IsZero() {
+		return false
+	}
+	// Kubernetes metav1.Time is serialized at whole-second precision. Compare all
+	// lifecycle boundaries at that precision so a genuine same-second receipt is
+	// accepted while pre-dispatch, post-deadline, and future timestamps are not.
+	created := r.CreatedAt.Truncate(time.Second)
+	processed := r.ProcessedAt.Truncate(time.Second)
+	started := p.startedAt.Truncate(time.Second)
+	deadline := p.censorDeadline.Truncate(time.Second)
+	if created.Before(started) || processed.Before(created) || processed.Before(started) || processed.After(deadline) {
+		return false
+	}
+	if !snap.Now.IsZero() && (created.After(snap.Now.Truncate(time.Second)) || processed.After(snap.Now.Truncate(time.Second))) {
+		return false
 	}
 	return true
 }
@@ -1250,7 +1303,7 @@ func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, a
 // than that modelling window is not permanently undercounted at 800 seconds.
 func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 	observer, costObserver := m.Optimizer.(decision.RotationObserver)
-	if (!costObserver && m.Calibration == nil && m.Disruption == nil) || snap == nil || len(m.pendingRotations) == 0 {
+	if snap == nil || len(m.pendingRotations) == 0 {
 		return
 	}
 	type pendingRef struct {
@@ -1271,6 +1324,12 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 	claimed := map[string]bool{}
 	for _, ref := range pending {
 		p := ref.p
+		phoenix := p.phoenix
+		if phoenix && !p.receiptConfirmed && phoenixRotationReceiptConfirmed(p, snap) {
+			p.receiptConfirmed = true
+			m.pendingRotations[ref.key] = p
+			m.recordRotationObservation(p, "confirmed-execution-recovery-pending", true, false, snap.Now)
+		}
 		oldUIDPresent := false
 		for i := range snap.Pods {
 			if snap.Pods[i].UID == p.view.Pod.UID {
@@ -1299,11 +1358,49 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 						ReferenceAtStart: p.referenceAtStart, CensorDeadline: p.censorDeadline,
 					})
 				}
+				if phoenix {
+					if !p.ledgerRecorded && m.Disruption != nil {
+						m.recordUnknownRotation(p, snap.Now)
+					}
+					outcome := "unconfirmed-execution"
+					if p.receiptConfirmed {
+						outcome = "confirmed-execution-recovery-censored"
+					}
+					m.recordRotationObservation(p, outcome, p.receiptConfirmed, false, snap.Now)
+				}
 				m.Log.Info("rotation cost observation unavailable; original UID still present",
 					"tenant", p.tenant,
 					"pod", p.view.Pod.Namespace+"/"+p.view.Pod.Name,
 					"oldUID", p.view.Pod.UID)
 			}
+			continue
+		}
+		// Pod disappearance alone is not Phoenix execution feedback. An unrelated
+		// rollout can remove this UID and create a same-owner Ready Pod while the
+		// exact SecurityEvent remains unprocessed or was recreated. Retain the
+		// unknown until the bounded deadline; never train or measure disruption from
+		// that replacement without the exact terminal receipt.
+		if phoenix && !p.receiptConfirmed {
+			if snap.Now.Before(p.censorDeadline) {
+				continue
+			}
+			if !p.ledgerRecorded && m.Disruption != nil {
+				m.recordUnknownRotation(p, snap.Now)
+			}
+			m.recordRotationObservation(p, "unconfirmed-execution", false, false, snap.Now)
+			if costObserver {
+				metrics.ObserveRotationOutcome(p.tenant, metrics.RLSAbandoned)
+			}
+			if m.Calibration != nil {
+				m.Calibration.ObserveRotation(calib.RotationRecord{
+					ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+					Action: string(model.ActionRotate), StartedAt: p.startedAt, RecordedAt: snap.Now,
+					Elapsed: elapsed, Outcome: calib.OutcomeInvalid,
+					InvalidReason:    "original Pod disappeared without the exact Phoenix execution receipt",
+					ReferenceAtStart: p.referenceAtStart, CensorDeadline: p.censorDeadline,
+				})
+			}
+			delete(m.pendingRotations, ref.key)
 			continue
 		}
 		var replacement *model.Pod
@@ -1453,6 +1550,11 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			m.pendingRotations[ref.key] = p
 		}
 		if ledgerCensored {
+			if phoenix && !p.censorObserved {
+				m.recordRotationObservation(p, "confirmed-execution-recovery-censored", true, false, observationEnd)
+				p.censorObserved = true
+				m.pendingRotations[ref.key] = p
+			}
 			if m.Disruption == nil {
 				delete(m.pendingRotations, ref.key)
 			}
@@ -1477,6 +1579,28 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 			"replacementUID", replacementUID,
 			"timeToReadySeconds", elapsed.Seconds(),
 			"calibrationCensored", calibrationCensored)
+		if phoenix {
+			m.recordRotationObservation(p, "confirmed-execution-recovery", true, replacement != nil, observationEnd)
+		}
+	}
+}
+
+func (m *Manager) recordUnknownRotation(p pendingRotation, observedAt time.Time) {
+	m.Disruption.Record(slo.Entry{
+		ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+		Action: model.ActionRotate, Cause: slo.CausePhorvex, StartedAt: p.startedAt,
+		ObservedAt: observedAt, Outcome: slo.OutcomeEmitted, ReplicaImpact: slo.ImpactUnmeasured,
+		SelectionBoundStatus:   p.selectionBound.Status,
+		SelectionBoundEvidence: selectionBoundEvidence(p.selectionBound),
+	})
+}
+
+func (m *Manager) recordRotationObservation(p pendingRotation, outcome string, executionConfirmed, recoveryConfirmed bool, observedAt time.Time) {
+	metrics.RecordActuationConfirmation("phoenix", outcome)
+	if m.Audit != nil {
+		m.Audit.RotationObservation(p.tenant, p.owner, p.decisionID, p.view.Pod.Namespace, p.view.Pod.Name,
+			p.view.Pod.UID, p.phoenixEventName, p.phoenixEventUID, outcome, executionConfirmed, recoveryConfirmed,
+			p.startedAt, observedAt)
 	}
 }
 
@@ -2469,7 +2593,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
-				if !m.trackRotationWithFloor(pol.Owner(), pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted) {
+				decisionID := ""
+				if decisions[i].Trace != nil {
+					decisionID = decisions[i].Trace.DecisionID
+				}
+				if !m.trackRotationReceipt(pol.Owner(), pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted, res, decisionID) {
 					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted)
 				}
 			} else {

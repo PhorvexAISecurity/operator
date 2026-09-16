@@ -113,6 +113,10 @@ var (
 		Name: "phorvex_actuations_total",
 		Help: "SecurityEvents actually emitted to Phoenix (active mode only).",
 	}, []string{"tenant", "action"})
+	actuationConfirmations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_actuation_confirmations_total",
+		Help: "Bounded asynchronous actuation observations by backend and closed outcome; submission alone is not confirmation.",
+	}, []string{"backend", "outcome"})
 
 	maintenanceAttempts = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_maintenance_attempts_total",
@@ -206,7 +210,7 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda, policyLambda, tenantCollisions,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, maintenanceAttempts, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
+		decisionsTotal, actuationsTotal, actuationConfirmations, maintenanceAttempts, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
@@ -413,6 +417,10 @@ func RecordEventAgedOut(tenant string) {
 
 func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
+}
+
+func RecordActuationConfirmation(backend, outcome string) {
+	actuationConfirmations.WithLabelValues(backend, outcome).Inc()
 }
 
 func RecordMaintenanceAttempt(operation, outcome string) {

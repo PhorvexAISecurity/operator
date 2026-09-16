@@ -39,11 +39,16 @@ type Snapshot struct {
 	PodInventoryComplete    bool
 	PolicyInventoryComplete bool
 	EventInventoryComplete  bool
-	Pods                    []model.Pod
-	PodByKey                map[string]*model.Pod
-	Graph                   *graph.Graph
-	Events                  []model.SecurityEventInfo
-	EventByPod              map[string][]model.SecurityEventInfo
+	// PhoenixReceiptInventoryComplete is true only when the same cluster-wide
+	// SecurityEvent list used for this snapshot succeeded. Receipts remain outside
+	// detector belief even though they share the API list.
+	PhoenixReceiptInventoryComplete bool
+	Pods                            []model.Pod
+	PodByKey                        map[string]*model.Pod
+	Graph                           *graph.Graph
+	Events                          []model.SecurityEventInfo
+	EventByPod                      map[string][]model.SecurityEventInfo
+	PhoenixReceipts                 map[string]model.PhoenixExecutionReceipt // keyed by event name; UID is rechecked by consumers
 	// NamespaceDryRun records the normalized annotation observation for every
 	// namespace, including malformed values which conservatively suppress work.
 	NamespaceDryRun map[string]model.ActuationBrakeObservation
@@ -103,17 +108,33 @@ func CollectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	if len(ownerReaders) > 0 {
 		reader = ownerReaders[0]
 	}
-	return collectSnapshot(ctx, c, now, assetValue, reader, nil)
+	return collectSnapshot(ctx, c, now, assetValue, reader, reader, nil)
 }
 
 // CollectSnapshotForRotationTargets limits owner API reads to this tick's protected
 // targets while retaining the full Pod inventory for graph and availability inputs.
 func CollectSnapshotForRotationTargets(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, reader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
-	return collectSnapshot(ctx, c, now, assetValue, reader, relevant)
+	return collectSnapshot(ctx, c, now, assetValue, reader, reader, relevant)
 }
 
-func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, reader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
-	ownerReader := newSnapshotOwnerReader(reader)
+// CollectSnapshotForRotationTargetsWithReceiptReader keeps controller ownership
+// reads and Phoenix execution receipt inventory independent. Phoenix does not need
+// native owner eligibility reads, but its terminal SecurityEvent evidence must be
+// read through the direct boundary reader so a deleted/recreated cached object
+// cannot authorize learning.
+func CollectSnapshotForRotationTargetsWithReceiptReader(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, ownerReader, receiptReader client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
+	snap, err := collectSnapshot(ctx, c, now, assetValue, ownerReader, receiptReader, relevant)
+	if err == nil && receiptReader == nil {
+		// The normal cached event stream may still feed detector belief, but it is
+		// insufficient to prove that a receipt object remains present now.
+		snap.PhoenixReceiptInventoryComplete = false
+		snap.PhoenixReceipts = map[string]model.PhoenixExecutionReceipt{}
+	}
+	return snap, err
+}
+
+func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetValue func(*model.Pod) float64, ownerBoundary, receiptBoundary client.Reader, relevant func(*corev1.Pod) bool) (*Snapshot, error) {
+	ownerReader := newSnapshotOwnerReader(ownerBoundary)
 	var podList corev1.PodList
 	if err := c.List(ctx, &podList); err != nil {
 		return nil, err
@@ -204,6 +225,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		PodByKey:             map[string]*model.Pod{},
 		Graph:                g,
 		EventByPod:           map[string][]model.SecurityEventInfo{},
+		PhoenixReceipts:      map[string]model.PhoenixExecutionReceipt{},
 		NamespaceDryRun:      dryRunNS,
 		Now:                  now,
 		NamespaceLabels:      nsLabels,
@@ -214,11 +236,17 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	}
 
 	// SecurityEvent stream.
-	events, byPod, err := collectEvents(ctx, c, now)
+	eventReader := client.Reader(c)
+	if receiptBoundary != nil {
+		eventReader = receiptBoundary
+	}
+	events, byPod, receipts, err := collectEventsAndReceipts(ctx, eventReader, now)
 	if err == nil {
 		snap.EventInventoryComplete = true
+		snap.PhoenixReceiptInventoryComplete = true
 		snap.Events = events
 		snap.EventByPod = byPod
+		snap.PhoenixReceipts = receipts
 		for i := range snap.Pods {
 			bindAdapterObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 		}

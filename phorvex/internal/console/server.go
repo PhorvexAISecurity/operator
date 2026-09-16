@@ -303,7 +303,7 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 
 	if localSource {
 		// The audit is tenant data as well as local-source data: count only granted tenants.
-		actuationCost, actuationRatePerHr, actuationPartial, auditErr := s.cfg.actuationCostPerYear(r.Context(), perActionCost, tenantFilterFor(r))
+		actuationCost, actuationRatePerHr, actuationCoverage, auditErr := s.cfg.actuationCostPerYear(r.Context(), perActionCost, tenantFilterFor(r))
 		if auditErr != nil && s.cfg.AuditSource != nil {
 			writeJSON(w, 503, map[string]string{"error": "remote audit cost source unavailable: " + auditErr.Error()})
 			return
@@ -311,10 +311,17 @@ func (s *Server) cost(w http.ResponseWriter, r *http.Request) {
 		defenseCost += actuationCost
 		body["actuationCost"] = actuationCost
 		body["actuationRatePerHr"] = actuationRatePerHr
-		body["actuationPartial"] = actuationPartial
+		body["actuationPartial"] = actuationCoverage.Partial()
+		body["actuationEvidence"] = actuationCoverage
 		note += " Defense overhead = operator footprint (" + overheadBasis + ") + actuation compute (measured action rate × per-action AWS compute)."
-		if actuationPartial {
+		if actuationCoverage.Truncated {
 			note += " Actuation rate is extrapolated from only the latest 8 MiB of decisions, not the full retained history."
+		}
+		if actuationCoverage.UntypedLegacy > 0 {
+			note += " Evidence-untyped historical dispatches are retained in the numeric series but cannot be classified as native or Phoenix."
+		}
+		if actuationCoverage.PendingPhoenix > 0 {
+			note += " Phoenix submissions without exact correlated execution observations are excluded from confirmed action cost; recovery is reported separately."
 		}
 	} else {
 		withheld = append(withheld, "actuationCost", "actuationRatePerHr")

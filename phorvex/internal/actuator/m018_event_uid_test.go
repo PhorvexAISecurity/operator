@@ -25,7 +25,7 @@ import (
 // m018Request is one rotate attempt against a pod.
 func m018Request() Request {
 	return Request{
-		Tenant: "team-a", Namespace: "ns", Pod: "p1",
+		Tenant: "team-a", Namespace: "ns", Pod: "p1", TargetUID: "pod-uid",
 		Action: model.ActionRotate, Reason: "test", Score: 0.5,
 	}
 }
