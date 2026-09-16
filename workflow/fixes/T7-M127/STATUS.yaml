@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -18,6 +18,13 @@ checks:
     approval_ref: AUTHORIZATION.md
     rationale: Lead in-scope plan under recorded Tier7 owner instruction and standing
       AUTONOMY.md; no live waiver
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/red.md
+    sha256: 7bce09c6ceffe8e3519d60f3271bf21f0d9fa6c77bcd8784546b9e769546d6ab
+    source_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
+    at: '2026-09-16T15:48:59+00:00'
 fix_id: T7-M127
 issues:
 - M-127
@@ -47,7 +54,7 @@ blind_derivation:
 implementation:
   branch: fix/t7-m127
   base_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
-  head_sha: null
+  head_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6
   stacked_on: []
 pull_request:
   url: null
@@ -87,7 +94,7 @@ next_action:
   owner: implementer
   action: Implement signed plan; source-pin, validate and submit for independent lead
     review; no issue PR
-updated_at: '2026-09-16T15:24:38+00:00'
+updated_at: '2026-09-16T15:53:11+00:00'
 configuration_history:
 - at: '2026-09-16T15:24:36+00:00'
   by: codex-lead
@@ -101,6 +108,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T15:53:11+00:00'
+  by: sol-t7-m127
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
