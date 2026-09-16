@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 7
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -23,12 +23,66 @@ checks:
     sha256: 69a1b07dcb4c68b24b496a3432f7230fbf5182530321e57d1925226f21093001
     source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
     at: '2026-09-16T12:34:05+00:00'
+  preflight:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/receipt.json
+    sha256: 8860ae097d6b9df174a17345ff582132925d2ad26b67d03c2fc952015fa9caeb
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+  implementation:
+    result: PASS
+    by: sol-t6-m074
+    artifact: 04-diff.patch
+    sha256: 7bf7d1b331151b3512e635ff77d0207954b8bd149ec6c964905630be94aa741b
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+  l0:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  l1:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  l2:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  positive_control:
+    result: PASS
+    by: sol-t6-m074
+    artifact: evidence/preflight/run-1789565524063820522/go-phorvex.log
+    sha256: 24895a6aaf7b3b55957da5d805ef726c4a8993da18779a8cca509f9594404f9f
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:37:23+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
 fix_id: T6-M074
 issues:
 - M-74
 title: Validate disaggregated KV peers before any effect
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -74,12 +128,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -89,10 +143,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t6-m074
-  action: Implement signed bounded parser and truthful local/remote result contract
-    after worker slot assigned
-updated_at: '2026-09-16T13:01:08+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-16T13:37:25+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:53+00:00'
   by: codex-lead
@@ -106,6 +160,11 @@ configuration_history:
   - verification
   approval_ref: AUTHORIZATION.md
 - at: '2026-09-16T13:01:08+00:00'
+  by: sol-t6-m074
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T13:37:22+00:00'
   by: sol-t6-m074
   fields:
   - implementation
@@ -127,3 +186,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T13:37:23+00:00'
+  by: sol-t6-m074
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T13:37:24+00:00'
+  by: sol-t6-m074
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T6-M074:7:submit
+  from: sol-t6-m074
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 7
