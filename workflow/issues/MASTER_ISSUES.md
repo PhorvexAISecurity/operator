@@ -1862,7 +1862,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-124 · No per-pod opt-out; the namespace dry-run brake is case-sensitive · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T8-M124
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
