@@ -594,6 +594,14 @@ type ContextSignals struct {
 // interfaces — so interface packages never import the API package.
 type Policy struct {
 	NativeRotate bool // M47: enforce validated ownership for the native delete path.
+	// Quarantine capacity is operator-owned, namespace-wide state. Configured=false
+	// preserves non-production/offline callers; production always supplies the guard.
+	// Known=false is a hard fail-closed inventory result, never an invented zero.
+	QuarantineCapacityConfigured bool
+	QuarantineCapacityKnown      bool
+	QuarantineCapacityUsed       int
+	QuarantineCapacityLimit      int
+	QuarantineCapacityReason     string
 
 	TrustBoundarySince           time.Time
 	DecisionAssets               map[string]string

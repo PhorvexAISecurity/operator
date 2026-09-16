@@ -6,6 +6,7 @@ package actuator
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -106,6 +107,41 @@ func TestPhoenixActuateEmitsSecurityEvent(t *testing.T) {
 	}
 	if se.Spec.AnomalyScore == nil || *se.Spec.AnomalyScore != "0.9000" {
 		t.Errorf("anomalyScore = %v, want 0.9000", se.Spec.AnomalyScore)
+	}
+}
+
+func TestPhoenixActuateBindsControlledQuarantineIdentity(t *testing.T) {
+	s := newScheme(t)
+	c := fake.NewClientBuilder().WithScheme(s).Build()
+	pa := NewPhoenixActuator(c)
+	ctx := context.Background()
+
+	if _, err := pa.Actuate(ctx, Request{Tenant: "team-a", Namespace: "ns", Pod: "demo-1", Action: model.ActionQuarantine}); !IsNoEffectRefusal(err) {
+		t.Fatalf("unbound controlled quarantine must be an explicit no-effect refusal, got %v", err)
+	}
+	if _, err := pa.Actuate(ctx, Request{
+		Tenant: "team-a", Namespace: "ns", Pod: "demo-1", Action: model.ActionQuarantine,
+		TargetUID: "pod-uid", TargetNamespaceUID: "namespace-uid", OperationID: "unbounded",
+	}); !IsNoEffectRefusal(err) {
+		t.Fatalf("malformed controlled operation identity must be an explicit no-effect refusal, got %v", err)
+	}
+	_, err := pa.Actuate(ctx, Request{
+		Tenant: "team-a", Namespace: "ns", Pod: "demo-1", Action: model.ActionQuarantine,
+		TargetUID: "pod-uid", TargetNamespaceUID: "namespace-uid", OperationID: strings.Repeat("a", 40),
+	})
+	if err != nil {
+		t.Fatalf("bound controlled quarantine: %v", err)
+	}
+	var events amtdv1beta1.SecurityEventList
+	if err := c.List(ctx, &events); err != nil {
+		t.Fatalf("list SecurityEvents: %v", err)
+	}
+	if len(events.Items) != 1 {
+		t.Fatalf("events=%d want 1", len(events.Items))
+	}
+	annotations := events.Items[0].Annotations
+	if annotations[phorvexQuarantineTargetUIDAnnotation] != "pod-uid" || annotations[phorvexQuarantineNamespaceUIDAnnotation] != "namespace-uid" || annotations[phorvexQuarantineOperationAnnotation] != strings.Repeat("a", 40) {
+		t.Fatalf("controlled quarantine identity annotations = %v", annotations)
 	}
 }
 

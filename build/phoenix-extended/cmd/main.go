@@ -123,8 +123,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controller.SecurityEventReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SecurityEvent")
 		os.Exit(1)

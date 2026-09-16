@@ -64,6 +64,20 @@ spec:
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
         {{- end }}
+        {{- $quarantineCapText := toString .Values.phorvex.maxRetainedQuarantinesPerNamespace }}
+        {{- if kindIs "float64" .Values.phorvex.maxRetainedQuarantinesPerNamespace }}
+        {{- if or (lt .Values.phorvex.maxRetainedQuarantinesPerNamespace 0.0) (ne .Values.phorvex.maxRetainedQuarantinesPerNamespace (floor .Values.phorvex.maxRetainedQuarantinesPerNamespace)) }}
+        {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must be a non-negative whole number" }}
+        {{- end }}
+        {{- $quarantineCapText = printf "%.0f" .Values.phorvex.maxRetainedQuarantinesPerNamespace }}
+        {{- end }}
+        {{- if not (regexMatch "^(0|[1-9][0-9]*)$" $quarantineCapText) }}
+        {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must be a non-negative whole number" }}
+        {{- end }}
+        {{- if or (gt (len $quarantineCapText) 3) (gt (int64 $quarantineCapText) 128) }}
+        {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must not exceed 128" }}
+        {{- end }}
+        - --max-retained-quarantines-per-namespace={{ $quarantineCapText }}
         {{- if .Values.phorvex.loraCleanSources.content }}
         - --lora-clean-sources-file={{ .Values.phorvex.loraCleanSources.mountPath }}
         {{- end }}
