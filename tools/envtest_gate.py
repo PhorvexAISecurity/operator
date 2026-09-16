@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Run the local API-server (envtest) test packages and fail unless everything really ran and passed.
+"""Run local envtest/controller packages and fail unless everything really ran and passed.
 
 The plain `go -C phorvex test ./...` job deliberately runs with KUBEBUILDER_ASSETS
 blank, so envtest-backed tests `t.Skip` there and `go test` still exits 0. This gate
-is the CI proof that the two packages carrying those tests were executed in full
-against local kube-apiserver/etcd binaries:
+is the CI proof that the six packages carrying those tests were executed in full
+against local kube-apiserver/etcd binaries and the pinned ReplicaSet controller:
 
   * the COMPLETE test suites of the selected packages run, with no `-run` filter,
     so a new envtest test (whatever helper performs its setup) runs automatically;
-  * the eight REQUIRED tests are a minimum: each must emit a `run` event and
+  * the REQUIRED tests are a minimum: each must emit a `run` event and
     terminate with `pass`; a rename or removal fails;
   * every observed parent or subtest in those packages is tracked to completion:
     a `run` without a terminal event, a terminal event without a preceding `run`,
@@ -29,8 +29,9 @@ Usage:
   envtest_gate.py run   --raw-output FILE --summary FILE [--stderr-output FILE] [--go GO] [--timeout 10m]
   envtest_gate.py check --raw-input FILE --exit-code N --summary FILE
 
-Scope: local isolated API servers only. envtest has no kubelet, CNI, garbage
-collector, cloud API or AI serving backend; a PASS here is not live acceptance.
+Scope: local isolated API servers plus an explicitly spawned ReplicaSet controller.
+There is no kubelet, CNI, garbage collector, cloud API or AI serving backend; a
+PASS here is not live acceptance.
 """
 from __future__ import annotations
 
@@ -46,6 +47,9 @@ MODULE = 'phorvex'
 # Minimum required tests per selected package. The packages run in full; these names
 # must additionally be observed running and passing.
 REQUIRED = {
+    'github.com/phorvex/phorvex/api/v1alpha1': (
+        'TestM022MaxMovesPerTickAPIDefaultingAndAdmission',
+    ),
     'github.com/phorvex/phorvex/internal/actuator': (
         'TestM47APIServerPreconditions',
         'TestM038APIServerConditionalDetach',
@@ -53,15 +57,31 @@ REQUIRED = {
         'TestM048APIServerRestrictedRole',
         'TestM007RestrictedRequests',
         'TestM032CoverageAPIServerReadback',
+        'TestM052PhoenixProducerToShippedConsumer',
+        'TestM052QuarantineCapacityRealAPICAS',
+        'TestM052QuarantineCapacityRealAPIRetainsAmbiguityAndReleasesOnlyDefiniteNoEffect',
+        'TestM052RealReplicaSetQuarantineStopsAtCapacity',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',
         'TestM013RealEventSink',
     ),
+    'github.com/phorvex/phorvex/internal/authz': (
+        'TestClusterScopedReviewRejectsNamespacedOnlyGrant',
+    ),
+    'github.com/phorvex/phorvex/internal/startupauthz': (
+        'TestRenderedManagerIdentityDrivesBootAdmission',
+    ),
+    'github.com/phorvex/phorvex/internal/console': (
+        'TestM168APIServerPolicyCASAndIdentity',
+        'TestM168APIServerClusterScopedSignalCleanupRequiresAbsence',
+    ),
 }
 EXPECTED = REQUIRED  # retained name for earlier review probes
-# Import paths run in full; each must be a key of REQUIRED.
-PACKAGES = ('./internal/actuator', './internal/runner')
+# Import paths run in full; each must be a key of REQUIRED. This keeps newly added
+# envtest tests in these security-sensitive packages inside the no-skip boundary.
+PACKAGES = ('./api/v1alpha1', './internal/actuator', './internal/runner', './internal/authz',
+            './internal/startupauthz', './internal/console')
 TERMINAL = ('pass', 'fail', 'skip')
 REQUIRED_BINARIES = ('kube-apiserver', 'etcd')
 
@@ -76,7 +96,7 @@ def evaluate(lines, returncode):
     """Return (problems, verdicts, packages) for a retained `go test -json` stream.
 
     `verdicts` maps every observed test in the selected packages (parents and
-    subtests, the REQUIRED eight always present) to its terminal action, or 'missing'
+    subtests, with every REQUIRED control always present) to its terminal action, or 'missing'
     for a required test that never terminated; `packages` maps every selected package
     to its terminal action or 'missing'. An empty `problems` list is the only PASS.
     """
@@ -153,6 +173,13 @@ def check_assets(env):
         path = Path(assets) / name
         if not path.is_file() or not os.access(path, os.X_OK):
             problems.append(f'missing or non-executable envtest binary: {path}')
+    controller_manager = env.get('KUBE_CONTROLLER_MANAGER', '')
+    if not controller_manager:
+        problems.append('KUBE_CONTROLLER_MANAGER is not set; refusing to run controller-backed tests')
+    else:
+        path = Path(controller_manager)
+        if not path.is_file() or not os.access(path, os.X_OK):
+            problems.append(f'missing or non-executable kube-controller-manager: {path}')
     if env.get('USE_EXISTING_CLUSTER', '').lower() == 'true':
         problems.append('USE_EXISTING_CLUSTER=true is not allowed: this gate proves local isolated servers only')
     return problems
@@ -194,8 +221,10 @@ def cmd_run(args) -> int:
         'required': {p: list(t) for p, t in REQUIRED.items()},
         'packages_run': list(PACKAGES),
         'assets': env.get('KUBEBUILDER_ASSETS', ''),
+        'kube_controller_manager': env.get('KUBE_CONTROLLER_MANAGER', ''),
         'raw_output': str(raw),
-        'scope': 'local isolated envtest API servers only; not a shared cluster and not live acceptance',
+        'scope': ('local isolated envtest API servers plus pinned ReplicaSet controller; '
+                  'not a shared cluster and not live acceptance'),
     }
     if problems:
         summary.update(exit=None, command=None, problems=problems, verdicts={}, packages={}, result='FAIL')

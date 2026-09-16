@@ -48,7 +48,7 @@ class PRValidationTests(unittest.TestCase):
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])
 
-    def test_envtest_job_runs_the_eight_api_server_tests_on_pinned_local_binaries(self):
+    def test_envtest_job_runs_required_api_and_controller_tests_on_pinned_local_binaries(self):
         job = DOC['jobs']['go-envtest']
         self.assertEqual(job['env']['KUBECONFIG'], '/dev/null')
         self.assertEqual(job['env']['USE_EXISTING_CLUSTER'], 'false')
@@ -57,6 +57,8 @@ class PRValidationTests(unittest.TestCase):
         runs = '\n'.join(s.get('run', '') for s in job['steps'])
         self.assertIn('bash tools/provision-envtest.sh', runs)
         self.assertIn('echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"', runs)
+        self.assertIn('bash tools/provision-kube-controller-manager.sh', runs)
+        self.assertIn('echo "KUBE_CONTROLLER_MANAGER=$controller_manager" >> "$GITHUB_ENV"', runs)
         self.assertIn('python3 tools/envtest_gate.py run --raw-output envtest-evidence/go-test.jsonl '
                       '--summary envtest-evidence/summary.json --timeout 10m', runs)
         # The full actuator suite renders the Helm chart; without helm those tests skip and
@@ -84,6 +86,16 @@ class PRValidationTests(unittest.TestCase):
         self.assertNotIn('| head', script)
         self.assertNotIn('${ENVTEST', script)  # no environment override of version, URL or digest
         self.assertIn('set -euo pipefail', script)
+        controller_script = (ROOT / 'tools/provision-kube-controller-manager.sh').read_text()
+        self.assertIn('VERSION=1.34.0', controller_script)
+        self.assertIn('SHA256=dd49fc2991df033c1eef6c12574795d64633a95e665d1b369afe0760472c24d1',
+                      controller_script)
+        self.assertIn('https://dl.k8s.io/release/v${VERSION}/bin/linux/amd64/kube-controller-manager',
+                      controller_script)
+        self.assertIn('sha256sum -c -', controller_script)
+        self.assertIn('version="$("$binary" --version 2>&1)"', controller_script)
+        self.assertNotIn('${KUBE_CONTROLLER_MANAGER', controller_script)
+        self.assertIn('set -euo pipefail', controller_script)
 
     def test_required_gate_rejects_failure_skip_and_cancellation(self):
         job = DOC['jobs']['pr-validation']
