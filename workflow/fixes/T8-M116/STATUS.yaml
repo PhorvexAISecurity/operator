@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 6
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,76 @@ checks:
     at: '2026-09-16T18:52:17+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-http.log
+    sha256: 0f2fff093c615bd2d62358f65b5fb2f971d14075196d7b509c01221197364e38
+    source_sha: 38f1f18c6211e059217320af9168427a111de8b3
+    at: '2026-09-16T19:19:54+00:00'
+    rationale: Independent baseline run reproduced ignored observe configuration and
+      prompt disclosure with a low-score HTTP202 upstream positive control; real model
+      false positives retained separately.
+  preflight:
+    result: PASS
+    by: sol-t8-m116
+    artifact: evidence/preflight/receipt.json
+    sha256: 09647752572e63cb5d14c88825ef4b8acf8093b321fe59608e6c3ae8e0b98d6b
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:20:26+00:00'
+  implementation:
+    result: PASS
+    by: sol-t8-m116
+    artifact: 04-diff.patch
+    sha256: a56498f1ef3e89c5d55a2a79c22e03eb725e5ae0bb46750a0f170f2bf7b47751
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:20:26+00:00'
+  l0:
+    result: PASS
+    by: sol-t8-m116
+    artifact: evidence/worker/l0.log
+    sha256: 53ae90220765fee570d5bb23f7095a8db080a9d81ece63747481fd0dfc403196
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:20:26+00:00'
+    inputs:
+    - build/test-harness/guardrail
+    inputs_sha256: 842d3af2450a68a0935bc26bdcb7c9d1a1878152660387b5f8aa12ea0af80f50
+  l1:
+    result: PASS
+    by: sol-t8-m116
+    artifact: evidence/worker/l1.log
+    sha256: 8e7b8732b656016772ece586a61acbf810268fc56d952f83e34cc9728f4fbee4
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:20:26+00:00'
+    inputs:
+    - build/test-harness/guardrail
+    inputs_sha256: 842d3af2450a68a0935bc26bdcb7c9d1a1878152660387b5f8aa12ea0af80f50
+  l2:
+    result: PASS
+    by: sol-t8-m116
+    artifact: evidence/worker/l2.log
+    sha256: 9a5edf123ca57d511d1c2f55d0ceb0dd592d2d06ba6d92d89a7eac184922e8ef
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:20:26+00:00'
+    inputs:
+    - build/test-harness/guardrail
+    inputs_sha256: 842d3af2450a68a0935bc26bdcb7c9d1a1878152660387b5f8aa12ea0af80f50
+  positive_control:
+    result: PASS
+    by: sol-t8-m116
+    artifact: evidence/worker/positive-control.log
+    sha256: c332e9563b597b931d4cc5a4774686631a8b4e38a563d43ef38d43af27555cc5
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:20:26+00:00'
+    inputs:
+    - build/test-harness/guardrail
+    inputs_sha256: 842d3af2450a68a0935bc26bdcb7c9d1a1878152660387b5f8aa12ea0af80f50
 fix_id: T8-M116
 issues:
 - M-116
 title: The guardrail tier false-positives on benign instruction-shaped probes
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -67,12 +131,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,9 +146,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t8-m116
-  action: Implement signed plan; coordinate heavy-test slot; submit-review --no-notify
-updated_at: '2026-09-16T19:14:22+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-16T19:20:29+00:00'
 configuration_history:
 - at: '2026-09-16T18:52:14+00:00'
   by: codex-lead
@@ -108,6 +173,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-16T19:20:26+00:00'
+  by: sol-t8-m116
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -125,3 +195,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T19:20:26+00:00'
+  by: sol-t8-m116
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T19:20:28+00:00'
+  by: sol-t8-m116
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T8-M116:8:submit
+  from: sol-t8-m116
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8

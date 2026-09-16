@@ -973,7 +973,7 @@ fixes:
     issues:
     - M-116
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t8-m116
