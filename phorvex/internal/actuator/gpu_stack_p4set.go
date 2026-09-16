@@ -38,7 +38,7 @@ const (
 	annoKVInvalidate  = "phorvex.ai/kv-invalidate-path"
 	defaultUnloadPath = "/v1/unload_lora_adapter"
 	defaultLoadPath   = "/v1/load_lora_adapter"
-	defaultDrainPath  = "/v1/drain"           // [PENDING-GPU-VALIDATION] no standard vLLM drain-all; deployment-specific
+	defaultDrainPath  = "/v1/drain"            // [PENDING-GPU-VALIDATION] no standard vLLM drain-all; deployment-specific
 	defaultGuardPath  = "/v1/guardrail/reload" // [PENDING-GPU-VALIDATION] guardrail-service specific
 	defaultKVInvPath  = "/v1/kv/invalidate"    // [PENDING-GPU-VALIDATION] disaggregation-connector specific
 )
@@ -174,6 +174,8 @@ func (g httpGuardrail) ApplyVariant(ctx context.Context, ep servingEndpoint, var
 // kvTransferController invalidates/migrates KV across disaggregated prefill/decode workers. The LOCAL
 // invalidate is real + runnable; the cross-worker MigrateRemote is DEFERRED [PENDING-GPU-VALIDATION]
 // (needs a disaggregated P/D deployment + the connector — vLLM --kv-transfer-config / Dynamo / Mooncake).
+// Handler syntax validation is not destination authorization: any production implementation must
+// enforce a separate operator-owned peer allowlist before dialing tenant-declared endpoints.
 type kvTransferController interface {
 	InvalidateLocal(ctx context.Context, ep servingEndpoint) error
 	MigrateRemote(ctx context.Context, ep servingEndpoint, peers []string) error
@@ -351,7 +353,7 @@ func daemonSetUID(ds *appsv1.DaemonSet) types.UID {
 // ---- EnactCtx resolvers (injected client or real default) ----
 
 var (
-	pkgGuardrail guardrailController = httpGuardrail{v: newHTTPVLLM()}
+	pkgGuardrail guardrailController  = httpGuardrail{v: newHTTPVLLM()}
 	pkgKVXfer    kvTransferController = httpKVTransfer{v: newHTTPVLLM()}
 )
 
