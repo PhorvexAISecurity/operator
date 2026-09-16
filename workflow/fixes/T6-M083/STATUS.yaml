@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -26,12 +26,72 @@ checks:
     rationale: Pinned baseline production handler/Capture used a valid foreign tenant
       GPU annotation as nvidia-smi selector; fixture stopped after Capture with workload
       unchanged.
+  preflight:
+    result: PASS
+    by: sol-t6-m083
+    artifact: evidence/preflight/receipt.json
+    sha256: dcd920016a8f5c1ff3e19b47b53f47432f8bb1161055cbed3ce5b2062cf87fd8
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:16:06+00:00'
+  implementation:
+    result: PASS
+    by: sol-t6-m083
+    artifact: 04-diff.patch
+    sha256: 7af850c79a75678aff9fb037fc5ec46f1dd0c5073f344bce9176c8393231c368
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:16:06+00:00'
+  l0:
+    result: PASS
+    by: sol-t6-m083
+    artifact: evidence/preflight/run-1789564129768428905/go-phorvex.log
+    sha256: f40ba77923e779bd973b392f22dd63c9cee43e4e2fa24e90eb8e03cb1fca9925
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:16:06+00:00'
+    inputs:
+    - deploy/docker/operator.Dockerfile
+    - deploy/helm/phorvex-stack
+    - phorvex
+    inputs_sha256: 3e0e7fa2bb355f607e21da6b1afa50d30a0b3725d489c0351133ef210ce5a915
+  l1:
+    result: PASS
+    by: sol-t6-m083
+    artifact: evidence/head-focused.txt
+    sha256: 942993ffac509151463ffe5aa9c6871b16369d225992a267a6856bf35f828207
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:16:06+00:00'
+    inputs:
+    - phorvex/charts/phorvex
+    - phorvex/cmd/main.go
+    - phorvex/internal/actuator
+    - phorvex/internal/podresources
+    inputs_sha256: 83677532535487f9b8710065671f103b8aaa4bb5f43185c269c0dc3e6ef5eb4c
+  l2:
+    result: PASS
+    by: sol-t6-m083
+    artifact: evidence/preflight/run-1789564129768428905/go-phorvex.log
+    sha256: f40ba77923e779bd973b392f22dd63c9cee43e4e2fa24e90eb8e03cb1fca9925
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:16:06+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 4b3f4c083c159fedc16d1dd6569d01f4081d14966e2df5381cf88e387a40349f
+  positive_control:
+    result: PASS
+    by: sol-t6-m083
+    artifact: evidence/head-focused.txt
+    sha256: 942993ffac509151463ffe5aa9c6871b16369d225992a267a6856bf35f828207
+    source_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
+    at: '2026-09-16T13:16:06+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/podresources
+    inputs_sha256: 900d30054cfb76e14b4eac220a53def9a5e98fc43d51f5181bc6ecaa2618c41f
 fix_id: T6-M083
 issues:
 - M-83
 title: Bind MIG operations to authoritative allocated GPU identity
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -55,7 +115,7 @@ blind_derivation:
 implementation:
   branch: fix/t6-m083
   base_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-  head_sha: null
+  head_sha: 0bdbb0b122b1bd4bef95d174697e0b7eb568a883
   stacked_on: []
 pull_request:
   url: null
@@ -77,12 +137,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -92,10 +152,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t6-m083
-  action: Implement authoritative allocation/profile and complete disabled-by-default
-    shipping path; request heavy slot before tests
-updated_at: '2026-09-16T12:36:50+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-16T13:16:09+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:56+00:00'
   by: codex-lead
@@ -108,6 +168,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T13:16:06+00:00'
+  by: sol-t6-m083
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -125,3 +190,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T13:16:06+00:00'
+  by: sol-t6-m083
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T13:16:07+00:00'
+  by: sol-t6-m083
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T6-M083:6:submit
+  from: sol-t6-m083
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 6
