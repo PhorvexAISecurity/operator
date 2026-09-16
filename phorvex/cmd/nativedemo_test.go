@@ -24,7 +24,8 @@ func TestNativeDemoRotateCaller(t *testing.T) {
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "demo", UID: "rs-uid"}, Spec: appsv1.ReplicaSetSpec{Replicas: &one, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}}
 	owned := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "owned", Namespace: "demo", UID: "pod-uid", ResourceVersion: "1", Labels: map[string]string{"app": "demo"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}}}
 	bare := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "bare", Namespace: "demo", UID: "bare-uid", ResourceVersion: "1"}}
-	c := fake.NewClientBuilder().WithScheme(s).WithObjects(rs, owned, bare).Build()
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(namespace, rs, owned, bare).Build()
 	n := newDemoActuator(c)
 	ctx := context.Background()
 	for _, tc := range []struct {

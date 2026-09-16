@@ -196,13 +196,17 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1.PhorvexPolicy{}).
-		WithObjects(policy, sentinel).Build()
+		WithObjects(policy, sentinel,
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}},
+			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: podName, UID: types.UID("uid-1")}},
+		).Build()
 	fa := &m127BoundaryActuator{name: "fake"}
 	notifications := record.NewFakeRecorder(4)
 	var auditSink bytes.Buffer
 	m := &Manager{
 		BrainImage: "record-image", GitSHA: "record-sha",
 		Client:            c,
+		BoundaryReader:    c,
 		Clock:             exposure.NewClock(),
 		Optimizer:         &killSwitchOptimizer{},
 		Audit:             audit.New(logr.Discard(), &auditSink),
@@ -225,12 +229,12 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 		StartedAt: now.Add(-time.Hour), Ready: true, DesiredReplicas: 2, ReadyReplicas: 2,
 	}
 	snap := &ingest.Snapshot{
-		Pods:             []model.Pod{pod},
-		PodByKey:         map[string]*model.Pod{namespace + "/" + podName: &pod},
-		Graph:            graph.Build(graph.Input{}),
-		EventByPod:       map[string][]model.SecurityEventInfo{},
-		DryRunNamespaces: map[string]bool{},
-		Now:              now,
+		Pods:            []model.Pod{pod},
+		PodByKey:        map[string]*model.Pod{namespace + "/" + podName: &pod},
+		Graph:           graph.Build(graph.Input{}),
+		EventByPod:      map[string][]model.SecurityEventInfo{},
+		NamespaceDryRun: map[string]model.ActuationBrakeObservation{},
+		Now:             now,
 	}
 	decisionLabels := map[string]string{
 		"tenant": tenant, "action": string(model.ActionRotate), "mode": "active", "selected": "true",

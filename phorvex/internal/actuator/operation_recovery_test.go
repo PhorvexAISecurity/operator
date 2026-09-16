@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -354,7 +355,7 @@ func TestOperationJournalWarmRecoveryRefusalControls(t *testing.T) {
 			if err := c.Get(ctx, client.ObjectKey{Name: "ns"}, ns); err != nil {
 				t.Fatal(err)
 			}
-			ns.Annotations = map[string]string{"phorvex.ai/dry-run": "true"}
+			ns.Annotations = map[string]string{actuationbrake.NamespaceDryRunAnnotation: " TRUE "}
 			if err := c.Update(ctx, ns); err != nil {
 				t.Fatal(err)
 			}
@@ -418,6 +419,29 @@ func TestOperationJournalWarmRecoveryRefusalControls(t *testing.T) {
 				t.Fatalf("refusal changed receipt: %v", err)
 			}
 		})
+	}
+}
+
+func TestM124PodOptOutDoesNotAbandonStartedWarmRecovery(t *testing.T) {
+	ctx := context.Background()
+	c, n, old, _ := interruptedWarmReceiptFixture(t)
+	current := &corev1.Pod{}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(old), current); err != nil {
+		t.Fatal(err)
+	}
+	if current.Annotations == nil {
+		current.Annotations = map[string]string{}
+	}
+	current.Annotations[actuationbrake.PodOptOutAnnotation] = "true"
+	if err := c.Update(ctx, current); err != nil {
+		t.Fatal(err)
+	}
+	events, err := n.RecoverOperations(ctx, false)
+	if err != nil || len(events) != 1 || events[0].Err != nil || events[0].Outcome != "confirmed" {
+		t.Fatalf("Pod opt-out abandoned required compensation: events=%+v err=%v", events, err)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(old), &corev1.Pod{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("retiring Pod was not converged after opt-out: %v", err)
 	}
 }
 

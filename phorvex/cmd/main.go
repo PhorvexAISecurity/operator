@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/audittransport"
@@ -645,6 +646,13 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 	ph := actuator.NewPhoenixActuator(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if observation := actuationbrake.ObserveNamespace(ctx, c, actuationbrake.DefaultReadTimeout, namespace); observation.Engaged {
+		return fmt.Errorf("namespace actuation brake: %s", observation.Cause)
+	}
+	podObservation, targetUID := actuationbrake.ObservePodIdentity(ctx, c, actuationbrake.DefaultReadTimeout, namespace, pod, "")
+	if podObservation.Engaged {
+		return fmt.Errorf("Pod actuation brake: %s", podObservation.Cause)
+	}
 
 	if err := ph.EnsurePolicy(ctx, actuator.TenantTarget{
 		Tenant:      tenant,
@@ -657,10 +665,17 @@ func runIntegrationEmit(tenant, namespace, pod, action, matchLabels string) erro
 	}); err != nil {
 		return fmt.Errorf("ensure AMTD: %w", err)
 	}
+	if observation := actuationbrake.ObserveNamespace(ctx, c, actuationbrake.DefaultReadTimeout, namespace); observation.Engaged {
+		return fmt.Errorf("namespace actuation brake before dispatch: %s", observation.Cause)
+	}
+	if observation := actuationbrake.ObservePod(ctx, c, actuationbrake.DefaultReadTimeout, namespace, pod, targetUID); observation.Engaged {
+		return fmt.Errorf("Pod actuation brake before dispatch: %s", observation.Cause)
+	}
 	res, err := ph.Actuate(ctx, actuator.Request{
 		Tenant:    tenant,
 		Namespace: namespace,
 		Pod:       pod,
+		TargetUID: targetUID,
 		Action:    act,
 		Reason:    "phorvex P0 Seam-1 integration proof",
 		Score:     0.99,

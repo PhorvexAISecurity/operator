@@ -750,7 +750,7 @@ func TestM140_SuccessfulEmissionMarksOwnerScopedCooldown(t *testing.T) {
 	}
 
 	// Positive control: the emission really happened.
-	if got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 1 || fa.calls != 1 {
+	if got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 1 || fa.calls != 1 {
 		t.Fatalf("emission positive control failed: emitted=%d actuator calls=%d", got, fa.calls)
 	}
 
@@ -800,7 +800,7 @@ func TestM140_FailedEmissionMarksNoCooldown(t *testing.T) {
 	views := map[string]*model.WorkloadView{
 		"ns/p": {Pod: model.Pod{Namespace: "ns", Name: "p", UID: "pod-uid", ReadyReplicas: 3}},
 	}
-	if got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 0 {
+	if got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 0 {
 		t.Fatalf("failed emission reported %d enacted moves", got)
 	}
 	if len(m.Intents.Since(pol.Owner(), "ns", "p", time.Now())) != 0 {
@@ -821,8 +821,8 @@ func TestM140_EmissionCooldownsAreIsolatedBetweenOwners(t *testing.T) {
 	views := map[string]*model.WorkloadView{
 		"ns/p": {Pod: model.Pod{Namespace: "ns", Name: "p", UID: "pod-uid", ReadyReplicas: 3}},
 	}
-	m.actuate(context.Background(), &policyEntry{namespace: "ns"}, first, decisions, views)
-	m.actuate(context.Background(), &policyEntry{namespace: "ns"}, second, decisions, views)
+	actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, first, decisions, views)
+	actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, second, decisions, views)
 
 	now := time.Now()
 	if len(m.Intents.Since(first.Owner(), "ns", "p", now)) == 0 || len(m.Intents.Since(second.Owner(), "ns", "p", now)) == 0 {

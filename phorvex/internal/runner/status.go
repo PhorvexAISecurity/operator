@@ -17,7 +17,9 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/metrics"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // metav1SelAsSel compiles a metav1.LabelSelector into a labels.Selector. An empty
@@ -108,7 +110,9 @@ func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, prot
 		dryReason, dryMsg := "Active", "actuation enabled"
 		dryStatus := metav1.ConditionFalse
 		if e.spec.IsDryRun() {
-			dryStatus, dryReason, dryMsg = metav1.ConditionTrue, "DryRun", "decide+log+metrics only; no actuation"
+			dryStatus, dryReason, dryMsg = metav1.ConditionTrue, actuationbrake.PolicyDryRun, actuationbrake.Message(model.ActuationBrakeObservation{Engaged: true, Cause: actuationbrake.PolicyDryRun})
+		} else if actions.namespaceDryRun.Engaged {
+			dryStatus, dryReason, dryMsg = metav1.ConditionTrue, actions.namespaceDryRun.Cause, actuationbrake.Message(actions.namespaceDryRun)
 		}
 		meta.SetStatusCondition(&p.Status.Conditions, metav1.Condition{
 			Type:               "DryRun",

@@ -5,13 +5,17 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/phorvex/phorvex/internal/authz"
 
+	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -164,7 +168,7 @@ func TestCapable_ConfigPredicates(t *testing.T) {
 		{"guardrail-variants", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.GuardrailVariants = 1 }, model.ActionGuardrailRotate},
 		{"guardrail-tier", func(p *model.Pod, _ *[]ingest.NodeInfo) { delete(p.Labels, labelGuardrailTier) }, model.ActionGuardrailRotate},
 		{"route-service", func(p *model.Pod, _ *[]ingest.NodeInfo) { p.RouteService = "" }, model.ActionEndpointRotate},
-		{"gpu-nodes", func(_ *model.Pod, n *[]ingest.NodeInfo) { *n = (*n)[:1] }, model.ActionWarmSwap},
+		{"gpu-nodes-model-shard", func(_ *model.Pod, n *[]ingest.NodeInfo) { *n = (*n)[:1] }, model.ActionModelShardReplace},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -235,8 +239,8 @@ func TestCapable_ServingSelector(t *testing.T) {
 	}
 }
 
-// TestCapable_ZeroMIGCapacityNotAGPUNode: a node with 0 allocatable GPU and only zero-count
-// MIG resources must NOT count toward the ≥2 GPU-node floor (warm-swap/model-shard).
+// TestCapable_ZeroMIGCapacityNotAGPUNode: warm-swap retires an old process and therefore
+// supports a one-node pool; model-shard retains its independent two-GPU-node floor.
 func TestCapable_ZeroMIGCapacityNotAGPUNode(t *testing.T) {
 	views, _ := capFleet()
 	fleet := []model.Pod{views[0].Pod, views[1].Pod, views[2].Pod}
@@ -246,10 +250,114 @@ func TestCapable_ZeroMIGCapacityNotAGPUNode(t *testing.T) {
 	}
 	svcs := []ingest.ServiceInfo{{Namespace: "ns", Name: "infer", Selector: map[string]string{"app": "infer", labelServing: "true"}}}
 	wit := witOver(fleet, nodes, svcs)
-	for _, a := range []model.Action{model.ActionWarmSwap, model.ActionModelShardReplace} {
-		if ok, _ := wit.Capable(views[0], a); ok {
-			t.Fatalf("%s should be uncapable with only 1 real GPU node (zero-MIG node must not count)", a)
+	if ok, why := wit.Capable(views[0], model.ActionWarmSwap); !ok {
+		t.Fatalf("warm-swap should support a verified one-node pool: %s", why)
+	}
+	if ok, _ := wit.Capable(views[0], model.ActionModelShardReplace); ok {
+		t.Fatal("model-shard should remain uncapable with only 1 real GPU node (zero-MIG node must not count)")
+	}
+}
+
+func TestM034ConfiguredPoolReconCapabilityAndOptimizer(t *testing.T) {
+	views, wit := capFleet()
+	view := views[0]
+	view.Phase = model.PhaseWarm
+	view.Physics = model.NeutralPhysics()
+	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
+	engine := decision.NewCoverageEngine()
+	engine.Capability = func(v *model.WorkloadView, a model.Action, cover []string) *actionset.Eligibility {
+		r := wit.Eligible(v, a, cover)
+		if r == nil {
+			return nil
 		}
+		return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+	}
+	pol := model.Policy{Tenant: "m034", Namespace: "ns", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1,
+		ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second, MinAvailableReplicas: 1,
+		EnabledActions: map[model.Action]bool{model.ActionWarmSwap: true}}
+	set, _ := engine.AssembleSet([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 1 || set.Candidates[0].Action != model.ActionWarmSwap || len(set.Candidates[0].CoverKeys) != 3 {
+		t.Fatalf("recon/capability action set = %+v exclusions=%+v", set.Candidates, set.Excluded)
+	}
+	ds, err := engine.DecideChecked([]*model.WorkloadView{view}, pol)
+	if err != nil || len(ds) != 1 || ds[0].Action != model.ActionWarmSwap || !ds[0].Feasible {
+		t.Fatalf("optimizer warm-swap decision = %+v err=%v", ds, err)
+	}
+
+	// A CPU served-model pool has the same process retirement guarantee. One node is
+	// enough; the stale relocation floor must not reappear through capability indexing.
+	leader, shadow := views[0].Pod, views[1].Pod
+	leader.HasGPU, leader.MIGDevice, leader.Node = false, "", "cpu-a"
+	shadow.HasGPU, shadow.Node = false, "cpu-a"
+	cpuWit := BuildWitness(context.Background(), BuildIndex([]model.Pod{leader, shadow}, []ingest.NodeInfo{{Name: "cpu-a", Schedulable: true}}, nil), nil, nil, okActuator{})
+	if ok, why := cpuWit.Capable(&model.WorkloadView{Pod: leader}, model.ActionWarmSwap); !ok {
+		t.Fatalf("CPU served-model one-node pool rejected: %s", why)
+	}
+}
+
+func TestM034RotatePositiveControl(t *testing.T) {
+	views, wit := capFleet()
+	view := views[0]
+	view.Phase = model.PhaseWarm
+	view.Physics = model.NeutralPhysics()
+	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
+	engine := decision.NewCoverageEngine()
+	engine.Capability = func(v *model.WorkloadView, a model.Action, cover []string) *actionset.Eligibility {
+		r := wit.Eligible(v, a, cover)
+		if r == nil {
+			return nil
+		}
+		return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+	}
+	pol := model.Policy{Tenant: "m034-rotate", Namespace: "ns", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1,
+		ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second, MinAvailableReplicas: 1,
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	set, _ := engine.AssembleSet([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 1 || set.Candidates[0].Action != model.ActionRotate || len(set.Candidates[0].CoverKeys) != 3 {
+		t.Fatalf("rotate positive control = %+v exclusions=%+v", set.Candidates, set.Excluded)
+	}
+}
+
+func TestM034WarmSwapAndRotateCompeteOnCost(t *testing.T) {
+	views, wit := capFleet()
+	view := views[0]
+	view.Phase = model.PhaseWarm
+	view.Physics = model.NeutralPhysics()
+	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
+	pol := model.Policy{Tenant: "m034-cost", Namespace: "ns", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1,
+		FlowDisruption: 1, CostCeiling: 100, ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second,
+		MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionWarmSwap: true, model.ActionRotate: true}}
+	newEngine := func() *decision.CoverageEngine {
+		engine := decision.NewCoverageEngine()
+		engine.Capability = func(v *model.WorkloadView, a model.Action, cover []string) *actionset.Eligibility {
+			r := wit.Eligible(v, a, cover)
+			if r == nil {
+				return nil
+			}
+			return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+		}
+		return engine
+	}
+	defaultEngine := newEngine()
+	set, _ := defaultEngine.AssembleSet([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 2 {
+		t.Fatalf("both physical erasers must compete: candidates=%+v exclusions=%+v", set.Candidates, set.Excluded)
+	}
+	if strings.Join(set.Candidates[0].CoverKeys, "\x00") != strings.Join(set.Candidates[1].CoverKeys, "\x00") {
+		t.Fatalf("warm-swap and rotate must compete on the same real process facts: %+v", set.Candidates)
+	}
+	defaultDecision, err := defaultEngine.DecideChecked([]*model.WorkloadView{view}, pol)
+	if err != nil || len(defaultDecision) != 1 || defaultDecision[0].Action != model.ActionWarmSwap {
+		t.Fatalf("default cost should prefer cutover: decision=%+v err=%v candidates=%+v", defaultDecision, err, set.Candidates)
+	}
+
+	trained := newEngine()
+	for i := 0; i < 32; i++ {
+		trained.Cost.ObserveRotation(view, 0)
+	}
+	trainedDecision, err := trained.DecideChecked([]*model.WorkloadView{view}, pol)
+	if err != nil || len(trainedDecision) != 1 || trainedDecision[0].Action != model.ActionRotate {
+		t.Fatalf("measured cheap rotation should flip the same-cover choice: decision=%+v err=%v", trainedDecision, err)
 	}
 }
 

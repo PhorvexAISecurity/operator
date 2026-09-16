@@ -244,6 +244,7 @@ func TestRenderedManagerIdentityDrivesBootAdmission(t *testing.T) {
 		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-boot"}, Rules: []rbacv1.PolicyRule{
 			{APIGroups: []string{"phorvex.ai"}, Resources: []string{"phorvexpolicies"}, Verbs: []string{"list"}},
 			{APIGroups: []string{"authorization.k8s.io"}, Resources: []string{"selfsubjectaccessreviews"}, Verbs: []string{"create"}},
+			{APIGroups: []string{""}, Resources: []string{"namespaces"}, ResourceNames: []string{"tenant-minimal"}, Verbs: []string{"get"}},
 		}},
 		&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate-boot"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "minimal-rotate-boot"}, Subjects: []rbacv1.Subject{minimalSubject}},
 		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "minimal-rotate", Namespace: "tenant-minimal"}, Rules: []rbacv1.PolicyRule{

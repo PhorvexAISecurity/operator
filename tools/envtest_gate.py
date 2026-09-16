@@ -67,7 +67,9 @@ REQUIRED = {
         'TestM005TwoManagersAndHandoff',
         'TestM013RealEventSink',
         'TestM127RealAPIDirectReaderClosesCachedDispatchWindow',
+        'TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
+        'TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController',
     ),
     'github.com/phorvex/phorvex/internal/authz': (
         'TestClusterScopedReviewRejectsNamespacedOnlyGrant',

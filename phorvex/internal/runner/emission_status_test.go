@@ -119,7 +119,7 @@ func TestM011EmittedErrorStillCountsOnceAtSource(t *testing.T) {
 	ds := tracedSelectedDecision()
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}}}
 	pol := model.Policy{Tenant: "t", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
-	h.m.actuate(context.Background(), h.e, pol, ds, views)
+	actuateWithBoundary(t, h.m, context.Background(), h.e, pol, ds, views)
 	if fa.calls != 1 {
 		t.Fatal("positive control did not invoke handler")
 	}

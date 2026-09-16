@@ -1,8 +1,8 @@
 # Outstanding live verification — readiness campaign
 
-Maintainer: `codex-lead`. Updated 2026-09-16 when Tier 7 source work was authorized while Tier 6 deployment was pending. This is the central reminder list; each fix's signed acceptance contract and evidence remain authoritative. **No row below is a live PASS or an accepted risk exception.** Local tests, merged code and healthy Pods do not close these rows.
+Maintainer: `codex-lead`. Updated 2026-09-16 during Tier8 delivery and the authorized combined Tier6–8 live campaign. This is the central reminder list; each fix's signed acceptance contract and evidence remain authoritative. **No row below is a live PASS or an accepted risk exception.** Local tests, merged code and healthy Pods do not close these rows.
 
-Latest retained observation: manager/console 0.4.120, fresh manager audit source `21b9ddac0ab788faee88c24488b0ff530019526c`; see [Tier 6 refresh](20260916-tier6/LIVE-REFRESH.md). Tier 6 [PR #217](https://github.com/PhorvexSecurity/operator/pull/217) was still open at Tier 7 intake. Deployment identities must be refreshed before executing controls.
+Latest retained observation: manager/console0.4.121 Ready; manager source `89f30f99168d09042835bcc1f3e6c8290f32292e` includes Tier6. The manager changed from hybrid to Phoenix with the global brake engaged; this does not verify the earlier hybrid permission refusal. Argo remains Degraded and Tier7 delivery [PR219](https://github.com/PhorvexSecurity/operator/pull/219) remains open. See [Tier8 observations](20260916-tier8/LIVE-OBSERVATIONS.md) and refresh actual identities before controls.
 
 ## How to use this list
 
@@ -41,7 +41,12 @@ These remain the detailed checklists. Historical statements such as “next tier
 | 4 | [Signed live plan](20260915-tier4/LIVE-ACCEPTANCE.md), [bounded partial checks](20260915-tier4-live/ACCEPTANCE-MATRIX.md): M4, M19, M57, M66, M95, M171 and M84 reconciliation. Later restored rollout/mTLS evidence below supersedes the old missing-secret diagnosis. |
 | 5 | [Current issue matrix](20260916-tier5-live/REPORT.md#issue-acceptance-matrix), [fixture handoff](20260916-tier5-live/LIVE-CONTROLS-HANDOFF.md): M56, M82, M96, M138, M146, M150, M167, M170. M61 is a deployed wording correction with no new runtime gate. |
 | 6 | [All seven live plans](20260916-tier6/LIVE-PLAN.md): M1, M22, M52, M74, M83, M90, M168. [Local combined validation](20260916-tier6/COMBINED-REVIEW.md) passed; [rollout prerequisites](20260916-tier6/DEVOPS-HANDOFF.md) and post-deployment controls remain. |
-| 7 — [PR218 open](https://github.com/PhorvexSecurity/operator/pull/218) | [All four member controls](20260916-tier7/LIVE-PLAN.md): M40, M127 and M142 fixes; M80 source reconciliation to Tier6 M83 with hardware verification still pending. |
+| 7 — PR218 merged into tier6; [PR219 to main](https://github.com/PhorvexSecurity/operator/pull/219) | [All four member controls](20260916-tier7/LIVE-PLAN.md): M40, M127 and M142 fixes; M80 source reconciliation to Tier6 M83 with hardware verification still pending. |
+| 8 — [PR220](https://github.com/PhorvexSecurity/operator/pull/220); live pending | [Combined Tier6–8 plan](20260916-tier8/LIVE-PLAN.md): M116 guardrail observation/calibration, M124 namespace/Pod brakes, M34 warm-swap process facts, M8 existing scoped MIG authority reconciliation. |
+
+## Current grouped verification window
+
+The owner authorized Tier8 source work while rollout lags and one combined Tier6–8 campaign, preserving per-issue verdicts. Earlier September16 observation found manager0.4.121 restarting on denied `pods/ephemeralcontainers:update` for custom-inject in `ci-reports`. At19:18 UTC manager and console are Ready; the manager reports Tier6 source `89f30f99`, the backend has changed from hybrid to Phoenix with the global kill switch engaged, and Argo remains Degraded. Hybrid permission repair and native effects remain unverified. PR219 still awaits merge to deliver Tier7 to main. See [current handoff](20260916-tier8/DEVOPS-HANDOFF.md). This supersedes earlier healthy-rollout observations only for current status, not their retained evidence. The five-minute monitor does not grant live PASS. Add M8 to LV-01, M34 to LV-02, M116 calibration to LV-10 and M124 to LV-11; each exact acceptance contract is in the linked Tier8 plan.
 
 ## Resolved operational prerequisites — do not request them again blindly
 

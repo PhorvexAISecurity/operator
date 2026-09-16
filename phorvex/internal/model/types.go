@@ -11,6 +11,13 @@ package model
 
 import "time"
 
+// ActuationBrakeObservation is a normalized operator annotation observation.
+// Cause is a stable, non-sensitive token; raw annotation values never enter audit.
+type ActuationBrakeObservation struct {
+	Engaged bool
+	Cause   string
+}
+
 // DefaultCostCeiling is the independent hard ceiling for the dimensionless
 // switching-cost gate. It is deliberately not derived from the objective
 // weights: those weights rank moves, while this value decides whether a move is
@@ -299,10 +306,13 @@ type RotationOwnership struct {
 type Pod struct {
 	RotationOwnership RotationOwnership
 
-	Namespace      string
-	Name           string
-	UID            string
-	Labels         map[string]string
+	Namespace string
+	Name      string
+	UID       string
+	Labels    map[string]string
+	// OptOut is the snapshot-time application-owner brake. It excludes this Pod
+	// before allocation; dispatch independently rechecks the live Pod.
+	OptOut         ActuationBrakeObservation
 	Node           string
 	Phase          string // raw K8s pod phase
 	Ready          bool
@@ -704,6 +714,10 @@ type Decision struct {
 	CounterfactualNote string  // why Phorvex's choice differs from R6's blind action
 	BlindCost          float64 // cost the blind timer (R6) incurs this cycle (it always rotates) — for the per-decision cost comparison
 	DryRun             bool
+	DryRunCause        string
+	// ActuationBrakeCause is the stable per-target or namespace authority
+	// refusal observed after selection. It is empty when no brake refused work.
+	ActuationBrakeCause string
 	// KillSwitch records that the GLOBAL kill switch suppressed actuation on this tick.
 	// Without it a kill-switched decision is byte-identical in the audit to one whose
 	// actuator silently failed — both read selected=true, dryRun=false, actuated=false —

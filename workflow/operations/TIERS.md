@@ -115,3 +115,9 @@ Completion means all validated issues in the agreed scope have reviewed fixes
 and successful live acceptance evidence, with all coverage gaps and accepted
 exceptions stated. Never promise a provably bug-free codebase. Prepare a concise
 due-diligence index linking claims to reproducible evidence and residual limits.
+
+The owner's September16 follow-up starts Tier8 from merged Tier7 and groups Tier6–8
+live verification after deployment. See assessments/20260916-tier8/AUTHORIZATION.md.
+This changes scheduling only. Keep each issue's exact controls/verdicts and older
+live debt in the central backlog; a combined campaign or healthy rollout is not an
+acceptance waiver. Check actual PR base and main ancestry before every publication.

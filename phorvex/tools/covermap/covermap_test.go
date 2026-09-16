@@ -271,8 +271,8 @@ func TestCurrentCoverFactsHoldInEveryFixture(t *testing.T) {
 		if got := coverOf(r, model.ActionRouteRotate); strings.Join(got, ",") != recon.FactNetworkIdentity {
 			t.Errorf("%s: route-rotate cover must be exactly {networkIdentity}, got %v", id, got)
 		}
-		if got := coverOf(r, model.ActionWarmSwap); len(got) != 0 {
-			t.Errorf("%s: warm-swap must be coverless, got %v", id, got)
+		if got := coverOf(r, model.ActionWarmSwap); len(got) > 0 && strings.Join(got, ",") != "inMemory,podIdentity,session" {
+			t.Errorf("%s: warm-swap may cover only the old-process facts, got %v", id, got)
 		}
 		if got := coverOf(r, model.ActionEndpointRotate); len(got) != 0 {
 			t.Errorf("%s: endpoint-rotate must be coverless, got %v", id, got)

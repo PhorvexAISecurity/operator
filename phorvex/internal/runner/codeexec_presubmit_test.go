@@ -46,7 +46,7 @@ func TestCodeExecPreSubmitGateFailsClosed(t *testing.T) {
 	// (a) nil verifier (unwired) => fail-closed, zero actuations.
 	fa := &fakeActuator{}
 	m := &Manager{Actuator: fa, Log: logr.Discard()}
-	if n := m.actuate(context.Background(), e, pol, dec(), view); n != 0 || fa.calls != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, dec(), view); n != 0 || fa.calls != 0 {
 		t.Fatalf("nil verifier must fail-closed (n=%d, Actuate calls=%d)", n, fa.calls)
 	}
 
@@ -55,7 +55,7 @@ func TestCodeExecPreSubmitGateFailsClosed(t *testing.T) {
 	fa = &fakeActuator{}
 	adm := &fakeAdmissionFinal{ok: false, reason: capability.ReasonCodeExec + ": not verified"}
 	m = &Manager{Actuator: fa, Log: logr.Discard(), CodeExec: adm}
-	if n := m.actuate(context.Background(), e, pol, dec(), view); n != 0 || fa.calls != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, dec(), view); n != 0 || fa.calls != 0 {
 		t.Fatalf("unavailable verifier must refuse dispatch (n=%d, Actuate calls=%d)", n, fa.calls)
 	}
 	if adm.sawNS != "ns" {
@@ -65,7 +65,7 @@ func TestCodeExecPreSubmitGateFailsClosed(t *testing.T) {
 	// (c) verified => the code-exec gate does not block; dispatch proceeds once.
 	fa = &fakeActuator{}
 	m = &Manager{Actuator: fa, Log: logr.Discard(), CodeExec: &fakeAdmissionFinal{ok: true}}
-	if n := m.actuate(context.Background(), e, pol, dec(), view); n != 1 || fa.calls != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, dec(), view); n != 1 || fa.calls != 1 {
 		t.Fatalf("verified verifier must allow dispatch (n=%d, Actuate calls=%d)", n, fa.calls)
 	}
 }

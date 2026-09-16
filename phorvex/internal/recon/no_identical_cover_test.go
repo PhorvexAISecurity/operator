@@ -19,6 +19,7 @@ import (
 
 var knownIdenticalPairs = map[string]string{
 	pairKey(model.ActionKVMigrateInvalidate, model.ActionKVReset): "remote KV migration is not built; both actions currently invalidate only local session state",
+	pairKey(model.ActionRotate, model.ActionWarmSwap):             "both successful actions retire the exact old process and invalidate its identity, memory and session facts",
 }
 
 type coverArchetype struct {
@@ -77,6 +78,14 @@ func coverArchetypes() []coverArchetype {
 			}
 		}
 	}
+	// A genuine verified scalar warm-pool leader exercises the conditional process-fact
+	// grant without multiplying every unrelated boolean archetype.
+	pod := model.Pod{Namespace: "ns", Name: "configured-pool", HasGPU: true, ModelID: "model-v1",
+		WarmPoolConfigured: true, WarmPoolOwnerUID: "rs-uid", RouteService: "infer",
+		Labels: map[string]string{"phorvex.ai/role": "leader", "phorvex.ai/swap-group": "g"}}
+	out = append(out, coverArchetype{name: "configured-warm-pool", view: &model.WorkloadView{Pod: pod, Physics: model.NeutralPhysics()},
+		fctx: FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1, HasGPU: true,
+			Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}})
 	return out
 }
 

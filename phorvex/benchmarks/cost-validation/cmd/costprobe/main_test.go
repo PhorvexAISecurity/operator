@@ -1,14 +1,23 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/model"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestValidateNamespaceFailClosed(t *testing.T) {
@@ -104,5 +113,77 @@ func TestTargetDepartureUsesUIDNotPodCount(t *testing.T) {
 	}
 	if !containsUID(pods, "uid-b") {
 		t.Fatal("present UID reported departed")
+	}
+}
+
+func TestM124CostProbeHonorsIdentityBoundNamespaceAndPodBrakes(t *testing.T) {
+	const namespace = namespacePrefix + "m124"
+	fixture := func(t *testing.T, namespaceValue, podValue string) (client.Client, corev1.Pod) {
+		t.Helper()
+		s := runtime.NewScheme()
+		if err := corev1.AddToScheme(s); err != nil {
+			t.Fatal(err)
+		}
+		if err := appsv1.AddToScheme(s); err != nil {
+			t.Fatal(err)
+		}
+		nsAnnotations, podAnnotations := map[string]string{}, map[string]string{}
+		if namespaceValue != "" {
+			nsAnnotations[actuationbrake.NamespaceDryRunAnnotation] = namespaceValue
+		}
+		if podValue != "" {
+			podAnnotations[actuationbrake.PodOptOutAnnotation] = podValue
+		}
+		two, controller := int32(2), true
+		rs := &appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "workload", UID: "rs-uid", ResourceVersion: "1"},
+			Spec:       appsv1.ReplicaSetSpec{Replicas: &two, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "workload"}}},
+		}
+		pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace, Name: "target", UID: types.UID("pod-uid"), ResourceVersion: "1",
+			Labels: map[string]string{"app": "workload"}, Annotations: podAnnotations,
+			OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: rs.Name, UID: rs.UID, Controller: &controller}},
+		}}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace, UID: "namespace-uid", Annotations: nsAnnotations}},
+			rs, &pod,
+		).Build()
+		return c, pod
+	}
+	o := options{Namespace: namespace, Pod: "target"}
+
+	t.Run("explicit-false-allows-real-native-dispatch", func(t *testing.T) {
+		c, target := fixture(t, "false", "no")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		result, err := actuateNativeCostProbe(ctx, c, o, model.ActionRotate, target)
+		if err != nil || !result.Emitted {
+			t.Fatalf("allowed cost probe dispatch = %+v, %v", result, err)
+		}
+		var after corev1.Pod
+		if err := c.Get(ctx, client.ObjectKeyFromObject(&target), &after); !apierrors.IsNotFound(err) {
+			t.Fatalf("real native rotate did not delete the bound target: %v", err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name, namespaceValue, podValue, cause string
+	}{
+		{"namespace", " TRUE ", "false", actuationbrake.NamespaceDryRunEngaged},
+		{"pod", "false", " yes ", actuationbrake.PodOptOutEngaged},
+	} {
+		t.Run(tc.name+"-brake-refuses-without-effect", func(t *testing.T) {
+			c, target := fixture(t, tc.namespaceValue, tc.podValue)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			result, err := actuateNativeCostProbe(ctx, c, o, model.ActionRotate, target)
+			if err == nil || result.Emitted || !strings.Contains(err.Error(), tc.cause) {
+				t.Fatalf("braked cost probe dispatch = %+v, %v; want cause %s", result, err, tc.cause)
+			}
+			var after corev1.Pod
+			if err := c.Get(ctx, client.ObjectKeyFromObject(&target), &after); err != nil || after.UID != target.UID {
+				t.Fatalf("brake changed target: uid=%s err=%v", after.UID, err)
+			}
+		})
 	}
 }

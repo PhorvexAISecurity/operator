@@ -73,6 +73,10 @@ type PodSpec struct {
 	RouteService         string `json:"routeService,omitempty"`
 	Stateful             bool   `json:"stateful,omitempty"`
 	ServingEndpointReady bool   `json:"servingEndpointReady,omitempty"`
+	WarmPoolConfigured   bool   `json:"warmPoolConfigured,omitempty"`
+	WarmPoolOwnerUID     string `json:"warmPoolOwnerUID,omitempty"`
+	SwapGroup            string `json:"swapGroup,omitempty"`
+	Role                 string `json:"role,omitempty"`
 }
 
 // PhysicsSpec is the dispersion witness a fixture supplies. nil means model.NeutralPhysics().
@@ -197,6 +201,16 @@ func Fixtures() []Fixture {
 			}()},
 		{Name: "gpu", Why: "GPU served model without a MIG device: the AI facts appear; mig-rebind gets nothing because the pod has no MIG device.",
 			Pod: gpuPod, Ctx: gpuCtx},
+		{Name: "gpu-warm-pool", Why: "Verified scalar warm-pool leader: warm-swap covers only the exact old process identity, memory and session facts; placement facts remain audit-only.",
+			Pod: func() PodSpec {
+				p := gpuPod
+				p.Name = "gpu-warm-pool"
+				p.WarmPoolConfigured = true
+				p.WarmPoolOwnerUID = "rs-uid"
+				p.SwapGroup = "g"
+				p.Role = "leader"
+				return p
+			}(), Ctx: gpuCtx},
 		{Name: "gpu-mig", Why: "Same pod with a MIG device: mig-rebind covers gpuContentionChannel only; gpuColocation stays audit-only.",
 			Pod: func() PodSpec { p := gpuPod; p.Name = "gpu-mig"; p.MIGDevice = "1g.10gb"; return p }(), Ctx: gpuCtx},
 		{Name: "cpu-served-model", Why: "Ready CPU served model: both session erasers share the produced serving-endpoint prerequisite while the non-GPU session weight remains 0.6.",
@@ -227,11 +241,15 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		HasGPU: f.Pod.HasGPU, MIGDevice: f.Pod.MIGDevice, ModelID: f.Pod.ModelID,
 		SuspectAdapter: f.Pod.SuspectAdapter, RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
+		WarmPoolConfigured:   f.Pod.WarmPoolConfigured, WarmPoolOwnerUID: f.Pod.WarmPoolOwnerUID,
+	}
+	if f.Pod.SwapGroup != "" || f.Pod.Role != "" {
+		pod.Labels = map[string]string{"phorvex.ai/swap-group": f.Pod.SwapGroup, "phorvex.ai/role": f.Pod.Role}
 	}
 	if pod.SuspectAdapter != "" {
 		pod.UID = "fixture-pod-uid"
-		pod.AdapterObservation = &model.AdapterObservation{EventName:"fixture-detector",EventUID:"fixture-event-uid",
-			CreatorIdentity:"system:serviceaccount:fixture:detector",TargetPodUID:pod.UID,AdapterName:pod.SuspectAdapter}
+		pod.AdapterObservation = &model.AdapterObservation{EventName: "fixture-detector", EventUID: "fixture-event-uid",
+			CreatorIdentity: "system:serviceaccount:fixture:detector", TargetPodUID: pod.UID, AdapterName: pod.SuspectAdapter}
 	}
 	ph := model.NeutralPhysics()
 	if f.Physics != nil {

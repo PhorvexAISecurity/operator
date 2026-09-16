@@ -1167,7 +1167,7 @@ Severity: HIGH · Tier: parallel · Fixes: T5-M138
 
 ### M-116 · The guardrail tier false-positives on benign instruction-shaped probes · **OPEN** · `ACTUATION`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: T8-M116
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.guardrail
@@ -1179,6 +1179,13 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 **What:** The guardrail proxy blocked benign probes at score 1.000. Needs threshold calibration + an observe mode.
 **Reproduced again 2026-08-25 (`phorvex:0.4.43`):** during the litellm repair, a two-word benign probe ("Say OK") was blocked at `injection-score=1.000` (variant `pgv1`), while a realistic customer-service sentence passed with 200 — the false-positive class is alive on the current build.
 *Sources: R7.*
+
+
+## Tier8 reviewed interface repair — 2026-09-16
+
+T8-M116 at source `04cdeca79adbe047c695eb26e9e98785a596c7e1` adds explicit startup-validated observe/enforce mode, per-variant thresholds, effective state/model revision reporting, prompt-free admission/would-block records and a provenance-bound synthetic calibration evaluator. Default enforcement and the 0.5 thresholds are unchanged. Independent real HTTP controls and 19 permanent tests pass; deployed serving-path controls remain pending.
+
+The classifier-quality part remains OPEN. Actual deployed PGv1/PGv2 scores on 16 labelled synthetic cases still include benign false positives; the corpus is too small to establish representative calibration or justify a new production threshold. See [independent review](../../fixes/T8-M116/evidence/p3/verdict.md) and [retained score evaluation](../../fixes/T8-M116/evidence/lead/retained-score-evaluation.json). Observe mode makes measurement possible while forwarding requests; it is not an enforcement guarantee or evidence of correct classification.
 
 ### M-24 · The emit-boundary re-gate is a tautology · **CLOSED** · `ACTUATION`
 
@@ -1528,7 +1535,7 @@ Severity: HIGH · Tier: parallel · Fixes: T5-M096
 
 ### M-34 · `warm-swap` has no recon cover — unselectable · **OPEN** · `KNOWLEDGE`
 
-Severity: FEATURE GAP · Tier: parallel · Fixes: none
+Severity: FEATURE GAP · Tier: parallel · Fixes: T8-M034
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100
@@ -1540,6 +1547,15 @@ Severity: FEATURE GAP · Tier: parallel · Fixes: none
 **What:** A soundness fix removed warm-swap's cover grant; the optimizer can never select it until a placement/anti-affinity fact lands. T16/T46's "warm-swap selected" results predate the removal.
 **Fix:** add the anti-affinity/colocation fact it genuinely invalidates, then re-grant.
 *Sources: I-23, A-197.*
+
+
+## Tier8 reviewed source repair — 2026-09-16
+
+T8-M034 at `4c14b6e243ddb6f4d81ea298b7cd8ba00b6b3f4b` restores selectable cover for the existing old-Pod identity, memory and session facts that a supported scalar warm swap retires. It requires the actual verified pool/owner/route witness and preserves independent capability and authorization gates. The two-GPU-node floor is removed only for warm-swap; same-node process retirement is a legitimate supported effect.
+
+Independent baseline RED/rotate positive, fixed recon/optimizer cost competition, and actual API plus ReplicaSet-controller/native lifecycle controls passed. See [incident](../../fixes/T8-M034/evidence/incident.md) and [independent review](../../fixes/T8-M034/evidence/p3/verdict.md). L3 remains pending the deployed serving-pool controls, so this is not issue closure.
+
+The historical anti-affinity proposal is not a prerequisite for this narrower process effect. GPU colocation/peer/device identity, relation-specific evidence and calibrated weight remain a separate explicit research/design residual; no new GPU-isolation or attack-mitigation guarantee is credited.
 
 ### M-105 · C2 — pod-identity exposure enters one fact weight twice, multiplicatively · **OPEN** · `KNOWLEDGE`
 
@@ -1643,6 +1659,13 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 *Sources: A-134.*
 
 ---
+
+
+## Current-source reconciliation — 2026-09-16
+
+At merged Tier7 source `38f1f18c6211e059217320af9168427a111de8b3`, the missing agent-namespace role and swallowed discovery error are already repaired. The enabled-only chart Role/Binding scopes Pod GET/LIST and exec CREATE to the configured agent namespace/manager identity. Discovery uses that namespace and preserves wrapped Forbidden causes. Independent real API/RBAC and typed-client HTTP controls pass; see [Tier8 reconciliation](../../assessments/20260916-tier8/reconciliation/m008.md).
+
+No duplicate Tier8 source change is required. Current installed authority and real MIG hardware behavior remain pending under [LV-01](../../assessments/LIVE-VERIFICATION-BACKLOG.md) and the [combined live plan](../../assessments/20260916-tier8/LIVE-PLAN.md). Source reconciliation is not live closure.
 
 ### M-21 · The default actuator rejects every AI-native move while reporting `ActionsSupported: True` · **OPEN** · `CONTRACT`
 
@@ -1862,7 +1885,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-124 · No per-pod opt-out; the namespace dry-run brake is case-sensitive · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T8-M124
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -1874,6 +1897,9 @@ Severity: HIGH · Tier: parallel · Fixes: none
 **What:** The only brake is `phorvex.ai/dry-run: "true"` (exact case) on the namespace. No per-pod escape hatch exists.
 **Live proof (second pass, 2026-08-21):** clean A/B on one tenant, four minutes apart. With `dry-run: "true"` (valid): zero actuation — decisions kept logging `selected=true, dryRun=true` but nothing emitted. With `dry-run: "TRUE"` (wrong case): the brake silently disengaged — 8 rotate events emitted in 90s and Phoenix deleted all three victim pods. An operator who writes `TRUE`/`True`/`yes` believes actuation is frozen; it is not.
 *Sources: A-216, A-16; live A/B test V3 (2026-08-21).*
+
+
+**Tier8 source reconciliation (2026-09-16):** Fix `T8-M124` at `1ceec03e7dafc2ad75314bdc53edb29bcce46d96` adds normalized namespace dry-run and Pod opt-out, pre-allocation exclusion and fresh bounded namespace/UID-bound Pod checks at dispatch and fallback. Present malformed values and unreadable/changed authority suppress new work with distinct status/audit causes. Actual API/HTTP baseline leaks and final refusal/positive controls were independently reproduced; native and Phoenix producer positives, snapshot-to-budget controls, strict startup reads and direct CLI paths are retained. Independent source review and selected local preflight PASS. The bounded check-to-call race and already-started protected compensation are explicit; accepted asynchronous work cannot be recalled. L3 remains pending the combined Tier6–8 deployment/fixture campaign; this source verdict does not close the issue. See `fixes/T8-M124/evidence/incident.md` and `fixes/T8-M124/evidence/p3/verdict.md`.
 
 ### M-135 · `EnsurePolicy` only runs on the actuation path — no self-heal while a tenant is idle or braked · **OPEN** · `CONTROL`
 
@@ -2557,6 +2583,10 @@ Severity: HIGH · Tier: unassigned · Fixes: T6-M168
 **Evidence:** intake/RPT-20260910-184000-console-experiment-validity/VERIFICATION.md; assessments/20260910-readiness/fresh-console/LEAD-REVIEW-R1.md
 
 **Required correction:** Execute a supported authenticated stimulus with explicit outcome checks; derive security claims from causally bound observations; journal experiment-owned mutations with UID/RV/lease identity and bounded fail-closed recovery without overwriting later user changes. Incomplete stimulus, cleanup or observation cannot be a completed comparison.
+
+## Diagnostic residual observed during Tier8 validation
+
+The experiment still fails closed when the observation window cannot establish a result. However, the outer `arms_runner.go` diagnostic calls every partial result `attack observation persistence partial`, including a target-identity read completing after its deadline. Preserve this unresolved distinction when investigating partial runs; the underlying `ObservationError` is the relevant evidence, not proof of a storage failure. See [Tier8 finding and fixture analysis](../../assessments/20260916-tier8/ADDITIONAL-FINDINGS.md). This does not relax the existing live acceptance requirements.
 
 ### M-169 · Attack watcher and HTTP result readers race on shared mutable outcome records · **OPEN** · `CONSOLE`
 

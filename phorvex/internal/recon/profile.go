@@ -21,8 +21,8 @@ type ReconProfile interface {
 // Registry holds the registered ReconProfiles.
 var Registry = registry.New[ReconProfile]()
 
-// standardRecon is the DEFAULT profile. Cover sets are DISTINCT per action so the
-// submodular optimizer meaningfully chooses: a ROTATE (Delete -> clean respawn) wipes
+// standardRecon is the DEFAULT profile. Cover sets describe physical invalidation effects;
+// actions may therefore share a set when they guarantee the same effect. A ROTATE wipes
 // the IN-POD facts (identity, session, in-memory implant); a QUARANTINE (deny-all +
 // detach) invalidates the NETWORK facts (reachable identity + each learned lateral
 // edge) without wiping local state. This is the honest mechanism mapping of Phoenix's
@@ -47,10 +47,11 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	var facts []Fact
 	cover := map[model.Action][]string{}
 
-	addRotate := func(kind string, w float64) {
+	addRotate := func(kind string, w float64) Fact {
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: kind, Weight: w}
 		facts = append(facts, f)
 		cover[model.ActionRotate] = append(cover[model.ActionRotate], f.Key())
+		return f
 	}
 	addQuarantine := func(kind, edge string, w float64) {
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: kind, Edge: edge, Weight: w}
@@ -70,7 +71,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// podIdentity told the optimiser it had neutralised identity recon when it had only relabelled the
 	// pod, i.e. it could be selected INSTEAD of a rotate that really would have. Only actions that truly
 	// invalidate the fact may claim it.
-	addRotate(FactInMemory, base*urg)
+	memFact := addRotate(FactInMemory, base*urg)
 	// Session/KV-cache fact is always modeled; GPU/stateful only affects exposure weight.
 	sessionW := base * urg * 0.6
 	if fctx.HasGPU || fctx.Stateful {
@@ -86,6 +87,14 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	sessFact := Fact{Scope: ScopePod, Asset: asset, Kind: FactSession, Weight: sessionW}
 	facts = append(facts, sessFact)
 	cover[model.ActionRotate] = append(cover[model.ActionRotate], sessFact.Key())
+	// A supported scalar warm-swap retires the exact selected old Pod UID before it can
+	// complete, then observes the owning ReplicaSet replenish the pool. That destroys the
+	// same old-process identity, memory and in-process session facts as rotate. This grant
+	// is limited to the snapshot witness used by capability admission; placement and GPU
+	// co-location remain outside it.
+	if warmSwapProcessCoverEligible(&view.Pod) {
+		cover[model.ActionWarmSwap] = append(cover[model.ActionWarmSwap], pid.Key(), memFact.Key(), sessFact.Key())
+	}
 	if view.Pod.ServingEndpointReady {
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
 	}
@@ -111,6 +120,14 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	}
 
 	return AssetFacts{Facts: facts, CoverByAction: cover}
+}
+
+func warmSwapProcessCoverEligible(p *model.Pod) bool {
+	if p == nil || (!p.HasGPU && p.ModelID == "") || !p.WarmPoolConfigured ||
+		p.WarmPoolOwnerUID == "" || p.RouteService == "" || p.Labels == nil {
+		return false
+	}
+	return p.Labels["phorvex.ai/role"] != "warm-shadow" && p.Labels["phorvex.ai/swap-group"] != ""
 }
 
 // clamp01 clamps a FINITE x into [0,1]. A non-finite x (NaN/±Inf) is not a value: ok=false

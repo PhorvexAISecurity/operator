@@ -68,7 +68,7 @@ func TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes(t *testing.T)
 			decisions[0].Action = model.ActionRequestDrain
 			views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "pod-uid", ModelID: "fixture-model", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}}}
 			policy := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRequestDrain: true}}
-			got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views)
+			got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views)
 			decision := decisions[0]
 			if act.calls != 1 || got != tc.wantActuations || decision.Actuated != tc.wantActuated || decision.Trace.DispatchOutcome != tc.wantOutcome || !strings.Contains(decision.Trace.DispatchReason, tc.wantReason) || len(decision.ObjectsTouched) != tc.wantObjects {
 				t.Fatalf("calls=%d actuations=%d decision=%+v trace=%+v", act.calls, got, decision, decision.Trace)
