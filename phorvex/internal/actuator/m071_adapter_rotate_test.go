@@ -325,6 +325,57 @@ func TestM071UnloadDispatchingRestartObservesBeforeRetry(t *testing.T) {
 	}
 }
 
+func TestM071TerminalReceiptRechecksMembershipBeforeCompletion(t *testing.T) {
+	for _, tc := range []struct {
+		name, phase    string
+		loaded, source bool
+	}{
+		{name: "absence drifted back to present", phase: "absent-confirmed", loaded: true},
+		{name: "restored membership disappeared", phase: "loaded-confirmed", loaded: false, source: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			serving := &m71Serving{loaded: tc.loaded}
+			c, req, ec, done := m71HTTPFixture(t, serving)
+			defer done()
+			var pod corev1.Pod
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, &pod); err != nil {
+				t.Fatal(err)
+			}
+			source := ""
+			if tc.source {
+				source = "/models/approved"
+				ec.AdapterSources = AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): source}
+			}
+			r := operationReceipt{
+				Version: adapterRotateReceiptVersion, Kind: "adapter-rotate", Phase: tc.phase,
+				PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID,
+				TargetName: req.Pod, TargetUID: req.TargetUID, TargetLabels: copyLabels(pod.Labels),
+				AdapterName: req.AdapterObservation.AdapterName, AdapterSource: source, AdapterSourcePresent: tc.source,
+				AdapterEventName: req.AdapterObservation.EventName, AdapterEventUID: req.AdapterObservation.EventUID,
+				AdapterEventCreatedAt: req.AdapterObservation.CreatedAt.UTC().Format(time.RFC3339Nano),
+				AdapterCreator:        req.AdapterObservation.CreatorIdentity, AdapterEndpointSHA256: adapterEndpointConfigDigest(&pod),
+			}
+			cm, err := journalWrite(context.Background(), ec, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := continueAdapterOperation(context.Background(), ec, cm, &r, false)
+			if err == nil || !result.Emitted || result.MutationKind != "partial" || !strings.Contains(err.Error(), "terminal membership drifted") {
+				t.Fatalf("terminal drift was credited: result=%+v err=%v", result, err)
+			}
+			if unloads, loads := serving.counts(); unloads != 0 || loads != 0 {
+				t.Fatalf("terminal recheck crossed POST boundary: unload=%d load=%d", unloads, loads)
+			}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, &pod); err != nil {
+				t.Fatal(err)
+			}
+			if pod.Annotations["phorvex.ai/adapter-epoch"] != "" {
+				t.Fatal("drifted terminal receipt stamped a success epoch")
+			}
+		})
+	}
+}
+
 type m71FailPhaseUpdate struct {
 	client.Client
 	phase  string
