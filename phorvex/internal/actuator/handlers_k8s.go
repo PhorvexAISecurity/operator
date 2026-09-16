@@ -11,6 +11,7 @@ package actuator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -24,8 +25,13 @@ import (
 	"github.com/phorvex/phorvex/internal/ownership"
 )
 
-// getPod fetches the target pod; returns (nil,false,nil) if already gone (a NotFound is
-// SUCCESS for an idempotent destructive move — the recon target is invalidated).
+var errPodTerminating = errors.New("actuator target Pod is terminating")
+
+// getPod fetches a target that is still eligible for a new effect. It returns
+// (nil,false,nil) if already gone, preserving callers' idempotent NotFound handling, but
+// refuses an existing Pod whose deletion has started. The check prevents effects based on
+// an object already committed to removal; callers must still use their existing identity
+// and concurrency guards because deletion can begin after this read.
 func getPod(ctx context.Context, c client.Reader, ns, name string) (*corev1.Pod, bool, error) {
 	var pod corev1.Pod
 	if err := c.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &pod); err != nil {
@@ -33,6 +39,9 @@ func getPod(ctx context.Context, c client.Reader, ns, name string) (*corev1.Pod,
 			return nil, false, nil
 		}
 		return nil, false, err
+	}
+	if pod.DeletionTimestamp != nil && !pod.DeletionTimestamp.IsZero() {
+		return nil, false, fmt.Errorf("%w: %s/%s; refusing to start a new effect", errPodTerminating, ns, name)
 	}
 	return &pod, true, nil
 }
