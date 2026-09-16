@@ -1,7 +1,10 @@
 # Agent entrypoint
 
 The user controls scope. Named fixes default to reviewed PR delivery under
-`operations/AUTONOMY.md`, without routine human checkpoints.
+`operations/AUTONOMY.md`, without routine human checkpoints. The active readiness
+campaign has a later local-only override: see
+`assessments/20260916-local-continuation/AUTHORIZATION.md`. Open no new PRs and
+continue unblocked source tiers while retaining their live acceptance debt.
 
 1. Classify with `OPERATIONS.md`; read one runbook. Run `doctor` once per session;
    unrelated historical warnings do not block authorized work.

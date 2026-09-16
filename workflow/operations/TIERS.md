@@ -57,6 +57,10 @@ consolidation equivalence; never rewrite attestations to invented source pins.
 Keep issue-specific live acceptance even though publication uses one shared PR.
 See assessments/20260913-tier2/TIER-DELIVERY-POLICY.md for the recorded instruction.
 
+## Active local continuation override
+
+The owner's later September16 instruction authorizes continued source work through the remaining tiers with **no new PRs**. For this readiness run, follow `assessments/20260916-local-continuation/AUTHORIZATION.md` and its live-critical gate ledger. Preserve local issue/tier branches, independent review and tests. Continue unblocked work after each locally reviewed tier; do not pause merely because deployment or closure-only L3 is pending. A demonstrated live-dependent implementation contract can hold its dependents. Preserve live debt and production HOLD; no shared infrastructure authority is added. The older publication barrier below remains historical/default policy, superseded by this explicit local-only scope.
+
 ## Stop at the deployment barrier
 
 When every member is independently reviewed and its issue PR or shared tier PR
