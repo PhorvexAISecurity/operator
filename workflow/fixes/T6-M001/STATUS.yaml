@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 14
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -115,7 +115,7 @@ issues:
 - M-1
 title: Reconcile shipped actuator RBAC and startup permission diagnostics
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -142,11 +142,11 @@ implementation:
   head_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/217
+  reviewed_head: 26eceead4a38f076249baab82bb1efbb563f67eb
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -177,9 +177,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-16T14:42:55+00:00'
+  action: Await maintainer merge and DevOps rollout prerequisite reconciliation/deployment;
+    then execute issue-specific live verification. Production HOLD remains.
+updated_at: '2026-09-16T14:45:01+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:44+00:00'
   by: codex-lead
@@ -211,6 +211,11 @@ configuration_history:
   by: sol-t6-m001
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-16T14:44:59+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -260,6 +265,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-16T14:45:01+00:00'
+  by: codex-lead
+  artifact: https://github.com/PhorvexSecurity/operator/pull/217
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 check_history:
 - check: decision

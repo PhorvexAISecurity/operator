@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -105,7 +105,7 @@ issues:
 - M-74
 title: Validate disaggregated KV peers before any effect
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -132,11 +132,11 @@ implementation:
   head_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/217
+  reviewed_head: 26eceead4a38f076249baab82bb1efbb563f67eb
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -167,9 +167,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-16T14:42:56+00:00'
+  action: Await maintainer merge and DevOps rollout prerequisite reconciliation/deployment;
+    then execute issue-specific live verification. Production HOLD remains.
+updated_at: '2026-09-16T14:45:10+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:53+00:00'
   by: codex-lead
@@ -191,6 +191,11 @@ configuration_history:
   by: sol-t6-m074
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-16T14:45:08+00:00'
+  by: codex-lead
+  fields:
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -240,6 +245,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-16T14:45:10+00:00'
+  by: codex-lead
+  artifact: https://github.com/PhorvexSecurity/operator/pull/217
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T6-M074:8:review
