@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -88,12 +88,19 @@ checks:
     - phorvex/internal/actuator/handlers_ai_test.go
     - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
     inputs_sha256: 3b518e1bf19ef8d97560b7d544361a288a3e1d8785fa3cf760e1cb94ff9c258e
+  p3:
+    result: FAIL
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 8e231549332270445f7830d18b6f34a4f866456b61150da1288b6016db00739d
+    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+    at: '2026-09-16T23:19:36+00:00'
 fix_id: T9-M035
 issues:
 - M-35
 title: '`endpoint-rotate`: unconditional cover, conditional effect'
 profile: standard
-state: OFFLINE_VERIFIED
+state: IMPLEMENTED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,7 +145,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: FAIL
   l0: PASS
   l1: PASS
   l2: PASS
@@ -154,10 +161,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T23:10:54+00:00'
+  owner: implementer
+  action: Repair the concrete findings in evidence/p3/verdict.md and resubmit; preserve
+    prior evidence.
+updated_at: '2026-09-16T23:19:38+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:30+00:00'
   by: codex-lead
@@ -213,10 +220,18 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: IMPLEMENTED
+  at: '2026-09-16T23:19:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T9-M035:7:submit
-  from: sol-t9-m035
-  to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  id: T9-M035:8:review
+  from: codex-lead
+  to: sol-t9-m035
+  role: implementer
+  kind: review
+  revision: 8

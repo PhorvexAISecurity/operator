@@ -1006,7 +1006,7 @@ fixes:
     issues:
     - M-35
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: IMPLEMENTED
     dependencies: []
     stacked_on: []
     branch: fix/t9-m035
