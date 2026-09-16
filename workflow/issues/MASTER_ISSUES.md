@@ -489,7 +489,7 @@ Severity: unspecified · Tier: 1 · Fixes: none
 
 ### M-9 · `Emitted` is a request-ack, not an effect — the brain never learns what Phoenix did · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: MAJOR · Tier: 2 · Fixes: none
+Severity: MAJOR · Tier: 2 · Fixes: T9-M009
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · phoenix-execution-readback
