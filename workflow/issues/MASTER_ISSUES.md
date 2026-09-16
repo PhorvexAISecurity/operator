@@ -1180,6 +1180,13 @@ Severity: MEDIUM · Tier: parallel · Fixes: T8-M116
 **Reproduced again 2026-08-25 (`phorvex:0.4.43`):** during the litellm repair, a two-word benign probe ("Say OK") was blocked at `injection-score=1.000` (variant `pgv1`), while a realistic customer-service sentence passed with 200 — the false-positive class is alive on the current build.
 *Sources: R7.*
 
+
+## Tier8 reviewed interface repair — 2026-09-16
+
+T8-M116 at source `04cdeca79adbe047c695eb26e9e98785a596c7e1` adds explicit startup-validated observe/enforce mode, per-variant thresholds, effective state/model revision reporting, prompt-free admission/would-block records and a provenance-bound synthetic calibration evaluator. Default enforcement and the 0.5 thresholds are unchanged. Independent real HTTP controls and 19 permanent tests pass; deployed serving-path controls remain pending.
+
+The classifier-quality part remains OPEN. Actual deployed PGv1/PGv2 scores on 16 labelled synthetic cases still include benign false positives; the corpus is too small to establish representative calibration or justify a new production threshold. See [independent review](../../fixes/T8-M116/evidence/p3/verdict.md) and [retained score evaluation](../../fixes/T8-M116/evidence/lead/retained-score-evaluation.json). Observe mode makes measurement possible while forwarding requests; it is not an enforcement guarantee or evidence of correct classification.
+
 ### M-24 · The emit-boundary re-gate is a tautology · **CLOSED** · `ACTUATION`
 
 Severity: MINOR · Tier: parallel · Fixes: none

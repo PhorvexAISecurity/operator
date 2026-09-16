@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -80,12 +80,28 @@ checks:
     inputs:
     - build/test-harness/guardrail
     inputs_sha256: 842d3af2450a68a0935bc26bdcb7c9d1a1878152660387b5f8aa12ea0af80f50
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 583adbdf8517f8bfd4a04e7a9a01a8cf2408c50406165e499915a1db43a8e257
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:22:07+00:00'
+    baseline_sha: 38f1f18c6211e059217320af9168427a111de8b3
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: c0385821ff0ab5e7b707bdedee780c582b860ddd6e52ff4786d49a42611dd19b
+    source_sha: 04cdeca79adbe047c695eb26e9e98785a596c7e1
+    at: '2026-09-16T19:22:07+00:00'
+    incident_sha256: 583adbdf8517f8bfd4a04e7a9a01a8cf2408c50406165e499915a1db43a8e257
 fix_id: T8-M116
 issues:
 - M-116
 title: The guardrail tier false-positives on benign instruction-shaped probes
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -130,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -146,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T19:20:29+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T19:22:10+00:00'
 configuration_history:
 - at: '2026-09-16T18:52:14+00:00'
   by: codex-lead
@@ -211,10 +227,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T19:22:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T19:22:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T8-M116:8:submit
-  from: sol-t8-m116
+  id: T8-M116:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9
