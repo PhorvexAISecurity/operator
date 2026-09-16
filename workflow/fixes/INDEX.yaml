@@ -940,8 +940,8 @@ fixes:
     issues:
     - M-142
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t7-m142
-    head_sha: null
+    head_sha: a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4
