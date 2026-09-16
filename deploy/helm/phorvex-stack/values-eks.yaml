@@ -125,30 +125,25 @@ phorvex:
         # The public console origin, for the same-origin/CSRF boundary on browser mutations.
         trustedOrigins:
           - https://console.phorvex.ai
-        # ── ROLLOUT PREREQUISITE — READ BEFORE DEPLOYING ────────────────────
-        # `subjects` is EMPTY on purpose. Nobody here knows which Cognito users should be
-        # operators of this cluster, and guessing is the failure mode this fix exists to remove:
-        # a wrong entry hands cluster-wide kubectl exec (through the operator ServiceAccount)
-        # to whoever it names.
-        #
-        # DevOps must fill this in before the console is useful:
-        #   1. list the pool's users and their `sub` UUIDs
-        #        aws cognito-idp list-users --user-pool-id us-east-2_JfwlBPRbB \
-        #          --query 'Users[].{sub:Attributes[?Name==`sub`].Value|[0],user:Username}'
-        #   2. add one entry per person, with the NARROWEST role and tenant scope that works;
-        #   3. redeploy.
-        #
-        # Until then the console starts, authenticates every logged-in user, and authorizes none
-        # of them: reads return 403 with "no authorization grant for this identity", the startup
-        # log says the grant table is empty, and /api/session reports grantsConfigured: false.
-        # That is the intended fail-closed state, not a regression.
+        # Approved 2026-09-16: the verified Cognito identity below may operate across
+        # namespaces on this cluster only. "default" also covers the in-cluster alias.
+        # Changing this mounted policy requires a console restart; grants load at startup.
         grants:
           enabled: true
           create: true
           data: |
             {
               "version": 1,
-              "subjects": []
+              "subjects": [
+                {
+                  "issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB",
+                  "subject": "71fb8550-3041-702a-5735-a33baf8836c8",
+                  "roles": ["operator"],
+                  "tenants": ["*"],
+                  "targets": ["default"],
+                  "note": "Operator access approved by the deployment owner on 2026-09-16"
+                }
+              ]
             }
     epss:
       enabled: true
