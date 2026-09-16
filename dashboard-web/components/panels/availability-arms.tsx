@@ -96,10 +96,10 @@ function RunBlock({ run }: { run: ArmRun }) {
             {arms.map((a) => <ArmCard key={a.arm} a={a} />)}
           </div>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            <span className="text-danger">No defense</span> kept 100% availability and lost the pod.{" "}
-            <span className="text-warning">The blind rotator</span> dipped {blind?.dipCount ?? "—"} times for{" "}
-            {blind?.secondsDegraded.toFixed(0) ?? "—"}s in the same window, whether or not anything was wrong.{" "}
-            <span className="text-success">Phorvex</span> dipped once and evicted the attacker.
+            Every arm received the same synthetic detector signal. <span className="text-warning">The blind rotator</span>{" "}
+            responded on its fixed cadence and dipped {blind?.dipCount ?? "—"} times for{" "}
+            {blind?.secondsDegraded.toFixed(0) ?? "—"}s in the registered window. Identity-bound workload responses are
+            reported separately from availability; this producer does not establish attacker presence, access, or mitigation.
           </p>
         </>
       )}
@@ -113,7 +113,7 @@ function ArmCard({ a }: { a: ArmResult }) {
       ? { ring: "border-l-success", txt: "text-success", bar: "bg-success", Icon: ShieldCheck, chip: "real" as const, label: "attacker evicted" }
       : a.attackerStopped === "no"
         ? { ring: "border-l-danger", txt: "text-danger", bar: "bg-danger", Icon: ShieldAlert, chip: "pending" as const, label: "attacker kept access" }
-        : { ring: "border-l-warning", txt: "text-warning", bar: "bg-warning", Icon: ShieldQuestion, chip: "modeled" as const, label: "only by coincidence" };
+        : { ring: "border-l-warning", txt: "text-warning", bar: "bg-warning", Icon: ShieldQuestion, chip: "modeled" as const, label: "attacker effect unknown" };
   const pct = Math.max(0, Math.min(100, a.meanPct));
   return (
     <Card className={cn("border-l-2", tone.ring)}>
@@ -140,7 +140,11 @@ function ArmCard({ a }: { a: ArmResult }) {
           <Stat k="downtime cost" v={`$${a.downtimeUsd.toFixed(4)}`} />
         </div>
 
-        <div className="border-t border-border/50 pt-2"><Badge variant={tone.chip}>{tone.label}</Badge></div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
+          <Badge variant={tone.chip}>{tone.label}</Badge>
+          <Badge variant={a.responseObserved ? "real" : "pending"}>{a.responseObserved ? "target response observed" : "no target response observed"}</Badge>
+          {!a.complete && <Badge variant="pending">incomplete evidence</Badge>}
+        </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">{a.verdict}</p>
       </CardContent>
     </Card>

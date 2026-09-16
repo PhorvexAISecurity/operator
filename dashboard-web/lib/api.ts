@@ -473,7 +473,8 @@ export interface AttackMonitoringResult {
 export interface ArmResult {
   arm: string; label: string; samples: number; meanPct: number; minPct: number;
   dipCount: number; secondsDegraded: number; replicaSeconds: number; downtimeUsd: number;
-  attackerStopped: "yes" | "no" | "by-luck-only"; verdict: string; complete: boolean;
+  attackerStopped: "yes" | "no" | "unknown"; verdict: string; complete: boolean;
+  responseObserved: boolean;
 }
 export interface ArmRun {
   runAt: string; namespace: string; deploy: string; attack: string;
