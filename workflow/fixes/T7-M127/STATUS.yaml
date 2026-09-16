@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -82,12 +82,28 @@ checks:
     inputs:
     - phorvex/internal/runner
     inputs_sha256: 3953248c257eb69174590259b601780bd82ab7b93601bae6e9d71933499b6140
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: dfc17de365f2c5a4f4fba5d39212ac9e41718e67cbe862e6b2e74f0e9b5df272
+    source_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6
+    at: '2026-09-16T16:09:11+00:00'
+    baseline_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: bd99b20e894d41b0e2f945aaf51d0ecbdcd1b649c65d84481d02739693c1d125
+    source_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6
+    at: '2026-09-16T16:09:11+00:00'
+    incident_sha256: dfc17de365f2c5a4f4fba5d39212ac9e41718e67cbe862e6b2e74f0e9b5df272
 fix_id: T7-M127
 issues:
 - M-127
 title: Recheck and explain the kill switch at dispatch boundaries
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -132,7 +148,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -148,10 +164,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T16:03:19+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T16:09:14+00:00'
 configuration_history:
 - at: '2026-09-16T15:24:36+00:00'
   by: codex-lead
@@ -208,10 +224,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T16:09:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T16:09:13+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T7-M127:7:submit
-  from: sol-t7-m127
+  id: T7-M127:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8

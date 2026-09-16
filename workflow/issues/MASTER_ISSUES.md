@@ -1929,7 +1929,7 @@ Severity: ADVISORY · Tier: parallel · Fixes: none
 
 ### M-127 · Kill-switch sampled once per tick, silent about why it engaged · **OPEN** · `CONTROL`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T7-M127
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -1938,6 +1938,11 @@ Severity: ADVISORY · Tier: parallel · Fixes: none
 *Evidence history (claims retain their original versions):*
 
 *Sources: A-19.*
+
+
+### Tier7 source review — 2026-09-16
+
+Fix `T7-M127` at `f2d56318701b532f0a6c4e1b1363a7e58e5120d6` passed independent offline review. Production wiring now reads the dynamic sentinel uncached at route, dispatch, fallback and maintenance admission boundaries, with bounded reads and consistent causes. Lead baseline/head HTTP controls and the real API/cache control pass; see `workflow/fixes/T7-M127/evidence/incident.md`. The historical issue is not declared closed: deployed image controls remain pending in `workflow/assessments/LIVE-VERIFICATION-BACKLOG.md` and the Tier7 live plan.
 
 ### M-128 · Tenant processing order is nondeterministic under a hard tick deadline · **OPEN** · `CONTROL`
 
