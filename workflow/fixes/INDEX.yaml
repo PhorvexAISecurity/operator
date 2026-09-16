@@ -874,7 +874,7 @@ fixes:
     issues:
     - M-1
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t6-m001

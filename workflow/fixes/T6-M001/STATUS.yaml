@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 9
+revision: 10
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -25,12 +25,74 @@ checks:
     sha256: 9431c3dcbe8a9f9e42bc7b51336892ef79b8a86745b28d12fdb70ddaa1d8bef3
     source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
     at: '2026-09-16T12:55:07+00:00'
+  preflight:
+    result: PASS
+    by: sol-t6-m001
+    artifact: evidence/preflight/receipt.json
+    sha256: de0e27d86047e235df922cc26ebb4dd1d72091c18b2defcabb9f2403abfd842f
+    source_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+    at: '2026-09-16T14:11:19+00:00'
+  implementation:
+    result: PASS
+    by: sol-t6-m001
+    artifact: 04-diff.patch
+    sha256: f5beec3df5b54fcfd53aa13c8d1eee545435a2dd9935972425db031ea84f4478
+    source_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+    at: '2026-09-16T14:11:19+00:00'
+  l0:
+    result: PASS
+    by: sol-t6-m001
+    artifact: evidence/preflight/run-1789567429526047277/go-phorvex.log
+    sha256: e98fcc2d90b7750bfcd6a9f43a60c2f3a7c568a980a64bdb23df8dea09b9663d
+    source_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+    at: '2026-09-16T14:11:19+00:00'
+    inputs:
+    - build/phoenix-extended
+    - phorvex
+    inputs_sha256: 793107e449c368a7e3837627e4ea198fcfded00b775b4e88f9b3299bd258acbd
+  l1:
+    result: PASS
+    by: sol-t6-m001
+    artifact: evidence/worker/head-focused-unit.log
+    sha256: b87399a2e580ee360404aaabad46435663d8cb0481a27e27e77581da86bff2af
+    source_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+    at: '2026-09-16T14:11:19+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/authz
+    - phorvex/internal/capability
+    - phorvex/internal/startupauthz
+    inputs_sha256: 0f37856e2b6d63fb3ff519c12e30092c518d73e227934d6c5cd5c76f5da7df73
+  l2:
+    result: PASS
+    by: sol-t6-m001
+    artifact: evidence/worker/head-owner-scope-r1.log
+    sha256: d407c8259fdbe6ed1d7caed284cd857f49d760853a52cfc40f38ddb05478fbbe
+    source_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+    at: '2026-09-16T14:11:19+00:00'
+    inputs:
+    - phorvex/charts/phorvex
+    - phorvex/config/crd
+    - phorvex/internal/startupauthz
+    inputs_sha256: 9048bfd8d283fa9f2100ab78774c8ea2d331c4cd1ee1f974f50d4708fd9c5a59
+  positive_control:
+    result: PASS
+    by: sol-t6-m001
+    artifact: evidence/worker/head-m048-rbac-r2.log
+    sha256: accb5770cae9d75a5a9fb807da71eef3b1cbb2f6f79c02d2c754bc22d224f14d
+    source_sha: 5335b2fe9af16df7768c6f9cf3d4d5343af66e3d
+    at: '2026-09-16T14:11:19+00:00'
+    inputs:
+    - phorvex/charts/phorvex
+    - phorvex/config/rbac
+    - phorvex/internal/actuator
+    inputs_sha256: db4acc84ea2c0e55c70ebfaebb813a42bd22d1c3fbbbce015d32b9ede891e8ca
 fix_id: T6-M001
 issues:
 - M-1
 title: Reconcile shipped actuator RBAC and startup permission diagnostics
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -76,12 +138,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -91,9 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t6-m001
-  action: Implement backend-aware startup permission plan when worker slot available
-updated_at: '2026-09-16T14:03:39+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-16T14:11:21+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:44+00:00'
   by: codex-lead
@@ -121,6 +184,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-16T14:11:18+00:00'
+  by: sol-t6-m001
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -138,6 +206,22 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T14:11:19+00:00'
+  by: sol-t6-m001
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T14:11:20+00:00'
+  by: sol-t6-m001
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -147,3 +231,10 @@ check_history:
   source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
   at: '2026-09-16T10:54:11+00:00'
   contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+handoff:
+  id: T6-M001:10:submit
+  from: sol-t6-m001
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 10
