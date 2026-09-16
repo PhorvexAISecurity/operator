@@ -44,7 +44,7 @@ func TestM132RunnerPhoenixSelectorPreservesNarrowingExpression(t *testing.T) {
 	d := m018SelectedDecision("ns", "demo-0")
 	view := m018TickView("ns", "demo-0")
 	view["ns/demo-0"].Pod.UID = "selected-uid"
-	if n := m.actuate(ctx, e, pol, d, view); n != 1 || !d[0].Actuated {
+	if n := actuateWithBoundary(t, m, ctx, e, pol, d, view); n != 1 || !d[0].Actuated {
 		t.Fatalf("runner did not deliver positive Phoenix action: n=%d trace=%+v", n, d[0].Trace)
 	}
 	var amtd amtdv1beta1.AdaptiveMovingTargetDefense

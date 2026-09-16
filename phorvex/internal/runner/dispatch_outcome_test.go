@@ -41,7 +41,7 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	e.spec.Selector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "tier", Operator: metav1.LabelSelectorOpExists}}
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "uid-1", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, HasGPU: true}}}
 	refused := tracedSelectedDecision()
-	if n := m.actuate(context.Background(), e, pol, refused, views); n != 0 || fa.calls != 0 || !strings.HasPrefix(refused[0].Trace.DispatchReason, "route-preparation-failed:") {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, refused, views); n != 0 || fa.calls != 0 || !strings.HasPrefix(refused[0].Trace.DispatchReason, "route-preparation-failed:") {
 		t.Fatalf("Phoenix refusal dispatched: n=%d calls=%d trace=%+v", n, fa.calls, refused[0].Trace)
 	}
 	if fa.target.Selector == nil || len(fa.target.Selector.MatchExpressions) != 1 {
@@ -57,12 +57,12 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	fa.calls = 0
 	native := tracedSelectedDecision()
 	native[0].Action = model.ActionKVReset
-	if n := m.actuate(context.Background(), e, pol, native, views); n != 1 || fa.calls != 1 || native[0].Trace.DispatchOutcome != model.DispatchEmitted {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, native, views); n != 1 || fa.calls != 1 || native[0].Trace.DispatchOutcome != model.DispatchEmitted {
 		t.Fatalf("native route suppressed by Phoenix refusal: n=%d calls=%d trace=%+v", n, fa.calls, native[0].Trace)
 	}
 	fa.calls = 0
 	mixed := append(tracedSelectedDecision(), native[0])
-	if n := m.actuate(context.Background(), e, pol, mixed, views); n != 1 || fa.calls != 1 || mixed[0].Trace.DispatchOutcome != model.DispatchNotAttempted || mixed[1].Trace.DispatchOutcome != model.DispatchEmitted {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, mixed, views); n != 1 || fa.calls != 1 || mixed[0].Trace.DispatchOutcome != model.DispatchNotAttempted || mixed[1].Trace.DispatchOutcome != model.DispatchEmitted {
 		t.Fatalf("mixed route isolation failed: n=%d calls=%d traces=%+v / %+v", n, fa.calls, mixed[0].Trace, mixed[1].Trace)
 	}
 	// The native leg is prepared independently and reaches its own downstream
@@ -70,7 +70,7 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	fa.prep = actuator.RoutePreparation{}
 	fa.calls = 0
 	allowed := tracedSelectedDecision()
-	if n := m.actuate(context.Background(), e, pol, allowed, views); n != 1 || fa.calls != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, allowed, views); n != 1 || fa.calls != 1 {
 		t.Fatalf("fresh supported route not delivered: n=%d calls=%d trace=%+v", n, fa.calls, allowed[0].Trace)
 	}
 }
@@ -124,7 +124,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		fa := &dispatchFakeActuator{ensureErr: errors.New("rbac denied")}
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
-		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 0 {
+		if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 0 {
 			t.Fatalf("actuated %d under EnsurePolicy failure", n)
 		}
 		if got, want := ds[0].Trace.DispatchReason, "ensure-policy-failed"; got != want {
@@ -140,7 +140,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		ds[0].Feasible = false // selected but infeasible: the invariant-violation path
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		if fa.calls != 0 {
 			t.Fatal("infeasible selected move reached Actuate")
 		}
@@ -153,7 +153,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{})
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{})
 		if fa.calls != 0 {
 			t.Fatal("map-miss reached Actuate (fail-open)")
 		}
@@ -169,7 +169,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		notReady := map[string]*model.WorkloadView{
 			"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 0}},
 		}
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, notReady)
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, notReady)
 		if fa.calls != 0 {
 			t.Fatal("infeasible-at-boundary move reached Actuate")
 		}
@@ -184,7 +184,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		fa := &dispatchFakeActuator{actErr: errors.New("boom")}
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, reason := dispatchOutcomeOf(t, ds)
 		if outcome != model.DispatchError || reason != "failed" {
 			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
@@ -195,7 +195,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		fa := &dispatchFakeActuator{actErr: context.DeadlineExceeded}
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, reason := dispatchOutcomeOf(t, ds)
 		if outcome != model.DispatchError || reason != "deadline-expired" {
 			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
@@ -206,7 +206,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: false}
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, _ := dispatchOutcomeOf(t, ds)
 		if outcome != model.DispatchEmittedFalse {
 			t.Fatalf("outcome = %q", outcome)
@@ -217,7 +217,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
 		m := &Manager{Actuator: fa, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
-		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 1 {
+		if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 1 {
 			t.Fatalf("actuated %d, want 1", n)
 		}
 		outcome, reason := dispatchOutcomeOf(t, ds)
@@ -232,7 +232,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		ds := tracedSelectedDecision()
 		ds[0].Selected = false
 		ds[0].Trace.DispatchReason = "unselected"
-		m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
+		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, reason := dispatchOutcomeOf(t, ds)
 		if outcome != model.DispatchNotAttempted || reason != "unselected" {
 			t.Fatalf("unselected decision was re-stamped: %q/%q", outcome, reason)

@@ -120,7 +120,7 @@ func TestM99SLOExceptionReachesDispatchAndRetainsVetoes(t *testing.T) {
 			}
 			m := &Manager{Actuator: fa, Log: logr.Discard()}
 			e := &policyEntry{namespace: "ns"}
-			m.actuate(context.Background(), e, p, ds, views)
+			actuateWithBoundary(t, m, context.Background(), e, p, ds, views)
 			wantCalls := 0
 			wantEffect := "not-attempted"
 			if mode == "slo-permitted" {

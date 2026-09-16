@@ -161,7 +161,8 @@ func (c *demoControllerClient) Delete(ctx context.Context, obj client.Object, op
 func TestDemoRouteCaseUsesNativeActuatorAndServiceReadback(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
-	c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).Build()}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
+	c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}
 	run := &demoRun{client: c, token: "route-run"}
 	row := runDemoRouteCase(context.Background(), run, newDemoActuator(c), "demo", model.ActionRouteRotate)
 	if row.verdict != demoConfirmed {
@@ -188,7 +189,8 @@ func TestDemoRouteMissingReadyFixtureIsVisible(t *testing.T) {
 func TestDemoRouteFailedIndependentServiceReadNeverPasses(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
-	c := &demoRouteReadFault{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).Build()}}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
+	c := &demoRouteReadFault{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}}
 	run := &demoRun{client: c, token: "read-fault-run"}
 	row := runDemoRouteCase(context.Background(), run, newDemoActuator(c), "demo", model.ActionRouteRotate)
 	if row.verdict != demoObservationFailure || !strings.Contains(row.observed, "injected postcondition") {
@@ -199,7 +201,8 @@ func TestDemoRouteFailedIndependentServiceReadNeverPasses(t *testing.T) {
 func TestDemoRouteSameNameServiceReplacementIsNotCreditedOrCleaned(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
-	c := &demoRouteReplacementClient{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).Build()}}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
+	c := &demoRouteReplacementClient{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}}
 	run := &demoRun{client: c, token: "replacement-run"}
 	ctx := context.Background()
 	row := runDemoRouteCase(ctx, run, newDemoActuator(c), "demo", model.ActionRouteRotate)
@@ -297,7 +300,8 @@ func TestDemoRouteRefusesZeroSingleAndUnreadyAlternativesWithoutMutation(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			s := runtime.NewScheme()
 			_ = corev1.AddToScheme(s)
-			c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).Build()}
+			namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
+			c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}
 			run := &demoRun{client: c, token: "refuse-" + tc.name}
 			ctx := context.Background()
 			mk := func(name string, ready bool, annotated bool) *corev1.Pod {

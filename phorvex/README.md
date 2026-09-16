@@ -98,6 +98,18 @@ go run ./cmd/main.go --integration-emit \
   off, while a malformed value or read failure fails closed. Each read is bounded,
   but the check cannot atomically revoke an HTTP/API call already in flight. Started
   operations retain their required compensation path.
+- **Namespace and Pod actuation brakes** are owned by cluster operators and
+  application owners respectively. `phorvex.ai/dry-run` on a Namespace keeps
+  decisions, audit, and metrics active while suppressing new tenant actuation;
+  `phorvex.ai/opt-out` on a Pod removes that Pod before move allocation without
+  disabling an unannotated peer. Both annotations trim whitespace and ignore case:
+  `true`, `1`, and `yes` engage; `false`, `0`, and `no` disengage; absence is
+  disengaged. A present empty or unrecognized value fails closed and is reported as
+  malformed. Active operation uses uncached, deadline-bounded Namespace and Pod
+  reads before route preparation and dispatch, binds the Pod read to the selected
+  UID, and rechecks before a fallback. These checks cannot recall an API or HTTP
+  request already accepted. Receipt recovery may finish compensation for a partial
+  operation under a later Pod opt-out; it cannot start a new operation.
 - **Move budget presence is explicit**: omitting `budget.maxMovesPerTick` uses the
   default of 3, while `maxMovesPerTick: 0` still runs the decision and audit path
   but selects no actuation. YAML and JSON continue to use an integer; direct Go

@@ -67,6 +67,7 @@ REQUIRED = {
         'TestM005TwoManagersAndHandoff',
         'TestM013RealEventSink',
         'TestM127RealAPIDirectReaderClosesCachedDispatchWindow',
+        'TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
     ),
     'github.com/phorvex/phorvex/internal/authz': (

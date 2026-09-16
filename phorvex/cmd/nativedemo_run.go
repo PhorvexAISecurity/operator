@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -359,9 +360,8 @@ func runNativeDemo(ctx context.Context, c client.Client, ns, adminNS string, w i
 		report.add("namespace", "active demo namespace required", "namespace terminating", demoSetupFailure)
 		return report.write(w)
 	}
-	switch namespace.Annotations["phorvex.ai/dry-run"] {
-	case "true", "True", "1", "yes":
-		report.add("namespace", "active demo namespace required", "namespace dry-run annotation set", demoSetupFailure)
+	if observation := actuationbrake.Namespace(namespace.Annotations); observation.Engaged {
+		report.add("namespace", "active demo namespace required", "namespace dry-run: "+observation.Cause, demoSetupFailure)
 		return report.write(w)
 	}
 	n := newDemoActuator(&demoTrackingClient{Client: c, run: run})

@@ -177,7 +177,7 @@ func TestM018PhoenixForensicIdentifiersReachTheAuditRecord(t *testing.T) {
 	}
 	ds := m018SelectedDecision("ns", "p1")
 
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), pol, ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), pol, ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("actuated %d moves, want 1", n)
 	}
 	if !ds[0].Actuated {
@@ -275,7 +275,7 @@ func TestM018PartialResultWithErrorKeepsFactsAndFailureOutcome(t *testing.T) {
 	m := &Manager{Actuator: fa, Log: logr.Discard()}
 	ds := m018SelectedDecision("ns", "p1")
 
-	n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1"))
+	n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1"))
 
 	// The OUTCOME is untouched by M-18: still a failed dispatch, still not actuated.
 	if n != 0 {
@@ -321,7 +321,7 @@ func TestM018RejectedCreateFabricatesNoIdentity(t *testing.T) {
 		Audit: audit.New(logr.Discard(), &buf)}
 	ds := m018SelectedDecision("ns", "p1")
 
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
 		t.Fatalf("actuated %d moves on a rejected create, want 0", n)
 	}
 	if ds[0].Phoenix != nil {
@@ -341,7 +341,7 @@ func TestM018NotAttemptedMoveCarriesNoStalePayload(t *testing.T) {
 	ds := m018SelectedDecision("ns", "p1")
 
 	// Attempt 1 succeeds and stamps a real payload onto the decision.
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("first attempt actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil {
@@ -350,7 +350,7 @@ func TestM018NotAttemptedMoveCarriesNoStalePayload(t *testing.T) {
 	firstUID := ds[0].Phoenix.EventUID
 
 	// Attempt 2 reuses the SAME decision but is vetoed before Actuate (empty tick view).
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, map[string]*model.WorkloadView{}); n != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, map[string]*model.WorkloadView{}); n != 0 {
 		t.Fatalf("map-miss attempt actuated %d, want 0", n)
 	}
 	if ds[0].Phoenix != nil {
@@ -382,7 +382,7 @@ func TestM018EachDecisionOwnsItsOwnEventIdentity(t *testing.T) {
 			view[k] = v
 		}
 	}
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, view); n != len(pods) {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, view); n != len(pods) {
 		t.Fatalf("actuated %d, want %d", n, len(pods))
 	}
 
@@ -436,7 +436,7 @@ func TestM018SameNameDifferentUIDStayDistinct(t *testing.T) {
 	got := make([]model.PhoenixForensics, 0, 2)
 	for _, pod := range []string{"p1", "p2"} {
 		ds := m018SelectedDecision("ns", pod)
-		if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", pod)); n != 1 {
+		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", pod)); n != 1 {
 			t.Fatalf("pod %s actuated %d, want 1", pod, n)
 		}
 		if ds[0].Phoenix == nil {
@@ -465,7 +465,7 @@ func TestM018NoCarryoverAcrossTenantsAndNamespaces(t *testing.T) {
 		pol := model.Policy{Tenant: r.tenant, MinAvailableReplicas: 1,
 			EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 		ds := m018SelectedDecision(r.ns, "p1")
-		if n := m.actuate(context.Background(), m018PolicyEntry(r.ns), pol, ds, m018TickView(r.ns, "p1")); n != 1 {
+		if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry(r.ns), pol, ds, m018TickView(r.ns, "p1")); n != 1 {
 			t.Fatalf("%s/%s actuated %d, want 1", r.ns, r.tenant, n)
 		}
 		if ds[0].Phoenix == nil {
@@ -497,7 +497,7 @@ func TestM018AMTDNamespaceIsNotGuessedWithoutAnAMTD(t *testing.T) {
 	}
 	m := &Manager{Actuator: fa, Log: logr.Discard()}
 	ds := m018SelectedDecision("ns", "p1")
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil {
@@ -540,7 +540,7 @@ func m018SeedRealPayload(t *testing.T) []model.Decision {
 	api := &m018RecordingAPI{}
 	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
 	ds := m018SelectedDecision("ns", "p1")
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("seeding emission actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil || ds[0].Phoenix.EventUID == "" {
@@ -560,7 +560,7 @@ func TestM018EnsurePolicyFailureClearsStalePhoenixEvidence(t *testing.T) {
 		Actuator: &m018EnsureFailActuator{err: errors.New("rbac denied")},
 		Log:      logr.Discard(), Audit: audit.New(logr.Discard(), &buf),
 	}
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
 		t.Fatalf("actuated %d under EnsurePolicy failure, want 0", n)
 	}
 
@@ -594,7 +594,7 @@ func TestM018UnselectedDecisionClearsStalePhoenixEvidence(t *testing.T) {
 	var buf bytes.Buffer
 	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard(),
 		Audit: audit.New(logr.Discard(), &buf)}
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
 		t.Fatalf("actuated %d for an unselected decision, want 0", n)
 	}
 	if ds[0].Phoenix != nil {
@@ -618,7 +618,7 @@ func TestM018ClearDoesNotSuppressGenuineEvidence(t *testing.T) {
 	first := *ds[0].Phoenix
 	api := &m018RecordingAPI{}
 	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
-	if n := m.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("re-actuation actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil {
@@ -635,7 +635,7 @@ func TestM018ClearDoesNotSuppressGenuineEvidence(t *testing.T) {
 	}}
 	nd := m018SelectedDecision("ns", "p2")
 	mn := &Manager{Actuator: native, Log: logr.Discard()}
-	if n := mn.actuate(context.Background(), m018PolicyEntry("ns"), m018Policy(), nd, m018TickView("ns", "p2")); n != 1 {
+	if n := actuateWithBoundary(t, mn, context.Background(), m018PolicyEntry("ns"), m018Policy(), nd, m018TickView("ns", "p2")); n != 1 {
 		t.Fatalf("native actuation actuated %d, want 1", n)
 	}
 	if nd[0].Handler != "kv-reset" || nd[0].MutationKind != "reversible" ||

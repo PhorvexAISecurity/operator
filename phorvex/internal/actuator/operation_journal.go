@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -287,9 +288,8 @@ func receiptAuthority(ctx context.Context, reader client.Reader, r operationRece
 	if err := reader.Get(ctx, client.ObjectKey{Name: r.PolicyNamespace}, ns); err != nil {
 		return nil, err
 	}
-	switch ns.Annotations["phorvex.ai/dry-run"] {
-	case "true", "True", "1", "yes":
-		return nil, fmt.Errorf("namespace dry-run")
+	if observation := actuationbrake.Namespace(ns.Annotations); observation.Engaged {
+		return nil, fmt.Errorf("namespace dry-run: %s", observation.Cause)
 	}
 	return pol, nil
 }

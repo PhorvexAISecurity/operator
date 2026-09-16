@@ -1495,6 +1495,8 @@ func eligibilityTrace(kind string) (status, exclusionKind string) {
 		return model.ActionStatusIneligible, model.ExclusionNoRBAC
 	case model.ExclusionActionFailure:
 		return model.ActionStatusIneligible, model.ExclusionActionFailure
+	case model.ExclusionOperatorOptOut:
+		return model.ActionStatusIneligible, model.ExclusionOperatorOptOut
 	default:
 		return model.ActionStatusNotEvaluated, model.ExclusionNone // defensive; never reached
 	}

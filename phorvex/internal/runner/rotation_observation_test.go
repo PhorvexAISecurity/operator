@@ -43,7 +43,7 @@ func TestLiveActuationLearnsOnlyFromNewReadyReplacement(t *testing.T) {
 		"ns/sibling": {Pod: model.Pod{Namespace: "ns", Name: "sibling", UID: "sibling-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true, ReadyReplicas: 3}},
 	}
 	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "old"}}
-	if got := m.actuate(context.Background(), e, pol, decisions, views); got != 1 {
+	if got := actuateWithBoundary(t, m, context.Background(), e, pol, decisions, views); got != 1 {
 		t.Fatalf("actuate count = %d, want 1", got)
 	}
 	if len(m.pendingRotations) != 1 {
@@ -355,7 +355,7 @@ func TestActuateWritesCompletedStructuralZeroToLedger(t *testing.T) {
 	decisions := []model.Decision{{
 		Selected: true, Feasible: true, Action: model.ActionIdentityRotate, Namespace: "ns", Pod: "api",
 	}}
-	if got := m.actuate(context.Background(), e, pol, decisions, map[string]*model.WorkloadView{"ns/api": view}); got != 1 {
+	if got := actuateWithBoundary(t, m, context.Background(), e, pol, decisions, map[string]*model.WorkloadView{"ns/api": view}); got != 1 {
 		t.Fatalf("actuated = %d, want one", got)
 	}
 	entries := ledger.Entries("tenant-a", time.Time{})
