@@ -45,7 +45,7 @@ type qtnSnapshot struct {
 }
 
 func labelAt(m map[string]string, k string) labelState { v, ok := m[k]; return labelState{v, ok} }
-func quarantinePod(ctx context.Context, ec EnactCtx, req Request) (*corev1.Pod, error) {
+func quarantinePod(ctx context.Context, ec EnactCtx, req Request, allowTerminating bool) (*corev1.Pod, error) {
 	if ec.DryRun {
 		return nil, errDryRunGuard
 	}
@@ -55,6 +55,9 @@ func quarantinePod(ctx context.Context, ec EnactCtx, req Request) (*corev1.Pod, 
 	p := &corev1.Pod{}
 	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, p); err != nil {
 		return nil, err
+	}
+	if !allowTerminating && p.DeletionTimestamp != nil && !p.DeletionTimestamp.IsZero() {
+		return nil, fmt.Errorf("%w: %s/%s; quarantine will not start new journal, isolation, or detach effects", errPodTerminating, req.Namespace, req.Pod)
 	}
 	if p.UID == "" || (req.TargetUID != "" && req.TargetUID != string(p.UID)) {
 		return nil, fmt.Errorf("quarantine: target UID unavailable or mismatched")
@@ -93,7 +96,7 @@ func (quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (o
 			out.Note = "partial quarantine: accepted writes retained; " + out.Note + "; " + failure.Error()
 		}
 	}()
-	p, err := quarantinePod(ctx, ec, req)
+	p, err := quarantinePod(ctx, ec, req, false)
 	if err != nil {
 		return HandlerResult{}, err
 	}
@@ -202,7 +205,10 @@ func (quarantineHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (o
 // Rollback is explicit re-admission, never automatic. Ref and snapshot bind the UID.
 // Only fields changed by quarantine are restored, and concurrent edits cause refusal.
 func (quarantineHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
-	p, err := quarantinePod(ctx, ec, req)
+	// Explicit administrative release may need to finish protected policy/receipt
+	// cleanup while a retained target is terminating. Keep that recovery contract;
+	// the forward path above refuses before creating any effect.
+	p, err := quarantinePod(ctx, ec, req, true)
 	if err != nil {
 		return err
 	}
