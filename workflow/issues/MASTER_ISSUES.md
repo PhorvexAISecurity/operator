@@ -1528,7 +1528,7 @@ Severity: HIGH · Tier: parallel · Fixes: T5-M096
 
 ### M-34 · `warm-swap` has no recon cover — unselectable · **OPEN** · `KNOWLEDGE`
 
-Severity: FEATURE GAP · Tier: parallel · Fixes: none
+Severity: FEATURE GAP · Tier: parallel · Fixes: T8-M034
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · warm-swap Create @ internal/actuator/handlers_ai.go:100
