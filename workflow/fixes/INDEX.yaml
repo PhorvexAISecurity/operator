@@ -863,11 +863,11 @@ fixes:
     issues:
     - M-90
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t6-m090
-    head_sha: null
+    head_sha: c78406356204e8734ad8bb24856cf28a7329da0f
   T6-M001:
     directory: fixes/T6-M001
     aliases: []

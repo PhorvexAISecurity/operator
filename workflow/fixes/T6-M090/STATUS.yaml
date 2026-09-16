@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,77 @@ checks:
     at: '2026-09-16T10:38:37+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t6-m090
+    artifact: workflow/fixes/T6-M090/evidence/worker/preflight.json
+    sha256: 278e77e1bc40382d970cf8c8fbfcf10befcad74cd73b50003b74b27b96e7e403
+    source_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+    at: '2026-09-16T10:54:24+00:00'
+  implementation:
+    result: PASS
+    by: sol-t6-m090
+    artifact: 04-diff.patch
+    sha256: 9d4d61cc34a530d8fb7ef0f71f3938adefadb08e0b728ba8b512f08a07fc89fd
+    source_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+    at: '2026-09-16T10:54:24+00:00'
+  red:
+    result: PASS
+    by: sol-t6-m090
+    artifact: evidence/worker/baseline-red.log
+    sha256: 85ce4b7442b0f1489fa6a917b1e1e45dc36f274dea0f3209c6b060a5d2c20456
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T10:54:24+00:00'
+  l0:
+    result: PASS
+    by: sol-t6-m090
+    artifact: workflow/fixes/T6-M090/evidence/worker/run-1789555557796538323/go-phorvex.log
+    sha256: d3a5aa459528005b0305375ebb587e192344c546660a597b568af1ca7fc5f466
+    source_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+    at: '2026-09-16T10:54:24+00:00'
+    inputs:
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: bf3100fc5a3d8810dbf22f059f1b113fbff8f75c5f630ad7ab262342f4e54a27
+  l1:
+    result: PASS
+    by: sol-t6-m090
+    artifact: evidence/worker/head-focused.log
+    sha256: c1e5933a3ed5961cc44be66aac0bcf62dbd3b7c13fdf8e5fa5a77b78940eb79c
+    source_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+    at: '2026-09-16T10:54:24+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: 52640d287b127120a13ccd5ad2ba2e6ccd5fe850f3517cbc537af5b0ded2cbe1
+  l2:
+    result: PASS
+    by: sol-t6-m090
+    artifact: evidence/worker/actuator-package.log
+    sha256: 5fc2870df6c688b0df96a817f26659577b38531c77646f0f6e33daa29a540820
+    source_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+    at: '2026-09-16T10:54:24+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/model
+    - phorvex/internal/ownership
+    inputs_sha256: c96452521e8f7a38ed480704acf734c04b3ff82bd8ebdc2ce97898200a289db1
+  positive_control:
+    result: PASS
+    by: sol-t6-m090
+    artifact: evidence/worker/head-focused.log
+    sha256: c1e5933a3ed5961cc44be66aac0bcf62dbd3b7c13fdf8e5fa5a77b78940eb79c
+    source_sha: c78406356204e8734ad8bb24856cf28a7329da0f
+    at: '2026-09-16T10:54:24+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    inputs_sha256: 52640d287b127120a13ccd5ad2ba2e6ccd5fe850f3517cbc537af5b0ded2cbe1
 fix_id: T6-M090
 issues:
 - M-90
 title: Refuse terminating actuator targets and clarify dry-run boundary
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +110,7 @@ blind_derivation:
 implementation:
   branch: fix/t6-m090
   base_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-  head_sha: null
+  head_sha: c78406356204e8734ad8bb24856cf28a7329da0f
   stacked_on: []
 pull_request:
   url: null
@@ -67,12 +132,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +147,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t6-m090
-  action: Implement signed terminating-target plan, preserve baseline RED and positive
-    controls, submit for independent review
-updated_at: '2026-09-16T10:38:37+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-16T10:54:27+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:58+00:00'
   by: codex-lead
@@ -98,6 +163,16 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T10:45:50+00:00'
+  by: sol-t6-m090
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T10:54:24+00:00'
+  by: sol-t6-m090
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +190,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T10:54:24+00:00'
+  by: sol-t6-m090
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T10:54:26+00:00'
+  by: sol-t6-m090
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T6-M090:6:submit
+  from: sol-t6-m090
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 6
