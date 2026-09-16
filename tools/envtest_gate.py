@@ -65,6 +65,7 @@ REQUIRED = {
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',
         'TestM013RealEventSink',
+        'TestM127RealAPIDirectReaderClosesCachedDispatchWindow',
     ),
     'github.com/phorvex/phorvex/internal/authz': (
         'TestClusterScopedReviewRejectsNamespacedOnlyGrant',

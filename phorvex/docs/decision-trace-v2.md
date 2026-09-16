@@ -22,6 +22,9 @@ inputs; and the runner-stamped `dispatchOutcome` (`not-attempted` / `emitted` /
 `emitted-false` / `dispatch-error`) with `dispatchReason` covering every
 pre-dispatch guard (`dry-run`, `kill-switch`, `ensure-policy-failed`,
 `inviolability-guard`, `no-tick-view`, `emit-boundary-infeasible`, `unselected`).
+Kill-switch refusals include the stable observation cause in `killSwitchCause` and
+`dispatchReason`; the value is sampled fresh at route and dispatch boundaries rather
+than inferred from the tick-start snapshot.
 
 ## Identity and scope
 

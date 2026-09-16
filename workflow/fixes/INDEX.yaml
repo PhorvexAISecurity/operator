@@ -934,3 +934,14 @@ fixes:
     stacked_on: []
     branch: fix/t6-m168
     head_sha: 52452bfdae9e4cf3cfc5c7ba23d2391fde9c7e16
+  T7-M127:
+    directory: fixes/T7-M127
+    aliases: []
+    issues:
+    - M-127
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t7-m127
+    head_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6

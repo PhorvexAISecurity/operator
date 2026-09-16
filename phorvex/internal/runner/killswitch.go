@@ -6,6 +6,7 @@ package runner
 
 import (
 	"context"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,51 +19,115 @@ import (
 // emits metrics, but NO actuation occurs regardless of a policy's Mode.
 type KillSwitch struct {
 	Static    bool
-	Client    client.Client
+	Client    client.Reader
 	Namespace string
 	Name      string
+	// ReadTimeout bounds every dynamic actuation observation. A caller deadline that
+	// expires sooner still wins. Zero uses DefaultKillSwitchReadTimeout.
+	ReadTimeout time.Duration
 }
 
 // DefaultKillSwitchName is the sentinel ConfigMap name.
 const DefaultKillSwitchName = "phorvex-killswitch"
 
-// Engaged reports whether actuation is currently frozen.
-func (k *KillSwitch) Engaged(ctx context.Context) bool {
+// DefaultKillSwitchReadTimeout bounds one fresh sentinel read at an actuation boundary.
+const DefaultKillSwitchReadTimeout = 2 * time.Second
+
+// KillSwitchCause is a stable, non-sensitive explanation of one observation.
+type KillSwitchCause string
+
+const (
+	KillSwitchStaticFlag         KillSwitchCause = "StaticFlag"
+	KillSwitchSentinelEngaged    KillSwitchCause = "SentinelEngaged"
+	KillSwitchMissingNamespace   KillSwitchCause = "MissingNamespace"
+	KillSwitchReadError          KillSwitchCause = "SentinelReadError"
+	KillSwitchMalformedValue     KillSwitchCause = "SentinelMalformed"
+	KillSwitchSentinelDisengaged KillSwitchCause = "SentinelDisengaged"
+	KillSwitchSentinelAbsent     KillSwitchCause = "SentinelAbsent"
+	KillSwitchSentinelKeyAbsent  KillSwitchCause = "SentinelKeyAbsent"
+	KillSwitchStaticOnly         KillSwitchCause = "StaticOnly"
+)
+
+// KillSwitchObservation is the one value and cause used at a boundary. It contains no
+// ConfigMap data so status and logs cannot disclose sentinel contents.
+type KillSwitchObservation struct {
+	Engaged bool
+	Cause   KillSwitchCause
+}
+
+func (o KillSwitchObservation) message() string {
+	switch o.Cause {
+	case KillSwitchStaticFlag:
+		return "actuation suppressed by the static startup flag"
+	case KillSwitchSentinelEngaged:
+		return "actuation suppressed by the dynamic sentinel"
+	case KillSwitchMissingNamespace:
+		return "actuation suppressed because the sentinel namespace is not configured"
+	case KillSwitchReadError:
+		return "actuation suppressed because the dynamic sentinel could not be read"
+	case KillSwitchMalformedValue:
+		return "actuation suppressed because the dynamic sentinel value is invalid"
+	case KillSwitchSentinelDisengaged:
+		return "actuation is permitted; the dynamic sentinel is explicitly disengaged"
+	case KillSwitchSentinelAbsent:
+		return "actuation is permitted; the dynamic sentinel is absent"
+	case KillSwitchSentinelKeyAbsent:
+		return "actuation is permitted; the dynamic sentinel has no engaged key"
+	default:
+		return "actuation is permitted; only the static kill-switch is configured"
+	}
+}
+
+// Observe returns one fresh bounded dynamic observation. Explicit accepted sentinel
+// values are true/True/1/yes and false/False/0/no. A missing key remains disengaged;
+// every other value is malformed and fails closed.
+func (k *KillSwitch) Observe(ctx context.Context) KillSwitchObservation {
 	if k == nil {
-		return false
+		return KillSwitchObservation{Cause: KillSwitchStaticOnly}
 	}
 	if k.Static {
-		return true
+		return KillSwitchObservation{Engaged: true, Cause: KillSwitchStaticFlag}
 	}
 	if k.Client == nil {
-		return false // no API client wired => static-only kill-switch (not a ConfigMap sentinel)
+		return KillSwitchObservation{Cause: KillSwitchStaticOnly}
 	}
 	if k.Namespace == "" {
-		// [P4c D4/F6 FAIL-CLOSED FIX] A client is wired but no namespace to LOCATE the sentinel
-		// => the ConfigMap kill-switch is non-functional (misconfiguration). A defense actuator
-		// must NOT actuate when its kill-switch cannot be evaluated — fail-CLOSED (engaged) until
-		// the operator namespace is set. (Previously this early-returned "not engaged" = fail-OPEN.)
-		return true
+		return KillSwitchObservation{Engaged: true, Cause: KillSwitchMissingNamespace}
 	}
 	name := k.Name
 	if name == "" {
 		name = DefaultKillSwitchName
 	}
+	timeout := k.ReadTimeout
+	if timeout <= 0 {
+		timeout = DefaultKillSwitchReadTimeout
+	}
+	readCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	var cm corev1.ConfigMap
-	if err := k.Client.Get(ctx, client.ObjectKey{Namespace: k.Namespace, Name: name}, &cm); err != nil {
+	if err := k.Client.Get(readCtx, client.ObjectKey{Namespace: k.Namespace, Name: name}, &cm); err != nil {
 		if apierrors.IsNotFound(err) {
-			return false // sentinel genuinely absent => not engaged (the normal case)
+			return KillSwitchObservation{Cause: KillSwitchSentinelAbsent}
 		}
-		// [P4b fail-closed FIX] ANY OTHER error (API hiccup, timeout, RBAC denial, server
-		// error, severed/slow API) is UNCERTAINTY. A defense actuator must NOT actuate when
-		// it cannot read its own kill-switch — treat a read failure as ENGAGED (fail-CLOSED).
-		return true
+		return KillSwitchObservation{Engaged: true, Cause: KillSwitchReadError}
 	}
-	switch cm.Data["engaged"] {
+	value, present := cm.Data["engaged"]
+	if !present {
+		return KillSwitchObservation{Cause: KillSwitchSentinelKeyAbsent}
+	}
+	switch value {
 	case "true", "True", "1", "yes":
-		return true
+		return KillSwitchObservation{Engaged: true, Cause: KillSwitchSentinelEngaged}
+	case "false", "False", "0", "no":
+		return KillSwitchObservation{Cause: KillSwitchSentinelDisengaged}
+	default:
+		return KillSwitchObservation{Engaged: true, Cause: KillSwitchMalformedValue}
 	}
-	return false
+}
+
+// Engaged reports whether actuation is currently frozen.
+func (k *KillSwitch) Engaged(ctx context.Context) bool {
+	return k.Observe(ctx).Engaged
 }
 
 // CalibrationFrozen reports whether ONLINE COST CALIBRATION should be suppressed (PHVX-2). It reads

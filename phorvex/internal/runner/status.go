@@ -49,6 +49,11 @@ func preparationRouteDetail(err error, skipped bool) string {
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, moves, actuated int, killEngaged bool, now time.Time, actionStatuses ...actionsSupportStatus) {
+	m.updateStatusObserved(ctx, e, protected, moves, actuated, legacyKillSwitchObservation(killEngaged), now, actionStatuses...)
+}
+
+func (m *Manager) updateStatusObserved(ctx context.Context, e *policyEntry, protected, moves, actuated int, killObservation KillSwitchObservation, now time.Time, actionStatuses ...actionsSupportStatus) {
+	killEngaged := killObservation.Engaged
 	actions := actionsSupportStatus{
 		status:  metav1.ConditionTrue,
 		reason:  actionsSupportedReason,
@@ -159,10 +164,9 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		// [PHVX-17] The CRD documents a "KillSwitch" condition ("Conditions includes Ready, DryRun,
 		// ValidationError, KillSwitch") and nothing ever wrote one. A condition carries a reason and a
 		// timestamp, which a bare bool cannot: an operator can see WHEN actuation stopped and why.
-		ksStatus, ksReason, ksMsg := metav1.ConditionFalse, "Disengaged", "actuation is permitted"
+		ksStatus, ksReason, ksMsg := metav1.ConditionFalse, string(killObservation.Cause), killObservation.message()
 		if killEngaged {
-			ksStatus, ksReason, ksMsg = metav1.ConditionTrue, "Engaged",
-				"actuation suppressed globally; the engine still decides, logs and emits metrics"
+			ksStatus = metav1.ConditionTrue
 		}
 		// [PHORVEXSEC-200 / M-113] TelemetryDegraded: a whole-source scrape outage is visible on
 		// the policy within one tick, with the source, the reason and since when; cleared on the
@@ -202,11 +206,12 @@ func (m *Manager) updateStatus(ctx context.Context, e *policyEntry, protected, m
 		metrics.SetKillSwitchStatusDisagreement(e.key.Namespace, e.key.Name, true)
 		if lastOperation == "read" {
 			m.Log.Error(err, "status read failed; kill-switch readout is UNKNOWN",
-				"tenant", e.tenant, "policy", e.key.String(), "killSwitchEngaged", killEngaged)
+				"tenant", e.tenant, "policy", e.key.String(), "killSwitchEngaged", killEngaged,
+				"killSwitchCause", string(killObservation.Cause))
 		} else {
 			m.Log.Error(err, "status update failed; the policy CR now shows a STALE kill-switch and "+
 				"decision state", "tenant", e.spec.Tenant, "policy", e.key.String(),
-				"killSwitchEngaged", killEngaged)
+				"killSwitchEngaged", killEngaged, "killSwitchCause", string(killObservation.Cause))
 		}
 		return
 	}
