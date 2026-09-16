@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -81,12 +81,28 @@ checks:
     - phorvex/internal/decision
     - phorvex/internal/runner
     inputs_sha256: 119a8ba7b4a3c365b508cfb8dbd1213f2c5137204e10292c7148f8fcce7aa149
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 89999e1ca5a74248e0dbeaa273bdd82ef71e17b9a45925938c0df6c96f5d7799
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:27:34+00:00'
+    baseline_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 89999e1ca5a74248e0dbeaa273bdd82ef71e17b9a45925938c0df6c96f5d7799
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:27:34+00:00'
+    incident_sha256: 89999e1ca5a74248e0dbeaa273bdd82ef71e17b9a45925938c0df6c96f5d7799
 fix_id: T6-M022
 issues:
 - M-22
 title: Preserve explicit zero move budgets through API defaulting
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -131,7 +147,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -147,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T12:26:41+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T12:27:37+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:47+00:00'
   by: codex-lead
@@ -211,10 +227,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T12:27:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T12:27:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T6-M022:7:submit
-  from: sol-t6-m022
+  id: T6-M022:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
