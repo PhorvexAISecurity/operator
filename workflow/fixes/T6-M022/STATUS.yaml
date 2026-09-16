@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 4
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,12 +16,93 @@ checks:
     at: '2026-09-16T10:44:03+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  preflight:
+    result: PASS
+    by: sol-t6-m022
+    artifact: evidence/preflight/receipt.json
+    sha256: b244a71a8141de0e5f41c44c6bf3ae05a7708c92d20d9ac6c17286242a760b80
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:26:38+00:00'
+  implementation:
+    result: PASS
+    by: sol-t6-m022
+    artifact: 04-diff.patch
+    sha256: 5bf15d71c3d616511c90e7ad1187290b05cb8c97f7867a3c03255b52d4bf2025
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:26:38+00:00'
+  red:
+    result: PASS
+    by: sol-t6-m022
+    artifact: evidence/worker/baseline-red.log
+    sha256: 861db37045d37f54e8ec7fe56c53167d8c8b129fa676cf5268ad7fcea8202667
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T12:26:38+00:00'
+  l0:
+    result: PASS
+    by: sol-t6-m022
+    artifact: evidence/preflight/receipt.json
+    sha256: b244a71a8141de0e5f41c44c6bf3ae05a7708c92d20d9ac6c17286242a760b80
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:26:38+00:00'
+  l1:
+    result: PASS
+    by: sol-t6-m022
+    artifact: evidence/worker/focused-head.log
+    sha256: 40812a30f23da8359946031af1e75bcbca1c60f6189ae302e92ec9c0fe288620
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:26:38+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml
+    inputs_sha256: 8094585d67c689ecfb3697852fff91ec28316f804fb441420dc53e5164a1f62f
+  l2:
+    result: PASS
+    by: sol-t6-m022
+    artifact: evidence/worker/focused-head.log
+    sha256: 40812a30f23da8359946031af1e75bcbca1c60f6189ae302e92ec9c0fe288620
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:26:39+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/internal/applier
+    - phorvex/internal/decision
+    - phorvex/internal/runner
+    inputs_sha256: 119a8ba7b4a3c365b508cfb8dbd1213f2c5137204e10292c7148f8fcce7aa149
+  positive_control:
+    result: PASS
+    by: sol-t6-m022
+    artifact: evidence/worker/focused-head.log
+    sha256: 40812a30f23da8359946031af1e75bcbca1c60f6189ae302e92ec9c0fe288620
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:26:39+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/internal/applier
+    - phorvex/internal/decision
+    - phorvex/internal/runner
+    inputs_sha256: 119a8ba7b4a3c365b508cfb8dbd1213f2c5137204e10292c7148f8fcce7aa149
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 89999e1ca5a74248e0dbeaa273bdd82ef71e17b9a45925938c0df6c96f5d7799
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:27:34+00:00'
+    baseline_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 89999e1ca5a74248e0dbeaa273bdd82ef71e17b9a45925938c0df6c96f5d7799
+    source_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
+    at: '2026-09-16T12:27:34+00:00'
+    incident_sha256: 89999e1ca5a74248e0dbeaa273bdd82ef71e17b9a45925938c0df6c96f5d7799
 fix_id: T6-M022
 issues:
 - M-22
 title: Preserve explicit zero move budgets through API defaulting
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -45,7 +126,7 @@ blind_derivation:
 implementation:
   branch: fix/t6-m022
   base_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-  head_sha: null
+  head_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
   stacked_on: []
 pull_request:
   url: null
@@ -66,13 +147,13 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -82,10 +163,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t6-m022
-  action: Implement pointer presence contract and real API plus decision controls
-    after worker slot assigned
-updated_at: '2026-09-16T10:44:03+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T12:27:37+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:47+00:00'
   by: codex-lead
@@ -98,6 +179,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T11:08:59+00:00'
+  by: sol-t6-m022
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T12:06:23+00:00'
+  by: sol-t6-m022
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T12:26:38+00:00'
+  by: sol-t6-m022
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -115,3 +211,42 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T12:26:39+00:00'
+  by: sol-t6-m022
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T12:26:40+00:00'
+  by: sol-t6-m022
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T12:27:34+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T12:27:36+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T6-M022:8:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 8
