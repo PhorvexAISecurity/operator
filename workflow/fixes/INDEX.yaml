@@ -885,7 +885,7 @@ fixes:
     issues:
     - M-22
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t6-m022
@@ -907,7 +907,7 @@ fixes:
     issues:
     - M-74
     related_issues: []
-    state: DESIGNING
+    state: AGREED
     dependencies: []
     stacked_on: []
     branch: fix/t6-m074

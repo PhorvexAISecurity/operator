@@ -2,17 +2,26 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 2
+revision: 4
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
-checks: {}
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e983e6f9e4cf5e6e0b115c8ce75ef456ac24ab768d1ae9b385ffa9d24454c74d
+    source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+    at: '2026-09-16T10:44:03+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
 fix_id: T6-M022
 issues:
 - M-22
 title: Preserve explicit zero move budgets through API defaulting
 profile: standard
-state: DESIGNING
+state: AGREED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -73,9 +82,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: codex-lead
-  action: Complete source investigation and sign implementation plan
-updated_at: '2026-09-16T10:37:48+00:00'
+  owner: sol-t6-m022
+  action: Implement pointer presence contract and real API plus decision controls
+    after worker slot assigned
+updated_at: '2026-09-16T10:44:03+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:47+00:00'
   by: codex-lead
@@ -94,6 +104,14 @@ transitions:
   at: '2026-09-16T10:37:48+00:00'
   by: codex-lead
   artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-16T10:44:03+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
   note: null
   approval_ref: null
   forced: false
