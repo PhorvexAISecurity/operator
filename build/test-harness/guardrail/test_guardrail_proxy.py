@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import stat
 import subprocess
 import tempfile
 import threading
@@ -343,6 +344,50 @@ class TransformTest(unittest.TestCase):
                         env=dict(os.environ, **setting), capture_output=True, text=True,
                     )
                     self.assertNotEqual(result.returncode, 0)
+
+    def test_deploy_rejects_invalid_config_before_mutation_or_stale_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            assets = root / "assets"
+            output = root / "output"
+            fake_bin = root / "bin"
+            assets.mkdir()
+            output.mkdir()
+            fake_bin.mkdir()
+            (assets / "transform.py").write_bytes((HERE / "transform.py").read_bytes())
+            (assets / "guardrail_proxy.py").write_text("not reached\n")
+            stale = output / "vllm-deploy.new.json"
+            stale.write_text('{"stale":true}\n')
+            command_log = root / "kubectl.log"
+            kubectl = fake_bin / "kubectl"
+            kubectl.write_text(
+                "#!/usr/bin/env bash\n"
+                "printf '%s\\n' \"$*\" >> \"$KUBECTL_LOG\"\n"
+                "if [[ \"$1 $2\" == \"get deploy\" ]]; then printf '{\\\"read_only\\\":true}\\n'; fi\n"
+            )
+            kubectl.chmod(kubectl.stat().st_mode | stat.S_IXUSR)
+            base_env = dict(
+                os.environ,
+                PATH=str(fake_bin) + os.pathsep + os.environ["PATH"],
+                KUBECTL_LOG=str(command_log),
+                GUARDRAIL_ASSET_DIR=str(assets),
+                GUARDRAIL_OUT_DIR=str(output),
+            )
+            for setting in ({"GUARDRAIL_MODE": "silent"}, {"GUARDRAIL_THRESHOLD_PGV1": "nan"}):
+                with self.subTest(setting=setting):
+                    command_log.write_text("")
+                    stale.write_text('{"stale":true}\n')
+                    result = subprocess.run(
+                        ["bash", str(HERE / "guardrail-deploy.sh")],
+                        env=dict(base_env, **setting), capture_output=True, text=True,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    commands = command_log.read_text().splitlines()
+                    self.assertEqual(len(commands), 1)
+                    self.assertTrue(commands[0].startswith("get deploy"), commands)
+                    self.assertFalse(any(word in command for command in commands
+                                         for word in ("create", "apply", "replace", "patch", "delete")))
+                    self.assertEqual(stale.read_text(), '{"stale":true}\n')
 
 
 if __name__ == "__main__":

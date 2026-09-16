@@ -24,6 +24,14 @@ if guardrail_mode not in ("enforce", "observe"):
 threshold_pgv1 = configured_threshold("GUARDRAIL_THRESHOLD_PGV1")
 threshold_pgv2 = configured_threshold("GUARDRAIL_THRESHOLD_PGV2")
 
+if sys.argv[1:] == ["--validate-config"]:
+    print(json.dumps({
+        "initial_variant": initial_variant,
+        "mode": guardrail_mode,
+        "thresholds": {"pgv1": threshold_pgv1, "pgv2": threshold_pgv2},
+    }, sort_keys=True))
+    raise SystemExit(0)
+
 d = json.load(open(sys.argv[1]))
 for k in ("resourceVersion", "uid", "creationTimestamp", "generation", "managedFields"):
     d["metadata"].pop(k, None)

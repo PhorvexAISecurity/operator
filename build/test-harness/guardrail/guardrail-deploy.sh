@@ -9,9 +9,10 @@
 #   GUARDRAIL_THRESHOLD_PGV1/PGV2=finite values in [0,1] (default 0.5)
 # Thresholds require retained, per-variant calibration evidence; observe mode records
 # would-block decisions but does not establish that forwarded prompts are safe.
-set -uo pipefail
+set -euo pipefail
 NSV=vllm
-OUT=/tmp/px-guardrail; mkdir -p "$OUT"
+ASSET_DIR=${GUARDRAIL_ASSET_DIR:-/tmp}
+OUT=${GUARDRAIL_OUT_DIR:-/tmp/px-guardrail}; mkdir -p "$OUT"
 say(){ printf '\n=== %s ===\n' "$*"; }
 date -Is | tee "$OUT/start.txt"
 
@@ -19,13 +20,15 @@ say "0) backup live deployment (rollback = kubectl replace -f this file)"
 kubectl get deploy -n $NSV vllm -o yaml > "$OUT/vllm-deploy.backup.yaml"
 wc -l "$OUT/vllm-deploy.backup.yaml"
 
-say "1) ConfigMap with the proxy source (pip-at-boot pattern, F13 startupProbe)"
-kubectl -n $NSV create configmap guardrail-proxy --from-file=guardrail_proxy.py=/tmp/guardrail_proxy.py --dry-run=client -o yaml | kubectl apply -f -
-
-say "2) transform deployment: vllm->8001, sidecar->8000, guardrail labels/annotations"
+say "1) validate configuration and transform before any cluster mutation"
+python3 "$ASSET_DIR/transform.py" --validate-config | tee "$OUT/config-check.txt"
 kubectl get deploy -n $NSV vllm -o json > "$OUT/vllm-deploy.live.json"
-python3 /tmp/transform.py "$OUT/vllm-deploy.live.json" "$OUT/vllm-deploy.new.json" | tee "$OUT/transform-check.txt"
-python3 -c "import json; json.load(open('$OUT/vllm-deploy.new.json'))" || { echo "TRANSFORM PRODUCED INVALID JSON — aborting"; exit 1; }
+rm -f "$OUT/vllm-deploy.new.json"
+python3 "$ASSET_DIR/transform.py" "$OUT/vllm-deploy.live.json" "$OUT/vllm-deploy.new.json" | tee "$OUT/transform-check.txt"
+python3 -c "import json; json.load(open('$OUT/vllm-deploy.new.json'))"
+
+say "2) ConfigMap with the proxy source (pip-at-boot pattern, F13 startupProbe)"
+kubectl -n $NSV create configmap guardrail-proxy --from-file=guardrail_proxy.py="$ASSET_DIR/guardrail_proxy.py" --dry-run=client -o yaml | kubectl apply -f -
 
 say "3) apply (kubectl replace) — the 7B pod WILL restart; ~10-15min to fully Ready"
 kubectl replace -f "$OUT/vllm-deploy.new.json" || { echo "REPLACE FAILED — rollback: kubectl replace -f $OUT/vllm-deploy.backup.yaml"; exit 1; }
