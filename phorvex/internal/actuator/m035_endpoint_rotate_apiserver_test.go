@@ -23,6 +23,34 @@ type m35ReplacementClient struct {
 	replacementUID types.UID
 }
 
+type m35FinalSelectorRaceReader struct {
+	client.Reader
+	writer      client.Client
+	serviceKey  client.ObjectKey
+	serviceGets int
+	mutated     bool
+}
+
+func (r *m35FinalSelectorRaceReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if _, ok := obj.(*corev1.Service); ok && key == r.serviceKey {
+		r.serviceGets++
+		if r.serviceGets == 3 {
+			stored := &corev1.Service{}
+			if err := r.Reader.Get(ctx, key, stored); err != nil {
+				return err
+			}
+			stored.Spec.Selector = copyLabels(stored.Spec.Selector)
+			delete(stored.Spec.Selector, "marker")
+			stored.Spec.Selector["replacement"] = ""
+			if err := r.writer.Update(ctx, stored); err != nil {
+				return err
+			}
+			r.mutated = true
+		}
+	}
+	return r.Reader.Get(ctx, key, obj, opts...)
+}
+
 func (c *m35ReplacementClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	switch current := obj.(type) {
 	case *corev1.Pod:
@@ -174,6 +202,31 @@ func TestM035EndpointRotateActualAPIIdentityAndReadback(t *testing.T) {
 		}
 	})
 
+	t.Run("confirmed-restitch-preserves-empty-selector-value", func(t *testing.T) {
+		pod, svc := m35CreateEndpointTarget(t, ctx, c, ns.Name, "empty-selector-positive")
+		pod.Labels["marker"] = ""
+		if err := c.Update(ctx, pod); err != nil {
+			t.Fatal(err)
+		}
+		svc.Spec.Selector["marker"] = ""
+		if err := c.Update(ctx, svc); err != nil {
+			t.Fatal(err)
+		}
+
+		native := &NativeActuator{Client: c, Reader: c}
+		result, err := native.Actuate(ctx, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionEndpointRotate})
+		if err != nil || !result.Emitted || result.MutationKind != "reversible" {
+			t.Fatalf("empty selector positive result=%+v err=%v", result, err)
+		}
+		gotSvc := &corev1.Service{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(svc), gotSvc); err != nil {
+			t.Fatal(err)
+		}
+		if value, present := gotSvc.Spec.Selector["marker"]; !present || value != "" {
+			t.Fatalf("empty-valued selector was not preserved: %v", gotSvc.Spec.Selector)
+		}
+	})
+
 	t.Run("same-name-pod-replacement", func(t *testing.T) {
 		pod, _ := m35CreateEndpointTarget(t, ctx, c, ns.Name, "pod-replacement")
 		writer := &m35ReplacementClient{Client: c, replaceKind: "Pod"}
@@ -208,6 +261,37 @@ func TestM035EndpointRotateActualAPIIdentityAndReadback(t *testing.T) {
 		}
 		if gotPod.Labels[labelRouteKey] == "ep-old" || gotSvc.UID != writer.replacementUID || gotSvc.Spec.Selector[labelRouteKey] != "ep-old" {
 			t.Fatalf("replacement was mutated or partial Pod write lost: Pod=%v ServiceUID=%s selector=%v", gotPod.Labels, gotSvc.UID, gotSvc.Spec.Selector)
+		}
+	})
+
+	t.Run("final-readback-requires-original-empty-selector-membership", func(t *testing.T) {
+		pod, svc := m35CreateEndpointTarget(t, ctx, c, ns.Name, "selector-race")
+		pod.Labels["marker"] = ""
+		pod.Labels["replacement"] = ""
+		if err := c.Update(ctx, pod); err != nil {
+			t.Fatal(err)
+		}
+		svc.Spec.Selector["marker"] = ""
+		if err := c.Update(ctx, svc); err != nil {
+			t.Fatal(err)
+		}
+
+		reader := &m35FinalSelectorRaceReader{
+			Reader:     c,
+			writer:     c,
+			serviceKey: client.ObjectKeyFromObject(svc),
+		}
+		native := &NativeActuator{Client: c, Reader: reader}
+		result, err := native.Actuate(ctx, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionEndpointRotate})
+		if err == nil || IsNoEffectRefusal(err) || !result.Emitted || result.MutationKind != "partial" || !reader.mutated {
+			t.Fatalf("selector race result=%+v err=%v mutated=%t serviceGets=%d", result, err, reader.mutated, reader.serviceGets)
+		}
+		gotSvc := &corev1.Service{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(svc), gotSvc); err != nil {
+			t.Fatal(err)
+		}
+		if _, present := gotSvc.Spec.Selector["marker"]; present || gotSvc.Spec.Selector["replacement"] != "" {
+			t.Fatalf("fixture did not preserve concurrent selector mutation: %v", gotSvc.Spec.Selector)
 		}
 	})
 }

@@ -712,7 +712,8 @@ func endpointServiceRestitchConfirmed(svc *corev1.Service, pod *corev1.Pod, uid,
 		if key == labelRouteKey {
 			value = routeKey
 		}
-		if svc.Spec.Selector[key] != value {
+		observed, present := svc.Spec.Selector[key]
+		if !present || observed != value {
 			return false
 		}
 	}
