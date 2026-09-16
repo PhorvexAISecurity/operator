@@ -1,5 +1,28 @@
 import json
+import math
+import os
 import sys
+
+
+def configured_threshold(name):
+    raw = os.environ.get(name, "0.5")
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must be a finite number in [0,1], got {raw!r}") from exc
+    if not math.isfinite(value) or not 0 <= value <= 1:
+        raise SystemExit(f"{name} must be a finite number in [0,1], got {raw!r}")
+    return raw
+
+
+initial_variant = os.environ.get("GUARDRAIL_INITIAL_VARIANT", "pgv2").strip()
+if initial_variant not in ("pgv1", "pgv2"):
+    raise SystemExit(f"GUARDRAIL_INITIAL_VARIANT must be pgv1 or pgv2, got {initial_variant!r}")
+guardrail_mode = os.environ.get("GUARDRAIL_MODE", "enforce").strip().lower()
+if guardrail_mode not in ("enforce", "observe"):
+    raise SystemExit(f"GUARDRAIL_MODE must be enforce or observe, got {guardrail_mode!r}")
+threshold_pgv1 = configured_threshold("GUARDRAIL_THRESHOLD_PGV1")
+threshold_pgv2 = configured_threshold("GUARDRAIL_THRESHOLD_PGV2")
 
 d = json.load(open(sys.argv[1]))
 for k in ("resourceVersion", "uid", "creationTimestamp", "generation", "managedFields"):
@@ -8,7 +31,7 @@ d.pop("status", None)
 t = d["spec"]["template"]
 t["metadata"].setdefault("labels", {})["phorvex.ai/guardrail-tier"] = "true"
 ann = t["metadata"].setdefault("annotations", {})
-ann["phorvex.ai/guardrail-variant"] = "pgv2"
+ann["phorvex.ai/guardrail-variant"] = initial_variant
 ann["phorvex.ai/guardrail-variants"] = "pgv2,pgv1"
 ann["phorvex.ai/guardrail-path"] = "/v1/guardrail/reload"
 spec = t["spec"]
@@ -24,7 +47,10 @@ sidecar = {
     "image": "python:3.11-slim",
     "command": ["sh", "-c", "pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir fastapi 'uvicorn[standard]' httpx transformers && exec python /src/guardrail_proxy.py"],
     "env": [
-        {"name": "GUARDRAIL_INITIAL_VARIANT", "value": "pgv2"},
+        {"name": "GUARDRAIL_INITIAL_VARIANT", "value": initial_variant},
+        {"name": "GUARDRAIL_MODE", "value": guardrail_mode},
+        {"name": "GUARDRAIL_THRESHOLD_PGV1", "value": threshold_pgv1},
+        {"name": "GUARDRAIL_THRESHOLD_PGV2", "value": threshold_pgv2},
         {"name": "HF_HOME", "value": "/tmp/hf"},
         {"name": "TOKENIZERS_PARALLELISM", "value": "false"},
     ],
@@ -43,3 +69,8 @@ args = d["spec"]["template"]["spec"]["containers"][0]["args"]
 print("containers:", [c["name"] for c in spec["containers"]])
 print("vllm --port ->", args[args.index("--port") + 1])
 print("vllm readiness port ->", d["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["httpGet"]["port"])
+print("guardrail config ->", {
+    "initial_variant": initial_variant,
+    "mode": guardrail_mode,
+    "thresholds": {"pgv1": threshold_pgv1, "pgv2": threshold_pgv2},
+})

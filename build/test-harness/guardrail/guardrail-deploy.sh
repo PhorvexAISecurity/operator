@@ -3,6 +3,12 @@
 # Architecture: sidecar on :8000 (the pod's serving port) classifies user turns with the
 # ACTIVE ProtectAI variant and proxies everything to vLLM on :8001. Phorvex's guardrail-rotate
 # POSTs /v1/guardrail/reload to swap variants. Full backup + rollback instructions on failure.
+# Optional deployment inputs consumed by transform.py:
+#   GUARDRAIL_INITIAL_VARIANT=pgv1|pgv2 (default pgv2)
+#   GUARDRAIL_MODE=enforce|observe (default enforce)
+#   GUARDRAIL_THRESHOLD_PGV1/PGV2=finite values in [0,1] (default 0.5)
+# Thresholds require retained, per-variant calibration evidence; observe mode records
+# would-block decisions but does not establish that forwarded prompts are safe.
 set -uo pipefail
 NSV=vllm
 OUT=/tmp/px-guardrail; mkdir -p "$OUT"
