@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -11,10 +11,13 @@ checks:
     result: PASS
     by: codex-lead
     artifact: 03-decision.md
-    sha256: e60cd87bb909a30d0383155eff077b3c33eea7bd4348a93235cce25b08463d8f
+    sha256: a46acebcb3ca951f8848b4288968a2ac17e5b72ad63c0bbe140b90f0c4b3d832
     source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
-    at: '2026-09-16T10:54:11+00:00'
+    at: '2026-09-16T13:08:49+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+    rationale: Required native compensation permission within authorized M1 backend-aware
+      authorization scope; preserves namespace opt-in and least-privilege defaults
   red:
     result: PASS
     by: codex-lead
@@ -90,7 +93,7 @@ residuals: []
 next_action:
   owner: sol-t6-m001
   action: Implement backend-aware startup permission plan when worker slot available
-updated_at: '2026-09-16T12:55:07+00:00'
+updated_at: '2026-09-16T13:08:49+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:44+00:00'
   by: codex-lead
@@ -120,3 +123,12 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: codex-lead
+  artifact: 03-decision.md
+  sha256: e60cd87bb909a30d0383155eff077b3c33eea7bd4348a93235cce25b08463d8f
+  source_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  at: '2026-09-16T10:54:11+00:00'
+  contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
