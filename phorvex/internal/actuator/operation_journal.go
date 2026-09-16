@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -57,12 +58,23 @@ type operationReceipt struct {
 	EndpointAddresses    []string          `json:"endpointAddresses,omitempty"`
 	EndpointConfigSHA256 string            `json:"endpointConfigSHA256,omitempty"`
 	Aborted              int               `json:"aborted,omitempty"`
+	// Adapter-rotate v4 fields bind one protected serving operation to the
+	// selected Pod, authenticated detector event and immutable source mapping.
+	AdapterName           string `json:"adapterName,omitempty"`
+	AdapterSource         string `json:"adapterSource,omitempty"`
+	AdapterSourcePresent  bool   `json:"adapterSourcePresent,omitempty"`
+	AdapterEventName      string `json:"adapterEventName,omitempty"`
+	AdapterEventUID       string `json:"adapterEventUID,omitempty"`
+	AdapterEventCreatedAt string `json:"adapterEventCreatedAt,omitempty"`
+	AdapterCreator        string `json:"adapterCreator,omitempty"`
+	AdapterEndpointSHA256 string `json:"adapterEndpointSHA256,omitempty"`
 }
 
 const (
-	requestDrainReceiptVersion = 3
-	requestDrainMaxLabels      = 64
-	requestDrainMaxAddresses   = 16
+	requestDrainReceiptVersion  = 3
+	adapterRotateReceiptVersion = 4
+	requestDrainMaxLabels       = 64
+	requestDrainMaxAddresses    = 16
 )
 
 func receiptName(r operationReceipt) string {
@@ -77,7 +89,7 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
@@ -133,6 +145,26 @@ func (r operationReceipt) valid() bool {
 		case "stack-confirmed":
 			return r.Aborted > 0
 		case "restored":
+			return true
+		default:
+			return false
+		}
+	case "adapter-rotate":
+		if r.Version != adapterRotateReceiptVersion || !boundedLabelMap(r.TargetLabels) ||
+			!validRuntimeAdapterName(r.AdapterName) || r.AdapterEventName == "" || r.AdapterEventUID == "" ||
+			r.AdapterCreator == "" || len(r.AdapterEventName) > 253 || len(r.AdapterEventUID) > 253 || len(r.AdapterCreator) > 512 ||
+			(r.AdapterSourcePresent && (r.AdapterSource == "" || len(r.AdapterSource) > maxAdapterSourcePathBytes)) || (!r.AdapterSourcePresent && r.AdapterSource != "") {
+			return false
+		}
+		createdAt, err := time.Parse(time.RFC3339Nano, r.AdapterEventCreatedAt)
+		if err != nil || createdAt.IsZero() || r.AdapterEventCreatedAt != createdAt.UTC().Format(time.RFC3339Nano) {
+			return false
+		}
+		if digest, err := hex.DecodeString(r.AdapterEndpointSHA256); err != nil || len(digest) != sha256.Size {
+			return false
+		}
+		switch r.Phase {
+		case "prepared", "unload-dispatching", "unload-acknowledged", "absent-confirmed", "load-dispatching", "load-acknowledged", "loaded-confirmed", "completed":
 			return true
 		default:
 			return false
@@ -281,7 +313,7 @@ func receiptAuthority(ctx context.Context, reader client.Reader, r operationRece
 	if err != nil {
 		return nil, err
 	}
-	if (r.Kind == "quarantine" || r.Kind == "request-drain") && !sel.Matches(labels.Set(r.TargetLabels)) {
+	if (r.Kind == "quarantine" || r.Kind == "request-drain" || r.Kind == "adapter-rotate") && !sel.Matches(labels.Set(r.TargetLabels)) {
 		return nil, fmt.Errorf("recorded target outside policy selector")
 	}
 	ns := &corev1.Namespace{}

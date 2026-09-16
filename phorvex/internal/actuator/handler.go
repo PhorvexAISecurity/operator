@@ -55,8 +55,10 @@ type EnactCtx struct {
 	MIGProfiles      *MIGProfiles
 	// Request-drain observation bounds default to production constants. Tests that
 	// emulate an EndpointSlice controller may shorten them without changing behavior.
-	DrainObservationTimeout  time.Duration
-	DrainObservationInterval time.Duration
+	DrainObservationTimeout    time.Duration
+	DrainObservationInterval   time.Duration
+	AdapterObservationTimeout  time.Duration
+	AdapterObservationInterval time.Duration
 }
 
 // HandlerResult is the native effect record.

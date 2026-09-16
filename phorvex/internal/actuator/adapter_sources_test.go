@@ -3,6 +3,7 @@ package actuator
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -27,7 +28,7 @@ func TestLoadAdapterSourcesFileStrictAndCopied(t *testing.T) {
 }
 
 func TestLoadAdapterSourcesFileRefusals(t *testing.T) {
-	for name, body := range map[string]string{
+	refusals := map[string]string{
 		"unknown":                   `{"version":1,"sources":[],"extra":true}`,
 		"duplicate-mapping":         `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/a"},{"namespace":"n","adapter":"a","source":"/b"}]}`,
 		"duplicate-version-field":   `{"version":9,"version":1,"sources":[]}`,
@@ -39,7 +40,9 @@ func TestLoadAdapterSourcesFileRefusals(t *testing.T) {
 		"wildcard":                  `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/models/*"}]}`,
 		"question-pattern":          `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/models/a?"}]}`,
 		"control":                   "{\"version\":1,\"sources\":[{\"namespace\":\"n\",\"adapter\":\"a\",\"source\":\"/a\\u0001\"}]}",
-	} {
+	}
+	refusals["oversized-source-path"] = `{"version":1,"sources":[{"namespace":"n","adapter":"a","source":"/` + strings.Repeat("a", maxAdapterSourcePathBytes) + `"}]}`
+	for name, body := range refusals {
 		t.Run(name, func(t *testing.T) {
 			p := filepath.Join(t.TempDir(), "x")
 			if err := os.WriteFile(p, []byte(body), 0600); err != nil {

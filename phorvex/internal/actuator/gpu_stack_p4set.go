@@ -114,6 +114,79 @@ func (c *httpVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, adapte
 	return nil
 }
 
+func (c *httpVLLM) AdapterLoaded(ctx context.Context, ep servingEndpoint, adapter string) (bool, error) {
+	if !ep.reachable() {
+		return false, errStackUnreachable
+	}
+	code, body, err := c.do(ctx, http.MethodGet, ep.base()+ep.modelsPath, ep.token)
+	if err != nil {
+		return false, err
+	}
+	if code != http.StatusOK {
+		return false, fmt.Errorf("serving model inventory: HTTP %d %s", code, strings.TrimSpace(body))
+	}
+	loaded, err := parseAdapterInventory([]byte(body), adapter)
+	if err != nil {
+		return false, fmt.Errorf("serving model inventory: %w", err)
+	}
+	return loaded, nil
+}
+
+// parseAdapterInventory accepts the OpenAI-compatible models envelope while allowing
+// documented extension fields. Absence is authoritative only when every entry has one
+// explicit, unique ID and the input is one complete bounded JSON value.
+func parseAdapterInventory(data []byte, adapter string) (bool, error) {
+	if len(data) == 0 || len(data) > servingResponseMaxBytes {
+		return false, fmt.Errorf("response size must be 1..%d bytes", servingResponseMaxBytes)
+	}
+	if err := rejectDuplicateJSONFields(data); err != nil {
+		return false, err
+	}
+	var envelope map[string]json.RawMessage
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&envelope); err != nil {
+		return false, err
+	}
+	for key := range envelope {
+		if strings.EqualFold(key, "data") && key != "data" {
+			return false, fmt.Errorf("inventory field %q is an ambiguous alias for data", key)
+		}
+	}
+	rawData, present := envelope["data"]
+	if !present || bytes.Equal(bytes.TrimSpace(rawData), []byte("null")) {
+		return false, fmt.Errorf("missing data inventory")
+	}
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(rawData, &entries); err != nil {
+		return false, fmt.Errorf("data must be an array: %w", err)
+	}
+	seen := make(map[string]bool, len(entries))
+	loaded := false
+	for i, entry := range entries {
+		for key := range entry {
+			if strings.EqualFold(key, "id") && key != "id" {
+				return false, fmt.Errorf("data[%d] field %q is an ambiguous alias for id", i, key)
+			}
+		}
+		rawID, present := entry["id"]
+		if !present || bytes.Equal(bytes.TrimSpace(rawID), []byte("null")) {
+			return false, fmt.Errorf("data[%d] has no explicit nonempty id", i)
+		}
+		var id string
+		if err := json.Unmarshal(rawID, &id); err != nil || strings.TrimSpace(id) == "" {
+			return false, fmt.Errorf("data[%d] has no explicit nonempty string id", i)
+		}
+		if seen[id] {
+			return false, fmt.Errorf("duplicate model id %q", id)
+		}
+		seen[id] = true
+		if id == adapter {
+			loaded = true
+		}
+	}
+	return loaded, nil
+}
+
 func (c *httpVLLM) LoadAdapter(ctx context.Context, ep servingEndpoint, adapter, source string) error {
 	if !ep.reachable() {
 		return errStackUnreachable

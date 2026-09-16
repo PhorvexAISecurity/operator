@@ -38,7 +38,7 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionKVReset:             {{Resource: "pods", Verb: "update"}},
 	model.ActionEndpointRotate:      {{Resource: "pods", Verb: "update"}, {Resource: "services", Verb: "update"}},
 	model.ActionModelShardReplace:   {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}},
-	model.ActionAdapterRotate:       {{Resource: "pods", Verb: "update"}},
+	model.ActionAdapterRotate:       {{Resource: "pods", Verb: "patch"}},
 	model.ActionRequestDrain:        {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionGuardrailRotate:     {{Resource: "pods", Verb: "update"}},
 	model.ActionKVMigrateInvalidate: {{Resource: "pods", Verb: "update"}},

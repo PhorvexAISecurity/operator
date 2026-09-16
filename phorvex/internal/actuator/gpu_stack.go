@@ -118,6 +118,9 @@ type vLLMClient interface {
 	ResetPrefixCache(ctx context.Context, ep servingEndpoint) error
 	// UnloadAdapter unloads a named LoRA/adapter (vLLM /v1/unload_lora_adapter; adapter-rotate).
 	UnloadAdapter(ctx context.Context, ep servingEndpoint, adapter string) error
+	// AdapterLoaded observes exact adapter membership through the configured models inventory.
+	// A false result is authoritative only when the bounded response is valid and unambiguous.
+	AdapterLoaded(ctx context.Context, ep servingEndpoint, adapter string) (bool, error)
 	// LoadAdapter loads a named LoRA/adapter from a (trusted, pinned) source path/uri.
 	LoadAdapter(ctx context.Context, ep servingEndpoint, adapter, source string) error
 	// DrainRequests stops admitting + aborts/finishes in-flight requests, returning the count
@@ -149,7 +152,13 @@ func (c *httpVLLM) do(ctx context.Context, method, url, token string) (int, stri
 		return 0, "", err
 	}
 	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	b, readErr := io.ReadAll(io.LimitReader(resp.Body, servingResponseMaxBytes+1))
+	if readErr != nil {
+		return 0, "", fmt.Errorf("read serving response: %w", readErr)
+	}
+	if len(b) > servingResponseMaxBytes {
+		return 0, "", fmt.Errorf("serving response exceeds %d bytes", servingResponseMaxBytes)
+	}
 	return resp.StatusCode, string(b), nil
 }
 

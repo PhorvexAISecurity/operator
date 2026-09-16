@@ -14,6 +14,7 @@ import (
 )
 
 const maxAdapterSourcesBytes = 1 << 20
+const maxAdapterSourcePathBytes = 4096
 
 type AdapterSources map[string]string
 
@@ -72,7 +73,7 @@ func LoadAdapterSourcesFile(path string) (AdapterSources, error) {
 		if len(validation.IsDNS1123Label(e.Namespace)) != 0 || !adapterIDPattern.MatchString(e.Adapter) {
 			return nil, fmt.Errorf("adapter clean sources: invalid namespace or adapter identity")
 		}
-		if e.Source == "" || e.Source == "/" || strings.ContainsAny(e.Source, "*?[]{}") || strings.IndexFunc(e.Source, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 || !filepath.IsAbs(e.Source) || filepath.Clean(e.Source) != e.Source {
+		if e.Source == "" || len(e.Source) > maxAdapterSourcePathBytes || e.Source == "/" || strings.ContainsAny(e.Source, "*?[]{}") || strings.IndexFunc(e.Source, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 || !filepath.IsAbs(e.Source) || filepath.Clean(e.Source) != e.Source {
 			return nil, fmt.Errorf("adapter clean sources: source must be a clean absolute serving-local path")
 		}
 		k := adapterSourceKey(e.Namespace, e.Adapter)

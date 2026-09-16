@@ -29,7 +29,7 @@ func (m *m95CaptureVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, 
 
 func m95DispatchFixture(t *testing.T) (*corev1.Pod, *unstructured.Unstructured, model.AdapterObservation) {
 	t.Helper()
-	now := time.Now().Add(-time.Minute).UTC()
+	now := time.Now().Add(-time.Minute).UTC().Truncate(time.Second)
 	pod := aiPod("ns", "infer", map[string]string{labelLoRAEnabled: "true"})
 	pod.Annotations[annoLoRAAdapter] = "tenant-drift"
 	creator := "system:serviceaccount:ns:detector"
@@ -38,7 +38,7 @@ func m95DispatchFixture(t *testing.T) (*corev1.Pod, *unstructured.Unstructured, 
 	e := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]interface{}{"name": o.EventName, "uid": o.EventUID,
-			"creationTimestamp": now.Format(time.RFC3339), "annotations": map[string]interface{}{
+			"creationTimestamp": now.Format(time.RFC3339Nano), "annotations": map[string]interface{}{
 				"phorvex.ai/creator-identity": creator, "phorvex.ai/target-pod-uid": o.TargetPodUID,
 				"phorvex.ai/adapter-name": o.AdapterName}},
 		"spec": map[string]interface{}{"rule": map[string]interface{}{"type": model.AttackVectorAdapter}, "targets": []interface{}{"ns/infer"}},
@@ -48,17 +48,12 @@ func m95DispatchFixture(t *testing.T) (*corev1.Pod, *unstructured.Unstructured, 
 
 func TestM095DispatchUsesDetectorAdapterDespitePodAnnotationDrift(t *testing.T) {
 	pod, event, o := m95DispatchFixture(t)
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "amtd.r6security.com", Version: "v1beta1", Kind: "SecurityEvent"}, &unstructured.Unstructured{})
-	c := fake.NewClientBuilder().WithScheme(s).WithObjects(pod, event).Build()
+	c := fakeC(pod, event)
 	ConfigureAdapterDetectorIdentities([]string{o.CreatorIdentity})
 	t.Cleanup(func() { ConfigureAdapterDetectorIdentities(nil) })
 	mv := &m95CaptureVLLM{}
-	req := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, AdapterObservation: &o}
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, req)
+	req := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, PolicyName: "policy", PolicyUID: "policy-uid", AdapterObservation: &o}
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, req)
 	if err != nil || !hr.Emitted {
 		t.Fatalf("trusted dispatch refused: result=%+v err=%v", hr, err)
 	}
@@ -69,12 +64,7 @@ func TestM095DispatchUsesDetectorAdapterDespitePodAnnotationDrift(t *testing.T) 
 
 func TestM095DispatchRefusesSpoofedOrRecreatedObservation(t *testing.T) {
 	pod, event, o := m95DispatchFixture(t)
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "amtd.r6security.com", Version: "v1beta1", Kind: "SecurityEvent"}, &unstructured.Unstructured{})
-	c := fake.NewClientBuilder().WithScheme(s).WithObjects(pod, event).Build()
+	c := fakeC(pod, event)
 	ConfigureAdapterDetectorIdentities([]string{o.CreatorIdentity})
 	t.Cleanup(func() { ConfigureAdapterDetectorIdentities(nil) })
 	for _, tc := range []struct {
@@ -101,9 +91,9 @@ func TestM095DispatchRefusesSpoofedOrRecreatedObservation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mv := &m95CaptureVLLM{}
-			r := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, AdapterObservation: &o}
+			r := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, PolicyName: "policy", PolicyUID: "policy-uid", AdapterObservation: &o}
 			tc.mutate(&r)
-			hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, r)
+			hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, r)
 			if err != nil || hr.Emitted || mv.unloadAdapter != "" {
 				t.Fatalf("refusal crossed serving seam: %+v %v unload=%q", hr, err, mv.unloadAdapter)
 			}
@@ -113,19 +103,14 @@ func TestM095DispatchRefusesSpoofedOrRecreatedObservation(t *testing.T) {
 
 func TestM095UnchangedDetectorEventAndAbsentStackCreditsNoNewMitigation(t *testing.T) {
 	pod, event, o := m95DispatchFixture(t)
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "amtd.r6security.com", Version: "v1beta1", Kind: "SecurityEvent"}, &unstructured.Unstructured{})
-	c := fake.NewClientBuilder().WithScheme(s).WithObjects(pod, event).Build()
+	c := fakeC(pod, event)
 	ConfigureAdapterDetectorIdentities([]string{o.CreatorIdentity})
 	t.Cleanup(func() { ConfigureAdapterDetectorIdentities(nil) })
-	r := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, AdapterObservation: &o}
+	r := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, PolicyName: "policy", PolicyUID: "policy-uid", AdapterObservation: &o}
 	for i := 0; i < 2; i++ {
-		mv := &m95CaptureVLLM{mockVLLM: mockVLLM{unloadErr: fmt.Errorf("%w", errAdapterAbsent)}}
-		hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, r)
-		if err != nil || hr.Emitted || mv.unloadAdapter != "actual-poison" {
+		mv := &m95CaptureVLLM{mockVLLM: mockVLLM{adapterStates: []bool{false}, unloadErr: fmt.Errorf("%w", errAdapterAbsent)}}
+		hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, r)
+		if err != nil || hr.Emitted || mv.unloadAdapter != "" {
 			t.Fatalf("repeat %d miscredited absent goal: result=%+v err=%v unload=%q", i, hr, err, mv.unloadAdapter)
 		}
 	}
