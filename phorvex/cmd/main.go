@@ -148,6 +148,7 @@ func main() {
 		migAllocationReadTimeout time.Duration
 		migReleaseTimeout        time.Duration
 		migExclusiveMaintenance  bool
+		maxRetainedQuarantines   int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -214,6 +215,7 @@ func main() {
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", defaultAuditMaxBytes, "[audit-json] target live-segment size in bytes (0 = unbounded). Whole records are preserved, so a segment may exceed this nominal cap. Default 512 MiB.")
 	flag.IntVar(&auditMaxBackups, "audit-max-backups", defaultAuditMaxBackups, "[audit-json] number of rotated segments to keep. Nominal budget is max-bytes*(backups+1); oversized records and pre-existing files can exceed it.")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
+	flag.IntVar(&maxRetainedQuarantines, "max-retained-quarantines-per-namespace", 1, fmt.Sprintf("Hard namespace-wide bound on retained or pending Phorvex quarantines (0 disables new quarantine, maximum %d).", actuator.MaxRetainedQuarantinesUpperBound))
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -251,6 +253,10 @@ func main() {
 	}
 	if supportDebounce < 1 {
 		setupLog.Error(fmt.Errorf("must be at least 1"), "invalid actions-supported-debounce", "value", supportDebounce)
+		os.Exit(2)
+	}
+	if maxRetainedQuarantines < 0 || maxRetainedQuarantines > actuator.MaxRetainedQuarantinesUpperBound {
+		setupLog.Error(fmt.Errorf("must be in [0,%d]", actuator.MaxRetainedQuarantinesUpperBound), "invalid max-retained-quarantines-per-namespace", "value", maxRetainedQuarantines)
 		os.Exit(2)
 	}
 	if calibrationShadow && (calibrationRefresh <= 0 || calibrationSample <= 0 || calibrationLookback <= 0 || calibrationSample > calibrationRefresh) {
@@ -359,6 +365,12 @@ func main() {
 		setupLog.Error(err, "cannot construct the resolved actuator; refusing to start")
 		os.Exit(1)
 	}
+	quarantineCapacity, capacityErr := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), operatorNS, maxRetainedQuarantines)
+	if capacityErr != nil {
+		setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
+		os.Exit(1)
+	}
+	rmgr.QuarantineCapacity = quarantineCapacity
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
 	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {

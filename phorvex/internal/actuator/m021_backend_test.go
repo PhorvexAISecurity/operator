@@ -169,7 +169,16 @@ func TestPhoenixSupportMatchesDispatch(t *testing.T) {
 	ctx := t.Context()
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable}, model.MutatingActions...) {
 		ok, why := pa.SupportsAction(ctx, a, Target{Namespace: "ns", Pod: "p"})
-		_, err := pa.Actuate(ctx, Request{Tenant: "t", Namespace: "ns", Pod: "p", Action: a, Score: 0.9})
+		req := Request{Tenant: "t", Namespace: "ns", Pod: "p", Action: a, Score: 0.9}
+		if a == model.ActionQuarantine {
+			// M52's controlled Phoenix route requires the durable reservation envelope.
+			// Supply it here so this M21 contract continues to compare backend
+			// repertoire with a well-formed dispatch, rather than input validation.
+			req.TargetUID = "pod-uid"
+			req.TargetNamespaceUID = "namespace-uid"
+			req.OperationID = strings.Repeat("a", 40)
+		}
+		_, err := pa.Actuate(ctx, req)
 		dispatches := err == nil
 		if ok != dispatches {
 			t.Fatalf("phoenix %s: SupportsAction=%v but Actuate accepted=%v (why=%q, err=%v)", a, ok, dispatches, why, err)

@@ -896,11 +896,11 @@ fixes:
     issues:
     - M-52
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t6-m052
-    head_sha: null
+    head_sha: 8c25060a5061dc9532d73ae1ce9ee901bc1fd266
   T6-M074:
     directory: fixes/T6-M074
     aliases: []

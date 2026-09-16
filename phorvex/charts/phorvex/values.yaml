@@ -98,6 +98,10 @@ phorvex:
   # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
   # and its leader-election lease). Empty => the operator's own POD_NAMESPACE.
   operatorNamespace: ""
+  # Hard safety bound shared by every policy and actuator route in a namespace.
+  # Existing and pending quarantine UIDs consume the same protected capacity. Zero
+  # disables new quarantine; values above 128 are rejected at render and startup.
+  maxRetainedQuarantinesPerNamespace: 1
   # Actuator backend. Accepted values are exactly: phoenix, native, hybrid.
   #   phoenix - drives UNMODIFIED Phoenix through SecurityEvent/AMTD CRs
   #   native  - Phorvex's own client-go hands (no Phoenix CRDs)

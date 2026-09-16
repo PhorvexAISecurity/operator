@@ -17,6 +17,12 @@ import (
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
+const (
+	phorvexQuarantineTargetUIDAnnotation    = "phorvex.ai/quarantine-target-uid"
+	phorvexQuarantineNamespaceUIDAnnotation = "phorvex.ai/quarantine-namespace-uid"
+	phorvexQuarantineOperationAnnotation    = "phorvex.ai/quarantine-operation"
+)
+
 // PhoenixActuator is the Phase-1 actuator (Seam 1). It actuates by speaking
 // UNMODIFIED Phoenix's existing contract:
 //
@@ -181,6 +187,9 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 	if ruleType == "" {
 		return Result{}, fmt.Errorf("phoenix actuator: unsupported action %q", req.Action)
 	}
+	if req.Action == model.ActionQuarantine && (req.TargetUID == "" || len(req.TargetUID) > 128 || req.TargetNamespaceUID == "" || len(req.TargetNamespaceUID) > 128 || len(req.OperationID) != 40) {
+		return Result{}, RefusedWithoutEffect(fmt.Errorf("phoenix actuator: controlled quarantine requires protected target, namespace and operation identity"))
+	}
 	identity := identityAnnotations(req.Namespace, req.Tenant)
 	if err := validateIdentityMetadata(req.Namespace, identity); err != nil {
 		return Result{}, fmt.Errorf("phoenix actuator: %w", err)
@@ -204,6 +213,11 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 			},
 			Description: phorvexDescription(req),
 		},
+	}
+	if req.Action == model.ActionQuarantine {
+		se.Annotations[phorvexQuarantineTargetUIDAnnotation] = req.TargetUID
+		se.Annotations[phorvexQuarantineNamespaceUIDAnnotation] = req.TargetNamespaceUID
+		se.Annotations[phorvexQuarantineOperationAnnotation] = req.OperationID
 	}
 	if req.CoverageValue != nil {
 		se.Annotations["phorvex.ai/coverage-contract"] = "selection-fact-weight-v1"
