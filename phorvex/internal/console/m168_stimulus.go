@@ -66,7 +66,11 @@ spec:
 	if err = s.persistEffectIntent("/api/availability-arms/run", actor, ns, "foothold"); err != nil {
 		return experimentStimulusReceipt{}, fmt.Errorf("attack refused before effect: %w", err)
 	}
-	out, err := kctl(10*time.Second, "create", "-f", f.Name())
+	verb := "create"
+	if event == "redteam-"+ns {
+		verb = "apply"
+	}
+	out, err := kctl(10*time.Second, verb, "-f", f.Name())
 	if err != nil {
 		return experimentStimulusReceipt{}, fmt.Errorf("create SecurityEvent: %w: %s", err, strings.TrimSpace(out))
 	}
