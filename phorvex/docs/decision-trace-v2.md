@@ -22,6 +22,9 @@ inputs; and the runner-stamped `dispatchOutcome` (`not-attempted` / `emitted` /
 `emitted-false` / `dispatch-error`) with `dispatchReason` covering every
 pre-dispatch guard (`dry-run`, `kill-switch`, `ensure-policy-failed`,
 `inviolability-guard`, `no-tick-view`, `emit-boundary-infeasible`, `unselected`).
+Kill-switch refusals include the stable observation cause in `killSwitchCause` and
+`dispatchReason`; the value is sampled fresh at route and dispatch boundaries rather
+than inferred from the tick-start snapshot.
 
 ## Identity and scope
 
@@ -50,6 +53,15 @@ tracked per Prometheus signal. Physics fields use their existing source witness;
 for example SM occupancy is present only with an SM source and VRAM is present
 only when both used/free series supplied a usable denominator.
 `primed` records the current cost learner's actual RLS state.
+
+`phaseReason` records how application telemetry supports the workload phase.
+`idle-measured` requires a fresh, finite, nonnegative request-rate sample within
+the existing idle boundary and no contradictory app activity. Positive queue
+depth or token throughput keeps the phase Warm. `warm-no-app-signal` means all
+application activity signals are genuinely absent; `warm-uncertain-app-signal`
+means app telemetry exists but is stale, errored, invalid, or insufficient to
+establish measured idle. Infrastructure-only cAdvisor signals remain outside this
+classification and do not claim application load.
 
 ## Reconstruction
 

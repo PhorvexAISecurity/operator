@@ -221,6 +221,8 @@ func TestCheckRefusesOmittedReadPermissionsByAction(t *testing.T) {
 		{name: "warm controller binding", action: v1alpha1.ActionWarmSwap, group: "apps", resource: "replicasets", verb: "get"},
 		{name: "route backend inventory", action: v1alpha1.ActionRouteRotate, resource: "pods", verb: "list"},
 		{name: "endpoint service", action: v1alpha1.ActionEndpointRotate, resource: "services", verb: "get"},
+		{name: "request drain endpoint inventory", action: v1alpha1.ActionRequestDrain, group: "discovery.k8s.io", resource: "endpointslices", verb: "list"},
+		{name: "request drain Pod patch", action: v1alpha1.ActionRequestDrain, resource: "pods", verb: "patch"},
 		{name: "MIG current policy", action: v1alpha1.ActionMIGRebind, group: "phorvex.ai", resource: "phorvexpolicies", verb: "get"},
 	}
 	for _, test := range tests {
@@ -233,6 +235,23 @@ func TestCheckRefusesOmittedReadPermissionsByAction(t *testing.T) {
 				t.Fatalf("omitted read was accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestM040CheckRequestsPodPatchAndPassesWhenGranted(t *testing.T) {
+	reviews := &recordingSSAR{}
+	if _, err := Check(t.Context(), policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRequestDrain)), reviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	var patch, update bool
+	for _, attributes := range reviews.attributes {
+		if attributes.Namespace == "tenant" && attributes.Resource == "pods" {
+			patch = patch || attributes.Verb == "patch"
+			update = update || attributes.Verb == "update"
+		}
+	}
+	if !patch || update {
+		t.Fatalf("request-drain startup inventory patch=%t update=%t: %+v", patch, update, reviews.attributes)
 	}
 }
 

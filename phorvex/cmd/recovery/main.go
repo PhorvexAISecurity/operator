@@ -27,7 +27,7 @@ func main() {
 	flag.StringVar(&namespace, "namespace", "", "target policy namespace (required)")
 	flag.StringVar(&policy, "policy", "", "target PhorvexPolicy name (required)")
 	flag.IntVar(&maxItems, "max-items", 20, "maximum scoped receipts (1-100); protected-journal scan is independently capped at 1000")
-	flag.StringVar(&planOut, "plan-out", "", "write a versioned quarantine re-admission plan; inventory remains the default")
+	flag.StringVar(&planOut, "plan-out", "", "write a versioned protected re-admission plan; inventory remains the default")
 	flag.StringVar(&applyPlan, "apply-plan", "", "apply this exact reviewed plan (separate explicit mode)")
 	flag.StringVar(&resultOut, "result-out", "", "durably write apply results before exit (required with --apply-plan)")
 	flag.Parse()

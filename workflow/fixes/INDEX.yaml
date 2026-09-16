@@ -934,3 +934,36 @@ fixes:
     stacked_on: []
     branch: fix/t6-m168
     head_sha: 52452bfdae9e4cf3cfc5c7ba23d2391fde9c7e16
+  T7-M127:
+    directory: fixes/T7-M127
+    aliases: []
+    issues:
+    - M-127
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t7-m127
+    head_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6
+  T7-M142:
+    directory: fixes/T7-M142
+    aliases: []
+    issues:
+    - M-142
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t7-m142
+    head_sha: a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4
+  T7-M040:
+    directory: fixes/T7-M040
+    aliases: []
+    issues:
+    - M-40
+    related_issues: []
+    state: IN_PR
+    dependencies: []
+    stacked_on: []
+    branch: fix/t7-m040
+    head_sha: b609df7d68a8b3d4b285f23b3eb4683753eae33d

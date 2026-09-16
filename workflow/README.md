@@ -42,6 +42,7 @@ trees are neither moved nor removed.
 | Engineer choosing work | `issues/MASTER_ISSUES.md` |
 | Engineer locating code/operations | `anatomy/ANATOMY.md` |
 | Release coordinator | `operations/SYNC.md` and `releases/CURRENT.yaml` |
+| Outstanding live verification and missing fixtures | [Live-verification backlog](assessments/LIVE-VERIFICATION-BACKLOG.md) |
 | Full-system investigator / master-register regeneration | `operations/ASSESSMENT.md` |
 | Campaign owner | `operations/CAMPAIGN.md` |
 

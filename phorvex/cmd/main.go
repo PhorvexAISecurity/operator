@@ -478,7 +478,9 @@ func main() {
 	}
 	rmgr.Optimizer = optimizer
 	setupLog.Info("decision brain", "engine", rmgr.Optimizer.Name())
-	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetClient(), Namespace: operatorNS}
+	// Kill-switch dispatch admission must bypass the informer cache: every route,
+	// selected dispatch, fallback and maintenance boundary reads current sentinel state.
+	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetAPIReader(), Namespace: operatorNS}
 
 	// Telemetry source: real Prometheus client if a URL is set, else honest nil source.
 	rmgr.PromURL = promURL         // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)

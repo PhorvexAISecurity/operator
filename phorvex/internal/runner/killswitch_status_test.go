@@ -30,18 +30,14 @@ import (
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/platform"
 )
 
-// killswitch_status_test.go — PHVX-17 / PHORVEXSEC-109.
+// killswitch_status_test.go — PHVX-17 / PHORVEXSEC-109 / M-127.
 //
-// The ticket's premise — that status.killSwitchEngaged is fed from a different source than the
-// engine — is FALSE: manager.go computes killEngaged once per tick and the same variable gates
-// actuation, sets the metric and writes the status. Verified before changing anything.
-//
-// The real defect is narrower and was confirmed on the live fleet: with `omitempty`, a `false`
-// disappeared from the CR entirely, so "the defence is running" and "this status was never written"
-// looked identical. All four live policies showed the field ABSENT while the sentinel said
-// engaged=false.
+// PHVX-17 made the false value explicit on the wire. M-127 keeps that compatibility
+// while carrying the observation used by the latest actuation boundary into the
+// audit and status condition.
 
 // TestKillSwitchFalseIsSerialised is the regression. A safety-control readout must state the safe
 // value explicitly; omitting it is not the same as reporting it.
@@ -64,6 +60,48 @@ func TestKillSwitchTrueStillSerialises(t *testing.T) {
 	}
 }
 
+func TestKillSwitchStatusUsesTheBoundaryObservationCause(t *testing.T) {
+	tests := []KillSwitchObservation{
+		{Engaged: true, Cause: KillSwitchStaticFlag},
+		{Engaged: true, Cause: KillSwitchSentinelEngaged},
+		{Engaged: true, Cause: KillSwitchMissingNamespace},
+		{Engaged: true, Cause: KillSwitchReadError},
+		{Engaged: true, Cause: KillSwitchMalformedValue},
+		{Cause: KillSwitchSentinelDisengaged},
+		{Cause: KillSwitchSentinelAbsent},
+		{Cause: KillSwitchSentinelKeyAbsent},
+		{Cause: KillSwitchStaticOnly},
+	}
+	for _, observation := range tests {
+		t.Run(string(observation.Cause), func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := v1.AddToScheme(scheme); err != nil {
+				t.Fatal(err)
+			}
+			policy := &v1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "status-cause", Name: "policy"}}
+			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.PhorvexPolicy{}).WithObjects(policy).Build()
+			m := &Manager{Client: c, Log: logr.Discard()}
+			e := &policyEntry{key: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}}
+			m.updateStatusObserved(context.Background(), e, 1, 1, 0, observation, time.Now())
+
+			var got v1.PhorvexPolicy
+			if err := c.Get(context.Background(), e.key, &got); err != nil {
+				t.Fatal(err)
+			}
+			condition := meta.FindStatusCondition(got.Status.Conditions, "KillSwitch")
+			wantStatus := metav1.ConditionFalse
+			if observation.Engaged {
+				wantStatus = metav1.ConditionTrue
+			}
+			if got.Status.KillSwitchEngaged != observation.Engaged || condition == nil ||
+				condition.Status != wantStatus || condition.Reason != string(observation.Cause) ||
+				condition.Message != observation.message() {
+				t.Fatalf("status does not describe observation %+v: %+v", observation, got.Status)
+			}
+		})
+	}
+}
+
 type killSwitchOptimizer struct{}
 
 func (*killSwitchOptimizer) Name() string { return "kill-switch-integration" }
@@ -79,6 +117,10 @@ func (*killSwitchOptimizer) Decide(views []*model.WorkloadView, _ model.Policy) 
 		Selected:      true,
 		Feasible:      true,
 		CoverageValue: 0.5,
+		Trace: &model.DecisionTraceV2{
+			DispatchOutcome: model.DispatchNotAttempted,
+			DispatchReason:  "pending-dispatch",
+		},
 	}}
 }
 
@@ -155,7 +197,7 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1.PhorvexPolicy{}).
 		WithObjects(policy, sentinel).Build()
-	fa := &fakeActuator{}
+	fa := &m127BoundaryActuator{name: "fake"}
 	notifications := record.NewFakeRecorder(4)
 	var auditSink bytes.Buffer
 	m := &Manager{
@@ -197,11 +239,15 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	decisionsBefore := metricValue(t, "phorvex_decisions_total", decisionLabels)
 	actuationsBefore := metricValue(t, "phorvex_actuations_total", actuationLabels)
 
-	engaged := m.KillSwitch.Engaged(context.Background())
-	if !engaged {
-		t.Fatal("engaged sentinel was not observed")
+	observation := m.KillSwitch.Observe(context.Background())
+	if !observation.Engaged || observation.Cause != KillSwitchSentinelEngaged {
+		t.Fatalf("initial engaged sentinel was not observed: %+v", observation)
 	}
-	m.processTenant(context.Background(), snap, e, engaged)
+	_, physicsByKey := platform.Derive(snap)
+	m.processTenantWithPhysicsObserved(context.Background(), snap, e, &observation, physicsByKey)
+	if !observation.Engaged || observation.Cause != KillSwitchSentinelEngaged {
+		t.Fatalf("engaged sentinel was not retained for the tick: %+v", observation)
+	}
 	// The normal runner attaches record-time metadata even without decision tracing.
 	var recorded audit.Record
 	if err := json.NewDecoder(&auditSink).Decode(&recorded); err != nil {
@@ -219,9 +265,12 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	if recorded.Measurements == nil || !recorded.Measurements.KillSwitch.Present || !recorded.Measurements.KillSwitch.Value {
 		t.Fatalf("engaged kill-switch measurement missing: %+v", recorded.Measurements)
 	}
+	if recorded.KillSwitchCause != string(KillSwitchSentinelEngaged) {
+		t.Fatalf("engaged audit cause = %q", recorded.KillSwitchCause)
+	}
 
-	if fa.calls != 0 {
-		t.Fatalf("kill-switch engaged: actuator called %d times, want 0", fa.calls)
+	if fa.actuateCalls != 0 {
+		t.Fatalf("kill-switch engaged: actuator called %d times, want 0", fa.actuateCalls)
 	}
 	if got := metricValue(t, "phorvex_decisions_total", decisionLabels); got != decisionsBefore+1 {
 		t.Fatalf("engaged decision counter = %v, want %v (decisions must continue)", got, decisionsBefore+1)
@@ -235,7 +284,7 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	}
 	ks := meta.FindStatusCondition(gotPolicy.Status.Conditions, "KillSwitch")
 	if !gotPolicy.Status.KillSwitchEngaged || gotPolicy.Status.Actuated ||
-		ks == nil || ks.Status != metav1.ConditionTrue {
+		ks == nil || ks.Status != metav1.ConditionTrue || ks.Reason != string(KillSwitchSentinelEngaged) {
 		t.Fatalf("engaged status did not match the actuation gate: %+v", gotPolicy.Status)
 	}
 
@@ -250,26 +299,78 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	if err := c.Update(context.Background(), &gotSentinel); err != nil {
 		t.Fatal(err)
 	}
-	engaged = m.KillSwitch.Engaged(context.Background())
-	if engaged {
+	fa.ensure = func(ctx context.Context) error {
+		var current corev1.ConfigMap
+		if err := c.Get(ctx, client.ObjectKeyFromObject(sentinel), &current); err != nil {
+			return err
+		}
+		current.Data["engaged"] = "true"
+		return c.Update(ctx, &current)
+	}
+	observation = m.KillSwitch.Observe(context.Background())
+	if observation.Engaged || observation.Cause != KillSwitchSentinelDisengaged {
 		t.Fatal("disengaged sentinel still reported engaged")
 	}
 	snap.Now = now.Add(time.Second)
-	m.processTenant(context.Background(), snap, e, engaged)
+	_, physicsByKey = platform.Derive(snap)
+	m.processTenantWithPhysicsObserved(context.Background(), snap, e, &observation, physicsByKey)
+	if !observation.Engaged || observation.Cause != KillSwitchSentinelEngaged {
+		t.Fatalf("late sentinel engagement was not retained for the tick: %+v audit=%s", observation, auditSink.String())
+	}
+	if err := json.NewDecoder(&auditSink).Decode(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if !recorded.KillSwitch || recorded.KillSwitchCause != string(KillSwitchSentinelEngaged) ||
+		recorded.Measurements == nil || !recorded.Measurements.KillSwitch.Present || !recorded.Measurements.KillSwitch.Value {
+		t.Fatalf("late refusal audit did not match the dispatch gate: %+v", recorded)
+	}
+	if fa.actuateCalls != 0 || len(notifications.Events) != 0 {
+		t.Fatalf("late engagement dispatched: calls=%d events=%d", fa.actuateCalls, len(notifications.Events))
+	}
+	if got := metricValue(t, "phorvex_decisions_total", decisionLabels); got != decisionsBefore+2 {
+		t.Fatalf("decision counter after late refusal = %v, want %v", got, decisionsBefore+2)
+	}
+	if err := c.Get(context.Background(), e.key, &gotPolicy); err != nil {
+		t.Fatal(err)
+	}
+	ks = meta.FindStatusCondition(gotPolicy.Status.Conditions, "KillSwitch")
+	if !gotPolicy.Status.KillSwitchEngaged || gotPolicy.Status.Actuated ||
+		gotPolicy.Status.DecisionsTotal != 2 || ks == nil || ks.Reason != string(KillSwitchSentinelEngaged) {
+		t.Fatalf("late refusal status did not match the dispatch gate: %+v", gotPolicy.Status)
+	}
+
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(sentinel), &gotSentinel); err != nil {
+		t.Fatal(err)
+	}
+	gotSentinel.Data["engaged"] = "false"
+	if err := c.Update(context.Background(), &gotSentinel); err != nil {
+		t.Fatal(err)
+	}
+	fa.ensure = nil
+	observation = m.KillSwitch.Observe(context.Background())
+	if observation.Engaged || observation.Cause != KillSwitchSentinelDisengaged {
+		t.Fatalf("disengaged sentinel did not resume: %+v", observation)
+	}
+	snap.Now = now.Add(2 * time.Second)
+	_, physicsByKey = platform.Derive(snap)
+	m.processTenantWithPhysicsObserved(context.Background(), snap, e, &observation, physicsByKey)
 	if err := json.NewDecoder(&auditSink).Decode(&recorded); err != nil {
 		t.Fatal(err)
 	}
 	if recorded.Measurements == nil || !recorded.Measurements.KillSwitch.Present || recorded.Measurements.KillSwitch.Value {
 		t.Fatalf("disengaged kill-switch false missing: %+v", recorded.Measurements)
 	}
+	if recorded.KillSwitchCause != "" {
+		t.Fatalf("disengaged decision unexpectedly carried refusal cause %q", recorded.KillSwitchCause)
+	}
 	if len(notifications.Events) != 1 {
 		t.Fatalf("active attempt events = %d", len(notifications.Events))
 	}
-	if fa.calls != 1 {
-		t.Fatalf("kill-switch disengaged: actuator called %d times, want 1", fa.calls)
+	if fa.actuateCalls != 1 {
+		t.Fatalf("kill-switch disengaged: actuator called %d times, want 1", fa.actuateCalls)
 	}
-	if got := metricValue(t, "phorvex_decisions_total", decisionLabels); got != decisionsBefore+2 {
-		t.Fatalf("decision counter after resume = %v, want %v", got, decisionsBefore+2)
+	if got := metricValue(t, "phorvex_decisions_total", decisionLabels); got != decisionsBefore+3 {
+		t.Fatalf("decision counter after resume = %v, want %v", got, decisionsBefore+3)
 	}
 	if got := metricValue(t, "phorvex_actuations_total", actuationLabels); got != actuationsBefore+1 {
 		t.Fatalf("actuation counter after resume = %v, want %v", got, actuationsBefore+1)
@@ -279,7 +380,8 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	}
 	ks = meta.FindStatusCondition(gotPolicy.Status.Conditions, "KillSwitch")
 	if gotPolicy.Status.KillSwitchEngaged || !gotPolicy.Status.Actuated ||
-		gotPolicy.Status.DecisionsTotal != 2 || ks == nil || ks.Status != metav1.ConditionFalse {
+		gotPolicy.Status.DecisionsTotal != 3 || ks == nil || ks.Status != metav1.ConditionFalse ||
+		ks.Reason != string(KillSwitchSentinelDisengaged) {
 		t.Fatalf("disengaged status did not resume coherently: %+v", gotPolicy.Status)
 	}
 	if got := metricValue(t, "phorvex_kill_switch_status_disagreement", map[string]string{
@@ -288,9 +390,9 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 		t.Fatalf("successful status reconciliation left disagreement gauge at %v", got)
 	}
 	e.spec.Mode = v1.ModeDryRun
-	snap.Now = now.Add(2 * time.Second)
+	snap.Now = now.Add(3 * time.Second)
 	m.processTenant(context.Background(), snap, e, false)
-	if fa.calls != 1 || len(notifications.Events) != 1 {
+	if fa.actuateCalls != 1 || len(notifications.Events) != 1 {
 		t.Fatal("dry-run dispatched or emitted notification")
 	}
 

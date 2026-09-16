@@ -8,6 +8,7 @@ import (
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,6 +19,7 @@ import (
 func p4bScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = discoveryv1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 	_ = networkingv1.AddToScheme(s)
 	_ = v1alpha1.AddToScheme(s)
