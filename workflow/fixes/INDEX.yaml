@@ -841,8 +841,8 @@ fixes:
     issues:
     - M-176
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/console-session-scan-recovery
-    head_sha: null
+    head_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574

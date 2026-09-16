@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 15
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -11,19 +11,83 @@ checks:
     result: PASS
     by: console-recovery-lead
     artifact: 03-decision.md
-    sha256: 98219d215409f9ced11ecc1c3bf068697f1016e2bb790a71a87ae697a6d29184
+    sha256: d2c8b85efeccca2f721e6466d73fc3e09215965ca650427f1f0824c7fb3e2f7a
     source_sha: edb1caf15656b81441bd6a76ed66413e408855f0
-    at: '2026-09-16T09:53:50+00:00'
+    at: '2026-09-16T10:02:35+00:00'
     contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
-    approval_ref: User 2026-09-16 console repair and live deployment request; operations/AUTONOMY.md
-      delegates in-scope implementation choices; recording required L3 does not expand
-      scope
+    approval_ref: User 2026-09-16 requests console recovery; operations/AUTONOMY.md
+      delegates in-scope design choices
+  red:
+    result: PASS
+    by: console-recovery-lead
+    artifact: evidence/lead-baseline-scan.log
+    sha256: d5c6014412a28ba0243b8db910a00ab19549d7053f734ce924ee89f5ef04520a
+    source_sha: edb1caf15656b81441bd6a76ed66413e408855f0
+    at: '2026-09-16T10:06:19+00:00'
+  incident:
+    result: PASS
+    by: console-recovery-lead
+    artifact: evidence/incident.md
+    sha256: 6f9629074c49acd84d406162c6ecb5e40a0fe732dad168e3dd41d298e610189d
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:57+00:00'
+    baseline_sha: edb1caf15656b81441bd6a76ed66413e408855f0
+  preflight:
+    result: PASS
+    by: console-repair-worker
+    artifact: evidence/preflight/final-receipt.json
+    sha256: 23cc72ab1ea3e7156bcb86b3a8fe9f0c0968905dfb1f60c63bcd4b876e7311b5
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:26+00:00'
+  implementation:
+    result: PASS
+    by: console-repair-worker
+    artifact: 04-diff.patch
+    sha256: 7aaf919ea8bffd84f7f716831dd456201cf335f002ce473e3548c2aff7c64f4e
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:26+00:00'
+  l0:
+    result: PASS
+    by: console-repair-worker
+    artifact: evidence/preflight/run-1789553319633031511/go-phorvex.log
+    sha256: 2e3ee126e184e9584f25f8c6a4c2a491211a2c2a0393509614f2c2649c563473
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:26+00:00'
+  l1:
+    result: PASS
+    by: console-repair-worker
+    artifact: evidence/worker-head-boundaries.log
+    sha256: cb85980476b1b9963239a14d655fb6b386771cf5a39e9e3ede9c775ee63d151c
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:26+00:00'
+  l2:
+    result: PASS
+    by: console-repair-worker
+    artifact: evidence/worker-head-integrations.log
+    sha256: 6cd547e9c3ebb008b079f3a313f3ea2d3675ca92a4a091af95c6f4ddbfb7d5f4
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:26+00:00'
+  positive_control:
+    result: PASS
+    by: console-repair-worker
+    artifact: evidence/worker-head-boundaries.log
+    sha256: cb85980476b1b9963239a14d655fb6b386771cf5a39e9e3ede9c775ee63d151c
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:26+00:00'
+  p3:
+    result: PASS
+    by: console-recovery-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 175033f26c24353ce7b507fffb50d83b58721828658371776b753e285e03c104
+    source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+    at: '2026-09-16T10:12:57+00:00'
+    incident_sha256: 6f9629074c49acd84d406162c6ecb5e40a0fe732dad168e3dd41d298e610189d
 fix_id: CONSOLE-RECOVERY
 issues:
 - M-176
 title: Console production login and scan recovery
 profile: standard
-state: AGREED
+state: PR_READY
 roles:
   human_owner: user
   proposer: console-recovery-lead
@@ -47,7 +111,7 @@ blind_derivation:
 implementation:
   branch: fix/console-session-scan-recovery
   base_sha: edb1caf15656b81441bd6a76ed66413e408855f0
-  head_sha: null
+  head_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
   stacked_on: []
 pull_request:
   url: null
@@ -68,25 +132,32 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
   anatomy_release: pending
   permanent_tests: pending
 dependencies: []
-blockers: []
+blockers:
+- GitHub publication unavailable in this environment; HTTPS has no authenticated credential
+  and SSH authentication failed. User has been asked to push fix/console-session-scan-recovery
+  from an authenticated terminal.
+- Recovery image published but not deployed; GitOps source publication/merge and real
+  signed-in browser session verification remain pending.
 residuals: []
 next_action:
-  owner: implementer
-  action: Complete implementation and validation; live verification remains required
-updated_at: '2026-09-16T09:53:50+00:00'
+  owner: coordinator
+  action: Publish reviewed branch and PR using authorized GitHub access, then reconcile
+    release and verify approved browser session and scan; retain L3 pending until
+    observed.
+updated_at: '2026-09-16T10:13:22+00:00'
 configuration_history:
 - at: '2026-09-16T09:51:02+00:00'
   by: console-recovery-lead
@@ -106,6 +177,27 @@ configuration_history:
   fields:
   - verification
   approval_ref: null
+- at: '2026-09-16T09:56:25+00:00'
+  by: console-repair-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T10:04:35+00:00'
+  by: console-repair-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T10:12:26+00:00'
+  by: console-repair-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T10:13:22+00:00'
+  by: console-recovery-lead
+  fields:
+  - blockers
+  - next_action
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -123,6 +215,38 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T10:12:26+00:00'
+  by: console-repair-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T10:12:27+00:00'
+  by: console-repair-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T10:12:57+00:00'
+  by: console-recovery-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T10:12:59+00:00'
+  by: console-recovery-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 check_history:
 - check: decision
   result: PASS
@@ -132,3 +256,29 @@ check_history:
   source_sha: edb1caf15656b81441bd6a76ed66413e408855f0
   at: '2026-09-16T09:52:14+00:00'
   contract_sha256: b38d76173f7b6dfcaea7e2c82ec182914a348bbe4ec74e1779168cc2be0ea56c
+- check: decision
+  result: PASS
+  by: console-recovery-lead
+  artifact: 03-decision.md
+  sha256: 98219d215409f9ced11ecc1c3bf068697f1016e2bb790a71a87ae697a6d29184
+  source_sha: edb1caf15656b81441bd6a76ed66413e408855f0
+  at: '2026-09-16T09:53:50+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  approval_ref: User 2026-09-16 console repair and live deployment request; operations/AUTONOMY.md
+    delegates in-scope implementation choices; recording required L3 does not expand
+    scope
+- check: incident
+  result: PASS
+  by: console-recovery-lead
+  artifact: evidence/incident.md
+  sha256: 6f9629074c49acd84d406162c6ecb5e40a0fe732dad168e3dd41d298e610189d
+  source_sha: 5195f43ed5ac98dd33a483aa5b13af22c2af7574
+  at: '2026-09-16T10:06:36+00:00'
+  baseline_sha: edb1caf15656b81441bd6a76ed66413e408855f0
+handoff:
+  id: CONSOLE-RECOVERY:14:review
+  from: console-recovery-lead
+  to: console-recovery-lead
+  role: coordinator
+  kind: review
+  revision: 14
