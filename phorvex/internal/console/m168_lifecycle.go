@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,6 +29,88 @@ type experimentCluster interface {
 	Policy(context.Context, string) (experimentPolicy, error)
 	SetPolicyMode(context.Context, experimentPolicy, string, string, bool) (experimentPolicy, error)
 	DeletePod(context.Context, string, string, string, string) error
+	PodUID(context.Context, string, string) (string, bool, error)
+	CreateEvent(context.Context, string, string, string, string) (string, error)
+	EventIdentity(context.Context, string, string) (string, string, bool, error)
+	DeleteEvent(context.Context, string, string, string) error
+}
+
+var securityEventGVR = schema.GroupVersionResource{Group: "amtd.r6security.com", Version: "v1beta1", Resource: "securityevents"}
+
+func (d dynamicExperimentCluster) CreateEvent(ctx context.Context, name, token, ns, pod string) (string, error) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "amtd.r6security.com/v1beta1",
+		"kind":       "SecurityEvent",
+		"metadata": map[string]any{
+			"name": name,
+			"labels": map[string]any{
+				"phorvex.ai/redteam":    "true",
+				"phorvex.ai/experiment": "true",
+			},
+			"annotations": map[string]any{experimentMarker: token},
+		},
+		"spec": map[string]any{
+			"description": "three-arm synthetic detector signal on " + pod,
+			"targets":     []any{ns + "/" + pod},
+			"rule": map[string]any{
+				"type": "Panic", "threatLevel": "critical", "source": "ExternalDetector",
+			},
+		},
+	}}
+	c, err := d.client()
+	if err != nil {
+		return "", err
+	}
+	created, err := c.Resource(securityEventGVR).Create(ctx, u, metav1.CreateOptions{})
+	if err != nil {
+		return "", err
+	}
+	if created.GetUID() == "" || created.GetAnnotations()[experimentMarker] != token {
+		return "", fmt.Errorf("created signal identity unavailable or mismatched")
+	}
+	return string(created.GetUID()), nil
+}
+
+func (d dynamicExperimentCluster) PodUID(ctx context.Context, ns, name string) (string, bool, error) {
+	c, e := d.client()
+	if e != nil {
+		return "", false, e
+	}
+	u, e := c.Resource(corePodGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(e) {
+		return "", false, nil
+	}
+	if e != nil {
+		return "", false, e
+	}
+	if u.GetUID() == "" {
+		return "", true, fmt.Errorf("pod UID unavailable")
+	}
+	return string(u.GetUID()), true, nil
+}
+func (d dynamicExperimentCluster) EventIdentity(ctx context.Context, _, name string) (string, string, bool, error) {
+	c, e := d.client()
+	if e != nil {
+		return "", "", false, e
+	}
+	// SecurityEvent is cluster scoped. The namespace is carried in spec.targets and
+	// remains part of the caller's authorization boundary; it is not an API path.
+	u, e := c.Resource(securityEventGVR).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(e) {
+		return "", "", false, nil
+	}
+	if e != nil {
+		return "", "", false, e
+	}
+	return string(u.GetUID()), u.GetAnnotations()[experimentMarker], true, nil
+}
+func (d dynamicExperimentCluster) DeleteEvent(ctx context.Context, _, name, uid string) error {
+	c, e := d.client()
+	if e != nil {
+		return e
+	}
+	u := types.UID(uid)
+	return c.Resource(securityEventGVR).Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &u}})
 }
 
 type dynamicExperimentCluster struct{ cfg *rest.Config }
@@ -76,6 +159,52 @@ func specHashWithMode(p experimentPolicy, mode string) string {
 	b, _ := json.Marshal(spec)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
+}
+
+func supportsResettablePolicy(p experimentPolicy) error {
+	if p.Marker != "" {
+		return fmt.Errorf("policy is already owned by another experiment")
+	}
+	var spec struct {
+		Actions struct {
+			Enabled []string `json:"enabled"`
+		} `json:"actions"`
+	}
+	if json.Unmarshal([]byte(p.SpecJSON), &spec) != nil || len(spec.Actions.Enabled) == 0 {
+		return fmt.Errorf("policy must explicitly enable only the resettable rotate action")
+	}
+	for _, a := range spec.Actions.Enabled {
+		if a != "rotate" {
+			return fmt.Errorf("policy action %q has no verified reset contract", a)
+		}
+	}
+	return nil
+}
+
+func policyMatchesOwnedState(live experimentPolicy, e experimentEvent) bool {
+	return live.UID == e.Policy.UID && live.Marker == e.Operation &&
+		live.Mode == e.OwnedMode && live.SpecHash == e.OwnedSpecHash &&
+		live.MetadataHash == e.OwnedMetadataHash
+}
+
+func policyMatchesRestoredState(live experimentPolicy, e experimentEvent) bool {
+	return live.UID == e.Policy.UID && live.Marker == "" &&
+		live.Mode == e.OriginalMode &&
+		live.SpecHash == specHashWithMode(e.Policy, e.OriginalMode) &&
+		live.MetadataHash == e.OwnedMetadataHash
+}
+
+func policyMatchesPreparedState(live experimentPolicy, e experimentEvent) bool {
+	return live.UID == e.Policy.UID && live.Marker == "" &&
+		live.Mode == e.OriginalMode && live.SpecHash == e.Policy.SpecHash &&
+		live.MetadataHash == e.Policy.MetadataHash
+}
+
+func restoredPolicyAcknowledged(restored, owned experimentPolicy, e experimentEvent) bool {
+	return restored.UID == owned.UID && restored.Marker == "" &&
+		restored.Mode == e.OriginalMode &&
+		restored.SpecHash == specHashWithMode(owned, e.OriginalMode) &&
+		restored.MetadataHash == owned.MetadataHash
 }
 
 func (d dynamicExperimentCluster) Policy(ctx context.Context, ns string) (experimentPolicy, error) {
@@ -190,37 +319,68 @@ func (s *Server) recoverExperiments() {
 		if e.Operation == "corrupt" {
 			continue
 		}
+		var problems []string
+		if e.Arm != nil && e.Arm.Event != "" {
+			if cleanupErr := s.cleanupExperimentSignal(e.Namespace, experimentStimulusReceipt{Event: e.Arm.Event, EventUID: e.Arm.EventUID, Token: e.Operation}); cleanupErr != nil {
+				problems = append(problems, cleanupErr.Error())
+			}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		live, err := s.experimentCluster().Policy(ctx, e.Namespace)
-		if err == nil && live.UID == e.Policy.UID && live.Marker == e.Operation && live.Mode == e.OwnedMode && live.SpecHash == e.OwnedSpecHash && live.MetadataHash == e.OwnedMetadataHash {
-			var restored experimentPolicy
-			restored, err = s.experimentCluster().SetPolicyMode(ctx, live, e.OriginalMode, e.Operation, true)
-			if err == nil {
-				e.Policy = restored
-				e.OwnedMode = e.OriginalMode
-				e.Phase = "restored"
-				err = s.appendExperiment(e)
+		restored, noEffect := false, false
+		if err == nil && policyMatchesOwnedState(live, e) {
+			e.Phase = "restore-intent"
+			if journalErr := s.appendExperiment(e); journalErr != nil {
+				problems = append(problems, "persist restore intention: "+journalErr.Error())
 			}
-		} else if err == nil && live.Marker == "" && e.Phase == "prepared" {
-			e.Phase = "no-effect"
-			err = s.appendExperiment(e)
-		} else if err == nil && live.Marker == "" && e.Phase == "transition-intent" && live.UID == e.Policy.UID && live.ResourceVersion == e.Policy.ResourceVersion && live.Mode == e.Policy.Mode {
-			e.Phase = "no-effect"
-			err = s.appendExperiment(e)
-		} else if err == nil && live.Marker == "" && live.UID == e.Policy.UID && live.Mode == e.OriginalMode && live.SpecHash == e.Policy.SpecHash && live.MetadataHash == e.Policy.MetadataHash && (e.Phase == "restored" || e.Phase == "restore-intent") {
-			e.Phase = "incomplete-restored"
-			e.Error = "process restarted after restoration before completed result was durable"
-			err = s.appendExperiment(e)
+			var acknowledged experimentPolicy
+			acknowledged, err = s.experimentCluster().SetPolicyMode(ctx, live, e.OriginalMode, e.Operation, true)
+			if err == nil {
+				if !restoredPolicyAcknowledged(acknowledged, live, e) {
+					err = fmt.Errorf("policy restore acknowledgement mismatched intended state")
+				} else {
+					e.Policy = acknowledged
+					e.OwnedMode = e.OriginalMode
+					e.OwnedSpecHash = acknowledged.SpecHash
+					e.OwnedMetadataHash = acknowledged.MetadataHash
+					restored = true
+				}
+			}
+		} else if err == nil && policyMatchesRestoredState(live, e) {
+			e.Policy = live
+			e.OwnedMode = e.OriginalMode
+			e.OwnedSpecHash = live.SpecHash
+			e.OwnedMetadataHash = live.MetadataHash
+			restored = true
+		} else if err == nil && e.Phase == "prepared" && policyMatchesPreparedState(live, e) {
+			noEffect = true
+		} else if err == nil && e.Phase == "transition-intent" && policyMatchesPreparedState(live, e) {
+			noEffect = true
 		} else if err == nil {
 			err = fmt.Errorf("recovery ownership conflict")
 		}
 		cancel()
 		if err != nil {
-			e.Phase = "recovery-required"
-			e.Error = err.Error()
-			if persistErr := s.appendExperiment(e); persistErr != nil {
-				s.recordStateError(persistErr)
+			problems = append(problems, err.Error())
+		}
+		if len(problems) == 0 {
+			switch {
+			case noEffect:
+				e.Phase = "no-effect"
+				e.Error = ""
+			case restored:
+				e.Phase = "incomplete-restored"
+				e.Error = "process restarted before completed result was durable"
+			default:
+				e.Phase = "recovery-required"
+				e.Error = "recovery did not establish a terminal policy state"
 			}
+		} else {
+			e.Phase = "recovery-required"
+			e.Error = strings.Join(problems, "; ")
+		}
+		if persistErr := s.appendExperiment(e); persistErr != nil {
+			s.recordStateError(persistErr)
 		}
 	}
 }

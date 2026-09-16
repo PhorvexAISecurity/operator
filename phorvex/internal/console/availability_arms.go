@@ -1,18 +1,16 @@
 /*
  * Phorvex Console — THREE-ARM AVAILABILITY COMPARISON.
  *
- * GET /api/availability-arms answers the question a customer actually asks: "what happens to MY
- * app's availability when it is attacked — with no defense, with a blind rotator, and with
- * Phorvex?"
+ * GET /api/availability-arms compares availability after the same synthetic detector signal with
+ * no response, with a blind rotator, and with Phorvex's configured response.
  *
- * All three arms are MEASURED on the same real workload, with the same real attack, and read from
+ * All three arms are MEASURED on the same real workload, with the same accepted signal, and read from
  * the SAME background availability sampler, so they are directly comparable. The arm windows are
  * recorded by the experiment runner (three-arm.sh) into three-arm-<ns>.json; this endpoint windows
  * the sampler over them and computes the numbers. Nothing here is modelled:
  *
- *   A) no defense  — the Phorvex policy is put in dryRun, the attack is fired. Nothing is
- *                    disrupted, so availability stays flat — and the attacker keeps the pod. This
- *                    arm exists to make the crucial point that HIGH AVAILABILITY IS NOT SAFETY.
+ *   A) no defense  — the Phorvex policy is put in dryRun and the signal receives no response.
+ *                    Attacker presence and mitigation are not measured by this producer.
  *   B) R6 blind    — still dryRun; we run the blind-timer MECHANISM (delete the rotation target on
  *                    a fixed interval regardless of any signal), which is what a time-based
  *                    rotator does. Labelled as the mechanism, not as the R6 product.
@@ -25,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -47,38 +46,49 @@ type armExperiment struct {
 }
 
 type armEvidence struct {
-	ID                   string `json:"id"`
-	Label                string `json:"label"`
-	Start                string `json:"start"`
-	End                  string `json:"end"`
-	StimulusAccepted     bool   `json:"stimulusAccepted"`
-	AttackID             string `json:"attackId,omitempty"`
-	TargetPod            string `json:"targetPod,omitempty"`
-	TargetUID            string `json:"targetUid,omitempty"`
-	Outcome              string `json:"outcome,omitempty"`
-	Action               string `json:"action,omitempty"`
-	Containment          string `json:"containment,omitempty"`
-	DwellOngoing         bool   `json:"dwellOngoing,omitempty"`
-	ObservationPersisted bool   `json:"observationPersisted"`
-	RotationConfirmed    bool   `json:"rotationConfirmed,omitempty"`
-	BaselineReady        bool   `json:"baselineReady"`
-	Error                string `json:"error,omitempty"`
+	ID                   string  `json:"id"`
+	Label                string  `json:"label"`
+	Start                string  `json:"start"`
+	End                  string  `json:"end"`
+	ObservationSeconds   float64 `json:"observationSeconds"`
+	StimulusAccepted     bool    `json:"stimulusAccepted"`
+	AttackID             string  `json:"attackId,omitempty"`
+	TargetPod            string  `json:"targetPod,omitempty"`
+	TargetUID            string  `json:"targetUid,omitempty"`
+	TargetRV             string  `json:"targetResourceVersion,omitempty"`
+	TargetOwnerUID       string  `json:"targetOwnerUid,omitempty"`
+	Event                string  `json:"event,omitempty"`
+	EventUID             string  `json:"eventUid,omitempty"`
+	SignalKind           string  `json:"signalKind,omitempty"`
+	Outcome              string  `json:"outcome,omitempty"`
+	Action               string  `json:"action,omitempty"`
+	Containment          string  `json:"containment,omitempty"`
+	DefendedPod          string  `json:"defendedPod,omitempty"`
+	ResponseSeconds      float64 `json:"responseSeconds,omitempty"`
+	ResponseObserved     bool    `json:"responseObserved,omitempty"`
+	DwellOngoing         bool    `json:"dwellOngoing,omitempty"`
+	ObservationPersisted bool    `json:"observationPersisted"`
+	RotationConfirmed    bool    `json:"rotationConfirmed,omitempty"`
+	BaselineReady        bool    `json:"baselineReady"`
+	Error                string  `json:"error,omitempty"`
 }
 
 // armResult is one defender's measured availability over its window.
 type armResult struct {
-	Arm             string  `json:"arm"`
-	Label           string  `json:"label"`
-	Samples         int     `json:"samples"`
-	MeanPct         float64 `json:"meanPct"`
-	MinPct          float64 `json:"minPct"`
-	DipCount        int     `json:"dipCount"`        // how many separate times it fell below full
-	SecondsDegrade  float64 `json:"secondsDegraded"` // wall-clock seconds spent below full capacity
-	ReplicaSeconds  float64 `json:"replicaSeconds"`  // capacity actually missing
-	DowntimeUSD     float64 `json:"downtimeUsd"`
-	AttackerStopped string  `json:"attackerStopped"` // yes | no | by-luck-only
-	Verdict         string  `json:"verdict"`
-	Complete        bool    `json:"complete"`
+	Arm              string  `json:"arm"`
+	Label            string  `json:"label"`
+	Samples          int     `json:"samples"`
+	MeanPct          float64 `json:"meanPct"`
+	MinPct           float64 `json:"minPct"`
+	DipCount         int     `json:"dipCount"`        // how many separate times it fell below full
+	SecondsDegrade   float64 `json:"secondsDegraded"` // wall-clock seconds spent below full capacity
+	ReplicaSeconds   float64 `json:"replicaSeconds"`  // capacity actually missing
+	DowntimeUSD      float64 `json:"downtimeUsd"`
+	AttackerStopped  string  `json:"attackerStopped"` // yes | no | unknown
+	Verdict          string  `json:"verdict"`
+	Complete         bool    `json:"complete"`
+	ObservedSeconds  float64 `json:"observedSeconds"`
+	ResponseObserved bool    `json:"responseObserved"`
 }
 
 // armRun is ONE three-arm experiment: which app, when, and the three measured arms.
@@ -167,9 +177,20 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 			exp.Arms = []armEvidence{{ID: "nodefense", Label: "No defense", Start: exp.ArmAStart, End: exp.ArmAEnd, Error: "legacy record has no correlated stimulus evidence"}, {ID: "r6blind", Label: "Blind fixed-interval rotator", Start: exp.ArmBStart, End: exp.ArmBEnd, Error: "legacy record has no correlated stimulus evidence"}, {ID: "phorvex", Label: "Phorvex", Start: exp.ArmCStart, End: exp.ArmCEnd, Error: "legacy record has no correlated stimulus evidence"}}
 		}
 		for _, a := range exp.Arms {
+			if a.SignalKind == "" {
+				a.SignalKind = "synthetic-detector-signal"
+			}
 			stopped, verdict := evidenceVerdict(a)
 			measured := measureArm(samples, exp.Namespace, deploy, a.ID, a.Label, a.Start, a.End, stopped, verdict, rate)
-			measured.Complete = measured.Complete && a.StimulusAccepted && a.ObservationPersisted && a.BaselineReady && exp.Restored && a.Error == ""
+			measured.ResponseObserved = a.StimulusAccepted && a.ObservationPersisted && a.ResponseObserved && a.TargetPod != "" && a.DefendedPod == a.TargetPod
+			startAt, startErr := time.Parse(time.RFC3339Nano, a.Start)
+			endAt, endErr := time.Parse(time.RFC3339Nano, a.End)
+			windowDelta := endAt.Sub(startAt).Seconds() - a.ObservationSeconds
+			if windowDelta < 0 {
+				windowDelta = -windowDelta
+			}
+			windowRegistered := startErr == nil && endErr == nil && a.ObservationSeconds > 0 && windowDelta < 0.000001
+			measured.Complete = measured.Complete && windowRegistered && a.StimulusAccepted && a.ObservationPersisted && a.BaselineReady && exp.Restored && a.Error == ""
 			run.Arms = append(run.Arms, measured)
 		}
 		out.Runs = append(out.Runs, run)
@@ -178,8 +199,14 @@ func (s *Server) availabilityArms(w http.ResponseWriter, r *http.Request) {
 }
 
 func evidenceVerdict(a armEvidence) (string, string) {
-	if !a.ObservationPersisted || a.Error != "" {
+	if !a.StimulusAccepted || a.AttackID == "" || a.TargetUID == "" || !a.ObservationPersisted || a.Error != "" {
 		return "unknown", "Outcome unavailable: " + a.Error
+	}
+	if a.SignalKind == "synthetic-detector-signal" {
+		if a.ResponseObserved && a.TargetPod != "" && a.TargetPod == a.DefendedPod {
+			return "unknown", fmt.Sprintf("Synthetic signal %s received an identity-bound %s response; real attacker mitigation was not measured.", a.AttackID, a.Action)
+		}
+		return "unknown", fmt.Sprintf("Synthetic signal %s did not prove an identity-bound target response; real attacker mitigation was not measured.", a.AttackID)
 	}
 	stopped := a.Outcome == "DEFENDED" && !a.DwellOngoing && (a.Containment == "evicted" || a.Containment == "contained" || a.Containment == "flushed")
 	if stopped {
@@ -199,7 +226,15 @@ func measureArm(samples []uptimeSample, ns, deploy, id, label, start, end, stopp
 	if e0 != nil || e1 != nil {
 		return res
 	}
-	var vals []float64
+	type point struct {
+		at             time.Time
+		ready, desired int
+	}
+	byTime := map[int64]point{}
+	window := t1.Sub(t0)
+	if window <= 0 {
+		return res
+	}
 	var replicaSec, degradedSec float64
 	dips, wasDown := 0, false
 	for _, sm := range samples {
@@ -210,10 +245,39 @@ func measureArm(samples []uptimeSample, ns, deploy, id, label, start, end, stopp
 		if err != nil || at.Before(t0) || at.After(t1) {
 			continue
 		}
-		vals = append(vals, float64(sm.Ready)/float64(sm.Desired)*100)
-		if sm.Ready < sm.Desired {
-			replicaSec += float64(sm.Desired-sm.Ready) * uptimeInterval.Seconds()
-			degradedSec += uptimeInterval.Seconds()
+		if sm.Ready < 0 || sm.Ready > sm.Desired {
+			return res
+		}
+		byTime[at.UnixNano()] = point{at, sm.Ready, sm.Desired}
+	}
+	pts := make([]point, 0, len(byTime))
+	for _, p := range byTime {
+		pts = append(pts, p)
+	}
+	sort.Slice(pts, func(i, j int) bool { return pts[i].at.Before(pts[j].at) })
+	if len(pts) < 2 {
+		return res
+	}
+	maxGap := 2 * uptimeInterval
+	if pts[0].at.Sub(t0) > maxGap || t1.Sub(pts[len(pts)-1].at) > maxGap {
+		return res
+	}
+	var vals []float64
+	for i, p := range pts {
+		vals = append(vals, float64(p.ready)/float64(p.desired)*100)
+		span := t1.Sub(p.at)
+		if i+1 < len(pts) {
+			span = pts[i+1].at.Sub(p.at)
+			if span <= 0 || span > maxGap {
+				return res
+			}
+		}
+		if span < 0 || span > maxGap {
+			return res
+		}
+		if p.ready < p.desired {
+			replicaSec += float64(p.desired-p.ready) * span.Seconds()
+			degradedSec += span.Seconds()
 			if !wasDown {
 				dips++
 				wasDown = true
@@ -222,7 +286,9 @@ func measureArm(samples []uptimeSample, ns, deploy, id, label, start, end, stopp
 			wasDown = false
 		}
 	}
-	if len(vals) == 0 {
+	coverage := t1.Sub(pts[0].at)
+	res.ObservedSeconds = round2(coverage.Seconds())
+	if coverage < window-2*uptimeInterval {
 		return res
 	}
 	sum, min := 0.0, vals[0]
@@ -232,7 +298,7 @@ func measureArm(samples []uptimeSample, ns, deploy, id, label, start, end, stopp
 			min = v
 		}
 	}
-	res.Samples = len(vals)
+	res.Samples = len(pts)
 	res.MeanPct = round2(sum / float64(len(vals)))
 	res.MinPct = round2(min)
 	res.DipCount = dips

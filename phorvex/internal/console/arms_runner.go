@@ -10,9 +10,8 @@
  * genuinely disruptive. Doing that silently behind a normal "fire attack" click would be a nasty
  * surprise. The UI says what it will do before it runs.
  *
- * SAFETY: the policy mode is restored to its ORIGINAL value in a defer, so an error, a panic or a
- * console restart mid-run cannot strand a tenant in dryRun (undefended). Only one experiment per
- * namespace at a time.
+ * SAFETY: every exit attempts operation-owned signal cleanup and policy restoration. Conflicts are
+ * retained as recovery-required work; restart recovery never replays a stimulus.
  */
 
 package console
@@ -123,7 +122,7 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "unsupported comparison: only the resettable stateless voice/foothold fixture is currently verified"})
 		return
 	}
-	if _, _, err := s.resettableTarget(ns); err != nil {
+	if _, err := s.resettableTarget(ns); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "comparison preflight: " + err.Error()})
 		return
 	}
@@ -150,6 +149,9 @@ func (s *Server) runArmsExperiment(w http.ResponseWriter, r *http.Request) {
 	armsJobs[ns] = job
 	armsMu.Unlock()
 
+	if policyErr == nil {
+		policyErr = supportsResettablePolicy(policyState)
+	}
 	if policyErr != nil || deploy == "" {
 		s.failArms(ns, "comparison preflight failed")
 		writeJSON(w, 400, map[string]string{"error": "comparison preflight failed: " + fmt.Sprint(policyErr)})
@@ -178,7 +180,11 @@ func (s *Server) failArms(ns, msg string) {
 
 func (s *Server) armsWorker(op experimentEvent, deploy string) {
 	ns := op.Namespace
+	var receipts []experimentStimulusReceipt
 	fail := func(err error) {
+		if cleanupErr := s.abortExperiment(&op, receipts); cleanupErr != nil {
+			err = fmt.Errorf("%v; cleanup/recovery: %w", err, cleanupErr)
+		}
 		op.Error = err.Error()
 		if op.Phase == "prepared" {
 			op.Phase = "no-effect"
@@ -192,6 +198,18 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		}
 	}()
 	transition := func(mode string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		live, err := s.experimentCluster().Policy(ctx, ns)
+		cancel()
+		if err != nil {
+			return err
+		}
+		if live.UID != op.Policy.UID || live.Marker != op.Policy.Marker || live.Mode != op.OwnedMode || live.SpecHash != op.OwnedSpecHash || live.MetadataHash != op.OwnedMetadataHash {
+			return fmt.Errorf("policy changed outside this experiment")
+		}
+		// A status-only controller update may advance resourceVersion. Persist the
+		// freshly verified identity/fingerprint and CAS that current version.
+		op.Policy = live
 		op.OwnedMode = mode
 		op.OwnedSpecHash = specHashWithMode(op.Policy, mode)
 		op.OwnedMetadataHash = op.Policy.MetadataHash
@@ -199,11 +217,14 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		if err := s.appendExperiment(op); err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		p, err := s.experimentCluster().SetPolicyMode(ctx, op.Policy, mode, op.Operation, false)
+		p, err := s.experimentCluster().SetPolicyMode(ctx, live, mode, op.Operation, false)
 		if err != nil {
 			return err
+		}
+		if p.UID != live.UID || p.Marker != op.Operation || p.Mode != mode || p.SpecHash != op.OwnedSpecHash || p.MetadataHash != op.OwnedMetadataHash {
+			return fmt.Errorf("policy transition acknowledgement mismatched intended state")
 		}
 		op.Policy = p
 		op.OwnedMode = mode
@@ -218,17 +239,13 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 				if r.Status != "done" {
 					return r, fmt.Errorf("attack observation persistence partial")
 				}
-				if persistedAttackByID(s.cfg, id) != nil {
-					return r, nil
+				if persisted := persistedAttackByID(s.cfg, id); persisted != nil {
+					return persisted, nil
 				}
 			}
 			s.cfg.sleep(time.Second)
 		}
 		return nil, fmt.Errorf("attack observation timeout")
-	}
-	ready := func() bool {
-		out, err := s.cfg.execText(8*time.Second, "kubectl", "-n", ns, "get", "deploy", deploy, "-o", `jsonpath={.status.readyReplicas}|{.status.replicas}`)
-		return err == nil && strings.TrimSpace(out) != "" && !strings.HasPrefix(strings.TrimSpace(out), "0|") && strings.Split(strings.TrimSpace(out), "|")[0] == strings.Split(strings.TrimSpace(out), "|")[1]
 	}
 	var arms []armEvidence
 	for i, spec := range []struct{ id, label, mode string }{{"nodefense", "No defense", "dryRun"}, {"r6blind", "Blind fixed-interval rotator", "dryRun"}, {"phorvex", "Phorvex", "active"}} {
@@ -237,8 +254,30 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 			return
 		}
 		s.cfg.sleep(2 * time.Second)
-		a := armEvidence{ID: spec.id, Label: spec.label, Start: s.cfg.now().UTC().Format(time.RFC3339)}
-		receipt, err := s.executeResettableFoothold(op.Actor, ns, "")
+		target, err := s.resettableTarget(ns)
+		if err != nil {
+			fail(fmt.Errorf("%s target preflight: %w", spec.id, err))
+			return
+		}
+		event := fmt.Sprintf("redteam-arms-%x", s.cfg.now().UnixNano())
+		window := s.cfg.AttackWatchDuration
+		if window <= 0 {
+			window = 95 * time.Second
+		}
+		windowStart := s.cfg.now()
+		windowEnd := windowStart.Add(window)
+		a := armEvidence{ID: spec.id, Label: spec.label, Start: windowStart.UTC().Format(time.RFC3339Nano), End: windowEnd.UTC().Format(time.RFC3339Nano), ObservationSeconds: window.Seconds(), TargetPod: target.Pod, TargetUID: target.UID, TargetRV: target.ResourceVersion, TargetOwnerUID: target.OwnerUID, Event: event, SignalKind: "synthetic-detector-signal"}
+		op.Arm = &a
+		op.Phase = "stimulus-intent"
+		if err = s.appendExperiment(op); err != nil {
+			fail(err)
+			return
+		}
+		receipts = append(receipts, experimentStimulusReceipt{Pod: target.Pod, PodUID: target.UID, PodRV: target.ResourceVersion, Deploy: target.Deploy, Event: event, Token: op.Operation})
+		receipt, err := s.executePreparedResettableSignal(op.Actor, ns, event, target, op.Operation, windowStart, windowEnd)
+		if receipt.Event != "" {
+			receipts[len(receipts)-1] = receipt
+		}
 		if err != nil {
 			a.Error = err.Error()
 			arms = append(arms, a)
@@ -249,8 +288,22 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		a.AttackID = receipt.AttackID
 		a.TargetPod = receipt.Pod
 		a.TargetUID = receipt.PodUID
+		a.EventUID = receipt.EventUID
+		a.Start = receipt.WindowStart.UTC().Format(time.RFC3339Nano)
+		a.End = receipt.WindowEnd.UTC().Format(time.RFC3339Nano)
+		op.Arm = &a
+		op.Phase = "stimulus-accepted"
+		if err = s.appendExperiment(op); err != nil {
+			fail(err)
+			return
+		}
 		if spec.id == "r6blind" {
-			rv := strings.TrimSpace(s.kctlOut(ns, "get", "pod", receipt.Pod, "-o", "jsonpath={.metadata.resourceVersion}"))
+			delay := s.cfg.BlindRotationDelay
+			if delay <= 0 {
+				delay = 30 * time.Second
+			}
+			s.cfg.sleep(delay)
+			rv := receipt.PodRV
 			if rv == "" {
 				err = fmt.Errorf("target resourceVersion unavailable")
 			} else {
@@ -266,24 +319,46 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		obs, oerr := observe(receipt.AttackID)
 		if obs != nil {
 			a.Outcome = obs.Outcome
-			a.Action = obs.Action
+			a.Action = obs.ResponseAction
 			a.Containment = obs.Containment
+			a.DefendedPod = obs.ResponsePod
+			a.ResponseSeconds = obs.ResponseSeconds
+			a.ResponseObserved = obs.ResponseObserved
 			a.DwellOngoing = obs.DwellOngoing
 			a.ObservationPersisted = obs.Status == "done"
+		}
+		if obs != nil && (obs.ID != receipt.AttackID || obs.Pod != receipt.Pod || obs.TargetUID != receipt.PodUID) {
+			oerr = fmt.Errorf("persisted observation identity mismatch")
 		}
 		if oerr != nil && a.Error == "" {
 			a.Error = oerr.Error()
 		}
+		if remaining := receipt.WindowEnd.Sub(s.cfg.now()); remaining > 0 {
+			s.cfg.sleep(remaining)
+		}
 		if err = s.resetExperimentStimulus(receipt); err != nil && a.Error == "" {
 			a.Error = err.Error()
 		}
-		for j := 0; j < 30 && !ready(); j++ {
-			s.cfg.sleep(time.Second)
+		var postErr error
+		for j := 0; j < 30; j++ {
+			var post resettableTargetInfo
+			post, postErr = s.resettableTarget(ns)
+			if postErr == nil && post.Deploy == target.Deploy && post.OwnerUID == target.OwnerUID {
+				a.BaselineReady = true
+				break
+			}
+			if postErr == nil {
+				postErr = fmt.Errorf("deployment identity changed during reset")
+			}
+			if j < 29 {
+				s.cfg.sleep(time.Second)
+			}
 		}
-		a.BaselineReady = ready()
-		a.End = s.cfg.now().UTC().Format(time.RFC3339)
 		if !a.BaselineReady && a.Error == "" {
-			a.Error = "workload baseline not ready after reset"
+			a.Error = "workload identity/readiness not restored after reset"
+			if postErr != nil {
+				a.Error += ": " + postErr.Error()
+			}
 		}
 		arms = append(arms, a)
 		op.Arm = &arms[len(arms)-1]
@@ -298,17 +373,32 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		}
 		_ = i
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	live, err := s.experimentCluster().Policy(ctx, ns)
+	cancel()
+	if err != nil || !policyMatchesOwnedState(live, op) {
+		if err == nil {
+			err = fmt.Errorf("policy changed outside this experiment")
+		}
+		fail(fmt.Errorf("restore policy: %w", err))
+		return
+	}
+	op.Policy = live
 	op.Phase = "restore-intent"
 	op.Arm = nil
 	if err := s.appendExperiment(op); err != nil {
 		fail(err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	restored, err := s.experimentCluster().SetPolicyMode(ctx, op.Policy, op.OriginalMode, op.Operation, true)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	restored, err := s.experimentCluster().SetPolicyMode(ctx, live, op.OriginalMode, op.Operation, true)
 	cancel()
 	if err != nil {
 		fail(fmt.Errorf("restore policy: %w", err))
+		return
+	}
+	if !restoredPolicyAcknowledged(restored, live, op) {
+		fail(fmt.Errorf("restore policy acknowledgement mismatched intended state"))
 		return
 	}
 	op.Policy = restored
@@ -337,4 +427,66 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		return
 	}
 	s.setArmsPhase(ns, "done", "complete — correlated results below", 100)
+}
+
+func (s *Server) abortExperiment(op *experimentEvent, receipts []experimentStimulusReceipt) error {
+	var problems []string
+	for _, r := range receipts {
+		if r.Event != "" {
+			if err := s.cleanupExperimentSignal(op.Namespace, r); err != nil {
+				problems = append(problems, err.Error())
+			}
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	live, err := s.experimentCluster().Policy(ctx, op.Namespace)
+	restored, noEffect := false, false
+	if err == nil && policyMatchesOwnedState(live, *op) {
+		op.Phase = "restore-intent"
+		if journalErr := s.appendExperiment(*op); journalErr != nil {
+			problems = append(problems, "persist restore intention: "+journalErr.Error())
+		}
+		var acknowledged experimentPolicy
+		acknowledged, err = s.experimentCluster().SetPolicyMode(ctx, live, op.OriginalMode, op.Operation, true)
+		if err == nil {
+			if !restoredPolicyAcknowledged(acknowledged, live, *op) {
+				err = fmt.Errorf("policy restore acknowledgement mismatched intended state")
+			} else {
+				op.Policy = acknowledged
+				op.OwnedMode = op.OriginalMode
+				op.OwnedSpecHash = acknowledged.SpecHash
+				op.OwnedMetadataHash = acknowledged.MetadataHash
+				restored = true
+			}
+		}
+	} else if err == nil && policyMatchesRestoredState(live, *op) {
+		op.Policy = live
+		op.OwnedMode = op.OriginalMode
+		op.OwnedSpecHash = live.SpecHash
+		op.OwnedMetadataHash = live.MetadataHash
+		restored = true
+	} else if err == nil && (op.Phase == "prepared" || op.Phase == "transition-intent") && policyMatchesPreparedState(live, *op) && len(receipts) == 0 {
+		noEffect = true
+	} else if err == nil {
+		err = fmt.Errorf("policy recovery ownership conflict")
+	}
+	if err != nil {
+		problems = append(problems, err.Error())
+	}
+	if len(problems) > 0 {
+		op.Phase = "recovery-required"
+		op.Error = strings.Join(problems, "; ")
+		return fmt.Errorf("%s", strings.Join(problems, "; "))
+	}
+	if noEffect {
+		op.Phase = "no-effect"
+	} else if restored {
+		op.Phase = "incomplete-restored"
+	} else {
+		op.Phase = "recovery-required"
+		op.Error = "cleanup did not establish a terminal policy state"
+		return fmt.Errorf("%s", op.Error)
+	}
+	return nil
 }

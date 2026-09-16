@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -15,7 +16,7 @@ func TestM168APIServerPolicyCASAndIdentity(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires isolated local envtest API server")
 	}
-	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}, ErrorIfCRDPathMissing: true}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases", "../../../build/phoenix-extended/config/crd/bases"}, ErrorIfCRDPathMissing: true}
 	cfg, err := e.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -63,5 +64,60 @@ func TestM168APIServerPolicyCASAndIdentity(t *testing.T) {
 	}
 	if _, err = d.SetPolicyMode(ctx, owned, "active", "op-1", true); err == nil {
 		t.Fatal("same-name replacement accepted old identity/version")
+	}
+}
+
+func TestM168APIServerClusterScopedSignalCleanupRequiresAbsence(t *testing.T) {
+	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
+		t.Skip("requires isolated local envtest API server")
+	}
+	e := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases", "../../../build/phoenix-extended/config/crd/bases"}, ErrorIfCRDPathMissing: true}
+	cfg, err := e.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := e.Stop(); err != nil {
+			t.Errorf("stop envtest: %v", err)
+		}
+	}()
+	d := dynamicExperimentCluster{cfg: cfg}
+	ctx := context.Background()
+	uid, err := d.CreateEvent(ctx, "m168-signal", "op-1", "voice", "voice-0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotUID, token, found, err := d.EventIdentity(ctx, "voice", "m168-signal")
+	if err != nil || !found || gotUID != uid || token != "op-1" {
+		t.Fatalf("cluster-scoped signal identity mismatch: uid=%q token=%q found=%v err=%v", gotUID, token, found, err)
+	}
+	cli, err := d.client()
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := cli.Resource(securityEventGVR).Get(ctx, "m168-signal", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.SetFinalizers([]string{"test.phorvex.ai/retain"})
+	if _, err = cli.Resource(securityEventGVR).Update(ctx, u, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	serverCfg := Config{StateDir: t.TempDir(), ExperimentRESTConfig: cfg, Sleep: func(time.Duration) {}}
+	s := &Server{cfg: serverCfg, runs: NewRunManager(serverCfg)}
+	receipt := experimentStimulusReceipt{Event: "m168-signal", EventUID: uid, Token: "op-1"}
+	if err = s.cleanupExperimentSignal("voice", receipt); err == nil {
+		t.Fatal("finalizer-retained signal was accepted as absent")
+	}
+	u, err = cli.Resource(securityEventGVR).Get(ctx, "m168-signal", metav1.GetOptions{})
+	if err != nil || u.GetDeletionTimestamp() == nil {
+		t.Fatalf("delete was not acknowledged by the API server: deletionTimestamp=%v err=%v", u.GetDeletionTimestamp(), err)
+	}
+	u.SetFinalizers(nil)
+	if _, err = cli.Resource(securityEventGVR).Update(ctx, u, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.cleanupExperimentSignal("voice", receipt); err != nil {
+		t.Fatalf("cleanup did not observe final absence: %v", err)
 	}
 }

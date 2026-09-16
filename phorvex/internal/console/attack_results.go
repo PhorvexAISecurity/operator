@@ -15,6 +15,7 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -52,18 +53,20 @@ type attackCost struct {
 }
 
 type attackRecord struct {
-	Claim     *model.ClaimScope `json:"claim,omitempty"`
-	ID        string            `json:"id"`
-	FiredAt   string            `json:"firedAt"`
-	Service   string            `json:"service"`
-	Namespace string            `json:"namespace"`
-	Pod       string            `json:"pod"`
-	Deploy    string            `json:"deploy"`
-	Attack    string            `json:"attack"`
-	AttackID  string            `json:"attackId"`
-	MITRE     string            `json:"mitre"`
-	Expected  string            `json:"expectedActuator"`
-	Stateful  bool              `json:"stateful"`
+	Claim        *model.ClaimScope `json:"claim,omitempty"`
+	ID           string            `json:"id"`
+	FiredAt      string            `json:"firedAt"`
+	Service      string            `json:"service"`
+	Namespace    string            `json:"namespace"`
+	Pod          string            `json:"pod"`
+	TargetUID    string            `json:"targetUid,omitempty"`
+	Deploy       string            `json:"deploy"`
+	Attack       string            `json:"attack"`
+	AttackID     string            `json:"attackId"`
+	MITRE        string            `json:"mitre"`
+	Expected     string            `json:"expectedActuator"`
+	Stateful     bool              `json:"stateful"`
+	EvidenceKind string            `json:"evidenceKind,omitempty"`
 
 	Status          string  `json:"status"`  // running | done
 	Outcome         string  `json:"outcome"` // DEFENDED | LANDED
@@ -85,6 +88,13 @@ type attackRecord struct {
 	// Dwell is bounded ONLY for evicted/contained; otherwise the intruder was never removed from the
 	// attacked pod, so its dwell is open-ended (DwellOngoing=true).
 	Containment string `json:"containment"`
+	// A synthetic detector signal can prove only an identity-bound workload response.
+	// Keep that evidence separate from attacker outcome, containment and dwell.
+	ResponseObserved bool    `json:"responseObserved,omitempty"`
+	ResponseAction   string  `json:"responseAction,omitempty"`
+	ResponsePod      string  `json:"responsePod,omitempty"`
+	ResponseSeconds  float64 `json:"responseSeconds,omitempty"`
+	ObservationError string  `json:"observationError,omitempty"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
 	Why                   string  `json:"why"`
@@ -108,6 +118,7 @@ type attackRecord struct {
 	PersistenceError string     `json:"persistenceError,omitempty"`
 
 	started     time.Time       // unexported, for elapsed timing
+	accepted    time.Time       // producer acknowledgement, for signal-response latency
 	baseEpoch   string          // pre-attack adapter epoch (poison detection)
 	baseKVEpoch string          // pre-attack kv-reset epoch (kvcache detection)
 	baseQuar    map[string]bool // pre-attack quarantine SecurityEvent names
@@ -119,6 +130,7 @@ type attackRecord struct {
 // react within ~1s, faster than the watcher's own baseline kubectl calls would complete — so a
 // watcher-side snapshot would absorb this attack's own quarantine and misreport it as LANDED.
 type defenseBaseline struct {
+	uid     string
 	epoch   string
 	kvEpoch string
 	quar    map[string]bool
@@ -133,6 +145,7 @@ type defenseBaseline struct {
 // snapshotBaseline captures the defense baseline for a namespace/pod. Call BEFORE applying the attack.
 func (s *Server) snapshotBaseline(ns, pod string) defenseBaseline {
 	return defenseBaseline{
+		uid:     s.podAnno(ns, pod, "metadata.uid"),
 		uptime:  s.workloadUptime(ns, s.firstDeploy(ns)),
 		epoch:   s.podAnno(ns, pod, "phorvex.ai/adapter-epoch"),
 		kvEpoch: s.podAnno(ns, pod, "phorvex.ai/kv-reset-epoch"),
@@ -200,6 +213,17 @@ func attackSnapshots(p *Principal) []*attackRecord {
 	return out
 }
 
+func realAttackSnapshots(p *Principal) []*attackRecord {
+	all := attackSnapshots(p)
+	out := make([]*attackRecord, 0, len(all))
+	for _, rec := range all {
+		if rec.EvidenceKind == "" {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
 func (s *Server) attacksPath() string {
 	if p := s.cfg.statePath("phorvex-attacks.jsonl"); p != "" {
 		return p
@@ -235,8 +259,10 @@ func (s *Server) loadAttacks() error {
 			if err := json.Unmarshal([]byte(ln), &r); err != nil {
 				return fmt.Errorf("malformed retained attack result: %w", err)
 			}
-			r.Status = "done"
-			if r.Containment == "" { // (re)classify records persisted before the field existed
+			if r.Status != "partial" || r.ObservationError == "" {
+				r.Status = "done"
+			}
+			if r.EvidenceKind == "" && r.Containment == "" && r.Outcome != "" { // classify legacy real-attack records only
 				classifyContainment(&r, 95) // 95s = the observation window (dwell floor for un-neutralized footholds)
 			}
 			loaded = append(loaded, cloneAttackRecord(&r))
@@ -281,17 +307,32 @@ func (s *Server) persistAttack(r *attackRecord) error {
 // startAttackRecord registers a running attack and launches the ground-truth watcher. Called by the
 // attack handlers immediately after the real attack is applied to the cluster.
 func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline) string {
+	d := s.cfg.AttackWatchDuration
+	if d <= 0 {
+		d = 95 * time.Second
+	}
+	started := s.cfg.now()
+	return s.startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected, stateful, base, started, started.Add(d))
+}
+
+// startAttackRecordAt pre-registers one exact observation window. Experiment arms use
+// this form so producer/API overhead cannot make one arm's measurement longer than another.
+func (s *Server) startAttackRecordAt(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline, started, deadline time.Time) string {
+	return s.startAttackRecordAtKind(ctxName, service, ns, pod, attack, attackID, mitre, expected, stateful, base, started, deadline, "", started)
+}
+
+func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, attackID, mitre, expected string, stateful bool, base defenseBaseline, started, deadline time.Time, evidenceKind string, accepted time.Time) string {
 	if err := s.loadAttacks(); err != nil {
 		s.recordStateError(err)
 	}
-	now := time.Now()
 	deploy := s.firstDeploy(ns)
 	r := &attackRecord{
-		ID:      "atk-" + strconv.FormatInt(now.UnixNano(), 36),
-		FiredAt: now.UTC().Format(time.RFC3339),
+		ID:      "atk-" + strconv.FormatInt(started.UnixNano(), 36),
+		FiredAt: started.UTC().Format(time.RFC3339Nano),
 		Service: service, Namespace: ns, Pod: pod, Deploy: deploy,
-		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful,
-		Status: "running",
+		Attack: attack, AttackID: attackID, MITRE: mitre, Expected: expected, Stateful: stateful, EvidenceKind: evidenceKind,
+		TargetUID: base.uid,
+		Status:    "running",
 		// PRE-FIRE value when the caller captured one (>=0); fall back to a live read only if the
 		// baseline predates this field, so an old caller still gets a number rather than 0.
 		UptimeBefore: func() float64 {
@@ -300,7 +341,8 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 			}
 			return s.workloadUptime(ns, deploy)
 		}(),
-		started:     now,
+		started:     started,
+		accepted:    accepted,
 		baseEpoch:   base.epoch,
 		baseKVEpoch: base.kvEpoch,
 		baseQuar:    base.quar,
@@ -311,7 +353,11 @@ func (s *Server) startAttackRecord(ctxName, service, ns, pod, attack, attackID, 
 	r.Cost.ValueAtRisk = s.nodeAnnualCost("", ns, pod)
 	r = cloneAttackRecord(r) // detach the handler's baseline maps before the watcher owns them
 	publishAttack(r)
-	go s.watchAttack(ctxName, r)
+	interval := s.cfg.AttackWatchInterval
+	if interval <= 0 {
+		interval = 3 * time.Second
+	}
+	go s.watchAttackUntil(ctxName, r, deadline, interval)
 	return r.ID
 }
 
@@ -345,7 +391,14 @@ func persistedAttackByID(cfg Config, id string) *attackRecord {
 }
 
 func (s *Server) watchAttack(ctxName string, r *attackRecord) {
-	s.watchAttackUntil(ctxName, r, time.Now().Add(95*time.Second), 3*time.Second)
+	d, interval := s.cfg.AttackWatchDuration, s.cfg.AttackWatchInterval
+	if d <= 0 {
+		d = 95 * time.Second
+	}
+	if interval <= 0 {
+		interval = 3 * time.Second
+	}
+	s.watchAttackUntil(ctxName, r, s.cfg.now().Add(d), interval)
 }
 
 // watchAttackUntil keeps the production window unchanged and gives local producer fixtures
@@ -358,19 +411,27 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 	kvEpoch0 := r.baseKVEpoch
 	quar0 := r.baseQuar
 	np0 := r.baseNP
-	for time.Now().Before(deadline) {
-		time.Sleep(interval)
+	for s.cfg.now().Before(deadline) {
+		remaining := deadline.Sub(s.cfg.now())
+		if remaining < interval {
+			s.cfg.sleep(remaining)
+		} else {
+			s.cfg.sleep(interval)
+		}
+		if !s.cfg.now().Before(deadline) {
+			break
+		}
 		if up := s.workloadUptime(r.Namespace, r.Deploy); up >= 0 && up < minUp {
 			minUp = up
 		}
-		if r.Outcome != "" {
+		if r.Outcome != "" || r.ResponseObserved {
 			continue
 		}
 		switch r.AttackID {
 		case "poison": // adapter-rotate: real actuation bumps the adapter epoch
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/adapter-epoch"); ep != "" && ep != epoch0 {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "adapter-rotate", true
-				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
 			}
 		case "kvcache":
 			// [DETECTION FIX] kv-reset's DEFINING property is that the pod stays ALIVE, so the
@@ -382,45 +443,84 @@ func (s *Server) watchAttackUntil(ctxName string, r *attackRecord, deadline time
 			if ep := s.podAnno(r.Namespace, r.Pod, "phorvex.ai/kv-reset-epoch"); ep != "" && ep != kvEpoch0 {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "kv-reset", true
 				r.DefendedPod = r.Pod // the flush happens IN the attacked pod; it is never a neighbor
-				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
 			}
-		default: // foothold: rotate (stateless) removes the attacked pod; quarantine (stateful) is recorded as a fresh phorvex-quarantine SecurityEvent
-			if s.podGone(r.Namespace, r.Pod) {
+		default: // foothold signal: only replacement of the exact pre-signal UID proves a target response
+			replaced, probeErr := s.targetUIDReplaced(r.Namespace, r.Pod, r.TargetUID)
+			if probeErr != nil {
+				r.ObservationError = "target identity observation: " + probeErr.Error()
+				publishAttack(r)
+				continue
+			}
+			if !s.cfg.now().Before(deadline) {
+				r.ObservationError = "target identity observation completed outside the registered window"
+				publishAttack(r)
+				continue
+			}
+			if replaced && r.EvidenceKind == "synthetic-detector-signal" {
+				r.ResponseObserved = true
+				r.ResponseAction = "rotate"
+				r.ResponsePod = r.Pod
+				r.ResponseSeconds = round2(s.cfg.now().Sub(r.accepted).Seconds())
+				publishAttack(r)
+			} else if replaced {
 				r.Outcome, r.Actuated = "DEFENDED", true
 				r.Action = "rotate"
 				r.DefendedPod = r.Pod
-				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
+			} else if r.EvidenceKind == "synthetic-detector-signal" {
+				continue
 			} else if qn := s.freshQuarantineName(r.Namespace, quar0); qn != "" {
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "quarantine", true
 				// capture the REAL target Phorvex quarantined (may be a neighbor node it isolates to cut
 				// lateral spread, not necessarily the attacked pod) + the decision reasoning from the event.
 				r.DefendedPod = strings.TrimPrefix(s.kctlOut(r.Namespace, "get", "securityevent", qn, "-o", "jsonpath={.spec.targets[0]}"), r.Namespace+"/")
+				if r.DefendedPod != r.Pod {
+					r.Outcome, r.Action, r.Actuated, r.DefendedPod = "", "", false, ""
+					continue
+				}
 				r.Why = s.kctlOut(r.Namespace, "get", "securityevent", qn, "-o", "jsonpath={.spec.description}")
-				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
 			} else if np := s.newQuarantineNP(r.Namespace, np0); np != "" {
 				// native-actuator path (no phorvex-quarantine SecurityEvent): a fresh quarantine NetworkPolicy.
 				r.Outcome, r.Action, r.Actuated = "DEFENDED", "quarantine", true
 				r.DefendedPod = podFromNP(np, r.Namespace)
-				r.TimeToDefendSec = round2(time.Since(r.started).Seconds())
+				if r.DefendedPod != r.Pod {
+					r.Outcome, r.Action, r.Actuated, r.DefendedPod = "", "", false, ""
+					continue
+				}
+				r.TimeToDefendSec = round2(s.cfg.now().Sub(r.started).Seconds())
 			}
 		}
 		if r.Outcome != "" {
 			publishAttack(r)
 		}
 	}
-	if r.Outcome == "" {
+	if r.EvidenceKind == "synthetic-detector-signal" {
+		// A detector signal is not an exploit and supplies no attacker foothold. Persist
+		// response evidence without manufacturing DEFENDED/LANDED, containment or dwell.
+		r.Outcome, r.Action, r.DefendedPod, r.Containment = "", "", "", ""
+		r.Actuated, r.TimeToDefendSec, r.DwellSec, r.DwellOngoing = false, 0, 0, false
+	} else if r.Outcome == "" {
 		r.Outcome = "LANDED"
 		r.Actuated = false
 		if r.Action == "" {
 			r.Action = "noop"
 		}
 	}
-	classifyContainment(r, round2(time.Since(r.started).Seconds()))
+	if r.EvidenceKind == "" {
+		classifyContainment(r, round2(s.cfg.now().Sub(r.started).Seconds()))
+	}
 	r.UptimeDip = minUp
 	r.UptimeAfter = s.workloadUptime(r.Namespace, r.Deploy)
-	s.fillReasoning(ctxName, r)
-	s.fillCost(ctxName, r)
+	if r.EvidenceKind == "" {
+		s.fillReasoning(ctxName, r)
+		s.fillCost(ctxName, r)
+	}
 	r.Status = "done"
+	if r.ObservationError != "" {
+		r.Status = "partial"
+	}
 	publishAttack(r)
 	if err := s.persistAttack(r); err != nil {
 		r.Status = "partial"
@@ -468,6 +568,25 @@ func firstName(out string) string {
 func (s *Server) podGone(ns, pod string) bool {
 	_, err := s.cfg.execText(6*time.Second, "kubectl", "-n", ns, "get", "pod", pod, "-o", "name")
 	return err != nil // NotFound => gone (rotated)
+}
+
+func (s *Server) targetUIDReplaced(ns, pod, uid string) (bool, error) {
+	if uid == "" {
+		return false, fmt.Errorf("target UID unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	live, found, err := s.experimentCluster().PodUID(ctx, ns, pod)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return true, nil
+	}
+	if live == "" {
+		return false, fmt.Errorf("live target UID unavailable")
+	}
+	return live != uid, nil
 }
 
 // quarantineNPs returns the set of Phorvex/Phoenix QUARANTINE NetworkPolicy names in the namespace:
@@ -531,6 +650,9 @@ func (s *Server) freshQuarantineName(ns string, baseline map[string]bool) string
 }
 
 func (s *Server) podAnno(ns, pod, key string) string {
+	if key == "metadata.uid" {
+		return s.kctlOut(ns, "get", "pod", pod, "-o", "jsonpath={.metadata.uid}")
+	}
 	return s.kctlOut(ns, "get", "pod", pod, "-o", "jsonpath={.metadata.annotations."+strings.ReplaceAll(key, ".", "\\.")+"}")
 }
 
@@ -765,7 +887,9 @@ func (s *Server) attackResults(w http.ResponseWriter, r *http.Request) {
 	// [M-136] The attack ledger spans every namespace the console has ever fired at, so it is
 	// filtered to the tenants this identity is granted. A cross-tenant grant sees all of it.
 	p := principalOf(r)
-	out := attackSnapshots(p)
+	// Synthetic detector signals support the dedicated three-arm comparison, but
+	// they are not exploits and therefore do not belong in the global attack report.
+	out := realAttackSnapshots(p)
 	writeJSON(w, 200, map[string]any{"attacks": out})
 }
 

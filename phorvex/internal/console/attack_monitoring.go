@@ -93,7 +93,7 @@ func (s *Server) attackMonitoringHandler(w http.ResponseWriter, r *http.Request)
 	// [M-136] Same cross-tenant control as /api/attack-results: the ledger is cluster-wide, so a
 	// tenant-limited grant monitors only its own namespaces.
 	p := principalOf(r)
-	recs := attackSnapshots(p)
+	recs := realAttackSnapshots(p)
 
 	samples, sampleErr := readUptimeSamples(uptimePath(s.cfg))
 	if sampleErr != nil {

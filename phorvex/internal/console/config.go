@@ -36,6 +36,9 @@ type Config struct {
 	// ExperimentRESTConfig is an isolated local-API test seam. Production derives
 	// the in-cluster/default kube config when this is nil.
 	ExperimentRESTConfig *rest.Config
+	AttackWatchDuration  time.Duration
+	AttackWatchInterval  time.Duration
+	BlindRotationDelay   time.Duration
 	// MutationAuditPath is a compatibility override for the mutation journal. Empty uses StateDir.
 	MutationAuditPath string
 }
