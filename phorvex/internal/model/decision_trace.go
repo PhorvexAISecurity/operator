@@ -181,8 +181,9 @@ type OptionalBool struct {
 // the decision path. Every potentially absent measurement carries presence.
 type DecisionModelInputsV2 struct {
 	Phase string `json:"phase"`
-	// PhaseReason (T1-C) distinguishes idle-measured|warm-no-app-signal|busy-measured|coldstart|
-	// draining|unknown, so a Warm-by-absence pod is auditable as such rather than as measured serving.
+	// PhaseReason distinguishes idle-measured|warm-no-app-signal|warm-uncertain-app-signal|
+	// busy-measured|coldstart|draining|unknown, so absence and uncertain app evidence are
+	// auditable rather than mislabeled as measured serving.
 	PhaseReason string `json:"phaseReason,omitempty"`
 
 	RequestRate     OptionalFloat `json:"requestRate"`

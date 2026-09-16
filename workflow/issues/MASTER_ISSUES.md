@@ -214,7 +214,7 @@ Severity: HIGH · Tier: 1 · Fixes: V3-M094
 
 ### M-142 · `Telemetry.Present` is universally true (cAdvisor), so `PhaseOf`'s conservative Warm fallback is dead past the first scrape interval — the fleet is priced Idle under arbitrary load · **OPEN** · `SENSING`
 
-Severity: HIGH · Tier: 1 · Fixes: none
+Severity: HIGH · Tier: 1 · Fixes: T7-M142
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ingest
@@ -229,6 +229,13 @@ Severity: HIGH · Tier: 1 · Fixes: none
 **T1-C cross-reference (2026-09-04, cycle 4):** fixed by the typed per-signal `Signal{Value,State,Age,Src}` retype (`fixes/T1-C/03-decision.md`) — `PhaseOf` keys on `AppLevelPresent`, never any-signal presence. Manifestation list += one found in cycle-4 blind derivation: `physics/littleslaw.go`'s fan-out term divided real cAdvisor ConnCount by an absent-zero ReqRate, fabricating a "lateral probing" residual on every uninstrumented pod into LIVE selection; resolved by per-term `Usable()` gates (no physics-math change).
 **Half-closure (2026-09-05, joint L3 at `0.4.84` @ `4522076`):** the type-level half is live-verified — fleet-wide Idle→Warm collapse (`warm-no-app-signal`) on exactly the uninstrumented pods this entry names (litellm, crm, voice, mcp, chroma); the one instrumented idle pod (vllm, reqRate present=0) stays Idle (control 2b); phantom fan-out = 0 on every absent-reqRate record; a rotate's `expectedCost` now carries the Warm phase price (0.70, observed live in actuation). The cAdvisor-delta phase boundary (ConnCount/bytes deltas moving phase) and its constants are deliberately NOT in T1-C — they remain here, owned by the future T1-M142 ticket.
 *Sources: Claude static trace (campaign bus 008), K3 verified at `v0.4.50` + live instances Round 1.*
+
+
+### Tier7 current-source repair — 2026-09-16
+
+The historical universal-cAdvisor presence defect was already repaired before Tier7. The remaining reproducible underpricing was request rate zero with positive queue depth/token generation; `T7-M142` at `a206cd4ea4c4b9b049c6ab3cf95d1645c2257ce4` passed independent baseline/head producer-to-phase-to-cost checks and offline review. Explicit uncertain activity also cannot establish cheap Idle. Deployed workload controls remain pending; see the central live backlog and Tier7 live plan.
+
+`R-M142-NETWORK` remains an optional research/design question: a future infrastructure/network conflict classifier needs UID/freshness semantics and measured quiet/load/background distributions. The old bare delta scaffold is not a validated classifier, and this repair does not claim that proposal was implemented.
 
 ### M-140 · Tenant-state resurrection: a recreated policy inherits the old tenant's λ, cost model, and belief prior · **OPEN** · `CONTROL->ECONOMICS`
 
