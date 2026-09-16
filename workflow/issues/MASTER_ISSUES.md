@@ -1167,7 +1167,7 @@ Severity: HIGH · Tier: parallel · Fixes: T5-M138
 
 ### M-116 · The guardrail tier false-positives on benign instruction-shaped probes · **OPEN** · `ACTUATION`
 
-Severity: MEDIUM · Tier: parallel · Fixes: none
+Severity: MEDIUM · Tier: parallel · Fixes: T8-M116
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · ext.guardrail
