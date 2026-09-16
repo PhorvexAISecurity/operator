@@ -122,6 +122,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["pods"]
+  # request-drain uses patch with resourceVersion optimistic locking for stop/restore.
   verbs: ["get", "list", "delete", "update", "patch"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
@@ -138,6 +139,10 @@ rules:
 - apiGroups: [""]
   resources: ["services"]
   verbs: ["get", "list", "update"]
+- apiGroups: ["discovery.k8s.io"]
+  # request-drain control-plane confirmation only; EndpointSlice mutation stays denied.
+  resources: ["endpointslices"]
+  verbs: ["list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

@@ -75,6 +75,16 @@ func TestRequiredVerbsFollowResolvedBackend(t *testing.T) {
 			t.Fatalf("%s lacks the Pod patch used by compensation/recovery", action)
 		}
 	}
+	var drainPatch, drainUpdate, endpointGet, endpointList bool
+	for _, verb := range RequiredVerbsForBackend(BackendNative, model.ActionRequestDrain) {
+		drainPatch = drainPatch || (verb.Resource == "pods" && verb.Verb == "patch")
+		drainUpdate = drainUpdate || (verb.Resource == "pods" && verb.Verb == "update")
+		endpointGet = endpointGet || (verb.Group == "discovery.k8s.io" && verb.Resource == "endpointslices" && verb.Verb == "get")
+		endpointList = endpointList || (verb.Group == "discovery.k8s.io" && verb.Resource == "endpointslices" && verb.Verb == "list")
+	}
+	if !drainPatch || drainUpdate || endpointGet || !endpointList {
+		t.Fatalf("request-drain permissions do not match patch + read-only EndpointSlice path: %+v", RequiredVerbsForBackend(BackendNative, model.ActionRequestDrain))
+	}
 }
 
 // TestRequiredVerbsAreWellFormed: every declared verb names a resource and a verb (a blank

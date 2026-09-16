@@ -1448,7 +1448,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-40 · `request-drain`'s K8s half stops nothing the attacker is doing · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T7-M040
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · request-drain Update @ internal/actuator/handlers_ai_p4set.go:268
@@ -1460,6 +1460,13 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 **What:** The "real, stack-independent step" is one label flip. It doesn't gate readiness, doesn't tear down established connections, and only matters if a Service selects on the label (never gated per-target). The in-flight flood the fact describes continues; the cover is booked. It also never re-admits on its own, and Rollback writes a hardcoded label value (the previous value is never persisted).
 **Fix:** gate per-target on a selecting Service; credit the cover only on confirmed stack drain; persist prevServing.
 *Sources: A-107, A-116, A-201.*
+
+
+### Tier7 source repair — 2026-09-16
+
+`T7-M040` at `b609df7d68a8b3d4b285f23b3eb4683753eae33d` replaces the unconfirmed leave-drained behavior with a protected, identity-bound transient lifecycle. It observes bound-Service endpoint withdrawal, requires a synchronous valid positive abort count, restores the exact prior serving label and endpoint membership, and retains partial/unknown outcomes and restoration authority on failures. Restart recovery restores without repeating the abort. Independent baseline/head protocol and real local API/HTTP checks are recorded in `workflow/fixes/T7-M040/evidence/incident.md`.
+
+Real supported serving-stack effects, actual network convergence and deployed recovery controls remain pending under Tier7 and central live backlog LV-02. Local EndpointSlice emulation is not CNI proof; a successful request drain does not establish durable exclusion of an attacker or prevent a new request.
 
 ### M-42 · Session-fact gate asymmetry: kv-reset vs kv-migrate · **OPEN** · `KNOWLEDGE`
 

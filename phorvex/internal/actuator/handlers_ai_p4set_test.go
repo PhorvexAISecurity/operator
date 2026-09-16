@@ -213,18 +213,17 @@ func TestAdapterRotateReachableFailFailsClosed(t *testing.T) {
 
 // ===== request-drain =====
 func TestRequestDrainStopsAdmitsThenAborts(t *testing.T) {
-	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
-	c := fakeC(pod)
+	pod, _, _, c := requestDrainFixture(t, "true")
 	mv := &mockVLLM{drained: 3}
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain})
+	hr, err := requestDrainHandler{}.Enact(context.Background(), requestDrainEC(c, mv), requestDrainReq(pod))
 	if err != nil {
 		t.Fatalf("request-drain: %v", err)
 	}
-	// ORDERING premortem: admits stopped (label flipped) AND in-flight aborted.
-	var p corev1.Pod
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
-	if p.Labels[labelServing] != "drained" {
-		t.Errorf("admits must be stopped (serving=drained), got %q", p.Labels[labelServing])
+	// The endpoint controller observed a transient withdrawal, the stack aborted, and the
+	// exact prior serving state was restored before success.
+	p := getDrainPod(t, c)
+	if p.Labels[labelServing] != "true" || p.Labels[labelDrainEpoch] == "" {
+		t.Errorf("exact serving state/operation epoch not preserved: %v", p.Labels)
 	}
 	if mv.drainCalls != 1 || !containsStr(hr.Note, "3 in-flight aborted") {
 		t.Errorf("must abort in-flight via the stack, calls=%d note=%q", mv.drainCalls, hr.Note)
@@ -238,24 +237,24 @@ func TestRequestDrainStopsAdmitsThenAborts(t *testing.T) {
 // event-valued drain-epoch in the SAME Update as the serving flip (the serving label is boolean and
 // reverts, so it can't clock repeated drains); Rollback re-admits WITHOUT touching the epoch.
 func TestRequestDrainStampsDrainEpochRollbackUntouched(t *testing.T) {
-	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
-	c := fakeC(pod)
-	if _, err := (requestDrainHandler{}).Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drained: 1}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain}); err != nil {
+	pod, _, _, c := requestDrainFixture(t, "true")
+	hr, err := (requestDrainHandler{}).Enact(context.Background(), requestDrainEC(c, &mockVLLM{drained: 1}), requestDrainReq(pod))
+	if err != nil {
 		t.Fatalf("drain: %v", err)
 	}
-	var p corev1.Pod
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	p := getDrainPod(t, c)
 	stamped := p.Labels[labelDrainEpoch]
 	if stamped == "" {
 		t.Fatalf("drain-epoch not stamped in the drain Update: %v", p.Labels)
 	}
-	// Rollback re-admits and must leave the drain-epoch untouched (it records drain EVENTS).
-	if err := (requestDrainHandler{}).Rollback(context.Background(), EnactCtx{Client: c}, Request{Namespace: "ns", Pod: "infer"}, ""); err != nil {
-		t.Fatalf("rollback: %v", err)
+	// Completed operations have no live receipt: a legacy/unbound rollback must refuse and
+	// cannot guess a new serving value or rewrite the event epoch.
+	if err := (requestDrainHandler{}).Rollback(context.Background(), requestDrainEC(c, nil), requestDrainReq(pod), hr.RollbackRef); err == nil {
+		t.Fatal("completed request-drain rollback must not operate without a live protected receipt")
 	}
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	p = getDrainPod(t, c)
 	if p.Labels[labelServing] != "true" {
-		t.Errorf("rollback must re-admit (serving=true), got %q", p.Labels[labelServing])
+		t.Errorf("completed drain changed serving state, got %q", p.Labels[labelServing])
 	}
 	if p.Labels[labelDrainEpoch] != stamped {
 		t.Errorf("rollback changed drain-epoch %q -> %q; it must leave the event clock untouched", stamped, p.Labels[labelDrainEpoch])
@@ -263,28 +262,31 @@ func TestRequestDrainStampsDrainEpochRollbackUntouched(t *testing.T) {
 }
 
 func TestRequestDrainReachableFailRestoresAdmits(t *testing.T) {
-	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
-	c := fakeC(pod)
-	_, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drainErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain})
+	pod, _, _, c := requestDrainFixture(t, "true")
+	hr, err := requestDrainHandler{}.Enact(context.Background(), requestDrainEC(c, &mockVLLM{drainErr: errors.New("HTTP 500")}), requestDrainReq(pod))
 	if err == nil {
 		t.Fatal("request-drain must FAIL-CLOSED on a reachable-but-failing abort")
 	}
-	var p corev1.Pod
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
+	p := getDrainPod(t, c)
 	if p.Labels[labelServing] != "true" {
 		t.Errorf("a failed abort must RESTORE admits (not strand the pod unready), got %q", p.Labels[labelServing])
+	}
+	if !hr.Emitted {
+		t.Fatal("the transient Pod mutation must remain visible alongside the failure")
 	}
 }
 
 func TestRequestDrainUnreachableIsPending(t *testing.T) {
-	pod := aiPod("ns", "infer", map[string]string{labelServing: "true"})
-	c := fakeC(pod)
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drainErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionRequestDrain})
-	if err != nil {
-		t.Fatalf("unreachable drain must not error (K8s drain real): %v", err)
+	pod, _, _, c := requestDrainFixture(t, "true")
+	hr, err := requestDrainHandler{}.Enact(context.Background(), requestDrainEC(c, &mockVLLM{drainErr: errStackUnreachable}), requestDrainReq(pod))
+	if err == nil {
+		t.Fatal("unreachable drain must not become a successful emission")
 	}
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
-		t.Errorf("note: %q", hr.Note)
+	if !containsStr(err.Error(), "abort unconfirmed") || !hr.Emitted {
+		t.Errorf("result=%+v err=%v", hr, err)
+	}
+	if got := getDrainPod(t, c).Labels[labelServing]; got != "true" {
+		t.Fatalf("unreachable drain stranded capacity: serving=%q", got)
 	}
 }
 

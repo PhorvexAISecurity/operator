@@ -38,6 +38,7 @@ func TestNativeRBACMarkersAreLeastPrivilege(t *testing.T) {
 		`namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get`,
 		`namespace=phorvex-tenant,groups=apps,resources=replicasets;statefulsets;daemonsets;deployments,verbs=get`,
 		`namespace=phorvex-tenant,groups=batch,resources=jobs,verbs=get`,
+		`namespace=phorvex-tenant,groups=discovery.k8s.io,resources=endpointslices,verbs=list`,
 		`namespace=phorvex-tenant,groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;delete;update`,
 	}
 	sort.Strings(want)
@@ -62,9 +63,18 @@ func TestServiceRestitchRBACIsNamespacedAndExact(t *testing.T) {
 		if len(verbs) != 1 || verbs[0] != `verbs: ["get", "list", "update"]` {
 			t.Errorf("%s Service grants = %v, want exactly get/list/update", path, verbs)
 		}
-		for _, denied := range []string{`resources: ["secrets"]`, `resources: ["endpointslices"]`} {
+		for _, denied := range []string{`resources: ["secrets"]`} {
 			if strings.Contains(text, denied) {
 				t.Errorf("%s grants forbidden resource via %s", path, denied)
+			}
+		}
+		endpointVerbs := singleResourceVerbs(text, `resources: ["endpointslices"]`)
+		if len(endpointVerbs) != 1 || endpointVerbs[0] != `verbs: ["list"]` {
+			t.Errorf("%s EndpointSlice grants = %v, want exactly list", path, endpointVerbs)
+		}
+		for _, forbidden := range []string{"get", "create", "update", "patch", "delete"} {
+			if strings.Contains(strings.Join(endpointVerbs, " "), `"`+forbidden+`"`) {
+				t.Errorf("%s grants forbidden EndpointSlice %s", path, forbidden)
 			}
 		}
 	}

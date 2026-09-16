@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ import (
 
 	"github.com/phorvex/phorvex/internal/podresources"
 )
+
+const servingResponseMaxBytes = 1 << 16
 
 // Configurable serving-stack routes (per-pod annotations override; defaults are vLLM-shaped and
 // [PENDING-GPU-VALIDATION] — confirm against the deployed vLLM/Triton/TGI version).
@@ -75,9 +78,14 @@ func (c *httpVLLM) postJSON(ctx context.Context, url, token string, payload any)
 		return 0, "", err
 	}
 	defer resp.Body.Close()
-	buf := make([]byte, 1<<14)
-	n, _ := resp.Body.Read(buf)
-	return resp.StatusCode, string(buf[:n]), nil
+	body, err := io.ReadAll(io.LimitReader(resp.Body, servingResponseMaxBytes+1))
+	if err != nil {
+		return 0, "", fmt.Errorf("read serving response: %w", err)
+	}
+	if len(body) > servingResponseMaxBytes {
+		return 0, "", fmt.Errorf("serving response exceeds %d bytes", servingResponseMaxBytes)
+	}
+	return resp.StatusCode, string(body), nil
 }
 
 func okCode(code int) bool {
@@ -128,14 +136,79 @@ func (c *httpVLLM) DrainRequests(ctx context.Context, ep servingEndpoint) (int, 
 	if err != nil {
 		return 0, err
 	}
-	if !okCode(code) {
+	// A request drain is synchronous evidence. Accepted/NoContent cannot establish a
+	// terminal abort count, so only an exact 200 response enters the strict parser.
+	if code != http.StatusOK {
 		return 0, fmt.Errorf("serving drain: HTTP %d %s", code, strings.TrimSpace(body))
 	}
-	var r struct {
-		Aborted int `json:"aborted"`
+	aborted, err := parseDrainResponse(body)
+	if err != nil {
+		return 0, fmt.Errorf("serving drain response: %w", err)
 	}
-	_ = json.Unmarshal([]byte(body), &r)
-	return r.Aborted, nil
+	return aborted, nil
+}
+
+// parseDrainResponse accepts one bounded terminal JSON object with one nonnegative integer
+// `aborted` field. Unknown extension fields remain compatible, while duplicate/missing fields,
+// fractional or overflowing values, trailing JSON and asynchronous/empty bodies are rejected.
+func parseDrainResponse(body string) (int, error) {
+	dec := json.NewDecoder(strings.NewReader(body))
+	token, err := dec.Token()
+	if err != nil {
+		return 0, err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '{' {
+		return 0, fmt.Errorf("expected one JSON object")
+	}
+	seen, aborted := false, 0
+	for dec.More() {
+		keyToken, err := dec.Token()
+		if err != nil {
+			return 0, err
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return 0, fmt.Errorf("object key is not a string")
+		}
+		if key == "aborted" {
+			if seen {
+				return 0, fmt.Errorf("duplicate aborted field")
+			}
+			seen = true
+			var raw json.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				return 0, fmt.Errorf("aborted must be an integer: %w", err)
+			}
+			if string(raw) == "null" {
+				return 0, fmt.Errorf("aborted must be an integer, not null")
+			}
+			if err := json.Unmarshal(raw, &aborted); err != nil {
+				return 0, fmt.Errorf("aborted must be an integer: %w", err)
+			}
+			continue
+		}
+		var ignored json.RawMessage
+		if err := dec.Decode(&ignored); err != nil {
+			return 0, err
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return 0, err
+	}
+	if !seen {
+		return 0, fmt.Errorf("aborted field is required")
+	}
+	if aborted < 0 {
+		return 0, fmt.Errorf("aborted must be nonnegative")
+	}
+	if token, err := dec.Token(); err != io.EOF {
+		if err == nil {
+			return 0, fmt.Errorf("unexpected trailing JSON token %v", token)
+		}
+		return 0, fmt.Errorf("trailing response data: %w", err)
+	}
+	return aborted, nil
 }
 
 // servingEndpoint route accessors (annotation-overridable; resolved in endpointForPod's extension).
