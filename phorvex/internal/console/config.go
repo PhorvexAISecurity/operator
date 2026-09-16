@@ -6,6 +6,7 @@ package console
 
 import (
 	"github.com/phorvex/phorvex/internal/audittransport"
+	"k8s.io/client-go/rest"
 	"path/filepath"
 	"time"
 )
@@ -32,6 +33,9 @@ type Config struct {
 	// Production leaves both nil and uses the wall clock.
 	Now   func() time.Time
 	Sleep func(time.Duration)
+	// ExperimentRESTConfig is an isolated local-API test seam. Production derives
+	// the in-cluster/default kube config when this is nil.
+	ExperimentRESTConfig *rest.Config
 	// MutationAuditPath is a compatibility override for the mutation journal. Empty uses StateDir.
 	MutationAuditPath string
 }

@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
 
 const experimentMarker = "phorvex.ai/console-experiment"
@@ -29,12 +30,16 @@ type experimentCluster interface {
 	DeletePod(context.Context, string, string, string, string) error
 }
 
-type dynamicExperimentCluster struct{}
+type dynamicExperimentCluster struct{ cfg *rest.Config }
 
-func (dynamicExperimentCluster) client() (dynamic.Interface, error) {
-	cfg, err := restConfigFor("")
-	if err != nil {
-		return nil, err
+func (d dynamicExperimentCluster) client() (dynamic.Interface, error) {
+	cfg := d.cfg
+	if cfg == nil {
+		var err error
+		cfg, err = restConfigFor("")
+		if err != nil {
+			return nil, err
+		}
 	}
 	return dynamic.NewForConfig(cfg)
 }
@@ -142,7 +147,7 @@ func (s *Server) experimentCluster() experimentCluster {
 	if s.experimentAPI != nil {
 		return s.experimentAPI
 	}
-	return dynamicExperimentCluster{}
+	return dynamicExperimentCluster{cfg: s.cfg.ExperimentRESTConfig}
 }
 
 func (s *Server) appendExperiment(e experimentEvent) error {
