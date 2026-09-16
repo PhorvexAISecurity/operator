@@ -223,7 +223,7 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		}
 		s.cfg.sleep(2 * time.Second)
 		a := armEvidence{ID: spec.id, Label: spec.label, Start: s.cfg.now().UTC().Format(time.RFC3339)}
-		receipt, err := s.executeResettableFoothold(op.Actor, ns)
+		receipt, err := s.executeResettableFoothold(op.Actor, ns, "")
 		if err != nil {
 			a.Error = err.Error()
 			arms = append(arms, a)

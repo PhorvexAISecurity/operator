@@ -55,7 +55,7 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	// M-168's resettable stateless experiment path and the normal Fire control share
 	// one typed producer. Other legacy demo actions keep their existing path below.
 	if ns == "voice" && (body.Action == "" || body.Action == "foothold") {
-		receipt, err := s.executeResettableFoothold(actorOf(r), ns)
+		receipt, err := s.executeResettableFoothold(actorOf(r), ns, "redteam-"+ns)
 		if err != nil {
 			writeJSON(w, 502, map[string]string{"error": err.Error()})
 			return

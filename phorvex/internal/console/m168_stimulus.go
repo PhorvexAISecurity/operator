@@ -18,7 +18,7 @@ type experimentStimulusReceipt struct {
 // executeResettableFoothold is deliberately narrow: voice is the shipped stateless,
 // resettable positive comparison fixture. Sticky/stateful and vLLM mutations are refused
 // by the experiment before policy mutation until they have an equally strong reset contract.
-func (s *Server) executeResettableFoothold(actor, ns string) (experimentStimulusReceipt, error) {
+func (s *Server) executeResettableFoothold(actor, ns, event string) (experimentStimulusReceipt, error) {
 	if ns != "voice" {
 		return experimentStimulusReceipt{}, fmt.Errorf("three-arm comparison unsupported for %s: no verified reset contract", ns)
 	}
@@ -30,7 +30,9 @@ func (s *Server) executeResettableFoothold(actor, ns string) (experimentStimulus
 		return experimentStimulusReceipt{}, err
 	}
 	base := s.snapshotBaseline(ns, pod)
-	event := "redteam-arms-" + strings.ToLower(strings.TrimPrefix(fmt.Sprintf("%x", s.cfg.now().UnixNano()), "-"))
+	if event == "" {
+		event = "redteam-arms-" + strings.ToLower(strings.TrimPrefix(fmt.Sprintf("%x", s.cfg.now().UnixNano()), "-"))
+	}
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
 metadata:
