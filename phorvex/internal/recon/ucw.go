@@ -89,7 +89,8 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	// has no loaded-identity/effect witness. EndpointPath remains audit-only because route
 	// restitching does not prove locator invalidation;
 	// mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
-	// warm-swap and GPU co-location remain cover-free until anti-affinity proves relocation; and
+	// warm-swap's old-process cover is inherited from standardRecon while GPU co-location
+	// remains cover-free because the cutover does not prove relocation; and
 	// kv-migrate-invalidate maps to session state below. This keeps selectable cover narrower than
 	// the emitted audit universe whenever an actuator cannot guarantee the claimed effect.
 	if view.Pod.HasGPU || view.Pod.ModelID != "" {
@@ -121,17 +122,10 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		//                 does NOT move the pod, so co-residency knowledge survives: it never covers
 		//                 gpuColocation. Conditional on the pod actually having a MIG device.
 		//
-		//   warm-swap   — creates a shadow with NodeName cleared and identical constraints. Nothing
-		//                 in rewarmShadow expresses anti-affinity, so the scheduler may re-place it
-		//                 on the same node. "May relocate" cannot back a binary grant, and neither
-		//                 can a high empirical relocation rate or the mere existence of a second GPU
-		//                 node. Until required podAntiAffinity on kubernetes.io/hostname excludes
-		//                 the old node — deferred by PHVX-26a — warm-swap covers NOTHING here and
-		//                 both facts stay audit-only.
-		//
-		// Consequence, stated plainly: warm-swap becomes unselectable on this fleet, exactly as
-		// identity-rotate did under PHVX-9e. Its real value (a cutover with no cold load) is
-		// unaffected; only the co-residency claim was false.
+		//   warm-swap   — may place the replacement on the same node, so it receives no GPU
+		//                 placement or contention cover here. standardRecon separately grants
+		//                 only the old-process facts when a verified scalar pool guarantees exact
+		//                 old-UID retirement and controller replenishment.
 		if view.Pod.MIGDevice != "" {
 			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
 		}
