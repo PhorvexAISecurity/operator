@@ -973,8 +973,8 @@ fixes:
     issues:
     - M-124
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t8-m124
-    head_sha: null
+    head_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
