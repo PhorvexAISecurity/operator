@@ -110,6 +110,19 @@ func Check(parent context.Context, reader client.Reader, reviews SSARClient, cfg
 			}
 			addActionRequirements(requirements, cfg, policy.Namespace, action)
 		}
+		// Every active route performs uncached namespace and target-Pod authority
+		// reads immediately before new work. Add these after action-specific reads
+		// so the deduplicated requirement keeps the common safety reason.
+		add(requirements, Requirement{
+			Namespace: policy.Namespace,
+			Verb:      authz.Verb{Resource: "namespaces", Name: policy.Namespace, Verb: "get", ClusterScoped: true},
+			Reason:    "namespace dry-run actuation brake",
+		})
+		add(requirements, Requirement{
+			Namespace: policy.Namespace,
+			Verb:      authz.Verb{Resource: "pods", Verb: "get"},
+			Reason:    "Pod opt-out actuation brake",
+		})
 	}
 	report.Namespaces = len(namespaces)
 	if report.ActivePolicies == 0 {

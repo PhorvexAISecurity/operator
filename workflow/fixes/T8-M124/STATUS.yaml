@@ -1,0 +1,276 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 10
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: f5ffb911cb3b061c528e37cb78e2035d72f360720d4c22c24c48a3013693e5d7
+    source_sha: 38f1f18c6211e059217320af9168427a111de8b3
+    at: '2026-09-16T18:54:55+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/baseline-http.log
+    sha256: cec6b6fe96a418cfdb7a97f6f526247f20e6c025cf37f7ae39e8534e928d9b22
+    source_sha: 38f1f18c6211e059217320af9168427a111de8b3
+    at: '2026-09-16T19:34:52+00:00'
+    rationale: Independent actual API annotations to runner dispatch and real HTTP
+      upstream reproduce uppercase namespace, Pod opt-out and late Pod leaks; explicit
+      false positive succeeds.
+  preflight:
+    result: PASS
+    by: sol-t8-m124
+    artifact: evidence/preflight/receipt.json
+    sha256: cd83bfbdb3dc4c99541065936cb60caf128740df9a9e3964b2cfc5f0020dd983
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:56:07+00:00'
+  implementation:
+    result: PASS
+    by: sol-t8-m124
+    artifact: 04-diff.patch
+    sha256: 03f7128ca42e5cb01fea06a7f628debcc14e9d4c9bced9a8b2b8352aab68236b
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:56:07+00:00'
+  l0:
+    result: PASS
+    by: sol-t8-m124
+    artifact: evidence/preflight/run-1789588206310414418/go-phorvex.log
+    sha256: 89d94400287365935712bffa98f567a6df0589cae09093b9c68ac0ca648e23dc
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:56:07+00:00'
+    inputs:
+    - phorvex
+    - tools/envtest_gate.py
+    - tools/test_envtest_gate.py
+    inputs_sha256: 2b1b70e4cf04b48797a9de5c9fc4ca71eb6604ebd58a3a0f284c70bebdb0fd82
+  l1:
+    result: PASS
+    by: sol-t8-m124
+    artifact: evidence/raw/focused-pass.log
+    sha256: 463ba261ddabc3a1755955715ad46f25bab06343dc4ec4c255f2b581a7142e63
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:56:07+00:00'
+    inputs:
+    - phorvex/benchmarks/cost-validation/cmd/costprobe
+    - phorvex/cmd
+    - phorvex/internal/actuationbrake
+    - phorvex/internal/ingest
+    - phorvex/internal/runner
+    - phorvex/internal/startupauthz
+    inputs_sha256: 0adbb3e4eac4db0bbbad6b19e3cd0650866240cda3e1a7c2ffc1d66144c93dcf
+  l2:
+    result: PASS
+    by: sol-t8-m124
+    artifact: evidence/preflight/run-1789588206310414418/go-phorvex.log
+    sha256: 89d94400287365935712bffa98f567a6df0589cae09093b9c68ac0ca648e23dc
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:56:07+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 0727cd193e48dc76eedaa311e95c0fe317aaa623e76c6e4ad8a3acc116290d04
+  positive_control:
+    result: PASS
+    by: sol-t8-m124
+    artifact: evidence/preflight/run-1789588206310414418/go-phorvex.log
+    sha256: 89d94400287365935712bffa98f567a6df0589cae09093b9c68ac0ca648e23dc
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:56:59+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: 0727cd193e48dc76eedaa311e95c0fe317aaa623e76c6e4ad8a3acc116290d04
+    rationale: Final-source full preflight passed the mandatory isolated real-API
+      native mutation and Phoenix SecurityEvent producer controls plus braked zero-effect
+      assertions; this supersedes the earlier 170e2c53 lead/head-http.log implementer
+      citation without claiming the lead run.
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 55e9303a41e00c4850073dbbe489f54c2bca40546ce6cf630ef545d1b16014ec
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:57:31+00:00'
+    baseline_sha: 38f1f18c6211e059217320af9168427a111de8b3
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 9b969a33de12ced35dd3c37a9befc93b56022c4e6bd06765d4e56bc445fed97a
+    source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+    at: '2026-09-16T19:57:31+00:00'
+    incident_sha256: 55e9303a41e00c4850073dbbe489f54c2bca40546ce6cf630ef545d1b16014ec
+fix_id: T8-M124
+issues:
+- M-124
+title: No per-pod opt-out; the namespace dry-run brake is case-sensitive
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t8-m124
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier6
+  code_sha: 38f1f18c6211e059217320af9168427a111de8b3
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t8-m124
+  base_sha: 38f1f18c6211e059217320af9168427a111de8b3
+  head_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T19:57:34+00:00'
+configuration_history:
+- at: '2026-09-16T18:54:53+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - title
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-16T19:35:40+00:00'
+  by: sol-t8-m124
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T19:49:22+00:00'
+  by: sol-t8-m124
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-16T19:56:07+00:00'
+  by: sol-t8-m124
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-16T18:54:54+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-16T18:54:56+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-16T19:56:07+00:00'
+  by: sol-t8-m124
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-16T19:56:09+00:00'
+  by: sol-t8-m124
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T19:57:32+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T19:57:33+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T8-M124:10:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 10
+check_history:
+- check: positive_control
+  result: PASS
+  by: sol-t8-m124
+  artifact: evidence/lead/head-http.log
+  sha256: fbcdfee0119216c2ab1065d41de40810e83a3b22973410e4fa7616381c72b894
+  source_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+  at: '2026-09-16T19:56:07+00:00'
+  inputs:
+  - phorvex/internal/actuationbrake
+  - phorvex/internal/ingest
+  - phorvex/internal/runner
+  inputs_sha256: b33b4fac22ebfb02f2040cf354f499b300a8e6b778729694de5f5672ee6110b0

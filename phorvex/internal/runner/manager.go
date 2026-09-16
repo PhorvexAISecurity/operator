@@ -31,6 +31,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actionset"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/authz"
@@ -116,6 +117,9 @@ func codeExecAwareEligibility(
 	hasQualified func(*model.WorkloadView) bool,
 	v *model.WorkloadView, a model.Action, coverKeys []string,
 ) *actionset.Eligibility {
+	if v != nil && v.Pod.OptOut.Engaged {
+		return &actionset.Eligibility{Excluded: true, Kind: model.ExclusionOperatorOptOut, Detail: "operator Pod opt-out: " + v.Pod.OptOut.Cause}
+	}
 	return eligibilityFrom(capWit.Eligible(v, a, coverKeys), authzNil, hasQualified, v)
 }
 
@@ -131,6 +135,9 @@ func codeExecAwareEligibilityObserved(
 	hasQualified func(*model.WorkloadView) bool,
 	v *model.WorkloadView, a model.Action, coverKeys []string,
 ) *actionset.Eligibility {
+	if v != nil && v.Pod.OptOut.Engaged {
+		return &actionset.Eligibility{Excluded: true, Kind: model.ExclusionOperatorOptOut, Detail: "operator Pod opt-out: " + v.Pod.OptOut.Cause}
+	}
 	return eligibilityFrom(capWit.EligibleObserved(v, a, coverKeys), authzNil, hasQualified, v)
 }
 
@@ -177,17 +184,21 @@ type Manager struct {
 	VocabularyReader client.Reader
 	vocabulary       atomic.Pointer[ActionVocabulary]
 	OwnershipReader  client.Reader // uncached, read-only owner evidence
-	// BoundaryReader bypasses informer staleness when checking M99 admission enforcement.
-	BoundaryReader    client.Reader
-	Client            client.Client
-	Clock             *exposure.Clock
-	Intents           *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
-	Failures          actionFailures    // M-19: owner/Pod-UID/action failure feedback
-	FailureNow        func() time.Time  // exact clock seam for cooldown tests
-	fallbackDecisions []model.Decision  // tick-local distinct audit attempts
-	Optimizer         decision.Optimizer
-	Audit             *audit.Logger
-	MetricsSource     ingest.MetricsSource
+	// BoundaryReader bypasses informer staleness for admission enforcement and
+	// actuation-brake authority reads.
+	BoundaryReader client.Reader
+	// ActuationBrakeReadTimeout bounds each uncached Namespace/Pod authority read.
+	// Zero uses actuationbrake.DefaultReadTimeout.
+	ActuationBrakeReadTimeout time.Duration
+	Client                    client.Client
+	Clock                     *exposure.Clock
+	Intents                   *exposure.Intents // M-23: per-action emit intent (cross-tick burst guard)
+	Failures                  actionFailures    // M-19: owner/Pod-UID/action failure feedback
+	FailureNow                func() time.Time  // exact clock seam for cooldown tests
+	fallbackDecisions         []model.Decision  // tick-local distinct audit attempts
+	Optimizer                 decision.Optimizer
+	Audit                     *audit.Logger
+	MetricsSource             ingest.MetricsSource
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
 	PromURL  string
@@ -1743,10 +1754,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}, availabilityViolations, sloViolations)
 	}
 
-	// Effective actuation gate (FR8): a tenant is dry-run if its policy says so OR its
-	// namespace is annotated phorvex.ai/dry-run; the global kill-switch suppresses on top.
-	nsDryRun := snap.DryRunNamespaces[e.namespace]
-	effectiveDryRun := pol.DryRun || nsDryRun
+	// The snapshot observation excludes opted-out targets before allocation. A fresh,
+	// uncached observation is still required at route and dispatch boundaries below.
+	namespaceObservation := snap.NamespaceDryRun[e.namespace]
+	if namespaceObservation.Cause == "" {
+		namespaceObservation = actuationbrake.Namespace(nil)
+	}
+	brakeState := &actuationBrakeTickState{namespace: namespaceObservation}
+	effectiveDryRun := pol.DryRun || namespaceObservation.Engaged
 	for i := range decisions {
 		if decisions[i].Measurements == nil {
 			decisions[i].Measurements = &model.DecisionMeasurementsV1{SchemaVersion: model.DecisionMeasurementsSchemaV1, Source: "runner-gates"}
@@ -1755,15 +1770,10 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	}
 	if effectiveDryRun {
 		for i := range decisions {
-			decisions[i].DryRun = true // honest audit: reflect the mode actually applied
-			if decisions[i].Trace != nil {
-				decisions[i].Trace.DryRun = true
-				// T0-C: actuate() never runs under dry-run — a selected move is
-				// not-attempted for that reason, not silently un-dispatched.
-				if decisions[i].Selected {
-					decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
-					decisions[i].Trace.DispatchReason = "dry-run"
-				}
+			if pol.DryRun {
+				stampPolicyDryRun(&decisions[i])
+			} else {
+				stampNamespaceDryRun(&decisions[i], namespaceObservation)
 			}
 		}
 	}
@@ -1794,15 +1804,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// (actuate marks decisions[i].Actuated on a successful emit).
 	m.fallbackDecisions = nil
 	var currentPreparation *actuator.RoutePreparation
-	if !effectiveDryRun && !killEngaged && m.Actuator != nil {
+	if !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
 		}
-		_, currentPreparation = m.actuatePreparedWithKillSwitch(ctx, e, pol, decisions, viewByKey, killState)
+		_, currentPreparation = m.actuatePreparedWithKillSwitch(ctx, e, pol, decisions, viewByKey, killState, brakeState)
 	}
 	*killObservation = killState.observation
 	finalKillObservation := killState.observation
+	finalNamespaceObservation := brakeState.namespace
 
 	assessmentInput := colocationInput(snap, e)
 	selected, infeasible := 0, 0
@@ -1858,6 +1869,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	}
 	m.updateExistentialStatus(ctx, e, decisions, inventory)
 	actionsSupport.preparation = currentPreparation
+	actionsSupport.namespaceDryRun = finalNamespaceObservation
 	m.updateStatusObserved(ctx, e, len(views), selected, 0, finalKillObservation, time.Now(), actionsSupport)
 
 	m.creditCadence(e, snap.Now)
@@ -2086,14 +2098,15 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 
 func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) (int, *actuator.RoutePreparation) {
 	state := &killSwitchTickState{observation: KillSwitchObservation{Cause: KillSwitchStaticOnly}}
-	return m.actuatePreparedWithKillSwitch(ctx, e, pol, decisions, tickViewByKey, state)
+	brakeState := &actuationBrakeTickState{namespace: actuationbrake.Namespace(nil)}
+	return m.actuatePreparedWithKillSwitch(ctx, e, pol, decisions, tickViewByKey, state, brakeState)
 }
 
-func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState) (int, *actuator.RoutePreparation) {
-	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state)
+func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
+	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState)
 }
 
-func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState) (int, *actuator.RoutePreparation) {
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
 	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
@@ -2106,9 +2119,20 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 	// returned by Actuate in THIS call may repopulate it.
 	for i := range decisions {
 		decisions[i].Phoenix = nil
+		decisions[i].DryRun = false
+		decisions[i].DryRunCause = ""
+		decisions[i].ActuationBrakeCause = ""
+		if decisions[i].Trace != nil {
+			decisions[i].Trace.DryRun = false
+			decisions[i].Trace.DryRunCause = ""
+			decisions[i].Trace.ActuationBrakeCause = ""
+		}
 	}
 	if state == nil {
 		state = &killSwitchTickState{observation: KillSwitchObservation{Cause: KillSwitchStaticOnly}}
+	}
+	if brakeState == nil {
+		brakeState = &actuationBrakeTickState{namespace: actuationbrake.Namespace(nil)}
 	}
 	boundaryObservation := state.observe(ctx, m.KillSwitch)
 	if boundaryObservation.Engaged {
@@ -2120,6 +2144,18 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		m.Log.Info("kill-switch refused route preparation",
 			"tenant", pol.Tenant, "namespace", e.namespace,
 			"killSwitchEngaged", true, "killSwitchCause", string(boundaryObservation.Cause))
+		return 0, nil
+	}
+	namespaceObservation := brakeState.observeNamespace(ctx, m, e.namespace)
+	if namespaceObservation.Engaged {
+		for i := range decisions {
+			if decisions[i].Selected {
+				stampNamespaceDryRun(&decisions[i], namespaceObservation)
+			}
+		}
+		m.Log.Info("namespace dry-run refused route preparation",
+			"tenant", pol.Tenant, "namespace", e.namespace,
+			"actuationBrakeCause", namespaceObservation.Cause)
 		return 0, nil
 	}
 	target := actuator.TenantTarget{
@@ -2254,6 +2290,24 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				"killSwitchEngaged", true, "killSwitchCause", string(dispatchObservation.Cause))
 			continue
 		}
+		namespaceObservation = brakeState.observeNamespace(ctx, m, decisions[i].Namespace)
+		if namespaceObservation.Engaged {
+			stampNamespaceDryRun(&decisions[i], namespaceObservation)
+			m.Log.Info("namespace dry-run refused selected dispatch",
+				"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+				"pod", decisions[i].Pod, "action", decisions[i].Action,
+				"actuationBrakeCause", namespaceObservation.Cause)
+			continue
+		}
+		podObservation := brakeState.observePod(ctx, m, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+		if podObservation.Engaged {
+			stampTargetBrake(&decisions[i], podObservation)
+			m.Log.Info("Pod opt-out refused selected dispatch",
+				"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+				"pod", decisions[i].Pod, "action", decisions[i].Action,
+				"actuationBrakeCause", podObservation.Cause)
+			continue
+		}
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuator.Request{
@@ -2296,7 +2350,22 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		if err != nil {
 			fallbackObservation := state.observe(ctx, m.KillSwitch)
 			fallbackBlocked := fallbackObservation.Engaged
-			if fallbackBlocked {
+			fallbackBrake := brakeState.observeNamespace(ctx, m, decisions[i].Namespace)
+			if !fallbackBrake.Engaged {
+				fallbackBrake = brakeState.observePod(ctx, m, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+			}
+			if fallbackBrake.Engaged {
+				fallbackBlocked = true
+				decisions[i].ActuationBrakeCause = fallbackBrake.Cause
+				if decisions[i].Trace != nil {
+					decisions[i].Trace.ActuationBrakeCause = fallbackBrake.Cause
+				}
+				m.Log.Info("actuation brake refused failure learning and fallback dispatch",
+					"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+					"pod", decisions[i].Pod, "action", decisions[i].Action,
+					"actuationBrakeCause", fallbackBrake.Cause)
+			}
+			if fallbackObservation.Engaged {
 				decisions[i].KillSwitch = true
 				decisions[i].KillSwitchCause = string(fallbackObservation.Cause)
 				if decisions[i].Measurements != nil {
@@ -2339,7 +2408,12 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				dispatchReason += ": " + res.Note
 			}
 			if fallbackBlocked {
-				dispatchReason += "; fallback-refused-kill-switch: " + string(fallbackObservation.Cause)
+				if fallbackObservation.Engaged {
+					dispatchReason += "; fallback-refused-kill-switch: " + string(fallbackObservation.Cause)
+				}
+				if fallbackBrake.Engaged {
+					dispatchReason += "; fallback-refused-actuation-brake: " + fallbackBrake.Cause
+				}
 			}
 			stampDispatch(model.DispatchError, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
@@ -2358,7 +2432,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 						}
 						fallback := fallbackDecision(decisions[i], alternative)
 						attempt := []model.Decision{fallback}
-						more, _ := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false, state)
+						more, _ := m.actuatePreparedMode(ctx, e, pol, attempt, tickViewByKey, false, state, brakeState)
 						actuated += more
 						// The recursive call modifies its local slice's owned trace;
 						// capture that actual attempt as a separate audit decision.

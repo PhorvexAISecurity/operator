@@ -81,7 +81,23 @@ func (a *recordingAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/api":
 		reply(200, map[string]any{"kind": "APIVersions", "apiVersion": "v1", "versions": []string{"v1"}})
 	case "/api/v1":
-		reply(200, map[string]any{"kind": "APIResourceList", "apiVersion": "v1", "groupVersion": "v1", "resources": []any{}})
+		resource := func(name, kind string, namespaced bool) map[string]any {
+			return map[string]any{"name": name, "singularName": "", "namespaced": namespaced,
+				"kind": kind, "verbs": []string{"get", "list"}}
+		}
+		reply(200, map[string]any{"kind": "APIResourceList", "apiVersion": "v1", "groupVersion": "v1", "resources": []any{
+			resource("namespaces", "Namespace", false), resource("pods", "Pod", true),
+		}})
+	case "/api/v1/namespaces/ns":
+		reply(200, map[string]any{
+			"apiVersion": "v1", "kind": "Namespace",
+			"metadata": map[string]any{"name": "ns", "uid": "namespace-uid", "resourceVersion": "1"},
+		})
+	case "/api/v1/namespaces/ns/pods/p1":
+		reply(200, map[string]any{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": map[string]any{"namespace": "ns", "name": "p1", "uid": "pod-uid", "resourceVersion": "1"},
+		})
 	case "/apis":
 		reply(200, map[string]any{"kind": "APIGroupList", "apiVersion": "v1", "groups": []any{group}})
 	case "/apis/" + amtdGroup:

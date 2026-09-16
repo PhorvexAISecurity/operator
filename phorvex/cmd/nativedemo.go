@@ -14,6 +14,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 )
 
@@ -39,6 +40,12 @@ func demoActuate(ctx context.Context, n *actuator.NativeActuator, req actuator.R
 			return actuator.Result{}, err
 		}
 		req.TargetUID = string(p.UID)
+	}
+	if observation := actuationbrake.ObserveNamespace(ctx, n.Reader, actuationbrake.DefaultReadTimeout, req.Namespace); observation.Engaged {
+		return actuator.Result{}, fmt.Errorf("namespace actuation brake: %s", observation.Cause)
+	}
+	if observation := actuationbrake.ObservePod(ctx, n.Reader, actuationbrake.DefaultReadTimeout, req.Namespace, req.Pod, req.TargetUID); observation.Engaged {
+		return actuator.Result{}, fmt.Errorf("Pod actuation brake: %s", observation.Cause)
 	}
 	return n.Actuate(ctx, req)
 }

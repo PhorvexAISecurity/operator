@@ -39,14 +39,14 @@ func TestEmitBoundaryFailsClosedOnMapMiss(t *testing.T) {
 	}
 
 	// map-MISS: empty tick view => invariant check fails CLOSED => 0 actuations.
-	if n := m.actuate(context.Background(), e, pol, mkDec(), map[string]*model.WorkloadView{}); n != 0 || fa.calls != 0 {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, mkDec(), map[string]*model.WorkloadView{}); n != 0 || fa.calls != 0 {
 		t.Fatalf("FAIL-OPEN: map-miss actuated (n=%d, Actuate calls=%d); must fail CLOSED", n, fa.calls)
 	}
 
 	// present + feasible: the move IS actuated (proves the veto is the map-miss, not a blanket block).
 	fa.calls = 0
 	view := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", ReadyReplicas: 3}}}
-	if m.actuate(context.Background(), e, pol, mkDec(), view); fa.calls != 1 {
+	if actuateWithBoundary(t, m, context.Background(), e, pol, mkDec(), view); fa.calls != 1 {
 		t.Fatalf("present+feasible move should actuate once, got %d calls", fa.calls)
 	}
 }

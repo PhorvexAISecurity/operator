@@ -137,7 +137,7 @@ func TestM127SentinelFlipAfterRoutePreparationRefusesDispatch(t *testing.T) {
 	decisions[0].MutationKind = "stale-kind"
 	pol := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 
-	if got := m.actuate(ctx, &policyEntry{namespace: "ns"}, pol, decisions, m127FeasibleViews("p1")); got != 0 {
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, pol, decisions, m127FeasibleViews("p1")); got != 0 {
 		t.Fatalf("actuated = %d after sentinel flip", got)
 	}
 	if hands.ensureCalls != 1 || hands.actuateCalls != 0 || httpCalls.Load() != 0 {
@@ -160,7 +160,7 @@ func TestM127SentinelFlipAfterRoutePreparationRefusesDispatch(t *testing.T) {
 	hands.ensure = nil
 	m.Intents = exposure.NewIntents()
 	allowed := tracedSelectedDecision()
-	if got := m.actuate(ctx, &policyEntry{namespace: "ns"}, pol, allowed, m127FeasibleViews("p1")); got != 1 || hands.actuateCalls != 1 || httpCalls.Load() != 1 {
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, pol, allowed, m127FeasibleViews("p1")); got != 1 || hands.actuateCalls != 1 || httpCalls.Load() != 1 {
 		t.Fatalf("disengaged positive control got=%d dispatches=%d HTTP=%d trace=%+v", got, hands.actuateCalls, httpCalls.Load(), allowed[0].Trace)
 	}
 }
@@ -189,7 +189,7 @@ func TestM127SentinelFlipBetweenSelectedDispatchesStopsLaterMove(t *testing.T) {
 	decisions = append(decisions, second)
 	pol := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 
-	if got := m.actuate(ctx, &policyEntry{namespace: "ns"}, pol, decisions, m127FeasibleViews("p1", "p2")); got != 1 {
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, pol, decisions, m127FeasibleViews("p1", "p2")); got != 1 {
 		t.Fatalf("actuated = %d, want only first dispatch", got)
 	}
 	if hands.actuateCalls != 1 || !decisions[0].Actuated || decisions[1].Actuated {
@@ -220,7 +220,7 @@ func TestM127EngagementAfterCleanRefusalSuppressesLearningAndFallback(t *testing
 		Log:        logr.Discard(),
 	}
 
-	if got := m.actuate(ctx, &policyEntry{namespace: "ns"}, pol, decisions, map[string]*model.WorkloadView{"ns/pod": views[0]}); got != 0 {
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, pol, decisions, map[string]*model.WorkloadView{"ns/pod": views[0]}); got != 0 {
 		t.Fatalf("actuated = %d", got)
 	}
 	if hands.actuateCalls != 1 || len(m.fallbackDecisions) != 0 || len(m.Failures.at) != 0 {
@@ -253,7 +253,7 @@ func TestM127DeniedPostFailureReadSuppressesLearningAndFallback(t *testing.T) {
 		Log:        logr.Discard(),
 	}
 
-	if got := m.actuate(ctx, &policyEntry{namespace: "ns"}, pol, decisions, map[string]*model.WorkloadView{"ns/pod": views[0]}); got != 0 {
+	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, pol, decisions, map[string]*model.WorkloadView{"ns/pod": views[0]}); got != 0 {
 		t.Fatalf("actuated = %d", got)
 	}
 	if reader.gets != 3 || hands.actuateCalls != 1 || len(m.fallbackDecisions) != 0 || len(m.Failures.at) != 0 {

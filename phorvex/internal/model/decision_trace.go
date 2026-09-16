@@ -68,6 +68,7 @@ const (
 	ExclusionNoRBAC         = "no-rbac"
 	ExclusionCapability     = "capability-unsupported"
 	ExclusionActionFailure  = "action-failure-cooldown"
+	ExclusionOperatorOptOut = "operator-opt-out"
 )
 
 // T0-C: the closed dispatch-outcome vocabulary. The runner stamps it after the
@@ -364,6 +365,8 @@ type DecisionTraceV2 struct {
 	CandidateDemand      int     `json:"candidateDemand"`
 	MovesSpent           int     `json:"movesSpent"`
 	DryRun               bool    `json:"dryRun"`
+	DryRunCause          string  `json:"dryRunCause,omitempty"`
+	ActuationBrakeCause  string  `json:"actuationBrakeCause,omitempty"`
 	KillSwitchEngaged    bool    `json:"killSwitchEngaged"`
 	KillSwitchCause      string  `json:"killSwitchCause,omitempty"`
 	LambdaConfiguredSeed float64 `json:"lambdaConfiguredSeed"`
@@ -786,6 +789,7 @@ func (t DecisionTraceV2) validateV3() error {
 		ExclusionFeasibility: true, ExclusionCostNaN: true, ExclusionSLOGate: true,
 		ExclusionReactiveOnly: true, ExclusionSelection: true,
 		ExclusionNotInstallable: true, ExclusionNoRBAC: true, ExclusionCapability: true, ExclusionActionFailure: true,
+		ExclusionOperatorOptOut: true,
 	}
 	selectedRows := 0
 	for i, row := range t.ActionStatus {
@@ -815,7 +819,7 @@ func (t DecisionTraceV2) validateV3() error {
 			return fmt.Errorf("actionStatus[%d] not-installable must read exclusionKind=not-installable, got %q", i, row.ExclusionKind)
 		}
 		if row.Status == ActionStatusIneligible &&
-			row.ExclusionKind != ExclusionNoRBAC && row.ExclusionKind != ExclusionCapability && row.ExclusionKind != ExclusionActionFailure {
+			row.ExclusionKind != ExclusionNoRBAC && row.ExclusionKind != ExclusionCapability && row.ExclusionKind != ExclusionActionFailure && row.ExclusionKind != ExclusionOperatorOptOut {
 			return fmt.Errorf("actionStatus[%d] ineligible must read a recognized eligibility exclusion, got %q", i, row.ExclusionKind)
 		}
 	}

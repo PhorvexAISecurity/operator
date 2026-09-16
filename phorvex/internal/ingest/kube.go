@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/model"
@@ -43,10 +44,10 @@ type Snapshot struct {
 	Graph                   *graph.Graph
 	Events                  []model.SecurityEventInfo
 	EventByPod              map[string][]model.SecurityEventInfo
-	// DryRunNamespaces are namespaces annotated phorvex.ai/dry-run=true|1|yes — a
-	// per-namespace actuation freeze independent of any policy's mode (FR8).
-	DryRunNamespaces map[string]bool
-	Now              time.Time
+	// NamespaceDryRun records the normalized annotation observation for every
+	// namespace, including malformed values which conservatively suppress work.
+	NamespaceDryRun map[string]model.ActuationBrakeObservation
+	Now             time.Time
 
 	// --- P-PHYSICS (UCW) additive scan products: node capacity + live PodDisruptionBudgets,
 	// the substrate the platform scanner turns into PhysicsWitness. ---
@@ -127,13 +128,10 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	}
 
 	nsLabels := map[string]map[string]string{}
-	dryRunNS := map[string]bool{}
+	dryRunNS := map[string]model.ActuationBrakeObservation{}
 	for i := range nsList.Items {
 		nsLabels[nsList.Items[i].Name] = nsList.Items[i].Labels
-		switch nsList.Items[i].Annotations["phorvex.ai/dry-run"] {
-		case "true", "True", "1", "yes":
-			dryRunNS[nsList.Items[i].Name] = true
-		}
+		dryRunNS[nsList.Items[i].Name] = actuationbrake.NamespaceObject(&nsList.Items[i])
 	}
 
 	// First pass: project pods and count per-owner replicas for the availability floor.
@@ -206,7 +204,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		PodByKey:             map[string]*model.Pod{},
 		Graph:                g,
 		EventByPod:           map[string][]model.SecurityEventInfo{},
-		DryRunNamespaces:     dryRunNS,
+		NamespaceDryRun:      dryRunNS,
 		Now:                  now,
 		NamespaceLabels:      nsLabels,
 		PodInventoryComplete: true,
@@ -451,6 +449,7 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 		Name:           p.Name,
 		UID:            string(p.UID),
 		Labels:         p.Labels,
+		OptOut:         actuationbrake.Pod(p.Annotations),
 		Node:           p.Spec.NodeName,
 		Phase:          string(p.Status.Phase),
 		ServiceAccount: p.Spec.ServiceAccountName,

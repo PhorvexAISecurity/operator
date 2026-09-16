@@ -44,7 +44,7 @@ func TestM132RealHybridPhoenixRefusalStillDeliversNativeAction(t *testing.T) {
 		{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 		{Selected: true, Feasible: true, Action: model.ActionRouteRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 	}
-	if n := m.actuate(ctx, e, pol, decisions, view); n != 1 || !decisions[1].Actuated || decisions[0].Actuated || !strings.HasPrefix(decisions[0].Trace.DispatchReason, "route-preparation-failed:") {
+	if n := actuateWithBoundary(t, m, ctx, e, pol, decisions, view); n != 1 || !decisions[1].Actuated || decisions[0].Actuated || !strings.HasPrefix(decisions[0].Trace.DispatchReason, "route-preparation-failed:") {
 		t.Fatalf("real hybrid route result: n=%d Phoenix=%+v native=%+v", n, decisions[0].Trace, decisions[1].Trace)
 	}
 	var updated corev1.Pod
@@ -84,7 +84,7 @@ func TestM132RealHybridEqualityControlDeliversBothRoutes(t *testing.T) {
 		{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 		{Selected: true, Feasible: true, Action: model.ActionRouteRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 	}
-	if n := m.actuate(ctx, e, pol, decisions, view); n != 2 || !decisions[0].Actuated || !decisions[1].Actuated {
+	if n := actuateWithBoundary(t, m, ctx, e, pol, decisions, view); n != 2 || !decisions[0].Actuated || !decisions[1].Actuated {
 		t.Fatalf("ordinary hybrid control failed: n=%d Phoenix=%+v native=%+v", n, decisions[0].Trace, decisions[1].Trace)
 	}
 	var amtds amtdv1beta1.AdaptiveMovingTargetDefenseList
@@ -121,7 +121,7 @@ func TestM132RealHybridNativeOnlySkipsPhoenixPreparation(t *testing.T) {
 	pol := model.Policy{Tenant: "team", EnabledActions: map[model.Action]bool{model.ActionRouteRotate: true}}
 	view := map[string]*model.WorkloadView{"ns/api": {Pod: model.Pod{Namespace: "ns", Name: "api", UID: "pod-uid", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, RouteService: "web-route", RouteServiceReady: true}}}
 	d := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRouteRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}}}
-	if n, prep := m.actuatePrepared(ctx, e, pol, d, view); n != 1 || prep == nil || !prep.PhoenixSkipped || prep.NativeSkipped || !d[0].Actuated {
+	if n, prep := actuatePreparedWithBoundary(t, m, ctx, e, pol, d, view); n != 1 || prep == nil || !prep.PhoenixSkipped || prep.NativeSkipped || !d[0].Actuated {
 		t.Fatalf("native-only route did not deliver: n=%d prep=%+v decision=%+v", n, prep, d[0])
 	}
 	var amtds amtdv1beta1.AdaptiveMovingTargetDefenseList

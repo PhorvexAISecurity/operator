@@ -150,6 +150,38 @@ func TestCheckNativeAndHybridRequireRecoveryJournalInventory(t *testing.T) {
 	}
 }
 
+func TestM124CheckRequiresCommonNamespaceAndPodAuthorityReads(t *testing.T) {
+	reader := policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionRotate))
+	for _, backend := range []actuator.Backend{actuator.BackendPhoenix, actuator.BackendNative, actuator.BackendHybrid} {
+		for _, deniedResource := range []string{"namespaces", "pods"} {
+			t.Run(string(backend)+"/"+deniedResource, func(t *testing.T) {
+				reviews := &recordingSSAR{deny: func(attributes authorizationv1.ResourceAttributes) bool {
+					return attributes.Resource == deniedResource && attributes.Verb == "get"
+				}}
+				_, err := Check(t.Context(), reader, reviews, Config{Backend: backend, OperatorNamespace: "operator"})
+				if err == nil || !strings.Contains(err.Error(), "actuation brake") {
+					t.Fatalf("denied common %s read was accepted: %v", deniedResource, err)
+				}
+				var saw bool
+				for _, attributes := range reviews.attributes {
+					if attributes.Resource == deniedResource && attributes.Verb == "get" {
+						saw = true
+						if deniedResource == "namespaces" && (attributes.Namespace != "" || attributes.Name != "tenant") {
+							t.Fatalf("namespace authority used wrong scope: %+v", attributes)
+						}
+						if deniedResource == "pods" && attributes.Namespace != "tenant" {
+							t.Fatalf("Pod authority used wrong scope: %+v", attributes)
+						}
+					}
+				}
+				if !saw {
+					t.Fatalf("missing %s review: %+v", deniedResource, reviews.attributes)
+				}
+			})
+		}
+	}
+}
+
 func TestCheckOptionalMIGAgentUsesExactDaemonSetAndExecSubresource(t *testing.T) {
 	reviews := &recordingSSAR{}
 	_, err := Check(t.Context(), policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, v1alpha1.ActionMIGRebind)), reviews, Config{

@@ -1885,7 +1885,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-124 · No per-pod opt-out; the namespace dry-run brake is case-sensitive · **OPEN** · `CONTROL`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T8-M124
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.tick
@@ -1897,6 +1897,9 @@ Severity: HIGH · Tier: parallel · Fixes: none
 **What:** The only brake is `phorvex.ai/dry-run: "true"` (exact case) on the namespace. No per-pod escape hatch exists.
 **Live proof (second pass, 2026-08-21):** clean A/B on one tenant, four minutes apart. With `dry-run: "true"` (valid): zero actuation — decisions kept logging `selected=true, dryRun=true` but nothing emitted. With `dry-run: "TRUE"` (wrong case): the brake silently disengaged — 8 rotate events emitted in 90s and Phoenix deleted all three victim pods. An operator who writes `TRUE`/`True`/`yes` believes actuation is frozen; it is not.
 *Sources: A-216, A-16; live A/B test V3 (2026-08-21).*
+
+
+**Tier8 source reconciliation (2026-09-16):** Fix `T8-M124` at `1ceec03e7dafc2ad75314bdc53edb29bcce46d96` adds normalized namespace dry-run and Pod opt-out, pre-allocation exclusion and fresh bounded namespace/UID-bound Pod checks at dispatch and fallback. Present malformed values and unreadable/changed authority suppress new work with distinct status/audit causes. Actual API/HTTP baseline leaks and final refusal/positive controls were independently reproduced; native and Phoenix producer positives, snapshot-to-budget controls, strict startup reads and direct CLI paths are retained. Independent source review and selected local preflight PASS. The bounded check-to-call race and already-started protected compensation are explicit; accepted asynchronous work cannot be recalled. L3 remains pending the combined Tier6–8 deployment/fixture campaign; this source verdict does not close the issue. See `fixes/T8-M124/evidence/incident.md` and `fixes/T8-M124/evidence/p3/verdict.md`.
 
 ### M-135 · `EnsurePolicy` only runs on the actuation path — no self-heal while a tenant is idle or braked · **OPEN** · `CONTROL`
 

@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/model"
@@ -325,15 +326,7 @@ func run(parent context.Context, o options) error {
 	} else if o.Feasibility != "feasible" {
 		obs.ActuationError = "not executed: feasibility=" + o.Feasibility
 	} else {
-		native := actuator.NewNativeActuator(kube)
-		native.StrictTenantNamespace = true
-		if err := native.EnsurePolicy(ctx, actuator.TenantTarget{Tenant: "cost-validation", Namespace: o.Namespace}); err != nil {
-			return err
-		}
-		res, actErr := native.Actuate(ctx, actuator.Request{
-			Tenant: "cost-validation", Namespace: o.Namespace, Pod: o.Pod, Action: action,
-			Reason: "PHORVEXSEC-35 isolated cost validation", Score: 1,
-		})
+		res, actErr := actuateNativeCostProbe(ctx, kube, o, action, target)
 		obs.Emitted = res.Emitted
 		obs.Handler = res.Handler
 		obs.MutationKind = res.MutationKind
@@ -443,6 +436,34 @@ func run(parent context.Context, o options) error {
 	}
 	sort.Strings(obs.Missing)
 	return writeObservation(o.Output, obs)
+}
+
+func actuateNativeCostProbe(ctx context.Context, kube client.Client, o options, action model.Action, target corev1.Pod) (actuator.Result, error) {
+	if target.UID == "" || target.Namespace != o.Namespace || target.Name != o.Pod {
+		return actuator.Result{}, errors.New("target Pod identity is incomplete or does not match the requested object")
+	}
+	if observation := actuationbrake.ObserveNamespace(ctx, kube, actuationbrake.DefaultReadTimeout, o.Namespace); observation.Engaged {
+		return actuator.Result{}, fmt.Errorf("namespace actuation brake: %s", observation.Cause)
+	}
+	if observation := actuationbrake.ObservePod(ctx, kube, actuationbrake.DefaultReadTimeout, o.Namespace, o.Pod, string(target.UID)); observation.Engaged {
+		return actuator.Result{}, fmt.Errorf("Pod actuation brake: %s", observation.Cause)
+	}
+	native := actuator.NewNativeActuator(kube)
+	native.SetBoundaryReader(kube)
+	native.StrictTenantNamespace = true
+	if err := native.EnsurePolicy(ctx, actuator.TenantTarget{Tenant: "cost-validation", Namespace: o.Namespace}); err != nil {
+		return actuator.Result{}, err
+	}
+	if observation := actuationbrake.ObserveNamespace(ctx, kube, actuationbrake.DefaultReadTimeout, o.Namespace); observation.Engaged {
+		return actuator.Result{}, fmt.Errorf("namespace actuation brake before dispatch: %s", observation.Cause)
+	}
+	if observation := actuationbrake.ObservePod(ctx, kube, actuationbrake.DefaultReadTimeout, o.Namespace, o.Pod, string(target.UID)); observation.Engaged {
+		return actuator.Result{}, fmt.Errorf("Pod actuation brake before dispatch: %s", observation.Cause)
+	}
+	return native.Actuate(ctx, actuator.Request{
+		Tenant: "cost-validation", Namespace: o.Namespace, Pod: o.Pod, TargetUID: string(target.UID), Action: action,
+		Reason: "PHORVEXSEC-35 isolated cost validation", Score: 1,
+	})
 }
 
 func workloadView(pod corev1.Pod, o options, metrics metricSnapshot, ready, desired int) *model.WorkloadView {

@@ -142,7 +142,7 @@ func TestM127RealAPIDirectReaderClosesCachedDispatchWindow(t *testing.T) {
 	directHands := newHands()
 	directManager := &Manager{Actuator: directHands, KillSwitch: &KillSwitch{Client: direct, Namespace: "m127"}, Log: logr.Discard()}
 	directDecision := tracedSelectedDecision()
-	if got := directManager.actuate(ctx, &policyEntry{namespace: "ns"}, pol, directDecision, m127FeasibleViews("p1")); got != 0 || directHands.actuateCalls != 0 || httpCalls.Load() != 0 {
+	if got := actuateWithBoundary(t, directManager, ctx, &policyEntry{namespace: "ns"}, pol, directDecision, m127FeasibleViews("p1")); got != 0 || directHands.actuateCalls != 0 || httpCalls.Load() != 0 {
 		t.Fatalf("direct API boundary dispatched after engagement: got=%d dispatches=%d HTTP=%d", got, directHands.actuateCalls, httpCalls.Load())
 	}
 	if directDecision[0].KillSwitchCause != string(KillSwitchSentinelEngaged) || directDecision[0].Trace.DispatchOutcome != model.DispatchNotAttempted {
@@ -155,7 +155,7 @@ func TestM127RealAPIDirectReaderClosesCachedDispatchWindow(t *testing.T) {
 		Intents: exposure.NewIntents(), Log: logr.Discard(),
 	}
 	cachedDecision := tracedSelectedDecision()
-	if got := cachedManager.actuate(ctx, &policyEntry{namespace: "ns"}, pol, cachedDecision, m127FeasibleViews("p1")); got != 1 || cachedHands.actuateCalls != 1 || httpCalls.Load() != 1 {
+	if got := actuateWithBoundary(t, cachedManager, ctx, &policyEntry{namespace: "ns"}, pol, cachedDecision, m127FeasibleViews("p1")); got != 1 || cachedHands.actuateCalls != 1 || httpCalls.Load() != 1 {
 		t.Fatalf("stale cached-reader negative control got=%d dispatches=%d HTTP=%d", got, cachedHands.actuateCalls, httpCalls.Load())
 	}
 }

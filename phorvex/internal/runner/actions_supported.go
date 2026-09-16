@@ -29,7 +29,8 @@ const (
 	// rather than True because "we saw nothing" is not "everything is ready" — the old
 	// code returned an affirmative all-supported claim for an empty fleet, which is a
 	// runtime-readiness assertion no observation supports.
-	actionsNoAssetsReason = "NoSelectedAssets"
+	actionsNoAssetsReason          = "NoSelectedAssets"
+	actionsNoPermittedAssetsReason = "NoPermittedAssets"
 )
 
 // actionGap is one enabled AI-capability action that is not serviceable on the WHOLE
@@ -48,10 +49,11 @@ type actionGap struct {
 func (g actionGap) unsupportedEverywhere() bool { return g.unsupported >= g.total }
 
 type actionsSupportStatus struct {
-	status      metav1.ConditionStatus
-	reason      string
-	message     string
-	preparation *actuator.RoutePreparation
+	status          metav1.ConditionStatus
+	reason          string
+	message         string
+	preparation     *actuator.RoutePreparation
+	namespaceDryRun model.ActuationBrakeObservation
 }
 
 // capabilityReport is ONE tick's capability picture for one policy: the per-action gaps
@@ -64,6 +66,9 @@ type capabilityReport struct {
 	observed int
 	// enabled is how many enabled, actionable entries were evaluated.
 	enabled int
+	// optedOut counts selected assets deliberately removed before capability and
+	// allocation evaluation by the application-owner brake.
+	optedOut int
 }
 
 // capabilityGaps returns every enabled AI-capability action that is not serviceable on
@@ -75,8 +80,20 @@ type capabilityReport struct {
 // though neither has both). A fully-supported action (every pod eligible) yields no gap;
 // a fully-unsupported one is a FLIP gap; a partial one is surfaced but does not flip.
 func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capability.Witness) capabilityReport {
-	total := len(views)
-	rep := capabilityReport{observed: total}
+	// An operator-opted-out Pod is outside the allocatable fleet. Its runtime
+	// capabilities therefore cannot degrade ActionsSupported, just as it cannot
+	// consume decision budget. A peer without opt-out remains observable here.
+	eligibleViews := make([]*model.WorkloadView, 0, len(views))
+	optedOut := 0
+	for _, view := range views {
+		if view != nil && !view.Pod.OptOut.Engaged {
+			eligibleViews = append(eligibleViews, view)
+		} else if view != nil && view.Pod.OptOut.Engaged {
+			optedOut++
+		}
+	}
+	total := len(eligibleViews)
+	rep := capabilityReport{observed: total, optedOut: optedOut}
 	var gaps []actionGap
 	// [M-21] Enumerate the enabled actions through the SAME source of truth the generator
 	// uses (model.MutatingActions filtered by model.ActionEnabled), for two reasons the
@@ -93,7 +110,7 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
 		rep.enabled++
 		unsupported := 0
 		whyCount := map[string]int{}
-		for _, v := range views {
+		for _, v := range eligibleViews {
 			// M-160: Capable AND authorized — the condition now reflects no-rbac gaps too,
 			// not only runtime fixtures (RBAC-unknown fails open inside, never a status gap).
 			if ok, why := wit.CapableAndAuthorized(v, action); !ok {
@@ -191,6 +208,12 @@ func (m *Manager) debounceActionsSupported(e *policyEntry, rep capabilityReport)
 		entry.actionsUnsupportedTicks = 0
 		entry.actionsUnsupportedSignature = ""
 		m.mu.Unlock()
+		if rep.optedOut > 0 {
+			return actionsSupportStatus{
+				status: metav1.ConditionUnknown, reason: actionsNoPermittedAssetsReason,
+				message: fmt.Sprintf("all %d selected asset(s) are operator-opted-out; per-target capability for the %d enabled action(s) was not evaluated", rep.optedOut, rep.enabled),
+			}
+		}
 		return actionsSupportStatus{
 			status: metav1.ConditionUnknown, reason: actionsNoAssetsReason,
 			message: fmt.Sprintf("no selected assets observed; per-target capability for the %d enabled action(s) was not evaluated", rep.enabled),

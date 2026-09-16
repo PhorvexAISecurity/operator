@@ -42,6 +42,8 @@ type Record struct {
 	Feasible            bool      `json:"feasible"`
 	InfeasibleWhy       string    `json:"infeasibleWhy,omitempty"`
 	DryRun              bool      `json:"dryRun"`
+	DryRunCause         string    `json:"dryRunCause,omitempty"`
+	ActuationBrakeCause string    `json:"actuationBrakeCause,omitempty"`
 	// KillSwitch is emitted only when engaged, so an existing consumer sees no change on a
 	// normal tick, and a suppressed decision is no longer indistinguishable from a failed one.
 	KillSwitch      bool    `json:"killSwitch,omitempty"`
@@ -301,6 +303,8 @@ func ToRecord(d model.Decision) Record {
 		Feasible:              d.Feasible,
 		InfeasibleWhy:         d.InfeasibleWhy,
 		DryRun:                d.DryRun,
+		DryRunCause:           d.DryRunCause,
+		ActuationBrakeCause:   d.ActuationBrakeCause,
 		KillSwitch:            d.KillSwitch,
 		KillSwitchCause:       d.KillSwitchCause,
 		Actuated:              d.Actuated,
@@ -508,6 +512,7 @@ func (l *Logger) Record(d model.Decision) error {
 		"existential", existentialJSON,
 		"tenant", rec.Tenant, "pod", rec.Namespace+"/"+rec.Pod, "action", rec.Action,
 		"selected", rec.Selected, "feasible", rec.Feasible, "dryRun", rec.DryRun,
+		"dryRunCause", rec.DryRunCause, "actuationBrakeCause", rec.ActuationBrakeCause,
 		"representation", rec.Representation, "claim", rec.Claim, "engine", rec.Engine, "perDollar", rec.PerDollar, "coveredFacts", rec.CoveredFacts,
 		"stage", rec.Stage, "nextStage", rec.NextStage, "hazard", rec.StageHazard,
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,

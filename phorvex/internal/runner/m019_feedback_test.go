@@ -100,7 +100,7 @@ func TestM019CleanRefusalGetsOneReservedAlternative(t *testing.T) {
 	}
 	h := &m019Hands{refusal: actuator.RefusedWithoutEffect(errors.New("precondition unavailable"))}
 	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
-	n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]})
+	n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]})
 	if n != 1 || len(h.calls) != 2 || h.calls[0] == h.calls[1] {
 		t.Fatalf("fallback not bounded/distinct: n=%d calls=%v", n, h.calls)
 	}
@@ -156,7 +156,7 @@ func TestM019AmbiguousRefusalNeverGetsAlternative(t *testing.T) {
 			ce, pol, views, ds := m019Scenario(t)
 			h := &m019Hands{refusal: tc.err, result: tc.result}
 			m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
-			if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
+			if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
 				t.Fatalf("ambiguous effect triggered fallback: n=%d calls=%v", n, h.calls)
 			}
 			if tc.name == "partial" && len(m.Failures.at) != 0 {
@@ -269,7 +269,7 @@ func TestM019OriginalDeadEndpointRunnerLoopBoundedAtHead(t *testing.T) {
 			t.Fatalf("incident action absent on tick %d: %v %+v", tick, err, ds)
 		}
 		h.calls = nil
-		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, viewMap); n != 0 || len(h.calls) != 1 || ds[0].Trace.DispatchOutcome != model.DispatchError {
+		if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, viewMap); n != 0 || len(h.calls) != 1 || ds[0].Trace.DispatchOutcome != model.DispatchError {
 			t.Fatalf("dead endpoint not reached: tick=%d n=%d calls=%v", tick, n, h.calls)
 		}
 		now = now.Add(10 * time.Second)
@@ -288,7 +288,7 @@ func TestM019RetiredOwnerCannotReceiveLateFailureFeedback(t *testing.T) {
 	h := &m019Hands{refusal: errors.New("late failure")}
 	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard(),
 		epochsTracked: true, epochs: map[string]uint64{pol.Owner(): 2}, tickEpochs: map[string]uint64{pol.Owner(): 1}}
-	if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
+	if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
 		t.Fatalf("late actuator path not exercised: n=%d calls=%v", n, h.calls)
 	}
 	if len(m.Failures.at) != 0 {
@@ -317,7 +317,7 @@ func TestM019ActionLocalHTTPTimeoutCoolsButCanceledTickDoesNot(t *testing.T) {
 		if err != nil || ds[0].Action != failed {
 			t.Fatalf("first transient drifted at tick %d: %v %+v", tick, err, ds)
 		}
-		if n := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, ds, viewMap); n != 0 || len(m.fallbackDecisions) != 0 {
+		if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, viewMap); n != 0 || len(m.fallbackDecisions) != 0 {
 			t.Fatalf("ambiguous HTTP timeout licensed alternative at tick %d", tick)
 		}
 		now = now.Add(10 * time.Second)
@@ -336,7 +336,7 @@ func TestM019ActionLocalHTTPTimeoutCoolsButCanceledTickDoesNot(t *testing.T) {
 	otherManager := &Manager{Actuator: otherHands, Optimizer: other, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	otherManager.actuate(ctx, &policyEntry{namespace: "ns"}, otherPol, otherDS, map[string]*model.WorkloadView{"ns/pod": otherViews[0]})
+	actuateWithBoundary(t, otherManager, ctx, &policyEntry{namespace: "ns"}, otherPol, otherDS, map[string]*model.WorkloadView{"ns/pod": otherViews[0]})
 	if len(otherManager.Failures.at) != 0 {
 		t.Fatalf("canceled parent tick taught action failure: %+v", otherManager.Failures.at)
 	}
