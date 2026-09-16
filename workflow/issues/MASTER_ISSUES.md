@@ -1454,6 +1454,13 @@ Severity: MAJOR · Tier: parallel · Fixes: T7-M040
 **Fix:** gate per-target on a selecting Service; credit the cover only on confirmed stack drain; persist prevServing.
 *Sources: A-107, A-116, A-201.*
 
+
+### Tier7 source repair — 2026-09-16
+
+`T7-M040` at `b609df7d68a8b3d4b285f23b3eb4683753eae33d` replaces the unconfirmed leave-drained behavior with a protected, identity-bound transient lifecycle. It observes bound-Service endpoint withdrawal, requires a synchronous valid positive abort count, restores the exact prior serving label and endpoint membership, and retains partial/unknown outcomes and restoration authority on failures. Restart recovery restores without repeating the abort. Independent baseline/head protocol and real local API/HTTP checks are recorded in `workflow/fixes/T7-M040/evidence/incident.md`.
+
+Real supported serving-stack effects, actual network convergence and deployed recovery controls remain pending under Tier7 and central live backlog LV-02. Local EndpointSlice emulation is not CNI proof; a successful request drain does not establish durable exclusion of an attacker or prevent a new request.
+
 ### M-42 · Session-fact gate asymmetry: kv-reset vs kv-migrate · **OPEN** · `KNOWLEDGE`
 
 Severity: HIGH · Tier: parallel · Fixes: T2-M042
