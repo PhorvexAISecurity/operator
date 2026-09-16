@@ -33,7 +33,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -437,46 +436,7 @@ type requestDrainHandler struct{}
 
 func (requestDrainHandler) Name() string { return string(model.ActionRequestDrain) }
 func (requestDrainHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "request-drain", req)
-	}
-	// ORDERING (premortem): STOP new admits BEFORE aborting in-flight, else new requests slip in mid-
-	// drain. The K8s readiness-drain (flip the serving label out) is the real, stack-independent step.
-	pod.Labels = ensureMap(pod.Labels)
-	prevServing, hadServing := pod.Labels[labelServing]
-	pod.Labels[labelServing] = "drained"
-	// M-23 A1: stamp an event-valued drain epoch in the SAME Update as the serving flip. The
-	// serving label is boolean and reverts on rollback/failure-restore, so it can't clock
-	// repeated drains; ResourceVersion differs each actuation. The failure-restore below and
-	// Rollback leave this epoch UNTOUCHED (it records drain EVENTS, not admission state).
-	pod.Labels[labelDrainEpoch] = pod.ResourceVersion
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("request-drain stop-admit %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	// abort/finish in-flight via the stack.
-	aborted, pending, derr := drainInflight(ctx, ec, pod)
-	if derr != nil {
-		// reachable-but-failed: restore admits (do not strand the pod unready) then fail-closed.
-		restoreErr := restoreObservedServing(ctx, ec.Client, pod, hadServing, prevServing)
-		status := "serving label restored"
-		if restoreErr != nil {
-			status = "PARTIAL: serving label may remain drained"
-		}
-		return HandlerResult{MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod, ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)}},
-			fmt.Errorf("request-drain abort %s/%s (%s): %w", req.Namespace, req.Pod, status, errors.Join(derr, restoreErr))
-	}
-	metrics.RecordRequestDrainAborted(req.Tenant, req.Namespace, req.Pod, aborted)
-	note := fmt.Sprintf("admits stopped; %d in-flight aborted", aborted)
-	if pending {
-		note = "admits stopped (K8s readiness-drain); in-flight abort [PENDING-GPU-VALIDATION] (serving stack unreachable)"
-	}
-	note += "; NOTE: does not block re-entry — pair with quarantine/route-rotate"
-	return HandlerResult{
-		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "request-drain: " + note,
-	}, nil
+	return enactRequestDrain(ctx, ec, req)
 }
 
 // restoreObservedServing re-reads the accepted stop-admit object so a concurrent annotation,
@@ -507,15 +467,10 @@ func restoreObservedServing(ctx context.Context, c client.Client, stopped *corev
 	return c.Update(ctx, &current)
 }
 
-// Rollback re-admits the pod (restore the serving label) — drain is transient eviction.
-func (requestDrainHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, _ string) error {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return orGone(err, ok, "request-drain-rollback", req)
-	}
-	pod.Labels = ensureMap(pod.Labels)
-	pod.Labels[labelServing] = "true"
-	return ec.Client.Update(ctx, pod)
+// Rollback only finishes an exact protected restoration obligation. It never guesses a
+// serving value from an unbound namespace/Pod reference.
+func (requestDrainHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
+	return rollbackRequestDrain(ctx, ec, req, ref)
 }
 
 // --- 15. guardrail-rotate — MTD for the safety tier ---------------------------------------

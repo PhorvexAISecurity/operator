@@ -11,13 +11,15 @@ import (
 
 // actionVerbs is the SINGLE SOURCE OF TRUTH for the RBAC verbs the T1-E capability gate
 // reviews (via SelfSubjectAccessReview) before an action is offered to the optimizer.
-// Each entry is the MUTATING operations the action's native handler actually performs,
+// Each entry is the operations the action's native handler must have at dispatch,
 // read from the handler code (the T1-E baseline verb table), NOT from RBAC markers.
 //
-// Reads (get/list pods, owner-object gets) are intentionally excluded: they are broadly
+// Broad scanner reads (get/list pods, owner-object gets) are intentionally excluded: they are broadly
 // granted, and the gate's question is "may I ACTUATE?" — gating on the mutation both
 // matches the semantics and BOUNDS SSAR amplification (P-BOUNDED-AUTHZ: fewer distinct
-// verbs ⇒ fewer cache keys ⇒ fewer apiserver calls). An empty entry is allowed for a
+// verbs ⇒ fewer cache keys ⇒ fewer apiserver calls). Request-drain's Service and EndpointSlice
+// reads are included because they are action-specific confirmation authority, not scanner context.
+// An empty entry is allowed for a
 // generatable action that performs no cluster mutation (none today); disable/noop are
 // declared-only, never generated, so they are deliberately absent.
 //
@@ -37,7 +39,7 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionEndpointRotate:      {{Resource: "pods", Verb: "update"}, {Resource: "services", Verb: "update"}},
 	model.ActionModelShardReplace:   {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}},
 	model.ActionAdapterRotate:       {{Resource: "pods", Verb: "update"}},
-	model.ActionRequestDrain:        {{Resource: "pods", Verb: "update"}},
+	model.ActionRequestDrain:        {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionGuardrailRotate:     {{Resource: "pods", Verb: "update"}},
 	model.ActionKVMigrateInvalidate: {{Resource: "pods", Verb: "update"}},
 }

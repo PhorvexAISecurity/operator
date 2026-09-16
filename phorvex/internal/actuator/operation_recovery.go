@@ -58,6 +58,8 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 				ev.Effect, ev.Err = recoverScalarCutover(ctx, ec, &entry.CM, &r)
 			case "quarantine":
 				ev.Effect, ev.Err = recoverQuarantineGC(ctx, ec, &entry.CM, &r)
+			case "request-drain":
+				ev.Effect, _, ev.Err = recoverRequestDrain(ctx, ec, &entry.CM, &r)
 			}
 		}
 		if ev.Err == nil {

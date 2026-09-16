@@ -3,8 +3,10 @@ package actuator
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,7 +45,24 @@ type operationReceipt struct {
 	RewarmUID       string            `json:"rewarmUID,omitempty"`
 	RewarmSpecHash  string            `json:"rewarmSpecHash,omitempty"`
 	Pool            *warmPoolIntent   `json:"pool,omitempty"`
+	// Request-drain v3 fields. The receipt is the authority for transient restoration;
+	// tenant Pod metadata alone never authorizes recovery.
+	OperationToken       string            `json:"operationToken,omitempty"`
+	ServiceName          string            `json:"serviceName,omitempty"`
+	ServiceUID           string            `json:"serviceUID,omitempty"`
+	ServiceSelector      map[string]string `json:"serviceSelector,omitempty"`
+	PriorServingPresent  bool              `json:"priorServingPresent,omitempty"`
+	PriorServingValue    string            `json:"priorServingValue,omitempty"`
+	EndpointAddresses    []string          `json:"endpointAddresses,omitempty"`
+	EndpointConfigSHA256 string            `json:"endpointConfigSHA256,omitempty"`
+	Aborted              int               `json:"aborted,omitempty"`
 }
+
+const (
+	requestDrainReceiptVersion = 3
+	requestDrainMaxLabels      = 64
+	requestDrainMaxAddresses   = 16
+)
 
 func receiptName(r operationReceipt) string {
 	h := sha256.Sum256([]byte(r.Kind + "/" + r.PolicyUID + "/" + r.TargetUID))
@@ -57,11 +76,14 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if (r.Version != 1 && r.Version != 2) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
 	case "warm-swap", "model-shard-replace":
+		if r.Version != 1 && r.Version != 2 {
+			return false
+		}
 		if r.Version == 2 {
 			p := r.Pool
 			if p == nil || p.RSName == "" || p.RSUID == "" || p.RSGeneration <= 0 || p.Desired < 2 || p.Desired > warmPoolMaxMembers || len(p.Members) != int(p.Desired) || p.RSTemplateHash == "" || p.RSSelectorHash == "" || p.ServiceName == "" || p.ServiceUID == "" || p.ServiceSelectorHash == "" || ((p.ParentName == "") != (p.ParentUID == "")) || r.RewarmSpecHash != "" || r.OldName == "" || r.OldName != r.TargetName || r.OldUID == "" || r.OldUID != r.TargetUID || r.NewName == "" || r.NewUID == "" || r.OldName == r.NewName || r.OldUID == r.NewUID || r.GroupValue == "" || !((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard)) {
@@ -86,9 +108,51 @@ func (r operationReceipt) valid() bool {
 		return validPhase && validRewarm && r.OldName == r.TargetName && r.OldUID == r.TargetUID && r.NewName != "" && r.NewUID != "" && r.OldName != r.NewName && r.OldUID != r.NewUID && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.GroupValue != "" && ((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard))
 	case "quarantine":
 		return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "policy-bound") && r.NPName != "" && r.TargetLabels != nil && (r.Phase != "policy-bound" || r.NPUID != "")
+	case "request-drain":
+		_, hasServingSelector := r.ServiceSelector[labelServing]
+		if r.Version != requestDrainReceiptVersion || !boundedLabelMap(r.TargetLabels) || !boundedLabelMap(r.ServiceSelector) || !hasServingSelector || r.ServiceName == "" || r.ServiceUID == "" || r.OperationToken == "" || len(r.EndpointAddresses) != 1 || (!r.PriorServingPresent && r.PriorServingValue != "") || r.Aborted < 0 {
+			return false
+		}
+		if token, err := hex.DecodeString(r.OperationToken); err != nil || len(token) != 16 {
+			return false
+		}
+		if digest, err := hex.DecodeString(r.EndpointConfigSHA256); err != nil || len(digest) != sha256.Size {
+			return false
+		}
+		seen := make(map[string]bool, len(r.EndpointAddresses))
+		for _, address := range r.EndpointAddresses {
+			if _, err := netip.ParseAddr(address); err != nil || seen[address] {
+				return false
+			}
+			seen[address] = true
+		}
+		switch r.Phase {
+		case "prepared", "claimed", "stopped", "withdrawn":
+			return r.Aborted == 0
+		case "stack-confirmed":
+			return r.Aborted > 0
+		case "restored":
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
+}
+
+func boundedLabelMap(values map[string]string) bool {
+	if len(values) == 0 || len(values) > requestDrainMaxLabels {
+		return false
+	}
+	for key, value := range values {
+		// Kubernetes already validates label syntax. These explicit bounds keep a hostile
+		// object from expanding a protected receipt beyond this operation's needs.
+		if key == "" || len(key) > 253 || len(value) > 63 {
+			return false
+		}
+	}
+	return true
 }
 
 func journalWrite(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.ConfigMap, error) {
@@ -216,7 +280,7 @@ func receiptAuthority(ctx context.Context, reader client.Reader, r operationRece
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind == "quarantine" && !sel.Matches(labels.Set(r.TargetLabels)) {
+	if (r.Kind == "quarantine" || r.Kind == "request-drain") && !sel.Matches(labels.Set(r.TargetLabels)) {
 		return nil, fmt.Errorf("recorded target outside policy selector")
 	}
 	ns := &corev1.Namespace{}

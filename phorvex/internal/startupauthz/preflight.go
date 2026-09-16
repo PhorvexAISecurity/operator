@@ -235,6 +235,17 @@ func addActionRequirements(out map[string]Requirement, cfg Config, namespace str
 	if action == model.ActionEndpointRotate {
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: "get"}, Reason: "endpoint-rotate declared service"})
 	}
+	if action == model.ActionRequestDrain {
+		for _, verb := range []string{"get", "list"} {
+			add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: verb}, Reason: "request-drain current service binding"})
+		}
+		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}, Reason: "request-drain endpoint withdrawal confirmation"})
+		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Group: "phorvex.ai", Resource: "phorvexpolicies", Verb: "get"}, Reason: "request-drain current policy authority"})
+		add(out, Requirement{Verb: authz.Verb{Resource: "namespaces", Name: namespace, Verb: "get", ClusterScoped: true}, Reason: "request-drain current namespace authority"})
+		for _, verb := range []string{"get", "list", "create", "update", "delete"} {
+			add(out, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: verb}, Reason: "request-drain recovery journal"})
+		}
+	}
 	if action == model.ActionWarmSwap || action == model.ActionModelShardReplace {
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "pods", Verb: "list"}, Reason: string(action) + " complete warm pool inventory"})
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: "get"}, Reason: string(action) + " service binding"})

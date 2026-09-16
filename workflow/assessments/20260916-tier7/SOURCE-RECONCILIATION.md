@@ -1,0 +1,18 @@
+# Tier 7 current-source decisions
+
+Lead `codex-lead`, source `669197bf025a446a87ed2923c04dbaa2237ca077`. Fresh main at intake is `b82a6b5d`; Tier6 PR217 is open. This tier uses the reviewed Tier6 product tree locally, with that dependency explicit. No live closure is inferred from the historical register.
+
+| Issue | Current-code disposition | Work |
+| --- | --- | --- |
+| M40 | PARTIALLY FIXED; remaining confirmed defect | Snapshot Service eligibility and some failure compensation exist. Dispatch ignores target/Service drift, unconfirmed HTTP can count as emission, successful targets remain drained, and crash-safe restoration is absent. Signed T7-M040 plan adds exact authority, confirmed transient drain and protected restoration. |
+| M80 | SOURCE FIXED BY TIER6; LIVE PENDING | Tier6 M83's actual capability path reads kubelet allocations and executes `nvidia-smi -L`, with bounded identity-keyed cache; the handler repeats uncached authority/complete geometry before effects. No duplicate product implementation. Requires real MIG hardware controls (LV-01). |
+| M127 | PARTIALLY FIXED; remaining reproduced defect | Boolean/condition reporting exists, but a cached tick-start sample authorizes later dispatch and loses cause. Lead actual ConfigMap flip -> actual HTTP request baseline reproduced late dispatch. T7-M127 rechecks at boundaries and reports the observed reason. |
+| M142 | ORIGINAL PRESENT BUG FIXED; remaining confirmed phase defect | CAdvisor-only Ready workloads already remain Warm. Request0 plus positive queue/token activity still becomes Idle and receives the existing low respawn prior. T7-M142 corrects contradictory/uncertain app inputs without changing the cost model or inventing network thresholds. |
+
+Independent source reports: [M40](reconciliation/m040-reconciliation.md), [M80](reconciliation/m080-reconciliation.md), [M142](reconciliation/m142-reconciliation.md). These reports are proposals/evidence; the signed issue plans define implementation scope. Lead directly inspected the corresponding producer, boundary and consumer paths before signing.
+
+M80 source reconciliation also reuses the accepted [Tier6 combined API/controller evidence](../20260916-tier6/COMBINED-REVIEW.md) at product source `8d5a71d4`, whose product tree is identical to intake `669197bf`. That run exercised the complete actuator suite, including the actual local PodResources socket and identity/cache/geometry controls. It does not prove real GPU execution or every possible driver failure. The absent focused `SupportsAction` binary-error test is a narrow coverage opportunity; the inspected producer already propagates that error and no redundant implementation is justified.
+
+For M142, infrastructure-delta calibration is recorded as **research/design residual R-M142-NETWORK**, not a fabricated source fix or a prerequisite to the conservative app-phase correction. Existing network-delta floats are unused and cannot safely support a classifier: byte signals already come from PromQL rates and are differentiated again; socket-count deltas and name-only cache keys do not prove application demand or replacement-safe history. A future optional one-way conflict detector needs source semantics, UID/freshness provenance and measured quiet/load/background distributions before thresholds. Current uninstrumented workloads already retain Warm pricing; this tier does not claim to implement that future feature. Track its later experiment alongside LV-07.
+
+The [central live backlog](../LIVE-VERIFICATION-BACKLOG.md) remains binding as a reminder and links original per-fix contracts. Source-fixed, locally validated, deployed and live-verified are distinct statuses. Production HOLD remains.

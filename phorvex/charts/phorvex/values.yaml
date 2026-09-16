@@ -124,7 +124,8 @@ phorvex:
   # namespaced mutations. Empty by default: the chart adds no workload-write privilege.
   # Each entry renders a namespaced Role/RoleBinding for pods, NetworkPolicies,
   # ReplicaSets and Services. Service access is exactly get/update so route-rotate and
-  # endpoint-rotate can restitch selectors; Secrets and EndpointSlices remain denied.
+  # endpoint-rotate can restitch selectors; Secrets and EndpointSlice mutation remain denied.
+  # request-drain receives namespaced EndpointSlice list only to confirm withdrawal/return.
   actuatorNamespaces: []
   # Operator-administered exact namespace+adapter reload mappings. Empty disables
   # adapter reload and mounts nothing. Changes take effect after manager restart.

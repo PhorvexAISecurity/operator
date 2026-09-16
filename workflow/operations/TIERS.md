@@ -96,6 +96,13 @@ assessments/20260916-tier6/AUTHORIZATION.md. This is a Tier6 scheduling exceptio
 the pending controls and production HOLD remain in force. It does not waive
 live evidence or authorize deployment or shared infrastructure changes.
 
+The owner's September 16 follow-up explicitly starts Tier7 source work while
+Tier6 deployment is pending; see assessments/20260916-tier7/AUTHORIZATION.md.
+This scheduling exception retains all live obligations. Maintain the central
+assessments/LIVE-VERIFICATION-BACKLOG.md when a control is added, exercised or
+closed, retaining per-fix evidence and verdicts. Reconcile current code first to
+avoid implementing already repaired historical tier entries.
+
 ## Durable handover and final evidence
 
 Persist assessment coverage, source/deployment pins, issue reconciliation, the

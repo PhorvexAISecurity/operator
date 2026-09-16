@@ -25,7 +25,8 @@ import (
 const (
 	RecoveryPlanVersion     = 1
 	RecoveryContractVersion = "phorvex-recovery/v1"
-	RecoveryOperation       = "quarantine-readmit"
+	RecoveryOperation       = "protected-readmit"
+	recoveryLegacyOperation = "quarantine-readmit"
 	RecoveryHoldName        = "phorvex-killswitch"
 	RecoveryMaxItems        = 100
 	RecoveryPlanMaxBytes    = 1 << 20
@@ -90,14 +91,16 @@ type RecoveryPlan struct {
 }
 
 type RecoveryPlanItem struct {
-	Receipt       ObjectBinding `json:"receipt"`
-	ReceiptSHA256 string        `json:"receiptSHA256"`
-	Policy        ObjectBinding `json:"policy"`
-	Pod           ObjectBinding `json:"pod"`
-	NetworkPolicy ObjectBinding `json:"networkPolicy"`
-	RollbackRef   string        `json:"rollbackRef"`
-	TargetLabels  string        `json:"targetLabelsSHA256"`
-	OwnerRefs     string        `json:"ownerRefsSHA256"`
+	Kind          string         `json:"kind,omitempty"`
+	Receipt       ObjectBinding  `json:"receipt"`
+	ReceiptSHA256 string         `json:"receiptSHA256"`
+	Policy        ObjectBinding  `json:"policy"`
+	Pod           ObjectBinding  `json:"pod"`
+	NetworkPolicy ObjectBinding  `json:"networkPolicy"`
+	Service       *ObjectBinding `json:"service,omitempty"`
+	RollbackRef   string         `json:"rollbackRef"`
+	TargetLabels  string         `json:"targetLabelsSHA256"`
+	OwnerRefs     string         `json:"ownerRefsSHA256"`
 }
 
 type RecoveryApplyResult struct {
@@ -323,9 +326,9 @@ func (n *NativeActuator) InventoryRecovery(ctx context.Context, scope RecoverySc
 		}
 		item.Kind, item.Phase, item.PolicyNamespace, item.PolicyName, item.PolicyUID = receipt.Kind, receipt.Phase, receipt.PolicyNamespace, receipt.PolicyName, receipt.PolicyUID
 		item.TargetName, item.TargetUID = receipt.TargetName, receipt.TargetUID
-		if receipt.Kind != "quarantine" {
+		if receipt.Kind != "quarantine" && receipt.Kind != "request-drain" {
 			item.Status, item.Reason = "manual", "forward recovery only; generic undo is unavailable"
-		} else if receipt.Phase != "policy-bound" {
+		} else if receipt.Kind == "quarantine" && receipt.Phase != "policy-bound" {
 			item.Reason = "quarantine receipt is not policy-bound"
 		} else if _, err := n.recoveryPlanItem(ctx, cm, receipt); err != nil {
 			item.Reason = err.Error()
@@ -340,6 +343,12 @@ func (n *NativeActuator) InventoryRecovery(ctx context.Context, scope RecoverySc
 }
 
 func (n *NativeActuator) recoveryPlanItem(ctx context.Context, cm *corev1.ConfigMap, r operationReceipt) (RecoveryPlanItem, error) {
+	if r.Kind == "request-drain" {
+		return n.requestDrainRecoveryPlanItem(ctx, cm, r)
+	}
+	if r.Kind != "quarantine" {
+		return RecoveryPlanItem{}, fmt.Errorf("unsupported recovery receipt kind %q", r.Kind)
+	}
 	if _, err := receiptAuthority(ctx, n.Reader, r, model.ActionQuarantine); err != nil {
 		return RecoveryPlanItem{}, err
 	}
@@ -371,7 +380,38 @@ func (n *NativeActuator) recoveryPlanItem(ctx context.Context, cm *corev1.Config
 	if _, err := recordedQuarantinePolicies(ctx, EnactCtx{Reader: n.Reader}, pod, &snap); err != nil {
 		return RecoveryPlanItem{}, err
 	}
-	return RecoveryPlanItem{Receipt: binding(cm, "v1", "ConfigMap"), ReceiptSHA256: digestJSON(cm.Data["receipt"]), Policy: binding(pol, v1alpha1.GroupVersion.String(), "PhorvexPolicy"), Pod: binding(pod, "v1", "Pod"), NetworkPolicy: binding(np, "networking.k8s.io/v1", "NetworkPolicy"), RollbackRef: pod.Namespace + "/" + pod.Name + "@" + string(pod.UID), TargetLabels: digestJSON(r.TargetLabels), OwnerRefs: digestJSON(pod.OwnerReferences)}, nil
+	return RecoveryPlanItem{Kind: "quarantine", Receipt: binding(cm, "v1", "ConfigMap"), ReceiptSHA256: digestJSON(cm.Data["receipt"]), Policy: binding(pol, v1alpha1.GroupVersion.String(), "PhorvexPolicy"), Pod: binding(pod, "v1", "Pod"), NetworkPolicy: binding(np, "networking.k8s.io/v1", "NetworkPolicy"), RollbackRef: pod.Namespace + "/" + pod.Name + "@" + string(pod.UID), TargetLabels: digestJSON(r.TargetLabels), OwnerRefs: digestJSON(pod.OwnerReferences)}, nil
+}
+
+func (n *NativeActuator) requestDrainRecoveryPlanItem(ctx context.Context, cm *corev1.ConfigMap, r operationReceipt) (RecoveryPlanItem, error) {
+	pol, err := receiptAuthority(ctx, n.Reader, r, model.ActionRequestDrain)
+	if err != nil {
+		return RecoveryPlanItem{}, err
+	}
+	pod := &corev1.Pod{}
+	if err := n.Reader.Get(ctx, client.ObjectKey{Namespace: r.PolicyNamespace, Name: r.TargetName}, pod); err != nil {
+		return RecoveryPlanItem{}, err
+	}
+	if string(pod.UID) != r.TargetUID || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
+		return RecoveryPlanItem{}, fmt.Errorf("request-drain target Pod UID/resourceVersion mismatch")
+	}
+	if r.Phase != "prepared" || pod.Labels[labelDrainEpoch] == r.OperationToken {
+		if pod.Labels[labelDrainEpoch] != r.OperationToken || (pod.Labels[labelServing] != "drained" && !servingRestored(pod, r)) {
+			return RecoveryPlanItem{}, fmt.Errorf("request-drain target operation token or serving state changed")
+		}
+	} else if !servingRestored(pod, r) {
+		return RecoveryPlanItem{}, fmt.Errorf("prepared request-drain outcome is ambiguous")
+	}
+	svc, err := readBoundDrainService(ctx, n.Reader, r)
+	if err != nil {
+		return RecoveryPlanItem{}, err
+	}
+	serviceBinding := binding(svc, "v1", "Service")
+	return RecoveryPlanItem{
+		Kind: "request-drain", Receipt: binding(cm, "v1", "ConfigMap"), ReceiptSHA256: digestJSON(cm.Data["receipt"]),
+		Policy: binding(pol, v1alpha1.GroupVersion.String(), "PhorvexPolicy"), Pod: binding(pod, "v1", "Pod"), Service: &serviceBinding,
+		RollbackRef: cm.Namespace + "/" + cm.Name + "@" + string(cm.UID), TargetLabels: digestJSON(r.TargetLabels), OwnerRefs: digestJSON(pod.OwnerReferences),
+	}, nil
 }
 
 func (n *NativeActuator) PlanRecovery(ctx context.Context, scope RecoveryScope) (RecoveryPlan, error) {
@@ -392,7 +432,7 @@ func (n *NativeActuator) PlanRecovery(ctx context.Context, scope RecoveryScope) 
 			return RecoveryPlan{}, fmt.Errorf("protected receipt changed after inventory")
 		}
 		r, err := validateProtectedReceipt(cm, scope.OperatorNamespace)
-		if err != nil || r.PolicyNamespace != scope.Namespace || r.PolicyName != scope.PolicyName || r.Kind != "quarantine" || r.Phase != "policy-bound" {
+		if err != nil || r.PolicyNamespace != scope.Namespace || r.PolicyName != scope.PolicyName || (r.Kind != "quarantine" && r.Kind != "request-drain") || (r.Kind == "quarantine" && r.Phase != "policy-bound") {
 			return RecoveryPlan{}, fmt.Errorf("protected receipt left selected recovery scope")
 		}
 		pi, err := n.recoveryPlanItem(ctx, cm, r)
@@ -402,7 +442,7 @@ func (n *NativeActuator) PlanRecovery(ctx context.Context, scope RecoveryScope) 
 		plan.Items = append(plan.Items, pi)
 	}
 	if len(plan.Items) == 0 {
-		return RecoveryPlan{}, fmt.Errorf("no supported quarantine re-admissions in scope")
+		return RecoveryPlan{}, fmt.Errorf("no supported protected re-admissions in scope")
 	}
 	plan.SHA256 = recoveryPlanHash(plan)
 	return plan, nil
@@ -415,14 +455,24 @@ func sameBinding(a, b ObjectBinding) bool {
 }
 
 func validatePlanStructure(plan RecoveryPlan) error {
-	if plan.Version != RecoveryPlanVersion || plan.Contract != RecoveryContractVersion || plan.Operation != RecoveryOperation || recoveryPlanHash(plan) != plan.SHA256 || validateRecoveryScope(plan.Scope) != nil || len(plan.Items) == 0 || len(plan.Items) > plan.Scope.MaxItems {
+	if plan.Version != RecoveryPlanVersion || plan.Contract != RecoveryContractVersion || (plan.Operation != RecoveryOperation && plan.Operation != recoveryLegacyOperation) || recoveryPlanHash(plan) != plan.SHA256 || validateRecoveryScope(plan.Scope) != nil || len(plan.Items) == 0 || len(plan.Items) > plan.Scope.MaxItems {
 		return fmt.Errorf("recovery plan is malformed, tampered, oversized, or incompatible")
 	}
 	seenReceipt, seenTarget := map[string]bool{}, map[string]bool{}
 	for _, item := range plan.Items {
+		kind := item.Kind
+		if kind == "" && plan.Operation == recoveryLegacyOperation {
+			kind = "quarantine"
+		}
 		if item.Receipt.APIVersion != "v1" || item.Receipt.Kind != "ConfigMap" || item.Receipt.Namespace != plan.Scope.OperatorNamespace || item.Receipt.Name == "" || item.Receipt.UID == "" || item.Receipt.ResourceVersion == "" || item.Receipt.SHA256 == "" || item.ReceiptSHA256 == "" ||
-			item.Policy.Namespace != plan.Scope.Namespace || item.Policy.Name != plan.Scope.PolicyName || item.Policy.UID == "" || item.Pod.Namespace != plan.Scope.Namespace || item.Pod.Name == "" || item.Pod.UID == "" || item.NetworkPolicy.Namespace != plan.Scope.Namespace || item.NetworkPolicy.Name == "" || item.NetworkPolicy.UID == "" || item.RollbackRef != item.Pod.Namespace+"/"+item.Pod.Name+"@"+item.Pod.UID {
+			item.Policy.Namespace != plan.Scope.Namespace || item.Policy.Name != plan.Scope.PolicyName || item.Policy.UID == "" || item.Pod.Namespace != plan.Scope.Namespace || item.Pod.Name == "" || item.Pod.UID == "" || (kind != "quarantine" && kind != "request-drain") {
 			return fmt.Errorf("recovery plan item has invalid protected scope or identity")
+		}
+		if kind == "quarantine" && (item.NetworkPolicy.Namespace != plan.Scope.Namespace || item.NetworkPolicy.Name == "" || item.NetworkPolicy.UID == "" || item.RollbackRef != item.Pod.Namespace+"/"+item.Pod.Name+"@"+item.Pod.UID) {
+			return fmt.Errorf("quarantine recovery plan item has invalid protected objects")
+		}
+		if kind == "request-drain" && (item.Service == nil || item.Service.Namespace != plan.Scope.Namespace || item.Service.Name == "" || item.Service.UID == "" || item.RollbackRef != item.Receipt.Namespace+"/"+item.Receipt.Name+"@"+item.Receipt.UID) {
+			return fmt.Errorf("request-drain recovery plan item has invalid protected objects")
 		}
 		if seenReceipt[item.Receipt.Name] || seenTarget[item.Pod.Namespace+"/"+item.Pod.Name+"@"+item.Pod.UID] {
 			return fmt.Errorf("recovery plan contains duplicate receipt or target")
@@ -498,6 +548,10 @@ func (n *NativeActuator) ApplyRecoveryWithRecorder(ctx context.Context, plan Rec
 		return nil
 	}
 	for _, item := range plan.Items {
+		itemKind := item.Kind
+		if itemKind == "" && plan.Operation == recoveryLegacyOperation {
+			itemKind = "quarantine"
+		}
 		out := RecoveryApplyItem{Receipt: item.Receipt.Name, Namespace: item.Pod.Namespace, Target: item.Pod.Name, TargetUID: item.Pod.UID, Outcome: "refused"}
 		currentHold, holdErr := n.requireRecoveryHold(ctx, plan.Scope.OperatorNamespace)
 		if holdErr != nil || !sameBinding(currentHold, hold) {
@@ -522,7 +576,7 @@ func (n *NativeActuator) ApplyRecoveryWithRecorder(ctx context.Context, plan Rec
 			return result, err
 		}
 		receipt, receiptErr := validateProtectedReceipt(cm, plan.Scope.OperatorNamespace)
-		if !sameBinding(binding(cm, "v1", "ConfigMap"), item.Receipt) || digestJSON(cm.Data["receipt"]) != item.ReceiptSHA256 || receiptErr != nil || receipt.Kind != "quarantine" || receipt.Phase != "policy-bound" || receipt.PolicyNamespace != plan.Scope.Namespace || receipt.PolicyName != plan.Scope.PolicyName {
+		if !sameBinding(binding(cm, "v1", "ConfigMap"), item.Receipt) || digestJSON(cm.Data["receipt"]) != item.ReceiptSHA256 || receiptErr != nil || receipt.Kind != itemKind || (receipt.Kind == "quarantine" && receipt.Phase != "policy-bound") || receipt.PolicyNamespace != plan.Scope.Namespace || receipt.PolicyName != plan.Scope.PolicyName {
 			out.Reason = "protected receipt changed or left scope"
 			result.Items = append(result.Items, out)
 			if writeErr := persistProgress(); writeErr != nil {
@@ -531,8 +585,12 @@ func (n *NativeActuator) ApplyRecoveryWithRecorder(ctx context.Context, plan Rec
 			return result, errors.New(out.Reason)
 		}
 		current, e := n.recoveryPlanItem(ctx, cm, receipt)
-		if e != nil || !sameBinding(current.Policy, item.Policy) || !sameBinding(current.Pod, item.Pod) || !sameBinding(current.NetworkPolicy, item.NetworkPolicy) || current.TargetLabels != item.TargetLabels || current.OwnerRefs != item.OwnerRefs || current.RollbackRef != item.RollbackRef {
-			out.Reason = "planned policy/Pod/NetworkPolicy preconditions changed"
+		serviceSame := current.Service == nil && item.Service == nil
+		if current.Service != nil && item.Service != nil {
+			serviceSame = sameBinding(*current.Service, *item.Service)
+		}
+		if e != nil || current.Kind != itemKind || !sameBinding(current.Policy, item.Policy) || !sameBinding(current.Pod, item.Pod) || !sameBinding(current.NetworkPolicy, item.NetworkPolicy) || !serviceSame || current.TargetLabels != item.TargetLabels || current.OwnerRefs != item.OwnerRefs || current.RollbackRef != item.RollbackRef {
+			out.Reason = "planned policy/Pod/operation-object preconditions changed"
 			if e != nil {
 				out.Reason += ": " + e.Error()
 			}
@@ -542,7 +600,11 @@ func (n *NativeActuator) ApplyRecoveryWithRecorder(ctx context.Context, plan Rec
 			}
 			return result, errors.New(out.Reason)
 		}
-		req := Request{Namespace: receipt.PolicyNamespace, Pod: receipt.TargetName, TargetUID: receipt.TargetUID, Action: model.ActionQuarantine, PolicyName: receipt.PolicyName, PolicyUID: receipt.PolicyUID}
+		action := model.ActionQuarantine
+		if receipt.Kind == "request-drain" {
+			action = model.ActionRequestDrain
+		}
+		req := Request{Namespace: receipt.PolicyNamespace, Pod: receipt.TargetName, TargetUID: receipt.TargetUID, Action: action, PolicyName: receipt.PolicyName, PolicyUID: receipt.PolicyUID}
 		if err = n.Rollback(ctx, req, item.RollbackRef); err != nil {
 			out.Outcome, out.Reason = "partial-or-unknown", err.Error()
 			result.Items = append(result.Items, out)

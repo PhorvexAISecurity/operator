@@ -252,8 +252,8 @@ func ExposureFingerprints(p Pod) map[string]string {
 // The old flat float64 fields + `Present bool` + `PresentSignals map[string]bool` are gone:
 // the per-Signal State subsumes both bools.
 type Telemetry struct {
-	// App-level signals — presence of ANY decides Idle-vs-Warm (see AppLevelPresent).
-	// Their absence must NEVER route a pod to Idle (M-142).
+	// App-level signals — presence and validity jointly decide Idle-vs-Warm. Their absence,
+	// uncertainty, or contradictory measured activity must NEVER route a pod to Idle (M-142).
 	ReqRate      Signal
 	P99Ms        Signal
 	LatencyMs    Signal // legacy mirror of P99Ms (same source)
@@ -544,7 +544,7 @@ type WorkloadView struct {
 	Pod                Pod
 	Telemetry          Telemetry
 	Phase              WorkloadPhase
-	PhaseReason        string  // T1-C: idle-measured|warm-no-app-signal|busy-measured|coldstart|draining|unknown
+	PhaseReason        string  // idle-measured|warm-no-app-signal|warm-uncertain-app-signal|busy-measured|coldstart|draining|unknown
 	BlastRadius        float64 // graph score (reach into high-value neighbors), normalized [0,1]
 	NeighborCount      int
 	Neighbors          []NeighborRef // reachable neighbors with their values (P1 lateral facts)
@@ -709,9 +709,10 @@ type Decision struct {
 	// actuator silently failed — both read selected=true, dryRun=false, actuated=false —
 	// so a decision-only mirror looks exactly like a broken actuator. Kill-switch and
 	// dry-run are separate gates and must stay separately visible.
-	KillSwitch bool
-	Actuated   bool
-	DecidedAt  time.Time
+	KillSwitch      bool
+	KillSwitchCause string
+	Actuated        bool
+	DecidedAt       time.Time
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---

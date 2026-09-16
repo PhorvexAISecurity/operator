@@ -43,6 +43,17 @@ func (c *t3FaultClient) Update(ctx context.Context, obj client.Object, opts ...c
 	}
 	return c.Client.Update(ctx, obj, opts...)
 }
+
+func (c *t3FaultClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	name := obj.GetName()
+	c.updates = append(c.updates, name)
+	if c.updateFault != nil {
+		if err := c.updateFault(obj); err != nil {
+			return err
+		}
+	}
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
 func (c *t3FaultClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	c.lists++
 	if c.listFault != nil {
@@ -334,152 +345,94 @@ func TestT3GroupUnreachableDrainIsPendingAndNotConfirmed(t *testing.T) {
 }
 
 func TestT3RequestDrainRestoreExactAbsentLabelAndJoinFailure(t *testing.T) {
-	p := aiPod("ns", "infer", map[string]string{"unrelated": "keep"})
+	p := aiPod("ns", "infer", map[string]string{"unrelated": "keep", labelServing: "drained", labelDrainEpoch: "00112233445566778899aabbccddeeff"})
 	base := fakeC(p)
-	drainErr, restoreErr := errors.New("drain HTTP 500"), errors.New("restore update refused")
-	c := &t3FaultClient{Client: base}
-	c.updateFault = func(obj client.Object) error {
-		pod := obj.(*corev1.Pod)
-		if _, exists := pod.Labels[labelServing]; !exists {
-			return restoreErr
-		}
-		return nil
-	}
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drainErr: drainErr}}, Request{Namespace: "ns", Pod: "infer"})
-	if !errors.Is(err, drainErr) || !errors.Is(err, restoreErr) || hr.Emitted || len(hr.ObjectsTouched) != 1 {
-		t.Fatalf("partial %v %+v", err, hr)
-	}
-	var saved corev1.Pod
-	if err := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &saved); err != nil {
+	r := operationReceipt{PolicyNamespace: "ns", TargetName: "infer", TargetUID: string(p.UID), OperationToken: p.Labels[labelDrainEpoch], PriorServingPresent: false}
+	if _, err := restoreDrainPod(context.Background(), EnactCtx{Client: base, Reader: base}, r); err != nil {
 		t.Fatal(err)
 	}
-	if saved.Labels[labelServing] != "drained" || saved.Labels[labelDrainEpoch] == "" || saved.Labels["unrelated"] != "keep" {
-		t.Fatalf("persisted %+v", saved.Labels)
-	}
-	// Complete compensation of an absent label must remove the key, not write an empty value.
-	completeBase := fakeC(aiPod("ns", "infer", map[string]string{"unrelated": "keep"}))
-	_, err = requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: completeBase, VLLM: &mockVLLM{drainErr: drainErr}}, Request{Namespace: "ns", Pod: "infer"})
-	if !errors.Is(err, drainErr) {
-		t.Fatal(err)
-	}
-	if err := completeBase.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &saved); err != nil {
-		t.Fatal(err)
-	}
+	saved := getDrainPod(t, base)
 	if _, present := saved.Labels[labelServing]; present {
 		t.Fatalf("absent prior serving label restored as %q", saved.Labels[labelServing])
 	}
-	if saved.Labels[labelDrainEpoch] == "" {
-		t.Fatal("drain event epoch lost")
+	if saved.Labels[labelDrainEpoch] != r.OperationToken || saved.Labels["unrelated"] != "keep" {
+		t.Fatalf("restoration lost operation epoch or unrelated metadata: %+v", saved.Labels)
 	}
 }
 
 func TestT3RequestDrainRestoreUpdateFailureRetainsBothErrors(t *testing.T) {
-	base := fakeC(aiPod("ns", "infer", map[string]string{labelServing: "true"}))
-	primary, restoreErr := errors.New("reachable drain HTTP 500"), errors.New("restore update refused")
-	c := &t3FaultClient{Client: base}
-	c.updateFault = func(obj client.Object) error {
-		p := obj.(*corev1.Pod)
+	pod, svc, _, controller := requestDrainFixture(t, "true")
+	r := testDrainReceipt(pod, svc, "prepared")
+	ec := requestDrainEC(controller, nil)
+	cm, err := journalWrite(context.Background(), ec, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped, _, err := drainPodWithReceipt(context.Background(), ec, getDrainPod(t, controller), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Phase = "stopped"
+	if err := journalAdvance(context.Background(), ec, cm, r); err != nil {
+		t.Fatal(err)
+	}
+	primary, restoreErr := errors.New("reachable drain HTTP 500"), errors.New("restore patch refused")
+	controller.patchErr = func(p *corev1.Pod) error {
 		if p.Labels[labelServing] == "true" {
 			return restoreErr
 		}
 		return nil
 	}
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{drainErr: primary}}, Request{Namespace: "ns", Pod: "infer"})
-	if !errors.Is(err, primary) || !errors.Is(err, restoreErr) || hr.Emitted || len(hr.ObjectsTouched) != 1 {
-		t.Fatalf("swallowed restore or lost effects: %+v %v", hr, err)
+	hr, err := requestDrainFailure(context.Background(), ec, cm, &r, stopped, primary)
+	if !errors.Is(err, primary) || !errors.Is(err, restoreErr) || !hr.Emitted {
+		t.Fatalf("swallowed restore or lost partial effects: %+v %v", hr, err)
 	}
-	var saved corev1.Pod
-	if getErr := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &saved); getErr != nil {
-		t.Fatal(getErr)
-	}
-	if saved.Labels[labelServing] != "drained" || saved.Labels[labelDrainEpoch] == "" {
-		t.Fatalf("failed restore did not retain stop-admit: %+v", saved.Labels)
+	if saved := getDrainPod(t, controller); saved.Labels[labelServing] != "drained" || saved.Labels[labelDrainEpoch] != r.OperationToken {
+		t.Fatalf("failed restore lost ownership evidence: %+v", saved.Labels)
 	}
 }
 
 func TestT3RequestDrainRestorePreservesConcurrentMetadata(t *testing.T) {
-	base := fakeC(aiPod("ns", "infer", map[string]string{labelServing: "standby"}))
-	primary := errors.New("reachable drain refused")
-	mv := &t3DrainHook{mockVLLM: &mockVLLM{drainErr: primary}}
-	mv.hook = func() {
-		var current corev1.Pod
-		if err := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &current); err != nil {
-			t.Fatal(err)
-		}
-		current.Annotations = ensureMap(current.Annotations)
-		current.Annotations["concurrent"] = "new-value"
-		if err := base.Update(context.Background(), &current); err != nil {
-			t.Fatal(err)
-		}
+	pod, svc, _, controller := requestDrainFixture(t, "standby")
+	r := testDrainReceipt(pod, svc, "stopped")
+	current := getDrainPod(t, controller)
+	current.Labels[labelServing], current.Labels[labelDrainEpoch] = "drained", r.OperationToken
+	current.Annotations["concurrent"] = "new-value"
+	if err := controller.Client.Update(context.Background(), current); err != nil {
+		t.Fatal(err)
 	}
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: base, VLLM: mv}, Request{Namespace: "ns", Pod: "infer"})
-	if !errors.Is(err, primary) || hr.Emitted {
-		t.Fatalf("failed drain: %+v %v", hr, err)
+	if _, err := restoreDrainPod(context.Background(), requestDrainEC(controller, nil), r); err != nil {
+		t.Fatal(err)
 	}
-	var saved corev1.Pod
-	if getErr := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &saved); getErr != nil {
-		t.Fatal(getErr)
-	}
-	if saved.Labels[labelServing] != "standby" || saved.Annotations["concurrent"] != "new-value" || saved.Labels[labelDrainEpoch] == "" {
+	saved := getDrainPod(t, controller)
+	if saved.Labels[labelServing] != "standby" || saved.Annotations["concurrent"] != "new-value" || saved.Labels[labelDrainEpoch] != r.OperationToken {
 		t.Fatalf("metadata lost: %+v", saved.ObjectMeta)
 	}
 }
 
 func TestT3RequestDrainRestoreRefusesSameNameReplacement(t *testing.T) {
-	base := fakeC(aiPod("ns", "infer", map[string]string{labelServing: "true"}))
-	primary := errors.New("reachable drain refused")
-	mv := &t3DrainHook{mockVLLM: &mockVLLM{drainErr: primary}}
-	mv.hook = func() {
-		var old corev1.Pod
-		if err := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &old); err != nil {
-			t.Fatal(err)
-		}
-		if err := base.Delete(context.Background(), &old); err != nil {
-			t.Fatal(err)
-		}
-		old.UID = types.UID("replacement-infer")
-		old.ResourceVersion = ""
-		old.Labels[labelServing] = "replacement"
-		if err := base.Create(context.Background(), &old); err != nil {
-			t.Fatal(err)
-		}
+	original := aiPod("ns", "infer", map[string]string{labelServing: "drained", labelDrainEpoch: "00112233445566778899aabbccddeeff"})
+	r := operationReceipt{PolicyNamespace: "ns", TargetName: "infer", TargetUID: string(original.UID), OperationToken: original.Labels[labelDrainEpoch], PriorServingPresent: true, PriorServingValue: "true"}
+	replacement := original.DeepCopy()
+	replacement.UID = types.UID("replacement-infer")
+	replacement.Labels[labelServing] = "replacement"
+	base := fakeC(replacement)
+	if _, err := restoreDrainPod(context.Background(), EnactCtx{Client: base, Reader: base}, r); err == nil || !containsStr(err.Error(), "identity changed") {
+		t.Fatalf("replacement restore err=%v", err)
 	}
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: base, VLLM: mv}, Request{Namespace: "ns", Pod: "infer"})
-	if !errors.Is(err, primary) || !errors.Is(err, errPodReplaced) || hr.Emitted {
-		t.Fatalf("replacement: %+v %v", hr, err)
-	}
-	var saved corev1.Pod
-	if getErr := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &saved); getErr != nil {
-		t.Fatal(getErr)
-	}
-	if saved.UID != types.UID("replacement-infer") || saved.Labels[labelServing] != "replacement" {
+	if saved := getDrainPod(t, base); saved.UID != replacement.UID || saved.Labels[labelServing] != "replacement" {
 		t.Fatalf("replacement overwritten: %+v", saved.ObjectMeta)
 	}
 }
 
 func TestT3RequestDrainRestoreRefusesLaterDrainEpoch(t *testing.T) {
-	base := fakeC(aiPod("ns", "infer", map[string]string{labelServing: "true"}))
-	primary := errors.New("reachable drain refused")
-	mv := &t3DrainHook{mockVLLM: &mockVLLM{drainErr: primary}}
-	mv.hook = func() {
-		var current corev1.Pod
-		if err := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &current); err != nil {
-			t.Fatal(err)
-		}
-		current.Labels[labelDrainEpoch] = "newer-drain-event"
-		if err := base.Update(context.Background(), &current); err != nil {
-			t.Fatal(err)
-		}
+	p := aiPod("ns", "infer", map[string]string{labelServing: "drained", labelDrainEpoch: "newer-drain-event"})
+	base := fakeC(p)
+	r := operationReceipt{PolicyNamespace: "ns", TargetName: "infer", TargetUID: string(p.UID), OperationToken: "00112233445566778899aabbccddeeff", PriorServingPresent: true, PriorServingValue: "true"}
+	if _, err := restoreDrainPod(context.Background(), EnactCtx{Client: base, Reader: base}, r); err == nil || !containsStr(err.Error(), "token changed") {
+		t.Fatalf("later drain err=%v", err)
 	}
-	hr, err := requestDrainHandler{}.Enact(context.Background(), EnactCtx{Client: base, VLLM: mv}, Request{Namespace: "ns", Pod: "infer"})
-	if !errors.Is(err, primary) || !containsStr(err.Error(), "drain epoch changed") || hr.Emitted {
-		t.Fatalf("later drain: %+v %v", hr, err)
-	}
-	var saved corev1.Pod
-	if getErr := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &saved); getErr != nil {
-		t.Fatal(getErr)
-	}
-	if saved.Labels[labelServing] != "drained" || saved.Labels[labelDrainEpoch] != "newer-drain-event" {
+	if saved := getDrainPod(t, base); saved.Labels[labelServing] != "drained" || saved.Labels[labelDrainEpoch] != "newer-drain-event" {
 		t.Fatalf("later drain overwritten: %+v", saved.Labels)
 	}
 }
