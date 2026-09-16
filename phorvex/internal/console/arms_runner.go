@@ -251,9 +251,13 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 		a.TargetUID = receipt.PodUID
 		if spec.id == "r6blind" {
 			rv := strings.TrimSpace(s.kctlOut(ns, "get", "pod", receipt.Pod, "-o", "jsonpath={.metadata.resourceVersion}"))
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			err = s.experimentCluster().DeletePod(ctx, ns, receipt.Pod, receipt.PodUID, rv)
-			cancel()
+			if rv == "" {
+				err = fmt.Errorf("target resourceVersion unavailable")
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				err = s.experimentCluster().DeletePod(ctx, ns, receipt.Pod, receipt.PodUID, rv)
+				cancel()
+			}
 			a.RotationConfirmed = err == nil
 			if err != nil {
 				a.Error = "identity-bound timer rotation: " + err.Error()
