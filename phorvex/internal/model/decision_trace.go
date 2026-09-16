@@ -364,6 +364,7 @@ type DecisionTraceV2 struct {
 	MovesSpent           int     `json:"movesSpent"`
 	DryRun               bool    `json:"dryRun"`
 	KillSwitchEngaged    bool    `json:"killSwitchEngaged"`
+	KillSwitchCause      string  `json:"killSwitchCause,omitempty"`
 	LambdaConfiguredSeed float64 `json:"lambdaConfiguredSeed"`
 	LambdaRuntime        float64 `json:"lambdaRuntime"`
 	// The two fields above remain as wire-compatible aliases for existing readers.

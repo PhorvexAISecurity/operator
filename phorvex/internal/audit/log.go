@@ -44,17 +44,18 @@ type Record struct {
 	DryRun              bool      `json:"dryRun"`
 	// KillSwitch is emitted only when engaged, so an existing consumer sees no change on a
 	// normal tick, and a suppressed decision is no longer indistinguishable from a failed one.
-	KillSwitch    bool    `json:"killSwitch,omitempty"`
-	Actuated      bool    `json:"actuated"`
-	CoverageValue float64 `json:"coverageValue"`
-	ThreatRisk    float64 `json:"threatRisk,omitempty"`
-	Cost          float64 `json:"cost"`
-	Net           float64 `json:"net"`
-	Residual      float64 `json:"residual"`      // observational under P1
-	ThreatPosture float64 `json:"threatPosture"` // observational under P1
-	Exposure      float64 `json:"exposure"`
-	PHold         float64 `json:"pHold"`
-	Provenance    float64 `json:"provenance,omitempty"` // prov(key) applied to coverage in selection/demand/fallback (M-110)
+	KillSwitch      bool    `json:"killSwitch,omitempty"`
+	KillSwitchCause string  `json:"killSwitchCause,omitempty"`
+	Actuated        bool    `json:"actuated"`
+	CoverageValue   float64 `json:"coverageValue"`
+	ThreatRisk      float64 `json:"threatRisk,omitempty"`
+	Cost            float64 `json:"cost"`
+	Net             float64 `json:"net"`
+	Residual        float64 `json:"residual"`      // observational under P1
+	ThreatPosture   float64 `json:"threatPosture"` // observational under P1
+	Exposure        float64 `json:"exposure"`
+	PHold           float64 `json:"pHold"`
+	Provenance      float64 `json:"provenance,omitempty"` // prov(key) applied to coverage in selection/demand/fallback (M-110)
 	// PHoldInputs (M-143): the capped noisy-OR terms behind pHold. Emitted so a reader can see
 	// that the posterior (betaMean) still moves pHold at every exposure age.
 	PHoldInputs *PHoldInputsRecord `json:"pHoldInputs,omitempty"`
@@ -301,6 +302,7 @@ func ToRecord(d model.Decision) Record {
 		InfeasibleWhy:         d.InfeasibleWhy,
 		DryRun:                d.DryRun,
 		KillSwitch:            d.KillSwitch,
+		KillSwitchCause:       d.KillSwitchCause,
 		Actuated:              d.Actuated,
 		CoverageValue:         round4(d.CoverageValue),
 		ThreatRisk:            round4(d.ThreatRisk),
@@ -517,10 +519,10 @@ func (l *Logger) Record(d model.Decision) error {
 }
 
 // TickSummary logs a per-tenant tick rollup.
-func (l *Logger) TickSummary(tenant string, total, selected, infeasible int, dur time.Duration, mode string, killSwitch bool) {
+func (l *Logger) TickSummary(tenant string, total, selected, infeasible int, dur time.Duration, mode string, killSwitch bool, killSwitchCause string) {
 	l.log.Info("tick",
 		"tenant", tenant, "pods", total, "selected", selected, "infeasible", infeasible,
-		"mode", mode, "killSwitch", killSwitch, "durationMs", dur.Milliseconds())
+		"mode", mode, "killSwitch", killSwitch, "killSwitchCause", killSwitchCause, "durationMs", dur.Milliseconds())
 }
 
 func round4(x float64) float64 {

@@ -91,7 +91,13 @@ go run ./cmd/main.go --integration-emit \
 - **`mode: dryRun`** (the default) decides + logs + emits metrics but **never
   actuates**. The decision loop calls the actuator ONLY in `mode: active`.
 - **Global kill-switch** (`--global-kill-switch` or the `phorvex-killswitch`
-  ConfigMap) suppresses all actuation regardless of mode.
+  ConfigMap) suppresses all actuation regardless of mode. The dynamic sentinel is
+  read through the uncached API reader at route preparation, dispatch, fallback, and
+  automatic-maintenance boundaries. Its `engaged` key accepts
+  `true`/`True`/`1`/`yes` and `false`/`False`/`0`/`no`; an absent ConfigMap or key is
+  off, while a malformed value or read failure fails closed. Each read is bounded,
+  but the check cannot atomically revoke an HTTP/API call already in flight. Started
+  operations retain their required compensation path.
 - **Move budget presence is explicit**: omitting `budget.maxMovesPerTick` uses the
   default of 3, while `maxMovesPerTick: 0` still runs the decision and audit path
   but selects no actuation. YAML and JSON continue to use an integer; direct Go

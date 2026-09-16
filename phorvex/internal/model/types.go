@@ -709,9 +709,10 @@ type Decision struct {
 	// actuator silently failed — both read selected=true, dryRun=false, actuated=false —
 	// so a decision-only mirror looks exactly like a broken actuator. Kill-switch and
 	// dry-run are separate gates and must stay separately visible.
-	KillSwitch bool
-	Actuated   bool
-	DecidedAt  time.Time
+	KillSwitch      bool
+	KillSwitchCause string
+	Actuated        bool
+	DecidedAt       time.Time
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
