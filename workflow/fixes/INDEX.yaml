@@ -934,3 +934,14 @@ fixes:
     stacked_on: []
     branch: fix/t6-m168
     head_sha: 52452bfdae9e4cf3cfc5c7ba23d2391fde9c7e16
+  T7-M040:
+    directory: fixes/T7-M040
+    aliases: []
+    issues:
+    - M-40
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t7-m040
+    head_sha: null

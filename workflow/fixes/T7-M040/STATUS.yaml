@@ -1,0 +1,120 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 4
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 6eb0541c5b46fa24e7a2fa28e719ed6074357b990c05f3366fa59d945236c5d4
+    source_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
+    at: '2026-09-16T15:26:19+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+    rationale: Lead in-scope plan under recorded Tier7 owner instruction and standing
+      AUTONOMY.md; no live waiver
+fix_id: T7-M040
+issues:
+- M-40
+title: Confirm request drain and restore exact serving state durably
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t7-m040
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier6
+  code_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
+  deployed_image: 0.4.120
+  deployed_git_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t7-m040
+  base_sha: 669197bf025a446a87ed2923c04dbaa2237ca077
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: implementer
+  action: Implement signed plan; source-pin, validate and submit for independent lead
+    review; no issue PR
+updated_at: '2026-09-16T15:26:20+00:00'
+configuration_history:
+- at: '2026-09-16T15:26:17+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - fix_loop
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-16T15:26:18+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-16T15:26:20+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
