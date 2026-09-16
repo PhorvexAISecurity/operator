@@ -179,14 +179,20 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	}
 	oldUID := old.UID
 
-	snap, err := ingest.CollectSnapshot(ctx, c, time.Now(), func(*model.Pod) float64 { return 1 }, c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := snap.PodByKey[ns+"/"+old.Name]
-	if p == nil || p.UID != string(oldUID) || !p.WarmPoolConfigured || p.WarmPoolOwnerUID != string(rs.UID) {
-		t.Fatalf("snapshot authority mismatch: %+v", p)
-	}
+	var snap *ingest.Snapshot
+	var p *model.Pod
+	m034Poll(t, 20*time.Second, func() (bool, error) {
+		current, collectErr := ingest.CollectSnapshot(ctx, c, time.Now(), func(*model.Pod) float64 { return 1 }, c)
+		if collectErr != nil {
+			return false, collectErr
+		}
+		candidate := current.PodByKey[ns+"/"+old.Name]
+		if candidate == nil || candidate.UID != string(oldUID) || !candidate.WarmPoolConfigured || candidate.WarmPoolOwnerUID != string(rs.UID) {
+			return false, nil
+		}
+		snap, p = current, candidate
+		return true, nil
+	})
 	view := &model.WorkloadView{Pod: *p, Phase: model.PhaseWarm, Physics: model.NeutralPhysics(), ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}}
 	native := actuator.NewNativeActuator(c)
 	native.Reader = c
@@ -201,8 +207,10 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		t.Fatalf("optimizer decision=%+v err=%v", ds, err)
 	}
 
+	releaseReplacementReady := make(chan struct{})
 	readyDone := make(chan error, 1)
 	go func() {
+		<-releaseReplacementReady
 		deadline := time.Now().Add(20 * time.Second)
 		for time.Now().Before(deadline) {
 			var current corev1.PodList
@@ -231,11 +239,12 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 		}
 		readyDone <- fmt.Errorf("replacement never appeared")
 	}()
-	m := &Manager{policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Client: c, Optimizer: engine, Actuator: recording, Clock: exposure.NewClock(), Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Client: c, BoundaryReader: c, Optimizer: engine, Actuator: recording, Clock: exposure.NewClock(), Intents: exposure.NewIntents(), Log: logr.Discard()}
 	entry := &policyEntry{key: types.NamespacedName{Namespace: ns, Name: policy.Name}, uid: string(policy.UID), tenant: "m034", namespace: ns, spec: policy.Spec}
 	if n := m.actuate(ctx, entry, pol, ds, map[string]*model.WorkloadView{ns + "/" + old.Name: view}); n != 0 || ds[0].Actuated || recording.err == nil || recording.result.Emitted {
 		t.Fatalf("runner must retain the controller-readiness interval as partial: n=%d result=%+v err=%v decision=%+v", n, recording.result, recording.err, ds[0])
 	}
+	close(releaseReplacementReady)
 	if e := <-readyDone; e != nil {
 		t.Fatal(e)
 	}
@@ -250,16 +259,43 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	if err := c.List(ctx, &after, client.InNamespace(ns)); err != nil {
 		t.Fatal(err)
 	}
-	foundOld, newUIDs := false, 0
+	foundOld := false
+	var survivor, replacement *corev1.Pod
 	for i := range after.Items {
 		if after.Items[i].UID == oldUID {
 			foundOld = true
 		}
+		if after.Items[i].UID == shadow.UID {
+			survivor = after.Items[i].DeepCopy()
+		}
 		if after.Items[i].UID != oldUID && after.Items[i].UID != shadow.UID {
-			newUIDs++
+			replacement = after.Items[i].DeepCopy()
 		}
 	}
-	if foundOld || newUIDs != 1 {
-		t.Fatalf("old UID retirement/controller replacement mismatch: old=%t new=%d pods=%+v", foundOld, newUIDs, after.Items)
+	ready := func(p *corev1.Pod) bool {
+		if p == nil || p.DeletionTimestamp != nil {
+			return false
+		}
+		for _, condition := range p.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				return true
+			}
+		}
+		return false
+	}
+	if foundOld || survivor == nil || survivor.Labels["phorvex.ai/role"] != "leader" || !ready(survivor) {
+		t.Fatalf("exact old UID not retired or survivor not a Ready leader: old=%t survivor=%+v", foundOld, survivor)
+	}
+	if replacement == nil {
+		t.Fatalf("controller did not create an exact replacement: pods=%+v", after.Items)
+	}
+	owner := metav1.GetControllerOf(replacement)
+	if owner == nil || owner.UID != rs.UID || replacement.Labels["phorvex.ai/role"] != "warm-shadow" ||
+		replacement.Labels["phorvex.ai/model-loaded"] != "true" || !ready(replacement) || len(replacement.Spec.EphemeralContainers) != 0 {
+		t.Fatalf("controller replacement is not the exact clean Ready warm shadow: replacement=%+v owner=%+v", replacement, owner)
+	}
+	var journals corev1.ConfigMapList
+	if err := c.List(ctx, &journals, client.InNamespace("m034-operator")); err != nil || len(journals.Items) != 0 {
+		t.Fatalf("completed recovery retained operation journals: count=%d err=%v", len(journals.Items), err)
 	}
 }
