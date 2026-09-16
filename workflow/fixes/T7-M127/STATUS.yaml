@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -98,6 +98,13 @@ checks:
     source_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6
     at: '2026-09-16T16:09:11+00:00'
     incident_sha256: dfc17de365f2c5a4f4fba5d39212ac9e41718e67cbe862e6b2e74f0e9b5df272
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: ac61f24e0ddb0037a656744d82bacbd82a0304e4f2f40c3b706d009096394925
+    source_sha: f2d56318701b532f0a6c4e1b1363a7e58e5120d6
+    at: '2026-09-16T16:45:38+00:00'
 fix_id: T7-M127
 issues:
 - M-127
@@ -167,7 +174,7 @@ next_action:
   owner: coordinator
   action: Push/open or update the reviewed PR under existing scope; record its actual
     head and CI. No merge/deploy.
-updated_at: '2026-09-16T16:09:14+00:00'
+updated_at: '2026-09-16T16:45:38+00:00'
 configuration_history:
 - at: '2026-09-16T15:24:36+00:00'
   by: codex-lead
