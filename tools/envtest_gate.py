@@ -61,10 +61,12 @@ REQUIRED = {
         'TestM052QuarantineCapacityRealAPICAS',
         'TestM052QuarantineCapacityRealAPIRetainsAmbiguityAndReleasesOnlyDefiniteNoEffect',
         'TestM052RealReplicaSetQuarantineStopsAtCapacity',
+        'TestM040RequestDrainAPIServerLifecycleAndRecovery',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',
         'TestM013RealEventSink',
+        'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
     ),
     'github.com/phorvex/phorvex/internal/authz': (
         'TestClusterScopedReviewRejectsNamespacedOnlyGrant',

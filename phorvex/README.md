@@ -100,7 +100,7 @@ go run ./cmd/main.go --integration-emit \
   guard) — Phorvex never rotates the same pod faster than the forensic window.
 - **Least-privilege RBAC** — the default chart remains read-only on workload objects.
   Native/hybrid writes are granted only in namespaces explicitly listed under
-  `phorvex.actuatorNamespaces`; Secrets and EndpointSlices remain denied.
+  `phorvex.actuatorNamespaces`; Secrets and EndpointSlice mutation remain denied.
 
 ### `route-rotate` deployment contract
 
@@ -120,7 +120,31 @@ phorvex:
 ```
 
 This renders a Role/RoleBinding per listed namespace. Service permission is exactly
-`get,update`; it grants no Service create/delete/patch and no Secret or EndpointSlice access.
+`get,update`; request-drain adds namespaced EndpointSlice `list` only for withdrawal/return
+observation. It grants no Service create/delete/patch, Secret access, or EndpointSlice mutation.
+
+### `request-drain` confirmation and recovery contract
+
+`request-drain` is a transient, request-granular action. The target must belong to a current
+same-namespace Service whose complete selector includes `phorvex.ai/serving`; the optional
+`phorvex.ai/route-service` annotation selects that Service explicitly. Before calling the serving
+stack, Phorvex records an operator-namespace recovery receipt, changes the serving label with an
+optimistic-lock Patch, and observes the exact Pod UID disappear from EndpointSlices owned by the
+recorded Service UID. EndpointSlice observation is Kubernetes control-plane routing evidence; it
+does not prove that kube-proxy, a CNI, or every established connection has converged.
+
+The configured drain endpoint must answer synchronously with HTTP 200 and one bounded JSON object
+containing a nonnegative integer `aborted` field. Empty, malformed, duplicate, negative, fractional,
+overflowing, trailing, 202 and 204 responses are failures. The shared HTTP client still accepts a
+literal zero for callers that only need confirmed quiescence; standalone `request-drain` requires a
+positive abort count before it credits `inflightRequests`.
+
+Success is reported only after a positive abort, exact restoration of the prior serving-label
+presence/value, observed EndpointSlice return, and receipt cleanup. Failures restore when recorded
+Pod/Service authority remains current; ambiguous writes or changed identities retain the receipt.
+Restart recovery restores only and never replays the abort. The default `/v1/drain` route is a
+deployment-specific adapter contract and remains pending validation against the deployed serving
+stack; request-drain does not claim durable exclusion or prevent a client from re-entering.
 
 ### SecurityEvent creator-identity trust boundary (M-94) — deployment contract
 

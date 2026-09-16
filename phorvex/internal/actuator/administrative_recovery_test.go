@@ -143,6 +143,39 @@ func TestAdministrativeRecoveryProducerInventoryPlanApply(t *testing.T) {
 	}
 }
 
+func TestM040LegacyQuarantinePlanCanonicalShapeStillValidates(t *testing.T) {
+	n, _ := recoveryFixture(t, "victim")
+	plan, err := n.PlanRecovery(context.Background(), recoveryScope(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.Operation = recoveryLegacyOperation
+	for i := range plan.Items {
+		plan.Items[i].Kind = ""
+		plan.Items[i].Service = nil
+	}
+	plan.SHA256 = recoveryPlanHash(plan)
+	if err := validatePlanStructure(plan); err != nil {
+		t.Fatalf("retained old-format quarantine plan rejected: %v", err)
+	}
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &encoded); err != nil || len(encoded.Items) != 1 {
+		t.Fatalf("decode legacy canonical JSON: items=%d err=%v", len(encoded.Items), err)
+	}
+	if _, kindPresent := encoded.Items[0]["kind"]; kindPresent {
+		t.Fatalf("legacy canonical JSON unexpectedly widened: %s", raw)
+	}
+	if _, servicePresent := encoded.Items[0]["service"]; servicePresent {
+		t.Fatalf("legacy canonical JSON unexpectedly widened: %s", raw)
+	}
+}
+
 func TestAdministrativeRecoveryHoldReadFailureIsNotEngaged(t *testing.T) {
 	n, c := recoveryFixture(t, "victim")
 	plan, err := n.PlanRecovery(context.Background(), recoveryScope(1))

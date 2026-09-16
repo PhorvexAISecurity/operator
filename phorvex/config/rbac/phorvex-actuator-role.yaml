@@ -4,7 +4,7 @@
 # (only unrendered kubebuilder markers), and the only write-capable binding was a CLUSTER-WIDE
 # ClusterRoleBinding sharing ONE token with the read scanner. This commits a per-managed-
 # namespace Role bound to the SAME manager ServiceAccount used by the shipped Deployment,
-# with NO cluster-wide write, NO secrets/endpointslices, NO pods/create, and no
+# with NO cluster-wide write, NO secrets or EndpointSlice mutation, NO pods/create, and no
 # pods/ephemeralcontainers write unless the separate code-exec Role is bound.
 #
 # Apply ONE copy PER managed namespace (substitute <NS>, <MANAGER-SA>, and <RELEASE-NS>).
@@ -14,9 +14,9 @@
 #
 # `kubectl auth can-i` (as system:serviceaccount:<RELEASE-NS>:<MANAGER-SA>) MUST show:
 #   yes: delete/update/patch/get/list pods; create/get/list/delete/update networkpolicies; get replicasets/
-#        statefulsets/daemonsets/jobs; get/list/update services  (in <NS>)
+#        statefulsets/daemonsets/jobs; get/list/update services; list endpointslices (in <NS>)
 #   no : delete pods --all-namespaces; delete pod -n kube-system; get/delete secrets;
-#        patch/create/delete services; update endpointslices; update pods/ephemeralcontainers; delete nodes
+#        patch/create/delete services; create/update/delete endpointslices; update pods/ephemeralcontainers; delete nodes
 #
 # CODE-EXEC HONESTY (P4c, proven by running): an ephemeral-container injection (kubectl-debug
 # patch path) is FORBIDDEN for the Role-A SA — verified live ("cannot patch pods/
@@ -33,8 +33,8 @@ metadata:
   name: phorvex-actuator-routine    # ROLE A — routine MTD moves (rotate/quarantine/identity/route/kv/endpoint/warm-swap)
   namespace: <NS>
 rules:
-  # rotate=delete; quarantine/identity/route/kv/endpoint=update; warm-swap=list+update+delete.
-  # Patch is used only by warm/model cutover compensation and recovery. No "create" on pods.
+  # rotate=delete; quarantine/identity/route/kv/endpoint=update; warm-swap=list+update+delete;
+  # request-drain uses optimistic-lock patch for transient stop/restore. No "create" on pods.
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "delete", "update", "patch"]
@@ -56,10 +56,14 @@ rules:
     verbs: ["get"]
   # route-rotate + endpoint-rotate: read and restitch an explicitly declared Service selector.
   # quarantine: list Services to break their selector keys when no owner selector is readable.
-  # Namespaced and deliberately limited: no patch/create/delete; Secrets and EndpointSlices denied.
+  # Namespaced and deliberately limited: no patch/create/delete; Secrets denied.
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get", "list", "update"]
+  # request-drain: observe exact target withdrawal and return. Read-only; no dataplane claim.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

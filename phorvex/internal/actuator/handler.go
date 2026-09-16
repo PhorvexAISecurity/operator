@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -52,6 +53,10 @@ type EnactCtx struct {
 	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
 	AdapterSources   AdapterSources
 	MIGProfiles      *MIGProfiles
+	// Request-drain observation bounds default to production constants. Tests that
+	// emulate an EndpointSlice controller may shorten them without changing behavior.
+	DrainObservationTimeout  time.Duration
+	DrainObservationInterval time.Duration
 }
 
 // HandlerResult is the native effect record.

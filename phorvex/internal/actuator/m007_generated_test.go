@@ -23,6 +23,7 @@ func m007Expected(codeexec bool) map[string]bool {
 	}
 	add("", "pods", "get", "list", "delete", "update", "patch")
 	add("", "services", "get", "list", "update")
+	add("discovery.k8s.io", "endpointslices", "list")
 	add("", "replicationcontrollers", "get")
 	for _, r := range []string{"replicasets", "deployments", "statefulsets", "daemonsets"} {
 		add("apps", r, "get")

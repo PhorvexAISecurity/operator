@@ -18,10 +18,11 @@
  * networkpolicies               : quarantine create/reconcile + migration/cleanup (create/get/list/delete/update)
  * replicasets/statefulsets/daemonsets, jobs : quarantine reads the owning controller's selector to detach (get)
  * services                      : route-rotate / endpoint-rotate selector restitch (get/update);
- *                                 quarantine independently checks all namespaced Service selectors (list)
+ *                                 quarantine and request-drain inspect selecting Services (list)
+ * endpointslices                : request-drain observes exact withdrawal/return only (list)
  *
  * Identity-rotate deliberately receives no ServiceAccount/Secret permission: projected tokens
- * cannot be revoked by a pod-scoped action. EndpointSlices also remain denied.
+ * cannot be revoked by a pod-scoped action. EndpointSlice mutation remains denied.
  */
 
 package actuator
@@ -33,3 +34,4 @@ package actuator
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=replicationcontrollers,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups=batch,resources=jobs,verbs=get
 // +kubebuilder:rbac:namespace=phorvex-tenant,groups="",resources=services,verbs=get;list;update
+// +kubebuilder:rbac:namespace=phorvex-tenant,groups=discovery.k8s.io,resources=endpointslices,verbs=list
