@@ -295,6 +295,29 @@ func TestM034ConfiguredPoolReconCapabilityAndOptimizer(t *testing.T) {
 	}
 }
 
+func TestM034RotatePositiveControl(t *testing.T) {
+	views, wit := capFleet()
+	view := views[0]
+	view.Phase = model.PhaseWarm
+	view.Physics = model.NeutralPhysics()
+	view.ExposureByVariable = map[string]time.Duration{model.VarPodIdentity: 2 * time.Hour, model.VarSession: 2 * time.Hour}
+	engine := decision.NewCoverageEngine()
+	engine.Capability = func(v *model.WorkloadView, a model.Action, cover []string) *actionset.Eligibility {
+		r := wit.Eligible(v, a, cover)
+		if r == nil {
+			return nil
+		}
+		return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+	}
+	pol := model.Policy{Tenant: "m034-rotate", Namespace: "ns", Lambda: cost.DefaultLambdaSeed, MaxMovesPerTick: 1,
+		ProactiveFloor: time.Minute, AntiOverRotationWindow: time.Second, MinAvailableReplicas: 1,
+		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
+	set, _ := engine.AssembleSet([]*model.WorkloadView{view}, pol)
+	if len(set.Candidates) != 1 || set.Candidates[0].Action != model.ActionRotate || len(set.Candidates[0].CoverKeys) != 3 {
+		t.Fatalf("rotate positive control = %+v exclusions=%+v", set.Candidates, set.Excluded)
+	}
+}
+
 // TestCapable_LabelCanonicality: capability labels must match exactly ("TRUE" != "true").
 func TestCapable_LabelCanonicality(t *testing.T) {
 	views, _ := capFleet()
