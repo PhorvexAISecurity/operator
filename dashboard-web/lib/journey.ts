@@ -25,15 +25,28 @@ export interface JourneySignals {
   hasAudit: boolean;    // live decisions have streamed (audit exists)
   hasBench: boolean;    // benchmark corpus present
   loading: boolean;
+  diagnosticsError?: string;
+}
+
+// Health is deliberately public/minimal. Corpus availability requires the same verified
+// identity and grant as the panels it unlocks; denied diagnostics remain unavailable.
+export async function loadCorpusSignal(lens: Lens): Promise<Pick<JourneySignals, "hasCorpus" | "diagnosticsError">> {
+  try {
+    const diagnostics = await api.diagnostics(lens);
+    return { hasCorpus: !!(diagnostics.hasP3Deep || diagnostics.hasPactuator) };
+  } catch (error) {
+    return { hasCorpus: false, diagnosticsError: String((error as Error).message || error) };
+  }
 }
 
 export function useJourneySignals(lens: Lens): JourneySignals {
   const [s, setS] = React.useState<JourneySignals>({ connected: false, hasCorpus: false, hasAudit: false, hasBench: false, loading: true });
   React.useEffect(() => {
     let live = false;
+    let cancelled = false;
     (async () => {
       const out: JourneySignals = { connected: false, hasCorpus: false, hasAudit: false, hasBench: false, loading: false };
-      try { const h = await api.health(); out.hasCorpus = !!(h.hasP3Deep || h.hasPactuator); } catch {}
+      Object.assign(out, await loadCorpusSignal(lens));
       try { const t = await api.targets(lens); out.connected = (t.targets || []).some((x) => x.runnable); } catch {}
       try { const b = await api.benchmarks(lens); out.hasBench = (b.groups || []).length > 0; } catch {}
       // a 1.5s probe of the SSE: did any decision stream?
@@ -44,8 +57,9 @@ export function useJourneySignals(lens: Lens): JourneySignals {
         es.close();
       } catch {}
       out.hasAudit = live;
-      setS(out);
+      if (!cancelled) setS(out);
     })();
+    return () => { cancelled = true; };
   }, [lens]);
   return s;
 }
