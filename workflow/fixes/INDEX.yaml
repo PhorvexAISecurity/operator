@@ -885,11 +885,11 @@ fixes:
     issues:
     - M-22
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t6-m022
-    head_sha: null
+    head_sha: 78bb55a6068b00133dbf334b249b133f12ab9bb0
   T6-M052:
     directory: fixes/T6-M052
     aliases: []
