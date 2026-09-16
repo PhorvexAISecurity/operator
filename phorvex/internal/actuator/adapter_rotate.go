@@ -302,10 +302,10 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 }
 
 func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	if ec.Client == nil {
-		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires a Kubernetes client"))
+	if ec.Client == nil || ec.Reader == nil {
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires a Kubernetes client and authoritative reader"))
 	}
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
+	pod, ok, err := getPod(ctx, ec.Reader, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "adapter-rotate", req)
 	}
@@ -316,7 +316,7 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 	if pod.Labels[labelLoRAEnabled] != "true" {
 		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate unsupported: LoRA capability unavailable"}, nil
 	}
-	if ec.Reader == nil || ec.JournalNamespace == "" || req.PolicyName == "" || req.PolicyUID == "" || req.TargetUID == "" {
+	if ec.JournalNamespace == "" || req.PolicyName == "" || req.PolicyUID == "" || req.TargetUID == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires authoritative reader, protected journal, policy and target identity"))
 	}
 	source, sourcePresent := ec.AdapterSources.source(req.Namespace, adapter)

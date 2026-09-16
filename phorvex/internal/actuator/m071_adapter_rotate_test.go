@@ -62,6 +62,7 @@ type m71Serving struct {
 	loadStatus       int
 	unloadCalls      int
 	loadCalls        int
+	inventoryCalls   int
 	pollsAfterUnload int
 	disappearAfter   int
 	unloadPending    bool
@@ -73,6 +74,7 @@ func (s *m71Serving) handler(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	switch r.URL.Path {
 	case defaultModelsPath:
+		s.inventoryCalls++
 		if s.unloadPending && s.loaded && s.disappearAfter > 0 {
 			s.pollsAfterUnload++
 			if s.pollsAfterUnload >= s.disappearAfter {
@@ -118,6 +120,12 @@ func (s *m71Serving) counts() (int, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.unloadCalls, s.loadCalls
+}
+
+func (s *m71Serving) inventoryCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.inventoryCalls
 }
 
 func m71HTTPFixture(t *testing.T, serving *m71Serving) (client.Client, Request, EnactCtx, func()) {
@@ -203,6 +211,27 @@ func TestM071UnloadAcknowledgementNeedsTerminalInventory(t *testing.T) {
 				t.Fatalf("protected recovery debt missing: %v", getErr)
 			}
 		})
+	}
+}
+
+func TestM071AuthoritativeReplacementRefusesBeforeServingRead(t *testing.T) {
+	serving := &m71Serving{loaded: true}
+	stale, req, ec, done := m71HTTPFixture(t, serving)
+	defer done()
+	replacement, event, _ := m95DispatchFixture(t)
+	replacement.UID = "replacement-pod-uid"
+	authoritative := fakeC(replacement, event)
+	ec.Client, ec.Reader = stale, authoritative
+	result, err := (adapterRotateHandler{}).Enact(context.Background(), ec, req)
+	if err != nil || result.Emitted || !strings.Contains(result.Note, "mismatched trusted observation") {
+		t.Fatalf("authoritative replacement was not refused: result=%+v err=%v", result, err)
+	}
+	if serving.inventoryCount() != 0 {
+		t.Fatalf("stale cached Pod endpoint received %d inventory request(s)", serving.inventoryCount())
+	}
+	name := receiptName(operationReceipt{Kind: "adapter-rotate", PolicyUID: req.PolicyUID, TargetUID: req.TargetUID})
+	if err := stale.Get(context.Background(), client.ObjectKey{Namespace: "operator", Name: name}, &corev1.ConfigMap{}); err == nil {
+		t.Fatal("replacement refusal created protected operation intent")
 	}
 }
 
