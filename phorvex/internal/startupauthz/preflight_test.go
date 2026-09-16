@@ -255,6 +255,10 @@ func TestCheckRefusesOmittedReadPermissionsByAction(t *testing.T) {
 		{name: "endpoint service", action: v1alpha1.ActionEndpointRotate, resource: "services", verb: "get"},
 		{name: "request drain endpoint inventory", action: v1alpha1.ActionRequestDrain, group: "discovery.k8s.io", resource: "endpointslices", verb: "list"},
 		{name: "request drain Pod patch", action: v1alpha1.ActionRequestDrain, resource: "pods", verb: "patch"},
+		{name: "adapter Pod patch", action: v1alpha1.ActionAdapterRotate, resource: "pods", verb: "patch"},
+		{name: "adapter detector authority", action: v1alpha1.ActionAdapterRotate, group: "amtd.r6security.com", resource: "securityevents", verb: "get"},
+		{name: "adapter policy authority", action: v1alpha1.ActionAdapterRotate, group: "phorvex.ai", resource: "phorvexpolicies", verb: "get"},
+		{name: "adapter journal update", action: v1alpha1.ActionAdapterRotate, resource: "configmaps", verb: "update"},
 		{name: "MIG current policy", action: v1alpha1.ActionMIGRebind, group: "phorvex.ai", resource: "phorvexpolicies", verb: "get"},
 	}
 	for _, test := range tests {
