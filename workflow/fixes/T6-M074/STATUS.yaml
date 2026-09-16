@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -77,12 +77,28 @@ checks:
     inputs:
     - phorvex
     inputs_sha256: c8acfad8166ebb6098119c9710b78b7c0b4eebecc1e6f033d4d885025d313a97
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: dce5443315ee8e37cbbae9e2be5d5ebde82f873a70d226c410294502fe2a76bf
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:38:09+00:00'
+    baseline_sha: 21b9ddac0ab788faee88c24488b0ff530019526c
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: dce5443315ee8e37cbbae9e2be5d5ebde82f873a70d226c410294502fe2a76bf
+    source_sha: e0251735c93e1b23304cf6e4ee30a96c582450af
+    at: '2026-09-16T13:38:09+00:00'
+    incident_sha256: dce5443315ee8e37cbbae9e2be5d5ebde82f873a70d226c410294502fe2a76bf
 fix_id: T6-M074
 issues:
 - M-74
 title: Validate disaggregated KV peers before any effect
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -127,7 +143,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -143,10 +159,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-16T13:37:25+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-16T13:38:12+00:00'
 configuration_history:
 - at: '2026-09-16T10:37:53+00:00'
   by: codex-lead
@@ -202,10 +218,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-16T13:38:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-16T13:38:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T6-M074:7:submit
-  from: sol-t6-m074
+  id: T6-M074:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
