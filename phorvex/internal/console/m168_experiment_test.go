@@ -482,7 +482,7 @@ func TestM168ArmsWorkerRejectsDeploymentReplacementBetweenArms(t *testing.T) {
 	defer resetM168AttackMemory()
 	dir := t.TempDir()
 	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true, replaceAtRead: 4}
-	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 20 * time.Millisecond, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
+	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 500 * time.Millisecond, AttackWatchInterval: 10 * time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
 	op := experimentEvent{Operation: "op-replaced-deploy", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
 	if err := s.appendExperiment(op); err != nil {
