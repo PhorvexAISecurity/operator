@@ -252,8 +252,8 @@ func ExposureFingerprints(p Pod) map[string]string {
 // The old flat float64 fields + `Present bool` + `PresentSignals map[string]bool` are gone:
 // the per-Signal State subsumes both bools.
 type Telemetry struct {
-	// App-level signals — presence of ANY decides Idle-vs-Warm (see AppLevelPresent).
-	// Their absence must NEVER route a pod to Idle (M-142).
+	// App-level signals — presence and validity jointly decide Idle-vs-Warm. Their absence,
+	// uncertainty, or contradictory measured activity must NEVER route a pod to Idle (M-142).
 	ReqRate      Signal
 	P99Ms        Signal
 	LatencyMs    Signal // legacy mirror of P99Ms (same source)
@@ -544,7 +544,7 @@ type WorkloadView struct {
 	Pod                Pod
 	Telemetry          Telemetry
 	Phase              WorkloadPhase
-	PhaseReason        string  // T1-C: idle-measured|warm-no-app-signal|busy-measured|coldstart|draining|unknown
+	PhaseReason        string  // idle-measured|warm-no-app-signal|warm-uncertain-app-signal|busy-measured|coldstart|draining|unknown
 	BlastRadius        float64 // graph score (reach into high-value neighbors), normalized [0,1]
 	NeighborCount      int
 	Neighbors          []NeighborRef // reachable neighbors with their values (P1 lateral facts)

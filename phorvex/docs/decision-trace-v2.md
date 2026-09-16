@@ -51,6 +51,15 @@ for example SM occupancy is present only with an SM source and VRAM is present
 only when both used/free series supplied a usable denominator.
 `primed` records the current cost learner's actual RLS state.
 
+`phaseReason` records how application telemetry supports the workload phase.
+`idle-measured` requires a fresh, finite, nonnegative request-rate sample within
+the existing idle boundary and no contradictory app activity. Positive queue
+depth or token throughput keeps the phase Warm. `warm-no-app-signal` means all
+application activity signals are genuinely absent; `warm-uncertain-app-signal`
+means app telemetry exists but is stale, errored, invalid, or insufficient to
+establish measured idle. Infrastructure-only cAdvisor signals remain outside this
+classification and do not claim application load.
+
 ## Reconstruction
 
 Facts are ordered by `factKey`; candidates use canonical action order; cover
