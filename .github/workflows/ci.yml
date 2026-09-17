@@ -412,9 +412,11 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
           PORT:    "18090"
         run: |
+          # The bracketed digit keeps pkill -f from matching the remote shell that carries this
+          # very pattern (it would kill its own ssh session: exit 255 before anything ran).
           set -euo pipefail
           SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
-          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80' 2>/dev/null; \
+          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console [1]8090:80' 2>/dev/null; \
                 nohup kubectl -n phorvex-system port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80 >/dev/null 2>&1 & \
                 for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q '"ok":true' && exit 0; done; \
                 echo 'console tunnel did not come up' >&2; exit 1"
@@ -467,7 +469,7 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
-            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console 18090:80' 2>/dev/null || true"
+            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console [1]8090:80' 2>/dev/null || true"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -834,9 +836,11 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
           PORT:    "18090"
         run: |
+          # The bracketed digit keeps pkill -f from matching the remote shell that carries this
+          # very pattern (it would kill its own ssh session: exit 255 before anything ran).
           set -euo pipefail
           SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
-          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80' 2>/dev/null; \
+          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console [1]8090:80' 2>/dev/null; \
                 nohup kubectl -n phorvex-system port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80 >/dev/null 2>&1 & \
                 for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q '"ok":true' && exit 0; done; \
                 echo 'console tunnel did not come up' >&2; exit 1"
@@ -883,7 +887,7 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
-            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console 18090:80' 2>/dev/null || true"
+            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console [1]8090:80' 2>/dev/null || true"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
