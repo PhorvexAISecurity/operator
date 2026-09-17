@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-17T00:33:15+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/lead-baseline.log
+    sha256: bb83497ba8455914b628d4a34af9c264136fe478304f2b7eaa942186fa712ede
+    source_sha: e35b809c543654134f83683489cf6fce973d7afb
+    at: '2026-09-17T02:24:48+00:00'
 fix_id: T11-ROUTE
 issues:
 - M-59
@@ -89,7 +96,7 @@ next_action:
   owner: sol-t11-route
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-17T02:18:14+00:00'
+updated_at: '2026-09-17T02:24:48+00:00'
 configuration_history:
 - at: '2026-09-17T00:33:12+00:00'
   by: codex-lead
