@@ -1035,3 +1035,14 @@ fixes:
     stacked_on: []
     branch: fix/t10-m010
     head_sha: 43ece5080ce999af86c6fb79138b963088ac38b5
+  T11-M045:
+    directory: fixes/T11-M045
+    aliases: []
+    issues:
+    - M-45
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t11-m045
+    head_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
