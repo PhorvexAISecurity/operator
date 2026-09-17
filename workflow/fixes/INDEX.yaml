@@ -1103,8 +1103,8 @@ fixes:
     - M-73
     - M-39
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t13-m064
-    head_sha: null
+    head_sha: e8aa0aca7120b3e938d30bc6ce0a728bd880fb88
