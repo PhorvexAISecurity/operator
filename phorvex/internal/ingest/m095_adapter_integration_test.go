@@ -70,29 +70,34 @@ func TestM095TrustedEventBindsAdapterAndRefreshClearsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(good).Build()
-	read := func(uid string) model.Pod {
+	read := func(uid, modelID string) model.Pod {
 		_, byPod, err := collectEvents(context.Background(), c, now)
 		if err != nil {
 			t.Fatal(err)
 		}
-		p := model.Pod{Namespace: "ns", Name: "serve", UID: uid, ModelID: "model"}
+		// Adapter authority is the trusted UID-bound event, independent of a generic
+		// model/GPU/serving declaration.
+		p := model.Pod{Namespace: "ns", Name: "serve", UID: uid, ModelID: modelID}
 		bindAdapterObservation(&p, byPod["ns/serve"])
 		return p
 	}
-	p := read("pod-1")
-	if p.SuspectAdapter != "detected-adapter" || p.AdapterObservation == nil || !hasAdapterFact(&model.WorkloadView{Pod: p}) {
-		t.Fatalf("trusted control absent: %+v", p)
+	var p model.Pod
+	for _, modelID := range []string{"model", ""} {
+		p = read("pod-1", modelID)
+		if p.SuspectAdapter != "detected-adapter" || p.AdapterObservation == nil || !hasAdapterFact(&model.WorkloadView{Pod: p}) {
+			t.Fatalf("trusted control absent with model-id %q: %+v", modelID, p)
+		}
 	}
 	if p.AdapterObservation.EventUID != "event-1" || p.AdapterObservation.TargetPodUID != "pod-1" {
 		t.Fatalf("wrong provenance: %+v", p.AdapterObservation)
 	}
-	if recreated := read("pod-2"); recreated.SuspectAdapter != "" || hasAdapterFact(&model.WorkloadView{Pod: recreated}) {
+	if recreated := read("pod-2", ""); recreated.SuspectAdapter != "" || hasAdapterFact(&model.WorkloadView{Pod: recreated}) {
 		t.Fatal("same-name recreated Pod inherited evidence")
 	}
 	if err := c.Delete(context.Background(), good); err != nil {
 		t.Fatal(err)
 	}
-	if refreshed := read("pod-1"); refreshed.SuspectAdapter != "" || hasAdapterFact(&model.WorkloadView{Pod: refreshed}) {
+	if refreshed := read("pod-1", ""); refreshed.SuspectAdapter != "" || hasAdapterFact(&model.WorkloadView{Pod: refreshed}) {
 		t.Fatal("removed event left stale evidence")
 	}
 }

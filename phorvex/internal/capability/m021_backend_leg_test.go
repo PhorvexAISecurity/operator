@@ -88,16 +88,16 @@ func TestCapableConsultsBackendForNonAIActions(t *testing.T) {
 func TestConfigPredicatesStillPrecedeTheBackend(t *testing.T) {
 	noGPU := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "cpu"}}
 	if ok, why := nativeWitness().Capable(noGPU, model.ActionKVReset); ok {
-		t.Fatal("a pod with no GPU or model identity cannot serve kv-reset")
-	} else if why != "pod advertises no GPU or model identity" {
+		t.Fatal("a pod with no serving declaration cannot serve kv-reset")
+	} else if why != "pod lacks the action's required GPU, serving, or detector context" {
 		t.Fatalf("the config predicate must win, got %q", why)
 	}
-	noEndpoint := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "gpu", HasGPU: true}}
+	noEndpoint := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "declared", ServingDeclared: true}}
 	if _, why := nativeWitness().Capable(noEndpoint, model.ActionKVReset); why != "pod has no Ready serving endpoint" {
 		t.Fatalf("the config predicate must win, got %q", why)
 	}
 	// With the fixtures present, the backend is what decides.
-	ready := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "gpu", HasGPU: true, ServingEndpointReady: true}}
+	ready := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "served", ServingDeclared: true, ServingEndpointReady: true}}
 	if ok, _ := nativeWitness().Capable(ready, model.ActionKVReset); !ok {
 		t.Fatal("native must support a fully configured kv-reset target")
 	}

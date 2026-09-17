@@ -16,7 +16,7 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 		for _, route := range []string{"", "missing-service", "infer"} {
 			for _, epoch := range []string{"", "ep-stale"} {
 				t.Run(asset.name+"/"+route+"/"+epoch, func(t *testing.T) {
-					v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: asset.gpu, ModelID: asset.model, RouteService: route, RouteKeyEpoch: epoch, MIGDevice: "MIG-a", SuspectAdapter: "bad", ServingEndpointReady: asset.gpu || asset.model != ""}}
+					v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "llm", HasGPU: asset.gpu, ModelID: asset.model, RouteService: route, RouteKeyEpoch: epoch, MIGDevice: "MIG-a", SuspectAdapter: "bad", ServingEndpointReady: asset.model != ""}}
 					detectorAdapter(&v.Pod, "bad")
 					v.Physics.ImageRarity = 2
 					v.Physics.EPSSMultiplier = 1
@@ -35,7 +35,7 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 						}
 					}
 					want := 0
-					if asset.gpu || asset.model != "" {
+					if asset.model != "" {
 						want = 1
 					}
 					if count != want {
@@ -57,15 +57,27 @@ func TestEndpointPathWithheldByRealProducer(t *testing.T) {
 					if len(got) != 1 || got[0] != network {
 						t.Fatalf("route control=%v", got)
 					}
-					if want == 1 {
-						// M-037 also withholds modelFingerprint; preserve the remaining independent grants.
-						for a, kind := range map[model.Action]string{model.ActionMIGRebind: FactGPUContentionChannel, model.ActionKVMigrateInvalidate: FactSession, model.ActionRequestDrain: FactInflightRequests, model.ActionGuardrailRotate: FactGuardrailBypass, model.ActionAdapterRotate: FactAdapterIntegrity} {
+					if asset.gpu {
+						keys := af.CoverByAction[model.ActionMIGRebind]
+						expected := (Fact{Scope: ScopePod, Asset: "ns/llm", Kind: FactGPUContentionChannel}).Key()
+						if len(keys) != 1 || keys[0] != expected {
+							t.Errorf("preserved MIG grant=%v, want %s", keys, expected)
+						}
+					}
+					if asset.model != "" {
+						// M-037 also withholds modelFingerprint; preserve independent serving grants.
+						for a, kind := range map[model.Action]string{model.ActionKVMigrateInvalidate: FactSession, model.ActionRequestDrain: FactInflightRequests, model.ActionGuardrailRotate: FactGuardrailBypass} {
 							keys := af.CoverByAction[a]
 							expected := (Fact{Scope: ScopePod, Asset: "ns/llm", Kind: kind}).Key()
 							if len(keys) != 1 || keys[0] != expected {
 								t.Errorf("preserved %s grant=%v, want %s", a, keys, expected)
 							}
 						}
+					}
+					keys := af.CoverByAction[model.ActionAdapterRotate]
+					expected := (Fact{Scope: ScopePod, Asset: "ns/llm", Kind: FactAdapterIntegrity}).Key()
+					if len(keys) != 1 || keys[0] != expected {
+						t.Errorf("preserved adapter grant=%v, want %s", keys, expected)
 					}
 					t.Logf("audit facts=%d endpoint facts=%d route control=%v", len(af.Facts), count, got)
 				})

@@ -25,12 +25,9 @@ func isAIMove(a model.Action) bool {
 	return false
 }
 
-// aiContextRequired vetoes an AI/GPU move on a workload with NO AI context (no GPU and no
-// model id) — you do not warm-swap / KV-reset a plain web server. On kind (plain pods,
-// GPUPresent=false, no ModelID) these moves are therefore infeasible and never selected,
-// so the default {rotate,quarantine} decision is byte-identical (1.62x + P3 + lead-demo
-// parity). An inference pod (ModelID set, or HasGPU) makes them feasible; the handler then
-// applies the fine gate (warm-swap requires a Ready shadow, etc.).
+// aiContextRequired separates hardware, serving and detector authority. A GPU allocation
+// licenses GPU-specific work only; serving actions require an explicit serving declaration,
+// and adapter eviction requires its exact UID-bound detector observation.
 type aiContextRequired struct{}
 
 func (aiContextRequired) Name() string { return "ai-context-required" }
@@ -39,10 +36,19 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 	if !isAIMove(move.Action) {
 		return feasible
 	}
-	if view.Pod.HasGPU || view.Pod.ModelID != "" {
+	var available bool
+	switch move.Action {
+	case model.ActionMIGRebind:
+		available = view.Pod.HasGPU
+	case model.ActionAdapterRotate:
+		available = view.Pod.HasBoundAdapterObservation()
+	default:
+		available = view.Pod.HasServingDeclaration()
+	}
+	if available {
 		return feasible
 	}
-	return Verdict{Feasible: false, Reason: "ai-context-required: " + string(move.Action) + " needs an inference/accelerated workload (no GPU, no model-id)"}
+	return Verdict{Feasible: false, Reason: "ai-context-required: " + string(move.Action) + " lacks its required GPU, serving, or detector context"}
 }
 
 // migDeviceRequired vetoes a mig-rebind on a pod with no MIG device (there is nothing to

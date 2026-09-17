@@ -9,7 +9,10 @@
 // "adding a profile/constraint/model = one file" stays true.
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ActuationBrakeObservation is a normalized operator annotation observation.
 // Cause is a stable, non-sensitive token; raw annotation values never enter audit.
@@ -362,12 +365,34 @@ type Pod struct {
 	SuspectAdapter     string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
 	AdapterObservation *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
 
-	// Typed capability witnesses used only for operator-facing ActionsSupported status.
-	ServingEndpointReady bool   // Ready AI pod with an assigned PodIP / serving endpoint
+	// Typed workload and capability witnesses projected from Kubernetes declarations.
+	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
+	ServingEndpointReady bool   // ServingDeclared plus Ready and an assigned PodIP; still not a protocol/loaded-model probe
 	RouteService         string // phorvex.ai/route-service annotation
 	RouteServiceReady    bool   // declared route Service exists in this namespace and can be restitched
 	GuardrailVariants    int    // distinct current+alternate guardrail variants declared
 	ParallelSize         int    // phorvex.ai/parallel-size; <=0 means absent or invalid
+}
+
+// HasModelDeclaration reports whether the workload declares a concrete served-model
+// identity. Whitespace is absence; hardware allocation alone is never model identity.
+func (p Pod) HasModelDeclaration() bool { return strings.TrimSpace(p.ModelID) != "" }
+
+// HasServingDeclaration reports structural serving context. ServingEndpointReady is
+// accepted as the stronger projected witness for compatibility with decoded/constructed
+// snapshots, while ingestion always sets ServingDeclared explicitly.
+func (p Pod) HasServingDeclaration() bool {
+	return p.ServingDeclared || p.ServingEndpointReady || p.HasModelDeclaration()
+}
+
+// HasBoundAdapterObservation is the narrow detector authority for adapter-integrity.
+// It is independent of generic model/GPU declarations and binds the assertion to this
+// exact Pod UID, adapter name, event identity and authenticated creator.
+func (p Pod) HasBoundAdapterObservation() bool {
+	o := p.AdapterObservation
+	return o != nil && p.UID != "" && p.SuspectAdapter != "" &&
+		o.AdapterName == p.SuspectAdapter && o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
 }
 
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can

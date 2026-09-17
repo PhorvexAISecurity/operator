@@ -60,7 +60,7 @@ func coverArchetypes() []coverArchetype {
 								pod.RouteService = "infer"
 								pod.GuardrailVariants = 2
 							}
-							pod.ServingEndpointReady = gpu || stateful || modelServer
+							pod.ServingEndpointReady = modelServer
 							name := fmt.Sprintf("gpu=%t/model=%t/stateful=%t/adapter=%t/mig=%t/route=%t",
 								gpu, modelServer, stateful, poisoned, mig, route)
 							out = append(out, coverArchetype{
