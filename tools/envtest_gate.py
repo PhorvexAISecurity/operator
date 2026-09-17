@@ -68,6 +68,7 @@ REQUIRED = {
         'TestM013RealEventSink',
         'TestM127RealAPIDirectReaderClosesCachedDispatchWindow',
         'TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch',
+        'TestM012RealAPIAuthorizationDenialCountsOneAttempt',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
         'TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController',
         'TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController',
