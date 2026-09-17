@@ -819,7 +819,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-76 · `do()` maps EVERY transport error to "stack unreachable" · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T10-M077
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -834,7 +834,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-77 · `postJSON`: classifier asymmetry + single-read truncation · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T10-M077
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers

@@ -1011,3 +1011,15 @@ fixes:
     stacked_on: []
     branch: fix/t9-m009
     head_sha: 03d5929784fbee81ef32732a0e64f7691ec1f3e6
+  T10-M077:
+    directory: fixes/T10-M077
+    aliases: []
+    issues:
+    - M-77
+    - M-76
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t10-m077
+    head_sha: 018a5628e44a89eea2146526eadbf994f52fb124
