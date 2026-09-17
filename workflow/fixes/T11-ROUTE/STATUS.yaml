@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 10
+revision: 11
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -23,6 +23,65 @@ checks:
     sha256: bb83497ba8455914b628d4a34af9c264136fe478304f2b7eaa942186fa712ede
     source_sha: e35b809c543654134f83683489cf6fce973d7afb
     at: '2026-09-17T02:24:48+00:00'
+  preflight:
+    result: PASS
+    by: sol-t11-route
+    artifact: evidence/preflight/receipt.json
+    sha256: 7a1f8e5e0bb46e64951b8bc38030cbe674ebf0d52cd3f1dc1de47064a2782593
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:27:27+00:00'
+  implementation:
+    result: PASS
+    by: sol-t11-route
+    artifact: 04-diff.patch
+    sha256: adf2118e10d0575584e806bd5812a93b48ebee3c0a28d499b226565b12a6cf74
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:27:27+00:00'
+  l0:
+    result: PASS
+    by: sol-t11-route
+    artifact: evidence/preflight/run-1789615327277567046/go-phorvex.log
+    sha256: 1ee1e4d3c10e66097951e6c9648101cf58df268860413a8c16c4d5a3622eeacd
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:27:27+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: fed1682760ef1278d6184ab67cb7678fa0c4453207e278eb92367d1335078df2
+  l1:
+    result: PASS
+    by: sol-t11-route
+    artifact: evidence/preflight/run-1789615327277567046/go-phorvex.log
+    sha256: 1ee1e4d3c10e66097951e6c9648101cf58df268860413a8c16c4d5a3622eeacd
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:27:27+00:00'
+    inputs:
+    - phorvex/internal/actuator
+    - phorvex/internal/runner
+    - phorvex/internal/slo
+    - phorvex/internal/startupauthz
+    inputs_sha256: ae703a6eb200c017b0027620dbe676632a330f8d2623fe749b9b90b3f49ca1b0
+  l2:
+    result: PASS
+    by: sol-t11-route
+    artifact: evidence/preflight/run-1789615327277567046/go-phorvex.log
+    sha256: 1ee1e4d3c10e66097951e6c9648101cf58df268860413a8c16c4d5a3622eeacd
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:27:27+00:00'
+    inputs:
+    - phorvex
+    inputs_sha256: fed1682760ef1278d6184ab67cb7678fa0c4453207e278eb92367d1335078df2
+  positive_control:
+    result: PASS
+    by: sol-t11-route
+    artifact: evidence/preflight/run-1789615327277567046/go-phorvex.log
+    sha256: 1ee1e4d3c10e66097951e6c9648101cf58df268860413a8c16c4d5a3622eeacd
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:27:27+00:00'
+    inputs:
+    - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
+    - phorvex/internal/actuator/route_cutover_test.go
+    - phorvex/internal/runner/route_reconciled_test.go
+    inputs_sha256: e5502160898858ebc59561dfdb9a07d807d9821db1235b0a688f2275d7e73ec6
 fix_id: T11-ROUTE
 issues:
 - M-59
@@ -32,7 +91,7 @@ issues:
 - M-147
 title: Journal route cutover and restore only owned fields
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -78,12 +137,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -93,10 +152,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t11-route
-  action: Implement signed plan; one heavy slot; submit-review --no-notify; local
-    only
-updated_at: '2026-09-17T03:21:59+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-17T03:27:30+00:00'
 configuration_history:
 - at: '2026-09-17T00:33:12+00:00'
   by: codex-lead
@@ -134,6 +193,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-17T03:27:26+00:00'
+  by: sol-t11-route
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -151,3 +215,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-17T03:27:27+00:00'
+  by: sol-t11-route
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-17T03:27:28+00:00'
+  by: sol-t11-route
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T11-ROUTE:11:submit
+  from: sol-t11-route
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 11

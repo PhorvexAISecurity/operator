@@ -1021,7 +1021,7 @@ fixes:
     - M-63
     - M-147
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t11-route
