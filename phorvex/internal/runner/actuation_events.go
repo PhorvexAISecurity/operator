@@ -1,8 +1,6 @@
 package runner
 
 import (
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,12 +35,19 @@ func (m *Manager) notifyActuation(target *corev1.Pod, action model.Action, res a
 		}
 	}
 	eventType, reason, message := corev1.EventTypeWarning, "PhorvexActuationOutcomeUnknown", "request outcome uncertain; partial changes may exist; effect unconfirmed"
-	if err == nil && res.Emitted {
+	if err == nil && res.Emitted && !contradictoryNoEffectResult(res, err) {
 		eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationEmitted", "request reported emitted for this target; effect unconfirmed"
-	} else if err == nil && !res.Emitted && res.Actuator == "native" && len(res.ObjectsTouched) == 0 && ((action == model.ActionRotate && strings.HasPrefix(res.Note, "Rotation not performed: ")) ||
-		(action == model.ActionRouteRotate && res.MutationKind == "none") ||
-		(action == model.ActionDisable && res.MutationKind == "declared")) {
-		reason, message = "PhorvexActuationNotEmitted", "request not emitted by this attempt; handler refused or lacks required configuration"
+	} else {
+		switch noEffectDisposition(res, err) {
+		case actuator.NoEffectRefused:
+			reason, message = "PhorvexActuationNotEmitted", "request definitely refused before effect; no mutation credited"
+		case actuator.NoEffectSatisfied:
+			eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationAlreadySatisfied", "no new mutation; current evidence says the requested state was already satisfied"
+		case actuator.NoEffectReconciled:
+			eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationReconciled", "no new mutation was submitted; a prior operation or observation was reconciled without claiming availability or effect"
+		case actuator.NoEffectDeclared:
+			eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationDeclaredOnly", "no mutation was submitted; this administrative action is declared without an implementation"
+		}
 	}
 	m.ActuationRecorder.Event(target, eventType, reason, safeAction+": "+message)
 }

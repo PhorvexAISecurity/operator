@@ -49,15 +49,20 @@ type Record struct {
 	KillSwitch      bool    `json:"killSwitch,omitempty"`
 	KillSwitchCause string  `json:"killSwitchCause,omitempty"`
 	Actuated        bool    `json:"actuated"`
+	DispatchOutcome string  `json:"dispatchOutcome,omitempty"`
+	DispatchReason  string  `json:"dispatchReason,omitempty"`
 	CoverageValue   float64 `json:"coverageValue"`
-	ThreatRisk      float64 `json:"threatRisk,omitempty"`
-	Cost            float64 `json:"cost"`
-	Net             float64 `json:"net"`
-	Residual        float64 `json:"residual"`      // observational under P1
-	ThreatPosture   float64 `json:"threatPosture"` // observational under P1
-	Exposure        float64 `json:"exposure"`
-	PHold           float64 `json:"pHold"`
-	Provenance      float64 `json:"provenance,omitempty"` // prov(key) applied to coverage in selection/demand/fallback (M-110)
+	// CoverageBasis qualifies selection-time coverage as a modeled opportunity,
+	// never measured mitigation or observed execution.
+	CoverageBasis string  `json:"coverageBasis,omitempty"`
+	ThreatRisk    float64 `json:"threatRisk,omitempty"`
+	Cost          float64 `json:"cost"`
+	Net           float64 `json:"net"`
+	Residual      float64 `json:"residual"`      // observational under P1
+	ThreatPosture float64 `json:"threatPosture"` // observational under P1
+	Exposure      float64 `json:"exposure"`
+	PHold         float64 `json:"pHold"`
+	Provenance    float64 `json:"provenance,omitempty"` // prov(key) applied to coverage in selection/demand/fallback (M-110)
 	// PHoldInputs (M-143): the capped noisy-OR terms behind pHold. Emitted so a reader can see
 	// that the posterior (betaMean) still moves pHold at every exposure age.
 	PHoldInputs *PHoldInputsRecord `json:"pHoldInputs,omitempty"`
@@ -285,6 +290,15 @@ func ToRecord(d model.Decision) Record {
 	if d.Claim != nil {
 		claim = model.NewClaimScope(d.Claim.DetectorSet, d.Claim.DetectorSetKnown, d.Claim.BrainImage, d.Claim.GitSHA)
 	}
+	coverageBasis := ""
+	if d.Engine == "p1-coverage" {
+		coverageBasis = "modeled-selection-opportunity"
+	}
+	dispatchOutcome := model.SafeDispatchOutcome(d.DispatchOutcome)
+	dispatchReason := ""
+	if dispatchOutcome != "" {
+		dispatchReason = model.SafeDispatchReason(d.DispatchReason)
+	}
 	return Record{
 		AdapterObservation:    d.AdapterObservation,
 		Representation:        cloneRepresentation(d.Representation),
@@ -308,7 +322,10 @@ func ToRecord(d model.Decision) Record {
 		KillSwitch:            d.KillSwitch,
 		KillSwitchCause:       d.KillSwitchCause,
 		Actuated:              d.Actuated,
+		DispatchOutcome:       dispatchOutcome,
+		DispatchReason:        dispatchReason,
 		CoverageValue:         round4(d.CoverageValue),
+		CoverageBasis:         coverageBasis,
 		ThreatRisk:            round4(d.ThreatRisk),
 		Cost:                  round4(d.Cost),
 		Net:                   round4(d.Net),
@@ -512,8 +529,11 @@ func (l *Logger) Record(d model.Decision) error {
 		"existential", existentialJSON,
 		"tenant", rec.Tenant, "pod", rec.Namespace+"/"+rec.Pod, "action", rec.Action,
 		"selected", rec.Selected, "feasible", rec.Feasible, "dryRun", rec.DryRun,
+		"actuated", rec.Actuated, "dispatchOutcome", rec.DispatchOutcome, "dispatchReason", rec.DispatchReason,
 		"dryRunCause", rec.DryRunCause, "actuationBrakeCause", rec.ActuationBrakeCause,
-		"representation", rec.Representation, "claim", rec.Claim, "engine", rec.Engine, "perDollar", rec.PerDollar, "coveredFacts", rec.CoveredFacts,
+		"representation", rec.Representation, "claim", rec.Claim, "engine", rec.Engine,
+		"coverageValue", rec.CoverageValue, "coverageBasis", rec.CoverageBasis,
+		"perDollar", rec.PerDollar, "coveredWeight", rec.CoveredWeight, "coveredFacts", rec.CoveredFacts,
 		"stage", rec.Stage, "nextStage", rec.NextStage, "hazard", rec.StageHazard,
 		"pHold", rec.PHold, "lambda", rec.Lambda, "proactiveRate", rec.ProactiveRate,
 		"cost", rec.Cost, "net", rec.Net, "asset", rec.AssetValue, "blast", rec.BlastRadius,

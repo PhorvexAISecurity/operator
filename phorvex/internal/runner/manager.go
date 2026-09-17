@@ -38,7 +38,6 @@ import (
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
-	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
@@ -336,6 +335,41 @@ func clearDispatchResult(d *model.Decision) {
 	d.RollbackRef = ""
 	d.MutationKind = ""
 	d.Phoenix = nil
+	d.DispatchOutcome, d.DispatchReason = "", ""
+}
+
+// resetDispatchAttempt removes every result and runtime-boundary field from a
+// prior call while restoring a valid pre-attempt trace state. Decisions may be
+// reused by tests and by audit plumbing; no later early return may serialize a
+// previous emission, brake or kill-switch observation as current evidence.
+func resetDispatchAttempt(d *model.Decision) {
+	clearDispatchResult(d)
+	d.DryRun = false
+	d.DryRunCause = ""
+	d.ActuationBrakeCause = ""
+	d.KillSwitch = false
+	d.KillSwitchCause = ""
+	if d.Measurements != nil {
+		d.Measurements.KillSwitch = model.OptionalBool{Present: true, Value: false}
+	}
+	if d.Existential != nil && d.Existential.Present {
+		d.Existential.EffectStatus = "not-attempted"
+	}
+	reason := "pending-dispatch"
+	if !d.Selected {
+		reason = "unselected"
+	}
+	if d.Trace != nil {
+		d.Trace.DryRun = false
+		d.Trace.DryRunCause = ""
+		d.Trace.ActuationBrakeCause = ""
+		d.Trace.KillSwitchEngaged = false
+		d.Trace.KillSwitchCause = ""
+		if d.Trace.Existential != nil && d.Trace.Existential != d.Existential && d.Trace.Existential.Present {
+			d.Trace.Existential.EffectStatus = "not-attempted"
+		}
+	}
+	stampDispatchEvidence(d, model.DispatchNotAttempted, reason)
 }
 
 func stampKillSwitchRefusal(d *model.Decision, observation KillSwitchObservation) {
@@ -348,10 +382,9 @@ func stampKillSwitchRefusal(d *model.Decision, observation KillSwitchObservation
 	if d.Trace != nil {
 		d.Trace.KillSwitchEngaged = true
 		d.Trace.KillSwitchCause = string(observation.Cause)
-		if d.Selected {
-			d.Trace.DispatchOutcome = model.DispatchNotAttempted
-			d.Trace.DispatchReason = "kill-switch: " + string(observation.Cause)
-		}
+	}
+	if d.Selected {
+		stampDispatchEvidence(d, model.DispatchNotAttempted, "kill-switch")
 	}
 }
 
@@ -2077,8 +2110,58 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 }
 
 func cleanNoEffectResult(r actuator.Result) bool {
-	return !r.Emitted && len(r.ObjectsTouched) == 0 && r.RollbackRef == "" && r.MutationKind == "" &&
+	return !r.Emitted && len(r.ObjectsTouched) == 0 && r.RollbackRef == "" && (r.MutationKind == "" || r.MutationKind == "none") &&
 		r.AMTDName == "" && r.EventName == "" && r.EventUID == ""
+}
+
+// noEffectDisposition accepts only the closed actuator vocabulary on a result
+// with no contradictory effect evidence. The legacy typed refusal remains a
+// supported producer when its result is structurally clean.
+func noEffectDisposition(r actuator.Result, err error) actuator.NoEffectDisposition {
+	switch r.NoEffect {
+	case actuator.NoEffectRefused:
+		if cleanNoEffectResult(r) && (err == nil || actuator.IsNoEffectRefusal(err)) {
+			return r.NoEffect
+		}
+		return actuator.NoEffectUnknown
+	case actuator.NoEffectSatisfied:
+		if err == nil && cleanNoEffectResult(r) {
+			return r.NoEffect
+		}
+		return actuator.NoEffectUnknown
+	case actuator.NoEffectReconciled:
+		if err == nil && !r.Emitted && (r.MutationKind == "" || r.MutationKind == "none") &&
+			r.EventName == "" && r.EventUID == "" {
+			return r.NoEffect
+		}
+		return actuator.NoEffectUnknown
+	case actuator.NoEffectDeclared:
+		if err == nil && !r.Emitted && len(r.ObjectsTouched) == 0 && r.RollbackRef == "" &&
+			r.MutationKind == "declared" && r.EventName == "" && r.EventUID == "" {
+			return r.NoEffect
+		}
+		return actuator.NoEffectUnknown
+	case actuator.NoEffectUnknown:
+		if actuator.IsNoEffectRefusal(err) && cleanNoEffectResult(r) {
+			return actuator.NoEffectRefused
+		}
+	}
+	return actuator.NoEffectUnknown
+}
+
+// contradictoryNoEffectResult distinguishes an absent disposition from a
+// producer that supplied a closed disposition alongside incompatible result
+// evidence. The latter must never fall through to emitted-success accounting
+// merely because the disposition validator correctly reduced it to unknown.
+func contradictoryNoEffectResult(r actuator.Result, err error) bool {
+	return r.NoEffect != actuator.NoEffectUnknown && noEffectDisposition(r, err) == actuator.NoEffectUnknown
+}
+
+func stampDispatchEvidence(d *model.Decision, outcome, reason string) {
+	d.DispatchOutcome, d.DispatchReason = outcome, reason
+	if d.Trace != nil {
+		d.Trace.DispatchOutcome, d.Trace.DispatchReason = outcome, reason
+	}
 }
 
 // cloneExistential preserves the first attempt's evidence after a fallback
@@ -2149,6 +2232,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 	}
 	d.Reason = fmt.Sprintf("same-tick alternative after explicit no-effect refusal of %s; reserved marginal gain %.6g", original.Action, a.Gain)
 	d.Actuated, d.Phoenix = false, nil
+	d.DispatchOutcome, d.DispatchReason = "", ""
 	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
 	d.ObjectsTouched = nil
 	if original.Trace != nil {
@@ -2231,26 +2315,12 @@ func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEn
 }
 
 func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
-	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
+	// Clear prior result and boundary metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
-	// Placing it later left two ways for a reused decision to carry a PREVIOUS tick's
-	// SecurityEvent name/UID into a record for a tick that never attempted an emission:
-	// a failed policy setup, and a decision that is no longer selected. Both are
-	// serialized as evidence — audit.Logger.Record calls writeRecord unconditionally,
-	// and OnlySelected gates only the structured log line, not the JSONL — so a stale
-	// identifier would point an investigator at the wrong object. Only a result actually
-	// returned by Actuate in THIS call may repopulate it.
+	// Audit.Record serializes both, so only evidence from THIS call may survive.
 	for i := range decisions {
-		decisions[i].Phoenix = nil
-		decisions[i].DryRun = false
-		decisions[i].DryRunCause = ""
-		decisions[i].ActuationBrakeCause = ""
-		if decisions[i].Trace != nil {
-			decisions[i].Trace.DryRun = false
-			decisions[i].Trace.DryRunCause = ""
-			decisions[i].Trace.ActuationBrakeCause = ""
-		}
+		resetDispatchAttempt(&decisions[i])
 	}
 	if state == nil {
 		state = &killSwitchTickState{observation: KillSwitchObservation{Cause: KillSwitchStaticOnly}}
@@ -2315,9 +2385,8 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		m.Log.Error(err, "actuator EnsurePolicy failed; suppressing actuation this tick", "tenant", pol.Tenant)
 		// T0-C: a tick-level pre-dispatch guard — every selected move is refused here.
 		for i := range decisions {
-			if decisions[i].Selected && decisions[i].Trace != nil {
-				decisions[i].Trace.DispatchOutcome = model.DispatchNotAttempted
-				decisions[i].Trace.DispatchReason = "ensure-policy-failed"
+			if decisions[i].Selected {
+				stampDispatchEvidence(&decisions[i], model.DispatchNotAttempted, "ensure-policy-failed")
 			}
 		}
 		return 0, &preparation
@@ -2330,10 +2399,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		// T0-C: every guard below stamps the dispatch outcome on the trace before
 		// the audit write, so a selected-but-refused move never reads as unselected.
 		stampDispatch := func(outcome, reason string) {
-			if decisions[i].Trace != nil {
-				decisions[i].Trace.DispatchOutcome = outcome
-				decisions[i].Trace.DispatchReason = reason
-			}
+			stampDispatchEvidence(&decisions[i], outcome, reason)
 		}
 		// Inviolability guard at the emit boundary (defense in depth): a selected move is
 		// ALWAYS feasible (the action-set generator excluded infeasible moves before
@@ -2346,7 +2412,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		}
 		if prepErr := preparation.ForAction(decisions[i].Action); prepErr != nil {
 			m.Log.Error(prepErr, "action route preparation refused; suppressing dispatch", "tenant", pol.Tenant, "namespace", decisions[i].Namespace, "pod", decisions[i].Pod, "action", decisions[i].Action)
-			stampDispatch(model.DispatchNotAttempted, "route-preparation-failed: "+prepErr.Error())
+			stampDispatch(model.DispatchNotAttempted, "route-preparation-failed")
 			continue
 		}
 		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
@@ -2369,7 +2435,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		if verdict := existentialEmitVerdict(decisions[i], v, pol); !verdict.Feasible {
 			m.Log.Error(nil, "EMIT-BOUNDARY INVARIANT VETO: refusing infeasible move at actuate boundary",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
-			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible: "+verdict.Reason)
+			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible")
 			continue
 		}
 		// M-6 pre-submit gate: a code-exec injection (debugger/custom-inject) is submitted ONLY
@@ -2382,13 +2448,13 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			if m.CodeExec == nil {
 				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec verifier unwired; refusing ephemeral-container injection",
 					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
-				stampDispatch(model.DispatchNotAttempted, codeexec.ReasonUnverified+": verifier-unwired")
+				stampDispatch(model.DispatchNotAttempted, "code-exec-unverified")
 				continue
 			}
 			if ok, why := m.CodeExec.FinalCheck(ctx, decisions[i].Namespace); !ok {
 				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec admission not verified at pre-submit; refusing injection",
 					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", why)
-				stampDispatch(model.DispatchNotAttempted, why)
+				stampDispatch(model.DispatchNotAttempted, "code-exec-unverified")
 				continue
 			}
 		}
@@ -2464,14 +2530,16 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		// returns nil when nothing was supplied — absence stays absent rather than
 		// becoming empty strings.
 		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
-		// M-11 emission bookkeeping and M-13 actuation notification both observe the raw
-		// result and are unaffected by the mapping above; order between them is immaterial
-		// because neither reads decisions[i].Phoenix.
+		disposition := noEffectDisposition(res, err)
+		contradictoryDisposition := contradictoryNoEffectResult(res, err)
+		// M-11 emission-window bookkeeping remains conservative about any producer that
+		// reports an attempted emission. Success, intent and learning accounting below
+		// additionally require a coherent result.
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
 		}
 		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
-		if err != nil {
+		if err != nil || disposition == actuator.NoEffectRefused || contradictoryDisposition {
 			fallbackObservation := state.observe(ctx, m.KillSwitch)
 			fallbackBlocked := fallbackObservation.Engaged
 			fallbackBrake := brakeState.observeNamespace(ctx, m, decisions[i].Namespace)
@@ -2508,7 +2576,8 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			// action's capability. An action-local timeout with a clean result
 			// still counts toward later-tick feedback, but cannot license an
 			// immediate different mutation. Partial effects enter neither gate.
-			if !fallbackBlocked && cleanNoEffectResult(res) && ctx.Err() == nil &&
+			if !fallbackBlocked && !contradictoryDisposition && cleanNoEffectResult(res) && ctx.Err() == nil &&
+				disposition != actuator.NoEffectSatisfied && disposition != actuator.NoEffectReconciled && disposition != actuator.NoEffectDeclared &&
 				m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) {
 				failureNow := time.Now()
 				if m.FailureNow != nil {
@@ -2523,34 +2592,44 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			decisions[i].MutationKind = res.MutationKind
 
 			outcome := slo.OutcomeFailed
-			dispatchReason := "failed"
+			dispatchOutcome := model.DispatchError
+			dispatchReason := "outcome-unknown"
+			if disposition == actuator.NoEffectRefused {
+				outcome = slo.OutcomeNotEmitted
+				dispatchOutcome = model.DispatchRefused
+				dispatchReason = "definite-no-effect-refusal"
+			}
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				outcome = slo.OutcomeDeadlineExpired
 				dispatchReason = "deadline-expired"
 			}
-			if res.Note != "" {
-				dispatchReason += ": " + res.Note
-			}
 			if fallbackBlocked {
 				if fallbackObservation.Engaged {
-					dispatchReason += "; fallback-refused-kill-switch: " + string(fallbackObservation.Cause)
+					dispatchReason += "; fallback-blocked-kill-switch"
 				}
 				if fallbackBrake.Engaged {
-					dispatchReason += "; fallback-refused-actuation-brake: " + fallbackBrake.Cause
+					dispatchReason += "; fallback-blocked-actuation-brake"
 				}
 			}
-			stampDispatch(model.DispatchError, dispatchReason)
+			stampDispatch(dispatchOutcome, dispatchReason)
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
-			m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
+			if err != nil {
+				m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
+			} else if disposition == actuator.NoEffectRefused {
+				m.Log.Info("actuator refused without effect", "pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
+			} else {
+				m.Log.Error(nil, "actuator returned contradictory result evidence", "pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
+			}
 			if !fallbackBlocked && allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
 				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
-				actuator.IsNoEffectRefusal(err) && cleanNoEffectResult(res) {
+				disposition == actuator.NoEffectRefused {
 				if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 					targetKey := v.Pod.Namespace + "/" + v.Pod.Name
 					if alternative, ok := ce.SelectAlternative(pol.Owner(), targetKey, decisions[i].Action); ok {
 						if !ce.ReserveAlternative(pol.Owner(), targetKey, decisions[i].Action, alternative.Action) {
+							decisions[i].DispatchReason += "; alternative-deferred-reservation-changed"
 							if decisions[i].Trace != nil {
-								decisions[i].Trace.DispatchReason += "; alternative-deferred: reservation-changed"
+								decisions[i].Trace.DispatchReason = decisions[i].DispatchReason
 							}
 							continue
 						}
@@ -2561,8 +2640,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 						// The recursive call modifies its local slice's owned trace;
 						// capture that actual attempt as a separate audit decision.
 						m.fallbackDecisions = append(m.fallbackDecisions, attempt[0])
-					} else if decisions[i].Trace != nil {
-						decisions[i].Trace.DispatchReason += "; alternative-deferred: no-admissible-candidate"
+					} else {
+						decisions[i].DispatchReason += "; alternative-deferred-no-admissible-candidate"
+						if decisions[i].Trace != nil {
+							decisions[i].Trace.DispatchReason = decisions[i].DispatchReason
+						}
 					}
 				}
 			}
@@ -2570,7 +2652,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		}
 		if res.Emitted {
 			m.Failures.reset(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, decisions[i].Action})
-			stampDispatch(model.DispatchEmitted, res.Note)
+			stampDispatch(model.DispatchEmitted, "emitted-unconfirmed")
 			decisions[i].Actuated = true
 			recordExistentialEffect(&decisions[i], true)
 			// M-23: stamp per-action emit intent on the SUCCESSFUL-emit path (a failed actuation
@@ -2608,7 +2690,23 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			}
 		} else {
-			stampDispatch(model.DispatchEmittedFalse, res.Note)
+			// A non-emitted result can still carry reviewed handler identity or a
+			// protected prior-operation reference. Retain those facts without
+			// promoting them to a fresh actuation or success epoch.
+			decisions[i].Handler = res.Handler
+			decisions[i].ObjectsTouched = res.ObjectsTouched
+			decisions[i].RollbackRef = res.RollbackRef
+			decisions[i].MutationKind = res.MutationKind
+			switch disposition {
+			case actuator.NoEffectSatisfied:
+				stampDispatch(model.DispatchSatisfied, "already-satisfied")
+			case actuator.NoEffectReconciled:
+				stampDispatch(model.DispatchReconciled, "reconciled-prior-operation")
+			case actuator.NoEffectDeclared:
+				stampDispatch(model.DispatchDeclared, "declared-without-implementation")
+			default:
+				stampDispatch(model.DispatchEmittedFalse, "outcome-unknown")
+			}
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
 		}
 	}

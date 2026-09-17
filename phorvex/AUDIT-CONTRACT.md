@@ -8,7 +8,14 @@ wire meaning changes.
 
 `phorvex.audit.v2` is the only schema written by this release.
 
-- `coverageValue` is the P1 recon-fact value at stake.
+- `coverageValue` and `coveredWeight` are modeled P1 selection opportunities.
+  `coverageBasis=modeled-selection-opportunity` states that they are not measured
+  mitigation, observed execution, or confirmed security effect.
+- `dispatchOutcome` and `dispatchReason` are optional top-level attempt evidence.
+  New writers use a closed outcome vocabulary and reviewed, bounded reasons so
+  untraced and history records retain the actual disposition without copying
+  backend errors or free-form handler notes. Their absence in older records is
+  unavailable outcome evidence, never retrospective confirmation.
 - `threatRisk` is the deprecated P0 engine's distinct threat-weighted value and is
   omitted under P1. The two meanings no longer share `risk`.
 - `pHold` is authoritative. `belief` is not emitted.

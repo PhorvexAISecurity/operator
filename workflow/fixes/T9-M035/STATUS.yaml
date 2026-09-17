@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 23
+revision: 26
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -103,12 +103,19 @@ checks:
     source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
     at: '2026-09-17T00:27:09+00:00'
     baseline_sha: 3bb0bc14cd78457d8d85078ef717ef8912848adc
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 4e3bb4cb57a33f75b0eb74cbfbbdd30fe43f9c06944bd09226be20387a41da55
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:57:33+00:00'
 fix_id: T9-M035
 issues:
 - M-35
 title: '`endpoint-rotate`: unconditional cover, conditional effect'
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -135,11 +142,11 @@ implementation:
   head_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/222
+  reviewed_head: 5572d7d0945611dde95c809442b3f1243c843be1
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -170,9 +177,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-17T00:27:13+00:00'
+  action: PR222 targets main. Await DevOps merge/deployment and external GitHub billing
+    resolution; continue independent Tier10 work. Retain issue-specific live verification.
+updated_at: '2026-09-17T00:57:33+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:30+00:00'
   by: codex-lead
@@ -204,6 +211,12 @@ configuration_history:
   by: sol-t9-m035
   fields:
   - implementation
+  approval_ref: null
+- at: '2026-09-17T00:57:32+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -269,6 +282,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-17T00:57:33+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T9-M035:23:review

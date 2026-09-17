@@ -35,6 +35,21 @@ func RefusedWithoutEffect(err error) error {
 }
 func IsNoEffectRefusal(err error) bool { var e NoEffectRefusal; return errors.As(err, &e) }
 
+// NoEffectDisposition is an actuator's positive statement about a reviewed
+// result that emitted no new mutation. Reconciled results may retain protected
+// prior-operation references; refused and satisfied results remain clean.
+// Empty is deliberately unknown: callers must never infer a refusal from
+// Emitted=false, MutationKind, or free-form Note text.
+type NoEffectDisposition string
+
+const (
+	NoEffectUnknown    NoEffectDisposition = ""
+	NoEffectRefused    NoEffectDisposition = "refused"
+	NoEffectSatisfied  NoEffectDisposition = "already-satisfied"
+	NoEffectReconciled NoEffectDisposition = "reconciled"
+	NoEffectDeclared   NoEffectDisposition = "declared-only"
+)
+
 // Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH the SecurityEvent
 // and the AMTD strategy that matches it, it bypasses Phoenix's brittle exact-match
 // problem entirely and drives any action deterministically (PRD §4.3). These rule
@@ -92,6 +107,11 @@ type Request struct {
 // checks at the actuate boundary, regardless of actuator.
 type Result struct {
 	Note string
+	// NoEffect is set only when a reviewed, non-emitted result positively proves
+	// why no new mutation occurred. Contradictory result evidence invalidates it
+	// at the runner boundary and leaves the outcome unknown; reconciled results
+	// may retain protected references from the prior operation they observed.
+	NoEffect NoEffectDisposition
 
 	Actuator  string
 	AMTDName  string
@@ -115,7 +135,7 @@ type Result struct {
 	ObjectsTouched []string
 	// RollbackRef is an opaque token a Rollbacker uses for compensating undo ("" = none).
 	RollbackRef string
-	// MutationKind is "reversible" | "irreversible" | "forward-only" | "swap" | "declared".
+	// MutationKind is "reversible" | "irreversible" | "forward-only" | "swap" | "declared" | "partial".
 	MutationKind string
 }
 

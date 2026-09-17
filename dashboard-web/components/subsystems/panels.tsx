@@ -108,7 +108,7 @@ export function OptimizationPanel({ lens }: { lens: Lens }) {
   const rows = acted.length ? acted : recs;
   return (
     <div className="space-y-4">
-      <SectionLabel>Modeled coverage − λ·cost scoring · the optimizer's choice per workload</SectionLabel>
+      <SectionLabel>Modeled selection opportunity − λ·cost scoring · not measured mitigation</SectionLabel>
       <Card><CardContent className="p-0">
         <Table>
           <THead><TH>Workload</TH><TH>Action</TH><TH>Modeled coverage</TH><TH>Cost (ECost)</TH><TH>Net = cov − λ·cost</TH><TH>per-$</TH><TH>λ</TH></THead>
@@ -126,7 +126,7 @@ export function OptimizationPanel({ lens }: { lens: Lens }) {
         </Table>
       </CardContent></Card>
       {rows[0] && <ShapAndR6 rec={rows.find((r) => r.attribution?.length) || rows[0]} />}
-      <div className="text-[10px] text-muted-foreground/60">Coverage/λ/per-$/SHAP/counterfactual are IP — Investor/Operator only; the owner lens sees the outcome (action + why) only.</div>
+      <div className="text-[10px] text-muted-foreground/60">Coverage values describe modeled selection opportunity, not measured mitigation. Coverage/λ/per-$/SHAP/counterfactual are IP — Investor/Operator only; the owner lens sees the outcome (action + why) only.</div>
     </div>
   );
 }

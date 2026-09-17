@@ -379,7 +379,7 @@ func TestM124LatePodOptOutSuppressesFailureLearningAndFallbackReservation(t *tes
 	}
 	if decisions[0].ActuationBrakeCause != actuationbrake.PodOptOutEngaged ||
 		decisions[0].KillSwitch || decisions[0].KillSwitchCause != "" || decisions[0].Trace.KillSwitchEngaged ||
-		!strings.Contains(decisions[0].Trace.DispatchReason, "fallback-refused-actuation-brake: "+actuationbrake.PodOptOutEngaged) {
+		!strings.Contains(decisions[0].Trace.DispatchReason, "fallback-blocked-actuation-brake") {
 		t.Fatalf("fallback refusal evidence = %+v trace=%+v", decisions[0], decisions[0].Trace)
 	}
 }

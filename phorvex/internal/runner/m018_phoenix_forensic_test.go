@@ -357,6 +357,13 @@ func TestM018NotAttemptedMoveCarriesNoStalePayload(t *testing.T) {
 		t.Fatalf("M-18: not-attempted move inherited a stale reference to %q: %+v",
 			firstUID, *ds[0].Phoenix)
 	}
+	if ds[0].Actuated || ds[0].Handler != "" || len(ds[0].ObjectsTouched) != 0 || ds[0].RollbackRef != "" || ds[0].MutationKind != "" {
+		t.Fatalf("not-attempted decision retained prior success/native evidence: %+v", ds[0])
+	}
+	if ds[0].DispatchOutcome != model.DispatchNotAttempted || ds[0].DispatchReason != "no-tick-view" ||
+		ds[0].Trace.DispatchOutcome != model.DispatchNotAttempted || ds[0].Trace.DispatchReason != "no-tick-view" {
+		t.Fatalf("not-attempted current-call outcome = %+v", ds[0])
+	}
 	if got := ds[0].Trace.DispatchOutcome; got != model.DispatchNotAttempted {
 		t.Fatalf("dispatch outcome = %q, want %q", got, model.DispatchNotAttempted)
 	}
@@ -540,11 +547,16 @@ func m018SeedRealPayload(t *testing.T) []model.Decision {
 	api := &m018RecordingAPI{}
 	m := &Manager{Actuator: actuator.NewPhoenixActuator(m018PhoenixClient(t, api)), Log: logr.Discard()}
 	ds := m018SelectedDecision("ns", "p1")
+	ds[0].Existential = &model.ExistentialDecision{Present: true, EffectStatus: "not-attempted"}
+	ds[0].Trace.Existential = ds[0].Existential
 	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("seeding emission actuated %d, want 1", n)
 	}
 	if ds[0].Phoenix == nil || ds[0].Phoenix.EventUID == "" {
 		t.Fatal("seed produced no real payload; the fixture would not be discriminating")
+	}
+	if ds[0].Existential.EffectStatus != "attempted-unconfirmed" {
+		t.Fatalf("seed did not produce attempted effect evidence: %+v", ds[0].Existential)
 	}
 	return ds
 }
@@ -567,6 +579,15 @@ func TestM018EnsurePolicyFailureClearsStalePhoenixEvidence(t *testing.T) {
 	if ds[0].Phoenix != nil {
 		t.Fatalf("STALE EVIDENCE: a tick that never attempted an emission kept event %q (uid %q)",
 			stale.EventName, stale.EventUID)
+	}
+	if ds[0].Actuated || ds[0].Handler != "" || len(ds[0].ObjectsTouched) != 0 || ds[0].RollbackRef != "" || ds[0].MutationKind != "" {
+		t.Fatalf("not-attempted decision retained prior success/native evidence: %+v", ds[0])
+	}
+	if ds[0].DispatchOutcome != model.DispatchNotAttempted || ds[0].DispatchReason != "ensure-policy-failed" {
+		t.Fatalf("top-level outcome disagrees with trace: %+v", ds[0])
+	}
+	if ds[0].Existential.EffectStatus != "not-attempted" || ds[0].Trace.Existential.EffectStatus != "not-attempted" {
+		t.Fatalf("not-attempted decision retained prior existential effect: %+v", ds[0].Existential)
 	}
 	// The record an investigator reads must not carry it either.
 	raw := m018RecordJSON(t, m, &buf, ds[0])
@@ -600,6 +621,16 @@ func TestM018UnselectedDecisionClearsStalePhoenixEvidence(t *testing.T) {
 	if ds[0].Phoenix != nil {
 		t.Fatalf("STALE EVIDENCE: unselected decision kept event %q (uid %q)",
 			stale.EventName, stale.EventUID)
+	}
+	if ds[0].Actuated || ds[0].Handler != "" || len(ds[0].ObjectsTouched) != 0 || ds[0].RollbackRef != "" || ds[0].MutationKind != "" {
+		t.Fatalf("unselected decision retained prior success/native evidence: %+v", ds[0])
+	}
+	if ds[0].DispatchOutcome != model.DispatchNotAttempted || ds[0].DispatchReason != "unselected" ||
+		ds[0].Trace.DispatchOutcome != model.DispatchNotAttempted || ds[0].Trace.DispatchReason != "unselected" {
+		t.Fatalf("unselected current-call outcome = %+v", ds[0])
+	}
+	if ds[0].Existential.EffectStatus != "not-attempted" || ds[0].Trace.Existential.EffectStatus != "not-attempted" {
+		t.Fatalf("unselected decision retained prior existential effect: %+v", ds[0].Existential)
 	}
 	raw := m018RecordJSON(t, m, &buf, ds[0])
 	if _, present := raw["phoenix"]; present {
@@ -639,7 +670,8 @@ func TestM018ClearDoesNotSuppressGenuineEvidence(t *testing.T) {
 		t.Fatalf("native actuation actuated %d, want 1", n)
 	}
 	if nd[0].Handler != "kv-reset" || nd[0].MutationKind != "reversible" ||
-		nd[0].RollbackRef != "rb-1" || len(nd[0].ObjectsTouched) != 1 {
+		nd[0].RollbackRef != "rb-1" || len(nd[0].ObjectsTouched) != 1 || !nd[0].Actuated ||
+		nd[0].DispatchOutcome != model.DispatchEmitted {
 		t.Fatalf("native forensic mapping changed: %+v", nd[0])
 	}
 	if nd[0].Phoenix != nil {
