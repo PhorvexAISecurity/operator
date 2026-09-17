@@ -1023,3 +1023,15 @@ fixes:
     stacked_on: []
     branch: fix/t10-m077
     head_sha: 018a5628e44a89eea2146526eadbf994f52fb124
+  T10-M010:
+    directory: fixes/T10-M010
+    aliases: []
+    issues:
+    - M-10
+    - M-15
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t10-m010
+    head_sha: null
