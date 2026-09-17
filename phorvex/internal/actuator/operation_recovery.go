@@ -27,15 +27,19 @@ func (n *NativeActuator) RecoverOperations(ctx context.Context, globalKill bool)
 }
 
 func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool, allow func(model.Action) bool) ([]RecoveryEvent, error) {
-	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources}
+	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}
 	if globalKill || n.DryRun {
 		return nil, nil
+	}
+	guardEvents, err := cleanupOrphanRouteGuards(ctx, ec)
+	if err != nil {
+		return nil, err
 	}
 	entries, err := journalList(ctx, ec)
 	if err != nil {
 		return nil, err
 	}
-	events := make([]RecoveryEvent, 0, len(entries))
+	events := append(make([]RecoveryEvent, 0, len(guardEvents)+len(entries)), guardEvents...)
 	for i := range entries {
 		entry := &entries[i]
 		r := entry.Receipt
@@ -49,19 +53,23 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 			events = append(events, ev)
 			continue
 		}
-		var pol *v1alpha1.PhorvexPolicy
-		pol, ev.Err = receiptAuthority(ctx, ec.Reader, r, action)
-		if ev.Err == nil {
-			ev.Tenant = pol.EffectiveTenant()
-			switch r.Kind {
-			case "warm-swap", "model-shard-replace":
-				ev.Effect, ev.Err = recoverScalarCutover(ctx, ec, &entry.CM, &r)
-			case "quarantine":
-				ev.Effect, ev.Err = recoverQuarantineGC(ctx, ec, &entry.CM, &r)
-			case "request-drain":
-				ev.Effect, _, ev.Err = recoverRequestDrain(ctx, ec, &entry.CM, &r)
-			case "adapter-rotate":
-				ev.Effect, ev.Err = recoverAdapterRotate(ctx, ec, &entry.CM, &r)
+		if r.Kind == string(model.ActionRouteRotate) || r.Kind == string(model.ActionEndpointRotate) {
+			ev.Effect, ev.Err = recoverRouteCutover(ctx, ec, &entry.CM, &r)
+		} else {
+			var pol *v1alpha1.PhorvexPolicy
+			pol, ev.Err = receiptAuthority(ctx, ec.Reader, r, action)
+			if ev.Err == nil {
+				ev.Tenant = pol.EffectiveTenant()
+				switch r.Kind {
+				case "warm-swap", "model-shard-replace":
+					ev.Effect, ev.Err = recoverScalarCutover(ctx, ec, &entry.CM, &r)
+				case "quarantine":
+					ev.Effect, ev.Err = recoverQuarantineGC(ctx, ec, &entry.CM, &r)
+				case "request-drain":
+					ev.Effect, _, ev.Err = recoverRequestDrain(ctx, ec, &entry.CM, &r)
+				case "adapter-rotate":
+					ev.Effect, ev.Err = recoverAdapterRotate(ctx, ec, &entry.CM, &r)
+				}
 			}
 		}
 		if ev.Err == nil {

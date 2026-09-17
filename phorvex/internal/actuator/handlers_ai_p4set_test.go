@@ -392,10 +392,11 @@ func TestGuardrailRotateRestoresLiveVariantWhenRecordFails(t *testing.T) {
 // ===== kv-migrate-invalidate =====
 func TestKVMigrateInvalidatesLocalCrossWorkerDeferred(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	pod.Annotations[annoDisaggPeers] = "10.0.0.2:8000,10.0.0.3:8000"
 	c := fakeC(pod)
 	mk := &mockKVXfer{}
-	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, KVXfer: mk}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVMigrateInvalidate})
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, KVXfer: mk}, boundReq(pod, model.ActionKVMigrateInvalidate))
 	if err == nil {
 		t.Fatal("deferred cross-worker result must remain an explicit partial error")
 	}
@@ -412,8 +413,10 @@ func TestKVMigrateInvalidatesLocalCrossWorkerDeferred(t *testing.T) {
 }
 
 func TestKVMigrateLocalUnreachablePending(t *testing.T) {
-	c := fakeC(aiPod("ns", "infer", map[string]string{"app": "infer"}))
-	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, KVXfer: &mockKVXfer{invErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVMigrateInvalidate})
+	pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
+	c := fakeC(pod)
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, KVXfer: &mockKVXfer{invErr: errStackUnreachable}}, boundReq(pod, model.ActionKVMigrateInvalidate))
 	if err != nil {
 		t.Fatalf("unreachable local invalidate must not error: %v", err)
 	}

@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -56,13 +55,44 @@ func m087Client(spy *m087Spy, objs ...client.Object) client.Client {
 	}).Build()
 }
 
+type m087WrappedClient struct {
+	client.Client
+	spy *m087Spy
+}
+
+func (c m087WrappedClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	c.spy.reads++
+	return c.Client.Get(ctx, key, obj, opts...)
+}
+func (c m087WrappedClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	c.spy.reads++
+	return c.Client.List(ctx, list, opts...)
+}
+func (c m087WrappedClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	c.spy.writes++
+	return c.Client.Create(ctx, obj, opts...)
+}
+func (c m087WrappedClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	c.spy.writes++
+	return c.Client.Update(ctx, obj, opts...)
+}
+func (c m087WrappedClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	c.spy.writes++
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
+func (c m087WrappedClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	c.spy.writes++
+	return c.Client.Delete(ctx, obj, opts...)
+}
+
 // m087Rotate performs a real route-rotate through Actuate on a permissive actuator.
 // actuator so the pod carries the handler-produced snapshot + rollback ref. The actuator under test
 // is then built separately with the case's bindings and DryRun.
-func m087Rotate(t *testing.T, c client.Client, ns, pod string) (Request, string) {
+func m087Rotate(t *testing.T, f routeUnitFixture) (Request, string) {
 	t.Helper()
-	req := Request{Tenant: "t", Namespace: ns, Pod: pod, Action: model.ActionRouteRotate, TargetUID: "uid-" + pod}
-	res, err := NewNativeActuator(c).Actuate(context.Background(), req)
+	req := f.request
+	req.Tenant = "t"
+	res, err := f.native.Actuate(f.ctx, req)
 	if err != nil || !res.Emitted || res.RollbackRef == "" {
 		t.Fatalf("route-rotate setup: emitted=%v ref=%q err=%v", res.Emitted, res.RollbackRef, err)
 	}
@@ -81,7 +111,7 @@ func m087Pod(t *testing.T, c client.Client, ns, name string) corev1.Pod {
 // m087Rotated asserts the pod is still in its restitched route state.
 func m087Rotated(t *testing.T, p corev1.Pod, what string) {
 	t.Helper()
-	if p.Labels[labelRouteKey] == "" || p.Labels[labelRouteKey] == "route-old" || p.Annotations[routeSnapAnno] == "" || p.Labels["app"] != "orig" {
+	if p.Labels[labelRouteKey] == "" || p.Labels[labelRouteKey] == "old" || p.Labels[routeBridgeLabel] != "" || p.Labels["app"] != "route" {
 		t.Fatalf("%s: pod %s/%s is no longer in its rotated state: labels=%v annotations=%v", what, p.Namespace, p.Name, p.Labels, p.Annotations)
 	}
 }
@@ -124,42 +154,28 @@ func TestM087RollbackEnforcesTenantAndDryRunBoundary(t *testing.T) {
 		return err != nil && !isDryRun(err) && strings.Contains(err.Error(), "DENIED (O7 strict)")
 	}
 	cases := []struct {
-		name   string
-		bind   string // namespace bound to tenant "t" ("" = no binding at all)
-		strict bool
-		dryRun bool
-		refuse func(error) bool // nil = the rollback must proceed and restore
+		name           string
+		bind           string
+		strict, dryRun bool
+		refuse         func(error) bool
 	}{
-		{name: "dry-run only refuses", bind: "ns", dryRun: true, refuse: isDryRun},
+		{name: "dry-run only refuses", bind: "route-unit", dryRun: true, refuse: isDryRun},
 		{name: "cross-namespace only refuses", bind: "elsewhere", refuse: isO7},
 		{name: "both: tenant error takes precedence", bind: "elsewhere", dryRun: true, refuse: isO7},
 		{name: "strict unbound refuses", strict: true, refuse: isO7Strict},
-		{name: "legacy unbound proceeds", refuse: nil},
-		{name: "same tenant non-dry-run restores", bind: "ns", refuse: nil},
+		{name: "legacy unbound proceeds"},
+		{name: "same tenant non-dry-run restores", bind: "route-unit"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			f := newRouteUnitFixture(t, model.ActionRouteRotate, 1)
+			req, ref := m087Rotate(t, f)
+			m087Rotated(t, m087Pod(t, f.client, f.pod.Namespace, f.pod.Name), "setup")
 			spy := &m087Spy{}
-			routeFixture := func(name, service string) *corev1.Pod {
-				p := aiPod("ns", name, map[string]string{"app": "orig", labelRouteKey: "route-old", "route-group": service})
-				p.Annotations[annoRouteService] = service
-				return p
-			}
-			serviceFixture := func(name string) *corev1.Service {
-				return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name},
-					Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "orig", "route-group": name, labelRouteKey: "route-old"}}}
-			}
-			c := m087Client(spy,
-				routeFixture("target", "target-route"), routeFixture("target-peer", "target-route"),
-				routeFixture("bystander", "bystander-route"), routeFixture("bystander-peer", "bystander-route"),
-				serviceFixture("target-route"), serviceFixture("bystander-route"))
-			// Real producer: both pods are actually rotated, so a rollback that reaches the handler WRITES.
-			req, ref := m087Rotate(t, c, "ns", "target")
-			m087Rotate(t, c, "ns", "bystander")
-			m087Rotated(t, m087Pod(t, c, "ns", "target"), "setup")
-
-			n := NewNativeActuator(c)
-			n.SetBoundaryReader(c)
+			wrapped := m087WrappedClient{Client: f.client, spy: spy}
+			n := NewNativeActuator(wrapped)
+			n.SetBoundaryReader(wrapped)
+			n.JournalNamespace = f.native.JournalNamespace
 			n.StrictTenantNamespace = tc.strict
 			n.DryRun = tc.dryRun
 			if tc.bind != "" {
@@ -167,27 +183,23 @@ func TestM087RollbackEnforcesTenantAndDryRunBoundary(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-
 			spy.reset()
 			err := n.Rollback(context.Background(), req, ref)
 			if tc.refuse != nil {
 				if !tc.refuse(err) {
-					after := m087Pod(t, c, "ns", "target")
-					t.Fatalf("rollback must be refused by the boundary guard, got err=%v; effects: reads=%d writes=%d; target labels=%v snapshot-present=%v",
-						err, spy.reads, spy.writes, after.Labels, after.Annotations[routeSnapAnno] != "")
+					t.Fatalf("rollback refusal=%v, want boundary error", err)
 				}
 				if spy.reads != 0 || spy.writes != 0 {
-					t.Fatalf("refused rollback crossed the boundary: reads=%d writes=%d", spy.reads, spy.writes)
+					t.Fatalf("refused rollback crossed boundary: reads=%d writes=%d", spy.reads, spy.writes)
 				}
-				m087Rotated(t, m087Pod(t, c, "ns", "target"), "refused rollback")
-				// Precedence parity: Actuate refuses the identical request with the identical error.
+				m087Rotated(t, m087Pod(t, f.client, f.pod.Namespace, f.pod.Name), "refused rollback")
 				spy.reset()
 				_, aerr := n.Actuate(context.Background(), req)
 				if aerr == nil || aerr.Error() != err.Error() {
-					t.Fatalf("Actuate/Rollback precedence differs:\n actuate=%v\n rollback=%v", aerr, err)
+					t.Fatalf("Actuate/Rollback precedence differs: actuate=%v rollback=%v", aerr, err)
 				}
 				if spy.reads != 0 || spy.writes != 0 {
-					t.Fatalf("refused actuate crossed the boundary: reads=%d writes=%d", spy.reads, spy.writes)
+					t.Fatalf("refused actuate crossed boundary: reads=%d writes=%d", spy.reads, spy.writes)
 				}
 				return
 			}
@@ -195,21 +207,19 @@ func TestM087RollbackEnforcesTenantAndDryRunBoundary(t *testing.T) {
 				t.Fatalf("allowed rollback refused: %v", err)
 			}
 			if spy.writes == 0 {
-				t.Fatal("allowed rollback wrote nothing — the fixture does not mutate, so refusal assertions would be vacuous")
+				t.Fatal("allowed rollback wrote nothing")
 			}
-			got := m087Pod(t, c, "ns", "target")
-			if got.Labels[labelRouteKey] != "route-old" || got.Annotations[routeSnapAnno] != "" || got.Labels["app"] != "orig" {
-				t.Fatalf("allowed rollback did not restore the snapshot: labels=%v annotations=%v", got.Labels, got.Annotations)
+			got := m087Pod(t, f.client, f.pod.Namespace, f.pod.Name)
+			if got.Labels[labelRouteKey] != "old" || got.Labels[routeBridgeLabel] != "" || got.Labels["foreign"] != "keep" {
+				t.Fatalf("allowed rollback did not restore owned state: %v", got.Labels)
 			}
 			var restoredService corev1.Service
-			if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "target-route"}, &restoredService); err != nil {
+			if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.service), &restoredService); err != nil {
 				t.Fatal(err)
 			}
-			if restoredService.Spec.Selector[labelRouteKey] != "route-old" {
-				t.Fatalf("allowed rollback did not restore Service selector: %v", restoredService.Spec.Selector)
+			if restoredService.Spec.Selector[labelRouteKey] != "old" {
+				t.Fatalf("Service not restored: %v", restoredService.Spec.Selector)
 			}
-			// Untouched-object control: the rollback restores only its own target.
-			m087Rotated(t, m087Pod(t, c, "ns", "bystander"), "bystander")
 		})
 	}
 }

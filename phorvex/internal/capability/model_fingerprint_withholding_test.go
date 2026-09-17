@@ -29,6 +29,7 @@ func TestM037CandidateWithholding(t *testing.T) {
 			views, _ := capFleet()
 			v := views[0]
 			v.Pod.ModelID, v.Pod.HasGPU = tc.leaderAlias, tc.gpu
+			v.Pod.ServingDeclared, v.Pod.ServingEndpointReady = tc.leaderAlias != "", tc.leaderAlias != ""
 			v.Pod.DesiredReplicas, v.Pod.ReadyReplicas = 3, 3
 			v.Physics = model.NeutralPhysics()
 			v.Phase = model.PhaseWarm
@@ -40,7 +41,7 @@ func TestM037CandidateWithholding(t *testing.T) {
 			}
 			witness := witOver(fleet, twoGPUNodes(), nil)
 			capable, why := witness.Capable(v, model.ActionModelShardReplace)
-			if capable != (tc.shadow && tc.ready) {
+			if capable != (tc.leaderAlias != "" && tc.shadow && tc.ready) {
 				t.Fatalf("fixture capability = %v (%s)", capable, why)
 			}
 			rp, ok := recon.Registry.Get("ucw-recon")
@@ -73,8 +74,8 @@ func TestM037CandidateWithholding(t *testing.T) {
 					auditFound = f.Weight > 0
 				}
 			}
-			if !auditFound {
-				t.Fatal("positive-weight fingerprint lost from audit")
+			if auditFound != (tc.leaderAlias != "") {
+				t.Fatalf("positive-weight fingerprint presence=%v, want declared model=%v", auditFound, tc.leaderAlias != "")
 			}
 			if _, present := set.FactWeights[fingerprint]; present {
 				t.Error("unsupported fingerprint entered ranking weights")
@@ -105,8 +106,8 @@ func TestM037CandidateWithholding(t *testing.T) {
 					control = true
 				}
 			}
-			if !control {
-				t.Fatalf("positive guardrail candidate missing: exclusions %+v", set.Excluded)
+			if control != (tc.leaderAlias != "") {
+				t.Fatalf("guardrail candidate=%v, want declared model=%v: exclusions %+v", control, tc.leaderAlias != "", set.Excluded)
 			}
 		})
 	}

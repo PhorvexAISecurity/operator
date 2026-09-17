@@ -143,7 +143,7 @@ func TestCheckNativeAndHybridRequireRecoveryJournalInventory(t *testing.T) {
 			reviews := &recordingSSAR{deny: func(attributes authorizationv1.ResourceAttributes) bool {
 				return attributes.Namespace == "operator" && attributes.Resource == "configmaps" && attributes.Verb == "list"
 			}}
-			if _, err := Check(t.Context(), reader, reviews, Config{Backend: backend, OperatorNamespace: "operator"}); err == nil || !strings.Contains(err.Error(), "native recovery journal inventory") {
+			if _, err := Check(t.Context(), reader, reviews, Config{Backend: backend, OperatorNamespace: "operator"}); err == nil || !strings.Contains(err.Error(), "native protected recovery journal") {
 				t.Fatalf("missing recovery journal list was accepted: %v", err)
 			}
 		})
@@ -298,4 +298,35 @@ type errorReader struct {
 
 func (r errorReader) List(context.Context, client.ObjectList, ...client.ListOption) error {
 	return r.err
+}
+
+func TestRouteCutoverStartupAuthorizationMatchesExactLifecycle(t *testing.T) {
+	for _, action := range []v1alpha1.ActionType{v1alpha1.ActionRouteRotate, v1alpha1.ActionEndpointRotate} {
+		t.Run(string(action), func(t *testing.T) {
+			reviews := &recordingSSAR{}
+			_, err := Check(t.Context(), policyReader(t, policy("tenant", "p", v1alpha1.ModeActive, action)), reviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := map[string]bool{
+				"tenant|/pods:get": false, "tenant|/pods:list": false, "tenant|/pods:patch": false,
+				"tenant|/services:get": false, "tenant|/services:list": false, "tenant|/services:update": false,
+				"tenant|discovery.k8s.io/endpointslices:list": false,
+				"tenant|phorvex.ai/phorvexpolicies:get":       false,
+				"|/namespaces:get":                            false,
+				"operator|/configmaps:get":                    false, "operator|/configmaps:list": false, "operator|/configmaps:create": false, "operator|/configmaps:update": false, "operator|/configmaps:delete": false,
+			}
+			for _, attributes := range reviews.attributes {
+				key := attributes.Namespace + "|" + attributes.Group + "/" + attributes.Resource + ":" + attributes.Verb
+				if _, ok := want[key]; ok {
+					want[key] = true
+				}
+			}
+			for requirement, found := range want {
+				if !found {
+					t.Errorf("missing %s", requirement)
+				}
+			}
+		})
+	}
 }

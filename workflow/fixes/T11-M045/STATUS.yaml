@@ -1,0 +1,246 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 11
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 818b184c98acdc6552c32653ecda75f5958143aea5165e62d98662d44ffd905c
+    source_sha: e35b809c543654134f83683489cf6fce973d7afb
+    at: '2026-09-17T00:34:32+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/lead-baseline.log
+    sha256: 93f8ffb66a0623f72a5396461ec395279579eb747f766da4b1b1d6e4c2caaf21
+    source_sha: e35b809c543654134f83683489cf6fce973d7afb
+    at: '2026-09-17T01:03:38+00:00'
+  preflight:
+    result: PASS
+    by: sol-t11-m045
+    artifact: evidence/preflight/receipt.json
+    sha256: bb8d71bc9671ce10f9bc4048a68c21e3240d2fe38fea5707806b868076cd906d
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:55:29+00:00'
+  implementation:
+    result: PASS
+    by: sol-t11-m045
+    artifact: 04-diff.patch
+    sha256: f2b2c1669a6929e646b62c6fec6551e37f8c0f5111504141fc6a1c06f0048b45
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:55:30+00:00'
+  l0:
+    result: PASS
+    by: sol-t11-m045
+    artifact: evidence/preflight/receipt.json
+    sha256: bb8d71bc9671ce10f9bc4048a68c21e3240d2fe38fea5707806b868076cd906d
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:55:30+00:00'
+  l1:
+    result: PASS
+    by: sol-t11-m045
+    artifact: evidence/worker/head-validation.md
+    sha256: b5cf9207b0c12e1182f747cf405531eab558d9cd9e95dd4b3e915af548b97d2d
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:55:30+00:00'
+  l2:
+    result: PASS
+    by: sol-t11-m045
+    artifact: evidence/preflight/run-1789613157452883463/go-phorvex.log
+    sha256: d5a529b4d604fa6d7c14e74e54ad1cde45c5545a6d03870d455938674140c3d9
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:55:30+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t11-m045
+    artifact: evidence/worker/head-validation.md
+    sha256: b5cf9207b0c12e1182f747cf405531eab558d9cd9e95dd4b3e915af548b97d2d
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:55:30+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 68fdf64f8b42965502064dd95bb423f4e39fbafd5a02d39e2eea3d9c5bdb1bfa
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:57:41+00:00'
+    baseline_sha: e35b809c543654134f83683489cf6fce973d7afb
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 2df459efa5e0bdb9b8ea78598a29d64dff8803a41c0ef62bc8f10732bfb88565
+    source_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+    at: '2026-09-17T02:57:41+00:00'
+    incident_sha256: 68fdf64f8b42965502064dd95bb423f4e39fbafd5a02d39e2eea3d9c5bdb1bfa
+fix_id: T11-M045
+issues:
+- M-45
+title: Scope modeled facts to declared serving and actual GPU context
+profile: standard
+state: PR_READY
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t11-m045
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier9
+  code_sha: e35b809c543654134f83683489cf6fce973d7afb
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t11-m045
+  base_sha: e35b809c543654134f83683489cf6fce973d7afb
+  head_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T02:57:45+00:00'
+configuration_history:
+- at: '2026-09-17T00:34:29+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-17T00:59:43+00:00'
+  by: sol-t11-m045
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T01:10:22+00:00'
+  by: sol-t11-m045
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T01:51:07+00:00'
+  by: sol-t11-m045
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T02:44:46+00:00'
+  by: sol-t11-m045
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T02:55:29+00:00'
+  by: sol-t11-m045
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-17T00:34:30+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-17T00:34:32+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-17T02:55:30+00:00'
+  by: sol-t11-m045
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-17T02:55:31+00:00'
+  by: sol-t11-m045
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T02:57:42+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T02:57:43+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T11-M045:11:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 11

@@ -138,7 +138,9 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 		Status:     corev1.PodStatus{PodIP: "127.0.0.1"},
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
-	m := &Manager{Actuator: actuator.NewNativeActuator(c), Intents: exposure.NewIntents(), Log: logr.Discard()}
+	native := actuator.NewNativeActuator(c)
+	native.SetBoundaryReader(c)
+	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	view := m010KVView("pod-uid")
 	decisions := []model.Decision{{
 		Namespace: "ns", Pod: "p1", Action: model.ActionKVReset, Selected: true, Feasible: true,

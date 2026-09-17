@@ -11,9 +11,11 @@
 package metrics
 
 import (
+	"sync"
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
-	"sync"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -111,8 +113,20 @@ var (
 
 	actuationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_actuations_total",
-		Help: "SecurityEvents actually emitted to Phoenix (active mode only).",
+		Help: "Actuation requests accepted for native dispatch or Phoenix submission; acceptance does not prove mitigation success.",
 	}, []string{"tenant", "action"})
+	actuationAttempts = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_actuation_attempts_total",
+		Help: "Actual actuator invocations by bounded synchronous outcome; each primary or fallback invocation is counted once.",
+	}, []string{"tenant", "action", "outcome"})
+	actuationFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_actuation_failures_total",
+		Help: "Actual actuator invocations that failed, were uncertain, or explicitly refused without effect; phorvex_actuation_attempts_total is the denominator.",
+	}, []string{"tenant", "action", "reason"})
+	actuationSuppressions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_actuation_suppressions_total",
+		Help: "Selected actions stopped before Actuate by a bounded preparation, invariant, or safety reason; these are not backend failures.",
+	}, []string{"tenant", "action", "reason"})
 	actuationConfirmations = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_actuation_confirmations_total",
 		Help: "Bounded asynchronous actuation observations by backend and closed outcome; submission alone is not confirmation.",
@@ -210,12 +224,108 @@ func init() {
 		podRisk, podCost, podNet, podBlast, podExposure,
 		podPerDollar, podProactiveRate, tenantLambda, policyLambda, tenantCollisions,
 		selectedPods, protectedPods, killSwitch, killSwitchStatusDisagreement,
-		decisionsTotal, actuationsTotal, actuationConfirmations, maintenanceAttempts, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
+		decisionsTotal, actuationsTotal, actuationAttempts, actuationFailures, actuationSuppressions,
+		actuationConfirmations, maintenanceAttempts, ticksTotal, actionSetRejections, epssLookupTotal, eventsAgedOut,
 		costNaNUnactionable, requestDrainAborted, tickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal,
-		candidatesExcludedTotal, candidatesRBACUnknownTotal,
+		candidatesExcludedTotal, candidatesRBACUnknownTotal, actuationCircuitCollector{},
 	)
+}
+
+// Actuation attempt outcomes are a closed metric-label vocabulary. They describe the
+// synchronous Result/error returned by one actual Actuate call; asynchronous Phoenix
+// confirmation remains in phorvex_actuation_confirmations_total.
+type ActuationAttemptOutcome string
+
+const (
+	AttemptAccepted   ActuationAttemptOutcome = "accepted-emission"
+	AttemptError      ActuationAttemptOutcome = "dispatch-error"
+	AttemptDeadline   ActuationAttemptOutcome = "deadline-expired"
+	AttemptUnknown    ActuationAttemptOutcome = "outcome-unknown"
+	AttemptRefused    ActuationAttemptOutcome = "refused-no-effect"
+	AttemptSatisfied  ActuationAttemptOutcome = "already-satisfied"
+	AttemptReconciled ActuationAttemptOutcome = "reconciled-prior-operation"
+	AttemptDeclared   ActuationAttemptOutcome = "declared-only"
+)
+
+// ActuationSuppressionReason is the closed vocabulary for selected actions stopped before
+// Actuate. It is deliberately separate from failure metrics.
+type ActuationSuppressionReason string
+
+const (
+	SuppressKillSwitch         ActuationSuppressionReason = "kill-switch"
+	SuppressNamespaceDryRun    ActuationSuppressionReason = "namespace-dry-run"
+	SuppressPodOptOut          ActuationSuppressionReason = "pod-opt-out"
+	SuppressEnsurePolicy       ActuationSuppressionReason = "ensure-policy-failed"
+	SuppressRoutePreparation   ActuationSuppressionReason = "route-preparation-failed"
+	SuppressInviolability      ActuationSuppressionReason = "inviolability-guard"
+	SuppressMissingTickView    ActuationSuppressionReason = "no-tick-view"
+	SuppressEmitBoundary       ActuationSuppressionReason = "emit-boundary-infeasible"
+	SuppressCodeExecUnverified ActuationSuppressionReason = "code-exec-unverified"
+	SuppressQuarantineCapacity ActuationSuppressionReason = "quarantine-capacity-refused"
+	SuppressOther              ActuationSuppressionReason = "other-veto"
+)
+
+// ActuationCircuit is one bounded public projection of the runner's existing cooldown
+// records. Count is the number of currently-open target circuits aggregated without target
+// identity labels.
+type ActuationCircuit struct {
+	Tenant string
+	Action string
+	Count  int
+}
+
+type circuitSource func(time.Time) []ActuationCircuit
+
+var circuitSources struct {
+	sync.RWMutex
+	generation uint64
+	current    circuitSource
+}
+
+var actuationCircuitDesc = prometheus.NewDesc(
+	"phorvex_actuation_circuit_open",
+	"Number of currently open retry cooldowns, aggregated by admitted tenant and action; expiry is evaluated at scrape time.",
+	[]string{"tenant", "action"}, nil,
+)
+
+type actuationCircuitCollector struct{}
+
+func (actuationCircuitCollector) Describe(ch chan<- *prometheus.Desc) { ch <- actuationCircuitDesc }
+
+func (actuationCircuitCollector) Collect(ch chan<- prometheus.Metric) {
+	circuitSources.RLock()
+	source := circuitSources.current
+	circuitSources.RUnlock()
+	if source == nil {
+		return
+	}
+	for _, circuit := range source(time.Now()) {
+		if circuit.Tenant == "" || circuit.Action == "" || circuit.Count <= 0 {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(actuationCircuitDesc, prometheus.GaugeValue,
+			float64(circuit.Count), circuit.Tenant, circuit.Action)
+	}
+}
+
+// BindActuationCircuitSource selects the live manager supplying cooldown state to the
+// process registry. The returned release removes only this generation, so a stopped stale
+// manager cannot erase a newer source. Call the release when the manager stops.
+func BindActuationCircuitSource(source func(time.Time) []ActuationCircuit) func() {
+	circuitSources.Lock()
+	circuitSources.generation++
+	generation := circuitSources.generation
+	circuitSources.current = source
+	circuitSources.Unlock()
+	return func() {
+		circuitSources.Lock()
+		if circuitSources.generation == generation {
+			circuitSources.current = nil
+		}
+		circuitSources.Unlock()
+	}
 }
 
 // RecordCandidateExcluded counts a candidate excluded by the T1-E capability gate.
@@ -398,7 +508,6 @@ func PublishTick(tenant, namespace, policy, uid string, decisions []model.Decisi
 	}
 }
 
-// RecordActuation counts a real emit to Phoenix (active mode).
 // RecordEPSSLookup counts one exploitability-cache lookup by outcome (M-141).
 func RecordEPSSLookup(result string) {
 	epssLookupTotal.WithLabelValues(result).Inc()
@@ -415,8 +524,38 @@ func RecordEventAgedOut(tenant string) {
 	eventsAgedOut.WithLabelValues(tenant).Inc()
 }
 
+// RecordActuation counts one synchronously accepted native dispatch or Phoenix submission.
+// It deliberately does not claim asynchronous completion or mitigation success.
 func RecordActuation(tenant, action string) {
 	actuationsTotal.WithLabelValues(tenant, action).Inc()
+}
+
+// RecordActuationAttempt counts one actual Actuate invocation. Failure-series reasons are
+// derived from the same closed outcome, so their denominator cannot drift from attempts.
+func RecordActuationAttempt(tenant, action string, outcome ActuationAttemptOutcome) {
+	switch outcome {
+	case AttemptAccepted, AttemptError, AttemptDeadline, AttemptUnknown, AttemptRefused,
+		AttemptSatisfied, AttemptReconciled, AttemptDeclared:
+	default:
+		outcome = AttemptUnknown
+	}
+	actuationAttempts.WithLabelValues(tenant, action, string(outcome)).Inc()
+	switch outcome {
+	case AttemptError, AttemptDeadline, AttemptUnknown, AttemptRefused:
+		actuationFailures.WithLabelValues(tenant, action, string(outcome)).Inc()
+	}
+}
+
+// RecordActuationSuppression counts one selected action stopped before Actuate.
+func RecordActuationSuppression(tenant, action string, reason ActuationSuppressionReason) {
+	switch reason {
+	case SuppressKillSwitch, SuppressNamespaceDryRun, SuppressPodOptOut, SuppressEnsurePolicy,
+		SuppressRoutePreparation, SuppressInviolability, SuppressMissingTickView,
+		SuppressEmitBoundary, SuppressCodeExecUnverified, SuppressQuarantineCapacity, SuppressOther:
+	default:
+		reason = SuppressOther
+	}
+	actuationSuppressions.WithLabelValues(tenant, action, string(reason)).Inc()
 }
 
 func RecordActuationConfirmation(backend, outcome string) {

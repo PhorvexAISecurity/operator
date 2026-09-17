@@ -54,7 +54,7 @@ func TestObservedMaximumIsNeverPromotedToDeterministicBound(t *testing.T) {
 
 func TestOnlyStructurallyZeroActionsProduceNumericZero(t *testing.T) {
 	for _, action := range []model.Action{
-		model.ActionNoop, model.ActionDisable, model.ActionIdentityRotate, model.ActionRouteRotate,
+		model.ActionNoop, model.ActionDisable, model.ActionIdentityRotate,
 	} {
 		b, ok := BoundFor(action)
 		if !ok || b.Status != StatusZero {
@@ -69,7 +69,7 @@ func TestOnlyStructurallyZeroActionsProduceNumericZero(t *testing.T) {
 
 func TestServingPathAndArbitraryPayloadActionsStayUnknown(t *testing.T) {
 	for _, action := range []model.Action{
-		model.ActionWarmSwap, model.ActionMIGRebind, model.ActionEndpointRotate,
+		model.ActionWarmSwap, model.ActionMIGRebind, model.ActionRouteRotate, model.ActionEndpointRotate,
 		model.ActionModelShardReplace, model.ActionAdapterRotate, model.ActionRequestDrain,
 		model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
 		model.ActionDebugger, model.ActionCustomInject,

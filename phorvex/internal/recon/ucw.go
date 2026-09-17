@@ -84,52 +84,43 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 	stageUrg, _ := clamp01(fctx.StageUrgency)
 	urg := 0.5 + 0.5*stageUrg
 
-	// AI recon facts — emitted on GPU/served-model assets. Cover is granted per physical mechanism,
+	// AI recon facts are scoped to three independent producer witnesses: a declared model,
+	// an explicit serving context, and an actual GPU resource. Cover is granted per physical mechanism,
 	// not to the group as a whole: modelFingerprint stays audit-only because model-shard-replace
 	// has no loaded-identity/effect witness. EndpointPath remains audit-only because route
 	// restitching does not prove locator invalidation;
 	// mig-rebind invalidates only the contention channel and only on a MIG-capable pod;
-	// warm-swap's old-process cover is inherited from standardRecon while GPU co-location
-	// remains cover-free because the cutover does not prove relocation; and
-	// kv-migrate-invalidate maps to session state below. This keeps selectable cover narrower than
-	// the emitted audit universe whenever an actuator cannot guarantee the claimed effect.
-	if view.Pod.HasGPU || view.Pod.ModelID != "" {
+	// GPU co-location remains cover-free because none of these actions proves relocation; and
+	// serving session erasure maps to the structural readiness witness below. This keeps
+	// selectable cover narrower than the emitted audit universe whenever an actuator cannot
+	// guarantee the claimed effect.
+	if view.Pod.HasModelDeclaration() {
 		mf := Fact{Scope: ScopePod, Asset: asset, Kind: FactModelFingerprint, Weight: base * urg * ph.ModelRarity}
-		ep := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
+		af.Facts = append(af.Facts, mf)
+	}
+	if view.Pod.HasGPU {
 		gc := Fact{Scope: ScopePod, Asset: asset, Kind: FactGPUColocation, Weight: base * urg * ph.CoResidency}
 		sc := Fact{Scope: ScopePod, Asset: asset, Kind: FactGPUContentionChannel, Weight: base * urg}
+		af.Facts = append(af.Facts, gc, sc)
+		// mig-rebind invalidates only the actual GPU contention channel and only with
+		// an ingestion-produced MIG allocation.
+		if view.Pod.MIGDevice != "" {
+			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
+		}
+	}
+	if view.Pod.HasServingDeclaration() {
+		ep := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointPath, Weight: base * urg}
 		// In-flight-request + guardrail-bypass recon on a serving pod — each invalidated by its own
 		// gentle AI actuator (request-drain / guardrail-rotate) so the engine can pick the surgical
 		// serving move over a blunt rotate. Distinct facts => distinct, meaningful cover per action.
 		rq := Fact{Scope: ScopePod, Asset: asset, Kind: FactInflightRequests, Weight: base * urg}
 		gb := Fact{Scope: ScopePod, Asset: asset, Kind: FactGuardrailBypass, Weight: base * urg}
-		af.Facts = append(af.Facts, mf, ep, gc, sc, rq, gb)
+		af.Facts = append(af.Facts, ep, rq, gb)
 		if af.CoverByAction == nil {
 			af.CoverByAction = map[model.Action][]string{}
 		}
 		// M-035: retain endpointPath and its weight for audit, but withhold cover from every action.
 		// A route declaration or selector change does not prove the learned DNS/API locator is unusable.
-		// [PHVX-26a] The GPU cover, corrected. These two actions used to receive byte-identical
-		// grants {gpuColocation, gpuContentionChannel}, which made them indistinguishable to the
-		// optimizer and asserted more than either performs.
-		//
-		// The soundness condition, confirmed by the math review on PHORVEXSEC-121/117: a fact may
-		// belong to CoverByAction[a] only if EVERY successful execution of a invalidates it. There
-		// is no probabilistic or expected-cover reading in this model.
-		//
-		//   mig-rebind  — repartitioning destroys the mapped GI/CI structure on the device, so the
-		//                 contention path is severed deterministically wherever the pod ends up. It
-		//                 does NOT move the pod, so co-residency knowledge survives: it never covers
-		//                 gpuColocation. Conditional on the pod actually having a MIG device.
-		//
-		//   warm-swap   — may place the replacement on the same node, so it receives no GPU
-		//                 placement or contention cover here. standardRecon separately grants
-		//                 only the old-process facts when a verified scalar pool guarantees exact
-		//                 old-UID retirement and controller replenishment.
-		if view.Pod.MIGDevice != "" {
-			af.CoverByAction[model.ActionMIGRebind] = append(af.CoverByAction[model.ActionMIGRebind], sc.Key())
-		}
-
 		// [PHVX-77] kv-migrate-invalidate covers SESSION, not endpointPath. Invalidating or migrating
 		// a KV cache destroys the attacker's in-pod session state; it does not change the inference
 		// route they learned, which is what the audit-only endpointPath represents.
@@ -137,37 +128,6 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		// class as PHVX-9e.
 		af.CoverByAction[model.ActionRequestDrain] = append(af.CoverByAction[model.ActionRequestDrain], rq.Key())
 		af.CoverByAction[model.ActionGuardrailRotate] = append(af.CoverByAction[model.ActionGuardrailRotate], gb.Key())
-		// adapter-integrity: present ONLY while a detector has flagged an unauthorized/poisoned LoRA
-		// adapter on this pod. Weighted to DOMINATE (a poisoned adapter corrupts every response), and
-		// covered by ONLY adapter-rotate — so the engine selects adapter-rotate for THIS attack rather
-		// than a generic rotate/kv-reset. The fact vanishes once the adapter is evicted (move stops).
-		//
-		// The weight is MULTIPLICATIVE, like every other fact in this file (PHVX-75). It used to be
-		// `(base + 2.0) * urg * 3`, and that additive term caused three problems:
-		//
-		//   1. It survived PHold = 0. base is AssetValue*clamp01(PHold), so at PHold = 0 the additive
-		//      form still produced 2.0*urg*3 >= 3.0 — a fact about a provably-departed attacker sat at
-		//      the top of the objective, and no evidence could ever retire it.
-		//   2. It was not portable. AssetValue's scale is a policy choice, so +2.0 dominated a fleet
-		//      emitting O(1) values and was rounding noise on one emitting O(100). The same constant
-		//      meant different things on different clusters.
-		//   3. It was the only additive weight here, so it did not compose with the others.
-		//
-		// Dominance is preserved WITHOUT the floor: every other multiplier in this file is of the form
-		// 1 + clamp01(...) and is therefore bounded by 2 (ModelRarity and CoResidency both), while this
-		// one is 3. So a poisoned adapter outranks any other fact on the same asset structurally,
-		// rather than by an additive constant that happens to be large.
-		if o := view.Pod.AdapterObservation; o != nil && view.Pod.SuspectAdapter != "" &&
-			o.AdapterName == view.Pod.SuspectAdapter && o.TargetPodUID == view.Pod.UID &&
-			o.EventUID != "" && o.CreatorIdentity != "" {
-			ai := Fact{Scope: ScopePod, Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
-			ai.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorAdapter, AppliedMultiplier: 3.0,
-				Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorAdapter,
-					TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID, AdapterName: o.AdapterName}}}
-			af.Facts = append(af.Facts, ai)
-			af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
-		}
-
 		// A NAMED attack vector targeting this pod makes the matching serving fact DOMINATE — the
 		// same ×3 structural dominance as adapter-integrity — so the engine picks the SURGICAL
 		// actuator for THAT attack (kv-reset for a KV/prompt-inject implant, guardrail-rotate for a
@@ -184,6 +144,18 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		if refs := vectorEvents(view.Events, model.AttackVectorInflight); len(refs) > 0 {
 			boostFactWeight(af.Facts, FactInflightRequests, model.AttackVectorInflight, vectorDominance, refs) // -> request-drain
 		}
+	}
+	// Adapter integrity has its own authenticated authority. It must neither require nor
+	// fabricate a generic model/GPU/serving context. The multiplicative 3x keeps the
+	// fact dominant while preserving zero weight at zero PHold and finite policy scaling.
+	if view.Pod.HasBoundAdapterObservation() {
+		o := view.Pod.AdapterObservation
+		ai := Fact{Scope: ScopePod, Asset: asset, Kind: FactAdapterIntegrity, Weight: base * urg * 3.0}
+		ai.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorAdapter, AppliedMultiplier: 3.0,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorAdapter,
+				TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID, AdapterName: o.AdapterName}}}
+		af.Facts = append(af.Facts, ai)
+		af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
@@ -204,7 +176,7 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 			Scope: ScopeNode, Asset: view.Pod.Node, Kind: FactNodeFoothold, Weight: base * urg,
 		})
 	}
-	if view.Pod.ModelID != "" {
+	if view.Pod.HasModelDeclaration() {
 		af.Facts = append(af.Facts, Fact{
 			Scope: ScopeModel, Asset: view.Pod.ModelID, Kind: FactModelIdentity, Weight: base * urg,
 		})

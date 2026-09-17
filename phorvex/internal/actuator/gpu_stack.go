@@ -30,6 +30,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -56,10 +58,16 @@ type servingEndpoint struct {
 	drainPath  string // request drain/abort (request-drain, warm-swap drain)
 	guardPath  string // guardrail reload (guardrail-rotate)
 	kvInvPath  string // disaggregated KV invalidate (kv-migrate-invalidate)
+	configErr  error  // malformed explicit Pod configuration; never treated as unreachable
 }
 
 func (e servingEndpoint) reachable() bool { return e.podIP != "" && e.port > 0 }
-func (e servingEndpoint) base() string    { return fmt.Sprintf("http://%s:%d", e.podIP, e.port) }
+func (e servingEndpoint) base() string {
+	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port))}).String()
+}
+func (e servingEndpoint) routeURL(route string) string {
+	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: route}).String()
+}
 
 const (
 	// Pod annotations let an operator declare the serving stack per workload without code change.
@@ -77,28 +85,120 @@ const (
 	defaultModelsPath = "/v1/models"
 )
 
+var errServingConfiguration = errors.New("invalid serving endpoint configuration")
+
+func invalidServingConfiguration(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", errServingConfiguration, fmt.Sprintf(format, args...))
+}
+
+func servingRoute(raw, annotation, fallback string, explicitlyConfigured bool) (string, error) {
+	if !explicitlyConfigured {
+		return fallback, nil
+	}
+	if raw == "" || raw != strings.TrimSpace(raw) {
+		return "", invalidServingConfiguration("%s must be a nonempty root-relative path without surrounding whitespace", annotation)
+	}
+	for _, r := range raw {
+		if r < 0x20 || r == 0x7f {
+			return "", invalidServingConfiguration("%s contains a control character", annotation)
+		}
+	}
+	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") || strings.ContainsAny(raw, "\\?#%@") {
+		return "", invalidServingConfiguration("%s must be an unambiguous root-relative path", annotation)
+	}
+	if path.Clean(raw) != raw {
+		return "", invalidServingConfiguration("%s contains traversal or ambiguous path separators", annotation)
+	}
+	for _, segment := range strings.Split(raw, "/") {
+		if segment == "." || segment == ".." {
+			return "", invalidServingConfiguration("%s contains a traversal segment", annotation)
+		}
+	}
+	return raw, nil
+}
+
+// validated checks the complete eight-route endpoint before any one route is used.
+// Empty route fields exist only in small direct unit fixtures and receive the same
+// documented defaults as absent Pod annotations.
+func (e servingEndpoint) validated() (servingEndpoint, error) {
+	if e.configErr != nil {
+		return servingEndpoint{}, e.configErr
+	}
+	if e.podIP != "" {
+		parsed := net.ParseIP(e.podIP)
+		if parsed == nil || parsed.IsUnspecified() || e.podIP != strings.TrimSpace(e.podIP) {
+			return servingEndpoint{}, invalidServingConfiguration("Pod IP %q is not a literal IP address", e.podIP)
+		}
+		e.podIP = parsed.String()
+	}
+	if e.port < 1 || e.port > 65535 {
+		return servingEndpoint{}, invalidServingConfiguration("serving port must be in 1..65535")
+	}
+	routes := []struct {
+		value      *string
+		annotation string
+		fallback   string
+	}{
+		{&e.resetPath, annoResetPath, defaultResetPath},
+		{&e.healthPath, annoHealthPath, defaultHealthPath},
+		{&e.modelsPath, annoModelsPath, defaultModelsPath},
+		{&e.unloadPath, annoUnloadPath, defaultUnloadPath},
+		{&e.loadPath, annoLoadPath, defaultLoadPath},
+		{&e.drainPath, annoDrainPath, defaultDrainPath},
+		{&e.guardPath, annoGuardrailPath, defaultGuardPath},
+		{&e.kvInvPath, annoKVInvalidate, defaultKVInvPath},
+	}
+	for _, route := range routes {
+		configured := *route.value != ""
+		value, err := servingRoute(*route.value, route.annotation, route.fallback, configured)
+		if err != nil {
+			return servingEndpoint{}, err
+		}
+		*route.value = value
+	}
+	return e, nil
+}
+
 // endpointForPod derives the serving endpoint from a running pod (IP + declared port/path).
 func endpointForPod(pod *corev1.Pod) servingEndpoint {
-	ep := servingEndpoint{podIP: pod.Status.PodIP, port: defaultServePort, resetPath: defaultResetPath, healthPath: defaultHealthPath, modelsPath: defaultModelsPath}
-	if v := pod.Annotations[annoServingPort]; v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+	ep := servingEndpoint{podIP: pod.Status.PodIP, port: defaultServePort}
+	if raw, present := pod.Annotations[annoServingPort]; present {
+		trimmed := strings.TrimSpace(raw)
+		n, err := strconv.Atoi(trimmed)
+		if trimmed == "" || err != nil || n < 1 || n > 65535 {
+			ep.configErr = invalidServingConfiguration("%s must be an integer in 1..65535", annoServingPort)
+		} else {
 			ep.port = n
 		}
 	}
-	if v := pod.Annotations[annoResetPath]; v != "" {
-		ep.resetPath = v
+	routeAnnotations := []struct {
+		key      string
+		fallback string
+		target   *string
+	}{
+		{annoResetPath, defaultResetPath, &ep.resetPath},
+		{annoHealthPath, defaultHealthPath, &ep.healthPath},
+		{annoModelsPath, defaultModelsPath, &ep.modelsPath},
+		{annoUnloadPath, defaultUnloadPath, &ep.unloadPath},
+		{annoLoadPath, defaultLoadPath, &ep.loadPath},
+		{annoDrainPath, defaultDrainPath, &ep.drainPath},
+		{annoGuardrailPath, defaultGuardPath, &ep.guardPath},
+		{annoKVInvalidate, defaultKVInvPath, &ep.kvInvPath},
 	}
-	if v := pod.Annotations[annoHealthPath]; v != "" {
-		ep.healthPath = v
-	}
-	if v := pod.Annotations[annoModelsPath]; v != "" {
-		ep.modelsPath = v
+	for _, route := range routeAnnotations {
+		raw, present := pod.Annotations[route.key]
+		value, err := servingRoute(raw, route.key, route.fallback, present)
+		if err != nil && ep.configErr == nil {
+			ep.configErr = err
+		}
+		*route.target = value
 	}
 	ep.token = pod.Annotations[annoServingTok]
-	// P-ACTUATOR-SET-COMPLETE routes (annotation-overridable, vLLM-shaped defaults).
-	ep = ep.withRoutes(pod.Annotations[annoUnloadPath], pod.Annotations[annoLoadPath],
-		pod.Annotations[annoDrainPath], pod.Annotations[annoGuardrailPath], pod.Annotations[annoKVInvalidate])
 	return ep
+}
+
+func validatedEndpointForPod(pod *corev1.Pod) (servingEndpoint, error) {
+	return endpointForPod(pod).validated()
 }
 
 // errStackUnreachable signals case (b): the request could not have reached a
@@ -198,8 +298,12 @@ func (c *httpVLLM) request(ctx context.Context, method, rawURL, token, contentTy
 	if isolatedTransport != nil {
 		// A new no-keepalive Transport cannot retry a stale pooled connection.
 		// This makes the typed dial result the complete attempt history for this
-		// request, while preserving TLS, proxy and custom DialContext settings.
+		// request, while preserving TLS and custom DialContext settings. Proxy
+		// routing is intentionally cleared below for selected-Pod containment.
 		isolatedTransport.DisableKeepAlives = true
+		// Serving control requests are bound to the selected Pod IP. Neither
+		// HTTP_PROXY nor a configured proxy may receive the request or bearer.
+		isolatedTransport.Proxy = nil
 		requestClient.Transport = isolatedTransport
 		trustworthyAttempt = true
 		defer isolatedTransport.CloseIdleConnections()
@@ -255,10 +359,15 @@ func definitelyUnsentServingRequest(err error) bool {
 }
 
 func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, error) {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return false, err
+	}
 	if !ep.reachable() {
 		return false, errStackUnreachable
 	}
-	code, _, err := c.do(ctx, http.MethodGet, ep.base()+ep.healthPath, ep.token)
+	code, _, err := c.do(ctx, http.MethodGet, ep.routeURL(ep.healthPath), ep.token)
 	if err != nil {
 		return false, err
 	}
@@ -266,7 +375,7 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 		return false, nil
 	}
 	// health 200 => live; the models route lists the loaded model => model-loaded.
-	mcode, body, err := c.do(ctx, http.MethodGet, ep.base()+ep.modelsPath, ep.token)
+	mcode, body, err := c.do(ctx, http.MethodGet, ep.routeURL(ep.modelsPath), ep.token)
 	if err != nil {
 		if errors.Is(err, errStackUnreachable) {
 			var unavailable *definiteServingUnreachableError
@@ -281,10 +390,15 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 }
 
 func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) error {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return err
+	}
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := c.do(ctx, http.MethodPost, ep.base()+ep.resetPath, ep.token)
+	code, body, err := c.do(ctx, http.MethodPost, ep.routeURL(ep.resetPath), ep.token)
 	if err != nil {
 		return err
 	}

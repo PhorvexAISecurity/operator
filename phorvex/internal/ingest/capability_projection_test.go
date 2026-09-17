@@ -33,12 +33,15 @@ func TestProjectPodCapabilityWitnesses(t *testing.T) {
 
 func TestServingEndpointReadyProducerMatrix(t *testing.T) {
 	for _, tc := range []struct {
-		name                              string
-		gpu, model, port, ready, ip, want bool
+		name                                                 string
+		gpu, model, port, ready, ip, wantDeclared, wantReady bool
 	}{
-		{"cpu-model", false, true, false, true, true, true}, {"cpu-port", false, false, true, true, true, true},
-		{"gpu", true, false, false, true, true, true}, {"plain-stateful", false, false, false, true, true, false},
-		{"unready", true, false, false, false, true, false}, {"missing-ip", true, false, false, true, false, false},
+		{"cpu-model", false, true, false, true, true, true, true},
+		{"cpu-port", false, false, true, true, true, true, true},
+		{"gpu-batch", true, false, false, true, true, false, false},
+		{"plain", false, false, false, true, true, false, false},
+		{"declared-unready", false, true, false, false, true, true, false},
+		{"declared-missing-ip", false, true, false, true, false, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ann := map[string]string{}
@@ -58,8 +61,9 @@ func TestServingEndpointReadyProducerMatrix(t *testing.T) {
 			if tc.gpu {
 				p.Spec.Containers = []corev1.Container{{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("1")}}}}
 			}
-			if got := projectPod(p, time.Unix(10, 0)).ServingEndpointReady; got != tc.want {
-				t.Fatalf("got %v want %v", got, tc.want)
+			got := projectPod(p, time.Unix(10, 0))
+			if got.ServingDeclared != tc.wantDeclared || got.ServingEndpointReady != tc.wantReady {
+				t.Fatalf("declared=%v ready=%v, want declared=%v ready=%v", got.ServingDeclared, got.ServingEndpointReady, tc.wantDeclared, tc.wantReady)
 			}
 		})
 	}

@@ -31,9 +31,10 @@ type AssetObservation struct {
 	// percentiles taken from it would be percentiles of a clipped distribution.
 	Namespaces int
 
-	// AIFactEligible mirrors the production gate `ModelID != "" || HasGPU`, which decides whether
-	// ModelRarity participates at all. It is not the same as "has a model id": a GPU pod with no
-	// model annotation still takes the term.
+	// AIFactEligible retains the shipped economic gate `ModelID != "" || HasGPU`, which decides
+	// whether ModelRarity participates in the common dispersion scalar. It is deliberately not
+	// the fact-emission predicate: M-45 separates model, serving and GPU fact families without
+	// changing the existing economics.
 	AIFactEligible bool
 }
 

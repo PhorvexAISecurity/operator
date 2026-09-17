@@ -538,7 +538,7 @@ Severity: MAJOR · Tier: 2 · Fixes: none
 
 ### M-12 · No actuation-failure metric · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: HIGH · Tier: 2 · Fixes: none
+Severity: HIGH · Tier: 2 · Fixes: T11-M012
 
 > Anatomy join review: **complete**.
 > `V2` **ABSENCE** — no positive locus: no actuation-failure metric exists
@@ -774,7 +774,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T4-M057
 
 ### M-62 · `endpoint-rotate` is two non-atomic writes with a blackhole window · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T11-ROUTE
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -864,7 +864,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T2-M081
 
 ### M-92 · Annotation-driven serving URLs: a tenant-controlled SSRF primitive · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: T3-M092
+Severity: MAJOR · Tier: parallel · Fixes: T11-M092, T3-M092
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
@@ -976,7 +976,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-59 · `restoreLabels` wholesale-clobbers the label map · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T11-ROUTE
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -990,7 +990,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-63 · `endpoint-rotate` Rollback omits the Service selector · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T11-ROUTE
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · endpoint-rotate Update @ internal/actuator/handlers_ai.go:334
@@ -1230,7 +1230,7 @@ See [the Tier5 reconciliation](../../assessments/20260915-tier5/M056-RECONCILIAT
 
 ### M-60 · identity/route-rotate are not retry-safe · **OPEN** · `ACTUATION`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T11-ROUTE
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · route-rotate Update @ internal/actuator/handlers_k8s.go:359
@@ -1334,7 +1334,7 @@ Severity: ADVISORY · Tier: parallel · Fixes: T6-M074
 
 ### M-75 · kv-migrate fail-closed guard comment vs condition mismatch · **OPEN** · `ACTUATION`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T11-M092
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -1578,7 +1578,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-45 · Served-model facts minted on GPU pods with no served model · **OPEN** · `KNOWLEDGE`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T11-M045
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · recon
@@ -2246,7 +2246,7 @@ Severity: HIGH · Tier: parallel · Fixes: T4-M004
 
 ### M-147 · `route-rotate` is priced as zero-disruption after the handler started changing Service selectors · **OPEN** · `ECONOMICS`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T11-ROUTE
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · route-rotate Service.Update @ internal/actuator/handlers_k8s.go:365

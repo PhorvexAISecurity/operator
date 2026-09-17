@@ -575,29 +575,47 @@ func (q *QuarantineCapacity) finish(ctx context.Context, reservation *Quarantine
 	})
 }
 
-// Actuate reserves capacity before the first backend effect and binds the durable
-// record to the acknowledged native effect or Phoenix event. Unknown outcomes retain
-// their slot. Only an explicit NoEffectRefusal releases its exact reservation.
-func (q *QuarantineCapacity) Actuate(ctx context.Context, backend Actuator, req Request) (Result, error) {
+// QuarantineCapacityProvenance states whether the capacity wrapper crossed the actual
+// backend invocation boundary. Callers use this explicit fact rather than trying to infer
+// it from an error string: reservation/inventory failures happen before Actuate, while a
+// protected-ledger finalization error happens after it.
+type QuarantineCapacityProvenance struct {
+	BackendInvoked bool
+}
+
+// ActuateWithProvenance reserves capacity before the first backend effect and binds the
+// durable record to the acknowledged native effect or Phoenix event. Unknown outcomes
+// retain their slot. Only an explicit NoEffectRefusal releases its exact reservation.
+func (q *QuarantineCapacity) ActuateWithProvenance(ctx context.Context, backend Actuator, req Request) (Result, QuarantineCapacityProvenance, error) {
 	if backend == nil {
-		return Result{}, fmt.Errorf("quarantine capacity: actuator unavailable")
+		return Result{}, QuarantineCapacityProvenance{}, fmt.Errorf("quarantine capacity: actuator unavailable")
 	}
 	if req.Action != model.ActionQuarantine {
-		return backend.Actuate(ctx, req)
+		result, err := backend.Actuate(ctx, req)
+		return result, QuarantineCapacityProvenance{BackendInvoked: true}, err
 	}
 	reservation, err := q.reserve(ctx, req, backend.Name())
 	if err != nil {
-		return Result{}, err
+		return Result{}, QuarantineCapacityProvenance{}, err
 	}
 	req.TargetNamespaceUID = reservation.namespaceUID
 	req.OperationID = reservation.operationID
 	result, actuationErr := backend.Actuate(ctx, req)
+	provenance := QuarantineCapacityProvenance{BackendInvoked: true}
 	finishErr := q.finish(ctx, reservation, result, actuationErr)
 	if finishErr != nil {
 		if actuationErr != nil {
-			return result, errors.Join(actuationErr, fmt.Errorf("bind protected quarantine reservation: %w", finishErr))
+			return result, provenance, errors.Join(actuationErr, fmt.Errorf("bind protected quarantine reservation: %w", finishErr))
 		}
-		return result, fmt.Errorf("bind protected quarantine reservation: %w", finishErr)
+		return result, provenance, fmt.Errorf("bind protected quarantine reservation: %w", finishErr)
 	}
-	return result, actuationErr
+	return result, provenance, actuationErr
+}
+
+// Actuate preserves the established wrapper API for direct consumers. The runner uses
+// ActuateWithProvenance because it must distinguish a pre-dispatch capacity refusal from
+// an actual backend attempt in metrics and feedback.
+func (q *QuarantineCapacity) Actuate(ctx context.Context, backend Actuator, req Request) (Result, error) {
+	result, _, err := q.ActuateWithProvenance(ctx, backend, req)
+	return result, err
 }

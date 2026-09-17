@@ -19,7 +19,7 @@ func TestM037FingerprintWithheld(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "leader", HasGPU: tc.gpu, ModelID: tc.alias,
-				Ready: true, Node: "gpu-a", MIGDevice: "MIG-a", SuspectAdapter: "adapter-a", ServingEndpointReady: tc.gpu || tc.alias != ""},
+				Ready: true, Node: "gpu-a", MIGDevice: "MIG-a", SuspectAdapter: "adapter-a", ServingEndpointReady: tc.alias != ""},
 				Physics: model.PhysicsWitness{ImageRarity: 1.2, EPSSMultiplier: 1.1, CoResidency: 1.2, ModelRarity: 1.5}}
 			detectorAdapter(&v.Pod, "adapter-a")
 			ctx := FactContext{AssetValue: 2, PHold: 0.8, StageUrgency: 0.5, HasGPU: tc.gpu}
@@ -32,7 +32,7 @@ func TestM037FingerprintWithheld(t *testing.T) {
 				byKind[f.Kind] = f
 			}
 			mf, exists := byKind[FactModelFingerprint]
-			if exists != (tc.gpu || tc.alias != "") {
+			if exists != (tc.alias != "") {
 				t.Fatalf("fingerprint presence = %v", exists)
 			}
 			scarcity, ok := DispersionMultiplier(v)
@@ -51,17 +51,27 @@ func TestM037FingerprintWithheld(t *testing.T) {
 						}
 					}
 				}
-				// Existing independent grants; endpoint withholding is inherited from M-035.
+			}
+			if tc.gpu {
+				keys := af.CoverByAction[model.ActionMIGRebind]
+				if len(keys) != 1 || keys[0] != byKind[FactGPUContentionChannel].Key() {
+					t.Errorf("MIG cover = %v", keys)
+				}
+			}
+			if tc.alias != "" {
 				for action, kind := range map[model.Action]string{
-					model.ActionMIGRebind:    FactGPUContentionChannel,
-					model.ActionRequestDrain: FactInflightRequests, model.ActionGuardrailRotate: FactGuardrailBypass,
-					model.ActionKVMigrateInvalidate: FactSession, model.ActionAdapterRotate: FactAdapterIntegrity,
+					model.ActionRequestDrain:        FactInflightRequests,
+					model.ActionGuardrailRotate:     FactGuardrailBypass,
+					model.ActionKVMigrateInvalidate: FactSession,
 				} {
 					keys := af.CoverByAction[action]
 					if len(keys) != 1 || keys[0] != byKind[kind].Key() {
 						t.Errorf("control %s cover = %v", action, keys)
 					}
 				}
+			}
+			if keys := af.CoverByAction[model.ActionAdapterRotate]; len(keys) != 1 || keys[0] != byKind[FactAdapterIntegrity].Key() {
+				t.Errorf("adapter cover = %v", keys)
 			}
 			identity, hasIdentity := byKind[FactModelIdentity]
 			if hasIdentity != (tc.alias != "") {

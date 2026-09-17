@@ -272,9 +272,10 @@ func TestWarmSwapStackUnreachableFallsBackToK8sGate(t *testing.T) {
 // ---- kv-reset ----
 func TestKVResetRealFlushPodAlive(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
 	mv := &mockVLLM{}
-	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVReset})
+	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, boundReq(pod, model.ActionKVReset))
 	if err != nil {
 		t.Fatalf("kv-reset: %v", err)
 	}
@@ -293,8 +294,9 @@ func TestKVResetRealFlushPodAlive(t *testing.T) {
 
 func TestKVResetUnreachableIsPendingPodAlive(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{resetErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVReset})
+	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{resetErr: errStackUnreachable}}, boundReq(pod, model.ActionKVReset))
 	if err != nil {
 		t.Fatalf("kv-reset (unreachable) must NOT error (pod-alive mechanic real): %v", err)
 	}
@@ -316,8 +318,9 @@ func TestKVResetUnreachableIsPendingPodAlive(t *testing.T) {
 
 func TestKVResetReachableFailureFailsClosed(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	_, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{resetErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVReset})
+	_, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{resetErr: errors.New("HTTP 500")}}, boundReq(pod, model.ActionKVReset))
 	if err == nil {
 		t.Fatal("kv-reset must FAIL-CLOSED when a reachable stack rejects the flush (no faked success)")
 	}
@@ -325,33 +328,13 @@ func TestKVResetReachableFailureFailsClosed(t *testing.T) {
 
 // ---- endpoint-rotate ----
 func TestEndpointRotateRestitchesRouteAndRollsBack(t *testing.T) {
-	pod := aiPod("ns", "infer", map[string]string{labelRouteKey: "ep-old"})
-	pod.Annotations[annoRouteService] = "infer-svc"
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "infer-svc", UID: types.UID("uid-infer-svc"), ResourceVersion: "9"},
-		Spec: corev1.ServiceSpec{Selector: map[string]string{labelRouteKey: "ep-old"}}}
-	c := fakeC(pod, svc)
-	ec := EnactCtx{Client: c, Reader: c}
-	hr, err := endpointRotateHandler{}.Enact(context.Background(), ec, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionEndpointRotate})
-	if err != nil {
-		t.Fatalf("endpoint-rotate: %v", err)
+	f := newRouteUnitFixture(t, model.ActionEndpointRotate, 1)
+	result, err := f.native.Actuate(f.ctx, f.request)
+	if err != nil || !result.Emitted {
+		t.Fatalf("endpoint-rotate result=%+v err=%v", result, err)
 	}
-	var p corev1.Pod
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
-	if p.Labels[labelRouteKey] == "ep-old" {
-		t.Error("route-key not re-keyed")
-	}
-	var s corev1.Service
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer-svc"}, &s)
-	if s.Spec.Selector[labelRouteKey] == "ep-old" {
-		t.Error("Service selector not restitched to the new route-key")
-	}
-	// rollback restores the snapshot
-	if err := (endpointRotateHandler{}).Rollback(context.Background(), ec, Request{Namespace: "ns", Pod: "infer"}, hr.RollbackRef); err != nil {
+	if err := f.native.Rollback(f.ctx, f.request, result.RollbackRef); err != nil {
 		t.Fatalf("endpoint-rotate rollback: %v", err)
-	}
-	_ = c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p)
-	if p.Labels[labelRouteKey] != "ep-old" {
-		t.Errorf("rollback did not restore route-key, got %q", p.Labels[labelRouteKey])
 	}
 }
 

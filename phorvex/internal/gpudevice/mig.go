@@ -3,27 +3,69 @@
 package gpudevice
 
 import (
+	"regexp"
 	"sort"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 )
 
-const migResourcePrefix = "nvidia.com/mig-"
+const (
+	gpuResource       = "nvidia.com/gpu"
+	sharedGPUResource = "nvidia.com/gpu.shared"
+	migResourcePrefix = "nvidia.com/mig-"
+)
+
+var (
+	migResourcePattern       = regexp.MustCompile(`^` + regexp.QuoteMeta(migResourcePrefix) + `[0-9]+g\.[0-9]+gb(?:\.me)?$`)
+	sharedMIGResourcePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(migResourcePrefix) + `[0-9]+g\.[0-9]+gb(?:\.me)?\.shared$`)
+)
+
+// IsGPUResourceName recognizes the NVIDIA device-plugin's built-in names for whole
+// GPUs, exclusive MIG profiles, and their renameByDefault shared variants. Arbitrary
+// configured aliases need a separate trusted mapping; a name in the nvidia.com domain
+// alone is not structural GPU evidence.
+func IsGPUResourceName(name corev1.ResourceName) bool {
+	s := string(name)
+	return s == gpuResource || s == sharedGPUResource ||
+		migResourcePattern.MatchString(s) || sharedMIGResourcePattern.MatchString(s)
+}
+
+// HasGPUResource reports whether a Pod has a positive request or limit for a
+// supported NVIDIA GPU resource. This is declaration evidence, not proof of a
+// runtime physical allocation; zero-valued map entries establish no context.
+func HasGPUResource(pod *corev1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+	for i := range pod.Spec.Containers {
+		for _, resources := range []corev1.ResourceList{
+			pod.Spec.Containers[i].Resources.Requests,
+			pod.Spec.Containers[i].Resources.Limits,
+		} {
+			for name, quantity := range resources {
+				if quantity.Sign() > 0 && IsGPUResourceName(name) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
 
 // MIGResourceName returns the canonical NVIDIA MIG extended-resource name
-// declared by a Pod. Kubernetes defaults an extended-resource request from its
-// limit during admission, but scanning both lists keeps direct construction and
-// API-admitted objects consistent. Noncanonical NVIDIA resources are not MIG.
+// positively requested or limited by a Pod. Kubernetes defaults an extended-resource
+// request from its limit during admission, but scanning both lists keeps direct
+// construction and API-admitted objects consistent. Shared and noncanonical NVIDIA
+// resources establish no exclusive MIG identity for destructive rebind operations.
 func MIGResourceName(pod *corev1.Pod) string {
 	if pod == nil {
 		return ""
 	}
 	names := map[string]struct{}{}
 	scan := func(resources corev1.ResourceList) {
-		for name := range resources {
+		for name, quantity := range resources {
 			s := string(name)
-			if strings.HasPrefix(s, migResourcePrefix) && len(s) > len(migResourcePrefix) {
+			if quantity.Sign() > 0 && migResourcePattern.MatchString(s) {
 				names[s] = struct{}{}
 			}
 		}

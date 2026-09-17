@@ -15,9 +15,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,7 +39,108 @@ func (c *demoUIDClient) Create(ctx context.Context, obj client.Object, opts ...c
 		p.Status.Phase = corev1.PodRunning
 		p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 	}
-	return c.Client.Create(ctx, obj, opts...)
+	if err := c.Client.Create(ctx, obj, opts...); err != nil {
+		return err
+	}
+	return c.syncRouteSlices(ctx)
+}
+
+func (c *demoUIDClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if err := c.Client.Update(ctx, obj, opts...); err != nil {
+		return err
+	}
+	return c.syncRouteSlices(ctx)
+}
+
+func (c *demoUIDClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	if err := c.Client.Patch(ctx, obj, patch, opts...); err != nil {
+		return err
+	}
+	return c.syncRouteSlices(ctx)
+}
+
+func (c *demoUIDClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	if err := c.Client.Delete(ctx, obj, opts...); err != nil {
+		return err
+	}
+	return c.syncRouteSlices(ctx)
+}
+
+// syncRouteSlices is the test boundary for the EndpointSlice controller. The
+// production demo relies on Kubernetes; these fake-client controls still feed
+// the real handler current Service-owned membership after every Pod/Service write.
+func (c *demoUIDClient) syncRouteSlices(ctx context.Context) error {
+	var services corev1.ServiceList
+	if err := c.Client.List(ctx, &services); err != nil {
+		return err
+	}
+	var pods corev1.PodList
+	if err := c.Client.List(ctx, &pods); err != nil {
+		return err
+	}
+	for i := range services.Items {
+		svc := &services.Items[i]
+		if svc.UID == "" || len(svc.Spec.Selector) == 0 {
+			continue
+		}
+		ready := true
+		endpoints := make([]discoveryv1.Endpoint, 0)
+		selector := labels.SelectorFromSet(svc.Spec.Selector)
+		for j := range pods.Items {
+			pod := &pods.Items[j]
+			if pod.Namespace != svc.Namespace || !selector.Matches(labels.Set(pod.Labels)) {
+				continue
+			}
+			isReady := false
+			for _, condition := range pod.Status.Conditions {
+				isReady = isReady || condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue
+			}
+			if !isReady || pod.UID == "" {
+				continue
+			}
+			ref := corev1.ObjectReference{APIVersion: "v1", Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name, UID: pod.UID}
+			endpoints = append(endpoints, discoveryv1.Endpoint{Addresses: []string{"10.0.0.1"}, TargetRef: &ref, Conditions: discoveryv1.EndpointConditions{Ready: &ready}})
+		}
+		key := client.ObjectKey{Namespace: svc.Namespace, Name: "demo-" + svc.Name}
+		var slice discoveryv1.EndpointSlice
+		err := c.Client.Get(ctx, key, &slice)
+		if runtime.IsNotRegisteredError(err) {
+			return nil
+		}
+		if apierrors.IsNotFound(err) {
+			slice = discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Namespace: svc.Namespace, Name: key.Name, UID: types.UID("slice-" + svc.Name), Labels: map[string]string{discoveryv1.LabelServiceName: svc.Name}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: svc.UID}}}, AddressType: discoveryv1.AddressTypeIPv4, Endpoints: endpoints}
+			if err := c.Client.Create(ctx, &slice); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		slice.Labels = map[string]string{discoveryv1.LabelServiceName: svc.Name}
+		slice.OwnerReferences = []metav1.OwnerReference{{APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: svc.UID}}
+		slice.Endpoints = endpoints
+		if err := c.Client.Update(ctx, &slice); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func demoRouteAuthority(t *testing.T, ctx context.Context, c client.Client, action model.Action) (*actuator.NativeActuator, *v1alpha1.PhorvexPolicy) {
+	t.Helper()
+	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}); err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatal(err)
+	}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "route-policy", Namespace: "demo"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"phorvex.ai/native-demo": "true"}}, SLO: v1alpha1.SLOSpec{MinAvailableReplicas: 1}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(action)}}}}
+	if err := c.Create(ctx, policy); err != nil {
+		t.Fatal(err)
+	}
+	native := newDemoActuator(c)
+	native.JournalNamespace = "operator"
+	native.RouteObservationTimeout = 100 * time.Millisecond
+	native.RouteObservationInterval = time.Millisecond
+	return native, policy
 }
 
 type demoRouteReadFault struct {
@@ -161,10 +264,14 @@ func (c *demoControllerClient) Delete(ctx context.Context, obj client.Object, op
 func TestDemoRouteCaseUsesNativeActuatorAndServiceReadback(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = discoveryv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
 	c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}
 	run := &demoRun{client: c, token: "route-run"}
-	row := runDemoRouteCase(context.Background(), run, newDemoActuator(c), "demo", model.ActionRouteRotate)
+	ctx := context.Background()
+	native, policy := demoRouteAuthority(t, ctx, c, model.ActionRouteRotate)
+	row := runDemoRouteCase(ctx, run, native, "demo", policy, model.ActionRouteRotate)
 	if row.verdict != demoConfirmed {
 		t.Fatalf("route control: %+v", row)
 	}
@@ -176,11 +283,17 @@ func TestDemoRouteCaseUsesNativeActuatorAndServiceReadback(t *testing.T) {
 func TestDemoRouteMissingReadyFixtureIsVisible(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = discoveryv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).Build(), suppressReady: true}
 	run := &demoRun{client: c, token: "missing-run"}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	row := runDemoRouteCase(ctx, run, newDemoActuator(c), "demo", model.ActionRouteRotate)
+	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo"}}); err != nil {
+		t.Fatal(err)
+	}
+	native, policy := demoRouteAuthority(t, ctx, c, model.ActionRouteRotate)
+	row := runDemoRouteCase(ctx, run, native, "demo", policy, model.ActionRouteRotate)
 	if row.verdict != demoSetupFailure || row.observed == "" {
 		t.Fatalf("missing fixture vanished: %+v", row)
 	}
@@ -189,10 +302,14 @@ func TestDemoRouteMissingReadyFixtureIsVisible(t *testing.T) {
 func TestDemoRouteFailedIndependentServiceReadNeverPasses(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = discoveryv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
 	c := &demoRouteReadFault{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}}
 	run := &demoRun{client: c, token: "read-fault-run"}
-	row := runDemoRouteCase(context.Background(), run, newDemoActuator(c), "demo", model.ActionRouteRotate)
+	ctx := context.Background()
+	native, policy := demoRouteAuthority(t, ctx, c, model.ActionRouteRotate)
+	row := runDemoRouteCase(ctx, run, native, "demo", policy, model.ActionRouteRotate)
 	if row.verdict != demoObservationFailure || !strings.Contains(row.observed, "injected postcondition") {
 		t.Fatalf("read failure credited: %+v", row)
 	}
@@ -201,11 +318,14 @@ func TestDemoRouteFailedIndependentServiceReadNeverPasses(t *testing.T) {
 func TestDemoRouteSameNameServiceReplacementIsNotCreditedOrCleaned(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
+	_ = discoveryv1.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
 	c := &demoRouteReplacementClient{demoUIDClient: &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}}
 	run := &demoRun{client: c, token: "replacement-run"}
 	ctx := context.Background()
-	row := runDemoRouteCase(ctx, run, newDemoActuator(c), "demo", model.ActionRouteRotate)
+	native, policy := demoRouteAuthority(t, ctx, c, model.ActionRouteRotate)
+	row := runDemoRouteCase(ctx, run, native, "demo", policy, model.ActionRouteRotate)
 	if c.replacementUID == "" || row.verdict != demoObservationFailure || !strings.Contains(row.observed, "restitched=false") {
 		t.Fatalf("same-name replacement credited: replacement=%s row=%+v", c.replacementUID, row)
 	}
@@ -300,10 +420,13 @@ func TestDemoRouteRefusesZeroSingleAndUnreadyAlternativesWithoutMutation(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			s := runtime.NewScheme()
 			_ = corev1.AddToScheme(s)
+			_ = discoveryv1.AddToScheme(s)
+			_ = v1alpha1.AddToScheme(s)
 			namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "demo-uid"}}
 			c := &demoUIDClient{Client: fake.NewClientBuilder().WithScheme(s).WithObjects(namespace).Build()}
 			run := &demoRun{client: c, token: "refuse-" + tc.name}
 			ctx := context.Background()
+			native, policy := demoRouteAuthority(t, ctx, c, model.ActionRouteRotate)
 			mk := func(name string, ready bool, annotated bool) *corev1.Pod {
 				c.suppressReady = !ready
 				p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "demo", Labels: map[string]string{"app": "route-group", demoRouteKey: "route-initial"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36"}}}}
@@ -323,7 +446,7 @@ func TestDemoRouteRefusesZeroSingleAndUnreadyAlternativesWithoutMutation(t *test
 			if err := run.create(ctx, svc); err != nil {
 				t.Fatal(err)
 			}
-			res, err := demoActuate(ctx, newDemoActuator(c), actuator.Request{Namespace: "demo", Pod: target.Name, TargetUID: string(target.UID), Action: model.ActionRouteRotate})
+			res, err := demoActuate(ctx, native, actuator.Request{Namespace: "demo", Pod: target.Name, TargetUID: string(target.UID), Action: model.ActionRouteRotate, PolicyName: policy.Name, PolicyUID: string(policy.UID), OperationID: "refuse-" + tc.name})
 			if err == nil && res.Emitted {
 				t.Fatalf("%s unexpectedly emitted: %+v", tc.name, res)
 			}
@@ -372,6 +495,7 @@ func TestNativeDemoFullRunReportsEffectsQualificationsAndOwnedCleanup(t *testing
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
+	_ = discoveryv1.AddToScheme(s)
 	_ = networkingv1.AddToScheme(s)
 	_ = v1alpha1.AddToScheme(s)
 	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo", UID: "tenant-uid"}}

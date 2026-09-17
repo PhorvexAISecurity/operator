@@ -4,7 +4,7 @@
 The plain `go -C phorvex test ./...` job deliberately runs with KUBEBUILDER_ASSETS
 blank, so envtest-backed tests `t.Skip` there and `go test` still exits 0. This gate
 is the CI proof that the six packages carrying those tests were executed in full
-against local kube-apiserver/etcd binaries and the pinned ReplicaSet controller:
+against local kube-apiserver/etcd binaries and the pinned Kubernetes controllers:
 
   * the COMPLETE test suites of the selected packages run, with no `-run` filter,
     so a new envtest test (whatever helper performs its setup) runs automatically;
@@ -29,7 +29,7 @@ Usage:
   envtest_gate.py run   --raw-output FILE --summary FILE [--stderr-output FILE] [--go GO] [--timeout 10m]
   envtest_gate.py check --raw-input FILE --exit-code N --summary FILE
 
-Scope: local isolated API servers plus an explicitly spawned ReplicaSet controller.
+Scope: local isolated API servers plus explicitly spawned ReplicaSet/EndpointSlice controllers.
 There is no kubelet, CNI, garbage collector, cloud API or AI serving backend; a
 PASS here is not live acceptance.
 """
@@ -62,12 +62,14 @@ REQUIRED = {
         'TestM052QuarantineCapacityRealAPIRetainsAmbiguityAndReleasesOnlyDefiniteNoEffect',
         'TestM052RealReplicaSetQuarantineStopsAtCapacity',
         'TestM040RequestDrainAPIServerLifecycleAndRecovery',
+        'TestRouteCutoverActualAPIAndKCMEndpointSliceLifecycle',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',
         'TestM013RealEventSink',
         'TestM127RealAPIDirectReaderClosesCachedDispatchWindow',
         'TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch',
+        'TestM012RealAPIAuthorizationDenialCountsOneAttempt',
         'TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes',
         'TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController',
         'TestM009ActualProducerReceiptSnapshotRunnerAndReplicaSetController',
@@ -229,7 +231,7 @@ def cmd_run(args) -> int:
         'assets': env.get('KUBEBUILDER_ASSETS', ''),
         'kube_controller_manager': env.get('KUBE_CONTROLLER_MANAGER', ''),
         'raw_output': str(raw),
-        'scope': ('local isolated envtest API servers plus pinned ReplicaSet controller; '
+        'scope': ('local isolated envtest API servers plus pinned ReplicaSet/EndpointSlice controllers; '
                   'not a shared cluster and not live acceptance'),
     }
     if problems:
