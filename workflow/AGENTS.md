@@ -1,15 +1,14 @@
 # Agent entrypoint
 
-The user controls scope. Named fixes default to reviewed PR delivery under
-`operations/AUTONOMY.md`, without routine human checkpoints. The active readiness
-campaign has a later local-only override: see
-`assessments/20260916-local-continuation/AUTHORIZATION.md`. Open no new PRs and
-continue unblocked source tiers while retaining their live acceptance debt.
+User scope controls. Named fixes follow reviewed PR delivery under
+`operations/AUTONOMY.md`. The local-only override is
+`assessments/20260916-local-continuation/AUTHORIZATION.md`: open no new PRs,
+continue unblocked source tiers and retain live acceptance debt.
 
-1. Classify with `OPERATIONS.md`; read one runbook. Run `doctor` once per session;
-   unrelated historical warnings do not block authorized work.
-2. Run `brief <fix> --agent <assigned-id>`; coordinator assigns missing roles.
-   Read its stage, issue, source and artifacts. Don't preload the register, anatomy,
+1. Classify with `OPERATIONS.md`; read one runbook. Run `doctor` once; historical
+   warnings do not block authorized work.
+2. Run `brief <fix> --agent <assigned-id>`; coordinator assigns roles. Read its
+   stage, issue, source and artifacts. Don't preload the register, anatomy,
    archives or raw history. `MANIFEST.yaml` locates authorities.
 3. Complete owned work; use `submit-review` / `review-verdict` for evidence and
    state handoffs (`operations/HANDOFFS.md`). Continue the peer loop
@@ -17,14 +16,13 @@ continue unblocked source tiers while retaining their live acceptance debt.
 
 ## Quality boundaries
 
-- New fixes use `fix_loop: lead_worker`: lead investigates/signs `03-decision.md`,
-  worker implements, lead reviews revisions until accepted, then delivers the PR
-  and verifies the deployed fix live. Assign proposer, skeptic, coordinator and
-  live_verifier to the lead; implementer to the worker.
-- Implementation authors cannot review or live-verify their own code. Older absent
-  `fix_loop`/`blind_peer` records retain independent blind design gates; never invent seals.
-- `record-check` and batched handoffs bind signer, artifact hash and source. Missing evidence stays missing.
-  Selection, dispatch, execution, confirmation and attack mitigation are distinct.
+- New fixes use `fix_loop: lead_worker`: lead signs `03-decision.md`, reviews,
+  delivers and live-verifies; worker implements. Lead owns proposer, skeptic,
+  coordinator and live_verifier; worker owns implementer.
+- Authors cannot review or live-verify their code. Older absent `fix_loop`/`blind_peer`
+  records retain blind design gates; never invent seals.
+- `record-check` and handoffs bind signer, artifact hash and source. Missing evidence
+  stays missing. Selection, dispatch, execution, confirmation and mitigation differ.
 - Before P3, independently reproduce the incident through real producers, assert
   fixture relevance, test relevant predicate arms/defaults/stale inputs, and include
   a positive control. A mocked final flag is insufficient.
