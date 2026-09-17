@@ -327,11 +327,11 @@ func TestKVResetReachableFailureFailsClosed(t *testing.T) {
 func TestEndpointRotateRestitchesRouteAndRollsBack(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelRouteKey: "ep-old"})
 	pod.Annotations[annoRouteService] = "infer-svc"
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "infer-svc"},
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "infer-svc", UID: types.UID("uid-infer-svc"), ResourceVersion: "9"},
 		Spec: corev1.ServiceSpec{Selector: map[string]string{labelRouteKey: "ep-old"}}}
 	c := fakeC(pod, svc)
-	ec := EnactCtx{Client: c}
-	hr, err := endpointRotateHandler{}.Enact(context.Background(), ec, Request{Namespace: "ns", Pod: "infer", Action: model.ActionEndpointRotate})
+	ec := EnactCtx{Client: c, Reader: c}
+	hr, err := endpointRotateHandler{}.Enact(context.Background(), ec, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionEndpointRotate})
 	if err != nil {
 		t.Fatalf("endpoint-rotate: %v", err)
 	}
