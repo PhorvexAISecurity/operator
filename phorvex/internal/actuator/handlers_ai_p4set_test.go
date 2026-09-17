@@ -7,11 +7,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -62,21 +58,16 @@ func trustedAdapterCase(t *testing.T, clean bool) (client.Client, Request) {
 	if clean {
 		pod.Annotations[annoLoRACleanSource] = "s3://trusted/clean-v2"
 	}
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
-	s.AddKnownTypeWithName(schema.GroupVersionKind{Group: "amtd.r6security.com", Version: "v1beta1", Kind: "SecurityEvent"}, &unstructured.Unstructured{})
-	c := fake.NewClientBuilder().WithScheme(s).WithObjects(pod, event).Build()
+	c := fakeC(pod, event)
 	ConfigureAdapterDetectorIdentities([]string{o.CreatorIdentity})
 	t.Cleanup(func() { ConfigureAdapterDetectorIdentities(nil) })
-	return c, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, AdapterObservation: &o}
+	return c, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, PolicyName: "policy", PolicyUID: "policy-uid", AdapterObservation: &o}
 }
 
 func TestAdapterRotateUnloadsPoisonedDegradeToBase(t *testing.T) {
 	c, req := trustedAdapterCase(t, false)
 	mv := &mockVLLM{}
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, req)
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, req)
 	if err != nil {
 		t.Fatalf("adapter-rotate: %v", err)
 	}
@@ -94,7 +85,7 @@ func TestAdapterRotateUnloadsPoisonedDegradeToBase(t *testing.T) {
 func TestAdapterRotateReloadsOnlyFromCleanSource(t *testing.T) {
 	c, req := trustedAdapterCase(t, true)
 	mv := &mockVLLM{}
-	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/clean-v2"}}, req)
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv, AdapterSources: AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/clean-v2"}}, req)
 	if err != nil {
 		t.Fatalf("adapter-rotate: %v", err)
 	}
@@ -119,7 +110,7 @@ func TestAdapterRotateIgnoresAnnotationAndRequiresExactOperatorMapping(t *testin
 		t.Run(tc.name, func(t *testing.T) {
 			c, req := trustedAdapterCase(t, true)
 			mv := &mockVLLM{}
-			hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: tc.sources}, req)
+			hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv, AdapterSources: tc.sources}, req)
 			if err != nil || !hr.Emitted || mv.unloadCalls != 1 || mv.loadCalls != 0 || !containsStr(hr.Note, "degraded to base") {
 				t.Fatalf("annotation gained reload authority: %+v err=%v calls=%d", hr, err, mv.loadCalls)
 			}
@@ -131,8 +122,8 @@ func TestAdapterRotateConfiguredLoadFailureIsPartial(t *testing.T) {
 	c, req := trustedAdapterCase(t, false)
 	mv := &mockVLLM{loadErr: errors.New("load failed")}
 	s := AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/approved"}
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req)
-	if err == nil || !hr.Emitted || hr.MutationKind != "forward-only" || mv.unloadCalls != 1 || mv.loadCalls != 1 {
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv, AdapterSources: s}, req)
+	if err == nil || !hr.Emitted || hr.MutationKind != "partial" || mv.unloadCalls != 1 || mv.loadCalls != 1 {
 		t.Fatalf("load partial hidden: %+v err=%v", hr, err)
 	}
 }
@@ -141,9 +132,12 @@ func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
 	c, req := trustedAdapterCase(t, false)
 	s := AdapterSources{adapterSourceKey(req.Namespace, req.AdapterObservation.AdapterName): "/models/approved"}
 	mv := &mockVLLM{}
-	if _, err := (adapterRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req); err != nil {
+	if _, err := (adapterRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv, AdapterSources: s}, req); err != nil {
 		t.Fatal(err)
 	}
+	// Compensation must observe the current serving membership, dispatch the
+	// approved reload only while absent, then observe exact presence.
+	mv.adapterStates = []bool{false, true}
 	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req, req.Namespace+"/"+req.Pod); err != nil {
 		t.Fatalf("authorized compensation refused: %v", err)
 	}
@@ -168,28 +162,26 @@ func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
 
 func TestAdapterRotateFailClosedNoAdapter(t *testing.T) {
 	c := fakeC(aiPod("ns", "infer", map[string]string{})) // no lora-enabled / no adapter
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
-	if err != nil || hr.Emitted {
+	mv := &mockVLLM{}
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err != nil || hr.Emitted || mv.unloadCalls != 0 {
 		t.Fatal("adapter-rotate must refuse without trusted observation")
 	}
 }
 
 func TestAdapterRotateUnreachableIsPending(t *testing.T) {
 	c, req := trustedAdapterCase(t, true)
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{unloadErr: errStackUnreachable}}, req)
-	if err != nil {
-		t.Fatalf("unreachable unload must not error: %v", err)
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{unloadErr: errStackUnreachable}}, req)
+	if err == nil {
+		t.Fatal("unreachable unload must surface an incomplete protected operation")
 	}
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
-		t.Errorf("note must flag pending, %q", hr.Note)
+	if !containsStr(hr.Note, "partial or unknown") || hr.MutationKind != "partial" {
+		t.Errorf("note must expose protected recovery debt, result=%+v", hr)
 	}
-	// TRUTHFULNESS (same class as the kv-reset fail-closed fix): an eviction without confirmed success
-	// is NOT a defence. This branch used to return Emitted:true and stamp an adapter-epoch, marking the
-	// decision Actuated and counting it in phorvex_actuations_total while the poisoned adapter was
-	// still loaded. Unlike request-drain there is no stack-independent half here — the unload IS the
-	// move. No confirmed unload => not emitted, and no epoch (a false forensic record).
-	if hr.Emitted {
-		t.Errorf("an unconfirmed unload must NOT be reported as emitted, note=%q", hr.Note)
+	// TRUTHFULNESS: dispatch uncertainty is a visible partial operation so the runner cannot
+	// attempt a different fallback, but it is still an error and never receives a success epoch.
+	if !hr.Emitted {
+		t.Errorf("a dispatched request with unknown outcome must remain visible and block fallback, note=%q", hr.Note)
 	}
 	var p corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "infer"}, &p); err != nil {
@@ -205,7 +197,7 @@ func TestAdapterRotateUnreachableIsPending(t *testing.T) {
 
 func TestAdapterRotateReachableFailFailsClosed(t *testing.T) {
 	c, req := trustedAdapterCase(t, true)
-	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{unloadErr: errors.New("HTTP 500")}}, req)
+	_, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{unloadErr: errors.New("HTTP 500")}}, req)
 	if err == nil {
 		t.Fatal("adapter-rotate must FAIL-CLOSED on a reachable-but-failing unload")
 	}

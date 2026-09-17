@@ -323,85 +323,7 @@ type adapterRotateHandler struct{}
 
 func (adapterRotateHandler) Name() string { return string(model.ActionAdapterRotate) }
 func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "adapter-rotate", req)
-	}
-	adapter, evidenceErr := validateAdapterDispatch(ctx, ec, req, string(pod.UID))
-	if evidenceErr != nil {
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: evidenceErr.Error()}, nil
-	}
-	if pod.Labels[labelLoRAEnabled] != "true" {
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate unsupported: LoRA capability unavailable"}, nil
-	}
-	ep := endpointForPod(pod)
-	// (1) UNLOAD the (poisoned) adapter — the base model stays clean.
-	note := ""
-	uerr := ec.vllm().UnloadAdapter(ctx, ep, adapter)
-	switch {
-	case uerr == nil:
-		note = "adapter " + adapter + " unloaded"
-	case errors.Is(uerr, errAdapterAbsent):
-		// The detector assertion persists until it is removed or expires. An HTTP
-		// 404 confirms the adapter is already absent, but no new eviction occurred.
-		// Crediting this as a fresh mutation on every tick would fabricate repeats.
-		return HandlerResult{Emitted: false, MutationKind: "none",
-			Note: "adapter-rotate: adapter " + adapter + " already absent from the serving stack; eviction goal already met, no new mitigation credited"}, nil
-	case errors.Is(uerr, errStackUnreachable):
-		// [FAIL-CLOSED FIX] The unload did not return a confirmed success. A dial failure means the
-		// stack never received it; a timeout can leave the outcome unknown. In either case we must not
-		// credit the defence. This
-		// branch used to fall through and return Emitted:true after stamping an adapter-epoch — the
-		// same false-forensic-record class already fixed in kv-reset: an eviction that did not happen
-		// was counted as a real actuation and narrated as a defence. Unlike request-drain (whose
-		// stop-admit is a real, stack-independent K8s step), adapter-rotate has NO stack-independent
-		// half: the unload IS the whole move. Report NOT emitted and write no epoch. The poison marker
-		// is deliberately left in place until absence is confirmed, so recon keeps the
-		// adapter-integrity fact and the move is safely reconciled/retried.
-		return HandlerResult{
-			Emitted: false, MutationKind: "none",
-			Note: "[PENDING-GPU-VALIDATION] adapter-rotate outcome unconfirmed: no usable serving-stack " +
-				"response at " + req.Namespace + "/" + req.Pod + " — adapter " + adapter +
-				" eviction was NOT credited; poison marker retained for reconciliation",
-		}, nil
-	default:
-		return HandlerResult{}, fmt.Errorf("adapter-rotate unload %q: %w", adapter, uerr)
-	}
-	// (2) optional RELOAD from a TRUSTED PINNED source ONLY (premortem: NEVER reload from the same
-	// poisoned path — that re-pulls the poison). No clean source => degrade to the base model.
-	if clean, approved := ec.AdapterSources.source(req.Namespace, adapter); approved && uerr == nil {
-		if lerr := ec.vllm().LoadAdapter(ctx, ep, adapter, clean); lerr != nil {
-			return HandlerResult{Emitted: true, MutationKind: "forward-only",
-					Note: "adapter-rotate partial: " + adapter + " was unloaded; clean reload failed and no epoch was recorded"},
-				fmt.Errorf("adapter-rotate configured reload %q failed: %w", adapter, lerr)
-		}
-		note += "; reloaded from operator-approved serving-local source"
-	} else if uerr == nil {
-		note += "; no operator-approved source for namespace and adapter — degraded to base model (poison evicted)"
-	}
-	// The snapshot records what was evicted, never tenant-provided reload authority.
-	snap, _ := json.Marshal(map[string]string{"adapter": adapter})
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[annoAdapterSnapshot] = string(snap)
-	pod.Labels = ensureMap(pod.Labels)
-	// [DETECTION FIX] The epoch was written ONLY as a label, but every reader — the attack watcher's
-	// pre-fire baseline and its poison-detection loop — reads it as an ANNOTATION. So a genuinely
-	// successful adapter-rotate was invisible and the poison attack was scored LANDED. Write the
-	// annotation (the contract readers use) and keep the label for selector-based consumers.
-	pod.Annotations["phorvex.ai/adapter-epoch"] = pod.ResourceVersion
-	pod.Labels["phorvex.ai/adapter-epoch"] = pod.ResourceVersion
-	// Tenant operational configuration is not a poison marker. A new detector
-	// assertion remains visible until its event expires or is removed.
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{Emitted: true, MutationKind: "forward-only",
-				Note: "adapter-rotate partial: " + note + "; Pod epoch write failed"},
-			fmt.Errorf("adapter-rotate epoch %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "forward-only", RollbackRef: req.Namespace + "/" + req.Pod,
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "adapter-rotate: " + note,
-	}, nil
+	return enactAdapterRotate(ctx, ec, req)
 }
 
 // Rollback is guarded compensation, not restoration from tenant state. It reloads only when the
@@ -428,7 +350,21 @@ func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Reque
 	if !approved {
 		return fmt.Errorf("adapter-rotate rollback unsupported: no operator-approved source")
 	}
-	return ec.vllm().LoadAdapter(ctx, endpointForPod(pod), adapter, clean)
+	ep := endpointForPod(pod)
+	loaded, err := ec.vllm().AdapterLoaded(ctx, ep, adapter)
+	if err != nil {
+		return fmt.Errorf("adapter-rotate rollback inventory unavailable: %w", err)
+	}
+	if loaded {
+		return nil
+	}
+	if err := ec.vllm().LoadAdapter(ctx, ep, adapter, clean); err != nil {
+		return err
+	}
+	if err := waitAdapterMembership(ctx, ec, ep, adapter, true); err != nil {
+		return fmt.Errorf("adapter-rotate rollback load unconfirmed: %w", err)
+	}
+	return nil
 }
 
 // --- 14. request-drain — request-granular in-flight eviction ------------------------------

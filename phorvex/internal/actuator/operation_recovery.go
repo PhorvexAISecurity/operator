@@ -27,7 +27,7 @@ func (n *NativeActuator) RecoverOperations(ctx context.Context, globalKill bool)
 }
 
 func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool, allow func(model.Action) bool) ([]RecoveryEvent, error) {
-	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM}
+	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources}
 	if globalKill || n.DryRun {
 		return nil, nil
 	}
@@ -60,6 +60,8 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 				ev.Effect, ev.Err = recoverQuarantineGC(ctx, ec, &entry.CM, &r)
 			case "request-drain":
 				ev.Effect, _, ev.Err = recoverRequestDrain(ctx, ec, &entry.CM, &r)
+			case "adapter-rotate":
+				ev.Effect, ev.Err = recoverAdapterRotate(ctx, ec, &entry.CM, &r)
 			}
 		}
 		if ev.Err == nil {

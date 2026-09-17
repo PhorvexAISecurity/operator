@@ -209,9 +209,15 @@ func addActionRequirements(out map[string]Requirement, cfg Config, namespace str
 		return
 	}
 	add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "pods", Verb: "get"}, Reason: string(action) + " target identity"})
-	if action == model.ActionQuarantine || action == model.ActionWarmSwap || action == model.ActionModelShardReplace || action == model.ActionMIGRebind {
+	if action == model.ActionQuarantine || action == model.ActionWarmSwap || action == model.ActionModelShardReplace || action == model.ActionMIGRebind || action == model.ActionAdapterRotate {
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Group: "phorvex.ai", Resource: "phorvexpolicies", Verb: "get"}, Reason: string(action) + " current policy authority"})
 		add(out, Requirement{Verb: authz.Verb{Resource: "namespaces", Name: namespace, Verb: "get", ClusterScoped: true}, Reason: string(action) + " current namespace authority"})
+	}
+	if action == model.ActionAdapterRotate {
+		add(out, Requirement{Verb: authz.Verb{Group: "amtd.r6security.com", Resource: "securityevents", Verb: "get", ClusterScoped: true}, Reason: "adapter-rotate detector authority"})
+		for _, verb := range []string{"get", "list", "create", "update", "delete"} {
+			add(out, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: verb}, Reason: "adapter-rotate recovery journal"})
+		}
 	}
 	if action == model.ActionRotate {
 		for _, owner := range []authz.Verb{

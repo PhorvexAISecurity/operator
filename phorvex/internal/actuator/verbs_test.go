@@ -75,6 +75,10 @@ func TestRequiredVerbsFollowResolvedBackend(t *testing.T) {
 			t.Fatalf("%s lacks the Pod patch used by compensation/recovery", action)
 		}
 	}
+	adapter := RequiredVerbsForBackend(BackendNative, model.ActionAdapterRotate)
+	if len(adapter) != 1 || adapter[0].Resource != "pods" || adapter[0].Verb != "patch" {
+		t.Fatalf("adapter-rotate permissions must match its optimistic completion patch: %+v", adapter)
+	}
 	var drainPatch, drainUpdate, endpointGet, endpointList bool
 	for _, verb := range RequiredVerbsForBackend(BackendNative, model.ActionRequestDrain) {
 		drainPatch = drainPatch || (verb.Resource == "pods" && verb.Verb == "patch")

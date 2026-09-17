@@ -10,27 +10,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// TestAdapterRotateConvergesWhenAdapterAlreadyAbsent pins the old marker path's
-// fail-closed migration: a Pod annotation alone may no longer authorize eviction.
+// TestAdapterRotateRefusesMarkerOnlyWhenServingAdapterAlreadyAbsent pins the old
+// marker path's fail-closed migration: a Pod annotation alone may no longer
+// authorize eviction. TestM071SameUIDEndpointDriftUsesOnlyAuthoritativeServingConfig
+// covers the trusted-observation path when authoritative inventory reports that
+// the adapter is already absent.
 //
-// A stale poison marker (phorvex.ai/lora-adapter=evil) named an adapter vLLM did not have.
-// adapter-rotate treated the resulting 404 as a hard failure, so it never emitted and never
-// cleared the marker — and because adapter-rotate outranks kv-reset on coverage, the brain
-// re-selected it every tick forever, starving kv-reset on that pod and scoring every
-// prefix-cache attack LANDED. An eviction whose target is already gone has SUCCEEDED.
-func TestAdapterRotateConvergesWhenAdapterAlreadyAbsent(t *testing.T) {
+// A stale poison marker (phorvex.ai/lora-adapter=evil) once caused adapter-rotate
+// to reach vLLM. The marker is now operational metadata only: without a trusted
+// detector observation the handler refuses before the serving boundary, regardless
+// of whether the serving stack would report that adapter absent.
+func TestAdapterRotateRefusesMarkerOnlyWhenServingAdapterAlreadyAbsent(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelLoRAEnabled: "true"})
 	pod.Annotations = map[string]string{annoLoRAAdapter: "evil"}
 	c := fakeC(pod)
 
 	absent := &mockVLLM{unloadErr: fmt.Errorf("%w: %q (HTTP 404)", errAdapterAbsent, "evil")}
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: absent},
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: absent},
 		Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
 	if err != nil {
-		t.Fatalf("an already-absent adapter is the goal state, not an error: %v", err)
+		t.Fatalf("marker-only refusal returned an error: %v", err)
 	}
 	if hr.Emitted {
 		t.Error("tenant marker alone must not authorize adapter eviction")
+	}
+	if absent.unloadCalls != 0 {
+		t.Fatalf("marker-only refusal reached serving boundary %d time(s)", absent.unloadCalls)
 	}
 
 	var p corev1.Pod

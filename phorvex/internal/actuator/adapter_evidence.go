@@ -64,7 +64,7 @@ func validateAdapterDispatch(ctx context.Context, ec EnactCtx, req Request, podU
 	}
 	created := se.GetCreationTimestamp()
 	age := time.Since(created.Time)
-	if string(se.GetUID()) != o.EventUID || created.IsZero() ||
+	if string(se.GetUID()) != o.EventUID || created.IsZero() || o.CreatedAt.IsZero() || !o.CreatedAt.Equal(created.Time) ||
 		age < 0 || age >= adapterHorizon || se.GetDeletionTimestamp() != nil ||
 		se.GetAnnotations()["phorvex.ai/creator-identity"] != o.CreatorIdentity ||
 		se.GetAnnotations()["phorvex.ai/target-pod-uid"] != podUID ||

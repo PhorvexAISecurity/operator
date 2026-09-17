@@ -46,6 +46,9 @@ func bindAdapterObservation(p *model.Pod, events []model.SecurityEventInfo) {
 		})
 	}
 	sort.Slice(observations, func(i, j int) bool {
+		if !observations[i].CreatedAt.Equal(observations[j].CreatedAt) {
+			return observations[i].CreatedAt.After(observations[j].CreatedAt)
+		}
 		if observations[i].EventName != observations[j].EventName {
 			return observations[i].EventName < observations[j].EventName
 		}
