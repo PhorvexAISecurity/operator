@@ -1578,7 +1578,7 @@ Severity: MEDIUM · Tier: parallel · Fixes: none
 
 ### M-45 · Served-model facts minted on GPU pods with no served model · **OPEN** · `KNOWLEDGE`
 
-Severity: MINOR · Tier: parallel · Fixes: none
+Severity: MINOR · Tier: parallel · Fixes: T11-M045
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · recon
