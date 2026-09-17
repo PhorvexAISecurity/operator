@@ -26,6 +26,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
 const (
@@ -55,7 +56,11 @@ func shadowModelReady(ctx context.Context, ec EnactCtx, pod *corev1.Pod) (ready,
 	if !podReady(pod) || pod.DeletionTimestamp != nil {
 		return false, false
 	}
-	loaded, err := ec.vllm().ModelReady(ctx, endpointForPod(pod))
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return false, false
+	}
+	loaded, err := ec.vllm().ModelReady(ctx, ep)
 	if err == nil {
 		return loaded, false // real vLLM verdict
 	}
@@ -77,6 +82,9 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 		if p.Name == exclude {
 			continue
 		}
+		if _, err := validatedEndpointForPod(p); err != nil {
+			return nil, false, fmt.Errorf("warm candidate serving endpoint configuration: %w", err)
+		}
 		if ready, pending := shadowModelReady(ctx, ec, p); ready {
 			return p, pending, nil
 		}
@@ -97,6 +105,9 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	// same-name replacement is refused here, untouched (native rotate's refusal convention).
 	if reason := triggerIdentityRefusal(req, leader); reason != "" {
 		return refuseAI(kind, reason)
+	}
+	if _, err := validatedEndpointForPod(leader); err != nil {
+		return refuseAI(kind, err.Error())
 	}
 	group := leader.Labels[groupKey]
 	if group == "" {
@@ -366,6 +377,10 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		partial.Note = note
 		return partial, fmt.Errorf("%s: serving cutover submitted; pool replenishment pending: %w", kind, observeErr)
 	}
+	if _, err := validatedEndpointForPod(candidate); err != nil {
+		partial.Note = note + "; replacement Pod serving endpoint configuration invalid"
+		return partial, fmt.Errorf("%s: replacement Pod serving endpoint configuration: %w", kind, err)
+	}
 	receipt.RewarmName, receipt.RewarmUID, receipt.Phase = candidate.Name, string(candidate.UID), "pool-observed"
 	if err := journalAdvance(ctx, ec, journal, receipt); err != nil {
 		partial.Note = note
@@ -443,6 +458,9 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	// [M-69] Refuse before any mutation unless the observed Pod is the one the request selected.
 	if reason := triggerIdentityRefusal(req, pod); reason != "" {
 		return refuseAI("mig-rebind", reason)
+	}
+	if _, err := validatedEndpointForPod(pod); err != nil {
+		return refuseAI("mig-rebind", err.Error())
 	}
 	// The current resource request identifies the device-plugin class. Desired geometry comes only
 	// from the operator-owned exact namespace/resource policy below.
@@ -620,14 +638,49 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 type kvResetHandler struct{}
 
 func (kvResetHandler) Name() string { return string(model.ActionKVReset) }
-func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
+
+func authoritativeRawKVPod(ctx context.Context, ec EnactCtx, req Request, kind string) (*corev1.Pod, HandlerResult, error) {
+	if ec.Reader == nil || ec.Client == nil {
+		result, err := refuseAI(kind, "authoritative reader or writer unavailable")
+		return nil, result, err
+	}
+	pod, ok, err := getPod(ctx, ec.Reader, req.Namespace, req.Pod)
 	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "kv-reset", req)
+		return nil, HandlerResult{}, orGone(err, ok, kind, req)
+	}
+	if pod.UID == "" || pod.ResourceVersion == "" {
+		result, refusalErr := refuseAI(kind, "authoritative target identity or resource version unavailable")
+		return nil, result, refusalErr
+	}
+	return pod, HandlerResult{}, nil
+}
+
+func declaredKVEndpoint(req Request, pod *corev1.Pod) (servingEndpoint, string) {
+	if reason := triggerIdentityRefusal(req, pod); reason != "" {
+		return servingEndpoint{}, reason
+	}
+	ep, err := validatedEndpointForPod(pod)
+	if err != nil {
+		return servingEndpoint{}, err.Error()
+	}
+	if !servingcontext.FromAnnotations(pod.Annotations).Declared() {
+		return servingEndpoint{}, "target Pod has no model-id or valid serving-port declaration"
+	}
+	return ep, ""
+}
+
+func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	pod, refusal, err := authoritativeRawKVPod(ctx, ec, req, "kv-reset")
+	if pod == nil {
+		return refusal, err
+	}
+	ep, reason := declaredKVEndpoint(req, pod)
+	if reason != "" {
+		return refuseAI("kv-reset", reason)
 	}
 	// REAL in-process flush via the serving stack (vLLM); the pod is NOT killed (the defining property).
 	flushNote := ""
-	resetErr := ec.vllm().ResetPrefixCache(ctx, endpointForPod(pod))
+	resetErr := ec.vllm().ResetPrefixCache(ctx, ep)
 	switch {
 	case resetErr == nil:
 		flushNote = "KV/prefix cache flushed via the serving stack (defeats wipe-surviving implant)"

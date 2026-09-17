@@ -272,9 +272,10 @@ func TestWarmSwapStackUnreachableFallsBackToK8sGate(t *testing.T) {
 // ---- kv-reset ----
 func TestKVResetRealFlushPodAlive(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
 	mv := &mockVLLM{}
-	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVReset})
+	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, boundReq(pod, model.ActionKVReset))
 	if err != nil {
 		t.Fatalf("kv-reset: %v", err)
 	}
@@ -293,8 +294,9 @@ func TestKVResetRealFlushPodAlive(t *testing.T) {
 
 func TestKVResetUnreachableIsPendingPodAlive(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{resetErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVReset})
+	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{resetErr: errStackUnreachable}}, boundReq(pod, model.ActionKVReset))
 	if err != nil {
 		t.Fatalf("kv-reset (unreachable) must NOT error (pod-alive mechanic real): %v", err)
 	}
@@ -316,8 +318,9 @@ func TestKVResetUnreachableIsPendingPodAlive(t *testing.T) {
 
 func TestKVResetReachableFailureFailsClosed(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	_, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{resetErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVReset})
+	_, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{resetErr: errors.New("HTTP 500")}}, boundReq(pod, model.ActionKVReset))
 	if err == nil {
 		t.Fatal("kv-reset must FAIL-CLOSED when a reachable stack rejects the flush (no faked success)")
 	}

@@ -70,7 +70,11 @@ func authoritativeDrainPod(ctx context.Context, ec EnactCtx, req Request) (*core
 	if string(pod.UID) != req.TargetUID || pod.UID == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
 		return nil, RefusedWithoutEffect(fmt.Errorf("request-drain target identity changed or is terminating"))
 	}
-	if pod.Status.PodIP == "" || !endpointForPod(pod).reachable() {
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return nil, RefusedWithoutEffect(fmt.Errorf("request-drain target serving endpoint configuration: %w", endpointErr))
+	}
+	if pod.Status.PodIP == "" || !ep.reachable() {
 		return nil, RefusedWithoutEffect(fmt.Errorf("request-drain target serving endpoint is unavailable"))
 	}
 	return pod, nil
@@ -264,6 +268,9 @@ func revalidateDrainDispatch(ctx context.Context, ec EnactCtx, r operationReceip
 	}
 	if string(fresh.UID) != r.TargetUID || fresh.UID == "" || fresh.ResourceVersion == "" || fresh.DeletionTimestamp != nil || fresh.Labels[labelServing] != "drained" || fresh.Labels[labelDrainEpoch] != r.OperationToken {
 		return nil, fmt.Errorf("request-drain target identity or operation state changed before abort")
+	}
+	if _, err := validatedEndpointForPod(fresh); err != nil {
+		return nil, fmt.Errorf("request-drain target serving endpoint configuration: %w", err)
 	}
 	if drainEndpointConfigDigest(fresh) != r.EndpointConfigSHA256 || fresh.Status.PodIP != r.EndpointAddresses[0] {
 		return nil, fmt.Errorf("request-drain serving endpoint configuration changed before abort")
