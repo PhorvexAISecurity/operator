@@ -1046,3 +1046,15 @@ fixes:
     stacked_on: []
     branch: fix/t11-m045
     head_sha: 6ef95a25d59fa7c4caa6558e1a9809dac24c0b21
+  T11-M092:
+    directory: fixes/T11-M092
+    aliases: []
+    issues:
+    - M-92
+    - M-75
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t11-m092
+    head_sha: null
