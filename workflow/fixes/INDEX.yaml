@@ -1018,7 +1018,7 @@ fixes:
     - M-77
     - M-76
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t10-m077
@@ -1030,7 +1030,7 @@ fixes:
     - M-10
     - M-15
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t10-m010
