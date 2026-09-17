@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -71,12 +71,28 @@ checks:
     sha256: 0082670be8fa68f35c5f2e1040cce53a76bf7928b2ee8b7fe35124893bc0bca9
     source_sha: c31ccf8de5fa862c72b3b85ff42f5a3e3fa04d11
     at: '2026-09-17T03:43:56+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 69c400e6a29e35f2b060f7fb7b19f23badb31e3aeeea255126440dc13fefcd20
+    source_sha: c31ccf8de5fa862c72b3b85ff42f5a3e3fa04d11
+    at: '2026-09-17T03:44:59+00:00'
+    baseline_sha: 5d9a4b837d3d8e6718071f42e0ca1a925322c362
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d11c1f84135ade260ea9f90043985497330e79aec8ef6faa12e8e8c93079801b
+    source_sha: c31ccf8de5fa862c72b3b85ff42f5a3e3fa04d11
+    at: '2026-09-17T03:44:59+00:00'
+    incident_sha256: 69c400e6a29e35f2b060f7fb7b19f23badb31e3aeeea255126440dc13fefcd20
 fix_id: T11-M012
 issues:
 - M-12
 title: Expose bounded actuation attempts and current retry cooldowns
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -121,7 +137,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -137,10 +153,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-17T03:43:59+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T03:45:02+00:00'
 configuration_history:
 - at: '2026-09-17T02:38:42+00:00'
   by: codex-lead
@@ -196,10 +212,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T03:44:59+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T03:45:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T11-M012:7:submit
-  from: sol-t11-m012
+  id: T11-M012:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8

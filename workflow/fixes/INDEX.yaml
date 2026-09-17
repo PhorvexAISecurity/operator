@@ -1041,7 +1041,7 @@ fixes:
     issues:
     - M-12
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t11-m012
