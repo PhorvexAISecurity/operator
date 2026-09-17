@@ -21,7 +21,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
@@ -150,9 +152,19 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p1", UID: types.UID("pod-uid"), ResourceVersion: "1", Labels: map[string]string{"app": "demo"}, Annotations: map[string]string{"phorvex.ai/serving-port": portText}},
 		Status:     corev1.PodStatus{PodIP: "127.0.0.1"},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod, m010ServingPolicy()).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		pod, m010ServingPolicy(),
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns", UID: "ns-uid", ResourceVersion: "1"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator", UID: "operator-uid", ResourceVersion: "1"}},
+	).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+		if _, ok := obj.(*corev1.ConfigMap); ok {
+			obj.SetUID(types.UID("created-" + obj.GetName()))
+		}
+		return c.Create(ctx, obj, opts...)
+	}}).Build()
 	native := actuator.NewNativeActuator(c)
 	native.SetBoundaryReader(c)
+	native.JournalNamespace = "operator"
 	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	native.SetServingSecurity(legacy)
 	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
@@ -162,7 +174,7 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 		Engine: "p1-coverage", CoverageValue: 4.5, CoveredWeight: 3.5,
 		Trace: &model.DecisionTraceV2{DispatchOutcome: model.DispatchNotAttempted, DispatchReason: "pending-dispatch"},
 	}}
-	policy := model.Policy{Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
+	policy := model.Policy{Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", TickID: "m010-loopback-tick-1", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	if got := actuateWithBoundary(t, m, context.Background(), m010Entry(), policy, decisions, map[string]*model.WorkloadView{"ns/p1": view}); got != 1 {
 		t.Fatalf("actuations = %d; decision=%+v", got, decisions[0])
 	}
@@ -179,9 +191,17 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 		t.Fatalf("modeled selection explanation changed: %+v", rec)
 	}
 
-	// Reuse the exact successful decision after the serving endpoint disappears.
-	// The current refusal must replace every success/native field from the first call.
+	// A later real decision starts from the acknowledged epoch. After the serving
+	// endpoint disappears, its definite pre-send refusal must replace every
+	// success/native field from the first call.
 	server.Close()
+	current := &corev1.Pod{}
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {
+		t.Fatal(err)
+	}
+	value, present := current.Annotations["phorvex.ai/kv-reset-epoch"]
+	view.Pod.KVResetEpoch = model.OwnedValue{Present: present, Value: value}
+	policy.TickID = "m010-loopback-tick-2"
 	if got := actuateWithBoundary(t, m, context.Background(), m010Entry(), policy, decisions, map[string]*model.WorkloadView{"ns/p1": view}); got != 0 {
 		t.Fatalf("closed endpoint actuations = %d", got)
 	}

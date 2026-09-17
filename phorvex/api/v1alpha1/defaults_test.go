@@ -18,6 +18,10 @@ import (
 
 func budgetInt(v int) *int { return &v }
 
+func durationPtr(v time.Duration) *metav1.Duration {
+	return &metav1.Duration{Duration: v}
+}
+
 func TestEffectiveDefaults(t *testing.T) {
 	var s PhorvexPolicySpec // all empty => code defaults
 	if got := s.EffectiveLambda(); got != 0.6 {
@@ -43,6 +47,9 @@ func TestEffectiveDefaults(t *testing.T) {
 	}
 	if got := s.EffectiveProactiveFloor(); got != time.Hour {
 		t.Errorf("proactiveFloor default = %v, want 1h", got)
+	}
+	if got := s.EffectiveEventAgeHorizon(); got != time.Hour {
+		t.Errorf("eventAgeHorizon default = %v, want 1h", got)
 	}
 	if got := s.EffectiveMinAvailableReplicas(); got != 1 {
 		t.Errorf("minAvailableReplicas default = %v, want 1", got)
@@ -79,7 +86,8 @@ func TestEffectiveOverrides(t *testing.T) {
 			AntiOverRotationWindow: metav1.Duration{Duration: 10 * time.Minute},
 			ProactiveFloor:         metav1.Duration{Duration: 2 * time.Hour},
 		},
-		Mode: ModeActive,
+		Triggers: TriggersSpec{EventAgeHorizon: durationPtr(90 * time.Minute)},
+		Mode:     ModeActive,
 		Brain: BrainSpec{KillChain: KillChainSpec{
 			Shape: "1.5", SojournScaleSeconds: SojournScaleSpec{Recon: 90, ModelTheft: 45},
 		}},
@@ -93,6 +101,9 @@ func TestEffectiveOverrides(t *testing.T) {
 	if s.EffectiveMaxMovesPerTick() != 5 || s.EffectiveTickInterval() != 30*time.Second {
 		t.Errorf("budget overrides not applied")
 	}
+	if s.EffectiveEventAgeHorizon() != 90*time.Minute {
+		t.Errorf("event horizon override not applied")
+	}
 	if s.IsDryRun() {
 		t.Errorf("active mode must not be dry-run")
 	}
@@ -101,6 +112,50 @@ func TestEffectiveOverrides(t *testing.T) {
 	}
 	if s.EffectiveSojournScaleSeconds()["exploit"] != 600 {
 		t.Errorf("partial override did not preserve exploit default")
+	}
+}
+
+func TestEventAgeHorizonPresenceSerializationAndDeepCopy(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		value     *metav1.Duration
+		wantKey   bool
+		wantValue string
+		want      time.Duration
+	}{
+		{name: "omitted", want: time.Hour},
+		{name: "positive", value: durationPtr(10 * time.Minute), wantKey: true, wantValue: "10m0s", want: 10 * time.Minute},
+		{name: "explicit-zero", value: durationPtr(0), wantKey: true, wantValue: "0s", want: time.Hour},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := PhorvexPolicySpec{Triggers: TriggersSpec{EventAgeHorizon: tc.value}}
+			encoded, err := json.Marshal(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(encoded, &raw); err != nil {
+				t.Fatal(err)
+			}
+			triggers, _ := raw["triggers"].(map[string]any)
+			got, found := triggers["eventAgeHorizon"]
+			if found != tc.wantKey || (found && got != tc.wantValue) {
+				t.Fatalf("serialized eventAgeHorizon=%v found=%t, want %q found=%t: %s", got, found, tc.wantValue, tc.wantKey, encoded)
+			}
+			if got := spec.EffectiveEventAgeHorizon(); got != tc.want {
+				t.Fatalf("effective eventAgeHorizon=%v, want %v", got, tc.want)
+			}
+			copy := spec.DeepCopy()
+			if tc.value != nil {
+				if copy.Triggers.EventAgeHorizon == spec.Triggers.EventAgeHorizon {
+					t.Fatal("deep copy aliased eventAgeHorizon pointer")
+				}
+				copy.Triggers.EventAgeHorizon.Duration++
+				if copy.Triggers.EventAgeHorizon.Duration == spec.Triggers.EventAgeHorizon.Duration {
+					t.Fatal("deep copy mutation changed source")
+				}
+			}
+		})
 	}
 }
 

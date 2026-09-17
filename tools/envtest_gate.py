@@ -49,6 +49,7 @@ MODULE = 'phorvex'
 REQUIRED = {
     'github.com/phorvex/phorvex/api/v1alpha1': (
         'TestM022MaxMovesPerTickAPIDefaultingAndAdmission',
+        'TestM029EventAgeHorizonAPIPresenceDefaultingAndAdmission',
     ),
     'github.com/phorvex/phorvex/internal/actuator': (
         'TestM47APIServerPreconditions',

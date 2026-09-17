@@ -40,7 +40,9 @@ Ops: `kv-reset` (prefix-cache flush), `adapter-rotate` (LoRA unload/load), `requ
   `phorvex.attack.{kv,guardrail,inflight}` additionally multiplies one serving fact's weight ×3 in `ucw-recon`
   (`phorvex.attack.adapter` does not); the boost grants no cover, is not attributed in the trace (M-153 pending),
   and is not aged by recon — it lasts while the CR exists. The kill-chain evidence weight of every event decays
-  to 0 at `EventAgeHorizon`. Current cover per action, with fixtures, is in
+  linearly to 0 at `spec.triggers.eventAgeHorizon`; omission uses an inherited, uncalibrated `1h` default that is
+  independent of `spec.budget.proactiveFloor`. Operators who previously used a custom proactive floor as accidental
+  event memory must set the new field explicitly to retain that duration. Current cover per action, with fixtures, is in
   `docs/recon-cover-map.generated.md` (`go run ./tools/covermap --check`); mechanics and the historical-trial
   caveats are in `build/test-harness/ACTUATOR_COVERAGE.md`. The 2026-08-21 detector runs in
   `workflow/attacks/reference/PHORVEX_RUNTIME_VALIDATION.md` predate the trust boundary and used self-declared

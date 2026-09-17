@@ -1090,11 +1090,22 @@ fixes:
     issues:
     - M-93
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t12-m093
     head_sha: 7bc372450b616bf0d212be0f0bbcaf4393f2be2e
+  T13-M029:
+    directory: fixes/T13-M029
+    aliases: []
+    issues:
+    - M-29
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t13-m029
+    head_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
   T13-M064:
     directory: fixes/T13-M064
     aliases: []
@@ -1103,11 +1114,11 @@ fixes:
     - M-73
     - M-39
     related_issues: []
-    state: AGREED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t13-m064
-    head_sha: null
+    head_sha: e8aa0aca7120b3e938d30bc6ce0a728bd880fb88
   T14-M036:
     directory: fixes/T14-M036
     aliases: []

@@ -696,9 +696,9 @@ type Policy struct {
 	// killchain substitutes the provisional default. INSUFFICIENT EVIDENCE — fit in T3-D.
 	ExposurePressureCap float64
 	// EventAgeHorizon (τ_ev) and ExposurePressureScale (T_exp) are T1-B's dedicated CLOCK->BELIEF
-	// horizons, split out of the triple-loaded ProactiveFloor. buildPolicy initialises BOTH equal
-	// to EffectiveProactiveFloor() (inherited, not chosen — the numeric value stays Tier 3). 0 =>
-	// killchain falls back to ProactiveFloor, so a policy built without them is byte-identical.
+	// horizons. EventAgeHorizon has an independent inherited one-hour default;
+	// ExposurePressureScale remains initialized from the proactive floor. A zero internal
+	// event horizon resolves through EffectiveEventAgeHorizon for legacy direct construction.
 	EventAgeHorizon       time.Duration
 	ExposurePressureScale time.Duration
 	EnabledActions        map[Action]bool

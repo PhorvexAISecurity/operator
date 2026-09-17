@@ -2869,7 +2869,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		TickInterval:                 s.EffectiveTickInterval(),
 		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
 		ProactiveFloor:               s.EffectiveProactiveFloor(),
-		EventAgeHorizon:              s.EffectiveProactiveFloor(), // T1-B: τ_ev initialised = floor (inherited)
+		EventAgeHorizon:              s.EffectiveEventAgeHorizon(),
 		ExposurePressureScale:        s.EffectiveProactiveFloor(), // T1-B: T_exp initialised = floor (inherited)
 		MinAvailableReplicas:         s.EffectiveMinAvailableReplicas(),
 		P99Ms:                        s.SLO.P99Ms,

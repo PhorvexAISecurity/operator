@@ -414,9 +414,14 @@ jobs:
         run: |
           set -euo pipefail
           SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
-          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80' 2>/dev/null; \
+          # Kill by pid file, never by pkill -f: a pattern that names the port-forward also
+          # appears in the remote shell's own command line, so pkill would kill that shell
+          # (ssh exit 255). \$ defers expansion to the jump host.
+          $SSH "PF=\$HOME/.phorvex-e2e-tunnel.pid; \
+                if [ -f \$PF ]; then kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; fi; \
                 nohup kubectl -n phorvex-system port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80 >/dev/null 2>&1 & \
-                for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q '"ok":true' && exit 0; done; \
+                echo \$! > \$PF; \
+                for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q ok && exit 0; done; \
                 echo 'console tunnel did not come up' >&2; exit 1"
           TOKEN="$($SSH "kubectl -n phorvex-system create token phorvex-phorvex-console-e2e --audience phorvex-console --duration 1h")"
           [ -n "$TOKEN" ] || { echo "::error::could not mint the console E2E token"; exit 1; }
@@ -467,7 +472,7 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
-            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console 18090:80' 2>/dev/null || true"
+            "PF=\$HOME/.phorvex-e2e-tunnel.pid; if [ -f \$PF ]; then kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; fi; true"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
@@ -836,9 +841,14 @@ jobs:
         run: |
           set -euo pipefail
           SSH="sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 ${USER_}@${HOST}"
-          $SSH "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80' 2>/dev/null; \
+          # Kill by pid file, never by pkill -f: a pattern that names the port-forward also
+          # appears in the remote shell's own command line, so pkill would kill that shell
+          # (ssh exit 255). \$ defers expansion to the jump host.
+          $SSH "PF=\$HOME/.phorvex-e2e-tunnel.pid; \
+                if [ -f \$PF ]; then kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; fi; \
                 nohup kubectl -n phorvex-system port-forward --address 127.0.0.1 svc/phorvex-console ${PORT}:80 >/dev/null 2>&1 & \
-                for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q '"ok":true' && exit 0; done; \
+                echo \$! > \$PF; \
+                for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; curl -s --max-time 3 http://127.0.0.1:${PORT}/api/health | grep -q ok && exit 0; done; \
                 echo 'console tunnel did not come up' >&2; exit 1"
           TOKEN="$($SSH "kubectl -n phorvex-system create token phorvex-phorvex-console-e2e --audience phorvex-console --duration 1h")"
           [ -n "$TOKEN" ] || { echo "::error::could not mint the console E2E token"; exit 1; }
@@ -883,7 +893,7 @@ jobs:
           USER_:   ${{ secrets.PHORVEX_SSH_USER }}
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PHORVEX_SSH_KNOWN_HOSTS" -o ConnectTimeout=20 -o LogLevel=ERROR -p 22 "${USER_}@${HOST}" \
-            "pkill -u \$(id -un) -f 'port-forward --address 127.0.0.1 svc/phorvex-console 18090:80' 2>/dev/null || true"
+            "PF=\$HOME/.phorvex-e2e-tunnel.pid; if [ -f \$PF ]; then kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; fi; true"
 
       - name: Publish report to ci-report.phorvex.ai
         id: publish
