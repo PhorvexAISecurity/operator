@@ -132,11 +132,11 @@ func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextS
 		}
 		sev := float64(rank) / 4.0
 		// One aging function for both halves of belief (M-27): the same linear
-		// w = 1 − clamp01(age/τ_ev) the kill-chain evidence sum now uses. τ_ev is the
-		// proactive floor (T1-B initialization; value INSUFFICIENT EVIDENCE, M-29).
+		// w = 1 − clamp01(age/τ_ev) the kill-chain evidence sum now uses. The inherited
+		// one-hour τ_ev is independent of cadence and remains uncalibrated.
 		decay := 0.0
 		if !e.TimestampMissing {
-			decay = model.EventAgeWeight(e.Age, eventAgeHorizonCtx(pol)) // T1-B: dedicated τ_ev (init = floor)
+			decay = model.EventAgeWeight(e.Age, eventAgeHorizonCtx(pol))
 		}
 		w := sev * decay
 		if !e.TargetsPod {
@@ -186,11 +186,7 @@ func clampC(x, lo, hi float64) float64 {
 
 func init() { Registry.Register(sensed{}) }
 
-// eventAgeHorizonCtx mirrors killchain.eventAgeHorizon: τ_ev is its own T1-B field, initialised
-// equal to ProactiveFloor; fall back to the floor when unset so an unbuilt policy is identical.
+// eventAgeHorizonCtx shares the one effective rule with every event consumer.
 func eventAgeHorizonCtx(pol model.Policy) time.Duration {
-	if pol.EventAgeHorizon > 0 {
-		return pol.EventAgeHorizon
-	}
-	return pol.ProactiveFloor
+	return pol.EffectiveEventAgeHorizon()
 }

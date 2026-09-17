@@ -34,10 +34,10 @@ func TestBeliefDecayFollowsEventAgeHorizonNotFloor(t *testing.T) {
 	if got := (reconExposure{}).Belief(agedEventView(), horizonOnly); !(got < ref) {
 		t.Fatalf("changing eventAgeHorizon alone did not move the belief decay: %.6f vs %.6f", got, ref)
 	}
-	// Unset horizon falls back to the floor: byte-identical to the pre-T1-B policy shape.
-	legacy := model.Policy{EventDriven: true, ProactiveFloor: time.Hour}
+	// Unset horizon uses the independent inherited one-hour default even when cadence differs.
+	legacy := model.Policy{EventDriven: true, ProactiveFloor: 10 * time.Minute}
 	if got := (reconExposure{}).Belief(agedEventView(), legacy); got != ref {
-		t.Fatalf("unset horizon must fall back to the floor: %.6f vs %.6f", got, ref)
+		t.Fatalf("unset horizon must use the one-hour default: %.6f vs %.6f", got, ref)
 	}
 }
 

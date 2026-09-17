@@ -36,6 +36,9 @@ spec:
     blastRadiusFromGraph: true
   triggers:
     eventDriven: true
+    # Linear event-evidence memory; inherited 1h default is uncalibrated and
+    # independent of budget.proactiveFloor.
+    eventAgeHorizon: 1h
     killChainSource: ["FalcoIntegrator", "prometheus"]
   actions:
     enabled: ["rotate", "quarantine"]

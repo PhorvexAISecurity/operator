@@ -72,6 +72,8 @@ spec:
     blastRadiusFromGraph: true
   triggers:
     eventDriven: true
+    # Linear SecurityEvent evidence horizon, independent of proactive cadence.
+    eventAgeHorizon: 1h
   actions:
     enabled: ["route-rotate"]
   mode: dryRun

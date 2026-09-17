@@ -567,12 +567,7 @@ func maxInt(a, b int) int {
 	return b
 }
 
-// eventAgeHorizon is the T1-B event-decay horizon (τ_ev): its dedicated policy field,
-// initialised equal to ProactiveFloor. Falls back to ProactiveFloor when unset so a policy
-// built without the field (older tests) is byte-identical.
+// eventAgeHorizon shares the one effective rule with every event consumer.
 func eventAgeHorizon(pol model.Policy) time.Duration {
-	if pol.EventAgeHorizon > 0 {
-		return pol.EventAgeHorizon
-	}
-	return pol.ProactiveFloor
+	return pol.EffectiveEventAgeHorizon()
 }

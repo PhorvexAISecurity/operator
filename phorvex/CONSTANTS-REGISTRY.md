@@ -62,6 +62,7 @@ validated; priors, blend weights, and hazard shapes can still be fleet-dependent
 | `MaxMovesPerTick` (B) | `3` | `api/v1alpha1/defaults.go:28,77-87` | `spec.budget.maxMovesPerTick` | Externalized and consumed. |
 | Tick interval (Δ) | `20s` | `api/v1alpha1/defaults.go:30,97-103` | `spec.budget.tickInterval` | Externalized and consumed. |
 | `ProactiveFloor` | `1h` | `api/v1alpha1/defaults.go:32,113-119` | `spec.budget.proactiveFloor` | Externalized and consumed. |
+| Event evidence horizon (τ_ev) | `1h` | `api/v1alpha1/defaults.go`; `internal/model/eventage.go` | `spec.triggers.eventAgeHorizon` | **Externalized; inherited default is uncalibrated.** Linear evidence weight reaches zero at the horizon independently of proactive cadence. |
 | Flow-disruption weight | `0.6` | `api/v1alpha1/defaults.go:26,67-70` | `spec.objective.costWeights.flowDisruption` | Externalized and consumed. |
 
 λ is an **initial condition**, not a fixed production price. The legacy controller adapts it to realized

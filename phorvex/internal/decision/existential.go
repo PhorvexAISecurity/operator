@@ -14,10 +14,7 @@ import (
 func assessOutcomes(v *model.WorkloadView, p model.Policy) *model.ExistentialDecision {
 	d := &model.ExistentialDecision{TrustBoundaryReady: p.TrustBoundaryReady, TrustBoundaryReason: p.TrustBoundaryReason, TrustBoundarySince: p.TrustBoundarySince, Result: "inactive", EffectStatus: "not-attempted", MayBreachSLO: p.MayBreachSLO, Order: "baseline"}
 	key := v.Pod.Namespace + "/" + v.Pod.Name
-	horizon := p.EventAgeHorizon
-	if horizon <= 0 {
-		horizon = p.ProactiveFloor
-	}
+	horizon := p.EffectiveEventAgeHorizon()
 	for _, ev := range v.OutcomeEvents {
 		if ev.OutcomeParseError != "" {
 			d.Reasons = append(d.Reasons, ev.OutcomeParseError)

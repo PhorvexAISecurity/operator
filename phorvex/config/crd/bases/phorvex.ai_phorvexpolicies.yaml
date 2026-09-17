@@ -92,10 +92,11 @@ spec:
                       and quarantine (Phoenix Quarantine); noop is always implicitly available.
                     items:
                       description: |-
-                        ActionType is one enabled mutation. The native actuator (P-ACTUATOR) enacts the full
-                        vocabulary; rotate/quarantine also map to Phoenix Delete/Quarantine via the optional
-                        adapter. The advanced/AI moves are native-only and opt-in (a nil/empty Enabled set
-                        defaults to rotate+quarantine — the historical behaviour).
+                        ActionType is stored policy vocabulary. Runtime support is separate: identity-rotate
+                        remains admitted for existing objects but is declared-only for a security effect and
+                        refused for new native/hybrid dispatch. rotate/quarantine also map to Phoenix
+                        Delete/Quarantine; advanced/AI moves are opt-in. A nil/empty Enabled set defaults
+                        to rotate+quarantine.
                       enum:
                       - rotate
                       - quarantine
@@ -268,6 +269,18 @@ spec:
                     x-kubernetes-validations:
                     - message: tickInterval must be a positive duration
                       rule: duration(self) > duration('0s')
+                type: object
+              cover:
+                description: |-
+                  Cover controls optional cover features. M-34 remains excluded from scoring
+                  even if enabled while its weight and execution prerequisites are unresolved.
+                properties:
+                  warmSwap:
+                    properties:
+                      enabled:
+                        default: false
+                        type: boolean
+                    type: object
                 type: object
               existential:
                 description: ExistentialSpec controls the narrowly scoped M99 availability
@@ -448,25 +461,6 @@ spec:
                       disables the budget path for this service.
                     type: string
                 type: object
-              trust:
-                type: object
-                description: Directional M-34 peer trust; effective tenant keys until M-140.
-                properties:
-                  peerPolicies:
-                    type: array
-                    x-kubernetes-list-type: set
-                    items:
-                      type: string
-                      minLength: 1
-              cover:
-                type: object
-                properties:
-                  warmSwap:
-                    type: object
-                    properties:
-                      enabled:
-                        type: boolean
-                        default: false
               tenant:
                 description: |-
                   Tenant is the explicit tenant identity this policy governs. Empty defaults to
@@ -481,6 +475,18 @@ spec:
                   SecurityEvent stream) and the always-on proactive exposure floor. (PRD:
                   triggers{eventDriven,killChainSource}.)
                 properties:
+                  eventAgeHorizon:
+                    default: 1h
+                    description: |-
+                      EventAgeHorizon is the linear evidence-memory horizon for SecurityEvents.
+                      Event weight reaches zero at this age. Omission defaults independently to
+                      one hour; it is not derived from the proactive movement cadence.
+                    type: string
+                    x-kubernetes-validations:
+                    - message: eventAgeHorizon must be a positive duration
+                      rule: duration(self) > duration('0s')
+                    - message: eventAgeHorizon exceeds the supported duration
+                      rule: duration(self) <= duration('2562047h47m16.854775807s')
                   eventDriven:
                     default: true
                     description: |-
@@ -507,6 +513,19 @@ spec:
                       proactive moving-target-defense behavior.
                     type: boolean
                 type: object
+              trust:
+                description: |-
+                  Trust declares directional peer trust for the M-34 observational assessment.
+                  Until M-140 supplies canonical policy identity, entries are effective tenant keys.
+                  Missing or ambiguous membership never establishes trust.
+                properties:
+                  peerPolicies:
+                    items:
+                      minLength: 1
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
             required:
             - actions
             - assetValue
@@ -527,7 +546,8 @@ spec:
                   False with EmissionHistory Unknown is not proof of no emission before observation.
                 type: boolean
               conditions:
-                description: Conditions includes Ready, DryRun, ValidationError, KillSwitch,
+                description: |-
+                  Conditions includes Ready, DryRun, ValidationError, KillSwitch,
                   ActionsSupported, and ActuationPrepared (current tick's backend preparation).
                 items:
                   description: Condition contains details for one aspect of the current

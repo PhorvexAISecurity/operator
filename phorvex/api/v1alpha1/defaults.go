@@ -32,6 +32,7 @@ const (
 	defaultTickInterval         = 20 * time.Second
 	defaultAntiOverRotation     = 5 * time.Minute
 	defaultProactiveFloor       = time.Hour
+	defaultEventAgeHorizon      = time.Hour
 )
 
 // ParseDecimal parses a decimal string, returning def on empty/invalid input. It is
@@ -150,6 +151,16 @@ func (s *PhorvexPolicySpec) EffectiveProactiveFloor() time.Duration {
 		return defaultProactiveFloor
 	}
 	return s.Budget.ProactiveFloor.Duration
+}
+
+// EffectiveEventAgeHorizon is the independent linear SecurityEvent evidence
+// horizon. Admission rejects an explicit non-positive value; the fallback also
+// preserves old/internal objects that do not carry API presence information.
+func (s *PhorvexPolicySpec) EffectiveEventAgeHorizon() time.Duration {
+	if s.Triggers.EventAgeHorizon == nil || s.Triggers.EventAgeHorizon.Duration <= 0 {
+		return defaultEventAgeHorizon
+	}
+	return s.Triggers.EventAgeHorizon.Duration
 }
 
 // EffectiveMode is the safety mode (default dryRun).
