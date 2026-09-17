@@ -58,34 +58,15 @@ func pathOr(ep servingEndpoint, override, def string) string {
 	return def
 }
 
-// postJSON performs a real POST with a JSON body through the shared http client, reusing httpVLLM.do's
-// unreachable-vs-error discrimination.
+// postJSON performs one real POST through the same no-redirect execution and
+// response boundary as do. Encoding failure is returned with its typed cause;
+// no request is constructed or sent.
 func (c *httpVLLM) postJSON(ctx context.Context, url, token string, payload any) (int, string, error) {
-	b, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
+	b, err := json.Marshal(payload)
 	if err != nil {
-		return 0, "", err
+		return 0, "", fmt.Errorf("marshal serving request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		if strings.Contains(err.Error(), "refused") || strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "timeout") {
-			return 0, "", errStackUnreachable
-		}
-		return 0, "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, servingResponseMaxBytes+1))
-	if err != nil {
-		return 0, "", fmt.Errorf("read serving response: %w", err)
-	}
-	if len(body) > servingResponseMaxBytes {
-		return 0, "", fmt.Errorf("serving response exceeds %d bytes", servingResponseMaxBytes)
-	}
-	return resp.StatusCode, string(body), nil
+	return c.request(ctx, http.MethodPost, url, token, "application/json", b)
 }
 
 func okCode(code int) bool {

@@ -23,6 +23,7 @@
 package actuator
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -33,6 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -99,9 +101,26 @@ func endpointForPod(pod *corev1.Pod) servingEndpoint {
 	return ep
 }
 
-// errStackUnreachable signals case (b): no serving stack answered (connection refused/timeout/no IP)
-// — distinct from a reachable-but-failing endpoint (case c, fail-closed).
+// errStackUnreachable signals case (b): the request could not have reached a
+// serving backend. Timeouts, cancellation, EOF/reset, TLS failure and opaque
+// transports do not prove this and must retain an unknown outcome instead.
 var errStackUnreachable = errors.New("serving endpoint unreachable [PENDING-GPU-VALIDATION]")
+
+// errServingOutcomeUnknown means the request may have reached the serving
+// backend, but no complete response proved its result. Consumers must preserve
+// possible effect and must not take compatibility fallbacks reserved for a
+// definitely unreachable endpoint.
+var errServingOutcomeUnknown = errors.New("serving request outcome unknown")
+
+type definiteServingUnreachableError struct{ cause error }
+
+func (e *definiteServingUnreachableError) Error() string {
+	return errStackUnreachable.Error() + ": " + e.cause.Error()
+}
+
+func (e *definiteServingUnreachableError) Unwrap() []error {
+	return []error{errStackUnreachable, e.cause}
+}
 
 // errAdapterAbsent means the serving stack answered and reported the named adapter is NOT
 // loaded. For an EVICTION this is the goal state already met, not a failure — treating it as
@@ -112,7 +131,8 @@ var errAdapterAbsent = errors.New("adapter not loaded on the serving stack")
 // vLLMClient is the serving-stack control plane. Default impl = vLLM HTTP API. Swap for Triton/TGI.
 type vLLMClient interface {
 	// ModelReady reports whether the served model is LOADED + healthy at ep (warm-pool readiness).
-	// Returns errStackUnreachable when no stack answers (so callers can fall back honestly on kind).
+	// Returns errStackUnreachable only when the request definitely could not reach a
+	// stack, so callers may use the documented non-GPU compatibility fallback.
 	ModelReady(ctx context.Context, ep servingEndpoint) (bool, error)
 	// ResetPrefixCache flushes the prefix/KV cache in-process WITHOUT restarting (kv-reset).
 	ResetPrefixCache(ctx context.Context, ep servingEndpoint) error
@@ -135,31 +155,103 @@ type httpVLLM struct{ hc *http.Client }
 func newHTTPVLLM() *httpVLLM { return &httpVLLM{hc: &http.Client{Timeout: 3 * time.Second}} }
 
 func (c *httpVLLM) do(ctx context.Context, method, url, token string) (int, string, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	return c.request(ctx, method, url, token, "", nil)
+}
+
+// request is the single serving HTTP execution boundary. Redirects are returned
+// as their original response so a write accepted by the first server is never
+// silently repeated and a later dial failure cannot erase that possible effect.
+// The client is copied before installing this policy; shared clients are immutable.
+func (c *httpVLLM) request(ctx context.Context, method, rawURL, token, contentType string, body []byte) (int, string, error) {
+	var requestBody io.Reader
+	if body != nil {
+		requestBody = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, requestBody)
 	if err != nil {
 		return 0, "", err
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		// connection refused / no route / timeout => unreachable (no serving stack here).
-		var ne net.Error
-		if errors.As(err, &ne) || strings.Contains(err.Error(), "refused") || strings.Contains(err.Error(), "no such host") {
-			return 0, "", errStackUnreachable
+	hc := c.hc
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	requestClient := *hc
+	trustworthyAttempt := false
+	var isolatedTransport *http.Transport
+	switch transport := hc.Transport.(type) {
+	case nil:
+		// A caller may replace the exported DefaultTransport with a custom
+		// RoundTripper. Only the standard transport provides the attempt
+		// properties this classifier relies on; custom defaults stay unknown.
+		if standard, ok := http.DefaultTransport.(*http.Transport); ok {
+			isolatedTransport = standard.Clone()
 		}
-		return 0, "", err
+	case *http.Transport:
+		isolatedTransport = transport.Clone()
+	}
+	if isolatedTransport != nil {
+		// A new no-keepalive Transport cannot retry a stale pooled connection.
+		// This makes the typed dial result the complete attempt history for this
+		// request, while preserving TLS, proxy and custom DialContext settings.
+		isolatedTransport.DisableKeepAlives = true
+		requestClient.Transport = isolatedTransport
+		trustworthyAttempt = true
+		defer isolatedTransport.CloseIdleConnections()
+	}
+	requestClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := requestClient.Do(req)
+	if err != nil {
+		if trustworthyAttempt && definitelyUnsentServingRequest(err) {
+			return 0, "", &definiteServingUnreachableError{cause: err}
+		}
+		return 0, "", fmt.Errorf("%w: %w", errServingOutcomeUnknown, err)
 	}
 	defer resp.Body.Close()
-	b, readErr := io.ReadAll(io.LimitReader(resp.Body, servingResponseMaxBytes+1))
+	b, readErr := readServingResponse(resp.Body)
 	if readErr != nil {
-		return 0, "", fmt.Errorf("read serving response: %w", readErr)
+		return resp.StatusCode, "", fmt.Errorf("%w after HTTP %d: %w", errServingOutcomeUnknown, resp.StatusCode, readErr)
+	}
+	return resp.StatusCode, b, nil
+}
+
+func readServingResponse(body io.Reader) (string, error) {
+	b, err := io.ReadAll(io.LimitReader(body, servingResponseMaxBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read serving response: %w", err)
 	}
 	if len(b) > servingResponseMaxBytes {
-		return 0, "", fmt.Errorf("serving response exceeds %d bytes", servingResponseMaxBytes)
+		return "", fmt.Errorf("serving response exceeds %d bytes", servingResponseMaxBytes)
 	}
-	return resp.StatusCode, string(b), nil
+	return string(b), nil
+}
+
+// definitelyUnsentServingRequest accepts only typed failures that occur before
+// an HTTP request can reach a server. A standard Transport plus a no-redirect
+// client gives a trustworthy single-attempt history. Error strings, generic
+// net.Error, timeouts and custom transports are deliberately insufficient.
+func definitelyUnsentServingRequest(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound && !dnsErr.IsTimeout {
+		return true
+	}
+	var opErr *net.OpError
+	if !errors.As(err, &opErr) || opErr.Op != "dial" || opErr.Timeout() {
+		return false
+	}
+	return errors.Is(opErr, syscall.ECONNREFUSED) ||
+		errors.Is(opErr, syscall.ENETUNREACH) ||
+		errors.Is(opErr, syscall.EHOSTUNREACH)
 }
 
 func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, error) {
@@ -176,6 +268,13 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 	// health 200 => live; the models route lists the loaded model => model-loaded.
 	mcode, body, err := c.do(ctx, http.MethodGet, ep.base()+ep.modelsPath, ep.token)
 	if err != nil {
+		if errors.Is(err, errStackUnreachable) {
+			var unavailable *definiteServingUnreachableError
+			if errors.As(err, &unavailable) {
+				return false, fmt.Errorf("%w after confirmed health response: %w", errServingOutcomeUnknown, unavailable.cause)
+			}
+			return false, fmt.Errorf("%w after confirmed health response", errServingOutcomeUnknown)
+		}
 		return false, err
 	}
 	return mcode == http.StatusOK && strings.Contains(body, "\"data\""), nil
