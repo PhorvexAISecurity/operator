@@ -40,6 +40,8 @@ func TestM045ProjectedContextScopesFactsAndActionSet(t *testing.T) {
 		name        string
 		annotations map[string]string
 		gpu         bool
+		gpuResource corev1.ResourceName
+		gpuQuantity string
 		ready       bool
 		ip          bool
 		wantModel   bool
@@ -49,6 +51,14 @@ func TestM045ProjectedContextScopesFactsAndActionSet(t *testing.T) {
 	}{
 		{name: "gpu batch", gpu: true, ready: true, ip: true, wantGPU: true,
 			wantActions: map[model.Action]bool{model.ActionMIGRebind: true}},
+		{name: "whole gpu", gpuResource: "nvidia.com/gpu", gpuQuantity: "1", wantGPU: true},
+		{name: "shared gpu", gpuResource: "nvidia.com/gpu.shared", gpuQuantity: "1", wantGPU: true},
+		{name: "mig media extension", gpuResource: "nvidia.com/mig-1g.10gb.me", gpuQuantity: "1", wantGPU: true,
+			wantActions: map[model.Action]bool{model.ActionMIGRebind: true}},
+		{name: "shared mig", gpuResource: "nvidia.com/mig-1g.10gb.shared", gpuQuantity: "1", wantGPU: true},
+		{name: "zero whole gpu", gpuResource: "nvidia.com/gpu", gpuQuantity: "0"},
+		{name: "zero mig", gpuResource: "nvidia.com/mig-1g.10gb", gpuQuantity: "0"},
+		{name: "unrelated nvidia resource", gpuResource: "nvidia.com/unrelated-device", gpuQuantity: "1"},
 		{name: "cpu model server", annotations: map[string]string{modelID: "model-v1"}, ready: true, ip: true,
 			wantModel: true, wantServing: true, wantActions: servingActions()},
 		{name: "combined", annotations: map[string]string{modelID: "model-v1"}, gpu: true, ready: true, ip: true,
@@ -70,9 +80,16 @@ func TestM045ProjectedContextScopesFactsAndActionSet(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "target", UID: "pod-uid", Annotations: tc.annotations}}
-			if tc.gpu {
+			if tc.gpu || tc.gpuResource != "" {
+				gpuResource, gpuQuantity := tc.gpuResource, tc.gpuQuantity
+				if gpuResource == "" {
+					gpuResource = "nvidia.com/mig-1g.10gb"
+				}
+				if gpuQuantity == "" {
+					gpuQuantity = "1"
+				}
 				pod.Spec.Containers = []corev1.Container{{Name: "worker", Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{corev1.ResourceName("nvidia.com/mig-1g.10gb"): resource.MustParse("1")},
+					Requests: corev1.ResourceList{gpuResource: resource.MustParse(gpuQuantity)},
 				}}}
 			}
 			if tc.ready {

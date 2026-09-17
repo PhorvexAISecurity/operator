@@ -664,20 +664,7 @@ func topOwner(p *corev1.Pod) (string, string) {
 }
 
 func gpuInfo(p *corev1.Pod) (bool, string) {
-	hasGPU := false
-	scan := func(rl corev1.ResourceList) {
-		for name := range rl {
-			n := string(name)
-			if strings.HasPrefix(n, gpuPrefix) {
-				hasGPU = true
-			}
-		}
-	}
-	for _, ct := range p.Spec.Containers {
-		scan(ct.Resources.Limits)
-		scan(ct.Resources.Requests)
-	}
-	return hasGPU, gpudevice.MIGResourceName(p)
+	return gpudevice.HasGPUResource(p), gpudevice.MIGResourceName(p)
 }
 
 func isStateful(p *corev1.Pod) bool {
