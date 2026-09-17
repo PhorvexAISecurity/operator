@@ -335,8 +335,8 @@ func TestM077OtherReceiptlessServingMutationsRetainUnknownOutcome(t *testing.T) 
 	kvPod.Annotations[annoKVInvalidate] = "/"
 	kvClient := fakeC(kvPod)
 	kvResult, kvErr := (kvMigrateInvalidateHandler{}).Enact(context.Background(), EnactCtx{
-		Client: kvClient, KVXfer: httpKVTransfer{v: &httpVLLM{hc: hc}},
-	}, Request{Namespace: kvPod.Namespace, Pod: kvPod.Name, Action: model.ActionKVMigrateInvalidate})
+		Client: kvClient, Reader: kvClient, KVXfer: httpKVTransfer{v: &httpVLLM{hc: hc}},
+	}, boundReq(kvPod, model.ActionKVMigrateInvalidate))
 	if kvErr == nil || !errors.Is(kvErr, errServingOutcomeUnknown) || kvResult.Emitted || kvResult.MutationKind != "partial" || !strings.Contains(kvResult.Note, "outcome unknown") {
 		t.Fatalf("local KV unknown outcome was erased: result=%+v err=%v", kvResult, kvErr)
 	}

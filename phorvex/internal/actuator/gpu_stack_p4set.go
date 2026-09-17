@@ -76,10 +76,15 @@ func okCode(code int) bool {
 // ---- vLLMClient NEW methods: adapter load/unload + request drain ----
 
 func (c *httpVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, adapter string) error {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return err
+	}
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := c.postJSON(ctx, ep.base()+ep.unloadPath, ep.token, map[string]string{"lora_name": adapter})
+	code, body, err := c.postJSON(ctx, ep.routeURL(ep.unloadPath), ep.token, map[string]string{"lora_name": adapter})
 	if err != nil {
 		return err
 	}
@@ -96,10 +101,15 @@ func (c *httpVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, adapte
 }
 
 func (c *httpVLLM) AdapterLoaded(ctx context.Context, ep servingEndpoint, adapter string) (bool, error) {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return false, err
+	}
 	if !ep.reachable() {
 		return false, errStackUnreachable
 	}
-	code, body, err := c.do(ctx, http.MethodGet, ep.base()+ep.modelsPath, ep.token)
+	code, body, err := c.do(ctx, http.MethodGet, ep.routeURL(ep.modelsPath), ep.token)
 	if err != nil {
 		return false, err
 	}
@@ -169,10 +179,15 @@ func parseAdapterInventory(data []byte, adapter string) (bool, error) {
 }
 
 func (c *httpVLLM) LoadAdapter(ctx context.Context, ep servingEndpoint, adapter, source string) error {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return err
+	}
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := c.postJSON(ctx, ep.base()+ep.loadPath, ep.token, map[string]string{"lora_name": adapter, "lora_path": source})
+	code, body, err := c.postJSON(ctx, ep.routeURL(ep.loadPath), ep.token, map[string]string{"lora_name": adapter, "lora_path": source})
 	if err != nil {
 		return err
 	}
@@ -183,10 +198,15 @@ func (c *httpVLLM) LoadAdapter(ctx context.Context, ep servingEndpoint, adapter,
 }
 
 func (c *httpVLLM) DrainRequests(ctx context.Context, ep servingEndpoint) (int, error) {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return 0, err
+	}
 	if !ep.reachable() {
 		return 0, errStackUnreachable
 	}
-	code, body, err := c.postJSON(ctx, ep.base()+ep.drainPath, ep.token, map[string]bool{"abort_inflight": true})
+	code, body, err := c.postJSON(ctx, ep.routeURL(ep.drainPath), ep.token, map[string]bool{"abort_inflight": true})
 	if err != nil {
 		return 0, err
 	}
@@ -287,10 +307,15 @@ type guardrailController interface {
 type httpGuardrail struct{ v *httpVLLM }
 
 func (g httpGuardrail) ApplyVariant(ctx context.Context, ep servingEndpoint, variant string) error {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return err
+	}
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := g.v.postJSON(ctx, ep.base()+ep.guardPath, ep.token, map[string]string{"variant": variant})
+	code, body, err := g.v.postJSON(ctx, ep.routeURL(ep.guardPath), ep.token, map[string]string{"variant": variant})
 	if err != nil {
 		return err
 	}
@@ -315,10 +340,15 @@ type kvTransferController interface {
 type httpKVTransfer struct{ v *httpVLLM }
 
 func (k httpKVTransfer) InvalidateLocal(ctx context.Context, ep servingEndpoint) error {
+	var err error
+	ep, err = ep.validated()
+	if err != nil {
+		return err
+	}
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := k.v.postJSON(ctx, ep.base()+ep.kvInvPath, ep.token, map[string]bool{"local": true})
+	code, body, err := k.v.postJSON(ctx, ep.routeURL(ep.kvInvPath), ep.token, map[string]bool{"local": true})
 	if err != nil {
 		return err
 	}

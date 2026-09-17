@@ -107,12 +107,13 @@ func (r m074UpdateRecorder) Update(ctx context.Context, obj client.Object, opts 
 func m074KVFixture(t *testing.T, peers string, localErr, remoteErr, updateErr error) (HandlerResult, error, []string, []string, client.Client) {
 	t.Helper()
 	pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
+	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	pod.Annotations[annoDisaggPeers] = peers
 	base := fakeC(pod)
 	calls := []string{}
 	recorder := &m074KVRecorder{calls: &calls, invErr: localErr, migErr: remoteErr}
 	c := m074UpdateRecorder{Client: base, calls: &calls, err: updateErr}
-	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, KVXfer: recorder}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionKVMigrateInvalidate})
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: base, KVXfer: recorder}, boundReq(pod, model.ActionKVMigrateInvalidate))
 	return hr, err, calls, recorder.peers, base
 }
 

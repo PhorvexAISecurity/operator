@@ -84,7 +84,7 @@ func TestM090TerminatingTargetStopsNativeAndAIHandlersBeforeEffect(t *testing.T)
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns", Name: "target", UID: "target-uid", ResourceVersion: "7",
 			DeletionTimestamp: &now, Finalizers: []string{"m090.phorvex.ai/retain"},
-			Labels: map[string]string{labelRouteKey: "old"},
+			Labels: map[string]string{labelRouteKey: "old"}, Annotations: map[string]string{"phorvex.ai/model-id": "fixture-model"},
 		},
 		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "example.invalid/app:test"}}},
 		Status: corev1.PodStatus{PodIP: "127.0.0.1"},

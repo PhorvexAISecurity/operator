@@ -864,7 +864,7 @@ Severity: MAJOR · Tier: parallel · Fixes: T2-M081
 
 ### M-92 · Annotation-driven serving URLs: a tenant-controlled SSRF primitive · **OPEN** · `ACTUATION`
 
-Severity: MAJOR · Tier: parallel · Fixes: T3-M092
+Severity: MAJOR · Tier: parallel · Fixes: T11-M092, T3-M092
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · runner.policies
@@ -1334,7 +1334,7 @@ Severity: ADVISORY · Tier: parallel · Fixes: T6-M074
 
 ### M-75 · kv-migrate fail-closed guard comment vs condition mismatch · **OPEN** · `ACTUATION`
 
-Severity: ADVISORY · Tier: parallel · Fixes: none
+Severity: ADVISORY · Tier: parallel · Fixes: T11-M092
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers

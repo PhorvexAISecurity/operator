@@ -24,7 +24,8 @@ func TestVLLMRoutes_DefaultsAndAnnotationOverrides(t *testing.T) {
 	// no annotations => documented defaults.
 	def := endpointForPod(&corev1.Pod{Status: corev1.PodStatus{PodIP: "1.2.3.4"}})
 	if def.resetPath != defaultResetPath || def.healthPath != defaultHealthPath || def.modelsPath != defaultModelsPath ||
-		def.unloadPath != defaultUnloadPath || def.loadPath != defaultLoadPath || def.drainPath != defaultDrainPath {
+		def.unloadPath != defaultUnloadPath || def.loadPath != defaultLoadPath || def.drainPath != defaultDrainPath ||
+		def.guardPath != defaultGuardPath || def.kvInvPath != defaultKVInvPath || def.configErr != nil {
 		t.Errorf("route defaults wrong: %+v", def)
 	}
 	// per-pod annotations override EVERY route (no hardcoded literal reaches the wire).
@@ -32,12 +33,14 @@ func TestVLLMRoutes_DefaultsAndAnnotationOverrides(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 			annoResetPath: "/r", annoHealthPath: "/h", annoModelsPath: "/m",
 			annoUnloadPath: "/u", annoLoadPath: "/l", annoDrainPath: "/d",
+			annoGuardrailPath: "/g", annoKVInvalidate: "/k",
 		}},
 		Status: corev1.PodStatus{PodIP: "1.2.3.4"},
 	}
 	ep := endpointForPod(pod)
 	if ep.resetPath != "/r" || ep.healthPath != "/h" || ep.modelsPath != "/m" ||
-		ep.unloadPath != "/u" || ep.loadPath != "/l" || ep.drainPath != "/d" {
+		ep.unloadPath != "/u" || ep.loadPath != "/l" || ep.drainPath != "/d" ||
+		ep.guardPath != "/g" || ep.kvInvPath != "/k" || ep.configErr != nil {
 		t.Errorf("not every route honored its annotation: %+v", ep)
 	}
 }

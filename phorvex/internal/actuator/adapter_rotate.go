@@ -86,6 +86,9 @@ func adapterAuthority(ctx context.Context, ec EnactCtx, r operationReceipt) (*co
 	if string(pod.UID) != r.TargetUID || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
 		return nil, fmt.Errorf("adapter-rotate target identity changed")
 	}
+	if _, err := validatedEndpointForPod(pod); err != nil {
+		return nil, fmt.Errorf("adapter-rotate serving endpoint configuration: %w", err)
+	}
 	sel, err := metav1.LabelSelectorAsSelector(&pol.Spec.Selector)
 	if err != nil || !sel.Matches(labels.Set(pod.Labels)) {
 		return nil, fmt.Errorf("adapter-rotate target left current policy selector")
@@ -191,7 +194,10 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 	if err != nil {
 		return adapterPartial(cm, fmt.Errorf("adapter-rotate recovery authority: %w", err))
 	}
-	ep := endpointForPod(pod)
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return adapterPartial(cm, fmt.Errorf("adapter-rotate serving endpoint configuration: %w", endpointErr))
+	}
 	if r.Phase == "prepared" {
 		if err := journalFinish(ctx, ec, cm); err != nil {
 			return adapterPartial(cm, fmt.Errorf("adapter-rotate finish unclaimed intent: %w", err))
@@ -323,6 +329,10 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 	if ec.JournalNamespace == "" || req.PolicyName == "" || req.PolicyUID == "" || req.TargetUID == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires authoritative reader, protected journal, policy and target identity"))
 	}
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate serving endpoint configuration: %w", endpointErr))
+	}
 	source, sourcePresent := ec.AdapterSources.source(req.Namespace, adapter)
 	r := operationReceipt{
 		Version: adapterRotateReceiptVersion, Kind: "adapter-rotate", Phase: "prepared",
@@ -356,7 +366,7 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 	} else if !apierrors.IsNotFound(requireErr) {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate protected operation lookup: %w", requireErr))
 	}
-	loaded, err := ec.vllm().AdapterLoaded(ctx, endpointForPod(pod), adapter)
+	loaded, err := ec.vllm().AdapterLoaded(ctx, ep, adapter)
 	if err != nil {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate pre-dispatch inventory unavailable: %w", err))
 	}

@@ -67,6 +67,9 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 	if reason := triggerIdentityRefusal(req, trig); reason != "" {
 		return refuseAI("model-shard-replace", reason)
 	}
+	if _, err := validatedEndpointForPod(trig); err != nil {
+		return refuseAI("model-shard-replace", err.Error())
+	}
 	size, _ := strconv.Atoi(trig.Annotations[annoParallelSize])
 	if size <= 0 {
 		return HandlerResult{}, fmt.Errorf("model-shard-replace: %s unset on group %q — cannot coherently flip a TP/PP group (fail-closed)", annoParallelSize, group)
@@ -86,6 +89,9 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 		}
 		if _, seen := readyByRank[p.Labels[labelRank]]; seen {
 			continue
+		}
+		if _, err := validatedEndpointForPod(p); err != nil {
+			return HandlerResult{}, fmt.Errorf("model-shard-replace candidate serving endpoint configuration: %w", err)
 		}
 		if ready, pend := shadowModelReady(ctx, ec, p); ready {
 			readyByRank[p.Labels[labelRank]] = p
@@ -307,7 +313,11 @@ func pendingErrors(names []string) []error {
 // request-drain AND warm-swap's retire. Returns (abortedCount, pending, err): pending=true means the
 // serving stack was unreachable (the abort is [PENDING-GPU-VALIDATION], the K8s drain still applies).
 func drainInflight(ctx context.Context, ec EnactCtx, pod *corev1.Pod) (int, bool, error) {
-	aborted, err := ec.vllm().DrainRequests(ctx, endpointForPod(pod))
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return 0, false, endpointErr
+	}
+	aborted, err := ec.vllm().DrainRequests(ctx, ep)
 	switch {
 	case err == nil:
 		return aborted, false, nil
@@ -338,6 +348,10 @@ func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Reque
 	if req.TargetUID == "" || req.TargetUID != string(pod.UID) {
 		return fmt.Errorf("adapter-rotate rollback refused: target UID unavailable or changed")
 	}
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return fmt.Errorf("adapter-rotate rollback refused: %w", endpointErr)
+	}
 	adapter, evidenceErr := validateAdapterDispatch(ctx, ec, req, string(pod.UID))
 	if evidenceErr != nil {
 		return fmt.Errorf("adapter-rotate rollback refused: %w", evidenceErr)
@@ -350,7 +364,6 @@ func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Reque
 	if !approved {
 		return fmt.Errorf("adapter-rotate rollback unsupported: no operator-approved source")
 	}
-	ep := endpointForPod(pod)
 	loaded, err := ec.vllm().AdapterLoaded(ctx, ep, adapter)
 	if err != nil {
 		return fmt.Errorf("adapter-rotate rollback inventory unavailable: %w", err)
@@ -433,10 +446,14 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	if next == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur))
 	}
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate serving endpoint configuration: %w", endpointErr))
+	}
 	// (1) apply the variant to the live guardrail first. A K8s annotation is only a
 	// forensic record; it must never turn an unconfirmed filter change into a
 	// successful actuation.
-	aerr := ec.guardrail().ApplyVariant(ctx, endpointForPod(pod), next)
+	aerr := ec.guardrail().ApplyVariant(ctx, ep, next)
 	switch {
 	case aerr == nil:
 	case errors.Is(aerr, errStackUnreachable):
@@ -462,7 +479,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	pod.Labels["phorvex.ai/guardrail-epoch"] = pod.ResourceVersion
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		persistErr := fmt.Errorf("guardrail-rotate record %s/%s: %w", req.Namespace, req.Pod, err)
-		if restoreErr := ec.guardrail().ApplyVariant(ctx, endpointForPod(pod), cur); restoreErr != nil {
+		if restoreErr := ec.guardrail().ApplyVariant(ctx, ep, cur); restoreErr != nil {
 			return HandlerResult{}, errors.Join(persistErr, fmt.Errorf("restore live variant %q: %w", cur, restoreErr))
 		}
 		return HandlerResult{}, persistErr
@@ -483,11 +500,15 @@ func (guardrailRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Req
 	if prev == "" {
 		return nil
 	}
+	ep, endpointErr := validatedEndpointForPod(pod)
+	if endpointErr != nil {
+		return fmt.Errorf("guardrail-rotate rollback refused: %w", endpointErr)
+	}
 	pod.Annotations[annoGuardrailVariant] = prev
 	if err := ec.Client.Update(ctx, pod); err != nil {
 		return err
 	}
-	_ = ec.guardrail().ApplyVariant(ctx, endpointForPod(pod), prev) // best-effort restore of the live filter
+	_ = ec.guardrail().ApplyVariant(ctx, ep, prev) // best-effort restore of the live filter
 	return nil
 }
 
@@ -594,20 +615,18 @@ func normalizeDisaggDNS(host string) (string, error) {
 }
 
 func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "kv-migrate-invalidate", req)
+	pod, refusal, err := authoritativeRawKVPod(ctx, ec, req, "kv-migrate-invalidate")
+	if pod == nil {
+		return refusal, err
 	}
 	peers, err := parseDisaggKVPeers(pod.Annotations[annoDisaggPeers])
 	if err != nil {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("kv-migrate-invalidate invalid %s: %w", annoDisaggPeers, err))
 	}
-	// FAIL-CLOSED: needs an inference/serving workload (a model id or GPU); you do not KV-invalidate a
-	// plain pod.
-	if pod.Labels["app"] == "" && pod.Annotations["phorvex.ai/model-id"] == "" {
-		// soft check: still require a reachable serving endpoint below; this is a clarity guard.
+	ep, reason := declaredKVEndpoint(req, pod)
+	if reason != "" {
+		return refuseAI("kv-migrate-invalidate", reason)
 	}
-	ep := endpointForPod(pod)
 	// (1) LOCAL KV invalidate (REAL where the connector exists).
 	note := "local KV invalidated"
 	ierr := ec.kvxfer().InvalidateLocal(ctx, ep)
