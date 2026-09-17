@@ -449,7 +449,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	default:
 		return HandlerResult{
 			MutationKind: "partial",
-			Note:         fmt.Sprintf("guardrail-rotate serving mutation outcome unknown at %s/%s; no variant or success epoch was written: %v", req.Namespace, req.Pod, aerr),
+			Note:         fmt.Sprintf("guardrail-rotate serving mutation outcome unknown at %s/%s; no variant or success epoch was written", req.Namespace, req.Pod),
 		}, fmt.Errorf("guardrail-rotate apply %q outcome unknown: %w", next, aerr)
 	}
 
@@ -630,7 +630,7 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 	default:
 		return HandlerResult{
 			MutationKind: "partial",
-			Note:         fmt.Sprintf("kv-migrate-invalidate local serving mutation outcome unknown at %s/%s; no local or cross-worker success and no KV epoch were credited: %v", req.Namespace, req.Pod, ierr),
+			Note:         fmt.Sprintf("kv-migrate-invalidate local serving mutation outcome unknown at %s/%s; no local or cross-worker success and no KV epoch were credited", req.Namespace, req.Pod),
 		}, fmt.Errorf("kv-migrate-invalidate local %s/%s outcome unknown: %w", req.Namespace, req.Pod, ierr)
 	}
 	// (2) CROSS-WORKER migrate/invalidate — DEFERRED [PENDING-GPU-VALIDATION] (premortem: local-only

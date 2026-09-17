@@ -269,11 +269,13 @@ func TestM077UnknownMutationCannotStampEpochOrUseNoEffectFallback(t *testing.T) 
 func TestM077RedirectedMutationCannotStampEpochOrRepeatPOST(t *testing.T) {
 	closed := m077ClosedEndpoint(t)
 	location := fmt.Sprintf("http://%s:%d/repeated", closed.podIP, closed.port)
+	const responseMarker = "private-serving-response-marker"
 	var accepted atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		accepted.Add(1)
 		w.Header().Set("Location", location)
 		w.WriteHeader(http.StatusTemporaryRedirect)
+		_, _ = io.WriteString(w, responseMarker)
 	}))
 	defer server.Close()
 	ep := m077Endpoint(t, server.URL)
@@ -283,8 +285,11 @@ func TestM077RedirectedMutationCannotStampEpochOrRepeatPOST(t *testing.T) {
 	pod.Annotations[annoResetPath] = "/"
 	c := fakeC(pod)
 	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &httpVLLM{hc: server.Client()}}, boundReq(pod, model.ActionKVReset))
-	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || !strings.Contains(result.Note, "HTTP 307") {
+	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || !strings.Contains(err.Error(), responseMarker) {
 		t.Fatalf("redirected mutation became success/fallback: accepted=%d result=%+v err=%v", accepted.Load(), result, err)
+	}
+	if strings.Contains(result.Note, responseMarker) || strings.Contains(result.Note, location) {
+		t.Fatalf("retained result Note exposed response or endpoint details: %q", result.Note)
 	}
 	current := &corev1.Pod{}
 	if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {

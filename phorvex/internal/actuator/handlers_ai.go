@@ -648,7 +648,7 @@ func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Hand
 		// result while refusing to credit success or write a false flush epoch.
 		return HandlerResult{
 			MutationKind: "partial",
-			Note:         fmt.Sprintf("kv-reset serving mutation outcome unknown at %s/%s; no success epoch was written: %v", req.Namespace, req.Pod, resetErr),
+			Note:         fmt.Sprintf("kv-reset serving mutation outcome unknown at %s/%s; no success epoch was written", req.Namespace, req.Pod),
 		}, fmt.Errorf("kv-reset %s/%s: serving-stack flush outcome unknown: %w", req.Namespace, req.Pod, resetErr)
 	}
 	// record the flush epoch (forensic + idempotent); pod stays alive.
