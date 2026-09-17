@@ -142,6 +142,27 @@ func TestRouteActionsCarryStableDecisionIdentityToActuator(t *testing.T) {
 	}
 }
 
+func TestM064TraceDisabledServingActionCarriesTickAndStructuredObservation(t *testing.T) {
+	fake := &dispatchFakeActuator{emit: true}
+	manager := &Manager{Actuator: fake, Log: logr.Discard(), DecisionTraceEnabled: false}
+	policy := model.Policy{Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", TickID: "real-tick-id", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
+	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionKVReset, Namespace: "ns", Pod: "p1"}}
+	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{
+		Namespace: "ns", Name: "p1", UID: "target-uid", Ready: true, DesiredReplicas: 1, ReadyReplicas: 1, ServingDeclared: true,
+		KVResetEpoch: model.OwnedValue{Present: true, Value: ""}, KVMigrateEpoch: model.OwnedValue{Present: true, Value: "m1"},
+		KVLocalEffectEpoch: model.OwnedValue{Present: false}, GuardrailEpochObservation: model.OwnedValue{Present: true, Value: ""},
+	}}}
+	if got := actuateWithBoundary(t, manager, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views); got != 1 {
+		t.Fatalf("trace-disabled serving dispatch count=%d", got)
+	}
+	if fake.last.TickID != policy.TickID || fake.last.OperationID != "" || fake.last.ServingObservation == nil ||
+		!fake.last.ServingObservation.KVReset.Present || fake.last.ServingObservation.KVReset.Value != "" ||
+		!fake.last.ServingObservation.KVMigrate.Present || fake.last.ServingObservation.KVMigrate.Value != "m1" ||
+		fake.last.ServingObservation.KVLocalEffect.Present || !fake.last.ServingObservation.Guardrail.Present || fake.last.ServingObservation.Guardrail.Value != "" {
+		t.Fatalf("trace-disabled request lost protected identity/observation: %+v", fake.last)
+	}
+}
+
 func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 	feasibleView := map[string]*model.WorkloadView{
 		"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}},

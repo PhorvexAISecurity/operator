@@ -523,7 +523,7 @@ Severity: MAJOR · Tier: 2 · Fixes: T10-M010
 
 ### M-64 · Epoch-write conflicts discard completed effects · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: MAJOR · Tier: 2 · Fixes: none
+Severity: MAJOR · Tier: 2 · Fixes: T13-M064
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · actuator.native.handlers
@@ -566,7 +566,7 @@ Severity: HIGH · Tier: 2 · Fixes: none
 
 ### M-73 · `okCode` accepts 202 as success for all four control-plane calls · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: MINOR · Tier: 2 · Fixes: none
+Severity: MINOR · Tier: 2 · Fixes: T13-M064
 
 > Anatomy join review: **complete**.
 > `V2` **AFFECTS** (below operation granularity) — see §V2-A.
@@ -1446,7 +1446,7 @@ Severity: MAJOR · Tier: parallel · Fixes: none
 
 ### M-39 · `kv-migrate-invalidate`: local flush, full session credit · **OPEN** · `KNOWLEDGE`
 
-Severity: MAJOR · Tier: parallel · Fixes: none
+Severity: MAJOR · Tier: parallel · Fixes: T13-M064
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · kv-migrate-invalidate MigrateRemote @ internal/actuator/handlers_ai_p4set.go:424

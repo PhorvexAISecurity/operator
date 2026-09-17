@@ -29,7 +29,7 @@ type updateFailClient struct {
 	err error
 }
 
-func (c updateFailClient) Update(context.Context, client.Object, ...client.UpdateOption) error {
+func (c updateFailClient) Patch(context.Context, client.Object, client.Patch, ...client.PatchOption) error {
 	return c.err
 }
 
@@ -138,7 +138,7 @@ func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
 	// Compensation must observe the current serving membership, dispatch the
 	// approved reload only while absent, then observe exact presence.
 	mv.adapterStates = []bool{false, true}
-	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req, req.Namespace+"/"+req.Pod); err != nil {
+	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv, AdapterSources: s}, req, req.Namespace+"/"+req.Pod); err != nil {
 		t.Fatalf("authorized compensation refused: %v", err)
 	}
 	if mv.loadCalls != 2 || mv.loadedSource != "/models/approved" {
@@ -152,7 +152,7 @@ func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
 	if err := c.Update(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
-	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv, AdapterSources: s}, req, ""); err == nil {
+	if err := (adapterRotateHandler{}).Rollback(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv, AdapterSources: s}, req, ""); err == nil {
 		t.Fatal("forged snapshot authorized compensation")
 	}
 	if mv.loadCalls != 2 {
@@ -163,7 +163,7 @@ func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
 func TestAdapterRotateFailClosedNoAdapter(t *testing.T) {
 	c := fakeC(aiPod("ns", "infer", map[string]string{})) // no lora-enabled / no adapter
 	mv := &mockVLLM{}
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
 	if err != nil || hr.Emitted || mv.unloadCalls != 0 {
 		t.Fatal("adapter-rotate must refuse without trusted observation")
 	}
@@ -291,9 +291,10 @@ func guardrailPod(ns, name, cur, alts string) *corev1.Pod {
 }
 
 func TestGuardrailRotatePicksDistinctVariant(t *testing.T) {
-	c := fakeC(guardrailPod("ns", "guard", "v1", "v1,v2,v3"))
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2,v3")
+	c := fakeC(pod)
 	mg := &mockGuardrail{}
-	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: mg}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: mg}, boundReq(pod, model.ActionGuardrailRotate))
 	if err != nil {
 		t.Fatalf("guardrail-rotate: %v", err)
 	}
@@ -309,31 +310,34 @@ func TestGuardrailRotatePicksDistinctVariant(t *testing.T) {
 }
 
 func TestGuardrailRotateFailClosedNoDistinctVariant(t *testing.T) {
-	c := fakeC(guardrailPod("ns", "guard", "v1", "v1")) // only the current variant declared
-	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	pod := guardrailPod("ns", "guard", "v1", "v1")
+	c := fakeC(pod) // only the current variant declared
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil {
 		t.Fatal("guardrail-rotate must FAIL-CLOSED when no DISTINCT variant exists (same blind spot = no MTD)")
 	}
 }
 
 func TestGuardrailRotateFailClosedNotTier(t *testing.T) {
-	c := fakeC(aiPod("ns", "x", map[string]string{}))
-	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{}}, Request{Namespace: "ns", Pod: "x", Action: model.ActionGuardrailRotate})
+	pod := aiPod("ns", "x", map[string]string{})
+	c := fakeC(pod)
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil {
 		t.Fatal("guardrail-rotate must FAIL-CLOSED on a non-guardrail pod")
 	}
 }
 
 func TestGuardrailRotateUnreachableIsNotCreditedOrRecorded(t *testing.T) {
-	c := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
-	hr, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{applyErr: errStackUnreachable}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	pod := guardrailPod("ns", "guard", "v1", "v2")
+	c := fakeC(pod)
+	hr, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{applyErr: errStackUnreachable}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err != nil {
 		t.Fatalf("unreachable guardrail must return an honest unconfirmed result: %v", err)
 	}
 	if hr.Emitted || hr.MutationKind != "none" {
 		t.Errorf("unconfirmed live change must not be credited, got emitted=%v mutation=%q", hr.Emitted, hr.MutationKind)
 	}
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") || !containsStr(hr.Note, "NOT credited") {
+	if !containsStr(hr.Note, "refused before") {
 		t.Errorf("note: %q", hr.Note)
 	}
 	var p corev1.Pod
@@ -352,8 +356,9 @@ func TestGuardrailRotateUnreachableIsNotCreditedOrRecorded(t *testing.T) {
 }
 
 func TestGuardrailRotateReachableFailureDoesNotRecordTransition(t *testing.T) {
-	c := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
-	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: &mockGuardrail{applyErr: errors.New("HTTP 500")}}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	pod := guardrailPod("ns", "guard", "v1", "v2")
+	c := fakeC(pod)
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: &mockGuardrail{applyErr: errors.New("HTTP 500")}}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil {
 		t.Fatal("reachable guardrail failure must fail closed")
 	}
@@ -369,16 +374,17 @@ func TestGuardrailRotateReachableFailureDoesNotRecordTransition(t *testing.T) {
 	}
 }
 
-func TestGuardrailRotateRestoresLiveVariantWhenRecordFails(t *testing.T) {
-	base := fakeC(guardrailPod("ns", "guard", "v1", "v2"))
+func TestGuardrailRotateRetainsConfirmedVariantWhenRecordFails(t *testing.T) {
+	pod := guardrailPod("ns", "guard", "v1", "v2")
+	base := fakeC(pod)
 	c := updateFailClient{Client: base, err: errors.New("Kubernetes write failed")}
 	g := &recordingGuardrail{}
-	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Guardrail: g}, Request{Namespace: "ns", Pod: "guard", Action: model.ActionGuardrailRotate})
+	_, err := guardrailRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: base, JournalNamespace: "operator", Guardrail: g}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil {
 		t.Fatal("an unrecordable live transition must fail")
 	}
-	if len(g.variants) != 2 || g.variants[0] != "v2" || g.variants[1] != "v1" {
-		t.Fatalf("failed Kubernetes record must restore live variant v1, apply sequence=%v", g.variants)
+	if len(g.variants) != 1 || g.variants[0] != "v2" {
+		t.Fatalf("metadata failure must not issue an unsafe compensating POST, apply sequence=%v", g.variants)
 	}
 	var p corev1.Pod
 	if err := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "guard"}, &p); err != nil {
@@ -396,19 +402,27 @@ func TestKVMigrateInvalidatesLocalCrossWorkerDeferred(t *testing.T) {
 	pod.Annotations[annoDisaggPeers] = "10.0.0.2:8000,10.0.0.3:8000"
 	c := fakeC(pod)
 	mk := &mockKVXfer{}
-	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, KVXfer: mk}, boundReq(pod, model.ActionKVMigrateInvalidate))
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", KVXfer: mk}, boundReq(pod, model.ActionKVMigrateInvalidate))
 	if err == nil {
 		t.Fatal("deferred cross-worker result must remain an explicit partial error")
 	}
 	if mk.invCalls != 1 {
 		t.Errorf("must invalidate LOCAL KV once, got %d", mk.invCalls)
 	}
-	// cross-worker is DEFERRED — must be recorded as pending, never claimed done.
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") || !containsStr(hr.Note, "cross-worker") {
+	// Cross-worker dispatch is unimplemented. The durable receipt and public
+	// result must report the exact no-send class rather than claiming completion.
+	if !containsStr(hr.Note, "confirmed=0 not-sent-unimplemented=2 refused-before-send=0") {
 		t.Errorf("cross-worker migrate must be recorded as deferred/pending, %q", hr.Note)
 	}
 	if !hr.Emitted || hr.MutationKind != "partial" {
 		t.Fatalf("confirmed local invalidation disappeared after deferred remote result: %+v", hr)
+	}
+	var current corev1.Pod
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), &current); err != nil {
+		t.Fatal(err)
+	}
+	if current.Annotations[annoKVEpoch] != "" || current.Annotations[annoKVLocalEffect] == "" {
+		t.Fatalf("local-only outcome minted full session credit: annotations=%v", current.Annotations)
 	}
 }
 
@@ -416,11 +430,11 @@ func TestKVMigrateLocalUnreachablePending(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{"app": "infer"})
 	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, KVXfer: &mockKVXfer{invErr: errStackUnreachable}}, boundReq(pod, model.ActionKVMigrateInvalidate))
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", KVXfer: &mockKVXfer{invErr: errStackUnreachable}}, boundReq(pod, model.ActionKVMigrateInvalidate))
 	if err != nil {
 		t.Fatalf("unreachable local invalidate must not error: %v", err)
 	}
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+	if !containsStr(hr.Note, "refused before") {
 		t.Errorf("note: %q", hr.Note)
 	}
 	// TRUTHFULNESS (same class as the kv-reset fail-closed fix): no invalidation was confirmed — local
