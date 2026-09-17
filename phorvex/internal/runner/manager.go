@@ -338,6 +338,40 @@ func clearDispatchResult(d *model.Decision) {
 	d.DispatchOutcome, d.DispatchReason = "", ""
 }
 
+// resetDispatchAttempt removes every result and runtime-boundary field from a
+// prior call while restoring a valid pre-attempt trace state. Decisions may be
+// reused by tests and by audit plumbing; no later early return may serialize a
+// previous emission, brake or kill-switch observation as current evidence.
+func resetDispatchAttempt(d *model.Decision) {
+	clearDispatchResult(d)
+	d.DryRun = false
+	d.DryRunCause = ""
+	d.ActuationBrakeCause = ""
+	d.KillSwitch = false
+	d.KillSwitchCause = ""
+	if d.Measurements != nil {
+		d.Measurements.KillSwitch = model.OptionalBool{Present: true, Value: false}
+	}
+	if d.Existential != nil && d.Existential.Present {
+		d.Existential.EffectStatus = "not-attempted"
+	}
+	reason := "pending-dispatch"
+	if !d.Selected {
+		reason = "unselected"
+	}
+	if d.Trace != nil {
+		d.Trace.DryRun = false
+		d.Trace.DryRunCause = ""
+		d.Trace.ActuationBrakeCause = ""
+		d.Trace.KillSwitchEngaged = false
+		d.Trace.KillSwitchCause = ""
+		if d.Trace.Existential != nil && d.Trace.Existential != d.Existential && d.Trace.Existential.Present {
+			d.Trace.Existential.EffectStatus = "not-attempted"
+		}
+	}
+	stampDispatchEvidence(d, model.DispatchNotAttempted, reason)
+}
+
 func stampKillSwitchRefusal(d *model.Decision, observation KillSwitchObservation) {
 	clearDispatchResult(d)
 	d.KillSwitch = true
@@ -2281,28 +2315,12 @@ func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEn
 }
 
 func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
-	// [M-18 R1-1] Clear prior Phoenix metadata on EVERY supplied decision before ANY
+	// Clear prior result and boundary metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
 	// without entering the per-decision loop at all) and the `!Selected` skip inside it.
-	// Placing it later left two ways for a reused decision to carry a PREVIOUS tick's
-	// SecurityEvent name/UID into a record for a tick that never attempted an emission:
-	// a failed policy setup, and a decision that is no longer selected. Both are
-	// serialized as evidence — audit.Logger.Record calls writeRecord unconditionally,
-	// and OnlySelected gates only the structured log line, not the JSONL — so a stale
-	// identifier would point an investigator at the wrong object. Only a result actually
-	// returned by Actuate in THIS call may repopulate it.
+	// Audit.Record serializes both, so only evidence from THIS call may survive.
 	for i := range decisions {
-		decisions[i].Phoenix = nil
-		decisions[i].DryRun = false
-		decisions[i].DryRunCause = ""
-		decisions[i].ActuationBrakeCause = ""
-		decisions[i].DispatchOutcome = ""
-		decisions[i].DispatchReason = ""
-		if decisions[i].Trace != nil {
-			decisions[i].Trace.DryRun = false
-			decisions[i].Trace.DryRunCause = ""
-			decisions[i].Trace.ActuationBrakeCause = ""
-		}
+		resetDispatchAttempt(&decisions[i])
 	}
 	if state == nil {
 		state = &killSwitchTickState{observation: KillSwitchObservation{Cause: KillSwitchStaticOnly}}

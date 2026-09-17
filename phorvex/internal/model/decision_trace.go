@@ -106,7 +106,7 @@ func SafeDispatchReason(reason string) string {
 		return ""
 	}
 	switch parts[0] {
-	case "kill-switch", "namespace-dry-run", "policy-dry-run", "actuation-brake",
+	case "pending-dispatch", "unselected", "kill-switch", "namespace-dry-run", "policy-dry-run", "actuation-brake",
 		"ensure-policy-failed", "inviolability-guard", "route-preparation-failed",
 		"no-tick-view", "emit-boundary-infeasible", "code-exec-unverified",
 		"emitted-unconfirmed", "outcome-unknown", "deadline-expired",

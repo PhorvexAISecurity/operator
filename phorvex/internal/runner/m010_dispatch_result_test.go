@@ -120,7 +120,7 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 		requestSeen <- r.Method + " " + r.URL.Path
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -143,6 +143,7 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 	decisions := []model.Decision{{
 		Namespace: "ns", Pod: "p1", Action: model.ActionKVReset, Selected: true, Feasible: true,
 		Engine: "p1-coverage", CoverageValue: 4.5, CoveredWeight: 3.5,
+		Trace: &model.DecisionTraceV2{DispatchOutcome: model.DispatchNotAttempted, DispatchReason: "pending-dispatch"},
 	}}
 	policy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	if got := actuateWithBoundary(t, m, context.Background(), m010Entry(), policy, decisions, map[string]*model.WorkloadView{"ns/p1": view}); got != 1 {
@@ -159,6 +160,19 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 	rec := audit.ToRecord(decisions[0])
 	if rec.CoverageValue != 4.5 || rec.CoveredWeight != 3.5 || rec.CoverageBasis != "modeled-selection-opportunity" {
 		t.Fatalf("modeled selection explanation changed: %+v", rec)
+	}
+
+	// Reuse the exact successful decision after the serving endpoint disappears.
+	// The current refusal must replace every success/native field from the first call.
+	server.Close()
+	if got := actuateWithBoundary(t, m, context.Background(), m010Entry(), policy, decisions, map[string]*model.WorkloadView{"ns/p1": view}); got != 0 {
+		t.Fatalf("closed endpoint actuations = %d", got)
+	}
+	d := decisions[0]
+	if d.Actuated || d.DispatchOutcome != model.DispatchRefused || d.DispatchReason != "definite-no-effect-refusal" ||
+		d.Trace.DispatchOutcome != model.DispatchRefused || d.Trace.DispatchReason != "definite-no-effect-refusal" ||
+		d.Handler != string(model.ActionKVReset) || len(d.ObjectsTouched) != 0 || d.RollbackRef != "" || d.MutationKind != "none" || d.Phoenix != nil {
+		t.Fatalf("refusal retained prior success evidence: %+v", d)
 	}
 }
 
