@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 22
+revision: 23
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -88,18 +88,27 @@ checks:
     - phorvex/internal/actuator/m035_endpoint_rotate_apiserver_test.go
     inputs_sha256: f61e707a409d1039067606810e4c05d6992a4ed05378cc3d7e4b9eb883cdca4a
   p3:
-    result: FAIL
+    result: PASS
     by: codex-lead
     artifact: evidence/p3/verdict.md
-    sha256: 8e231549332270445f7830d18b6f34a4f866456b61150da1288b6016db00739d
-    source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
-    at: '2026-09-16T23:19:36+00:00'
+    sha256: ce1486c565627aab7949de79f3a0066a8c637cdbbd2057db3be691eef9781390
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:27:09+00:00'
+    incident_sha256: 00689c72613a21d8142a3a56e4389c661bc142ec57df90859c89077c67dc5c15
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 00689c72613a21d8142a3a56e4389c661bc142ec57df90859c89077c67dc5c15
+    source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
+    at: '2026-09-17T00:27:09+00:00'
+    baseline_sha: 3bb0bc14cd78457d8d85078ef717ef8912848adc
 fix_id: T9-M035
 issues:
 - M-35
 title: '`endpoint-rotate`: unconditional cover, conditional effect'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -144,7 +153,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: FAIL
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -160,10 +169,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-17T00:23:58+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T00:27:13+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:30+00:00'
   by: codex-lead
@@ -245,13 +254,29 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T00:27:10+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T00:27:11+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T9-M035:22:submit
-  from: sol-t9-m035
+  id: T9-M035:23:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 22
+  role: coordinator
+  kind: review
+  revision: 23
 check_history:
 - check: implementation
   result: PASS
@@ -417,3 +442,10 @@ check_history:
   sha256: a13621864f765292a64896578ae547d55a9d4fb7ca9148b3c610a0ea4aa964a9
   source_sha: 013b67d4a98c8cb1677bd955eded2c6a2266466b
   at: '2026-09-17T00:14:16+00:00'
+- check: p3
+  result: FAIL
+  by: codex-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 8e231549332270445f7830d18b6f34a4f866456b61150da1288b6016db00739d
+  source_sha: e76c39ef3a930fc06113803afe575bc22bf82809
+  at: '2026-09-16T23:19:36+00:00'
