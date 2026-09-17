@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -80,12 +80,28 @@ checks:
     inputs:
     - phorvex/internal/actuator
     inputs_sha256: ad6c487efa183f48f5bc95279c619c5f826bc777c665ae0dbaf950921ff10b53
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 613934986c5502fd08b3bee5f7d49c81cfa9d3cfa83d88db43598702beed8756
+    source_sha: b74bc120430d1562e4b1e18a59f5d769b1820622
+    at: '2026-09-17T00:21:20+00:00'
+    baseline_sha: 3bb0bc14cd78457d8d85078ef717ef8912848adc
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: ba5909793c031e0ee25190abdfdf5e7131f9785257ac0506ad2c0d23abbff7bb
+    source_sha: b74bc120430d1562e4b1e18a59f5d769b1820622
+    at: '2026-09-17T00:21:20+00:00'
+    incident_sha256: 613934986c5502fd08b3bee5f7d49c81cfa9d3cfa83d88db43598702beed8756
 fix_id: T9-M071
 issues:
 - M-71
 title: 'adapter-rotate: no post-unload verification; retry errors instead of no-op'
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -130,7 +146,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -146,10 +162,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-17T00:20:47+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T00:21:23+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:38+00:00'
   by: codex-lead
@@ -225,10 +241,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T00:21:21+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T00:21:22+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T9-M071:11:submit
-  from: sol-t9-m071
+  id: T9-M071:12:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 11
+  role: coordinator
+  kind: review
+  revision: 12
