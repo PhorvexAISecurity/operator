@@ -447,7 +447,10 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 				"credited and no variant/epoch record was written",
 		}, nil
 	default:
-		return HandlerResult{}, fmt.Errorf("guardrail-rotate apply %q: %w", next, aerr)
+		return HandlerResult{
+			MutationKind: "partial",
+			Note:         fmt.Sprintf("guardrail-rotate serving mutation outcome unknown at %s/%s; no variant or success epoch was written: %v", req.Namespace, req.Pod, aerr),
+		}, fmt.Errorf("guardrail-rotate apply %q outcome unknown: %w", next, aerr)
 	}
 
 	// (2) persist the confirmed live transition and its rollback snapshot. If this
@@ -625,7 +628,10 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 				"cross-worker invalidation was credited",
 		}, nil
 	default:
-		return HandlerResult{}, fmt.Errorf("kv-migrate-invalidate local %s/%s: %w", req.Namespace, req.Pod, ierr)
+		return HandlerResult{
+			MutationKind: "partial",
+			Note:         fmt.Sprintf("kv-migrate-invalidate local serving mutation outcome unknown at %s/%s; no local or cross-worker success and no KV epoch were credited: %v", req.Namespace, req.Pod, ierr),
+		}, fmt.Errorf("kv-migrate-invalidate local %s/%s outcome unknown: %w", req.Namespace, req.Pod, ierr)
 	}
 	// (2) CROSS-WORKER migrate/invalidate — DEFERRED [PENDING-GPU-VALIDATION] (premortem: local-only
 	// leaves poisoned KV on REMOTE decode workers). Attempted only if disagg peers are declared; the

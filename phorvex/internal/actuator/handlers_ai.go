@@ -644,8 +644,12 @@ func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Hand
 				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — no cache was flushed",
 		}, nil
 	default:
-		// reachable but the admin call failed => FAIL-CLOSED (do not claim a flush).
-		return HandlerResult{}, fmt.Errorf("kv-reset %s/%s: serving-stack flush failed: %w", req.Namespace, req.Pod, resetErr)
+		// The request may have reached the stack. Keep that uncertainty in the
+		// result while refusing to credit success or write a false flush epoch.
+		return HandlerResult{
+			MutationKind: "partial",
+			Note:         fmt.Sprintf("kv-reset serving mutation outcome unknown at %s/%s; no success epoch was written: %v", req.Namespace, req.Pod, resetErr),
+		}, fmt.Errorf("kv-reset %s/%s: serving-stack flush outcome unknown: %w", req.Namespace, req.Pod, resetErr)
 	}
 	// record the flush epoch (forensic + idempotent); pod stays alive.
 	pod.Annotations = ensureMap(pod.Annotations)

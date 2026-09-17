@@ -254,7 +254,7 @@ func TestM077UnknownMutationCannotStampEpochOrUseNoEffectFallback(t *testing.T) 
 	pod.Annotations[annoResetPath] = "/"
 	c := fakeC(pod)
 	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &httpVLLM{hc: &http.Client{Timeout: 10 * time.Millisecond}}}, boundReq(pod, model.ActionKVReset))
-	if accepted.Load() != 1 || err == nil || result.Emitted || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) {
+	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) {
 		t.Fatalf("unknown mutation became success/fallback: accepted=%d result=%+v err=%v", accepted.Load(), result, err)
 	}
 	current := &corev1.Pod{}
@@ -283,7 +283,7 @@ func TestM077RedirectedMutationCannotStampEpochOrRepeatPOST(t *testing.T) {
 	pod.Annotations[annoResetPath] = "/"
 	c := fakeC(pod)
 	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &httpVLLM{hc: server.Client()}}, boundReq(pod, model.ActionKVReset))
-	if accepted.Load() != 1 || err == nil || result.Emitted || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") {
+	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || !strings.Contains(result.Note, "HTTP 307") {
 		t.Fatalf("redirected mutation became success/fallback: accepted=%d result=%+v err=%v", accepted.Load(), result, err)
 	}
 	current := &corev1.Pod{}
@@ -292,6 +292,58 @@ func TestM077RedirectedMutationCannotStampEpochOrRepeatPOST(t *testing.T) {
 	}
 	if current.Annotations[annoKVResetEpoch] != "" {
 		t.Fatal("redirected reset outcome stamped a success epoch")
+	}
+}
+
+func TestM077OtherReceiptlessServingMutationsRetainUnknownOutcome(t *testing.T) {
+	var accepted atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		accepted.Add(1)
+		time.Sleep(100 * time.Millisecond)
+	}))
+	defer server.Close()
+	ep := m077Endpoint(t, server.URL)
+	hc := &http.Client{Timeout: 10 * time.Millisecond}
+
+	guardPod := guardrailPod("ns", "guard", "v1", "v2")
+	guardPod.Status.PodIP = ep.podIP
+	guardPod.Annotations[annoServingPort] = strconv.Itoa(ep.port)
+	guardPod.Annotations[annoGuardrailPath] = "/"
+	guardClient := fakeC(guardPod)
+	guardResult, guardErr := (guardrailRotateHandler{}).Enact(context.Background(), EnactCtx{
+		Client: guardClient, Guardrail: httpGuardrail{v: &httpVLLM{hc: hc}},
+	}, Request{Namespace: guardPod.Namespace, Pod: guardPod.Name, Action: model.ActionGuardrailRotate})
+	if guardErr == nil || !errors.Is(guardErr, errServingOutcomeUnknown) || guardResult.Emitted || guardResult.MutationKind != "partial" || !strings.Contains(guardResult.Note, "outcome unknown") {
+		t.Fatalf("guardrail unknown outcome was erased: result=%+v err=%v", guardResult, guardErr)
+	}
+	currentGuard := &corev1.Pod{}
+	if err := guardClient.Get(context.Background(), client.ObjectKeyFromObject(guardPod), currentGuard); err != nil {
+		t.Fatal(err)
+	}
+	if currentGuard.Annotations[annoGuardrailVariant] != "v1" || currentGuard.Annotations[annoGuardrailSnap] != "" || currentGuard.Labels["phorvex.ai/guardrail-epoch"] != "" {
+		t.Fatalf("guardrail unknown outcome wrote success state: annotations=%v labels=%v", currentGuard.Annotations, currentGuard.Labels)
+	}
+
+	kvPod := aiPod("ns", "infer-kv", map[string]string{"app": "infer"})
+	kvPod.Status.PodIP = ep.podIP
+	kvPod.Annotations[annoServingPort] = strconv.Itoa(ep.port)
+	kvPod.Annotations[annoKVInvalidate] = "/"
+	kvClient := fakeC(kvPod)
+	kvResult, kvErr := (kvMigrateInvalidateHandler{}).Enact(context.Background(), EnactCtx{
+		Client: kvClient, KVXfer: httpKVTransfer{v: &httpVLLM{hc: hc}},
+	}, Request{Namespace: kvPod.Namespace, Pod: kvPod.Name, Action: model.ActionKVMigrateInvalidate})
+	if kvErr == nil || !errors.Is(kvErr, errServingOutcomeUnknown) || kvResult.Emitted || kvResult.MutationKind != "partial" || !strings.Contains(kvResult.Note, "outcome unknown") {
+		t.Fatalf("local KV unknown outcome was erased: result=%+v err=%v", kvResult, kvErr)
+	}
+	currentKV := &corev1.Pod{}
+	if err := kvClient.Get(context.Background(), client.ObjectKeyFromObject(kvPod), currentKV); err != nil {
+		t.Fatal(err)
+	}
+	if currentKV.Annotations[annoKVEpoch] != "" {
+		t.Fatal("local KV unknown outcome wrote a success epoch")
+	}
+	if accepted.Load() != 2 {
+		t.Fatalf("accepted serving mutations=%d, want 2", accepted.Load())
 	}
 }
 
