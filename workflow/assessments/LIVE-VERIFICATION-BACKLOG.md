@@ -64,3 +64,11 @@ The [September 16 observation](20260916-tier5-live/REPORT.md) established recove
 M92 was excluded from Tier3 and remains an open source issue. The current-source audit is now implementing the independently reproduced bounded defensive containment follow-up T11-M092 after the shared transport repair; see [the current plan](20260916-local-continuation/plans/M092.md). The old Tier3 deferral is history, not a new authorization or live prerequisite. Do not mark M92 fixed by completing this backlog. Likewise, an unwired remote KV connector or console applier needs a separately reviewed implementation before claiming its positive live behavior.
 
 No backlog item has been waived. Each future closure must link its evidence and update the owning fix's formal live checks; leave the historical record intact.
+
+## September17 04:39 UTC independent follow-up
+
+PR222 (Tier9) was externally merged at04:13 UTC as `a0e6eb6eedc349b99f06e778169e37fa5f29a0c8`; the complete reviewed local Tier12 predecessor includes that main commit. GitHub billing refusals remain recorded; this observation does not invent green checks or workflow merge approval. Tier10 PR223 and Tier11 PR224 remain open at the last independent GitHub check.
+
+A fresh read-only SSH observation at04:39 UTC finds the actual Phorvex manager `phorvex-phorvex-864bb98794-4d8c6`, UID `c28e87fb-aac7-478a-9cff-a2295cb2cc1c`, on0.4.123 / digest `ea604b0e19d2494fbe4e870bff68d280b120ab3869577b411029add43c927d80`, not Ready, with66 restarts. Its04:38:41 startup log refuses missing `pods/ephemeralcontainers:update` in namespace `ci-reports` for custom-inject actuation. The separately healthy Phoenix operator is not this manager. Argo is Synced to the Tier9 merge and Degraded; that config revision does not prove the running application contains Tier9. No issue-specific live PASS or production approval is inferred.
+
+Retained raw evidence: `.git/phorvex-workflow/local-continuation-20260916/live/20260917T043911Z/`. The five-minute observer remains active. Its local container filter now excludes the feed Job sharing Deployment labels and fingerprints sync revisions; this correction changes no cluster resource and the actual manager still fails readiness.
