@@ -900,6 +900,8 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err := recon.ValidateRegistryCoverKeys(); err != nil {
 		return fmt.Errorf("recon cover-key startup invariant failed: %w", err)
 	}
+	releaseCircuitMetrics := metrics.BindActuationCircuitSource(m.currentActuationCircuits)
+	defer releaseCircuitMetrics()
 	if m.BaseInterval <= 0 {
 		m.BaseInterval = 10 * time.Second
 	}
@@ -944,6 +946,42 @@ func (m *Manager) Start(ctx context.Context) error {
 			t.Reset(max(deadline.Sub(now), time.Duration(0)))
 		}
 	}
+}
+
+// currentActuationCircuits projects the existing bounded failure store at scrape time.
+// Failure and ownership locks are never held together: this first takes an owned failure
+// snapshot, then joins it to currently admitted policy display names. Unknown/retired
+// owners are omitted rather than guessed from their encoded owner key.
+func (m *Manager) currentActuationCircuits(now time.Time) []metrics.ActuationCircuit {
+	open := m.Failures.openByOwner(now)
+	m.mu.RLock()
+	tenantByOwner := make(map[string]string, len(m.policies))
+	for _, entry := range m.policies {
+		if entry != nil {
+			tenantByOwner[entry.ownerKey()] = entry.tenant
+		}
+	}
+	m.mu.RUnlock()
+	type labelKey struct{ tenant, action string }
+	aggregated := make(map[labelKey]int)
+	for key, count := range open {
+		tenant := tenantByOwner[key.owner]
+		if tenant == "" {
+			continue
+		}
+		aggregated[labelKey{tenant: tenant, action: string(key.action)}] += count
+	}
+	rows := make([]metrics.ActuationCircuit, 0, len(aggregated))
+	for key, count := range aggregated {
+		rows = append(rows, metrics.ActuationCircuit{Tenant: key.tenant, Action: key.action, Count: count})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Tenant != rows[j].Tenant {
+			return rows[i].Tenant < rows[j].Tenant
+		}
+		return rows[i].Action < rows[j].Action
+	})
+	return rows
 }
 
 // nextMaintenanceDeadline advances a missed maintenance deadline to the first future
@@ -2314,6 +2352,34 @@ func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEn
 	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState)
 }
 
+func actuationAttemptOutcome(res actuator.Result, err error, disposition actuator.NoEffectDisposition, contradictory bool) metrics.ActuationAttemptOutcome {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return metrics.AttemptDeadline
+	}
+	if disposition == actuator.NoEffectRefused && !contradictory {
+		return metrics.AttemptRefused
+	}
+	if err != nil {
+		return metrics.AttemptError
+	}
+	if contradictory {
+		return metrics.AttemptUnknown
+	}
+	if res.Emitted {
+		return metrics.AttemptAccepted
+	}
+	switch disposition {
+	case actuator.NoEffectSatisfied:
+		return metrics.AttemptSatisfied
+	case actuator.NoEffectReconciled:
+		return metrics.AttemptReconciled
+	case actuator.NoEffectDeclared:
+		return metrics.AttemptDeclared
+	default:
+		return metrics.AttemptUnknown
+	}
+}
+
 func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
 	// Clear prior result and boundary metadata on EVERY supplied decision before ANY
 	// early exit. This must precede both the EnsurePolicy guard below (which returns
@@ -2333,6 +2399,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		for i := range decisions {
 			if decisions[i].Selected {
 				stampKillSwitchRefusal(&decisions[i], boundaryObservation)
+				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressKillSwitch)
 			}
 		}
 		m.Log.Info("kill-switch refused route preparation",
@@ -2345,6 +2412,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		for i := range decisions {
 			if decisions[i].Selected {
 				stampNamespaceDryRun(&decisions[i], namespaceObservation)
+				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressNamespaceDryRun)
 			}
 		}
 		m.Log.Info("namespace dry-run refused route preparation",
@@ -2387,6 +2455,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		for i := range decisions {
 			if decisions[i].Selected {
 				stampDispatchEvidence(&decisions[i], model.DispatchNotAttempted, "ensure-policy-failed")
+				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressEnsurePolicy)
 			}
 		}
 		return 0, &preparation
@@ -2408,11 +2477,13 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			m.Log.Error(nil, "INVARIANT VIOLATION: a selected move was infeasible/noop; refusing to emit",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			stampDispatch(model.DispatchNotAttempted, "inviolability-guard")
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressInviolability)
 			continue
 		}
 		if prepErr := preparation.ForAction(decisions[i].Action); prepErr != nil {
 			m.Log.Error(prepErr, "action route preparation refused; suppressing dispatch", "tenant", pol.Tenant, "namespace", decisions[i].Namespace, "pod", decisions[i].Pod, "action", decisions[i].Action)
 			stampDispatch(model.DispatchNotAttempted, "route-preparation-failed")
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressRoutePreparation)
 			continue
 		}
 		// Same-tick invariant check: evaluate the selected action against the same tick snapshot
@@ -2430,12 +2501,14 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			m.Log.Error(nil, "EMIT-BOUNDARY VETO (fail-closed): no tick view for the target; refusing to actuate",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			stampDispatch(model.DispatchNotAttempted, "no-tick-view")
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressMissingTickView)
 			continue
 		}
 		if verdict := existentialEmitVerdict(decisions[i], v, pol); !verdict.Feasible {
 			m.Log.Error(nil, "EMIT-BOUNDARY INVARIANT VETO: refusing infeasible move at actuate boundary",
 				"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", verdict.Reason)
 			stampDispatch(model.DispatchNotAttempted, "emit-boundary-infeasible")
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressEmitBoundary)
 			continue
 		}
 		// M-6 pre-submit gate: a code-exec injection (debugger/custom-inject) is submitted ONLY
@@ -2449,12 +2522,14 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec verifier unwired; refusing ephemeral-container injection",
 					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 				stampDispatch(model.DispatchNotAttempted, "code-exec-unverified")
+				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressCodeExecUnverified)
 				continue
 			}
 			if ok, why := m.CodeExec.FinalCheck(ctx, decisions[i].Namespace); !ok {
 				m.Log.Error(nil, "M-6 FAIL-CLOSED: code-exec admission not verified at pre-submit; refusing injection",
 					"pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action, "reason", why)
 				stampDispatch(model.DispatchNotAttempted, "code-exec-unverified")
+				metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressCodeExecUnverified)
 				continue
 			}
 		}
@@ -2474,6 +2549,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		dispatchObservation := state.observe(ctx, m.KillSwitch)
 		if dispatchObservation.Engaged {
 			stampKillSwitchRefusal(&decisions[i], dispatchObservation)
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressKillSwitch)
 			m.Log.Info("kill-switch refused selected dispatch",
 				"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
 				"pod", decisions[i].Pod, "action", decisions[i].Action,
@@ -2483,6 +2559,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		namespaceObservation = brakeState.observeNamespace(ctx, m, decisions[i].Namespace)
 		if namespaceObservation.Engaged {
 			stampNamespaceDryRun(&decisions[i], namespaceObservation)
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressNamespaceDryRun)
 			m.Log.Info("namespace dry-run refused selected dispatch",
 				"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
 				"pod", decisions[i].Pod, "action", decisions[i].Action,
@@ -2492,6 +2569,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		podObservation := brakeState.observePod(ctx, m, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
 		if podObservation.Engaged {
 			stampTargetBrake(&decisions[i], podObservation)
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressPodOptOut)
 			m.Log.Info("Pod opt-out refused selected dispatch",
 				"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
 				"pod", decisions[i].Pod, "action", decisions[i].Action,
@@ -2520,10 +2598,22 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		}
 		var res actuator.Result
 		var err error
+		backendInvoked := true
 		if m.QuarantineCapacity != nil {
-			res, err = m.QuarantineCapacity.Actuate(ctx, m.Actuator, request)
+			var provenance actuator.QuarantineCapacityProvenance
+			res, provenance, err = m.QuarantineCapacity.ActuateWithProvenance(ctx, m.Actuator, request)
+			backendInvoked = provenance.BackendInvoked
 		} else {
 			res, err = m.Actuator.Actuate(ctx, request)
+		}
+		if !backendInvoked {
+			stampDispatch(model.DispatchNotAttempted, "quarantine-capacity-refused")
+			recordExistentialEffect(&decisions[i], false)
+			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressQuarantineCapacity)
+			m.Log.Error(err, "quarantine capacity refused dispatch before actuator invocation",
+				"tenant", pol.Tenant, "namespace", decisions[i].Namespace,
+				"pod", decisions[i].Pod, "action", decisions[i].Action)
+			continue
 		}
 		// [M-18] Preserve the Phoenix forensic identity of THIS attempt BEFORE any branch,
 		// so a result carrying real identifiers alongside an error keeps the facts the
@@ -2537,6 +2627,7 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
 		disposition := noEffectDisposition(res, err)
 		contradictoryDisposition := contradictoryNoEffectResult(res, err)
+		metrics.RecordActuationAttempt(pol.Tenant, string(decisions[i].Action), actuationAttemptOutcome(res, err, disposition, contradictoryDisposition))
 		// M-11 emission-window bookkeeping remains conservative about any producer that
 		// reports an attempted emission. Success, intent and learning accounting below
 		// additionally require a coherent result.

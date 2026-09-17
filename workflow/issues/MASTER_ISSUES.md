@@ -538,7 +538,7 @@ Severity: MAJOR · Tier: 2 · Fixes: none
 
 ### M-12 · No actuation-failure metric · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: HIGH · Tier: 2 · Fixes: none
+Severity: HIGH · Tier: 2 · Fixes: T11-M012
 
 > Anatomy join review: **complete**.
 > `V2` **ABSENCE** — no positive locus: no actuation-failure metric exists

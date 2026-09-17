@@ -229,6 +229,28 @@ policy neither authenticates them nor removes or disproves a historical forgery.
 on stored events, inventory the pre-guard ones that read as trusted and reconcile them from
 their actual age and provenance (authorized re-emission by the detector, or retirement).
 
+## Actuation outcome metrics
+
+`phorvex_actuations_total` counts native dispatches and Phoenix submissions accepted by
+their synchronous actuator call. It does not claim the mitigation completed. Use
+`phorvex_actuation_confirmations_total` for the bounded asynchronous Phoenix confirmation
+view and `phorvex_maintenance_attempts_total` for protected-operation recovery.
+
+`phorvex_actuation_attempts_total{tenant,action,outcome}` counts each actual `Actuate`
+invocation once, including a separately invoked fallback. Its closed outcome vocabulary
+separates accepted emission, dispatch error, deadline, unknown effect, explicit no-effect
+refusal, already-satisfied state, reconciled prior operation, and declared-only handling.
+`phorvex_actuation_failures_total{tenant,action,reason}` is the failure/refusal subset with
+the attempt counter as its denominator. Selected actions stopped before `Actuate` appear
+under `phorvex_actuation_suppressions_total`; kill switches, namespace dry-run, Pod opt-out,
+preparation failures, and invariant vetoes are not reported as backend downtime.
+
+`phorvex_actuation_circuit_open{tenant,action}` is the current count of existing target
+retry cooldowns aggregated without Pod or UID labels. It reads the bounded runner cooldown
+store at scrape time, so expiry, accepted dispatch, target/owner retirement, and policy
+replacement withdraw the series without a second retry mechanism. When no live runner owns
+the source, the series is absent rather than a fabricated zero.
+
 ## Honest scope limits (P0)
 
 - The optimizer is the **greedy top-B** the PRD calls the MVP form; the offline

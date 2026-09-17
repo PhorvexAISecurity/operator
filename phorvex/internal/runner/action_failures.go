@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -21,13 +22,19 @@ type failureRecord struct {
 	retry       time.Time
 }
 
-// actionFailures is owned by the serialized tick loop. The controller may retire
-// owners concurrently, so writes are admitted only after Manager's epoch check.
-type actionFailures struct{ at map[failureKey]failureRecord }
+// actionFailures mutations remain owned by the serialized tick/lifecycle paths and are
+// admitted only after Manager's epoch check. The mutex gives Prometheus a concurrent,
+// read-only snapshot without changing retry ownership or backoff semantics.
+type actionFailures struct {
+	mu sync.RWMutex
+	at map[failureKey]failureRecord
+}
 
 const maxFailureRecords = 4096
 
 func (f *actionFailures) observe(k failureKey, now time.Time) failureRecord {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.at == nil {
 		f.at = make(map[failureKey]failureRecord)
 	}
@@ -46,13 +53,19 @@ func (f *actionFailures) observe(k failureKey, now time.Time) failureRecord {
 		r.retry = now.Add(d)
 	}
 	f.at[k] = r
-	f.bound()
+	f.boundLocked()
 	return r
 }
 
-func (f *actionFailures) reset(k failureKey) { delete(f.at, k) }
+func (f *actionFailures) reset(k failureKey) {
+	f.mu.Lock()
+	delete(f.at, k)
+	f.mu.Unlock()
+}
 
 func (f *actionFailures) exclusion(k failureKey, now time.Time) (string, bool) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	r, ok := f.at[k]
 	if !ok || r.retry.IsZero() || !now.Before(r.retry) {
 		return "", false
@@ -61,6 +74,8 @@ func (f *actionFailures) exclusion(k failureKey, now time.Time) (string, bool) {
 }
 
 func (f *actionFailures) retain(owner string, live map[string]struct{}) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for k := range f.at {
 		if k.owner != owner {
 			continue
@@ -72,6 +87,8 @@ func (f *actionFailures) retain(owner string, live map[string]struct{}) {
 }
 
 func (f *actionFailures) forgetOwner(owner string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for k := range f.at {
 		if k.owner == owner {
 			delete(f.at, k)
@@ -79,7 +96,7 @@ func (f *actionFailures) forgetOwner(owner string) {
 	}
 }
 
-func (f *actionFailures) bound() {
+func (f *actionFailures) boundLocked() {
 	if len(f.at) <= maxFailureRecords {
 		return
 	}
@@ -97,4 +114,26 @@ func (f *actionFailures) bound() {
 	for _, k := range keys[:len(keys)-maxFailureRecords] {
 		delete(f.at, k)
 	}
+}
+
+type failureOwnerAction struct {
+	owner  string
+	action model.Action
+}
+
+// openByOwner snapshots only cooldowns that are open at now. Expired records remain useful
+// for the existing consecutive-failure/backoff semantics, but they are never exported as
+// open. The returned map owns its data and can be joined with manager ownership after the
+// failure lock is released.
+func (f *actionFailures) openByOwner(now time.Time) map[failureOwnerAction]int {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	open := make(map[failureOwnerAction]int)
+	for key, record := range f.at {
+		if record.retry.IsZero() || !now.Before(record.retry) {
+			continue
+		}
+		open[failureOwnerAction{owner: key.owner, action: key.action}]++
+	}
+	return open
 }
