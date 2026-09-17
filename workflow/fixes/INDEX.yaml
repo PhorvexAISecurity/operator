@@ -1025,7 +1025,7 @@ fixes:
     dependencies: []
     stacked_on: []
     branch: fix/t11-route
-    head_sha: 308037ab01c1a0ad38ec2366b7820d84d10894cc
+    head_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
   T10-M077:
     directory: fixes/T10-M077
     aliases: []
