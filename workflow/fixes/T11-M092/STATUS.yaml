@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -65,13 +65,29 @@ checks:
     sha256: 07b0025cb03dd8c9f65e095d74f00be5c07009314858c69a52826419e18d8b3e
     source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
     at: '2026-09-17T04:07:20+00:00'
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: c3f13480f0bc3385c47c6e2c2cbbb60584a9cfe55e9c28efa09acfb5f4857431
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:11:06+00:00'
+    baseline_sha: 9121876f905e11c4cad35cdf8f61ca8e290a6f68
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 60fa63b31e365a9851496225d28a2ba60ae53d8c7afee0d5a05239719aef10b5
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:11:06+00:00'
+    incident_sha256: c3f13480f0bc3385c47c6e2c2cbbb60584a9cfe55e9c28efa09acfb5f4857431
 fix_id: T11-M092
 issues:
 - M-92
 - M-75
 title: Contain serving control destinations and reject undeclared KV targets
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -116,7 +132,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -132,10 +148,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-17T04:07:23+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T04:11:09+00:00'
 follow_up_to: T3-M092
 configuration_history:
 - at: '2026-09-17T03:03:45+00:00'
@@ -197,10 +213,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T04:11:07+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T04:11:08+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T11-M092:8:submit
-  from: sol-t11-m092
+  id: T11-M092:9:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 8
+  role: coordinator
+  kind: review
+  revision: 9
