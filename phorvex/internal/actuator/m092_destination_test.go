@@ -134,6 +134,8 @@ func TestM092ValidDefaultAndOverrideRoutesReachOnlySelectedPod(t *testing.T) {
 			_, _ = w.Write([]byte(`{"aborted":1}`))
 		case strings.HasSuffix(r.URL.Path, "/health"):
 			w.WriteHeader(http.StatusOK)
+		case strings.HasSuffix(r.URL.Path, "/reset"):
+			_, _ = w.Write([]byte(`{"success":true}`))
 		default:
 			w.WriteHeader(http.StatusNoContent)
 		}
