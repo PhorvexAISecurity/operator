@@ -474,7 +474,7 @@ func TestM075RawKVHandlerPreservesDeclaredCPUAndPortServingTargets(t *testing.T)
 			}
 			kube := fakeC(pod)
 			before := requests.Load()
-			result, err := (kvMigrateInvalidateHandler{}).Enact(context.Background(), EnactCtx{Client: kube, Reader: kube, KVXfer: httpKVTransfer{v: v}}, boundReq(pod, model.ActionKVMigrateInvalidate))
+			result, err := (kvMigrateInvalidateHandler{}).Enact(context.Background(), EnactCtx{Client: kube, Reader: kube, JournalNamespace: "operator", KVXfer: httpKVTransfer{v: v}}, boundReq(pod, model.ActionKVMigrateInvalidate))
 			if err != nil || !result.Emitted || requests.Load() != before+1 {
 				t.Fatalf("declared target failed: result=%+v requests=%d->%d err=%v", result, before, requests.Load(), err)
 			}

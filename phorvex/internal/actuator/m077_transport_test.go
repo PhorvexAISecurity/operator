@@ -253,8 +253,8 @@ func TestM077UnknownMutationCannotStampEpochOrUseNoEffectFallback(t *testing.T) 
 	pod.Annotations[annoServingPort] = strconv.Itoa(ep.port)
 	pod.Annotations[annoResetPath] = "/"
 	c := fakeC(pod)
-	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &httpVLLM{hc: &http.Client{Timeout: 10 * time.Millisecond}}}, boundReq(pod, model.ActionKVReset))
-	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) {
+	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &httpVLLM{hc: &http.Client{Timeout: 10 * time.Millisecond}}}, boundReq(pod, model.ActionKVReset))
+	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "protected phase dispatching") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) {
 		t.Fatalf("unknown mutation became success/fallback: accepted=%d result=%+v err=%v", accepted.Load(), result, err)
 	}
 	current := &corev1.Pod{}
@@ -284,8 +284,8 @@ func TestM077RedirectedMutationCannotStampEpochOrRepeatPOST(t *testing.T) {
 	pod.Annotations[annoServingPort] = strconv.Itoa(ep.port)
 	pod.Annotations[annoResetPath] = "/"
 	c := fakeC(pod)
-	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &httpVLLM{hc: server.Client()}}, boundReq(pod, model.ActionKVReset))
-	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || strings.Contains(err.Error(), responseMarker) {
+	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &httpVLLM{hc: server.Client()}}, boundReq(pod, model.ActionKVReset))
+	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "protected phase dispatching") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || strings.Contains(err.Error(), responseMarker) {
 		t.Fatalf("redirected mutation became success/fallback: accepted=%d result=%+v err=%v", accepted.Load(), result, err)
 	}
 	if strings.Contains(result.Note, responseMarker) || strings.Contains(result.Note, location) {
@@ -316,9 +316,9 @@ func TestM077OtherReceiptlessServingMutationsRetainUnknownOutcome(t *testing.T) 
 	guardPod.Annotations[annoGuardrailPath] = "/"
 	guardClient := fakeC(guardPod)
 	guardResult, guardErr := (guardrailRotateHandler{}).Enact(context.Background(), EnactCtx{
-		Client: guardClient, Guardrail: httpGuardrail{v: &httpVLLM{hc: hc}},
-	}, Request{Namespace: guardPod.Namespace, Pod: guardPod.Name, Action: model.ActionGuardrailRotate})
-	if guardErr == nil || !errors.Is(guardErr, errServingOutcomeUnknown) || guardResult.Emitted || guardResult.MutationKind != "partial" || !strings.Contains(guardResult.Note, "outcome unknown") {
+		Client: guardClient, Reader: guardClient, JournalNamespace: "operator", Guardrail: httpGuardrail{v: &httpVLLM{hc: hc}},
+	}, boundReq(guardPod, model.ActionGuardrailRotate))
+	if guardErr == nil || !errors.Is(guardErr, errServingOutcomeUnknown) || guardResult.Emitted || guardResult.MutationKind != "partial" || !strings.Contains(guardResult.Note, "protected phase dispatching") {
 		t.Fatalf("guardrail unknown outcome was erased: result=%+v err=%v", guardResult, guardErr)
 	}
 	currentGuard := &corev1.Pod{}
@@ -335,9 +335,9 @@ func TestM077OtherReceiptlessServingMutationsRetainUnknownOutcome(t *testing.T) 
 	kvPod.Annotations[annoKVInvalidate] = "/"
 	kvClient := fakeC(kvPod)
 	kvResult, kvErr := (kvMigrateInvalidateHandler{}).Enact(context.Background(), EnactCtx{
-		Client: kvClient, Reader: kvClient, KVXfer: httpKVTransfer{v: &httpVLLM{hc: hc}},
+		Client: kvClient, Reader: kvClient, JournalNamespace: "operator", KVXfer: httpKVTransfer{v: &httpVLLM{hc: hc}},
 	}, boundReq(kvPod, model.ActionKVMigrateInvalidate))
-	if kvErr == nil || !errors.Is(kvErr, errServingOutcomeUnknown) || kvResult.Emitted || kvResult.MutationKind != "partial" || !strings.Contains(kvResult.Note, "outcome unknown") {
+	if kvErr == nil || !errors.Is(kvErr, errServingOutcomeUnknown) || kvResult.Emitted || kvResult.MutationKind != "partial" || !strings.Contains(kvResult.Note, "protected phase dispatching") {
 		t.Fatalf("local KV unknown outcome was erased: result=%+v err=%v", kvResult, kvErr)
 	}
 	currentKV := &corev1.Pod{}

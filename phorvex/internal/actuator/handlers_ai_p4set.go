@@ -448,91 +448,13 @@ func (guardrailRotateHandler) Name() string { return string(model.ActionGuardrai
 func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
 	req.Action = model.ActionGuardrailRotate
 	ec.ServingRequest = req
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "guardrail-rotate", req)
-	}
-	if pod.Labels[labelGuardrailTier] != "true" || pod.Annotations[annoGuardrailAlts] == "" {
-		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate GuardrailUnavailable: pod %s/%s is not %s / declares no %s [PENDING-GPU-VALIDATION]", req.Namespace, req.Pod, labelGuardrailTier, annoGuardrailAlts))
-	}
-	cur := pod.Annotations[annoGuardrailVariant]
-	// PREMORTEM: pick a DISTINCT variant (same blind spot = no MTD diversity = no help).
-	next := ""
-	for _, v := range strings.Split(pod.Annotations[annoGuardrailAlts], ",") {
-		if v = strings.TrimSpace(v); v != "" && v != cur {
-			next = v
-			break
-		}
-	}
-	if next == "" {
-		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur))
-	}
-	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
-	if endpointErr != nil {
-		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate serving endpoint configuration: %w", endpointErr))
-	}
-	// (1) apply the variant to the live guardrail first. A K8s annotation is only a
-	// forensic record; it must never turn an unconfirmed filter change into a
-	// successful actuation.
-	aerr := ec.guardrail().ApplyVariant(ctx, ep, next)
-	switch {
-	case aerr == nil:
-	case errors.Is(aerr, errStackUnreachable):
-		return HandlerResult{
-			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
-			Note: "[PENDING-GPU-VALIDATION] guardrail-rotate outcome unconfirmed: guardrail service " +
-				"unreachable at " + req.Namespace + "/" + req.Pod + " — live filter change was NOT " +
-				"credited and no variant/epoch record was written",
-		}, nil
-	default:
-		return HandlerResult{
-			MutationKind: "partial",
-			Note:         fmt.Sprintf("guardrail-rotate serving mutation outcome unknown at %s/%s; no variant or success epoch was written", req.Namespace, req.Pod),
-		}, fmt.Errorf("guardrail-rotate apply %q outcome unknown: %w", next, aerr)
-	}
-
-	// (2) persist the confirmed live transition and its rollback snapshot. If this
-	// write fails, restore the live filter so runtime and Kubernetes do not diverge.
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[annoGuardrailSnap] = cur
-	pod.Annotations[annoGuardrailVariant] = next
-	pod.Labels = ensureMap(pod.Labels)
-	pod.Labels["phorvex.ai/guardrail-epoch"] = pod.ResourceVersion
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		persistErr := fmt.Errorf("guardrail-rotate record %s/%s: %w", req.Namespace, req.Pod, err)
-		if restoreErr := ec.guardrail().ApplyVariant(ctx, ep, cur); restoreErr != nil {
-			return HandlerResult{}, errors.Join(persistErr, fmt.Errorf("restore live variant %q: %w", cur, restoreErr))
-		}
-		return HandlerResult{}, persistErr
-	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod)},
-		Note:           "guardrail-rotate: variant " + cur + " -> " + next + " applied to the guardrail service (bypass staled)",
-	}, nil
+	return enactProtectedGuardrail(ctx, ec, req)
 }
 
-func (guardrailRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, _ string) error {
+func (guardrailRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
 	req.Action = model.ActionGuardrailRotate
 	ec.ServingRequest = req
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return orGone(err, ok, "guardrail-rotate-rollback", req)
-	}
-	prev := pod.Annotations[annoGuardrailSnap]
-	if prev == "" {
-		return nil
-	}
-	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
-	if endpointErr != nil {
-		return fmt.Errorf("guardrail-rotate rollback refused: %w", endpointErr)
-	}
-	pod.Annotations[annoGuardrailVariant] = prev
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return err
-	}
-	_ = ec.guardrail().ApplyVariant(ctx, ep, prev) // best-effort restore of the live filter
-	return nil
+	return rollbackProtectedGuardrail(ctx, ec, req, ref)
 }
 
 // --- 16. kv-migrate-invalidate — disaggregated P/D KV (local real, cross-worker deferred) --
@@ -601,7 +523,7 @@ func parseDisaggKVPeers(raw string) ([]string, error) {
 		}
 		normalized := net.JoinHostPort(normalizedHost, strconv.FormatUint(port, 10))
 		if _, duplicate := seen[normalized]; duplicate {
-			continue
+			return nil, fmt.Errorf("peer %d duplicates normalized endpoint %q", i+1, normalized)
 		}
 		seen[normalized] = struct{}{}
 		peers = append(peers, normalized)
@@ -640,73 +562,7 @@ func normalizeDisaggDNS(host string) (string, error) {
 func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
 	req.Action = model.ActionKVMigrateInvalidate
 	ec.ServingRequest = req
-	pod, refusal, err := authoritativeRawKVPod(ctx, ec, req, "kv-migrate-invalidate")
-	if pod == nil {
-		return refusal, err
-	}
-	peers, err := parseDisaggKVPeers(pod.Annotations[annoDisaggPeers])
-	if err != nil {
-		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("kv-migrate-invalidate invalid %s: %w", annoDisaggPeers, err))
-	}
-	ep, reason := declaredKVEndpoint(ctx, ec, req, pod)
-	if reason != "" {
-		return refuseAI("kv-migrate-invalidate", reason)
-	}
-	// (1) LOCAL KV invalidate (REAL where the connector exists).
-	note := "local KV invalidated"
-	ierr := ec.kvxfer().InvalidateLocal(ctx, ep)
-	switch {
-	case ierr == nil:
-	case errors.Is(ierr, errStackUnreachable):
-		// [FAIL-CLOSED FIX] The local invalidate did not return a confirmed success. A dial failure
-		// means it did not run; a timeout leaves the outcome unknown. In neither case may we claim that
-		// local or remote KV was invalidated. This branch used to fall through and return
-		// Emitted:true after stamping a kv-epoch, the same false-forensic-record class already fixed
-		// in kv-reset: a poisoned KV that was never invalidated was counted as a real actuation. The
-		// invalidate IS the whole move (there is no stack-independent half), so report NOT emitted and
-		// write no epoch — a KV epoch for an invalidate that never ran is a false forensic record.
-		return HandlerResult{
-			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
-			Note: "[PENDING-GPU-VALIDATION] kv-migrate-invalidate outcome unconfirmed: no usable " +
-				"serving-stack response at " + req.Namespace + "/" + req.Pod + " — no local or " +
-				"cross-worker invalidation was credited",
-		}, nil
-	default:
-		return HandlerResult{
-			MutationKind: "partial",
-			Note:         fmt.Sprintf("kv-migrate-invalidate local serving mutation outcome unknown at %s/%s; no local or cross-worker success and no KV epoch were credited", req.Namespace, req.Pod),
-		}, fmt.Errorf("kv-migrate-invalidate local %s/%s outcome unknown: %w", req.Namespace, req.Pod, ierr)
-	}
-	// (2) CROSS-WORKER migrate/invalidate — DEFERRED [PENDING-GPU-VALIDATION] (premortem: local-only
-	// leaves poisoned KV on REMOTE decode workers). Attempted only if disagg peers are declared; the
-	// real impl returns the deferred sentinel, recorded honestly (never fabricated).
-	var remoteErr error
-	if len(peers) > 0 {
-		remoteErr = ec.kvxfer().MigrateRemote(ctx, ep, peers)
-		if remoteErr == nil {
-			note += fmt.Sprintf("; cross-worker connector confirmed its operation for %d validated peer(s)", len(peers))
-		} else {
-			note += "; cross-worker outcome unconfirmed: " + remoteErr.Error()
-		}
-	} else {
-		note += "; cross-worker migrate: not attempted (no disagg peers declared) [PENDING-GPU-VALIDATION]"
-	}
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[annoKVEpoch] = pod.ResourceVersion
-	updateErr := ec.Client.Update(ctx, pod)
-	result := HandlerResult{Emitted: true, MutationKind: "forward-only", Note: "kv-migrate-invalidate: " + note}
-	if updateErr == nil {
-		result.ObjectsTouched = []string{objRef("Pod", req.Namespace, req.Pod)}
-	} else {
-		result.MutationKind = "partial"
-		result.Note += "; local effect occurred but the KV epoch record failed"
-		updateErr = fmt.Errorf("kv-migrate-invalidate epoch %s/%s: %w", req.Namespace, req.Pod, updateErr)
-	}
-	if remoteErr != nil {
-		result.MutationKind = "partial"
-		remoteErr = fmt.Errorf("kv-migrate-invalidate cross-worker operation: %w", remoteErr)
-	}
-	return result, errors.Join(remoteErr, updateErr)
+	return enactProtectedKVMigrate(ctx, ec, req)
 }
 
 func init() {

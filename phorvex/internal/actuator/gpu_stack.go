@@ -223,6 +223,11 @@ var errStackUnreachable = errors.New("serving endpoint unreachable [PENDING-GPU-
 // definitely unreachable endpoint.
 var errServingOutcomeUnknown = errors.New("serving request outcome unknown")
 
+// errServingQueued records an explicit 202 response. The backend accepted work
+// but did not prove its effect synchronously, so protected callers retain the
+// dispatch obligation and must not stamp success metadata or retry the POST.
+var errServingQueued = errors.New("serving request accepted asynchronously")
+
 type definiteServingUnreachableError struct{ cause error }
 
 func (e *definiteServingUnreachableError) Error() string {

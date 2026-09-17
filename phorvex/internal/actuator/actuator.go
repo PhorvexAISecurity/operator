@@ -86,7 +86,9 @@ type Request struct {
 	TargetUID          string                    // Bound identity from the selecting snapshot.
 	TargetNamespaceUID string                    // Bound by the protected quarantine-capacity reservation.
 	OperationID        string                    // Stable decision identity for protected quarantine and route operations.
-	PolicyName         string                    // Selecting PhorvexPolicy identity for recoverable native operations.
+	TickID             string                    // Real selection tick; protected serving operation IDs are recomputed from it.
+	ServingObservation *ServingSelectionObservation
+	PolicyName         string // Selecting PhorvexPolicy identity for recoverable native operations.
 	PolicyUID          string
 
 	Tenant    string
@@ -100,11 +102,19 @@ type Request struct {
 	CoverageValue *float64
 }
 
-// Result records what was emitted (used by the audit log + integration proof). The
+// ServingSelectionObservation is the presence-aware metadata snapshot selected
+// by the runner. It is compared with a fresh exact-UID Pod before a protected
+// serving receipt may dispatch.
+type ServingSelectionObservation struct {
+	KVReset, KVMigrate, KVLocalEffect, Guardrail model.OwnedValue
+}
+
+// Result records observed effect provenance (used by the audit log + integration proof). The
 // Phoenix-path fields (AMTDName/EventName/RuleType/RuleThreatLevel/RuleSource) are empty
 // for the native actuator; the neutral fields (Handler/ObjectsTouched/RollbackRef/
-// MutationKind) carry native effects. Emitted is the universal success flag the runner
-// checks at the actuate boundary, regardless of actuator.
+// MutationKind) carry native effects. Emitted may also accompany an error when an effect
+// was confirmed but later bookkeeping failed; completion requires coherent outcome and
+// error handling at the runner boundary.
 type Result struct {
 	Note string
 	// NoEffect is set only when a reviewed, non-emitted result positively proves
