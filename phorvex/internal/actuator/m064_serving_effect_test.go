@@ -349,6 +349,7 @@ func TestM036PreparedGuardrailRecoveryUsesFixedRosterIntent(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pod := guardrailPod("ns", "guard", "v1", tc.roster)
+			pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 			receipt := m064PreparedReceipt(pod, model.ActionGuardrailRotate, "m036-recovery")
 			receipt.PriorVariant, receipt.NextVariant = "v1", "v2"
 			if !receipt.valid() {
@@ -359,6 +360,9 @@ func TestM036PreparedGuardrailRecoveryUsesFixedRosterIntent(t *testing.T) {
 			req := boundReq(pod, model.ActionGuardrailRotate)
 			req.TickID = receipt.TickID
 			ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: stack, ServingSecurity: legacyServingSecurityForTest(t), ServingRequest: req}
+			if err := prepareServingAttempt(context.Background(), &ec, req); err != nil {
+				t.Fatal(err)
+			}
 			cm, recorded, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionGuardrailRotate)
 			if err != nil {
 				t.Fatal(err)
