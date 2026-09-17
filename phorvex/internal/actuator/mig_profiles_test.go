@@ -79,3 +79,62 @@ func TestMIGProfilesSetterTakesValidatedImmutableSnapshot(t *testing.T) {
 		t.Fatal("invalid profile configuration gained authority through setter")
 	}
 }
+
+func TestM177MIGProfilesRequireExactPublishedJSONKeys(t *testing.T) {
+	validRule := `{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","profile":"2g.20gb"}`
+	refusals := map[string]string{
+		"root-version-alias":                 `{"Version":1,"rules":[]}`,
+		"root-rules-alias":                   `{"version":1,"Rules":[]}`,
+		"entry-namespace-alias":              `{"version":1,"rules":[{"Namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","profile":"2g.20gb"}]}`,
+		"entry-resource-alias":               `{"version":1,"rules":[{"namespace":"tenant","Resource":"nvidia.com/mig-1g.10gb","profile":"2g.20gb"}]}`,
+		"entry-profile-alias":                `{"version":1,"rules":[{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","Profile":"2g.20gb"}]}`,
+		"root-canonical-then-alias":          `{"version":9,"Version":1,"rules":[]}`,
+		"root-alias-then-canonical":          `{"Version":9,"version":1,"rules":[]}`,
+		"entry-canonical-then-alias":         `{"version":1,"rules":[{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","profile":"bad","Profile":"2g.20gb"}]}`,
+		"entry-alias-then-canonical":         `{"version":1,"rules":[{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","Profile":"bad","profile":"2g.20gb"}]}`,
+		"root-escaped-decoded-duplicate":     `{"ver\u0073ion":9,"version":1,"rules":[]}`,
+		"entry-escaped-decoded-duplicate":    `{"version":1,"rules":[{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","pro\u0066ile":"bad","profile":"2g.20gb"}]}`,
+		"root-literal-duplicate":             `{"version":9,"version":1,"rules":[]}`,
+		"entry-literal-duplicate":            `{"version":1,"rules":[{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb","profile":"bad","profile":"2g.20gb"}]}`,
+		"missing-version":                    `{"rules":[]}`,
+		"missing-entry-profile":              `{"version":1,"rules":[{"namespace":"tenant","resource":"nvidia.com/mig-1g.10gb"}]}`,
+		"invalid-version-type":               `{"version":"1","rules":[]}`,
+		"invalid-rules-type":                 `{"version":1,"rules":{}}`,
+		"invalid-entry-type":                 `{"version":1,"rules":["not-an-object"]}`,
+		"unknown-canonical-looking-root-key": `{"version":1,"rules":[],"Profiles":[]}`,
+	}
+	for name, body := range refusals {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "profiles.json")
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadMIGProfilesFile(path); err == nil {
+				t.Fatalf("accepted ambiguous or invalid MIG profile document: %s", body)
+			}
+		})
+	}
+
+	for name, body := range map[string]string{
+		"omitted-rules":  `{"version":1}`,
+		"empty-rules":    `{"version":1,"rules":[]}`,
+		"canonical-rule": `{"version":1,"rules":[` + validRule + `]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "profiles.json")
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			profiles, err := LoadMIGProfilesFile(path)
+			if err != nil {
+				t.Fatalf("canonical MIG profile document rejected: %v", err)
+			}
+			if name == "canonical-rule" {
+				rule, err := profiles.Resolve("tenant", "nvidia.com/mig-1g.10gb")
+				if err != nil || rule.Profile != "2g.20gb" {
+					t.Fatalf("canonical lookup: rule=%+v err=%v", rule, err)
+				}
+			}
+		})
+	}
+}
