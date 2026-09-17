@@ -128,15 +128,11 @@ func Check(parent context.Context, reader client.Reader, reviews SSARClient, cfg
 	if report.ActivePolicies == 0 {
 		return report, nil
 	}
-	// Native and hybrid managers reconcile protected receipts before due policies.
-	// Recovery can require CAS advancement, exact cleanup, or acquisition of a
-	// missing route target guard even after the originating policy was disabled.
-	// Therefore the boot contract covers the full protected-journal lifecycle,
-	// independent of the actions enabled by the current policy set.
+	// Native and hybrid managers inventory protected receipts before due policies.
+	// Mutation permissions stay action-specific below: an unrelated rotate-only
+	// policy does not need authority to create or update recovery receipts.
 	if cfg.Backend == actuator.BackendNative || cfg.Backend == actuator.BackendHybrid {
-		for _, verb := range []string{"get", "list", "create", "update", "delete"} {
-			add(requirements, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: verb}, Reason: "native protected recovery journal"})
-		}
+		add(requirements, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: "list"}, Reason: "native protected recovery journal inventory"})
 	}
 	if cfg.MIGAgent != nil {
 		if cfg.MIGAgent.Namespace == "" || cfg.MIGAgent.DaemonSet == "" {
