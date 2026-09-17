@@ -383,7 +383,7 @@ type Pod struct {
 	ServingEndpointReady bool   // ServingDeclared plus Ready and an assigned PodIP; still not a protocol/loaded-model probe
 	RouteService         string // phorvex.ai/route-service annotation
 	RouteServiceReady    bool   // declared route Service exists in this namespace and can be restitched
-	GuardrailVariants    int    // distinct current+alternate guardrail variants declared
+	GuardrailVariants    int    // distinct members of a valid complete ordered guardrail roster
 	ParallelSize         int    // phorvex.ai/parallel-size; <=0 means absent or invalid
 }
 

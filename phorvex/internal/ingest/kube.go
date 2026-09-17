@@ -556,13 +556,11 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 }
 
 func distinctGuardrailVariants(current, alternatives string) int {
-	seen := map[string]struct{}{}
-	for _, value := range append([]string{current}, strings.Split(alternatives, ",")...) {
-		if value = strings.TrimSpace(value); value != "" {
-			seen[value] = struct{}{}
-		}
+	roster, err := servingcontext.ParseGuardrailRoster(current, alternatives)
+	if err != nil {
+		return 0
 	}
-	return len(seen)
+	return len(roster.Variants)
 }
 
 // primaryImageID returns the running image digest of the primary container — spec

@@ -65,6 +65,7 @@ REQUIRED = {
         'TestRouteCutoverActualAPIAndKCMEndpointSliceLifecycle',
         'TestM093RealAPISecretAuthorizationAndProtectedTLSRecovery',
         'TestM064RealAPIAcknowledgementCASAndLifecycle',
+        'TestM036RealAPITLSOrderedGuardrailRosterLifecycle',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',

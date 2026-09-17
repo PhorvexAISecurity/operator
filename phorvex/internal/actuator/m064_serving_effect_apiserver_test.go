@@ -29,11 +29,12 @@ import (
 )
 
 type m064HTTPReceiver struct {
-	calls  atomic.Int32
-	mu     sync.Mutex
-	status int
-	hook   func() error
-	token  string
+	calls    atomic.Int32
+	mu       sync.Mutex
+	status   int
+	hook     func() error
+	token    string
+	variants []string
 }
 
 func (r *m064HTTPReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -50,6 +51,17 @@ func (r *m064HTTPReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.calls.Add(1)
 	r.mu.Lock()
 	status, hook, token := r.status, r.hook, r.token
+	if req.URL.Path == defaultGuardPath {
+		var body struct {
+			Variant string `json:"variant"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Variant == "" {
+			r.mu.Unlock()
+			http.Error(w, "invalid guardrail payload", http.StatusBadRequest)
+			return
+		}
+		r.variants = append(r.variants, body.Variant)
+	}
 	r.hook = nil
 	r.mu.Unlock()
 	if token != "" && req.Header.Get("Authorization") != "Bearer "+token {
@@ -72,6 +84,12 @@ func (r *m064HTTPReceiver) configure(status int, token string, hook func() error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.status, r.token, r.hook = status, token, hook
+}
+
+func (r *m064HTTPReceiver) observedVariants() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.variants...)
 }
 
 type m064APIFaultClient struct {

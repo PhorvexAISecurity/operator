@@ -251,7 +251,7 @@ func TestM064PostClaimAuthorityAndEndpointChangesPreventSend(t *testing.T) {
 }
 
 func TestM064GuardrailPriorVariantChangesAfterClaimPreventSend(t *testing.T) {
-	pod := guardrailPod("ns", "guard", "v1", "v2")
+	pod := guardrailPod("ns", "guard", "v1", "v1,v2")
 	base := fakeC(pod)
 	guarded := &m064AfterClaimClient{Client: base, mutate: func(ctx context.Context, c client.Client) error {
 		current := &corev1.Pod{}
@@ -265,6 +265,118 @@ func TestM064GuardrailPriorVariantChangesAfterClaimPreventSend(t *testing.T) {
 	result, err := (guardrailRotateHandler{}).Enact(context.Background(), EnactCtx{Client: guarded, Reader: guarded, JournalNamespace: "operator", Guardrail: stack}, boundReq(pod, model.ActionGuardrailRotate))
 	if err == nil || result.MutationKind != "partial" || len(stack.variants) != 0 || !guarded.fired {
 		t.Fatalf("changed prior variant escaped: result=%+v variants=%v fired=%t err=%v", result, stack.variants, guarded.fired, err)
+	}
+}
+
+func TestM036GuardrailReceiptClassificationPrecedesRosterRefusal(t *testing.T) {
+	t.Run("terminal-same-operation-reconciles-malformed-roster", func(t *testing.T) {
+		pod := guardrailPod("ns", "guard", "v1", "v1,v2")
+		c := fakeC(pod)
+		stack := &mockGuardrail{}
+		ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: stack}
+		req := boundReq(pod, model.ActionGuardrailRotate)
+		req.TickID = "m036-terminal"
+		first, err := (guardrailRotateHandler{}).Enact(context.Background(), ec, req)
+		if err != nil || !first.Emitted || stack.applyCalls != 1 {
+			t.Fatalf("terminal prerequisite: result=%+v calls=%d err=%v", first, stack.applyCalls, err)
+		}
+		current := &corev1.Pod{}
+		if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {
+			t.Fatal(err)
+		}
+		current.Annotations[annoGuardrailAlts] = "v1,,v2"
+		if err := c.Update(context.Background(), current); err != nil {
+			t.Fatal(err)
+		}
+		cm, before, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionGuardrailRotate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		retry, err := (guardrailRotateHandler{}).Enact(context.Background(), ec, req)
+		if err != nil || retry.Emitted || retry.NoEffect != NoEffectReconciled || stack.applyCalls != 1 {
+			t.Fatalf("same operation did not reconcile before roster refusal: result=%+v calls=%d err=%v", retry, stack.applyCalls, err)
+		}
+		fresh := boundReq(current, model.ActionGuardrailRotate)
+		fresh.TickID = "m036-fresh"
+		refused, err := (guardrailRotateHandler{}).Enact(context.Background(), ec, fresh)
+		if err == nil || !IsNoEffectRefusal(err) || refused.Emitted || stack.applyCalls != 1 {
+			t.Fatalf("fresh operation used malformed roster: result=%+v calls=%d err=%v", refused, stack.applyCalls, err)
+		}
+		afterCM, after, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionGuardrailRotate)
+		if err != nil || afterCM.UID != cm.UID || afterCM.ResourceVersion != cm.ResourceVersion || after.Generation != before.Generation || after.OperationID != before.OperationID {
+			t.Fatalf("fresh refusal changed terminal receipt: before=%+v after=%+v cm=%s/%s err=%v", before, after, cm.ResourceVersion, afterCM.ResourceVersion, err)
+		}
+	})
+
+	t.Run("pending-operation-blocks-malformed-roster-retry", func(t *testing.T) {
+		pod := guardrailPod("ns", "guard", "v1", "v1,v2")
+		c := fakeC(pod)
+		stack := &mockGuardrail{applyErr: errors.New("response lost")}
+		ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: stack}
+		req := boundReq(pod, model.ActionGuardrailRotate)
+		req.TickID = "m036-pending"
+		first, err := (guardrailRotateHandler{}).Enact(context.Background(), ec, req)
+		if err == nil || first.MutationKind != "partial" || stack.applyCalls != 1 {
+			t.Fatalf("pending prerequisite: result=%+v calls=%d err=%v", first, stack.applyCalls, err)
+		}
+		current := &corev1.Pod{}
+		if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), current); err != nil {
+			t.Fatal(err)
+		}
+		current.Annotations[annoGuardrailAlts] = "v1,,v2"
+		if err := c.Update(context.Background(), current); err != nil {
+			t.Fatal(err)
+		}
+		for _, tick := range []string{req.TickID, "m036-contender"} {
+			retry := boundReq(current, model.ActionGuardrailRotate)
+			retry.TickID = tick
+			result, retryErr := (guardrailRotateHandler{}).Enact(context.Background(), ec, retry)
+			if retryErr == nil || result.MutationKind != "partial" || result.NoEffect != "" || stack.applyCalls != 1 {
+				t.Fatalf("pending retry %q escaped: result=%+v calls=%d err=%v", tick, result, stack.applyCalls, retryErr)
+			}
+		}
+	})
+}
+
+func TestM036PreparedGuardrailRecoveryUsesFixedRosterIntent(t *testing.T) {
+	for _, tc := range []struct {
+		name, roster string
+		wantCalls    int
+		wantErr      bool
+	}{
+		{name: "reordered-complete-roster", roster: "v3,v1,v2", wantCalls: 1},
+		{name: "fixed-next-removed", roster: "v1,v3", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := guardrailPod("ns", "guard", "v1", tc.roster)
+			receipt := m064PreparedReceipt(pod, model.ActionGuardrailRotate, "m036-recovery")
+			receipt.PriorVariant, receipt.NextVariant = "v1", "v2"
+			if !receipt.valid() {
+				t.Fatal("prepared guardrail receipt fixture invalid")
+			}
+			c := fakeC(pod, m064LiteralReceipt(receipt))
+			stack := &mockGuardrail{}
+			req := boundReq(pod, model.ActionGuardrailRotate)
+			req.TickID = receipt.TickID
+			ec := EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", Guardrail: stack, ServingSecurity: legacyServingSecurityForTest(t), ServingRequest: req}
+			cm, recorded, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionGuardrailRotate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, recoverErr := recoverProtectedServingEffect(context.Background(), ec, cm, &recorded)
+			if (recoverErr != nil) != tc.wantErr || stack.applyCalls != tc.wantCalls {
+				t.Fatalf("recovery calls=%d want=%d err=%v", stack.applyCalls, tc.wantCalls, recoverErr)
+			}
+			if tc.wantCalls == 1 && stack.lastVar != "v2" {
+				t.Fatalf("reordered roster redirected fixed intent to %q", stack.lastVar)
+			}
+			if tc.wantErr {
+				_, retained, err := servingReceiptGet(context.Background(), ec, string(pod.UID), model.ActionGuardrailRotate)
+				if err != nil || retained.Phase != "prepared" {
+					t.Fatalf("removed fixed member changed prepared receipt: receipt=%+v err=%v", retained, err)
+				}
+			}
+		})
 	}
 }
 

@@ -34,18 +34,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
 const (
-	labelLoRAEnabled     = "phorvex.ai/lora-enabled"       // pod advertises --enable-lora
-	annoLoRAAdapter      = "phorvex.ai/lora-adapter"       // the adapter to evict
-	annoLoRACleanSource  = "phorvex.ai/lora-clean-source"  // a TRUSTED pinned source to reload (optional)
-	annoAdapterSnapshot  = "phorvex.ai/adapter-snapshot"   // rollback record
-	labelGuardrailTier   = "phorvex.ai/guardrail-tier"     // marks a guardrail pod
-	annoGuardrailVariant = "phorvex.ai/guardrail-variant"  // current variant
-	annoGuardrailAlts    = "phorvex.ai/guardrail-variants" // comma-list of DIVERSE alternates
-	annoGuardrailSnap    = "phorvex.ai/guardrail-snapshot" // rollback record
-	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"    // <=32 validated DNS/IP host:port P/D endpoints, <=4096 bytes
+	labelLoRAEnabled     = "phorvex.ai/lora-enabled"                  // pod advertises --enable-lora
+	annoLoRAAdapter      = "phorvex.ai/lora-adapter"                  // the adapter to evict
+	annoLoRACleanSource  = "phorvex.ai/lora-clean-source"             // a TRUSTED pinned source to reload (optional)
+	annoAdapterSnapshot  = "phorvex.ai/adapter-snapshot"              // rollback record
+	labelGuardrailTier   = "phorvex.ai/guardrail-tier"                // marks a guardrail pod
+	annoGuardrailVariant = servingcontext.GuardrailVariantAnnotation  // current member of the complete ordered roster
+	annoGuardrailAlts    = servingcontext.GuardrailVariantsAnnotation // complete ordered guardrail roster
+	annoGuardrailSnap    = "phorvex.ai/guardrail-snapshot"            // rollback record
+	annoDisaggPeers      = "phorvex.ai/disagg-kv-peers"               // <=32 validated DNS/IP host:port P/D endpoints, <=4096 bytes
 	annoKVEpoch          = "phorvex.ai/kv-migrate-epoch"
 	labelServing         = "phorvex.ai/serving"        // K8s readiness-drain target label
 	labelDrainEpoch      = "phorvex.ai/drain-epoch"    // M-23 A1: event-valued clock for VarDrainEpoch
