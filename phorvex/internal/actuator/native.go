@@ -7,6 +7,7 @@ package actuator
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,12 +30,14 @@ import (
 // (ZERO Phoenix imports); every handler is authored from the published k8s.io API
 // contract (clean-room), so the standalone product IP carries no SSPL-derived Go.
 type NativeActuator struct {
-	Client           client.Client
-	Reader           client.Reader
-	JournalNamespace string
-	RecoveryVLLM     vLLMClient // optional serving-stack seam for recovery tests; nil uses live client
-	AdapterSources   AdapterSources
-	migProfiles      *MIGProfiles
+	Client                   client.Client
+	Reader                   client.Reader
+	JournalNamespace         string
+	RecoveryVLLM             vLLMClient // optional serving-stack seam for recovery tests; nil uses live client
+	AdapterSources           AdapterSources
+	RouteObservationTimeout  time.Duration
+	RouteObservationInterval time.Duration
+	migProfiles              *MIGProfiles
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -141,7 +144,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
@@ -164,7 +167,7 @@ func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) 
 		return nil
 	}
 	if rb, ok := h.(Rollbacker); ok {
-		return rb.Rollback(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources}, req, ref)
+		return rb.Rollback(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}, req, ref)
 	}
 	return nil
 }

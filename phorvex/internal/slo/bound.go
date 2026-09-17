@@ -91,8 +91,8 @@ var classifications = map[model.Action]Bound{
 		"no-op has no mutation path and cannot reduce a Ready serving replica"),
 	model.ActionIdentityRotate: zero(model.ActionIdentityRotate,
 		"metadata-only identity epoch update; it does not change pod UID, IP, token, readiness, or routing"),
-	model.ActionRouteRotate: zero(model.ActionRouteRotate,
-		"metadata-only route epoch update; the shipped handler does not change Service selectors or EndpointSlices"),
+	model.ActionRouteRotate: unknown(model.ActionRouteRotate, -1,
+		"Service route cutover and rollback preserve a controller membership floor but have no enforced safe-return or network data-plane deadline"),
 	model.ActionDisable: zero(model.ActionDisable,
 		"declared-not-implemented handler always returns emitted=false and has no mutation path"),
 

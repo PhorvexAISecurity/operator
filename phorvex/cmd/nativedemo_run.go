@@ -365,7 +365,7 @@ func runNativeDemo(ctx context.Context, c client.Client, ns, adminNS string, w i
 		return report.write(w)
 	}
 	n := newDemoActuator(&demoTrackingClient{Client: c, run: run})
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "native-demo-" + strings.ReplaceAll(run.token, "-", ""), Namespace: ns}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"phorvex.ai/native-demo-run": run.token}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionQuarantine, v1alpha1.ActionWarmSwap, v1alpha1.ActionModelShardReplace}}}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Name: "native-demo-" + strings.ReplaceAll(run.token, "-", ""), Namespace: ns}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"phorvex.ai/native-demo-run": run.token}}, Budget: v1alpha1.BudgetSpec{TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: 5 * time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionQuarantine, v1alpha1.ActionWarmSwap, v1alpha1.ActionModelShardReplace, v1alpha1.ActionRouteRotate, v1alpha1.ActionEndpointRotate}}}}
 	policyReady := true
 	if err := run.create(ctx, policy); err != nil {
 		policyReady = false
@@ -521,8 +521,8 @@ func runNativeDemo(ctx context.Context, c client.Client, ns, adminNS string, w i
 		}
 		report.add("dry-run guard", "mutation refused; selected UID untouched", fmt.Sprintf("emitted=%v act=%v read=%v", res.Emitted, e, readErr), v)
 	}
-	report.rows = append(report.rows, runDemoRouteCase(ctx, run, n, ns, model.ActionRouteRotate))
-	report.rows = append(report.rows, runDemoRouteCase(ctx, run, n, ns, model.ActionEndpointRotate))
+	report.rows = append(report.rows, runDemoRouteCase(ctx, run, n, ns, policy, model.ActionRouteRotate))
+	report.rows = append(report.rows, runDemoRouteCase(ctx, run, n, ns, policy, model.ActionEndpointRotate))
 	if !policyReady || !journalReady {
 		report.add("warm-swap", "current policy and protected journal", "policy/journal setup unavailable", demoSetupFailure)
 	} else {
@@ -543,14 +543,14 @@ func runNativeDemo(ctx context.Context, c client.Client, ns, adminNS string, w i
 
 func ptr32(v int32) *int32 { return &v }
 
-func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActuator, ns string, action model.Action) demoRow {
+func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActuator, ns string, policy *v1alpha1.PhorvexPolicy, action model.Action) demoRow {
 	a := string(action)
 	group := "demo-" + a
 	svcName := "svc-" + a
 	row := demoRow{action: a, expected: "Pod/Service selector restitched; >=2 Ready before; target Ready after", verdict: demoSetupFailure}
 	createPod := func(name string, annotation bool) (*corev1.Pod, error) {
 		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: map[string]string{"app": group, "phorvex.ai/native-demo": "true"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox:1.36", Command: []string{"sh", "-c", "sleep 3600"}}}}}
-		if action == model.ActionRouteRotate {
+		if action == model.ActionRouteRotate || action == model.ActionEndpointRotate {
 			p.Labels[demoRouteKey] = "route-initial"
 		}
 		if annotation {
@@ -579,7 +579,7 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 		return row
 	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: ns}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": group}, Ports: []corev1.ServicePort{{Port: 80}}}}
-	if action == model.ActionRouteRotate {
+	if action == model.ActionRouteRotate || action == model.ActionEndpointRotate {
 		svc.Spec.Selector[demoRouteKey] = "route-initial"
 	}
 	if err := run.create(ctx, svc); err != nil {
@@ -597,7 +597,11 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 		row.observed = fmt.Sprintf("only %d Ready selected backends before actuation", beforeReady)
 		return row
 	}
-	request := actuator.Request{Tenant: ns, Namespace: ns, Pod: target.Name, TargetUID: string(target.UID), Action: action, Reason: "native-demo", Score: 0.9}
+	if policy == nil || policy.UID == "" {
+		row.observed = "current policy identity unavailable"
+		return row
+	}
+	request := actuator.Request{Tenant: ns, Namespace: ns, Pod: target.Name, TargetUID: string(target.UID), Action: action, Reason: "native-demo", Score: 0.9, PolicyName: policy.Name, PolicyUID: string(policy.UID), OperationID: run.token + ":" + a}
 	result, actErr := demoActuate(ctx, n, request)
 	mutated, readErr := demoRouteRestitched(ctx, run.client, target, svc)
 	var afterSvc corev1.Service
@@ -620,7 +624,14 @@ func runDemoRouteCase(ctx context.Context, run *demoRun, n *actuator.NativeActua
 	if actErr != nil || readErr != nil || !result.Emitted || !mutated || !otherUntouched {
 		row.verdict = demoObservationFailure
 	}
-	row.observed = fmt.Sprintf("beforeReady=%d afterReady=%d restitched=%v alternativeUnchanged=%v emitted=%v act=%v read=%v; traffic unmeasured", beforeReady, afterReady, mutated, otherUntouched, result.Emitted, actErr, readErr)
+	var rollbackErr error
+	if result.RollbackRef != "" {
+		rollbackErr = n.Rollback(ctx, request, result.RollbackRef)
+		if rollbackErr != nil {
+			row.verdict = demoObservationFailure
+		}
+	}
+	row.observed = fmt.Sprintf("beforeReady=%d afterReady=%d restitched=%v alternativeUnchanged=%v emitted=%v act=%v read=%v rollback=%v; traffic unmeasured", beforeReady, afterReady, mutated, otherUntouched, result.Emitted, actErr, readErr, rollbackErr)
 	return row
 }
 

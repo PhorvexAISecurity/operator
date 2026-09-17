@@ -128,12 +128,11 @@ func Check(parent context.Context, reader client.Reader, reviews SSARClient, cfg
 	if report.ActivePolicies == 0 {
 		return report, nil
 	}
-	// Native and hybrid managers inventory the protected recovery journal on every
-	// active-policy tick before processing due policies. This read is required even when
-	// the current action does not itself create a receipt; receipt-specific writes remain
-	// in addActionRequirements below.
+	// Native and hybrid managers inventory protected receipts before due policies.
+	// Mutation permissions stay action-specific below: an unrelated rotate-only
+	// policy does not need authority to create or update recovery receipts.
 	if cfg.Backend == actuator.BackendNative || cfg.Backend == actuator.BackendHybrid {
-		add(requirements, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: "list"}, Reason: "native recovery journal inventory"})
+		add(requirements, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: "list"}, Reason: "native protected recovery journal inventory"})
 	}
 	if cfg.MIGAgent != nil {
 		if cfg.MIGAgent.Namespace == "" || cfg.MIGAgent.DaemonSet == "" {
@@ -209,7 +208,7 @@ func addActionRequirements(out map[string]Requirement, cfg Config, namespace str
 		return
 	}
 	add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "pods", Verb: "get"}, Reason: string(action) + " target identity"})
-	if action == model.ActionQuarantine || action == model.ActionWarmSwap || action == model.ActionModelShardReplace || action == model.ActionMIGRebind || action == model.ActionAdapterRotate {
+	if action == model.ActionQuarantine || action == model.ActionWarmSwap || action == model.ActionModelShardReplace || action == model.ActionMIGRebind || action == model.ActionAdapterRotate || action == model.ActionRouteRotate || action == model.ActionEndpointRotate {
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Group: "phorvex.ai", Resource: "phorvexpolicies", Verb: "get"}, Reason: string(action) + " current policy authority"})
 		add(out, Requirement{Verb: authz.Verb{Resource: "namespaces", Name: namespace, Verb: "get", ClusterScoped: true}, Reason: string(action) + " current namespace authority"})
 	}
@@ -248,11 +247,22 @@ func addActionRequirements(out map[string]Requirement, cfg Config, namespace str
 		}
 	}
 	if action == model.ActionRouteRotate {
-		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: "get"}, Reason: "route-rotate declared service"})
+		for _, verb := range []string{"get", "list"} {
+			add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: verb}, Reason: "route-rotate exact service scope"})
+		}
 		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "pods", Verb: "list"}, Reason: "route-rotate ready backend inventory"})
 	}
 	if action == model.ActionEndpointRotate {
-		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: "get"}, Reason: "endpoint-rotate declared service"})
+		for _, verb := range []string{"get", "list"} {
+			add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "services", Verb: verb}, Reason: "endpoint-rotate exact service scope"})
+		}
+		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Resource: "pods", Verb: "list"}, Reason: "endpoint-rotate target inventory"})
+	}
+	if action == model.ActionRouteRotate || action == model.ActionEndpointRotate {
+		add(out, Requirement{Namespace: namespace, Verb: authz.Verb{Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}, Reason: string(action) + " EndpointSlice convergence"})
+		for _, verb := range []string{"get", "list", "create", "update", "delete"} {
+			add(out, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "configmaps", Verb: verb}, Reason: string(action) + " protected route journal"})
+		}
 	}
 	if action == model.ActionRequestDrain {
 		for _, verb := range []string{"get", "list"} {

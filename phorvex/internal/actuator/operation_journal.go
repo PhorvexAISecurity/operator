@@ -68,16 +68,44 @@ type operationReceipt struct {
 	AdapterEventCreatedAt string `json:"adapterEventCreatedAt,omitempty"`
 	AdapterCreator        string `json:"adapterCreator,omitempty"`
 	AdapterEndpointSHA256 string `json:"adapterEndpointSHA256,omitempty"`
+	// Route-cutover v5 fields. The Service-UID-named receipt is the only
+	// authority for route/endpoint continuation or restoration. Tenant metadata
+	// is deliberately not an authority surface.
+	NamespaceUID            string            `json:"namespaceUID,omitempty"`
+	ReceiptID               string            `json:"receiptID,omitempty"`
+	TargetGuardUID          string            `json:"targetGuardUID,omitempty"`
+	AdmittedFloor           int               `json:"admittedFloor,omitempty"`
+	RouteEpochKey           string            `json:"routeEpochKey,omitempty"`
+	RouteValue              string            `json:"routeValue,omitempty"`
+	BridgeValue             string            `json:"bridgeValue,omitempty"`
+	OriginalServiceSelector map[string]string `json:"originalServiceSelector,omitempty"`
+	BeforePodRoute          routeOwnedValue   `json:"beforePodRoute,omitempty,omitzero"`
+	BeforePodEpoch          routeOwnedValue   `json:"beforePodEpoch,omitempty,omitzero"`
+	BeforePodBridge         routeOwnedValue   `json:"beforePodBridge,omitempty,omitzero"`
+	BeforeServiceRoute      routeOwnedValue   `json:"beforeServiceRoute,omitempty,omitzero"`
+	BeforeServiceBridge     routeOwnedValue   `json:"beforeServiceBridge,omitempty,omitzero"`
 }
+
+type routeOwnedValue struct {
+	Present bool   `json:"present"`
+	Value   string `json:"value,omitempty"`
+}
+
+func (v routeOwnedValue) IsZero() bool { return !v.Present && v.Value == "" }
 
 const (
 	requestDrainReceiptVersion  = 3
 	adapterRotateReceiptVersion = 4
+	routeCutoverReceiptVersion  = 5
 	requestDrainMaxLabels       = 64
 	requestDrainMaxAddresses    = 16
 )
 
 func receiptName(r operationReceipt) string {
+	if (r.Kind == string(model.ActionRouteRotate) || r.Kind == string(model.ActionEndpointRotate)) && r.ServiceUID != "" {
+		h := sha256.Sum256([]byte("route-service/" + r.ServiceUID))
+		return fmt.Sprintf("phorvex-route-service-%x", h[:20])
+	}
 	h := sha256.Sum256([]byte(r.Kind + "/" + r.PolicyUID + "/" + r.TargetUID))
 	return fmt.Sprintf("phorvex-operation-%x", h[:20])
 }
@@ -89,7 +117,7 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
@@ -165,6 +193,35 @@ func (r operationReceipt) valid() bool {
 		}
 		switch r.Phase {
 		case "prepared", "unload-dispatching", "unload-acknowledged", "absent-confirmed", "load-dispatching", "load-acknowledged", "loaded-confirmed", "completed":
+			return true
+		default:
+			return false
+		}
+	case string(model.ActionRouteRotate), string(model.ActionEndpointRotate):
+		action := model.Action(r.Kind)
+		if r.Version != routeCutoverReceiptVersion || r.NamespaceUID == "" || r.ServiceName == "" || r.ServiceUID == "" ||
+			r.OperationToken == "" || r.ReceiptID == "" || r.TargetGuardUID == "" || r.AdmittedFloor != 1 ||
+			r.RouteEpochKey == "" || r.RouteValue == "" || r.BridgeValue == "" ||
+			!boundedLabelMap(r.TargetLabels) || !boundedLabelMap(r.OriginalServiceSelector) ||
+			r.BeforePodRoute != ownedValue(r.TargetLabels, labelRouteKey) ||
+			r.BeforePodBridge != ownedValue(r.TargetLabels, routeBridgeLabel) ||
+			r.BeforeServiceRoute != ownedValue(r.OriginalServiceSelector, labelRouteKey) ||
+			r.BeforeServiceBridge != ownedValue(r.OriginalServiceSelector, routeBridgeLabel) ||
+			r.BeforePodBridge.Present || r.BeforeServiceBridge.Present || r.BeforePodRoute != r.BeforeServiceRoute ||
+			r.RouteEpochKey != routeEpochKey(action) ||
+			r.ReceiptID != routeReceiptID(r.PolicyUID, r.TargetUID, action, r.OperationToken) ||
+			r.RouteValue != routeToken("route", r.PolicyUID, r.TargetUID, action, r.OperationToken) ||
+			r.BridgeValue != routeToken("bridge", r.PolicyUID, r.TargetUID, action, r.OperationToken) {
+			return false
+		}
+		if len(r.OperationToken) > 253 || len(r.ReceiptID) != 40 || len(r.RouteValue) > 63 || len(r.BridgeValue) > 63 {
+			return false
+		}
+		if digest, err := hex.DecodeString(r.ReceiptID); err != nil || len(digest) != 20 {
+			return false
+		}
+		switch r.Phase {
+		case "prepared", "pod-bridged", "service-bridged", "target-rekeyed", "service-final", "applied", "restoring":
 			return true
 		default:
 			return false
@@ -257,7 +314,7 @@ func journalList(ctx context.Context, ec EnactCtx) ([]struct {
 	for i := range list.Items {
 		cm := list.Items[i]
 		var r operationReceipt
-		if err := json.Unmarshal([]byte(cm.Data["receipt"]), &r); err != nil || !r.valid() || cm.Name != receiptName(r) || cm.UID == "" || cm.ResourceVersion == "" {
+		if err := json.Unmarshal([]byte(cm.Data["receipt"]), &r); err != nil || !r.valid() || cm.Name != receiptName(r) || cm.UID == "" || cm.ResourceVersion == "" || cm.DeletionTimestamp != nil {
 			return nil, fmt.Errorf("invalid operation journal %s/%s: %v", cm.Namespace, cm.Name, err)
 		}
 		out = append(out, struct {

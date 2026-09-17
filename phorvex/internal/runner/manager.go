@@ -2513,6 +2513,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			CoverageValue:      coverageValue,
 			TargetUID:          v.Pod.UID,
 		}
+		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate {
+			if decisions[i].Trace != nil {
+				request.OperationID = decisions[i].Trace.DecisionID
+			}
+		}
 		var res actuator.Result
 		var err error
 		if m.QuarantineCapacity != nil {
