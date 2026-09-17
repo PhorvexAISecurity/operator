@@ -306,8 +306,8 @@ func TestM071CleanReloadResumesWithoutDuplicateUnloadOrLoad(t *testing.T) {
 	if unloads, loads := serving.counts(); unloads != 1 || loads != 2 {
 		t.Fatalf("restart duplicated wrong serving call: unload=%d load=%d", unloads, loads)
 	}
-	repeat, err := (adapterRotateHandler{}).Enact(context.Background(), ec, req)
-	if err != nil || repeat.Emitted {
+	repeat, err := dispatch(context.Background(), ec, req)
+	if err != nil || repeat.Emitted || repeat.NoEffect != NoEffectReconciled || len(repeat.ObjectsTouched) == 0 || repeat.RollbackRef == "" {
 		t.Fatalf("persistent event repeated completed operation: result=%+v err=%v", repeat, err)
 	}
 	if unloads, loads := serving.counts(); unloads != 1 || loads != 2 {

@@ -47,17 +47,17 @@ func TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes(t *testing.T)
 		{
 			name:         "confirmed-abort-and-restoration",
 			result:       actuator.Result{Emitted: true, Handler: string(model.ActionRequestDrain), MutationKind: "reversible", ObjectsTouched: []string{"Pod/ns/p1", "ConfigMap/operator/receipt"}, Note: "request-drain: 1 in-flight aborted; exact serving state restored"},
-			wantActuated: true, wantOutcome: model.DispatchEmitted, wantReason: "1 in-flight aborted", wantObjects: 2, wantActuations: 1,
+			wantActuated: true, wantOutcome: model.DispatchEmitted, wantReason: "emitted-unconfirmed", wantObjects: 2, wantActuations: 1,
 		},
 		{
 			name:   "confirmed-write-restoration-unresolved",
 			result: actuator.Result{Emitted: true, Handler: string(model.ActionRequestDrain), MutationKind: "reversible", ObjectsTouched: []string{"Pod/ns/p1", "ConfigMap/operator/receipt"}, Note: "request-drain partial confirmed mutation: restoration unresolved"},
-			err:    errors.New("request-drain incomplete"), wantOutcome: model.DispatchError, wantReason: "partial confirmed mutation", wantObjects: 2,
+			err:    errors.New("request-drain incomplete"), wantOutcome: model.DispatchError, wantReason: "outcome-unknown", wantObjects: 2,
 		},
 		{
 			name:   "write-acceptance-unknown-receipt-retained",
 			result: actuator.Result{Emitted: false, Handler: string(model.ActionRequestDrain), MutationKind: "reversible", ObjectsTouched: []string{"Pod/ns/p1", "ConfigMap/operator/receipt"}, Note: "request-drain outcome unknown: authoritative Pod outcome unreadable; receipt retained"},
-			err:    errors.New("request-drain incomplete"), wantOutcome: model.DispatchError, wantReason: "outcome unknown", wantObjects: 2,
+			err:    errors.New("request-drain incomplete"), wantOutcome: model.DispatchError, wantReason: "outcome-unknown", wantObjects: 2,
 		},
 	}
 	for _, tc := range tests {

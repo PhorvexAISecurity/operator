@@ -639,13 +639,17 @@ func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Hand
 		// flush that did not happen is not a defence: report it as NOT emitted and write no epoch
 		// (a "flush epoch" for a flush that never ran is a false forensic record).
 		return HandlerResult{
-			Emitted: false, MutationKind: "none",
+			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
 			Note: "[PENDING-GPU-VALIDATION] kv-reset NOT performed: serving stack unreachable at " +
 				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — no cache was flushed",
 		}, nil
 	default:
-		// reachable but the admin call failed => FAIL-CLOSED (do not claim a flush).
-		return HandlerResult{}, fmt.Errorf("kv-reset %s/%s: serving-stack flush failed: %w", req.Namespace, req.Pod, resetErr)
+		// The request may have reached the stack. Keep that uncertainty in the
+		// result while refusing to credit success or write a false flush epoch.
+		return HandlerResult{
+			MutationKind: "partial",
+			Note:         fmt.Sprintf("kv-reset serving mutation outcome unknown at %s/%s; no success epoch was written", req.Namespace, req.Pod),
+		}, fmt.Errorf("kv-reset %s/%s: serving-stack flush outcome unknown: %w", req.Namespace, req.Pod, resetErr)
 	}
 	// record the flush epoch (forensic + idempotent); pod stays alive.
 	pod.Annotations = ensureMap(pod.Annotations)
@@ -667,7 +671,7 @@ func (endpointRotateHandler) Name() string { return string(model.ActionEndpointR
 
 func endpointRotateRefusal(reason string) (HandlerResult, error) {
 	err := fmt.Errorf("endpoint-rotate not performed: %s", reason)
-	return HandlerResult{Note: err.Error()}, RefusedWithoutEffect(err)
+	return HandlerResult{NoEffect: NoEffectRefused, Note: err.Error()}, RefusedWithoutEffect(err)
 }
 
 func endpointRotatePartial(touched []string, err error) (HandlerResult, error) {

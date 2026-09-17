@@ -178,12 +178,14 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 			return adapterPartial(cm, fmt.Errorf("adapter-rotate completed receipt revalidation: %w", err))
 		}
 		if current {
-			return adapterResult(cm, false, "none", "adapter-rotate already completed for the current trusted detector event; no new mitigation credited", nil), nil
+			result := adapterResult(cm, false, "none", "adapter-rotate already completed for the current trusted detector event; no new mitigation credited", nil)
+			result.NoEffect = NoEffectReconciled
+			return result, nil
 		}
 		if err := journalFinish(ctx, ec, cm); err != nil {
 			return adapterPartial(cm, fmt.Errorf("adapter-rotate retire completed receipt: %w", err))
 		}
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate retired completed receipt after detector authority ended"}, nil
+		return HandlerResult{Emitted: false, NoEffect: NoEffectReconciled, MutationKind: "none", Note: "adapter-rotate retired completed receipt after detector authority ended"}, nil
 	}
 	pod, err := adapterAuthority(ctx, ec, *r)
 	if err != nil {
@@ -194,7 +196,7 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 		if err := journalFinish(ctx, ec, cm); err != nil {
 			return adapterPartial(cm, fmt.Errorf("adapter-rotate finish unclaimed intent: %w", err))
 		}
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate prepared intent retired before serving dispatch"}, nil
+		return HandlerResult{Emitted: false, NoEffect: NoEffectReconciled, MutationKind: "none", Note: "adapter-rotate prepared intent retired before serving dispatch"}, nil
 	}
 	if r.Phase == "unload-dispatching" {
 		loaded, observeErr := ec.vllm().AdapterLoaded(ctx, ep, r.AdapterName)
@@ -292,7 +294,9 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 		return adapterPartial(cm, fmt.Errorf("adapter-rotate completion: %w", err))
 	}
 	if !newAttempt {
-		return adapterResult(cm, false, "none", "adapter-rotate reconciled a prior protected operation; no new mitigation credited", completedPod), nil
+		result := adapterResult(cm, false, "none", "adapter-rotate reconciled a prior protected operation; no new mitigation credited", completedPod)
+		result.NoEffect = NoEffectReconciled
+		return result, nil
 	}
 	note := "adapter " + r.AdapterName + " absence confirmed from serving inventory; degraded to base model"
 	if r.AdapterSourcePresent {
@@ -311,10 +315,10 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 	}
 	adapter, err := validateAdapterDispatch(ctx, ec, req, string(pod.UID))
 	if err != nil {
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: err.Error()}, nil
+		return HandlerResult{Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none", Note: err.Error()}, nil
 	}
 	if pod.Labels[labelLoRAEnabled] != "true" {
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate unsupported: LoRA capability unavailable"}, nil
+		return HandlerResult{Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none", Note: "adapter-rotate unsupported: LoRA capability unavailable"}, nil
 	}
 	if ec.JournalNamespace == "" || req.PolicyName == "" || req.PolicyUID == "" || req.TargetUID == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires authoritative reader, protected journal, policy and target identity"))
@@ -357,7 +361,7 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate pre-dispatch inventory unavailable: %w", err))
 	}
 	if !loaded {
-		return HandlerResult{Emitted: false, MutationKind: "none", Note: "adapter-rotate inventory confirms adapter already absent before operation; no new mitigation credited"}, nil
+		return HandlerResult{Emitted: false, NoEffect: NoEffectSatisfied, MutationKind: "none", Note: "adapter-rotate inventory confirms adapter already absent before operation; no new mitigation credited"}, nil
 	}
 	cm := replaceCompleted
 	if cm != nil {

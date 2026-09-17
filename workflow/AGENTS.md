@@ -1,9 +1,9 @@
 # Agent entrypoint
 
 User scope controls. Named fixes follow reviewed PR delivery under
-`operations/AUTONOMY.md`. The local-only override is
-`assessments/20260916-local-continuation/AUTHORIZATION.md`: open no new PRs,
-continue unblocked source tiers and retain live acceptance debt.
+`operations/AUTONOMY.md`. Current campaign scope is in
+`assessments/20260916-local-continuation/AUTHORIZATION.md`: publish one reviewed
+PR per tier targeting main; continue unblocked source work and retain live debt.
 
 1. Classify with `OPERATIONS.md`; read one runbook. Run `doctor` once; historical
    warnings do not block authorized work.

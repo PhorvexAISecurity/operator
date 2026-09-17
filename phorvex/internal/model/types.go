@@ -715,7 +715,7 @@ type Decision struct {
 	Node           string
 	// CoverageValue is the recon-fact weight at stake under the P1 coverage engine.
 	// It never carries the deprecated P0 engine's threat-weighted risk.
-	CoverageValue float64
+	CoverageValue float64 // modeled selection opportunity; never measured mitigation
 	// ThreatRisk preserves the deprecated P0 engine's distinct threat-weighted value.
 	// It is zero under P1 and is serialized separately so one field never has two meanings.
 	ThreatRisk    float64
@@ -768,13 +768,18 @@ type Decision struct {
 	KillSwitch      bool
 	KillSwitchCause string
 	Actuated        bool
+	// DispatchOutcome and DispatchReason are the retained, bounded result of
+	// this attempt. They are top-level so untraced records and history views do
+	// not lose the actual outcome when DecisionTrace is absent or stripped.
+	DispatchOutcome string
+	DispatchReason  string
 	DecidedAt       time.Time
 
 	// --- P1 (submodular recon-coverage) fields; additive, zero-valued under the P0
 	// greedy engine. ---
 	Engine        string            // "p0-greedy" | "p1-coverage"
-	CoveredWeight float64           // recon-fact weight invalidated by the chosen move
-	CoveredFacts  int               // count of distinct recon facts invalidated
+	CoveredWeight float64           // modeled recon-fact selection opportunity; not measured mitigation
+	CoveredFacts  int               // count of modeled recon facts associated with the selected action
 	PerDollar     float64           // legacy full-value / ECost reporting ratio; not the selector
 	Stage         string            // most-likely kill-chain stage (semi-Markov)
 	StageHazard   float64           // stage-exit hazard h_s(t) (predictive horizon signal)

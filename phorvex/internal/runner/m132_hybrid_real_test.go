@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -44,7 +43,7 @@ func TestM132RealHybridPhoenixRefusalStillDeliversNativeAction(t *testing.T) {
 		{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 		{Selected: true, Feasible: true, Action: model.ActionRouteRotate, Namespace: "ns", Pod: "api", Trace: &model.DecisionTraceV2{}},
 	}
-	if n := actuateWithBoundary(t, m, ctx, e, pol, decisions, view); n != 1 || !decisions[1].Actuated || decisions[0].Actuated || !strings.HasPrefix(decisions[0].Trace.DispatchReason, "route-preparation-failed:") {
+	if n := actuateWithBoundary(t, m, ctx, e, pol, decisions, view); n != 1 || !decisions[1].Actuated || decisions[0].Actuated || decisions[0].Trace.DispatchReason != "route-preparation-failed" {
 		t.Fatalf("real hybrid route result: n=%d Phoenix=%+v native=%+v", n, decisions[0].Trace, decisions[1].Trace)
 	}
 	var updated corev1.Pod

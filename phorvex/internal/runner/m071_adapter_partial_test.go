@@ -3,7 +3,6 @@ package runner
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -42,7 +41,7 @@ func TestM071RunnerKeepsUncertainAdapterDispatchOutOfFallback(t *testing.T) {
 	got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views)
 	decision := decisions[0]
 	if act.calls != 1 || got != 0 || decision.Actuated || decision.Trace.DispatchOutcome != model.DispatchError ||
-		!strings.Contains(decision.Trace.DispatchReason, "partial or unknown") || len(decision.ObjectsTouched) != 1 || len(m.fallbackDecisions) != 0 {
+		decision.Trace.DispatchReason != "outcome-unknown" || len(decision.ObjectsTouched) != 1 || len(m.fallbackDecisions) != 0 {
 		t.Fatalf("uncertain adapter effect entered fallback or lost evidence: calls=%d actuations=%d decision=%+v fallbacks=%+v", act.calls, got, decision, m.fallbackDecisions)
 	}
 }
