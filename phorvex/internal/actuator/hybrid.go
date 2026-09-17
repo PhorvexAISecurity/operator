@@ -51,8 +51,9 @@ func (h *HybridActuator) ConfigureNativeJournal(reader client.Reader, namespace 
 	h.native.Reader = reader
 	h.native.JournalNamespace = namespace
 }
-func (h *HybridActuator) SetAdapterSources(s AdapterSources) { h.native.SetAdapterSources(s) }
-func (h *HybridActuator) SetMIGProfiles(p *MIGProfiles)      { h.native.SetMIGProfiles(p) }
+func (h *HybridActuator) SetAdapterSources(s AdapterSources)          { h.native.SetAdapterSources(s) }
+func (h *HybridActuator) SetMIGProfiles(p *MIGProfiles)               { h.native.SetMIGProfiles(p) }
+func (h *HybridActuator) SetServingSecurity(c *ServingSecurityConfig) { h.native.SetServingSecurity(c) }
 
 func (h *HybridActuator) RecoverOperations(ctx context.Context, globalKill bool) ([]RecoveryEvent, error) {
 	return h.native.recoverOperations(ctx, globalKill, func(a model.Action) bool { return RuleTypeFor(a) == "" })
@@ -67,6 +68,13 @@ func (h *HybridActuator) SupportsAction(ctx context.Context, a model.Action, t T
 		return h.phoenix.SupportsAction(ctx, a, t)
 	}
 	return h.native.SupportsAction(ctx, a, t)
+}
+
+func (h *HybridActuator) CapabilityAdvisory(a model.Action, t Target) string {
+	if RuleTypeFor(a) != "" {
+		return ""
+	}
+	return h.native.CapabilityAdvisory(a, t)
 }
 
 // EnsurePolicy maintains BOTH sides: Phoenix's AMTD CR (so nats/rotate/quarantine keep the

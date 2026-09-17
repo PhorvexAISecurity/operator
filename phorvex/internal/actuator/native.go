@@ -38,6 +38,7 @@ type NativeActuator struct {
 	RouteObservationTimeout  time.Duration
 	RouteObservationInterval time.Duration
 	migProfiles              *MIGProfiles
+	servingSecurity          *ServingSecurityConfig
 	// DryRun is a belt-and-suspenders guard (the runner already skips actuation in
 	// dry-run); when set, every handler refuses to mutate.
 	DryRun bool
@@ -63,6 +64,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	// are rejected here rather than accepted and then refused at the dispatch boundary.
 	if ok, detail := nativeAccepts(a); !ok {
 		return false, unsupportedWhy(BackendNative, a, detail)
+	}
+	if ok, why := n.servingSecurity.supports(a, t); !ok {
+		return false, why
 	}
 	// Transport is checked before its dependent allocation evidence.
 	if a == model.ActionMIGRebind && !NodeExecWired() {
@@ -98,6 +102,14 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 
 // Name implements Actuator.
 func (*NativeActuator) Name() string { return "native" }
+
+// CapabilityAdvisory exposes configured insecure compatibility without spending API reads.
+func (n *NativeActuator) CapabilityAdvisory(a model.Action, t Target) string {
+	if ok, why := n.servingSecurity.supports(a, t); ok {
+		return why
+	}
+	return ""
+}
 
 // EnsurePolicy records the tenant→namespace binding (O7) and pre-stages per-tenant native state where a
 // handler needs it. The base K8s moves need no standing CR, so beyond the binding this is a no-op.
@@ -144,7 +156,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if err := n.assertTenantNamespace(req); err != nil {
 		return Result{}, err
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
@@ -167,7 +179,11 @@ func (n *NativeActuator) Rollback(ctx context.Context, req Request, ref string) 
 		return nil
 	}
 	if rb, ok := h.(Rollbacker); ok {
-		return rb.Rollback(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}, req, ref)
+		ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}
+		if err := prepareServingAttempt(ctx, &ec, req); err != nil {
+			return err
+		}
+		return rb.Rollback(ctx, ec, req, ref)
 	}
 	return nil
 }
@@ -184,3 +200,6 @@ func (n *NativeActuator) SetAdapterSources(s AdapterSources) {
 	n.AdapterSources = copyAdapterSources(s)
 }
 func (n *NativeActuator) SetMIGProfiles(p *MIGProfiles) { n.migProfiles = snapshotMIGProfiles(p) }
+func (n *NativeActuator) SetServingSecurity(c *ServingSecurityConfig) {
+	n.servingSecurity = snapshotServingSecurity(c)
+}

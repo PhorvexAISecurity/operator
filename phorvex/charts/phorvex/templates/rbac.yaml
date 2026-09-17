@@ -94,6 +94,14 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "list", "create", "update", "delete"]
+{{- if and (eq .Values.phorvex.servingSecurity.mode "secure-required") (has .Values.phorvex.actuator (list "native" "hybrid")) }}
+{{- range .Values.phorvex.servingSecurity.bindings }}
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: [{{ required "servingSecurity binding secretName is required" .secretName | quote }}]
+  verbs: ["get"]
+{{- end }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

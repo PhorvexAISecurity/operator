@@ -43,7 +43,11 @@ func m010KVView(uid string) *model.WorkloadView {
 }
 
 func m010Entry() *policyEntry {
-	return &policyEntry{namespace: "ns", spec: v1alpha1.PhorvexPolicySpec{Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}}
+	return &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", namespace: "ns", spec: v1alpha1.PhorvexPolicySpec{Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}}
+}
+
+func m010ServingPolicy() *v1alpha1.PhorvexPolicy {
+	return &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid", ResourceVersion: "2"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionKVReset)}}}}
 }
 
 // This is the end-to-end producer counterexample from M-10: the real native
@@ -55,6 +59,9 @@ func TestM010NativeUnavailableRefusalSurvivesRunnerAuditAndHistory(t *testing.T)
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -64,18 +71,21 @@ func TestM010NativeUnavailableRefusalSurvivesRunnerAuditAndHistory(t *testing.T)
 		t.Fatal(err)
 	}
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p1", UID: types.UID("pod-uid"), Annotations: map[string]string{"phorvex.ai/serving-port": strconv.Itoa(port)}},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p1", UID: types.UID("pod-uid"), ResourceVersion: "1", Labels: map[string]string{"app": "demo"}, Annotations: map[string]string{"phorvex.ai/serving-port": strconv.Itoa(port)}},
 		Status:     corev1.PodStatus{PodIP: "127.0.0.1"},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod, m010ServingPolicy()).Build()
 	native := actuator.NewNativeActuator(c)
+	native.SetBoundaryReader(c)
+	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	native.SetServingSecurity(legacy)
 	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	view := m010KVView("pod-uid")
 	decisions := []model.Decision{{
 		Tenant: "tenant", Namespace: "ns", Pod: "p1", Action: model.ActionKVReset,
 		Selected: true, Feasible: true, Engine: "p1-coverage", CoverageValue: 3.25, CoveredWeight: 2.75,
 	}}
-	policy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
+	policy := model.Policy{Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	if got := actuateWithBoundary(t, m, context.Background(), m010Entry(), policy, decisions, map[string]*model.WorkloadView{"ns/p1": view}); got != 0 {
 		t.Fatalf("actuated = %d", got)
 	}
@@ -133,13 +143,18 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p1", UID: types.UID("pod-uid"), ResourceVersion: "1", Annotations: map[string]string{"phorvex.ai/serving-port": portText}},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p1", UID: types.UID("pod-uid"), ResourceVersion: "1", Labels: map[string]string{"app": "demo"}, Annotations: map[string]string{"phorvex.ai/serving-port": portText}},
 		Status:     corev1.PodStatus{PodIP: "127.0.0.1"},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod, m010ServingPolicy()).Build()
 	native := actuator.NewNativeActuator(c)
 	native.SetBoundaryReader(c)
+	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	native.SetServingSecurity(legacy)
 	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	view := m010KVView("pod-uid")
 	decisions := []model.Decision{{
@@ -147,9 +162,9 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 		Engine: "p1-coverage", CoverageValue: 4.5, CoveredWeight: 3.5,
 		Trace: &model.DecisionTraceV2{DispatchOutcome: model.DispatchNotAttempted, DispatchReason: "pending-dispatch"},
 	}}
-	policy := model.Policy{Tenant: "tenant", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
+	policy := model.Policy{Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	if got := actuateWithBoundary(t, m, context.Background(), m010Entry(), policy, decisions, map[string]*model.WorkloadView{"ns/p1": view}); got != 1 {
-		t.Fatalf("actuations = %d", got)
+		t.Fatalf("actuations = %d; decision=%+v", got, decisions[0])
 	}
 	var request string
 	select {

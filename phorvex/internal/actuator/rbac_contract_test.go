@@ -63,10 +63,8 @@ func TestServiceRestitchRBACIsNamespacedAndExact(t *testing.T) {
 		if len(verbs) != 1 || verbs[0] != `verbs: ["get", "list", "update"]` {
 			t.Errorf("%s Service grants = %v, want exactly get/list/update", path, verbs)
 		}
-		for _, denied := range []string{`resources: ["secrets"]`} {
-			if strings.Contains(text, denied) {
-				t.Errorf("%s grants forbidden resource via %s", path, denied)
-			}
+		if path == "../../config/rbac/phorvex-actuator-role.yaml" && strings.Contains(text, `resources: ["secrets"]`) {
+			t.Errorf("%s must not gain an unconfigured standing Secret grant", path)
 		}
 		endpointVerbs := singleResourceVerbs(text, `resources: ["endpointslices"]`)
 		if len(endpointVerbs) != 1 || endpointVerbs[0] != `verbs: ["list"]` {
@@ -86,6 +84,9 @@ func TestServiceRestitchRBACIsNamespacedAndExact(t *testing.T) {
 	chartText := string(chart)
 	if !strings.Contains(chartText, "kind: Role\n") || !strings.Contains(chartText, ".Values.phorvex.actuatorNamespaces") {
 		t.Error("Helm restitch permission must be an opt-in namespaced Role")
+	}
+	if !strings.Contains(chartText, `resources: ["secrets"]`) || !strings.Contains(chartText, `resourceNames: [{{ required "servingSecurity binding secretName is required" .secretName | quote }}]`) || !strings.Contains(chartText, `verbs: ["get"]`) {
+		t.Error("configured serving credentials require only exact-name Secret get")
 	}
 }
 

@@ -251,7 +251,7 @@ class SourceBindingTests(unittest.TestCase):
                 declared.update(re.findall(r'^func (Test\w+)\(t \*testing\.T\)', path.read_text(), re.M))
             for test in tests:
                 self.assertIn(test, declared, f'{test} is no longer declared in {package}')
-        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 25)
+        self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 26)
 
     def test_envtest_importing_test_files_are_all_inside_the_selected_packages(self):
         # Textual import scan only: it flags an envtest-bearing test file the full-package

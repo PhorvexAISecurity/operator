@@ -1084,3 +1084,14 @@ fixes:
     stacked_on: []
     branch: fix/t11-m092
     head_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+  T12-M093:
+    directory: fixes/T12-M093
+    aliases: []
+    issues:
+    - M-93
+    related_issues: []
+    state: PR_READY
+    dependencies: []
+    stacked_on: []
+    branch: fix/t12-m093
+    head_sha: 7bc372450b616bf0d212be0f0bbcaf4393f2be2e

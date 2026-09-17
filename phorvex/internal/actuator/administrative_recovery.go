@@ -605,7 +605,22 @@ func (n *NativeActuator) ApplyRecoveryWithRecorder(ctx context.Context, plan Rec
 			action = model.ActionRequestDrain
 		}
 		req := Request{Namespace: receipt.PolicyNamespace, Pod: receipt.TargetName, TargetUID: receipt.TargetUID, Action: action, PolicyName: receipt.PolicyName, PolicyUID: receipt.PolicyUID}
-		if err = n.Rollback(ctx, req, item.RollbackRef); err != nil {
+		if receipt.Kind == "request-drain" {
+			ec := EnactCtx{Client: n.Client, Reader: n.Reader, JournalNamespace: n.JournalNamespace, ServingSecurity: n.servingSecurity, ServingRequest: req}
+			if secureServingReceipt(receipt) {
+				if n.servingSecurity == nil {
+					err = fmt.Errorf("serving security configuration is not wired")
+				} else {
+					ec.ServingAttempt, err = n.servingSecurity.prepareRecovery(ctx, n.Reader, receipt)
+				}
+			}
+			if err == nil {
+				err = rollbackRequestDrain(ctx, ec, req, item.RollbackRef)
+			}
+		} else {
+			err = n.Rollback(ctx, req, item.RollbackRef)
+		}
+		if err != nil {
 			out.Outcome, out.Reason = "partial-or-unknown", err.Error()
 			result.Items = append(result.Items, out)
 			result.State = "partial-or-unknown"

@@ -287,6 +287,8 @@ func TestM087RollbackRefusalPrecedesServingCall(t *testing.T) {
 
 	// Positive control: with the guards satisfied the handler IS invoked and hits the tripwire.
 	open := NewNativeActuator(c)
+	open.SetBoundaryReader(c)
+	open.SetServingSecurity(legacyServingSecurityForTest(t))
 	_ = open.EnsurePolicy(context.Background(), TenantTarget{Tenant: "t", Namespace: "ns"})
 	if err := open.Rollback(context.Background(), req, ""); !errors.Is(err, errTripwire) || crossings != 1 {
 		t.Fatalf("control: allowed adapter-rotate rollback must reach the pod read (crossings=%d), got %v", crossings, err)

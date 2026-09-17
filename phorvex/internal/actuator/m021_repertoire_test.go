@@ -133,6 +133,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 		if err != nil {
 			t.Fatalf("New(%s): %v", backend, err)
 		}
+		switch configured := act.(type) {
+		case *NativeActuator:
+			configured.SetServingSecurity(legacyServingSecurityForTest(t))
+		case *HybridActuator:
+			configured.SetServingSecurity(legacyServingSecurityForTest(t))
+		}
 		for _, e := range Repertoire(backend) {
 			ok, why := act.SupportsAction(t.Context(), e.Action, Target{Namespace: "ns", Pod: "p"})
 			// mig-rebind on a native route has a runtime prerequisite the static table

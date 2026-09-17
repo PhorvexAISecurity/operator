@@ -360,7 +360,7 @@ func TestMIGRebindPreparationRefusalDoesNotMutateWorkload(t *testing.T) {
 	c := fakeC(pod)
 	ds, _ := testAgentObjects("agent-a")
 	mig := &nvidiaSMIMIG{run: execNodeRunner{client: fake.NewSimpleClientset(ds), exec: noopExec, policy: testAgentPolicy()}}
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mig, MIGProfiles: testMIGProfiles()}, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: mig, VLLM: &mockVLLM{}, MIGProfiles: testMIGProfiles()}, Request{Namespace: "ns", Pod: "infer", TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
 	if err == nil {
 		t.Fatal("selection refusal accepted")
 	}

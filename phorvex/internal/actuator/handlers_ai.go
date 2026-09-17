@@ -54,7 +54,11 @@ func shadowModelReady(ctx context.Context, ec EnactCtx, pod *corev1.Pod) (ready,
 	if !podReady(pod) || pod.DeletionTimestamp != nil {
 		return false, false
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	req := ec.ServingRequest
+	if req.Action == "" {
+		req.Action = model.ActionWarmSwap
+	}
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return false, false
 	}
@@ -80,7 +84,7 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 		if p.Name == exclude {
 			continue
 		}
-		if _, err := validatedEndpointForPod(p); err != nil {
+		if _, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, p); err != nil {
 			return nil, false, fmt.Errorf("warm candidate serving endpoint configuration: %w", err)
 		}
 		if ready, pending := shadowModelReady(ctx, ec, p); ready {
@@ -94,6 +98,8 @@ func pickReadyShadow(ctx context.Context, ec EnactCtx, ns string, sel client.Mat
 // leader, retire the old leader, and REWARM a replacement shadow. Used by warm-swap (swap-group) and
 // model-shard-replace (model-shard group). FAIL-CLOSED: no Ready shadow => the old leader keeps serving.
 func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind string) (HandlerResult, error) {
+	req.Action = model.Action(kind)
+	ec.ServingRequest = req
 	leader, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, kind, req)
@@ -104,7 +110,7 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 	if reason := triggerIdentityRefusal(req, leader); reason != "" {
 		return refuseAI(kind, reason)
 	}
-	if _, err := validatedEndpointForPod(leader); err != nil {
+	if _, err := servingEndpointForPod(ctx, ec, req, leader); err != nil {
 		return refuseAI(kind, err.Error())
 	}
 	group := leader.Labels[groupKey]
@@ -133,11 +139,21 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		return HandlerResult{}, fmt.Errorf("%s: warm pair UID changed before intent", kind)
 	}
 	leader, shadow = currentOld, currentNew
+	if _, err := servingEndpointForPod(ctx, ec, req, leader); err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: current leader serving identity: %w", kind, err)
+	}
+	if _, err := servingEndpointForPod(ctx, ec, req, shadow); err != nil {
+		return HandlerResult{}, fmt.Errorf("%s: current shadow serving identity: %w", kind, err)
+	}
 	pool, err := warmPoolCapture(ctx, ec.Reader, leader, shadow, groupKey, group)
 	if err != nil {
 		return HandlerResult{}, fmt.Errorf("%s: unsupported warm pool: %w", kind, err)
 	}
-	receipt := operationReceipt{Version: 2, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool}
+	receiptVersion, bindingDigest, bindingServiceAccount := 2, "", ""
+	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
+		receiptVersion, bindingDigest, bindingServiceAccount = warmSecureReceiptVersion, ec.ServingAttempt.digest, normalizeServiceAccount(leader.Spec.ServiceAccountName)
+	}
+	receipt := operationReceipt{Version: receiptVersion, Kind: kind, Phase: "prepared", PolicyNamespace: req.Namespace, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID, TargetName: leader.Name, TargetUID: string(leader.UID), TargetLabels: copyLabels(leader.Labels), OldName: leader.Name, OldUID: string(leader.UID), NewName: shadow.Name, NewUID: string(shadow.UID), GroupKey: groupKey, GroupValue: group, Pool: &pool, ServingBindingSHA256: bindingDigest, ServingServiceAccount: bindingServiceAccount}
 	if !receipt.valid() {
 		return HandlerResult{}, fmt.Errorf("%s: operation provenance unavailable", kind)
 	}
@@ -375,7 +391,7 @@ func warmCutover(ctx context.Context, ec EnactCtx, req Request, groupKey, kind s
 		partial.Note = note
 		return partial, fmt.Errorf("%s: serving cutover submitted; pool replenishment pending: %w", kind, observeErr)
 	}
-	if _, err := validatedEndpointForPod(candidate); err != nil {
+	if _, err := servingEndpointForPod(ctx, ec, req, candidate); err != nil {
 		partial.Note = note + "; replacement Pod serving endpoint configuration invalid"
 		return partial, fmt.Errorf("%s: replacement Pod serving endpoint configuration: %w", kind, err)
 	}
@@ -449,6 +465,8 @@ type migRebindHandler struct{}
 
 func (migRebindHandler) Name() string { return string(model.ActionMIGRebind) }
 func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	req.Action = model.ActionMIGRebind
+	ec.ServingRequest = req
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "mig-rebind", req)
@@ -457,7 +475,7 @@ func (migRebindHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Ha
 	if reason := triggerIdentityRefusal(req, pod); reason != "" {
 		return refuseAI("mig-rebind", reason)
 	}
-	if _, err := validatedEndpointForPod(pod); err != nil {
+	if _, err := servingEndpointForPod(ctx, ec, req, pod); err != nil {
 		return refuseAI("mig-rebind", err.Error())
 	}
 	// The current resource request identifies the device-plugin class. Desired geometry comes only
@@ -653,11 +671,11 @@ func authoritativeRawKVPod(ctx context.Context, ec EnactCtx, req Request, kind s
 	return pod, HandlerResult{}, nil
 }
 
-func declaredKVEndpoint(req Request, pod *corev1.Pod) (servingEndpoint, string) {
+func declaredKVEndpoint(ctx context.Context, ec EnactCtx, req Request, pod *corev1.Pod) (servingEndpoint, string) {
 	if reason := triggerIdentityRefusal(req, pod); reason != "" {
 		return servingEndpoint{}, reason
 	}
-	ep, err := validatedEndpointForPod(pod)
+	ep, err := servingEndpointForPod(ctx, ec, req, pod)
 	if err != nil {
 		return servingEndpoint{}, err.Error()
 	}
@@ -668,11 +686,13 @@ func declaredKVEndpoint(req Request, pod *corev1.Pod) (servingEndpoint, string) 
 }
 
 func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	req.Action = model.ActionKVReset
+	ec.ServingRequest = req
 	pod, refusal, err := authoritativeRawKVPod(ctx, ec, req, "kv-reset")
 	if pod == nil {
 		return refusal, err
 	}
-	ep, reason := declaredKVEndpoint(req, pod)
+	ep, reason := declaredKVEndpoint(ctx, ec, req, pod)
 	if reason != "" {
 		return refuseAI("kv-reset", reason)
 	}

@@ -1,0 +1,43 @@
+# REVIEW BEFORE APPLYING. This example isolates only Pods explicitly labelled
+# phorvex.ai/serving-admin-protected=true. It assumes distinct listeners: the
+# Pod's exact phorvex.ai/serving-port is 8443 for administrative control, while
+# inference data uses 8000. L4 NetworkPolicy cannot isolate HTTP routes that
+# share one port. Adapt ports and client selectors to the real serving stack.
+# NetworkPolicy support and behavior depend on the CNI.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: serving-control-admin-plane
+  namespace: tenant-a
+spec:
+  podSelector:
+    matchLabels:
+      phorvex.ai/serving-admin-protected: "true"
+  policyTypes:
+    - Ingress
+  ingress:
+    # Administrative serving routes: only the Phorvex manager identity's Pods.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: phorvex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: phorvex
+              app.kubernetes.io/component: manager
+      ports:
+        - protocol: TCP
+          port: 8443
+    # Preserve the reviewed inference/data-plane clients and port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tenant-a
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: model-serving
+      ports:
+        - protocol: TCP
+          port: 8000
+# Egress is intentionally outside policyTypes, so this example does not alter
+# DNS, certificate/Secret delivery, telemetry, registry, or other egress paths.

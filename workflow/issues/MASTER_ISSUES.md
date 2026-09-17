@@ -1123,7 +1123,7 @@ Severity: HIGH · Tier: parallel · Fixes: none
 
 ### M-93 · Plaintext, unauthenticated model control plane · **OPEN** · `ACTUATION`
 
-Severity: HIGH · Tier: parallel · Fixes: none
+Severity: HIGH · Tier: parallel · Fixes: T12-M093
 
 > Anatomy join review: **complete**.
 > `V2` **LOCUS** · ext.vllm

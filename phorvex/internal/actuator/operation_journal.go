@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	validation "k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
@@ -68,6 +69,8 @@ type operationReceipt struct {
 	AdapterEventCreatedAt string `json:"adapterEventCreatedAt,omitempty"`
 	AdapterCreator        string `json:"adapterCreator,omitempty"`
 	AdapterEndpointSHA256 string `json:"adapterEndpointSHA256,omitempty"`
+	ServingBindingSHA256  string `json:"servingBindingSHA256,omitempty"`
+	ServingServiceAccount string `json:"servingServiceAccount,omitempty"`
 	// Route-cutover v5 fields. The Service-UID-named receipt is the only
 	// authority for route/endpoint continuation or restoration. Tenant metadata
 	// is deliberately not an authority surface.
@@ -94,12 +97,20 @@ type routeOwnedValue struct {
 func (v routeOwnedValue) IsZero() bool { return !v.Present && v.Value == "" }
 
 const (
-	requestDrainReceiptVersion  = 3
-	adapterRotateReceiptVersion = 4
-	routeCutoverReceiptVersion  = 5
-	requestDrainMaxLabels       = 64
-	requestDrainMaxAddresses    = 16
+	requestDrainReceiptVersion        = 3
+	adapterRotateReceiptVersion       = 4
+	routeCutoverReceiptVersion        = 5
+	warmSecureReceiptVersion          = 6
+	requestDrainSecureReceiptVersion  = 7
+	adapterRotateSecureReceiptVersion = 8
+	requestDrainMaxLabels             = 64
+	requestDrainMaxAddresses          = 16
 )
+
+func validDigest(value string) bool {
+	b, err := hex.DecodeString(value)
+	return err == nil && len(b) == sha256.Size
+}
 
 func receiptName(r operationReceipt) string {
 	if (r.Kind == string(model.ActionRouteRotate) || r.Kind == string(model.ActionEndpointRotate)) && r.ServiceUID != "" {
@@ -117,15 +128,15 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
 	case "warm-swap", "model-shard-replace":
-		if r.Version != 1 && r.Version != 2 {
+		if r.Version != 1 && r.Version != 2 && r.Version != warmSecureReceiptVersion {
 			return false
 		}
-		if r.Version == 2 {
+		if r.Version == 2 || r.Version == warmSecureReceiptVersion {
 			p := r.Pool
 			if p == nil || p.RSName == "" || p.RSUID == "" || p.RSGeneration <= 0 || p.Desired < 2 || p.Desired > warmPoolMaxMembers || len(p.Members) != int(p.Desired) || p.RSTemplateHash == "" || p.RSSelectorHash == "" || p.ServiceName == "" || p.ServiceUID == "" || p.ServiceSelectorHash == "" || ((p.ParentName == "") != (p.ParentUID == "")) || r.RewarmSpecHash != "" || r.OldName == "" || r.OldName != r.TargetName || r.OldUID == "" || r.OldUID != r.TargetUID || r.NewName == "" || r.NewUID == "" || r.OldName == r.NewName || r.OldUID == r.NewUID || r.GroupValue == "" || !((r.Kind == "warm-swap" && r.GroupKey == labelSwapGroup) || (r.Kind == "model-shard-replace" && r.GroupKey == labelModelShard)) {
 				return false
@@ -142,7 +153,8 @@ func (r operationReceipt) valid() bool {
 			}
 			preObservation := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired-awaiting-controller"
 			postObservation := r.Phase == "pool-observed" || r.Phase == "pool-warm-ready"
-			return (preObservation && r.RewarmName == "" && r.RewarmUID == "") || (postObservation && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.RewarmUID != r.OldUID && r.RewarmUID != r.NewUID && !members[r.RewarmUID])
+			valid := (preObservation && r.RewarmName == "" && r.RewarmUID == "") || (postObservation && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmName != r.OldName && r.RewarmName != r.NewName && r.RewarmUID != r.OldUID && r.RewarmUID != r.NewUID && !members[r.RewarmUID])
+			return valid && (r.Version != warmSecureReceiptVersion || (validDigest(r.ServingBindingSHA256) && len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) == 0))
 		}
 		validPhase := r.Phase == "prepared" || r.Phase == "promoted" || r.Phase == "retiring" || r.Phase == "retired" || r.Phase == "rewarm-intent" || r.Phase == "rewarmed"
 		validRewarm := (r.Phase != "rewarm-intent" && r.Phase != "rewarmed" && r.RewarmName == "" && r.RewarmUID == "" && r.RewarmSpecHash == "") || (r.Phase == "rewarm-intent" && r.RewarmName != "" && r.RewarmUID == "" && r.RewarmSpecHash != "") || (r.Phase == "rewarmed" && r.RewarmName != "" && r.RewarmUID != "" && r.RewarmSpecHash != "")
@@ -151,7 +163,7 @@ func (r operationReceipt) valid() bool {
 		return r.Version == 1 && (r.Phase == "prepared" || r.Phase == "policy-bound") && r.NPName != "" && r.TargetLabels != nil && (r.Phase != "policy-bound" || r.NPUID != "")
 	case "request-drain":
 		_, hasServingSelector := r.ServiceSelector[labelServing]
-		if r.Version != requestDrainReceiptVersion || !boundedLabelMap(r.TargetLabels) || !boundedLabelMap(r.ServiceSelector) || !hasServingSelector || r.ServiceName == "" || r.ServiceUID == "" || r.OperationToken == "" || len(r.EndpointAddresses) != 1 || (!r.PriorServingPresent && r.PriorServingValue != "") || r.Aborted < 0 {
+		if (r.Version != requestDrainReceiptVersion && r.Version != requestDrainSecureReceiptVersion) || !boundedLabelMap(r.TargetLabels) || !boundedLabelMap(r.ServiceSelector) || !hasServingSelector || r.ServiceName == "" || r.ServiceUID == "" || r.OperationToken == "" || len(r.EndpointAddresses) != 1 || (!r.PriorServingPresent && r.PriorServingValue != "") || r.Aborted < 0 || (r.Version == requestDrainSecureReceiptVersion && (!validDigest(r.ServingBindingSHA256) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0)) {
 			return false
 		}
 		if token, err := hex.DecodeString(r.OperationToken); err != nil || len(token) != 16 {
@@ -178,10 +190,10 @@ func (r operationReceipt) valid() bool {
 			return false
 		}
 	case "adapter-rotate":
-		if r.Version != adapterRotateReceiptVersion || !boundedLabelMap(r.TargetLabels) ||
+		if (r.Version != adapterRotateReceiptVersion && r.Version != adapterRotateSecureReceiptVersion) || !boundedLabelMap(r.TargetLabels) ||
 			!validRuntimeAdapterName(r.AdapterName) || r.AdapterEventName == "" || r.AdapterEventUID == "" ||
 			r.AdapterCreator == "" || len(r.AdapterEventName) > 253 || len(r.AdapterEventUID) > 253 || len(r.AdapterCreator) > 512 ||
-			(r.AdapterSourcePresent && (r.AdapterSource == "" || len(r.AdapterSource) > maxAdapterSourcePathBytes)) || (!r.AdapterSourcePresent && r.AdapterSource != "") {
+			(r.AdapterSourcePresent && (r.AdapterSource == "" || len(r.AdapterSource) > maxAdapterSourcePathBytes)) || (!r.AdapterSourcePresent && r.AdapterSource != "") || (r.Version == adapterRotateSecureReceiptVersion && (!validDigest(r.ServingBindingSHA256) || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0)) {
 			return false
 		}
 		createdAt, err := time.Parse(time.RFC3339Nano, r.AdapterEventCreatedAt)

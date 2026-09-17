@@ -235,6 +235,7 @@ func TestUnknownActionsAreConservativelyUnsupported(t *testing.T) {
 // noop sentinel and the declared-not-implemented `disable` are not support.
 func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 	na := NewNativeActuator(fake.NewClientBuilder().WithScheme(newScheme(t)).Build())
+	na.SetServingSecurity(legacyServingSecurityForTest(t))
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable}, model.MutatingActions...) {
 		ok, why := na.SupportsAction(t.Context(), a, Target{})
 		_, registered := HandlerRegistry.Get(string(a))
@@ -282,6 +283,8 @@ func TestHybridAsksTheRouteItWouldDispatchTo(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
 	h := NewHybridActuator(c)
 	phoenix, native := NewPhoenixActuator(c), NewNativeActuator(c)
+	h.SetServingSecurity(legacyServingSecurityForTest(t))
+	native.SetServingSecurity(legacyServingSecurityForTest(t))
 	ctx := t.Context()
 
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable}, model.MutatingActions...) {
