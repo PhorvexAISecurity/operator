@@ -38,7 +38,7 @@ phorvex:
       # The phorvex subchart has no global-registry helper (unlike the dashboard), so the
       # registry has to be spelled out in the repository here.
       repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
-      tag: "0.4.124"    # ci:phorvex-tag
+      tag: "0.4.128"    # ci:phorvex-tag
       pullPolicy: IfNotPresent
     baseInterval: 10s
     leaderElect: true
@@ -102,7 +102,7 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.124" # ci:console-tag
+        tag: "0.4.128" # ci:console-tag
         pullPolicy: IfNotPresent
       port: 8090
       # ── console identity and authorization (M-136) ────────────────────────
@@ -166,6 +166,42 @@ phorvex:
                 }
               ]
             }
+    # ── Namespaced actuation RBAC (startup authorization preflight) ───────────────
+    # The operator refuses to start unless it holds, in EVERY namespace that carries a
+    # PhorvexPolicy, the verbs its enabled actions need (pods delete/update/patch,
+    # NetworkPolicies, Service selector restitching, EndpointSlice list). The chart grants
+    # those only through per-namespace Role/RoleBindings rendered from this list — nothing
+    # cluster-wide. Every namespace here has a live policy; a policy in a namespace that is
+    # NOT listed makes the operator fail closed at startup (v0.4.122 outage, 2026-09-17).
+    # ── Serving-control transport (kv-reset, kv-migrate-invalidate, guardrail-rotate,
+    # adapter-rotate, request-drain, warm-swap, model-shard-replace) ──────────────────
+    # Default `secure-required` needs an exact TLS binding (policy UID + workload SA +
+    # bearer/CA Secret) per serving workload; with none configured EVERY serving-control
+    # actuator is "unsupported" and a KV attack can only be answered by rotate. This dev
+    # cluster's vLLM control endpoints are plain HTTP inside the cluster, so the explicit
+    # migration mode is the truthful setting. Visibly insecure by contract: move back to
+    # secure-required + bindings once the serving pods expose TLS admin endpoints.
+    servingSecurity:
+      mode: legacy-plaintext
+    # ── Detector allowlist (M-94) ─────────────────────────────────────────────────
+    # Chart default plus the console: attacks fired from the console UI create
+    # SecurityEvents as the console ServiceAccount, and an unlisted creator carries no
+    # belief evidence (the brain ignores it). Listing the console makes the dashboard's
+    # attack controls count as real signal. The e2e-detector is appended by the chart.
+    trustedDetectors:
+      - vllm/detector-kv-canary
+      - vllm/detector-adapter-inv
+      - phorvex-system/operator-controller-manager
+      - phorvex-system/phorvex-phorvex-console
+    actuatorNamespaces:
+      - voice
+      - nats
+      - vllm
+      - litellm
+      - crm
+      - mcp
+      - document-store
+      - ci-reports
     epss:
       enabled: true
       configMapName: phorvex-epss

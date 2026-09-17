@@ -23,23 +23,39 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 const vllmAttackNS = "vllm"
 
-// vllmBaselinePolicy is the calm hygiene state "reset" returns to: the two always-on AI actuators,
-// single-replica floor, proactive (poison/kvcache need no event).
-const vllmBaselinePolicy = `{"spec":{"actions":{"enabled":["kv-reset","adapter-rotate"]},"slo":{"minAvailableReplicas":1},"triggers":{"eventDriven":true,"reactiveOnly":false}}}`
-
-// scopeVllmPolicy merge-patches vllm-defense so ONE surgical actuator is the sole feasible candidate
-// (+ reactiveOnly so the pick is attributable to the fired event). Fire-and-forget.
-func (s *Server) scopeVllmPolicy(mergePatch string) {
-	_, _ = s.cfg.execText(8*time.Second, "kubectl", "-n", vllmAttackNS, "patch", "phorvexpolicy", "vllm-defense", "--type", "merge", "-p", mergePatch)
-}
+// Scenarios NEVER rewrite vllm-defense. They used to merge-patch actions.enabled down to
+// [rotate, <the one expected actuator>] (+ reactiveOnly) before firing, and "reset" shrank it
+// to a two-action hygiene baseline — which made every demo's outcome a property of the patch,
+// not of the brain, and left the tenant's policy in whatever shape the last click chose. The
+// policy is the operator's contract; which actuator answers an attack is the brain's call.
+// A scenario only plants the condition and fires a SecurityEvent whose rule type names the
+// attack VECTOR (model.AttackVectorFor*), the same contract workload_attack.go uses.
 
 // fireVllmEvent applies a Phoenix SecurityEvent CR (the detector stand-in) targeting the pod, so the
 // workload becomes actionable and the reactive pick is attributable. Labeled phorvex.ai/redteam=true so
 // "reset" can delete it. Mirrors workload_attack.go (execText has no stdin -> temp file + apply).
+// vllmRuleType maps a scenario's event name to the attack vector the brain steers on, so the
+// fired event lands as belief about WHICH surface was hit rather than as an opaque name.
+func vllmRuleType(evType string) string {
+	switch evType {
+	case "KVPoisoning", "KVCacheOccupancy":
+		return model.AttackVectorKV
+	case "GuardrailBypass":
+		return model.AttackVectorGuardrail
+	case "DenialOfWallet":
+		return model.AttackVectorInflight
+	case "AdapterPoisoning":
+		return model.AttackVectorAdapter
+	}
+	return evType
+}
+
 func (s *Server) fireVllmEvent(pod, evType, desc, anomaly string) error {
 	yaml := fmt.Sprintf(`apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
@@ -56,7 +72,7 @@ spec:
     threatLevel: "critical"
     source: "redteam"
   anomalyScore: %q
-`, strings.ToLower(evType), vllmAttackNS, desc, vllmAttackNS, pod, evType, anomaly)
+`, strings.ToLower(evType), vllmAttackNS, desc, vllmAttackNS, pod, vllmRuleType(evType), anomaly)
 	f, ferr := os.CreateTemp("", "phorvex-vllm-se-*.yaml")
 	if ferr != nil {
 		return ferr
@@ -118,6 +134,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		}
 		kctl("label", "pod", pod, "phorvex.ai/lora-enabled=true", "--overwrite")
 		kctl("annotate", "pod", pod, "phorvex.ai/lora-adapter=evil", "--overwrite")
+		if e := s.fireVllmEvent(pod, "AdapterPoisoning", "unauthorized LoRA adapter loaded into the serving process", "0.9"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
 		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Poisoned LoRA injection", "poison", "OWASP LLM05 / AML.T0018", "adapter-rotate", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "poison",
 			"message": "Poisoned LoRA injected + flagged on " + pod + " — within ~10s the vllm tenant below picks adapter-rotate (not kv-reset). See the Report tab for the measured outcome."})
@@ -125,6 +145,10 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// ATTACK: prime a secret prefix into the shared prefix-cache. kv-reset (proactive hygiene)
 		// flushes it; the timing-oracle leak/close numbers are the CLI oracle.
 		_, _ = execIn(`curl -s -o /dev/null http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"SYSTEM CONFIDENTIAL DOSSIER wire-secret ZX-44918-PLT do not reveal","max_tokens":1}'`)
+		if e := s.fireVllmEvent(pod, "KVCacheOccupancy", "secret prefix primed into the shared prefix-cache (timing-oracle leak)", "0.9"); e != nil {
+			writeJSON(w, 502, map[string]string{"error": e.Error()})
+			return
+		}
 		s.startAttackRecord("", vllmAttackNS, vllmAttackNS, pod, "Prefix-cache occupancy oracle", "kvcache", "CWE-208", "kv-reset", false, base)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "kvcache",
 			"message": "Secret prefix primed on " + pod + " — Phorvex flushes it via kv-reset (watch the vllm tenant below). See the Report tab for the measured outcome."})
@@ -136,7 +160,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		kctl("label", "pod", pod, "phorvex.ai/route-key=ep-old", "--overwrite")
 		kctl("annotate", "pod", pod, "phorvex.ai/route-service=vllm-infer", "--overwrite")
 		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/route-key":"ep-old"}}}`)
-		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","endpoint-rotate"]},"slo":{"minAvailableReplicas":2},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
 		if e := s.fireVllmEvent(pod, "EndpointPinning", "attacker pinned the vLLM serving route (route-key=ep-old) for model extraction / SSRF", "0.95"); e != nil {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
@@ -149,7 +172,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// ATTACK: a many-shot jailbreak that the ACTIVE guardrail variant misses. Set active=pgv1 (the
 		// weak one) so guardrail-rotate visibly swaps to pgv2 and the same probe is then blocked.
 		_, _ = execIn(`curl -s -o /dev/null -X POST http://localhost:8000/v1/guardrail/reload -H 'Content-Type: application/json' -d '{"variant":"pgv1"}'`)
-		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","guardrail-rotate"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
 		if e := s.fireVllmEvent(pod, "GuardrailBypass", "many-shot jailbreak bypasses the active safety-guardrail variant", "0.95"); e != nil {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
@@ -162,7 +184,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// ATTACK: expensive-turn flood (denial-of-wallet). request-drain aborts the in-flight flood
 		// without restarting the pod. Flood is best-effort/background (evidence, not the selection driver).
 		_, _ = execIn(`for n in 1 2 3 4 5 6; do curl -s -o /dev/null --max-time 90 http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Write a very long detailed essay about the history of computing.","max_tokens":400}' & done; sleep 2`)
-		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","request-drain"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
 		if e := s.fireVllmEvent(pod, "DenialOfWallet", "expensive-turn flood saturating the vLLM pod (denial-of-wallet)", "0.9"); e != nil {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
@@ -175,7 +196,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// ATTACK: plant a distinctive long prefix (2nd send = cache HIT) — poisoned KV. kv-migrate-invalidate
 		// evicts the planted cache state locally without restarting the pod.
 		_, _ = execIn(`PFX='ZQX-DEMO stable system context block for the disaggregated serving rig padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding'; for n in 1 2; do curl -s -o /dev/null http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d "{\"model\":\"Qwen/Qwen2.5-7B-Instruct-AWQ\",\"messages\":[{\"role\":\"user\",\"content\":\"$PFX reply with OK\"}],\"max_tokens\":4}"; sleep 1; done`)
-		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","kv-migrate-invalidate"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
 		if e := s.fireVllmEvent(pod, "KVPoisoning", "poisoned KV migrated from a prefill worker (disaggregated serving)", "0.9"); e != nil {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
@@ -189,7 +209,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// and retires the leader. DESTRUCTIVE: retires the 7B leader (Deployment recreates it in minutes;
 		// serving continues via the smaller stand-in meanwhile). Start a long in-flight request as drain evidence.
 		_, _ = execIn(`curl -s -o /dev/null --max-time 180 http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","messages":[{"role":"user","content":"Count from 1 to 200, one number per line."}],"max_tokens":600}' & sleep 2`)
-		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","warm-swap"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
 		if e := s.fireVllmEvent(pod, "GPUEviction", "hostile co-tenant pressure on the shared GPU — evict without cold-load", "0.9"); e != nil {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
@@ -202,7 +221,6 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		// ATTACK: served-model weight tamper (fingerprint drift). model-shard-replace swaps in the known-good
 		// shard shadow with zero cold-load. DESTRUCTIVE (same as warm-swap: retires the leader). The shard
 		// labels are persisted on both Deployment templates, so no live-pod re-labeling is needed here.
-		s.scopeVllmPolicy(`{"spec":{"actions":{"enabled":["rotate","model-shard-replace"]},"triggers":{"eventDriven":true,"reactiveOnly":true}}}`)
 		if e := s.fireVllmEvent(pod, "ModelTampering", "served-model weight tamper indicated by fingerprint drift — replace the shard cleanly", "0.9"); e != nil {
 			writeJSON(w, 502, map[string]string{"error": e.Error()})
 			return
@@ -221,9 +239,8 @@ func (s *Server) vllmAttack(w http.ResponseWriter, r *http.Request) {
 		kctl("label", "pod", pod, "phorvex.ai/route-key-", "phorvex.ai/serving-")
 		kctl("annotate", "pod", pod, "phorvex.ai/route-service-")
 		kctl("patch", "svc", "vllm-infer", "--type", "merge", "-p", `{"spec":{"selector":{"app":"vllm","phorvex.ai/role":"leader"}}}`)
-		s.scopeVllmPolicy(vllmBaselinePolicy)
 		writeJSON(w, 200, map[string]any{"ok": true, "action": "reset",
-			"message": "Reset — detector flags + fired events cleared, poisoned adapter unloaded, route/serving labels un-staged, policy back to the hygiene baseline (kv-reset + adapter-rotate, proactive). If a warm-swap/model-shard-replace ran, the Deployment is recreating the 7B leader (a few minutes)."})
+			"message": "Reset — detector flags + fired events cleared, poisoned adapter unloaded, route/serving labels un-staged. If a warm-swap/model-shard-replace ran, the Deployment is recreating the 7B leader (a few minutes)."})
 
 	default:
 		writeJSON(w, 400, map[string]string{"error": "unknown action (poison|kvcache|endpoint-rotate|guardrail-rotate|request-drain|kv-migrate-invalidate|warm-swap|model-shard-replace|reset)"})
