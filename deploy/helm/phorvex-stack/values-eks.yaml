@@ -166,6 +166,22 @@ phorvex:
                 }
               ]
             }
+    # ── Namespaced actuation RBAC (startup authorization preflight) ───────────────
+    # The operator refuses to start unless it holds, in EVERY namespace that carries a
+    # PhorvexPolicy, the verbs its enabled actions need (pods delete/update/patch,
+    # NetworkPolicies, Service selector restitching, EndpointSlice list). The chart grants
+    # those only through per-namespace Role/RoleBindings rendered from this list — nothing
+    # cluster-wide. Every namespace here has a live policy; a policy in a namespace that is
+    # NOT listed makes the operator fail closed at startup (v0.4.122 outage, 2026-09-17).
+    actuatorNamespaces:
+      - voice
+      - nats
+      - vllm
+      - litellm
+      - crm
+      - mcp
+      - document-store
+      - ci-reports
     epss:
       enabled: true
       configMapName: phorvex-epss
