@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -16,6 +16,13 @@ checks:
     at: '2026-09-17T00:34:32+00:00'
     contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
     approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/lead-baseline.log
+    sha256: 93f8ffb66a0623f72a5396461ec395279579eb747f766da4b1b1d6e4c2caaf21
+    source_sha: e35b809c543654134f83683489cf6fce973d7afb
+    at: '2026-09-17T01:03:38+00:00'
 fix_id: T11-M045
 issues:
 - M-45
@@ -85,7 +92,7 @@ next_action:
   owner: sol-t11-m045
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-17T00:59:43+00:00'
+updated_at: '2026-09-17T01:03:38+00:00'
 configuration_history:
 - at: '2026-09-17T00:34:29+00:00'
   by: codex-lead
