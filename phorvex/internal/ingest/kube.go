@@ -26,6 +26,7 @@ import (
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
+	"github.com/phorvex/phorvex/internal/servingcontext"
 )
 
 // Snapshot is one cluster-wide ingest pass shared by all tenants in a tick: the
@@ -511,7 +512,8 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 	// AI/inference identity (P-CONTEXT): a served-model fingerprint + inference endpoint
 	// are declared via annotations (a NIM/serving operator stamps these); honest-absent
 	// ("") for non-AI workloads so the generic kill-chain path is unchanged.
-	out.ModelID = p.Annotations["phorvex.ai/model-id"]
+	serving := servingcontext.FromAnnotations(p.Annotations)
+	out.ModelID = serving.ModelID
 	// Session epoch: either flush bumps it, and either resets the session exposure clock (PHVX-67).
 	out.SessionEpoch = p.Annotations["phorvex.ai/kv-reset-epoch"] + "|" + p.Annotations["phorvex.ai/kv-migrate-epoch"]
 	// M-23 per-action exposure epochs: the `phorvex.ai/*-epoch` labels the pod-alive rotation
@@ -534,8 +536,12 @@ func projectPod(p *corev1.Pod, now time.Time) model.Pod {
 		p.Annotations["phorvex.ai/guardrail-variant"],
 		p.Annotations["phorvex.ai/guardrail-variants"],
 	)
-	out.ServingEndpointReady = out.Ready && p.Status.PodIP != "" &&
-		(out.HasGPU || out.ModelID != "" || p.Annotations["phorvex.ai/serving-port"] != "")
+	// Serving is an explicit workload declaration, never inferred from a GPU allocation.
+	// A model-id is itself a serving declaration; otherwise serving-port must be a valid
+	// TCP port. Readiness and PodIP are separate structural prerequisites and do not prove
+	// that a protocol answered or that the declared model is loaded.
+	out.ServingDeclared = serving.Declared()
+	out.ServingEndpointReady = out.ServingDeclared && out.Ready && p.Status.PodIP != ""
 	// lora-adapter is operational tenant configuration, never an integrity assertion.
 	return out
 }
@@ -658,20 +664,7 @@ func topOwner(p *corev1.Pod) (string, string) {
 }
 
 func gpuInfo(p *corev1.Pod) (bool, string) {
-	hasGPU := false
-	scan := func(rl corev1.ResourceList) {
-		for name := range rl {
-			n := string(name)
-			if strings.HasPrefix(n, gpuPrefix) {
-				hasGPU = true
-			}
-		}
-	}
-	for _, ct := range p.Spec.Containers {
-		scan(ct.Resources.Limits)
-		scan(ct.Resources.Requests)
-	}
-	return hasGPU, gpudevice.MIGResourceName(p)
+	return gpudevice.HasGPUResource(p), gpudevice.MIGResourceName(p)
 }
 
 func isStateful(p *corev1.Pod) bool {

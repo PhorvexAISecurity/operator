@@ -289,8 +289,8 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 	// local checks first, unchanged.
 	if AICapabilityActions[action] {
 		pod := &v.Pod
-		if !(pod.HasGPU || pod.ModelID != "") {
-			return false, "pod advertises no GPU or model identity"
+		if !actionContextAvailable(pod, action) {
+			return false, "pod lacks the action's required GPU, serving, or detector context"
 		}
 		if why := w.configWhy(pod, action); why != "" {
 			return false, why
@@ -319,6 +319,20 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 		return false, why
 	}
 	return true, ""
+}
+
+func actionContextAvailable(pod *model.Pod, action model.Action) bool {
+	if pod == nil {
+		return false
+	}
+	switch action {
+	case model.ActionMIGRebind:
+		return pod.HasGPU
+	case model.ActionAdapterRotate:
+		return pod.HasBoundAdapterObservation()
+	default:
+		return pod.HasServingDeclaration()
+	}
 }
 
 // CapableAndAuthorized is Capable PLUS the no-rbac leg, per (pod, action) — the check the
@@ -415,7 +429,7 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 
 func (w Witness) warmPoolWhy(pod *model.Pod, group string, shadows map[string]bool, label string) string {
 	if !capabilityTarget(pod) {
-		return "pod is a warm shadow or advertises no GPU/model identity"
+		return "pod is a warm shadow or declares no serving context"
 	}
 	if group == "" {
 		return "pod declares no " + label
@@ -434,7 +448,7 @@ func (w Witness) warmPoolWhy(pod *model.Pod, group string, shadows map[string]bo
 
 func (w Witness) shardPoolWhy(pod *model.Pod) string {
 	if !capabilityTarget(pod) {
-		return "pod is a warm shadow or advertises no GPU/model identity"
+		return "pod is a warm shadow or declares no serving context"
 	}
 	shard := pod.Labels[labelModelShard]
 	if shard == "" {
@@ -470,7 +484,7 @@ func (w Witness) servingServiceSelects(pod *model.Pod) bool {
 }
 
 func capabilityTarget(pod *model.Pod) bool {
-	return pod != nil && pod.Labels[labelWarmRole] != warmShadowRole && (pod.HasGPU || pod.ModelID != "")
+	return pod != nil && pod.Labels[labelWarmRole] != warmShadowRole && pod.HasServingDeclaration()
 }
 
 func hasAllocatableGPU(node ingest.NodeInfo) bool {

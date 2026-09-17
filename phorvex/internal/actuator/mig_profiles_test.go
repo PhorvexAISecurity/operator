@@ -25,6 +25,18 @@ func TestMIGProfilesExactAuthority(t *testing.T) {
 	}
 }
 
+func TestMIGProfilesAcceptsKubernetesMediaExtensionName(t *testing.T) {
+	p := &MIGProfiles{Version: 1, Rules: []MIGProfileRule{{
+		Namespace: "tenant", Resource: "nvidia.com/mig-1g.10gb.me", Profile: "1g.10gb+me",
+	}}}
+	if err := p.validate(); err != nil {
+		t.Fatalf("NVIDIA media-extension resource rejected: %v", err)
+	}
+	if _, err := p.Resolve("tenant", "nvidia.com/mig-1g.10gb.me"); err != nil {
+		t.Fatalf("NVIDIA media-extension resource did not resolve: %v", err)
+	}
+}
+
 func TestMIGProfilesRejectsWildcardDuplicateAndBadProfile(t *testing.T) {
 	for _, body := range []string{
 		`{"version":1,"rules":[{"namespace":"*","resource":"nvidia.com/mig-1g.10gb","profile":"2g.20gb"}]}`,

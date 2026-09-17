@@ -52,7 +52,16 @@ func (b migAllocationBinding) valid() bool {
 
 func isCanonicalMIGResource(resource string) bool {
 	const prefix = "nvidia.com/mig-"
-	return strings.HasPrefix(resource, prefix) && profilePattern.MatchString(strings.TrimPrefix(resource, prefix))
+	if !strings.HasPrefix(resource, prefix) {
+		return false
+	}
+	profile := strings.TrimPrefix(resource, prefix)
+	// The NVIDIA device plugin replaces '+' in physical media-extension profile
+	// names with '.' when constructing Kubernetes extended-resource names.
+	if strings.HasSuffix(profile, ".me") {
+		profile = strings.TrimSuffix(profile, ".me") + "+me"
+	}
+	return profilePattern.MatchString(profile)
 }
 
 type migAllocationAuthority interface {

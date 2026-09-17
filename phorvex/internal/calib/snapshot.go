@@ -104,8 +104,9 @@ func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsW
 			EPSS:        w.EPSSMultiplier,
 			ModelRarity: w.ModelRarity,
 			Namespaces:  len(tenants[p.Node]),
-			// Mirrors the production gate in recon: a GPU pod takes the ModelRarity term even
-			// with no model annotation.
+			// Retains the shipped common-scalar economic gate: a GPU pod takes the
+			// ModelRarity term even with no model annotation. This is separate from M-45's
+			// context-specific fact-emission predicates.
 			AIFactEligible: p.ModelID != "" || p.HasGPU,
 		})
 	}

@@ -123,7 +123,7 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 }
 
 func warmSwapProcessCoverEligible(p *model.Pod) bool {
-	if p == nil || (!p.HasGPU && p.ModelID == "") || !p.WarmPoolConfigured ||
+	if p == nil || !p.HasServingDeclaration() || !p.WarmPoolConfigured ||
 		p.WarmPoolOwnerUID == "" || p.RouteService == "" || p.Labels == nil {
 		return false
 	}

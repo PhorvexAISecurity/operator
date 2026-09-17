@@ -25,7 +25,18 @@ func TestM071RunnerKeepsUncertainAdapterDispatchOutOfFallback(t *testing.T) {
 	}
 	decisions := tracedSelectedDecision()
 	decisions[0].Action = model.ActionAdapterRotate
-	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "pod-uid", ModelID: "fixture-model", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}}}
+	pod := model.Pod{
+		Namespace: "ns", Name: "p1", UID: "pod-uid", ModelID: "fixture-model",
+		SuspectAdapter: "adapter-a", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true,
+	}
+	pod.AdapterObservation = &model.AdapterObservation{
+		EventName:       "adapter-detected",
+		EventUID:        "event-uid",
+		CreatorIdentity: "system:serviceaccount:ns:detector",
+		TargetPodUID:    pod.UID,
+		AdapterName:     pod.SuspectAdapter,
+	}
+	views := map[string]*model.WorkloadView{"ns/p1": {Pod: pod}}
 	policy := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
 	got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views)
 	decision := decisions[0]

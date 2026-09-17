@@ -13,7 +13,11 @@ func TestEndpointPathWithheldThroughSelection(t *testing.T) {
 			for _, control := range []bool{false, true} {
 				v := covView("endpoint", true, 2*time.Hour, false)
 				v.Pod.HasGPU = gpu
-				if !gpu {
+				if gpu {
+					// Exercise endpoint withholding on GPU hardware through an explicit
+					// serving declaration, rather than recreating the repaired GPU=>serving inference.
+					v.Pod.ServingDeclared = true
+				} else {
 					v.Pod.ModelID = "m"
 				}
 				v.Pod.RouteService = route

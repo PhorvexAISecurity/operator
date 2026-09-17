@@ -120,13 +120,21 @@ func plainView() *model.WorkloadView {
 	return &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p", UID: "u1"}}
 }
 
-// aiView is the same pod with the positive AI context every AI move requires, including the
-// MIG device mig-rebind additionally requires.
+// aiView is the same pod with the positive context every AI move requires, including the
+// MIG device mig-rebind requires and the exact detector binding adapter-rotate requires.
 func aiView() *model.WorkloadView {
 	v := plainView()
 	v.Pod.HasGPU = true
 	v.Pod.ModelID = "llama-3-8b"
 	v.Pod.MIGDevice = "MIG-GPU-0/1g.5gb"
+	v.Pod.SuspectAdapter = "adapter-a"
+	v.Pod.AdapterObservation = &model.AdapterObservation{
+		EventName:       "adapter-detected",
+		EventUID:        "event-uid",
+		CreatorIdentity: "system:serviceaccount:ns:detector",
+		TargetPodUID:    v.Pod.UID,
+		AdapterName:     v.Pod.SuspectAdapter,
+	}
 	return v
 }
 

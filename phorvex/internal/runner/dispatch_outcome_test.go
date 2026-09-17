@@ -38,7 +38,7 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	e := &policyEntry{namespace: "ns"}
 	e.spec.Selector.MatchLabels = map[string]string{"app": "demo"}
 	e.spec.Selector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "tier", Operator: metav1.LabelSelectorOpExists}}
-	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "uid-1", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, HasGPU: true}}}
+	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "uid-1", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, ServingDeclared: true}}}
 	refused := tracedSelectedDecision()
 	if n := actuateWithBoundary(t, m, context.Background(), e, pol, refused, views); n != 0 || fa.calls != 0 || refused[0].Trace.DispatchReason != "route-preparation-failed" {
 		t.Fatalf("Phoenix refusal dispatched: n=%d calls=%d trace=%+v", n, fa.calls, refused[0].Trace)
