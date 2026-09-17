@@ -173,6 +173,26 @@ phorvex:
     # those only through per-namespace Role/RoleBindings rendered from this list — nothing
     # cluster-wide. Every namespace here has a live policy; a policy in a namespace that is
     # NOT listed makes the operator fail closed at startup (v0.4.122 outage, 2026-09-17).
+    # ── Serving-control transport (kv-reset, kv-migrate-invalidate, guardrail-rotate,
+    # adapter-rotate, request-drain, warm-swap, model-shard-replace) ──────────────────
+    # Default `secure-required` needs an exact TLS binding (policy UID + workload SA +
+    # bearer/CA Secret) per serving workload; with none configured EVERY serving-control
+    # actuator is "unsupported" and a KV attack can only be answered by rotate. This dev
+    # cluster's vLLM control endpoints are plain HTTP inside the cluster, so the explicit
+    # migration mode is the truthful setting. Visibly insecure by contract: move back to
+    # secure-required + bindings once the serving pods expose TLS admin endpoints.
+    servingSecurity:
+      mode: legacy-plaintext
+    # ── Detector allowlist (M-94) ─────────────────────────────────────────────────
+    # Chart default plus the console: attacks fired from the console UI create
+    # SecurityEvents as the console ServiceAccount, and an unlisted creator carries no
+    # belief evidence (the brain ignores it). Listing the console makes the dashboard's
+    # attack controls count as real signal. The e2e-detector is appended by the chart.
+    trustedDetectors:
+      - vllm/detector-kv-canary
+      - vllm/detector-adapter-inv
+      - phorvex-system/operator-controller-manager
+      - phorvex-system/phorvex-phorvex-console
     actuatorNamespaces:
       - voice
       - nats
