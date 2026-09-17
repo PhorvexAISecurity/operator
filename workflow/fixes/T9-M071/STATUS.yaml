@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 15
+revision: 16
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -137,7 +137,7 @@ implementation:
 pull_request:
   url: https://github.com/PhorvexSecurity/operator/pull/222
   reviewed_head: 5572d7d0945611dde95c809442b3f1243c843be1
-  merge_sha: null
+  merge_sha: a0e6eb6eedc349b99f06e778169e37fa5f29a0c8
   checks: FAIL
   patch_equivalence: PASS
 deployment:
@@ -170,9 +170,11 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: PR222 targets main. Await DevOps merge/deployment and external GitHub billing
-    resolution; continue independent Tier10 work. Retain issue-specific live verification.
-updated_at: '2026-09-17T00:57:36+00:00'
+  action: PR222 externally merged to main at a0e6eb6e on September17 04:13UTC. Remote
+    billing refusal retained; formal MERGED gate cannot pass without actual check
+    evidence. Await source-bound deployment and issue live controls; continue independent
+    tiers.
+updated_at: '2026-09-17T05:08:41+00:00'
 configuration_history:
 - at: '2026-09-16T22:46:38+00:00'
   by: codex-lead
@@ -221,6 +223,12 @@ configuration_history:
   - next_action
   - pull_request
   approval_ref: null
+- at: '2026-09-17T05:08:41+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
