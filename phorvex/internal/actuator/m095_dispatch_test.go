@@ -171,7 +171,7 @@ func TestM095AuthoritativeEventRecheckRejectsInvalidLiveObjects(t *testing.T) {
 	mv := &m95CaptureVLLM{}
 	r := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionAdapterRotate, AdapterObservation: &o}
 	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: mv}, r)
-	if err != nil || hr.Emitted || mv.unloadAdapter != "" {
+	if err == nil || hr.Emitted || mv.unloadAdapter != "" {
 		t.Fatalf("missing authoritative reader crossed serving seam: %+v %v unload=%q", hr, err, mv.unloadAdapter)
 	}
 }

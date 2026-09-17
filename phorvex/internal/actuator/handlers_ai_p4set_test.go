@@ -162,8 +162,9 @@ func TestAdapterRotateRollbackRequiresCurrentEvidenceAndMapping(t *testing.T) {
 
 func TestAdapterRotateFailClosedNoAdapter(t *testing.T) {
 	c := fakeC(aiPod("ns", "infer", map[string]string{})) // no lora-enabled / no adapter
-	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, VLLM: &mockVLLM{}}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
-	if err != nil || hr.Emitted {
+	mv := &mockVLLM{}
+	hr, err := adapterRotateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, Request{Namespace: "ns", Pod: "infer", Action: model.ActionAdapterRotate})
+	if err != nil || hr.Emitted || mv.unloadCalls != 0 {
 		t.Fatal("adapter-rotate must refuse without trusted observation")
 	}
 }
