@@ -575,7 +575,7 @@ func TestRouteCutoverUnavailableTargetRetainsImpossibleMixedOwnedState(t *testin
 			}
 
 			events, recoverErr := f.native.RecoverOperations(f.ctx, false)
-			if recoverErr == nil || len(events) == 0 {
+			if recoverErr != nil || len(events) != 1 || events[0].Outcome != "partial" || events[0].Err == nil {
 				t.Fatalf("impossible mixed %s state was accepted: events=%+v err=%v", mutate, events, recoverErr)
 			}
 			if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {

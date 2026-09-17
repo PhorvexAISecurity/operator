@@ -130,12 +130,13 @@ func TestRouteTerminalReceiptReconcilesThroughActualNativeRunner(t *testing.T) {
 	decision := func() []model.Decision {
 		return []model.Decision{{Namespace: ns.Name, Pod: pod.Name, Action: model.ActionRouteRotate, Selected: true, Feasible: true, Trace: &model.DecisionTraceV2{DecisionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", DispatchOutcome: model.DispatchNotAttempted, DispatchReason: "pending-dispatch"}}}
 	}
+	entry := &policyEntry{namespace: ns.Name, spec: v1alpha1.PhorvexPolicySpec{Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "route"}}}}
 	first := decision()
-	if got := actuateWithBoundary(t, manager, ctx, &policyEntry{namespace: ns.Name}, policy, first, views); got != 1 || !first[0].Actuated || first[0].DispatchOutcome != model.DispatchEmitted || first[0].RollbackRef == "" {
+	if got := actuateWithBoundary(t, manager, ctx, entry, policy, first, views); got != 1 || !first[0].Actuated || first[0].DispatchOutcome != model.DispatchEmitted || first[0].RollbackRef == "" {
 		t.Fatalf("first route dispatch = count=%d decision=%+v", got, first[0])
 	}
 	second := decision()
-	if got := actuateWithBoundary(t, manager, ctx, &policyEntry{namespace: ns.Name}, policy, second, views); got != 0 {
+	if got := actuateWithBoundary(t, manager, ctx, entry, policy, second, views); got != 0 {
 		t.Fatalf("terminal retry actuations=%d decision=%+v", got, second[0])
 	}
 	if second[0].Actuated || second[0].DispatchOutcome != model.DispatchReconciled || second[0].DispatchReason != "reconciled-prior-operation" ||
