@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -88,12 +88,28 @@ checks:
     - phorvex/internal/actuator
     - phorvex/internal/runner
     inputs_sha256: 073c1bc118235c7a38c83d98d4a42f9581020771a8eb66c2fb399ab4e1583b72
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 744a9c083be390af00cd48087cf527af68d9a2cae10b465645d219724f8ca706
+    source_sha: 7bc372450b616bf0d212be0f0bbcaf4393f2be2e
+    at: '2026-09-17T05:29:00+00:00'
+    baseline_sha: 373fcf862d6b90b4ce16335411912ef83c673dbd
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 7b6bed833ce904c50515ca12db03adc41315e3d053d0c2764030dfe8881a8fde
+    source_sha: 7bc372450b616bf0d212be0f0bbcaf4393f2be2e
+    at: '2026-09-17T05:29:00+00:00'
+    incident_sha256: 744a9c083be390af00cd48087cf527af68d9a2cae10b465645d219724f8ca706
 fix_id: T12-M093
 issues:
 - M-93
 title: Authenticate serving control with trusted scoped TLS credentials
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -138,7 +154,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -154,10 +170,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-17T05:24:35+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T05:29:04+00:00'
 configuration_history:
 - at: '2026-09-17T04:13:26+00:00'
   by: codex-lead
@@ -213,10 +229,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T05:29:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T05:29:03+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T12-M093:7:submit
-  from: sol-t12-m093
+  id: T12-M093:8:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 7
+  role: coordinator
+  kind: review
+  revision: 8
