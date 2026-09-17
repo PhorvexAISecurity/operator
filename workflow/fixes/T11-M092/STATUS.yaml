@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 7
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -23,13 +23,55 @@ checks:
     sha256: 3bea24e3cd66f9b6c5b452ca3ab5da986cbdf3800d91293234aea2bad0ec4486
     source_sha: 9121876f905e11c4cad35cdf8f61ca8e290a6f68
     at: '2026-09-17T03:04:27+00:00'
+  preflight:
+    result: PASS
+    by: sol-t11-m092
+    artifact: evidence/preflight/receipt.json
+    sha256: ec44ddd36373f827f4ab51d133a1de3ad88b142eaf868f846c805f8f76a644bc
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:07:20+00:00'
+  implementation:
+    result: PASS
+    by: sol-t11-m092
+    artifact: 04-diff.patch
+    sha256: 92c1b83c2bf2db83f3765ce49978c4938d395ccb7d44fb7472130f9926153f82
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:07:20+00:00'
+  l0:
+    result: PASS
+    by: sol-t11-m092
+    artifact: evidence/preflight/receipt.json
+    sha256: ec44ddd36373f827f4ab51d133a1de3ad88b142eaf868f846c805f8f76a644bc
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:07:20+00:00'
+  l1:
+    result: PASS
+    by: sol-t11-m092
+    artifact: evidence/worker/head-validation.md
+    sha256: 07b0025cb03dd8c9f65e095d74f00be5c07009314858c69a52826419e18d8b3e
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:07:20+00:00'
+  l2:
+    result: PASS
+    by: sol-t11-m092
+    artifact: evidence/preflight/run-1789617734131502046/go-phorvex.log
+    sha256: f9aa217298947f9a4c92615cbb338bac147f4c384897841c85bf1311caa6c8db
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:07:20+00:00'
+  positive_control:
+    result: PASS
+    by: sol-t11-m092
+    artifact: evidence/worker/head-validation.md
+    sha256: 07b0025cb03dd8c9f65e095d74f00be5c07009314858c69a52826419e18d8b3e
+    source_sha: 6200e577f17be2f4e515a016282a8e3ba194c450
+    at: '2026-09-17T04:07:20+00:00'
 fix_id: T11-M092
 issues:
 - M-92
 - M-75
 title: Contain serving control destinations and reject undeclared KV targets
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -75,12 +117,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -90,10 +132,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t11-m092
-  action: Implement signed plan; one heavy slot; submit-review --no-notify; local
-    only
-updated_at: '2026-09-17T04:01:59+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-17T04:07:23+00:00'
 follow_up_to: T3-M092
 configuration_history:
 - at: '2026-09-17T03:03:45+00:00'
@@ -117,6 +159,11 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-17T04:07:20+00:00'
+  by: sol-t11-m092
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -134,3 +181,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-17T04:07:20+00:00'
+  by: sol-t11-m092
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-17T04:07:22+00:00'
+  by: sol-t11-m092
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T11-M092:8:submit
+  from: sol-t11-m092
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8

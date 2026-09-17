@@ -1053,7 +1053,7 @@ fixes:
     - M-92
     - M-75
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t11-m092
