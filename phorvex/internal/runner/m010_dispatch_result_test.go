@@ -131,6 +131,7 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestSeen <- r.Method + " " + r.URL.Path
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
 	}))
 	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)
