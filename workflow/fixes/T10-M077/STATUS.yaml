@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 6
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -53,7 +53,7 @@ blind_derivation:
 implementation:
   branch: fix/t10-m077
   base_sha: e35b809c543654134f83683489cf6fce973d7afb
-  head_sha: null
+  head_sha: fb68850162c3fc1a7ccf287ca31549893eb07080
   stacked_on: []
 pull_request:
   url: null
@@ -93,7 +93,7 @@ next_action:
   owner: sol-t10-m077
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-17T00:46:48+00:00'
+updated_at: '2026-09-17T00:47:00+00:00'
 configuration_history:
 - at: '2026-09-17T00:30:30+00:00'
   by: codex-lead
@@ -106,6 +106,11 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-17T00:47:00+00:00'
+  by: sol-t10-m077
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
