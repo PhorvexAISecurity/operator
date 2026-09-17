@@ -1035,3 +1035,14 @@ fixes:
     stacked_on: []
     branch: fix/t10-m010
     head_sha: 43ece5080ce999af86c6fb79138b963088ac38b5
+  T11-M012:
+    directory: fixes/T11-M012
+    aliases: []
+    issues:
+    - M-12
+    related_issues: []
+    state: AGREED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t11-m012
+    head_sha: null
