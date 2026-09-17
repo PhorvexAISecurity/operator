@@ -1883,7 +1883,8 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		absent = vocabulary.NotInstallable
 	}
 	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), absent, m.Authz, m.Actuator).
-		WithCodeExec(m.CodeExec, snap.NamespaceLabels)
+		WithCodeExec(m.CodeExec, snap.NamespaceLabels).
+		WithPolicyIdentity(pol.PolicyName, pol.PolicyUID)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
 		wireCapabilityGates(ce, capWit, m.Authz == nil,

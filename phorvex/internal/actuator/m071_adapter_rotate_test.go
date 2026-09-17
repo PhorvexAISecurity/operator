@@ -544,7 +544,7 @@ func TestM071HTTPInventoryRejectsAmbiguousReservedAliases(t *testing.T) {
 	host, portText, _ := net.SplitHostPort(u.Host)
 	port, _ := strconv.Atoi(portText)
 	loaded, err := (&httpVLLM{hc: server.Client()}).AdapterLoaded(context.Background(), servingEndpoint{podIP: host, port: port, modelsPath: "/"}, "target")
-	if err == nil || loaded || !strings.Contains(err.Error(), "ambiguous alias") {
+	if err == nil || loaded || !strings.Contains(err.Error(), "invalid bounded response") {
 		t.Fatalf("ambiguous inventory fabricated membership: loaded=%t err=%v", loaded, err)
 	}
 }

@@ -1,0 +1,12 @@
+{{- if and (eq .Values.phorvex.servingSecurity.mode "secure-required") (has .Values.phorvex.actuator (list "native" "hybrid")) .Values.phorvex.servingSecurity.bindings }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex.fullname" . }}-serving-security
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+data:
+  security.json: |
+    {{- dict "version" 1 "bindings" .Values.phorvex.servingSecurity.bindings | toJson | nindent 4 }}
+{{- end }}

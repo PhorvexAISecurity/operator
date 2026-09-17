@@ -285,7 +285,7 @@ func TestM077RedirectedMutationCannotStampEpochOrRepeatPOST(t *testing.T) {
 	pod.Annotations[annoResetPath] = "/"
 	c := fakeC(pod)
 	result, err := (kvResetHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &httpVLLM{hc: server.Client()}}, boundReq(pod, model.ActionKVReset))
-	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || !strings.Contains(err.Error(), responseMarker) {
+	if accepted.Load() != 1 || err == nil || result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "outcome unknown") || errors.Is(err, errStackUnreachable) || IsNoEffectRefusal(err) || !strings.Contains(err.Error(), "HTTP 307") || strings.Contains(err.Error(), responseMarker) {
 		t.Fatalf("redirected mutation became success/fallback: accepted=%d result=%+v err=%v", accepted.Load(), result, err)
 	}
 	if strings.Contains(result.Note, responseMarker) || strings.Contains(result.Note, location) {

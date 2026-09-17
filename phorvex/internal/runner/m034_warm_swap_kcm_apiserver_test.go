@@ -197,6 +197,11 @@ func TestM034SnapshotOptimizerRunnerNativeAndReplicaSetController(t *testing.T) 
 	native := actuator.NewNativeActuator(c)
 	native.Reader = c
 	native.JournalNamespace = "m034-operator"
+	legacySecurity, err := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "m034-operator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	native.SetServingSecurity(legacySecurity)
 	recording := &m034RecordingActuator{inner: native}
 	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native)
 	engine := decision.NewCoverageEngine()

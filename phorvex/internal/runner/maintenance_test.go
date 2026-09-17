@@ -35,7 +35,7 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 	shadow.Name, shadow.UID, shadow.Labels["phorvex.ai/role"], shadow.Labels["phorvex.ai/model-loaded"] = "new", "new-uid", "warm-shadow", "true"
 	for _, p := range []*corev1.Pod{old, shadow} {
 		p.Labels["app"] = "pool"
-		p.Annotations = map[string]string{"phorvex.ai/route-service": "pool"}
+		p.Annotations = map[string]string{"phorvex.ai/route-service": "pool", "phorvex.ai/model-id": "fixture"}
 	}
 	controller := true
 	owner := metav1.OwnerReference{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "pool", UID: "pool-uid", Controller: &controller}
@@ -76,6 +76,8 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 	}).Build()
 	native := actuator.NewNativeActuator(base)
 	native.Reader, native.JournalNamespace = base, "operator"
+	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	native.SetServingSecurity(legacy)
 	if _, err := native.Actuate(ctx, actuator.Request{Namespace: "ns", Pod: "old", TargetUID: "old-uid", Action: model.ActionWarmSwap, PolicyName: "policy", PolicyUID: "policy-uid"}); err == nil {
 		t.Fatal("producer did not interrupt after promotion")
 	}

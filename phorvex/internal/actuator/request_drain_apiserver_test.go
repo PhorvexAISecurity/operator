@@ -230,6 +230,7 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 
 		native := NewNativeActuator(c)
 		native.Reader, native.JournalNamespace = c, "operator"
+		native.SetServingSecurity(legacyServingSecurityForTest(t))
 		result, enactErr := native.Actuate(ctx, Request{Tenant: "tenant", Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionRequestDrain, PolicyName: pol.Name, PolicyUID: string(pol.UID)})
 		if enactErr != nil || !result.Emitted || !strings.Contains(result.Note, "1 in-flight aborted") {
 			t.Fatalf("native request-drain result=%+v err=%v", result, enactErr)

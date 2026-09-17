@@ -144,13 +144,16 @@ type Result struct {
 // action on THIS pod?" (labels, annotations, node, GPU) — no fleet/pool state, which the
 // capability layer precomputes once per tick and checks itself (R1).
 type Target struct {
-	Namespace   string
-	Pod         string
-	UID         string
-	Labels      map[string]string
-	NodeName    string
-	HasGPU      bool
-	MIGResource string
+	Namespace      string
+	Pod            string
+	UID            string
+	Labels         map[string]string
+	NodeName       string
+	HasGPU         bool
+	MIGResource    string
+	PolicyName     string
+	PolicyUID      string
+	ServiceAccount string
 }
 
 // Actuator is the swappable hands behind the brain.

@@ -44,6 +44,21 @@ func adapterEndpointConfigDigest(pod *corev1.Pod) string {
 	}{ep.podIP, ep.modelsPath, ep.unloadPath, ep.loadPath, hex.EncodeToString(token[:]), ep.port})
 }
 
+func secureAdapterEndpointConfigDigest(pod *corev1.Pod) string {
+	ep := endpointForPod(pod)
+	return digestJSON(struct {
+		PodIP, ModelsPath, UnloadPath, LoadPath string
+		Port                                    int
+	}{ep.podIP, ep.modelsPath, ep.unloadPath, ep.loadPath, ep.port})
+}
+
+func adapterReceiptEndpointConfigDigest(pod *corev1.Pod, version int) string {
+	if version == adapterRotateSecureReceiptVersion {
+		return secureAdapterEndpointConfigDigest(pod)
+	}
+	return adapterEndpointConfigDigest(pod)
+}
+
 func waitAdapterMembership(ctx context.Context, ec EnactCtx, ep servingEndpoint, adapter string, want bool) error {
 	timeout, interval := adapterTiming(ec)
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -86,14 +101,14 @@ func adapterAuthority(ctx context.Context, ec EnactCtx, r operationReceipt) (*co
 	if string(pod.UID) != r.TargetUID || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
 		return nil, fmt.Errorf("adapter-rotate target identity changed")
 	}
-	if _, err := validatedEndpointForPod(pod); err != nil {
+	if _, err := servingEndpointForPod(ctx, ec, Request{Namespace: r.PolicyNamespace, Pod: r.TargetName, TargetUID: r.TargetUID, PolicyName: r.PolicyName, PolicyUID: r.PolicyUID, Action: model.ActionAdapterRotate}, pod); err != nil {
 		return nil, fmt.Errorf("adapter-rotate serving endpoint configuration: %w", err)
 	}
 	sel, err := metav1.LabelSelectorAsSelector(&pol.Spec.Selector)
 	if err != nil || !sel.Matches(labels.Set(pod.Labels)) {
 		return nil, fmt.Errorf("adapter-rotate target left current policy selector")
 	}
-	if adapterEndpointConfigDigest(pod) != r.AdapterEndpointSHA256 {
+	if adapterReceiptEndpointConfigDigest(pod, r.Version) != r.AdapterEndpointSHA256 {
 		return nil, fmt.Errorf("adapter-rotate serving endpoint configuration changed")
 	}
 	if _, err := validateAdapterDispatch(ctx, ec, Request{
@@ -194,7 +209,7 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 	if err != nil {
 		return adapterPartial(cm, fmt.Errorf("adapter-rotate recovery authority: %w", err))
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	ep, endpointErr := servingEndpointForPod(ctx, ec, Request{Namespace: r.PolicyNamespace, Pod: r.TargetName, TargetUID: r.TargetUID, PolicyName: r.PolicyName, PolicyUID: r.PolicyUID, Action: model.ActionAdapterRotate}, pod)
 	if endpointErr != nil {
 		return adapterPartial(cm, fmt.Errorf("adapter-rotate serving endpoint configuration: %w", endpointErr))
 	}
@@ -312,6 +327,8 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 }
 
 func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	req.Action = model.ActionAdapterRotate
+	ec.ServingRequest = req
 	if ec.Client == nil || ec.Reader == nil {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires a Kubernetes client and authoritative reader"))
 	}
@@ -329,7 +346,7 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 	if ec.JournalNamespace == "" || req.PolicyName == "" || req.PolicyUID == "" || req.TargetUID == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate requires authoritative reader, protected journal, policy and target identity"))
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate serving endpoint configuration: %w", endpointErr))
 	}
@@ -342,6 +359,12 @@ func enactAdapterRotate(ctx context.Context, ec EnactCtx, req Request) (HandlerR
 		AdapterEventName: req.AdapterObservation.EventName, AdapterEventUID: req.AdapterObservation.EventUID,
 		AdapterEventCreatedAt: req.AdapterObservation.CreatedAt.UTC().Format(time.RFC3339Nano),
 		AdapterCreator:        req.AdapterObservation.CreatorIdentity, AdapterEndpointSHA256: adapterEndpointConfigDigest(pod),
+	}
+	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
+		r.Version = adapterRotateSecureReceiptVersion
+		r.AdapterEndpointSHA256 = secureAdapterEndpointConfigDigest(pod)
+		r.ServingBindingSHA256 = ec.ServingAttempt.digest
+		r.ServingServiceAccount = normalizeServiceAccount(pod.Spec.ServiceAccountName)
 	}
 	if !r.valid() {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("adapter-rotate bounded receipt preconditions are invalid"))

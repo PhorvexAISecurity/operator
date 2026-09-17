@@ -446,7 +446,7 @@ func TestMIGRebindRepartitionFailureEmitsNothing(t *testing.T) {
 func TestMIGRebindFailClosedNoDevice(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{labelRole: roleLeader}) // no MIG resource
 	c := fakeC(pod)
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{}}, boundReq(pod, model.ActionMIGRebind))
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, MIG: &mockMIG{}, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("mig-rebind must FAIL-CLOSED without a MIG device")
 	}
@@ -512,7 +512,7 @@ func TestMIGRebindDefaultRunnerFailsClosed(t *testing.T) {
 	pod := migPod("ns", "infer")
 	c := fakeC(pod)
 	// no MIG injected => the package default (unconfigured nodeRunner) => must fail-closed.
-	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c}, boundReq(pod, model.ActionMIGRebind))
+	_, err := migRebindHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, MIG: &nvidiaSMIMIG{run: unwiredNodeRunner{}}, VLLM: &mockVLLM{}}, boundReq(pod, model.ActionMIGRebind))
 	if err == nil {
 		t.Fatal("mig-rebind with the default unconfigured node runner must FAIL-CLOSED [PENDING-GPU-VALIDATION]")
 	}

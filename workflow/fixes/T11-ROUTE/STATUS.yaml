@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 12
+revision: 15
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -98,6 +98,13 @@ checks:
     source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
     at: '2026-09-17T03:30:01+00:00'
     incident_sha256: 2da44cb1d4c01d71601386954701600075cfa2f1169352ca2d0d8e82e2538dbc
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: f1bd31f62f62aced445acfdaf65a0e20b2f4a2749a9eadaeeabb33103ff46c75
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T04:22:03+00:00'
 fix_id: T11-ROUTE
 issues:
 - M-59
@@ -107,7 +114,7 @@ issues:
 - M-147
 title: Journal route cutover and restore only owned fields
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -134,11 +141,11 @@ implementation:
   head_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/224
+  reviewed_head: 5caed5e48c82c78aacfffc54df581c266d7c4720
   merge_sha: null
-  checks: pending
-  patch_equivalence: pending
+  checks: FAIL
+  patch_equivalence: PASS
 deployment:
   image: null
   digest: null
@@ -169,9 +176,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-09-17T03:30:04+00:00'
+  action: PR224 targets main; await DevOps merge/deployment and external GitHub billing
+    resolution. Continue independent Tier12 source; retain L3 debt.
+updated_at: '2026-09-17T04:22:03+00:00'
 configuration_history:
 - at: '2026-09-17T00:33:12+00:00'
   by: codex-lead
@@ -214,6 +221,12 @@ configuration_history:
   fields:
   - implementation
   approval_ref: null
+- at: '2026-09-17T04:22:01+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -262,6 +275,14 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-17T04:22:03+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
   forced: false
 handoff:
   id: T11-ROUTE:12:review

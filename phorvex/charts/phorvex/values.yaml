@@ -132,6 +132,26 @@ phorvex:
   loraCleanSources:
     content: ""
     mountPath: /etc/phorvex-adapters/sources.json
+  # Serving control is HTTPS with a scoped operator-owned Secret by default. Each
+  # binding is exact for one policy UID and workload ServiceAccount. The referenced
+  # Secret lives in operatorNamespace (or the release namespace when empty) and must
+  # contain the configured bearer and CA keys. `legacy-plaintext` is an explicit,
+  # visibly insecure migration mode and does not satisfy the secure contract.
+  servingSecurity:
+    mode: secure-required
+    mountPath: /etc/phorvex-serving/security.json
+    # Example (values must match current API-assigned policy UID and workload SA):
+    # bindings:
+    #   - namespace: tenant-a
+    #     policyName: models
+    #     policyUID: 9e7354cc-5b97-42f4-982d-8c531f03cf15
+    #     serviceAccount: model-runtime
+    #     profileID: models-admin-v1
+    #     secretName: models-serving-admin # Secret in operatorNamespace/release namespace
+    #     bearerKey: bearer
+    #     caKey: ca.crt
+    #     serverName: models-admin.tenant-a.svc
+    bindings: []
   # Destructive MIG repartition is disabled unless both an operator-owned exact
   # profile map and the trusted two-container node agent are explicitly enabled.
   mig:

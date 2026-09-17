@@ -69,6 +69,14 @@ func (c *httpVLLM) postJSON(ctx context.Context, url, token string, payload any)
 	return c.request(ctx, http.MethodPost, url, token, "application/json", b)
 }
 
+func (c *httpVLLM) postJSONEndpoint(ctx context.Context, ep servingEndpoint, route string, payload any) (int, string, error) {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return 0, "", fmt.Errorf("marshal serving request: %w", err)
+	}
+	return c.requestWithClient(ctx, ep.client, http.MethodPost, ep.routeURL(route), ep.token, "application/json", b)
+}
+
 func okCode(code int) bool {
 	return code == http.StatusOK || code == http.StatusNoContent || code == http.StatusAccepted
 }
@@ -84,7 +92,7 @@ func (c *httpVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, adapte
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := c.postJSON(ctx, ep.routeURL(ep.unloadPath), ep.token, map[string]string{"lora_name": adapter})
+	code, _, err := c.postJSONEndpoint(ctx, ep, ep.unloadPath, map[string]string{"lora_name": adapter})
 	if err != nil {
 		return err
 	}
@@ -92,10 +100,10 @@ func (c *httpVLLM) UnloadAdapter(ctx context.Context, ep servingEndpoint, adapte
 	// loaded. For an eviction that is the desired end state, so surface it as a distinct sentinel
 	// rather than a generic failure (the caller decides it means "already converged").
 	if code == http.StatusNotFound {
-		return fmt.Errorf("%w: %q (HTTP 404 %s)", errAdapterAbsent, adapter, strings.TrimSpace(body))
+		return fmt.Errorf("%w: HTTP 404", errAdapterAbsent)
 	}
 	if !okCode(code) {
-		return fmt.Errorf("vLLM unload_lora_adapter %q: HTTP %d %s", adapter, code, strings.TrimSpace(body))
+		return fmt.Errorf("vLLM unload_lora_adapter: HTTP %d", code)
 	}
 	return nil
 }
@@ -109,16 +117,16 @@ func (c *httpVLLM) AdapterLoaded(ctx context.Context, ep servingEndpoint, adapte
 	if !ep.reachable() {
 		return false, errStackUnreachable
 	}
-	code, body, err := c.do(ctx, http.MethodGet, ep.routeURL(ep.modelsPath), ep.token)
+	code, body, err := c.doEndpoint(ctx, ep, http.MethodGet, ep.modelsPath)
 	if err != nil {
 		return false, err
 	}
 	if code != http.StatusOK {
-		return false, fmt.Errorf("serving model inventory: HTTP %d %s", code, strings.TrimSpace(body))
+		return false, fmt.Errorf("serving model inventory: HTTP %d", code)
 	}
 	loaded, err := parseAdapterInventory([]byte(body), adapter)
 	if err != nil {
-		return false, fmt.Errorf("serving model inventory: %w", err)
+		return false, fmt.Errorf("serving model inventory: invalid bounded response")
 	}
 	return loaded, nil
 }
@@ -140,7 +148,7 @@ func parseAdapterInventory(data []byte, adapter string) (bool, error) {
 	}
 	for key := range envelope {
 		if strings.EqualFold(key, "data") && key != "data" {
-			return false, fmt.Errorf("inventory field %q is an ambiguous alias for data", key)
+			return false, fmt.Errorf("inventory has an ambiguous data field alias")
 		}
 	}
 	rawData, present := envelope["data"]
@@ -156,7 +164,7 @@ func parseAdapterInventory(data []byte, adapter string) (bool, error) {
 	for i, entry := range entries {
 		for key := range entry {
 			if strings.EqualFold(key, "id") && key != "id" {
-				return false, fmt.Errorf("data[%d] field %q is an ambiguous alias for id", i, key)
+				return false, fmt.Errorf("data[%d] has an ambiguous id field alias", i)
 			}
 		}
 		rawID, present := entry["id"]
@@ -168,7 +176,7 @@ func parseAdapterInventory(data []byte, adapter string) (bool, error) {
 			return false, fmt.Errorf("data[%d] has no explicit nonempty string id", i)
 		}
 		if seen[id] {
-			return false, fmt.Errorf("duplicate model id %q", id)
+			return false, fmt.Errorf("duplicate model id")
 		}
 		seen[id] = true
 		if id == adapter {
@@ -187,12 +195,12 @@ func (c *httpVLLM) LoadAdapter(ctx context.Context, ep servingEndpoint, adapter,
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := c.postJSON(ctx, ep.routeURL(ep.loadPath), ep.token, map[string]string{"lora_name": adapter, "lora_path": source})
+	code, _, err := c.postJSONEndpoint(ctx, ep, ep.loadPath, map[string]string{"lora_name": adapter, "lora_path": source})
 	if err != nil {
 		return err
 	}
 	if !okCode(code) {
-		return fmt.Errorf("vLLM load_lora_adapter %q from %q: HTTP %d %s", adapter, source, code, strings.TrimSpace(body))
+		return fmt.Errorf("vLLM load_lora_adapter: HTTP %d", code)
 	}
 	return nil
 }
@@ -206,18 +214,18 @@ func (c *httpVLLM) DrainRequests(ctx context.Context, ep servingEndpoint) (int, 
 	if !ep.reachable() {
 		return 0, errStackUnreachable
 	}
-	code, body, err := c.postJSON(ctx, ep.routeURL(ep.drainPath), ep.token, map[string]bool{"abort_inflight": true})
+	code, body, err := c.postJSONEndpoint(ctx, ep, ep.drainPath, map[string]bool{"abort_inflight": true})
 	if err != nil {
 		return 0, err
 	}
 	// A request drain is synchronous evidence. Accepted/NoContent cannot establish a
 	// terminal abort count, so only an exact 200 response enters the strict parser.
 	if code != http.StatusOK {
-		return 0, fmt.Errorf("serving drain: HTTP %d %s", code, strings.TrimSpace(body))
+		return 0, fmt.Errorf("serving drain: HTTP %d", code)
 	}
 	aborted, err := parseDrainResponse(body)
 	if err != nil {
-		return 0, fmt.Errorf("serving drain response: %w", err)
+		return 0, fmt.Errorf("serving drain response: invalid bounded response")
 	}
 	return aborted, nil
 }
@@ -315,12 +323,12 @@ func (g httpGuardrail) ApplyVariant(ctx context.Context, ep servingEndpoint, var
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := g.v.postJSON(ctx, ep.routeURL(ep.guardPath), ep.token, map[string]string{"variant": variant})
+	code, _, err := g.v.postJSONEndpoint(ctx, ep, ep.guardPath, map[string]string{"variant": variant})
 	if err != nil {
 		return err
 	}
 	if !okCode(code) {
-		return fmt.Errorf("guardrail reload variant %q: HTTP %d %s", variant, code, strings.TrimSpace(body))
+		return fmt.Errorf("guardrail reload: HTTP %d", code)
 	}
 	return nil
 }
@@ -348,12 +356,12 @@ func (k httpKVTransfer) InvalidateLocal(ctx context.Context, ep servingEndpoint)
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := k.v.postJSON(ctx, ep.routeURL(ep.kvInvPath), ep.token, map[string]bool{"local": true})
+	code, _, err := k.v.postJSONEndpoint(ctx, ep, ep.kvInvPath, map[string]bool{"local": true})
 	if err != nil {
 		return err
 	}
 	if !okCode(code) {
-		return fmt.Errorf("kv invalidate(local): HTTP %d %s", code, strings.TrimSpace(body))
+		return fmt.Errorf("kv invalidate(local): HTTP %d", code)
 	}
 	return nil
 }

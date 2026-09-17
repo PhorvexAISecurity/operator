@@ -25,6 +25,7 @@ type Config struct {
 	OperatorNamespace string
 	Timeout           time.Duration
 	MIGAgent          *MIGAgentAccess
+	ServingSecurity   *actuator.ServingSecurityConfig
 }
 
 // MIGAgentAccess describes the optional M83 manager-to-agent path. These permissions are
@@ -142,6 +143,11 @@ func Check(parent context.Context, reader client.Reader, reviews SSARClient, cfg
 		add(requirements, Requirement{Namespace: cfg.MIGAgent.Namespace, Verb: authz.Verb{Resource: "pods", Verb: "list"}, Reason: "MIG agent discovery"})
 		add(requirements, Requirement{Namespace: cfg.MIGAgent.Namespace, Verb: authz.Verb{Resource: "pods", Subresource: "exec", Verb: "create"}, Reason: "MIG agent execution"})
 		add(requirements, Requirement{Namespace: cfg.MIGAgent.Namespace, Verb: authz.Verb{Group: "apps", Resource: "daemonsets", Name: cfg.MIGAgent.DaemonSet, Verb: "get"}, Reason: "MIG agent owner identity"})
+	}
+	if cfg.Backend == actuator.BackendNative || cfg.Backend == actuator.BackendHybrid {
+		for _, name := range cfg.ServingSecurity.SecretNames() {
+			add(requirements, Requirement{Namespace: cfg.OperatorNamespace, Verb: authz.Verb{Resource: "secrets", Name: name, Verb: "get"}, Reason: "trusted serving credential"})
+		}
 	}
 	if reviews == nil {
 		return report, fmt.Errorf("startup authorization: SelfSubjectAccessReview client is unavailable")

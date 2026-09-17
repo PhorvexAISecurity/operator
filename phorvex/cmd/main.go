@@ -138,6 +138,8 @@ func main() {
 		auditSourceVClusterPath  string
 		loraCleanSourcesFile     string
 		migProfilesFile          string
+		servingSecurityFile      string
+		servingSecurityMode      string
 		migNodeExec              bool
 		migAgentNamespace        string
 		migAgentServiceAccounts  string
@@ -174,6 +176,8 @@ func main() {
 	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
 	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
 	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
+	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "Operator-owned versioned exact policy/workload binding configuration for serving TLS credentials.")
+	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "Serving control mode: secure-required (default) or explicit legacy-plaintext migration compatibility.")
 	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
 	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
 	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
@@ -293,6 +297,17 @@ func main() {
 		setupLog.Error(migProfilesErr, "invalid MIG profile authority configuration; refusing to start")
 		os.Exit(2)
 	}
+	securityMode, securityModeErr := actuator.ParseServingSecurityMode(servingSecurityMode)
+	if securityModeErr != nil {
+		setupLog.Error(securityModeErr, "invalid serving security mode; refusing to start")
+		os.Exit(2)
+	}
+	servingSecurity, servingSecurityErr := actuator.LoadServingSecurityFile(servingSecurityFile, securityMode, operatorNS)
+	if servingSecurityErr != nil {
+		setupLog.Error(servingSecurityErr, "invalid serving security configuration; refusing to start")
+		os.Exit(2)
+	}
+	setupLog.Info("serving control security configured", "mode", securityMode, "bindings", len(servingSecurity.Bindings))
 
 	if epssFeed {
 		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout); err != nil {
@@ -366,6 +381,7 @@ func main() {
 	}
 	bootConfig := startupauthz.Config{
 		Backend: backend.Backend, OperatorNamespace: operatorNS,
+		ServingSecurity: servingSecurity,
 	}
 	if migNodeExec {
 		bootConfig.MIGAgent = &startupauthz.MIGAgentAccess{Namespace: migAgentNamespace, DaemonSet: migAgentDaemonSet}
@@ -401,11 +417,13 @@ func main() {
 		native.JournalNamespace = operatorNS
 		native.SetAdapterSources(adapterSources)
 		native.SetMIGProfiles(migProfiles)
+		native.SetServingSecurity(servingSecurity)
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
 		hybrid.SetAdapterSources(adapterSources)
 		hybrid.SetMIGProfiles(migProfiles)
+		hybrid.SetServingSecurity(servingSecurity)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.BaseInterval = baseInterval

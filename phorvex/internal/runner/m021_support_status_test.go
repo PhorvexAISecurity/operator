@@ -43,7 +43,10 @@ func phoenixBackend() actuator.Actuator {
 	return actuator.NewPhoenixActuator(fake.NewClientBuilder().Build())
 }
 func nativeBackend() actuator.Actuator {
-	return actuator.NewNativeActuator(fake.NewClientBuilder().Build())
+	native := actuator.NewNativeActuator(fake.NewClientBuilder().Build())
+	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	native.SetServingSecurity(legacy)
+	return native
 }
 
 func newEntryManager(t *testing.T, name string) (*Manager, *policyEntry) {
@@ -169,8 +172,8 @@ func TestMixedPolicyCannotClaimAllSupported(t *testing.T) {
 }
 
 // TestSupportedActionsRemainSupported is the positive control: on a backend that really
-// implements the enabled actions, nothing changes — including the byte-identical legacy
-// green message that keeps deploys diff-free.
+// implements the enabled actions, it remains green. The explicit legacy serving mode is
+// now appended as an insecure compatibility advisory rather than being hidden.
 func TestSupportedActionsRemainSupported(t *testing.T) {
 	backend := nativeBackend()
 	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
@@ -198,8 +201,9 @@ func TestSupportedActionsRemainSupported(t *testing.T) {
 	m, entry := newEntryManager(t, "green")
 	got := m.debounceActionsSupported(entry, rep)
 	if got.status != metav1.ConditionTrue ||
-		got.message != "all enabled actions have matching capabilities in the selected fleet" {
-		t.Fatalf("no-gap green must stay byte-identical, got %s / %q", got.status, got.message)
+		!strings.Contains(got.message, "all enabled actions have matching capabilities in the selected fleet") ||
+		!strings.Contains(got.message, "insecure compatibility") || !strings.Contains(got.message, "legacy-plaintext") {
+		t.Fatalf("no-gap legacy status must stay green and disclose insecurity, got %s / %q", got.status, got.message)
 	}
 	// The default policy (nil EnabledActions = rotate+quarantine) stays green on BOTH
 	// backends: M-21 changes no default and flips nothing that used to work.
@@ -440,4 +444,24 @@ func (*recordingBackend) Actuate(context.Context, actuator.Request) (actuator.Re
 func (r *recordingBackend) SupportsAction(_ context.Context, a model.Action, _ actuator.Target) (bool, string) {
 	r.asked = append(r.asked, a)
 	return false, "recorder-says-no"
+}
+
+func TestM093ExplicitLegacyModeIsVisibleInActionsSupported(t *testing.T) {
+	native := actuator.NewNativeActuator(fake.NewClientBuilder().Build())
+	legacy, err := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	native.SetServingSecurity(legacy)
+	view := &model.WorkloadView{Pod: model.Pod{Namespace: "tenant", Name: "model-0", UID: "pod-uid", ServiceAccount: "model-sa", ModelID: "model", Ready: true, ServingDeclared: true, ServingEndpointReady: true}}
+	witness := capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{view.Pod}, nil, nil), nil, nil, native).WithPolicyIdentity("policy", "policy-uid")
+	report := capabilityGaps(model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}, []*model.WorkloadView{view}, witness)
+	manager, entry := newEntryManager(t, "legacy-serving")
+	var status actionsSupportStatus
+	for range DefaultActionsSupportedDebounceTicks {
+		status = manager.debounceActionsSupported(entry, report)
+	}
+	if status.status != metav1.ConditionTrue || !strings.Contains(status.message, "insecure compatibility") || !strings.Contains(status.message, "legacy-plaintext") {
+		t.Fatalf("legacy serving posture was hidden: %+v", status)
+	}
 }

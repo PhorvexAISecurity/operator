@@ -59,6 +59,22 @@ func drainEndpointConfigDigest(pod *corev1.Pod) string {
 	}{PodIP: ep.podIP, Port: ep.port, DrainPath: ep.drainPath, TokenSHA256: hex.EncodeToString(tokenDigest[:])})
 }
 
+func secureDrainEndpointConfigDigest(pod *corev1.Pod) string {
+	ep := endpointForPod(pod)
+	return digestJSON(struct {
+		PodIP     string `json:"podIP"`
+		Port      int    `json:"port"`
+		DrainPath string `json:"drainPath"`
+	}{PodIP: ep.podIP, Port: ep.port, DrainPath: ep.drainPath})
+}
+
+func drainReceiptEndpointConfigDigest(pod *corev1.Pod, version int) string {
+	if version == requestDrainSecureReceiptVersion {
+		return secureDrainEndpointConfigDigest(pod)
+	}
+	return drainEndpointConfigDigest(pod)
+}
+
 func authoritativeDrainPod(ctx context.Context, ec EnactCtx, req Request) (*corev1.Pod, error) {
 	if ec.Reader == nil || req.TargetUID == "" {
 		return nil, RefusedWithoutEffect(fmt.Errorf("request-drain requires authoritative reader and selected target UID"))
@@ -70,7 +86,7 @@ func authoritativeDrainPod(ctx context.Context, ec EnactCtx, req Request) (*core
 	if string(pod.UID) != req.TargetUID || pod.UID == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil {
 		return nil, RefusedWithoutEffect(fmt.Errorf("request-drain target identity changed or is terminating"))
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return nil, RefusedWithoutEffect(fmt.Errorf("request-drain target serving endpoint configuration: %w", endpointErr))
 	}
@@ -269,10 +285,10 @@ func revalidateDrainDispatch(ctx context.Context, ec EnactCtx, r operationReceip
 	if string(fresh.UID) != r.TargetUID || fresh.UID == "" || fresh.ResourceVersion == "" || fresh.DeletionTimestamp != nil || fresh.Labels[labelServing] != "drained" || fresh.Labels[labelDrainEpoch] != r.OperationToken {
 		return nil, fmt.Errorf("request-drain target identity or operation state changed before abort")
 	}
-	if _, err := validatedEndpointForPod(fresh); err != nil {
+	if _, err := servingEndpointForPod(ctx, ec, ec.ServingRequest, fresh); err != nil {
 		return nil, fmt.Errorf("request-drain target serving endpoint configuration: %w", err)
 	}
-	if drainEndpointConfigDigest(fresh) != r.EndpointConfigSHA256 || fresh.Status.PodIP != r.EndpointAddresses[0] {
+	if drainReceiptEndpointConfigDigest(fresh, r.Version) != r.EndpointConfigSHA256 || fresh.Status.PodIP != r.EndpointAddresses[0] {
 		return nil, fmt.Errorf("request-drain serving endpoint configuration changed before abort")
 	}
 	svc, err := readBoundDrainService(ctx, ec.Reader, r)
@@ -431,6 +447,8 @@ func requestDrainFailure(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap,
 }
 
 func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	req.Action = model.ActionRequestDrain
+	ec.ServingRequest = req
 	if ec.Client == nil || ec.Reader == nil || ec.JournalNamespace == "" || req.PolicyName == "" || req.PolicyUID == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("request-drain requires authoritative client, protected journal and policy identity"))
 	}
@@ -460,6 +478,12 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 		TargetName: pod.Name, TargetUID: string(pod.UID), TargetLabels: copyLabels(pod.Labels),
 		OperationToken: token, ServiceName: service.Name, ServiceUID: string(service.UID), ServiceSelector: copyLabels(service.Spec.Selector),
 		PriorServingPresent: priorPresent, PriorServingValue: priorValue, EndpointAddresses: append([]string(nil), addresses...), EndpointConfigSHA256: drainEndpointConfigDigest(pod),
+	}
+	if ec.ServingSecurity != nil && ec.ServingSecurity.Mode() == ServingSecuritySecureRequired {
+		r.Version = requestDrainSecureReceiptVersion
+		r.EndpointConfigSHA256 = secureDrainEndpointConfigDigest(pod)
+		r.ServingBindingSHA256 = ec.ServingAttempt.digest
+		r.ServingServiceAccount = normalizeServiceAccount(pod.Spec.ServiceAccountName)
 	}
 	if !r.valid() {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("request-drain bounded receipt preconditions are invalid"))
@@ -506,7 +530,7 @@ func enactRequestDrain(ctx context.Context, ec EnactCtx, req Request) (HandlerRe
 	if claimErr == nil && claimedFresh.ResourceVersion != fresh.ResourceVersion {
 		claimErr = fmt.Errorf("request-drain target changed after pre-write claim")
 	}
-	if claimErr == nil && drainEndpointConfigDigest(claimedFresh) != r.EndpointConfigSHA256 {
+	if claimErr == nil && drainReceiptEndpointConfigDigest(claimedFresh, r.Version) != r.EndpointConfigSHA256 {
 		claimErr = fmt.Errorf("request-drain serving endpoint configuration changed after pre-write claim")
 	}
 	if claimErr == nil {

@@ -59,6 +59,8 @@ const (
 // Ready shadow per rank) is flipped together, then the old group is drained + retired. FAIL-CLOSED on
 // an incomplete replacement group — never serve a mixed-rank (old+new) group.
 func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group string) (HandlerResult, error) {
+	req.Action = model.ActionModelShardReplace
+	ec.ServingRequest = req
 	trig, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "model-shard-replace", req)
@@ -67,7 +69,7 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 	if reason := triggerIdentityRefusal(req, trig); reason != "" {
 		return refuseAI("model-shard-replace", reason)
 	}
-	if _, err := validatedEndpointForPod(trig); err != nil {
+	if _, err := servingEndpointForPod(ctx, ec, req, trig); err != nil {
 		return refuseAI("model-shard-replace", err.Error())
 	}
 	size, _ := strconv.Atoi(trig.Annotations[annoParallelSize])
@@ -90,7 +92,7 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 		if _, seen := readyByRank[p.Labels[labelRank]]; seen {
 			continue
 		}
-		if _, err := validatedEndpointForPod(p); err != nil {
+		if _, err := servingEndpointForPod(ctx, ec, req, p); err != nil {
 			return HandlerResult{}, fmt.Errorf("model-shard-replace candidate serving endpoint configuration: %w", err)
 		}
 		if ready, pend := shadowModelReady(ctx, ec, p); ready {
@@ -106,6 +108,17 @@ func groupCoherentCutover(ctx context.Context, ec EnactCtx, req Request, group s
 		ranks = append(ranks, rank)
 	}
 	sort.Strings(ranks)
+	// Bind every existing HTTP participant to the same trusted profile before the
+	// first rank label changes. A later fresh inventory still controls retirement.
+	for i := range shadows.Items {
+		participant := &shadows.Items[i]
+		if participant.Labels[labelRole] != roleLeader {
+			continue
+		}
+		if _, err := servingEndpointForPod(ctx, ec, req, participant); err != nil {
+			return HandlerResult{}, fmt.Errorf("model-shard-replace participant security: %w", err)
+		}
+	}
 	// (1) FLIP UP every shadow rank to leader, COHERENTLY; roll back all on any failure.
 	var flipped []*corev1.Pod
 	for _, rank := range ranks {
@@ -313,7 +326,11 @@ func pendingErrors(names []string) []error {
 // request-drain AND warm-swap's retire. Returns (abortedCount, pending, err): pending=true means the
 // serving stack was unreachable (the abort is [PENDING-GPU-VALIDATION], the K8s drain still applies).
 func drainInflight(ctx context.Context, ec EnactCtx, pod *corev1.Pod) (int, bool, error) {
-	ep, endpointErr := validatedEndpointForPod(pod)
+	req := ec.ServingRequest
+	if req.Action == "" {
+		req.Action = model.ActionRequestDrain
+	}
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return 0, false, endpointErr
 	}
@@ -341,6 +358,8 @@ func (adapterRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request)
 // operator mapping still supplies an exact local path. Missing authority is an explicit refusal.
 // Mapping approval does not prove the serving-local artifact's contents are clean.
 func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, _ string) error {
+	req.Action = model.ActionAdapterRotate
+	ec.ServingRequest = req
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return orGone(err, ok, "adapter-rotate-rollback", req)
@@ -348,7 +367,7 @@ func (adapterRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Reque
 	if req.TargetUID == "" || req.TargetUID != string(pod.UID) {
 		return fmt.Errorf("adapter-rotate rollback refused: target UID unavailable or changed")
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return fmt.Errorf("adapter-rotate rollback refused: %w", endpointErr)
 	}
@@ -427,6 +446,8 @@ type guardrailRotateHandler struct{}
 
 func (guardrailRotateHandler) Name() string { return string(model.ActionGuardrailRotate) }
 func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	req.Action = model.ActionGuardrailRotate
+	ec.ServingRequest = req
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return HandlerResult{}, orGone(err, ok, "guardrail-rotate", req)
@@ -446,7 +467,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	if next == "" {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate: no DISTINCT alternate variant (only %q declared) — rotation would not change the blind spot", cur))
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("guardrail-rotate serving endpoint configuration: %w", endpointErr))
 	}
@@ -492,6 +513,8 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 }
 
 func (guardrailRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, _ string) error {
+	req.Action = model.ActionGuardrailRotate
+	ec.ServingRequest = req
 	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
 	if err != nil || !ok {
 		return orGone(err, ok, "guardrail-rotate-rollback", req)
@@ -500,7 +523,7 @@ func (guardrailRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Req
 	if prev == "" {
 		return nil
 	}
-	ep, endpointErr := validatedEndpointForPod(pod)
+	ep, endpointErr := servingEndpointForPod(ctx, ec, req, pod)
 	if endpointErr != nil {
 		return fmt.Errorf("guardrail-rotate rollback refused: %w", endpointErr)
 	}
@@ -615,6 +638,8 @@ func normalizeDisaggDNS(host string) (string, error) {
 }
 
 func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
+	req.Action = model.ActionKVMigrateInvalidate
+	ec.ServingRequest = req
 	pod, refusal, err := authoritativeRawKVPod(ctx, ec, req, "kv-migrate-invalidate")
 	if pod == nil {
 		return refusal, err
@@ -623,7 +648,7 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 	if err != nil {
 		return HandlerResult{}, RefusedWithoutEffect(fmt.Errorf("kv-migrate-invalidate invalid %s: %w", annoDisaggPeers, err))
 	}
-	ep, reason := declaredKVEndpoint(req, pod)
+	ep, reason := declaredKVEndpoint(ctx, ec, req, pod)
 	if reason != "" {
 		return refuseAI("kv-migrate-invalidate", reason)
 	}
