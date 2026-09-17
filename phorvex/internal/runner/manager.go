@@ -2591,6 +2591,11 @@ func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol m
 			Score:              score,
 			CoverageValue:      coverageValue,
 			TargetUID:          v.Pod.UID,
+			TickID:             pol.TickID,
+			ServingObservation: &actuator.ServingSelectionObservation{
+				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
+				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
+			},
 		}
 		if decisions[i].Action == model.ActionRouteRotate || decisions[i].Action == model.ActionEndpointRotate {
 			if decisions[i].Trace != nil {
@@ -2864,7 +2869,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		TickInterval:                 s.EffectiveTickInterval(),
 		AntiOverRotationWindow:       s.EffectiveAntiOverRotationWindow(),
 		ProactiveFloor:               s.EffectiveProactiveFloor(),
-		EventAgeHorizon:              s.EffectiveProactiveFloor(), // T1-B: τ_ev initialised = floor (inherited)
+		EventAgeHorizon:              s.EffectiveEventAgeHorizon(),
 		ExposurePressureScale:        s.EffectiveProactiveFloor(), // T1-B: T_exp initialised = floor (inherited)
 		MinAvailableReplicas:         s.EffectiveMinAvailableReplicas(),
 		P99Ms:                        s.SLO.P99Ms,

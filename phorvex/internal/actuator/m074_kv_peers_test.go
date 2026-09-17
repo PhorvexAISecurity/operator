@@ -28,7 +28,7 @@ func TestM074ParseDisaggKVPeers(t *testing.T) {
 	}{
 		{name: "absent"},
 		{name: "whitespace only", raw: " \t\n"},
-		{name: "DNS IPv4 IPv6 and dedupe", raw: " EXAMPLE.COM.:080,10.0.0.2:8000,[2001:0db8::1]:00443,example.com:80 ", want: []string{"example.com:80", "10.0.0.2:8000", "[2001:db8::1]:443"}},
+		{name: "DNS IPv4 IPv6", raw: " EXAMPLE.COM.:080,10.0.0.2:8000,[2001:0db8::1]:00443 ", want: []string{"example.com:80", "10.0.0.2:8000", "[2001:db8::1]:443"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := parseDisaggKVPeers(tc.raw)
@@ -57,6 +57,7 @@ func TestM074ParseDisaggKVPeers(t *testing.T) {
 		"bracketless IPv6":       "2001:db8::1:80",
 		"bracketed DNS":          "[decode.example]:8000",
 		"bracketed IPv4":         "[127.0.0.1]:8000",
+		"normalized duplicate":   "EXAMPLE.COM.:080,example.com:80",
 		"IPv6 zone":              "[fe80::1%eth0]:80",
 		"bad DNS label":          "-bad.example:80",
 		"underscore DNS":         "bad_name.example:80",
@@ -84,10 +85,18 @@ func (r *m074KVRecorder) InvalidateLocal(context.Context, servingEndpoint) error
 	return r.invErr
 }
 
-func (r *m074KVRecorder) MigrateRemote(_ context.Context, _ servingEndpoint, peers []string) error {
+func (r *m074KVRecorder) MigrateRemote(_ context.Context, _ servingEndpoint, peers []string) ([]kvPeerOutcome, error) {
 	*r.calls = append(*r.calls, "remote")
 	r.peers = append([]string(nil), peers...)
-	return r.migErr
+	out := make([]kvPeerOutcome, 0, len(peers))
+	disposition := kvPeerConfirmed
+	if r.migErr != nil {
+		disposition = kvPeerUnknownAfterDispatch
+	}
+	for _, peer := range peers {
+		out = append(out, kvPeerOutcome{Peer: peer, Disposition: disposition})
+	}
+	return out, r.migErr
 }
 
 type m074UpdateRecorder struct {
@@ -96,12 +105,12 @@ type m074UpdateRecorder struct {
 	err   error
 }
 
-func (r m074UpdateRecorder) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	*r.calls = append(*r.calls, "epoch")
+func (r m074UpdateRecorder) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	*r.calls = append(*r.calls, "metadata")
 	if r.err != nil {
 		return r.err
 	}
-	return r.Client.Update(ctx, obj, opts...)
+	return r.Client.Patch(ctx, obj, patch, opts...)
 }
 
 func m074KVFixture(t *testing.T, peers string, localErr, remoteErr, updateErr error) (HandlerResult, error, []string, []string, client.Client) {
@@ -113,7 +122,7 @@ func m074KVFixture(t *testing.T, peers string, localErr, remoteErr, updateErr er
 	calls := []string{}
 	recorder := &m074KVRecorder{calls: &calls, invErr: localErr, migErr: remoteErr}
 	c := m074UpdateRecorder{Client: base, calls: &calls, err: updateErr}
-	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: base, KVXfer: recorder}, boundReq(pod, model.ActionKVMigrateInvalidate))
+	hr, err := kvMigrateInvalidateHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: base, JournalNamespace: "operator", KVXfer: recorder}, boundReq(pod, model.ActionKVMigrateInvalidate))
 	return hr, err, calls, recorder.peers, base
 }
 
@@ -143,14 +152,14 @@ func TestM074KVEffectOrderingAndTruthfulResults(t *testing.T) {
 		wantKind, wantNote     string
 		wantEpoch, wantTouched bool
 	}{
-		{name: "no peers", peers: " \t", wantCalls: []string{"local", "epoch"}, wantEmitted: true, wantKind: "forward-only", wantNote: "not attempted", wantEpoch: true, wantTouched: true},
-		{name: "remote confirmed", peers: "DECODE.EXAMPLE.:080,10.0.0.2:8000", wantCalls: []string{"local", "remote", "epoch"}, wantPeers: []string{"decode.example:80", "10.0.0.2:8000"}, wantEmitted: true, wantKind: "forward-only", wantNote: "connector confirmed", wantEpoch: true, wantTouched: true},
-		{name: "remote deferred", peers: "decode.example:8000", remoteErr: deferred, wantCalls: []string{"local", "remote", "epoch"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "outcome unconfirmed", wantEpoch: true, wantTouched: true},
-		{name: "remote failure", peers: "decode.example:8000", remoteErr: errors.New("HTTP 500"), wantCalls: []string{"local", "remote", "epoch"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "outcome unconfirmed", wantEpoch: true, wantTouched: true},
-		{name: "local unreachable", peers: "decode.example:8000", localErr: errStackUnreachable, wantCalls: []string{"local"}, wantKind: "none", wantNote: "no local or cross-worker", wantEpoch: false},
-		{name: "local failure", peers: "decode.example:8000", localErr: errors.New("HTTP 500"), wantCalls: []string{"local"}, wantErr: true, wantKind: "partial", wantNote: "outcome unknown", wantEpoch: false},
-		{name: "epoch failure after remote success", peers: "decode.example:8000", updateErr: errors.New("write failed"), wantCalls: []string{"local", "remote", "epoch"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "local effect occurred", wantEpoch: false},
-		{name: "remote and epoch failure", peers: "decode.example:8000", remoteErr: deferred, updateErr: errors.New("write failed"), wantCalls: []string{"local", "remote", "epoch"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "local effect occurred", wantEpoch: false},
+		{name: "no peers", peers: " \t", wantCalls: []string{"local", "metadata"}, wantEmitted: true, wantKind: "forward-only", wantNote: "no remote peers", wantEpoch: true, wantTouched: true},
+		{name: "remote confirmed", peers: "DECODE.EXAMPLE.:080,10.0.0.2:8000", wantCalls: []string{"local", "remote", "metadata"}, wantPeers: []string{"decode.example:80", "10.0.0.2:8000"}, wantEmitted: true, wantKind: "forward-only", wantNote: "all declared remote", wantEpoch: true, wantTouched: true},
+		{name: "remote deferred", peers: "decode.example:8000", remoteErr: deferred, wantCalls: []string{"local", "remote"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "protected phase", wantEpoch: false, wantTouched: true},
+		{name: "remote failure", peers: "decode.example:8000", remoteErr: errors.New("HTTP 500"), wantCalls: []string{"local", "remote"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "protected phase", wantEpoch: false, wantTouched: true},
+		{name: "local unreachable", peers: "decode.example:8000", localErr: errStackUnreachable, wantCalls: []string{"local"}, wantKind: "none", wantNote: "refused before", wantEpoch: false},
+		{name: "local failure", peers: "decode.example:8000", localErr: errors.New("HTTP 500"), wantCalls: []string{"local"}, wantErr: true, wantKind: "partial", wantNote: "protected phase", wantEpoch: false, wantTouched: true},
+		{name: "epoch failure after remote success", peers: "decode.example:8000", updateErr: errors.New("write failed"), wantCalls: []string{"local", "remote", "metadata"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "protected phase", wantEpoch: false, wantTouched: true},
+		{name: "remote and epoch failure", peers: "decode.example:8000", remoteErr: deferred, updateErr: errors.New("write failed"), wantCalls: []string{"local", "remote"}, wantPeers: []string{"decode.example:8000"}, wantErr: true, wantEmitted: true, wantKind: "partial", wantNote: "protected phase", wantEpoch: false, wantTouched: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hr, err, calls, peers, base := m074KVFixture(t, tc.peers, tc.localErr, tc.remoteErr, tc.updateErr)

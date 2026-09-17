@@ -59,23 +59,23 @@ func TestStageDwellRestartsOnStageTransition(t *testing.T) {
 
 // T1-B decoupling + idempotence (03 §5, §B.6.1).
 
-// A policy whose dedicated horizons are UNSET (0) must be byte-identical to one whose horizons
-// are set equal to the floor — the "inherited, not chosen" equal-value initialisation.
-func TestBeliefHorizonsUnsetEqualsFloorInitialised(t *testing.T) {
+// An unset event horizon uses the inherited one-hour default independently of
+// the proactive floor; exposure pressure retains its floor-derived scale.
+func TestBeliefEventHorizonUnsetUsesIndependentDefault(t *testing.T) {
 	view := &model.WorkloadView{
 		Pod:    model.Pod{Namespace: "ns", Name: "p", UID: "u"},
 		Events: []model.SecurityEventInfo{{Type: "Anomaly", ThreatLevel: "high", TargetsPod: true, Age: 5 * time.Minute}},
 	}
-	base := model.Policy{Tenant: "t", ProactiveFloor: 15 * time.Minute} // horizons unset => fall back to floor
+	base := model.Policy{Tenant: "t", ProactiveFloor: 15 * time.Minute}
 	init := base
-	init.EventAgeHorizon = 15 * time.Minute
+	init.EventAgeHorizon = time.Hour
 	init.ExposurePressureScale = 15 * time.Minute
 
 	a := NewModel().Assess(view, base, 600, 900)
 	b := NewModel().Assess(view, init, 600, 900)
 	if a.Hazard != b.Hazard || a.PHold != b.PHold || a.StageUrgency != b.StageUrgency ||
 		a.EventEvidence != b.EventEvidence || a.InStageSec != b.InStageSec {
-		t.Errorf("unset horizons must equal floor-initialised: unset{h=%.4f p=%.4f u=%.4f e=%.4f} init{h=%.4f p=%.4f u=%.4f e=%.4f}",
+		t.Errorf("unset event horizon must equal explicit one-hour default: unset{h=%.4f p=%.4f u=%.4f e=%.4f} init{h=%.4f p=%.4f u=%.4f e=%.4f}",
 			a.Hazard, a.PHold, a.StageUrgency, a.EventEvidence, b.Hazard, b.PHold, b.StageUrgency, b.EventEvidence)
 	}
 }

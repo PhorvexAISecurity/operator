@@ -22,7 +22,10 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-const journalLabel = "phorvex.ai/operation-journal"
+const (
+	journalLabel        = "phorvex.ai/operation-journal"
+	servingJournalLabel = "phorvex.ai/serving-effect-journal"
+)
 
 // operationReceipt is administrative provenance, stored only in the operator namespace.
 // Pod annotations and labels are never used as evidence that a receipt exists.
@@ -71,6 +74,7 @@ type operationReceipt struct {
 	AdapterEndpointSHA256 string `json:"adapterEndpointSHA256,omitempty"`
 	ServingBindingSHA256  string `json:"servingBindingSHA256,omitempty"`
 	ServingServiceAccount string `json:"servingServiceAccount,omitempty"`
+	ServingLegacy         bool   `json:"servingLegacy,omitempty"`
 	// Route-cutover v5 fields. The Service-UID-named receipt is the only
 	// authority for route/endpoint continuation or restoration. Tenant metadata
 	// is deliberately not an authority surface.
@@ -87,6 +91,26 @@ type operationReceipt struct {
 	BeforePodBridge         routeOwnedValue   `json:"beforePodBridge,omitempty,omitzero"`
 	BeforeServiceRoute      routeOwnedValue   `json:"beforeServiceRoute,omitempty,omitzero"`
 	BeforeServiceBridge     routeOwnedValue   `json:"beforeServiceBridge,omitempty,omitzero"`
+	// Protected serving-effect v9 fields. One stable ConfigMap name is shared by
+	// all policies/actions in an exact target/effect domain.
+	EffectDomain      string          `json:"effectDomain,omitempty"`
+	OperationID       string          `json:"operationID,omitempty"`
+	TickID            string          `json:"tickID,omitempty"`
+	Generation        uint64          `json:"generation,omitempty"`
+	SelectedReset     routeOwnedValue `json:"selectedReset,omitempty,omitzero"`
+	SelectedMigrate   routeOwnedValue `json:"selectedMigrate,omitempty,omitzero"`
+	SelectedLocal     routeOwnedValue `json:"selectedLocal,omitempty,omitzero"`
+	SelectedGuardrail routeOwnedValue `json:"selectedGuardrail,omitempty,omitzero"`
+	ExpectedReset     routeOwnedValue `json:"expectedReset,omitempty,omitzero"`
+	ExpectedMigrate   routeOwnedValue `json:"expectedMigrate,omitempty,omitzero"`
+	ExpectedLocal     routeOwnedValue `json:"expectedLocal,omitempty,omitzero"`
+	ExpectedGuardrail routeOwnedValue `json:"expectedGuardrail,omitempty,omitzero"`
+	PriorVariant      string          `json:"priorVariant,omitempty"`
+	NextVariant       string          `json:"nextVariant,omitempty"`
+	PriorSnapshot     routeOwnedValue `json:"priorSnapshot,omitempty,omitzero"`
+	PeerOutcomes      []kvPeerOutcome `json:"peerOutcomes,omitempty"`
+	DeclaredPeers     []string        `json:"declaredPeers,omitempty"`
+	RemoteExpected    int             `json:"remoteExpected,omitempty"`
 }
 
 type routeOwnedValue struct {
@@ -96,6 +120,104 @@ type routeOwnedValue struct {
 
 func (v routeOwnedValue) IsZero() bool { return !v.Present && v.Value == "" }
 
+func boundedOwnedValue(v routeOwnedValue) bool {
+	return len(v.Value) <= servingEffectEpochMaxBytes && (v.Present || v.Value == "")
+}
+
+func boundedServingIdentity(r operationReceipt) bool {
+	return len(validation.IsDNS1123Label(r.PolicyNamespace)) == 0 &&
+		len(validation.IsDNS1123Subdomain(r.PolicyName)) == 0 &&
+		len(validation.IsDNS1123Subdomain(r.TargetName)) == 0 &&
+		r.PolicyUID != "" && len(r.PolicyUID) <= 253 && r.TargetUID != "" && len(r.TargetUID) <= 253
+}
+
+func validServingEffectReceipt(r operationReceipt) bool {
+	if r.Version != servingEffectReceiptVersion || r.Generation == 0 || !validDigest(r.OperationID) || r.TickID == "" || len(r.TickID) > 253 ||
+		r.OperationID != servingOperationDigest(r.TickID, r.PolicyUID, r.PolicyNamespace, r.TargetUID, model.Action(r.Kind)) ||
+		(!r.ServingLegacy && !validDigest(r.ServingBindingSHA256)) || (r.ServingLegacy && r.ServingBindingSHA256 != "") || len(validation.IsDNS1123Subdomain(r.ServingServiceAccount)) != 0 || !validDigest(r.EndpointConfigSHA256) ||
+		!boundedServingIdentity(r) || !boundedOptionalLabelMap(r.TargetLabels) || !boundedOwnedValue(r.PriorSnapshot) ||
+		!boundedOwnedValue(r.SelectedReset) || !boundedOwnedValue(r.SelectedMigrate) || !boundedOwnedValue(r.SelectedLocal) || !boundedOwnedValue(r.SelectedGuardrail) ||
+		!boundedOwnedValue(r.ExpectedReset) || !boundedOwnedValue(r.ExpectedMigrate) || !boundedOwnedValue(r.ExpectedLocal) || !boundedOwnedValue(r.ExpectedGuardrail) {
+		return false
+	}
+	apply := routeOwnedValue{Present: true, Value: epochToken(r.OperationID, "apply")}
+	unchangedKV := r.ExpectedReset == r.SelectedReset && r.ExpectedMigrate == r.SelectedMigrate && r.ExpectedLocal == r.SelectedLocal
+	unchangedGuard := r.ExpectedGuardrail == r.SelectedGuardrail
+	switch model.Action(r.Kind) {
+	case model.ActionKVReset:
+		if r.EffectDomain != kvEffectDomain || r.ExpectedReset != apply || r.ExpectedMigrate != r.SelectedMigrate || r.ExpectedLocal != r.SelectedLocal ||
+			!unchangedGuard || r.RemoteExpected != 0 || len(r.DeclaredPeers) != 0 || len(r.PeerOutcomes) != 0 || r.PriorVariant != "" || r.NextVariant != "" {
+			return false
+		}
+		switch r.Phase {
+		case "prepared", "dispatching", "effect-confirmed", "metadata-ready-full", "terminal-full":
+			return true
+		default:
+			return false
+		}
+	case model.ActionGuardrailRotate:
+		if r.EffectDomain != guardrailEffectDomain || !unchangedKV || r.PriorVariant == "" || r.NextVariant == "" || r.PriorVariant == r.NextVariant || len(r.PriorVariant) > 1024 || len(r.NextVariant) > 1024 ||
+			r.RemoteExpected != 0 || len(r.DeclaredPeers) != 0 || len(r.PeerOutcomes) != 0 {
+			return false
+		}
+		switch r.Phase {
+		case "prepared", "dispatching", "effect-confirmed", "metadata-ready-full", "terminal-full":
+			return r.ExpectedGuardrail == apply
+		case "rollback-dispatching":
+			return r.ExpectedGuardrail == apply
+		case "rollback-confirmed", "rolled-back":
+			return r.ExpectedGuardrail == (routeOwnedValue{Present: true, Value: epochToken(r.OperationID, "rollback")})
+		default:
+			return false
+		}
+	case model.ActionKVMigrateInvalidate:
+		if r.EffectDomain != kvEffectDomain || !unchangedGuard || r.PriorVariant != "" || r.NextVariant != "" || r.RemoteExpected < 0 || r.RemoteExpected > 32 || len(r.DeclaredPeers) != r.RemoteExpected || (len(r.PeerOutcomes) != 0 && len(r.PeerOutcomes) != r.RemoteExpected) {
+			return false
+		}
+		declared := make(map[string]bool, len(r.DeclaredPeers))
+		for _, peer := range r.DeclaredPeers {
+			if peer == "" || len(peer) > 300 || declared[peer] {
+				return false
+			}
+			declared[peer] = true
+		}
+		confirmed, finalPartial, unknown := 0, 0, 0
+		seen := make(map[string]bool, len(r.PeerOutcomes))
+		for _, outcome := range r.PeerOutcomes {
+			if !outcome.valid() || !declared[outcome.Peer] || seen[outcome.Peer] {
+				return false
+			}
+			seen[outcome.Peer] = true
+			switch outcome.Disposition {
+			case kvPeerConfirmed:
+				confirmed++
+			case kvPeerNotSentUnimplemented, kvPeerRefusedBeforeSend:
+				finalPartial++
+			case kvPeerUnknownAfterDispatch:
+				unknown++
+			}
+		}
+		switch r.Phase {
+		case "prepared", "dispatching", "effect-confirmed":
+			return len(r.PeerOutcomes) == 0 && unchangedKV
+		case "remote-dispatching":
+			return r.RemoteExpected > 0 && len(r.PeerOutcomes) == 0 && unchangedKV
+		case "remote-unknown":
+			return r.RemoteExpected > 0 && unchangedKV && (len(r.PeerOutcomes) == 0 || unknown > 0)
+		case "metadata-ready-full", "terminal-full":
+			return r.ExpectedReset == r.SelectedReset && r.ExpectedLocal == r.SelectedLocal && r.ExpectedMigrate == apply &&
+				((r.RemoteExpected == 0 && len(r.PeerOutcomes) == 0) || (r.RemoteExpected > 0 && confirmed == r.RemoteExpected && finalPartial == 0 && unknown == 0))
+		case "metadata-ready-partial", "terminal-partial":
+			return r.RemoteExpected > 0 && len(r.PeerOutcomes) == r.RemoteExpected && unknown == 0 && finalPartial > 0 &&
+				r.ExpectedReset == r.SelectedReset && r.ExpectedMigrate == r.SelectedMigrate && r.ExpectedLocal == (routeOwnedValue{Present: true, Value: epochToken(r.OperationID, "local-only")})
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
 const (
 	requestDrainReceiptVersion        = 3
 	adapterRotateReceiptVersion       = 4
@@ -103,8 +225,11 @@ const (
 	warmSecureReceiptVersion          = 6
 	requestDrainSecureReceiptVersion  = 7
 	adapterRotateSecureReceiptVersion = 8
+	servingEffectReceiptVersion       = 9
 	requestDrainMaxLabels             = 64
 	requestDrainMaxAddresses          = 16
+	servingEffectReceiptMaxBytes      = 32 << 10
+	servingEffectEpochMaxBytes        = 4 << 10
 )
 
 func validDigest(value string) bool {
@@ -113,6 +238,10 @@ func validDigest(value string) bool {
 }
 
 func receiptName(r operationReceipt) string {
+	if r.Version == servingEffectReceiptVersion && r.EffectDomain != "" {
+		h := sha256.Sum256([]byte("serving-effect/" + r.EffectDomain + "/" + r.TargetUID))
+		return fmt.Sprintf("phorvex-serving-effect-%x", h[:20])
+	}
 	if (r.Kind == string(model.ActionRouteRotate) || r.Kind == string(model.ActionEndpointRotate)) && r.ServiceUID != "" {
 		h := sha256.Sum256([]byte("route-service/" + r.ServiceUID))
 		return fmt.Sprintf("phorvex-route-service-%x", h[:20])
@@ -128,10 +257,12 @@ func podSpecDigest(p *corev1.Pod) string {
 }
 
 func (r operationReceipt) valid() bool {
-	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
+	if (r.Version != 1 && r.Version != 2 && r.Version != requestDrainReceiptVersion && r.Version != adapterRotateReceiptVersion && r.Version != routeCutoverReceiptVersion && r.Version != warmSecureReceiptVersion && r.Version != requestDrainSecureReceiptVersion && r.Version != adapterRotateSecureReceiptVersion && r.Version != servingEffectReceiptVersion) || r.PolicyNamespace == "" || r.PolicyName == "" || r.PolicyUID == "" || r.TargetName == "" || r.TargetUID == "" {
 		return false
 	}
 	switch r.Kind {
+	case string(model.ActionKVReset), string(model.ActionKVMigrateInvalidate), string(model.ActionGuardrailRotate):
+		return validServingEffectReceipt(r)
 	case "warm-swap", "model-shard-replace":
 		if r.Version != 1 && r.Version != 2 && r.Version != warmSecureReceiptVersion {
 			return false
@@ -257,6 +388,18 @@ func boundedLabelMap(values map[string]string) bool {
 	return true
 }
 
+func boundedOptionalLabelMap(values map[string]string) bool {
+	if len(values) > requestDrainMaxLabels {
+		return false
+	}
+	for key, value := range values {
+		if key == "" || len(key) > 253 || len(value) > 63 {
+			return false
+		}
+	}
+	return true
+}
+
 func journalWrite(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1.ConfigMap, error) {
 	if ec.JournalNamespace == "" || ec.JournalNamespace == r.PolicyNamespace || ec.Client == nil || !r.valid() {
 		return nil, fmt.Errorf("operation journal unavailable or invalid")
@@ -265,7 +408,14 @@ func journalWrite(ctx context.Context, ec EnactCtx, r operationReceipt) (*corev1
 	if err != nil {
 		return nil, err
 	}
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: ec.JournalNamespace, Name: receiptName(r), Labels: map[string]string{journalLabel: "v1"}}, Data: map[string]string{"receipt": string(b)}}
+	if r.Version == servingEffectReceiptVersion && len(b) > servingEffectReceiptMaxBytes {
+		return nil, fmt.Errorf("protected serving receipt exceeds %d bytes", servingEffectReceiptMaxBytes)
+	}
+	journalLabels := map[string]string{journalLabel: "v1"}
+	if r.Version == servingEffectReceiptVersion {
+		journalLabels[servingJournalLabel] = "v1"
+	}
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: ec.JournalNamespace, Name: receiptName(r), Labels: journalLabels}, Data: map[string]string{"receipt": string(b)}}
 	if err := ec.Client.Create(ctx, cm); err != nil {
 		return nil, err
 	}
@@ -282,6 +432,9 @@ func journalAdvance(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r op
 	b, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	if r.Version == servingEffectReceiptVersion && len(b) > servingEffectReceiptMaxBytes {
+		return fmt.Errorf("protected serving receipt exceeds %d bytes", servingEffectReceiptMaxBytes)
 	}
 	next := cm.DeepCopy()
 	next.Data["receipt"] = string(b)
@@ -382,7 +535,7 @@ func receiptAuthority(ctx context.Context, reader client.Reader, r operationRece
 	if err != nil {
 		return nil, err
 	}
-	if (r.Kind == "quarantine" || r.Kind == "request-drain" || r.Kind == "adapter-rotate") && !sel.Matches(labels.Set(r.TargetLabels)) {
+	if (r.Kind == "quarantine" || r.Kind == "request-drain" || r.Kind == "adapter-rotate" || r.Version == servingEffectReceiptVersion) && !sel.Matches(labels.Set(r.TargetLabels)) {
 		return nil, fmt.Errorf("recorded target outside policy selector")
 	}
 	ns := &corev1.Namespace{}

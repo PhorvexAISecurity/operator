@@ -13,12 +13,12 @@ import (
 //
 // Old code: the evidence sum and the event-derived stage never read event age; a 0 s and a
 // 30 min event produced byte-identical assessments. New: w = 1 − clamp01(age/τ_ev), evidence
-// = Σ w·severity, stage from events with w > 0 only. τ_ev = proactiveFloor = 15 m here.
+// = Σ w·severity, stage from events with w > 0 only. τ_ev is explicitly 15 m here.
 
 const tauEv = 15 * time.Minute
 
 func agingPolicy() model.Policy {
-	return model.Policy{Tenant: "t", ProactiveFloor: tauEv, ExposurePressureCap: 0.5}
+	return model.Policy{Tenant: "t", ProactiveFloor: tauEv, EventAgeHorizon: tauEv, ExposurePressureCap: 0.5}
 }
 
 func persistEvent(age time.Duration) model.SecurityEventInfo {
@@ -56,6 +56,9 @@ func TestEventAgeWeightMatchesRulingVector(t *testing.T) {
 	}
 	if model.EventAgeWeight(time.Hour, 0) != 1 {
 		t.Fatal("tau_ev <= 0 must disable aging (w = 1)")
+	}
+	if model.EventAgeWeight(-time.Second, tauEv) != 0 {
+		t.Fatal("negative age must not gain fresh evidence")
 	}
 }
 

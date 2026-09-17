@@ -1,0 +1,287 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 12
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: 3d56cdce3802afb22c67bd6e12f4d5cee9bf4fc98d9441e2b5c35ba33b5a272a
+    source_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
+    at: '2026-09-17T05:31:43+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/lead-baseline.log
+    sha256: 100f9afc6ba8c9c7247ffe2fd1cd4efd598dcfcaa3511c37bb68082a9e2287e1
+    source_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
+    at: '2026-09-17T05:32:49+00:00'
+  preflight:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/preflight/receipt.json
+    sha256: ee109960272e5554aee978d97de2d31e124dcfd483a9db54963469c51ad9b18a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+  implementation:
+    result: PASS
+    by: sol-t13-m029
+    artifact: 04-diff.patch
+    sha256: 4a0028d1acfbd85c5c7ff30275a11d9f6f8ace3bbf5786f848b00953626b638a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+  l0:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/preflight/receipt.json
+    sha256: ee109960272e5554aee978d97de2d31e124dcfd483a9db54963469c51ad9b18a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 1ce049585bfde42a76bbbc7457ac9b40bec4aad76163732edfdee25ae8620316
+  l1:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/worker/focused-head.md
+    sha256: fd102940f7aef963fc20b49afd4bc119a0e3106ca5df35860bda662ed5e8e8b2
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/internal/belief
+    - phorvex/internal/ctxprov
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/recon
+    - phorvex/internal/runner
+    - tools
+    inputs_sha256: 594d518273a827d1e751191316ab74a4982a0bac8ef32f72b8a1cd6c6eb95c0d
+  l2:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/preflight/receipt.json
+    sha256: ee109960272e5554aee978d97de2d31e124dcfd483a9db54963469c51ad9b18a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - phorvex
+    - tools/envtest_gate.py
+    inputs_sha256: edafe6e63eb7d44e87a8bf5719b8d51b1d083b608bc56d4d6a957b615d4ff6af
+  positive_control:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/worker/focused-head.md
+    sha256: fd102940f7aef963fc20b49afd4bc119a0e3106ca5df35860bda662ed5e8e8b2
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/internal/belief
+    - phorvex/internal/ctxprov
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/runner
+    inputs_sha256: f307c43463d346f95f04558e8ad12baaef1e8ed73aaef025f08c47fb8ed7f3dc
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: e8ca22a0a35dac0e9fed169566c47a292913a69eda74f6e387381a82648ba4c6
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:12:48+00:00'
+    baseline_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: 8a7b34750c0e58de2feebc3528f8054f93503870f15a3bba85149fa9068bcb47
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:12:48+00:00'
+    incident_sha256: e8ca22a0a35dac0e9fed169566c47a292913a69eda74f6e387381a82648ba4c6
+  patch_equivalence:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/lead/composition-review.md
+    sha256: 494f8be67c3d2cde3361ad9130947241472d1d99bd05d2d0a78fd12de1481504
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T20:26:46+00:00'
+fix_id: T13-M029
+issues:
+- M-29
+title: Decouple event evidence memory from proactive rotation cadence
+profile: standard
+state: IN_PR
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t13-m029
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier12
+  code_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t13-m029
+  base_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
+  head_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator/pull/231
+  reviewed_head: de5bab14015993c7d48042513a7536a1823dd1e0
+  merge_sha: null
+  checks: FAIL
+  patch_equivalence: PASS
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: PR231 targets main; await DevOps merge/deployment and external GitHub billing
+    resolution. Continue Tier14 source/review; retain issue-specific L3 debt.
+updated_at: '2026-09-17T20:26:46+00:00'
+configuration_history:
+- at: '2026-09-17T05:31:40+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+- at: '2026-09-17T05:57:47+00:00'
+  by: sol-t13-m029
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T05:58:15+00:00'
+  by: sol-t13-m029
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T06:10:45+00:00'
+  by: sol-t13-m029
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T20:26:45+00:00'
+  by: codex-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-17T05:31:41+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-17T05:31:43+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-17T06:10:45+00:00'
+  by: sol-t13-m029
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-17T06:10:47+00:00'
+  by: sol-t13-m029
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T06:12:48+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T06:12:50+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-09-17T20:26:46+00:00'
+  by: codex-lead
+  artifact: evidence/lead/composition-review.md
+  note: null
+  approval_ref: AUTHORIZATION.md
+  forced: false
+handoff:
+  id: T13-M029:9:review
+  from: codex-lead
+  to: codex-lead
+  role: coordinator
+  kind: review
+  revision: 9
