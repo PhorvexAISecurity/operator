@@ -1000,3 +1000,14 @@ fixes:
     stacked_on: []
     branch: fix/t8-m124
     head_sha: 1ceec03e7dafc2ad75314bdc53edb29bcce46d96
+  T9-M071:
+    directory: fixes/T9-M071
+    aliases: []
+    issues:
+    - M-71
+    related_issues: []
+    state: OFFLINE_VERIFIED
+    dependencies: []
+    stacked_on: []
+    branch: fix/t9-m071
+    head_sha: b74bc120430d1562e4b1e18a59f5d769b1820622

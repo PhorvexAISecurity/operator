@@ -549,7 +549,7 @@ Severity: HIGH · Tier: 2 · Fixes: none
 
 ### M-71 · adapter-rotate: no post-unload verification; retry errors instead of no-op · **OPEN** · `ACTUATION->EFFECT`
 
-Severity: HIGH · Tier: 2 · Fixes: none
+Severity: HIGH · Tier: 2 · Fixes: T9-M071
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · adapter-rotate Update @ internal/actuator/handlers_ai_p4set.go:229
