@@ -1018,7 +1018,7 @@ fixes:
     - M-77
     - M-76
     related_issues: []
-    state: OFFLINE_VERIFIED
+    state: PR_READY
     dependencies: []
     stacked_on: []
     branch: fix/t10-m077
