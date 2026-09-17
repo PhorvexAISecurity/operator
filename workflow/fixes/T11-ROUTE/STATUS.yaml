@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 8
+revision: 9
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -56,7 +56,7 @@ blind_derivation:
 implementation:
   branch: fix/t11-route
   base_sha: e35b809c543654134f83683489cf6fce973d7afb
-  head_sha: 064d5d087ffc021c0abe4d69b290f37a867d8cc1
+  head_sha: 308037ab01c1a0ad38ec2366b7820d84d10894cc
   stacked_on: []
 pull_request:
   url: null
@@ -96,7 +96,7 @@ next_action:
   owner: sol-t11-route
   action: Implement signed plan; one heavy slot; submit-review --no-notify; local
     only
-updated_at: '2026-09-17T02:24:48+00:00'
+updated_at: '2026-09-17T02:59:07+00:00'
 configuration_history:
 - at: '2026-09-17T00:33:12+00:00'
   by: codex-lead
@@ -120,6 +120,11 @@ configuration_history:
   - implementation
   approval_ref: null
 - at: '2026-09-17T02:18:14+00:00'
+  by: sol-t11-route
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T02:59:07+00:00'
   by: sol-t11-route
   fields:
   - implementation
