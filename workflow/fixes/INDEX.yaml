@@ -1041,8 +1041,8 @@ fixes:
     issues:
     - M-12
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t11-m012
-    head_sha: null
+    head_sha: c31ccf8de5fa862c72b3b85ff42f5a3e3fa04d11
