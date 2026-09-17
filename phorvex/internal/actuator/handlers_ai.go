@@ -15,7 +15,6 @@ package actuator
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -36,7 +35,6 @@ const (
 	labelRouteKey    = "phorvex.ai/route-key"
 	annoSwapPhase    = "phorvex.ai/swap-phase"
 	annoKVResetEpoch = "phorvex.ai/kv-reset-epoch"
-	annoEndpointSnap = "phorvex.ai/endpoint-snapshot"
 	annoRouteService = "phorvex.ai/route-service" // optional Service whose selector this pod's route-key drives
 	annoMIGProfile   = "phorvex.ai/mig-target-profile"
 	annoGPUID        = "phorvex.ai/gpu-id"
@@ -665,163 +663,12 @@ type endpointRotateHandler struct{}
 
 func (endpointRotateHandler) Name() string { return string(model.ActionEndpointRotate) }
 
-func endpointRotateRefusal(reason string) (HandlerResult, error) {
-	err := fmt.Errorf("endpoint-rotate not performed: %s", reason)
-	return HandlerResult{Note: err.Error()}, RefusedWithoutEffect(err)
-}
-
-func endpointRotatePartial(touched []string, err error) (HandlerResult, error) {
-	return HandlerResult{
-		Emitted:        true,
-		MutationKind:   "partial",
-		ObjectsTouched: touched,
-		Note:           "endpoint-rotate partial/unknown: accepted or ambiguous writes require reconciliation; Kubernetes restitch not confirmed",
-	}, err
-}
-
-func endpointServiceSelectsPod(svc *corev1.Service, pod *corev1.Pod) bool {
-	if svc == nil || pod == nil || len(svc.Spec.Selector) == 0 {
-		return false
-	}
-	for key, value := range svc.Spec.Selector {
-		observed, present := pod.Labels[key]
-		if !present || observed != value {
-			return false
-		}
-	}
-	return true
-}
-
-func endpointPodRestitchConfirmed(pod *corev1.Pod, uid, routeService, routeKey, epoch string) bool {
-	return pod != nil && string(pod.UID) == uid && pod.UID != "" && pod.ResourceVersion != "" &&
-		pod.DeletionTimestamp == nil && pod.Labels[labelRouteKey] == routeKey &&
-		pod.Labels["phorvex.ai/endpoint-epoch"] == epoch && pod.Annotations[annoRouteService] == routeService
-}
-
-func endpointServiceRestitchConfirmed(svc *corev1.Service, pod *corev1.Pod, uid, routeKey string, original map[string]string) bool {
-	wantLen := len(original)
-	if _, existed := original[labelRouteKey]; !existed {
-		wantLen++
-	}
-	if svc == nil || string(svc.UID) != uid || svc.UID == "" || svc.ResourceVersion == "" ||
-		svc.DeletionTimestamp != nil || svc.Spec.Selector[labelRouteKey] != routeKey ||
-		len(svc.Spec.Selector) != wantLen {
-		return false
-	}
-	for key, value := range original {
-		if key == labelRouteKey {
-			value = routeKey
-		}
-		observed, present := svc.Spec.Selector[key]
-		if !present || observed != value {
-			return false
-		}
-	}
-	return endpointServiceSelectsPod(svc, pod)
-}
-
 func (endpointRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	if ec.Reader == nil || ec.Client == nil {
-		return endpointRotateRefusal("authoritative reader or writer unavailable")
-	}
-	pod, ok, err := getPod(ctx, ec.Reader, req.Namespace, req.Pod)
-	if err != nil {
-		return endpointRotateRefusal("authoritative Pod read failed: " + err.Error())
-	}
-	if !ok {
-		return endpointRotateRefusal("selected Pod is absent")
-	}
-	if reason := triggerIdentityRefusal(req, pod); reason != "" {
-		return endpointRotateRefusal(reason)
-	}
-	if pod.ResourceVersion == "" {
-		return endpointRotateRefusal("selected Pod resource version unavailable")
-	}
-	svcName := pod.Annotations[annoRouteService]
-	if svcName == "" {
-		return endpointRotateRefusal("pod declares no phorvex.ai/route-service")
-	}
-	svc := &corev1.Service{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: svcName}, svc); err != nil {
-		return endpointRotateRefusal("declared Service read failed: " + err.Error())
-	}
-	if svc.UID == "" || svc.ResourceVersion == "" || svc.DeletionTimestamp != nil {
-		return endpointRotateRefusal("declared Service identity is unavailable or terminating")
-	}
-	if !endpointServiceSelectsPod(svc, pod) {
-		return endpointRotateRefusal("declared Service selector does not select the target Pod")
-	}
-
-	podUID, podRV := string(pod.UID), pod.ResourceVersion
-	svcUID, svcRV := string(svc.UID), svc.ResourceVersion
-	originalSelector := copyLabels(svc.Spec.Selector)
-	// Snapshot the labels for the existing Pod-only rollback contract. Service rollback and
-	// multi-write cutover recovery remain separate work (M-63 and M-62).
-	snap, _ := json.Marshal(copyLabels(pod.Labels))
-	pod.Labels = ensureMap(pod.Labels)
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[annoEndpointSnap] = string(snap)
-	newKey := "ep-" + podRV
-	pod.Labels[labelRouteKey] = newKey
-	pod.Labels["phorvex.ai/endpoint-epoch"] = podRV
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		if apierrors.IsConflict(err) || apierrors.IsNotFound(err) || apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err) {
-			return endpointRotateRefusal("Pod update rejected before effect: " + err.Error())
-		}
-		return endpointRotatePartial([]string{objRef("Pod", req.Namespace, req.Pod)}, fmt.Errorf("endpoint-rotate Pod update outcome unknown: %w", err))
-	}
-	touched := []string{objRef("Pod", req.Namespace, req.Pod)}
-
-	freshPod := &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, freshPod); err != nil || !endpointPodRestitchConfirmed(freshPod, podUID, svcName, newKey, podRV) {
-		if err == nil {
-			err = fmt.Errorf("Pod identity or route-key postcondition changed")
-		}
-		return endpointRotatePartial(touched, fmt.Errorf("endpoint-rotate Pod readback: %w", err))
-	}
-
-	// Re-read immediately before the second write. The original UID and ResourceVersion bind
-	// the declaration that was validated before any mutation; a replacement or intervening
-	// update cannot inherit this operation.
-	freshSvc := &corev1.Service{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: svcName}, freshSvc); err != nil {
-		return endpointRotatePartial(touched, fmt.Errorf("endpoint-rotate Service pre-write read: %w", err))
-	}
-	if string(freshSvc.UID) != svcUID || freshSvc.ResourceVersion != svcRV || freshSvc.DeletionTimestamp != nil {
-		return endpointRotatePartial(touched, fmt.Errorf("endpoint-rotate declared Service identity or resource version changed before write"))
-	}
-	freshSvc.Spec.Selector = copyLabels(freshSvc.Spec.Selector)
-	freshSvc.Spec.Selector[labelRouteKey] = newKey
-	attemptedTouched := append(append([]string(nil), touched...), objRef("Service", req.Namespace, svcName))
-	if err := ec.Client.Update(ctx, freshSvc); err != nil {
-		return endpointRotatePartial(attemptedTouched, fmt.Errorf("endpoint-rotate Service update after Pod mutation: %w", err))
-	}
-	touched = attemptedTouched
-
-	confirmedPod := &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, confirmedPod); err != nil || !endpointPodRestitchConfirmed(confirmedPod, podUID, svcName, newKey, podRV) {
-		if err == nil {
-			err = fmt.Errorf("Pod identity or route-key postcondition changed")
-		}
-		return endpointRotatePartial(touched, fmt.Errorf("endpoint-rotate final Pod readback: %w", err))
-	}
-	confirmedSvc := &corev1.Service{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: svcName}, confirmedSvc); err != nil || !endpointServiceRestitchConfirmed(confirmedSvc, confirmedPod, svcUID, newKey, originalSelector) {
-		if err == nil {
-			err = fmt.Errorf("Service identity or selector postcondition changed")
-		}
-		return endpointRotatePartial(touched, fmt.Errorf("endpoint-rotate final Service readback: %w", err))
-	}
-
-	return HandlerResult{
-		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
-		ObjectsTouched: touched,
-		Note:           "endpoint-rotate: Pod route-key and declared Service selector confirmed by authoritative Kubernetes readback; DNS/data-plane availability unverified",
-	}, nil
+	return enactRouteCutover(ctx, ec, req)
 }
 
 func (endpointRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
-	return restoreLabels(ctx, ec, req, annoEndpointSnap)
+	return rollbackRouteCutover(ctx, ec, req, ref)
 }
 
 // --- 12. model-shard-replace — REAL warm-provision/flip/retire for a sharded model ----------

@@ -102,16 +102,27 @@ func TestM090TerminatingTargetStopsNativeAndAIHandlersBeforeEffect(t *testing.T)
 	req := Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID)}
 
 	t.Run("native-route-rotate", func(t *testing.T) {
-		c := newClient()
-		result, err := (routeRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c, Reader: c}, req)
+		f := newRouteUnitFixture(t, model.ActionRouteRotate, 1)
+		terminating := &corev1.Pod{}
+		if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), terminating); err != nil {
+			t.Fatal(err)
+		}
+		terminating.Finalizers = []string{"m090.phorvex.ai/retain"}
+		if err := f.client.Client.Update(f.ctx, terminating); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.client.Client.Delete(f.ctx, terminating); err != nil {
+			t.Fatal(err)
+		}
+		result, err := f.native.Actuate(f.ctx, f.request)
 		if err == nil || !strings.Contains(err.Error(), "terminating") || result.Emitted || len(result.ObjectsTouched) != 0 {
 			t.Fatalf("native handler crossed refusal: result=%+v err=%v", result, err)
 		}
 		var got corev1.Pod
-		if err := c.Get(context.Background(), client.ObjectKeyFromObject(pod), &got); err != nil {
+		if err := f.client.Get(f.ctx, client.ObjectKeyFromObject(f.pod), &got); err != nil {
 			t.Fatal(err)
 		}
-		if got.Labels[labelRouteKey] != "old" || got.Annotations[routeSnapAnno] != "" {
+		if got.Labels[labelRouteKey] != "old" || got.Labels[routeBridgeLabel] != "" {
 			t.Fatalf("native handler mutated terminating Pod: %+v", got)
 		}
 	})

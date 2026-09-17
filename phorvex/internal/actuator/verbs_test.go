@@ -48,6 +48,17 @@ func TestRequiredVerbsRoutingAware(t *testing.T) {
 	if got := RequiredVerbs(model.ActionRouteRotate); len(got) != 2 {
 		t.Errorf("native-routed route-rotate must keep its 2 native verbs, got %+v", got)
 	}
+	for _, action := range []model.Action{model.ActionRouteRotate, model.ActionEndpointRotate} {
+		var podPatch, podUpdate, serviceUpdate bool
+		for _, verb := range RequiredVerbsForBackend(BackendNative, action) {
+			podPatch = podPatch || (verb.Resource == "pods" && verb.Verb == "patch")
+			podUpdate = podUpdate || (verb.Resource == "pods" && verb.Verb == "update")
+			serviceUpdate = serviceUpdate || (verb.Resource == "services" && verb.Verb == "update")
+		}
+		if !podPatch || podUpdate || !serviceUpdate {
+			t.Errorf("%s permissions do not match owned-key Pod patch + Service update: %+v", action, RequiredVerbsForBackend(BackendNative, action))
+		}
+	}
 }
 
 func TestRequiredVerbsFollowResolvedBackend(t *testing.T) {

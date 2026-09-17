@@ -1,8 +1,9 @@
 # Reference deployment contract for route-rotate (PHORVEXSEC-129).
 #
 # The Service selects phorvex.ai/route-key, every managed pod names that Service with
-# phorvex.ai/route-service, and two Ready replicas prevent selector restitch from
-# interrupting the sole backend. The policy stays dryRun until an operator deliberately
+# phorvex.ai/route-service, and controller-owned EndpointSlices establish the selected
+# backend. The bounded cutover ends on one target, so its policy floor is exactly one.
+# The policy stays dryRun until an operator deliberately
 # enables the native/hybrid backend and namespaced actuator RBAC.
 apiVersion: v1
 kind: Service
@@ -66,7 +67,7 @@ spec:
     antiOverRotationWindow: 5m
     proactiveFloor: 1h
   slo:
-    minAvailableReplicas: 2
+    minAvailableReplicas: 1
   assetValue:
     blastRadiusFromGraph: true
   triggers:

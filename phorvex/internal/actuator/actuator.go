@@ -70,7 +70,7 @@ type Request struct {
 	AdapterObservation *model.AdapterObservation // selection-time detector assertion; runtime rechecks event
 	TargetUID          string                    // Bound identity from the selecting snapshot.
 	TargetNamespaceUID string                    // Bound by the protected quarantine-capacity reservation.
-	OperationID        string                    // Durable quarantine operation identity; empty for other actions.
+	OperationID        string                    // Stable decision identity for protected quarantine and route operations.
 	PolicyName         string                    // Selecting PhorvexPolicy identity for recoverable native operations.
 	PolicyUID          string
 

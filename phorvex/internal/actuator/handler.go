@@ -59,6 +59,8 @@ type EnactCtx struct {
 	DrainObservationInterval   time.Duration
 	AdapterObservationTimeout  time.Duration
 	AdapterObservationInterval time.Duration
+	RouteObservationTimeout    time.Duration
+	RouteObservationInterval   time.Duration
 }
 
 // HandlerResult is the native effect record.

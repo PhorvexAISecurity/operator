@@ -33,8 +33,8 @@ metadata:
   name: phorvex-actuator-routine    # ROLE A — routine MTD moves (rotate/quarantine/identity/route/kv/endpoint/warm-swap)
   namespace: <NS>
 rules:
-  # rotate=delete; quarantine/identity/route/kv/endpoint=update; warm-swap=list+update+delete;
-  # request-drain uses optimistic-lock patch for transient stop/restore. No "create" on pods.
+  # rotate=delete; quarantine/identity/kv=update; warm-swap=list+update+delete;
+  # request-drain and protected route/endpoint cutovers use optimistic-lock patch. No "create" on pods.
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "delete", "update", "patch"]
@@ -60,7 +60,8 @@ rules:
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get", "list", "update"]
-  # request-drain: observe exact target withdrawal and return. Read-only; no dataplane claim.
+  # request-drain and route/endpoint cutovers: observe exact controller membership. Read-only;
+  # this proves no HTTP/DNS/data-plane continuity.
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
     verbs: ["list"]

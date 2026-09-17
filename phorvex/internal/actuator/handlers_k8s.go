@@ -300,24 +300,15 @@ func (identityRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Requ
 	return restoreLabels(ctx, ec, req, identitySnapAnno)
 }
 
-// --- 7. route-rotate (advanced K8s; native-only) — reversible ----------------------------
+// --- 7. route-rotate (advanced K8s; native-only) — protected reversible cutover -----------
 //
-// Re-key the target pod and its declared fronting Service selector. Reversible: both
-// the prior pod labels and the complete prior Service selector are snapshotted on the pod.
-// The Service contract is explicit: the pod must name it with phorvex.ai/route-service,
-// and the Service must select phorvex.ai/route-key.
+// The shared route engine serializes by exact Service and target identity, records the
+// owned fields in the protected journal, and confirms each selector transition through
+// Service-owned EndpointSlices before advancing.
 
 type routeRotateHandler struct{}
 
 func (routeRotateHandler) Name() string { return string(model.ActionRouteRotate) }
-
-const routeSnapAnno = "phorvex.ai/route-snapshot"
-
-type routeSnapshot struct {
-	Labels          map[string]string `json:"labels"`
-	ServiceName     string            `json:"serviceName"`
-	ServiceSelector map[string]string `json:"serviceSelector"`
-}
 
 func selectorMatchesPod(selector, podLabels map[string]string) bool {
 	if len(selector) == 0 {
@@ -333,138 +324,11 @@ func selectorMatchesPod(selector, podLabels map[string]string) bool {
 }
 
 func (routeRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return HandlerResult{}, orGone(err, ok, "route-rotate", req)
-	}
-	svcName := pod.Annotations[annoRouteService]
-	if svcName == "" {
-		return HandlerResult{
-			Emitted: false, MutationKind: "none",
-			Note: "route-rotate not emitted: pod has no " + annoRouteService + " annotation",
-		}, nil
-	}
-
-	var svc corev1.Service
-	if err := ec.Client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: svcName}, &svc); err != nil {
-		return HandlerResult{}, fmt.Errorf("route-rotate get Service %s/%s: %w", req.Namespace, svcName, err)
-	}
-	if svc.Spec.Selector[labelRouteKey] == "" || !selectorMatchesPod(svc.Spec.Selector, pod.Labels) {
-		return HandlerResult{}, fmt.Errorf("route-rotate refused: declared Service %s/%s does not select the target route-key", req.Namespace, svcName)
-	}
-	ready, err := readyPodsMatchingService(ctx, ec.Client, &svc)
-	if err != nil {
-		return HandlerResult{}, fmt.Errorf("route-rotate count Ready backends for Service %s/%s: %w", req.Namespace, svcName, err)
-	}
-	if !podReady(pod) || ready < 2 {
-		return HandlerResult{}, fmt.Errorf("route-rotate refused: Service %s/%s requires target Ready and at least two Ready backends (found %d)", req.Namespace, svcName, ready)
-	}
-
-	snap := routeSnapshot{
-		Labels:          copyLabels(pod.Labels),
-		ServiceName:     svcName,
-		ServiceSelector: copyLabels(svc.Spec.Selector),
-	}
-	snapJSON, err := json.Marshal(snap)
-	if err != nil {
-		return HandlerResult{}, fmt.Errorf("route-rotate snapshot %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	pod.Labels = ensureMap(pod.Labels)
-	pod.Annotations = ensureMap(pod.Annotations)
-	pod.Annotations[routeSnapAnno] = string(snapJSON)
-	newKey := "route-" + pod.ResourceVersion
-	pod.Labels[labelRouteKey] = newKey
-	pod.Labels["phorvex.ai/route-epoch"] = pod.ResourceVersion
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return HandlerResult{}, fmt.Errorf("route-rotate %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-
-	svc.Spec.Selector = copyLabels(svc.Spec.Selector)
-	svc.Spec.Selector[labelRouteKey] = newKey
-	if err := ec.Client.Update(ctx, &svc); err != nil {
-		// The pod re-key alone is inert and can temporarily remove it from the old
-		// Service. Compensate before returning so a failed restitch earns no credit
-		// and leaves no half-applied mutation behind.
-		compensateErr := restoreRoutePodLabels(ctx, ec.Client, req.Namespace, req.Pod, snap.Labels)
-		if compensateErr != nil {
-			return HandlerResult{}, fmt.Errorf("route-rotate restitch Service %s/%s: %w; pod compensation also failed: %v", req.Namespace, svcName, err, compensateErr)
-		}
-		return HandlerResult{}, fmt.Errorf("route-rotate restitch Service %s/%s: %w (pod mutation compensated)", req.Namespace, svcName, err)
-	}
-	return HandlerResult{
-		Emitted: true, MutationKind: "reversible", RollbackRef: req.Namespace + "/" + req.Pod,
-		ObjectsTouched: []string{objRef("Pod", req.Namespace, req.Pod), objRef("Service", req.Namespace, svcName)},
-		Note:           "route-key re-keyed and Service " + svcName + " selector restitched",
-	}, nil
+	return enactRouteCutover(ctx, ec, req)
 }
 
 func (routeRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
-	pod, ok, err := getPod(ctx, ec.Client, req.Namespace, req.Pod)
-	if err != nil || !ok {
-		return err
-	}
-	raw := pod.Annotations[routeSnapAnno]
-	if raw == "" {
-		return nil
-	}
-
-	var snap routeSnapshot
-	if err := json.Unmarshal([]byte(raw), &snap); err != nil {
-		return fmt.Errorf("route-rotate rollback decode snapshot: %w", err)
-	}
-	// Backward compatibility for a snapshot written by the old label-only handler.
-	if snap.Labels == nil {
-		if err := json.Unmarshal([]byte(raw), &snap.Labels); err != nil {
-			return fmt.Errorf("route-rotate rollback decode legacy snapshot: %w", err)
-		}
-	}
-
-	// Restore the Service first. Its old selector still has at least one of the
-	// Ready backends that made Enact safe, avoiding an empty selector transition.
-	if snap.ServiceName != "" {
-		var svc corev1.Service
-		if err := ec.Client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: snap.ServiceName}, &svc); err != nil {
-			return fmt.Errorf("route-rotate rollback get Service %s/%s: %w", req.Namespace, snap.ServiceName, err)
-		}
-		svc.Spec.Selector = copyLabels(snap.ServiceSelector)
-		if err := ec.Client.Update(ctx, &svc); err != nil {
-			return fmt.Errorf("route-rotate rollback Service %s/%s: %w", req.Namespace, snap.ServiceName, err)
-		}
-	}
-
-	pod.Labels = snap.Labels
-	delete(pod.Annotations, routeSnapAnno)
-	if err := ec.Client.Update(ctx, pod); err != nil {
-		return fmt.Errorf("route-rotate rollback pod %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	return nil
-}
-
-func readyPodsMatchingService(ctx context.Context, c client.Client, svc *corev1.Service) (int, error) {
-	var pods corev1.PodList
-	if err := c.List(ctx, &pods, client.InNamespace(svc.Namespace), client.MatchingLabels(svc.Spec.Selector)); err != nil {
-		return 0, err
-	}
-	ready := 0
-	for i := range pods.Items {
-		for _, cond := range pods.Items[i].Status.Conditions {
-			if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-				ready++
-				break
-			}
-		}
-	}
-	return ready, nil
-}
-
-func restoreRoutePodLabels(ctx context.Context, c client.Client, namespace, name string, labels map[string]string) error {
-	var pod corev1.Pod
-	if err := c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &pod); err != nil {
-		return err
-	}
-	pod.Labels = labels
-	delete(pod.Annotations, routeSnapAnno)
-	return c.Update(ctx, &pod)
+	return rollbackRouteCutover(ctx, ec, req, ref)
 }
 
 // --- shared helpers ----------------------------------------------------------------------
