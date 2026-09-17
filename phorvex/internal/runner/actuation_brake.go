@@ -46,6 +46,7 @@ func clearDispatchEvidence(d *model.Decision) {
 	d.Handler, d.RollbackRef, d.MutationKind = "", "", ""
 	d.ObjectsTouched = nil
 	d.Phoenix = nil
+	d.DispatchOutcome, d.DispatchReason = "", ""
 }
 
 func stampNamespaceDryRun(d *model.Decision, observation model.ActuationBrakeObservation) {
@@ -58,9 +59,10 @@ func stampNamespaceDryRun(d *model.Decision, observation model.ActuationBrakeObs
 		d.Trace.DryRunCause = observation.Cause
 		d.Trace.ActuationBrakeCause = observation.Cause
 		if d.Selected {
-			d.Trace.DispatchOutcome = model.DispatchNotAttempted
-			d.Trace.DispatchReason = "namespace-dry-run: " + observation.Cause
+			stampDispatchEvidence(d, model.DispatchNotAttempted, "namespace-dry-run")
 		}
+	} else if d.Selected {
+		stampDispatchEvidence(d, model.DispatchNotAttempted, "namespace-dry-run")
 	}
 }
 
@@ -72,9 +74,10 @@ func stampPolicyDryRun(d *model.Decision) {
 		d.Trace.DryRun = true
 		d.Trace.DryRunCause = actuationbrake.PolicyDryRun
 		if d.Selected {
-			d.Trace.DispatchOutcome = model.DispatchNotAttempted
-			d.Trace.DispatchReason = "policy-dry-run"
+			stampDispatchEvidence(d, model.DispatchNotAttempted, "policy-dry-run")
 		}
+	} else if d.Selected {
+		stampDispatchEvidence(d, model.DispatchNotAttempted, "policy-dry-run")
 	}
 }
 
@@ -83,9 +86,8 @@ func stampTargetBrake(d *model.Decision, observation model.ActuationBrakeObserva
 	d.ActuationBrakeCause = observation.Cause
 	if d.Trace != nil {
 		d.Trace.ActuationBrakeCause = observation.Cause
-		d.Trace.DispatchOutcome = model.DispatchNotAttempted
-		d.Trace.DispatchReason = "actuation-brake: " + observation.Cause
 	}
+	stampDispatchEvidence(d, model.DispatchNotAttempted, "actuation-brake")
 }
 
 func hasPermittedTarget(decisions []model.Decision, views []*model.WorkloadView) bool {

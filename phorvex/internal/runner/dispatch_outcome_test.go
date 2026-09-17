@@ -9,7 +9,6 @@ package runner
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -41,7 +40,7 @@ func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	e.spec.Selector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "tier", Operator: metav1.LabelSelectorOpExists}}
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "uid-1", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, HasGPU: true}}}
 	refused := tracedSelectedDecision()
-	if n := actuateWithBoundary(t, m, context.Background(), e, pol, refused, views); n != 0 || fa.calls != 0 || !strings.HasPrefix(refused[0].Trace.DispatchReason, "route-preparation-failed:") {
+	if n := actuateWithBoundary(t, m, context.Background(), e, pol, refused, views); n != 0 || fa.calls != 0 || refused[0].Trace.DispatchReason != "route-preparation-failed" {
 		t.Fatalf("Phoenix refusal dispatched: n=%d calls=%d trace=%+v", n, fa.calls, refused[0].Trace)
 	}
 	if fa.target.Selector == nil || len(fa.target.Selector.MatchExpressions) != 1 {
@@ -186,7 +185,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 		ds := tracedSelectedDecision()
 		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, reason := dispatchOutcomeOf(t, ds)
-		if outcome != model.DispatchError || reason != "failed" {
+		if outcome != model.DispatchError || reason != "outcome-unknown" {
 			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
 		}
 	})
@@ -221,7 +220,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 			t.Fatalf("actuated %d, want 1", n)
 		}
 		outcome, reason := dispatchOutcomeOf(t, ds)
-		if outcome != model.DispatchEmitted || reason != "" {
+		if outcome != model.DispatchEmitted || reason != "emitted-unconfirmed" {
 			t.Fatalf("outcome/reason = %q/%q", outcome, reason)
 		}
 	})

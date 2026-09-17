@@ -441,7 +441,7 @@ func (guardrailRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	case aerr == nil:
 	case errors.Is(aerr, errStackUnreachable):
 		return HandlerResult{
-			Emitted: false, MutationKind: "none",
+			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
 			Note: "[PENDING-GPU-VALIDATION] guardrail-rotate outcome unconfirmed: guardrail service " +
 				"unreachable at " + req.Namespace + "/" + req.Pod + " — live filter change was NOT " +
 				"credited and no variant/epoch record was written",
@@ -622,7 +622,7 @@ func (kvMigrateInvalidateHandler) Enact(ctx context.Context, ec EnactCtx, req Re
 		// invalidate IS the whole move (there is no stack-independent half), so report NOT emitted and
 		// write no epoch — a KV epoch for an invalidate that never ran is a false forensic record.
 		return HandlerResult{
-			Emitted: false, MutationKind: "none",
+			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
 			Note: "[PENDING-GPU-VALIDATION] kv-migrate-invalidate outcome unconfirmed: no usable " +
 				"serving-stack response at " + req.Namespace + "/" + req.Pod + " — no local or " +
 				"cross-worker invalidation was credited",

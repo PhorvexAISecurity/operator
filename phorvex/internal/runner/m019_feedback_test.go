@@ -107,7 +107,7 @@ func TestM019CleanRefusalGetsOneReservedAlternative(t *testing.T) {
 	if got := ce.Cost.Dual.Lambda(); got != lambdaAfterDecision {
 		t.Fatalf("fallback second-committed dual price: before=%g after=%g", lambdaAfterDecision, got)
 	}
-	if len(m.fallbackDecisions) != 1 || !m.fallbackDecisions[0].Actuated || m.fallbackDecisions[0].Trace.DispatchOutcome != model.DispatchEmitted || ds[0].Trace.DispatchOutcome != model.DispatchError {
+	if len(m.fallbackDecisions) != 1 || !m.fallbackDecisions[0].Actuated || m.fallbackDecisions[0].Trace.DispatchOutcome != model.DispatchEmitted || ds[0].Trace.DispatchOutcome != model.DispatchRefused {
 		t.Fatalf("attempt evidence lost: initial=%+v fallback=%+v", ds[0], m.fallbackDecisions)
 	}
 	fallback := m.fallbackDecisions[0]

@@ -89,9 +89,9 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
           <KV k="belief" v={n(sel.belief)} />
           <KV k="threat posture" v={n(sel.threatPosture)} />
           <KV k="physics residual" v={n(sel.residual)} />
-          <Sep label="what recon found" />
-          <KV k="covered facts" v={String(sel.coveredFacts ?? "—")} />
-          <KV k="covered weight" v={n(sel.coveredWeight)} />
+          <Sep label="modeled selection opportunity · not measured mitigation" />
+          <KV k="modeled covered facts" v={String(sel.coveredFacts ?? "—")} />
+          <KV k="modeled selection weight" v={n(sel.coveredWeight)} />
           <KV k="SLO headroom" v={n(sel.sloHeadroom)} />
         </Stage>
 
@@ -100,7 +100,7 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
         <Stage n={2} title="Processing" sub="how it scored the move" Icon={Scale} tone="proc" delay={150}>
           <KV k="engine" v={sel.engine || "—"} mono />
           <Sep label="the value of acting" />
-          <KV k="risk covered" v={n(sel.risk)} strong />
+          <KV k="modeled coverage opportunity" v={n(sel.risk)} strong />
           {Array.isArray(sel.attribution) && sel.attribution.length > 0 && (
             <div className="my-1.5 space-y-1 rounded border border-border/50 bg-panel/40 p-2">
               <div className="text-[9px] uppercase tracking-wide text-muted-foreground/70">where that value came from</div>

@@ -639,7 +639,7 @@ func (kvResetHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Hand
 		// flush that did not happen is not a defence: report it as NOT emitted and write no epoch
 		// (a "flush epoch" for a flush that never ran is a false forensic record).
 		return HandlerResult{
-			Emitted: false, MutationKind: "none",
+			Emitted: false, NoEffect: NoEffectRefused, MutationKind: "none",
 			Note: "[PENDING-GPU-VALIDATION] kv-reset NOT performed: serving stack unreachable at " +
 				req.Namespace + "/" + req.Pod + " (no reachable vLLM endpoint) — no cache was flushed",
 		}, nil
@@ -671,7 +671,7 @@ func (endpointRotateHandler) Name() string { return string(model.ActionEndpointR
 
 func endpointRotateRefusal(reason string) (HandlerResult, error) {
 	err := fmt.Errorf("endpoint-rotate not performed: %s", reason)
-	return HandlerResult{Note: err.Error()}, RefusedWithoutEffect(err)
+	return HandlerResult{NoEffect: NoEffectRefused, Note: err.Error()}, RefusedWithoutEffect(err)
 }
 
 func endpointRotatePartial(touched []string, err error) (HandlerResult, error) {

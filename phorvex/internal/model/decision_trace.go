@@ -78,7 +78,58 @@ const (
 	DispatchEmitted      = "emitted"
 	DispatchEmittedFalse = "emitted-false"
 	DispatchError        = "dispatch-error"
+	DispatchRefused      = "refused-no-effect"
+	DispatchSatisfied    = "already-satisfied"
+	DispatchReconciled   = "reconciled-no-new-mutation"
+	DispatchDeclared     = "declared-only"
 )
+
+// SafeDispatchOutcome returns outcome only when it belongs to the retained,
+// closed public vocabulary. Empty is the honest representation for older
+// records and for an unrecognized producer value.
+func SafeDispatchOutcome(outcome string) string {
+	switch outcome {
+	case DispatchNotAttempted, DispatchEmitted, DispatchEmittedFalse, DispatchError, DispatchRefused, DispatchSatisfied, DispatchReconciled, DispatchDeclared:
+		return outcome
+	default:
+		return ""
+	}
+}
+
+// SafeDispatchReason returns reason only when every component is a reviewed,
+// non-sensitive runner classification. It deliberately rejects arbitrary
+// backend errors and Notes before they can enter retained history or public
+// structured logs.
+func SafeDispatchReason(reason string) string {
+	parts := strings.Split(reason, "; ")
+	if len(parts) == 0 {
+		return ""
+	}
+	switch parts[0] {
+	case "kill-switch", "namespace-dry-run", "policy-dry-run", "actuation-brake",
+		"ensure-policy-failed", "inviolability-guard", "route-preparation-failed",
+		"no-tick-view", "emit-boundary-infeasible", "code-exec-unverified",
+		"emitted-unconfirmed", "outcome-unknown", "deadline-expired",
+		"definite-no-effect-refusal", "already-satisfied", "reconciled-prior-operation",
+		"declared-without-implementation":
+	default:
+		return ""
+	}
+	seen := map[string]bool{}
+	for _, suffix := range parts[1:] {
+		switch suffix {
+		case "fallback-blocked-kill-switch", "fallback-blocked-actuation-brake",
+			"alternative-deferred-reservation-changed", "alternative-deferred-no-admissible-candidate":
+			if seen[suffix] {
+				return ""
+			}
+			seen[suffix] = true
+		default:
+			return ""
+		}
+	}
+	return reason
+}
 
 // DecisionActionStatusV3 is one canonical action's outcome for this asset (T0-C R-2):
 // every MutatingActions member gets exactly one row, so "the action was never
@@ -923,7 +974,7 @@ func (t DecisionTraceV2) validateV3() error {
 
 	// (7) Dispatch outcome from the closed vocabulary, always recorded.
 	switch t.DispatchOutcome {
-	case DispatchNotAttempted, DispatchEmitted, DispatchEmittedFalse, DispatchError:
+	case DispatchNotAttempted, DispatchEmitted, DispatchEmittedFalse, DispatchError, DispatchRefused, DispatchSatisfied, DispatchReconciled, DispatchDeclared:
 	default:
 		return fmt.Errorf("dispatchOutcome %q is outside the closed vocabulary", t.DispatchOutcome)
 	}
