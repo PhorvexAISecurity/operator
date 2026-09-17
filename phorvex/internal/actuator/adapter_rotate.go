@@ -190,6 +190,7 @@ func adapterEventStillCurrent(ctx context.Context, ec EnactCtx, r operationRecei
 }
 
 func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.ConfigMap, r *operationReceipt, newAttempt bool) (HandlerResult, error) {
+	loadClaimOwned := false
 	if r.Phase == "completed" {
 		current, err := adapterEventStillCurrent(ctx, ec, *r)
 		if err != nil {
@@ -233,6 +234,9 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 				return adapterPartial(cm, fmt.Errorf("adapter-rotate record recovered absence: %w", err))
 			}
 		} else {
+			if !newAttempt {
+				return adapterPartial(cm, fmt.Errorf("adapter-rotate unload dispatch remains unresolved; unchanged inventory does not authorize a repeat POST"))
+			}
 			uerr := ec.vllm().UnloadAdapter(ctx, ep, r.AdapterName)
 			if uerr != nil && !errors.Is(uerr, errAdapterAbsent) {
 				return adapterPartial(cm, fmt.Errorf("adapter-rotate unload dispatch outcome unknown: %w", uerr))
@@ -270,6 +274,7 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 		if err := journalAdvance(ctx, ec, cm, *r); err != nil {
 			return adapterPartial(cm, fmt.Errorf("adapter-rotate claim clean reload: %w", err))
 		}
+		loadClaimOwned = true
 	}
 	if r.Phase == "load-dispatching" {
 		loaded, observeErr := ec.vllm().AdapterLoaded(ctx, ep, r.AdapterName)
@@ -282,6 +287,9 @@ func continueAdapterOperation(ctx context.Context, ec EnactCtx, cm *corev1.Confi
 				return adapterPartial(cm, fmt.Errorf("adapter-rotate record recovered loaded membership: %w", err))
 			}
 		} else {
+			if !newAttempt && !loadClaimOwned {
+				return adapterPartial(cm, fmt.Errorf("adapter-rotate clean-load dispatch remains unresolved; unchanged inventory does not authorize a repeat POST"))
+			}
 			if err := ec.vllm().LoadAdapter(ctx, ep, r.AdapterName, r.AdapterSource); err != nil {
 				return adapterPartial(cm, fmt.Errorf("adapter-rotate configured clean reload outcome unknown: %w", err))
 			}

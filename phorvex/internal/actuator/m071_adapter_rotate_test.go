@@ -283,7 +283,7 @@ func TestM071UnloadHTTPTimeoutRetainsUnknownRecoveryDebt(t *testing.T) {
 	}
 }
 
-func TestM071CleanReloadResumesWithoutDuplicateUnloadOrLoad(t *testing.T) {
+func TestM071RecoveredLoadDispatchDoesNotRepeatUnresolvedPOST(t *testing.T) {
 	serving := &m71Serving{loaded: true, unloadStatus: http.StatusOK, loadStatus: http.StatusInternalServerError, disappearAfter: 1}
 	c, req, ec, done := m71HTTPFixture(t, serving)
 	defer done()
@@ -295,23 +295,20 @@ func TestM071CleanReloadResumesWithoutDuplicateUnloadOrLoad(t *testing.T) {
 	if unloads, loads := serving.counts(); unloads != 1 || loads != 1 {
 		t.Fatalf("initial calls unload=%d load=%d", unloads, loads)
 	}
-	serving.mu.Lock()
-	serving.loadStatus = http.StatusAccepted
-	serving.mu.Unlock()
 	native := &NativeActuator{Client: c, Reader: c, JournalNamespace: "operator", RecoveryVLLM: ec.VLLM, AdapterSources: ec.AdapterSources}
 	events, err := native.RecoverOperations(context.Background(), false)
-	if err != nil || len(events) != 1 || events[0].Outcome != "confirmed" {
-		t.Fatalf("restart did not reconcile receipt: events=%+v err=%v", events, err)
+	if err != nil || len(events) != 1 || events[0].Outcome != "partial" || events[0].Err == nil {
+		t.Fatalf("restart did not retain unresolved load dispatch: events=%+v err=%v", events, err)
 	}
-	if unloads, loads := serving.counts(); unloads != 1 || loads != 2 {
-		t.Fatalf("restart duplicated wrong serving call: unload=%d load=%d", unloads, loads)
+	if unloads, loads := serving.counts(); unloads != 1 || loads != 1 {
+		t.Fatalf("restart repeated a serving call: unload=%d load=%d", unloads, loads)
 	}
 	repeat, err := dispatch(context.Background(), ec, req)
-	if err != nil || repeat.Emitted || repeat.NoEffect != NoEffectReconciled || len(repeat.ObjectsTouched) == 0 || repeat.RollbackRef == "" {
-		t.Fatalf("persistent event repeated completed operation: result=%+v err=%v", repeat, err)
+	if err == nil || repeat.MutationKind != "partial" || repeat.RollbackRef == "" {
+		t.Fatalf("persistent event did not retain unresolved operation: result=%+v err=%v", repeat, err)
 	}
-	if unloads, loads := serving.counts(); unloads != 1 || loads != 2 {
-		t.Fatalf("completed operation repeated: unload=%d load=%d", unloads, loads)
+	if unloads, loads := serving.counts(); unloads != 1 || loads != 1 {
+		t.Fatalf("unresolved operation repeated: unload=%d load=%d", unloads, loads)
 	}
 }
 

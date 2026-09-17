@@ -119,13 +119,27 @@ func newM093Fixture(t *testing.T, handler http.Handler) *m093Fixture {
 	f.policy = &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "tenant", Name: "policy", UID: types.UID("policy-uid"), ResourceVersion: "11"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "model"}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionKVReset), v1alpha1.ActionType(model.ActionAdapterRotate), v1alpha1.ActionType(model.ActionRequestDrain), v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind), v1alpha1.ActionType(model.ActionGuardrailRotate), v1alpha1.ActionType(model.ActionKVMigrateInvalidate)}}}}
 	f.pod = &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "tenant", Name: "model-0", UID: types.UID("pod-uid"), ResourceVersion: "12", Labels: map[string]string{"app": "model"}, Annotations: map[string]string{annoServingPort: strconv.Itoa(port), annoServingTok: "tenant-controlled-token"}}, Spec: corev1.PodSpec{ServiceAccountName: "model-sa", Containers: []corev1.Container{{Name: "model", Image: "model:test"}}}, Status: corev1.PodStatus{PodIP: host, Phase: corev1.PodRunning}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "operator", Name: "model-admin", UID: types.UID("secret-uid"), ResourceVersion: "13"}, Data: map[string][]byte{"bearer": []byte("trusted-token-1"), "ca.crt": caPEM}}
-	f.client = fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(f.policy, f.pod, secret).Build()
+	f.client = fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(f.policy, f.pod, secret,
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).
+		WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			if obj.GetUID() == "" {
+				obj.SetUID(types.UID("created-" + obj.GetName()))
+			}
+			return c.Create(ctx, obj, opts...)
+		}}).Build()
 	f.config = writeServingSecurityConfig(t, ServingSecuritySecureRequired, "operator", []ServingSecurityBinding{f.binding})
 	return f
 }
 
 func (f *m093Fixture) request(action model.Action) Request {
-	return Request{Tenant: "tenant", Namespace: f.pod.Namespace, Pod: f.pod.Name, TargetUID: string(f.pod.UID), PolicyName: f.policy.Name, PolicyUID: string(f.policy.UID), Action: action}
+	current := &corev1.Pod{}
+	if err := f.client.Get(context.Background(), client.ObjectKeyFromObject(f.pod), current); err != nil {
+		panic(err)
+	}
+	req := boundReq(current, action)
+	req.Tenant, req.PolicyName, req.PolicyUID = "tenant", f.policy.Name, string(f.policy.UID)
+	req.TickID = fmt.Sprintf("m093-%d", time.Now().UnixNano())
+	return req
 }
 
 func (f *m093Fixture) native(t *testing.T) *NativeActuator {

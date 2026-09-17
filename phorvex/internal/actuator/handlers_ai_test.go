@@ -149,17 +149,29 @@ func (m *mockGuardrail) ApplyVariant(_ context.Context, _ servingEndpoint, v str
 type mockKVXfer struct {
 	invErr, migErr error
 	invCalls       int
+	peerOutcomes   []kvPeerOutcome
 }
 
 func (m *mockKVXfer) InvalidateLocal(_ context.Context, _ servingEndpoint) error {
 	m.invCalls++
 	return m.invErr
 }
-func (m *mockKVXfer) MigrateRemote(_ context.Context, _ servingEndpoint, _ []string) error {
-	if m.migErr != nil {
-		return m.migErr
+func (m *mockKVXfer) MigrateRemote(_ context.Context, _ servingEndpoint, peers []string) ([]kvPeerOutcome, error) {
+	if m.peerOutcomes != nil {
+		return append([]kvPeerOutcome(nil), m.peerOutcomes...), m.migErr
 	}
-	return errors.New("MigrateRemote deferred [PENDING-GPU-VALIDATION]")
+	if m.migErr != nil {
+		out := make([]kvPeerOutcome, 0, len(peers))
+		for _, peer := range peers {
+			out = append(out, kvPeerOutcome{Peer: peer, Disposition: kvPeerUnknownAfterDispatch})
+		}
+		return out, m.migErr
+	}
+	out := make([]kvPeerOutcome, 0, len(peers))
+	for _, peer := range peers {
+		out = append(out, kvPeerOutcome{Peer: peer, Disposition: kvPeerNotSentUnimplemented})
+	}
+	return out, errors.New("MigrateRemote deferred [PENDING-GPU-VALIDATION]")
 }
 
 // ---- pod builders ----
@@ -195,7 +207,7 @@ func fakeC(objs ...client.Object) client.Client {
 			}
 		}
 	}
-	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind), v1alpha1.ActionType(model.ActionRequestDrain), v1alpha1.ActionType(model.ActionAdapterRotate)}}}}
+	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: "policy-uid"}, Spec: v1alpha1.PhorvexPolicySpec{Mode: v1alpha1.ModeActive, Selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "phorvex.ai/fixture-never", Operator: metav1.LabelSelectorOpDoesNotExist}}}, Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionWarmSwap), v1alpha1.ActionType(model.ActionModelShardReplace), v1alpha1.ActionType(model.ActionMIGRebind), v1alpha1.ActionType(model.ActionRequestDrain), v1alpha1.ActionType(model.ActionAdapterRotate), v1alpha1.ActionType(model.ActionKVReset), v1alpha1.ActionType(model.ActionKVMigrateInvalidate), v1alpha1.ActionType(model.ActionGuardrailRotate)}}}}
 	objs = append(objs, policy, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}})
 	return fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 		if obj.GetUID() == "" {
@@ -209,8 +221,16 @@ func leaderRole(p *corev1.Pod) string { return p.Labels[labelRole] }
 // boundReq is the runner's shape of a destructive AI request: it names the Pod AND binds the
 // identity (TargetUID) of the observed object the selection was made against.
 func boundReq(p *corev1.Pod, a model.Action) Request {
-	return Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a, PolicyName: "policy", PolicyUID: "policy-uid"}
+	return Request{Namespace: p.Namespace, Pod: p.Name, TargetUID: string(p.UID), Action: a, PolicyName: "policy", PolicyUID: "policy-uid", TickID: "fixture-tick",
+		ServingObservation: &ServingSelectionObservation{
+			KVReset:       model.OwnedValue{Present: hasKey(p.Annotations, annoKVResetEpoch), Value: p.Annotations[annoKVResetEpoch]},
+			KVMigrate:     model.OwnedValue{Present: hasKey(p.Annotations, annoKVEpoch), Value: p.Annotations[annoKVEpoch]},
+			KVLocalEffect: model.OwnedValue{Present: hasKey(p.Annotations, annoKVLocalEffect), Value: p.Annotations[annoKVLocalEffect]},
+			Guardrail:     model.OwnedValue{Present: hasKey(p.Labels, "phorvex.ai/guardrail-epoch"), Value: p.Labels["phorvex.ai/guardrail-epoch"]},
+		}}
 }
+
+func hasKey(values map[string]string, key string) bool { _, ok := values[key]; return ok }
 
 // ---- warm-swap ----
 func TestWarmSwapPromotesRetiresAndAwaitsController(t *testing.T) {
@@ -275,7 +295,7 @@ func TestKVResetRealFlushPodAlive(t *testing.T) {
 	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
 	mv := &mockVLLM{}
-	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: mv}, boundReq(pod, model.ActionKVReset))
+	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: mv}, boundReq(pod, model.ActionKVReset))
 	if err != nil {
 		t.Fatalf("kv-reset: %v", err)
 	}
@@ -296,11 +316,11 @@ func TestKVResetUnreachableIsPendingPodAlive(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
 	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{resetErr: errStackUnreachable}}, boundReq(pod, model.ActionKVReset))
+	hr, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{resetErr: errStackUnreachable}}, boundReq(pod, model.ActionKVReset))
 	if err != nil {
 		t.Fatalf("kv-reset (unreachable) must NOT error (pod-alive mechanic real): %v", err)
 	}
-	if !containsStr(hr.Note, "PENDING-GPU-VALIDATION") {
+	if !containsStr(hr.Note, "refused before") {
 		t.Errorf("unreachable flush must be flagged pending, note=%q", hr.Note)
 	}
 	// TRUTHFULNESS: a flush that did not happen is NOT a defence. This branch used to return
@@ -320,7 +340,7 @@ func TestKVResetReachableFailureFailsClosed(t *testing.T) {
 	pod := aiPod("ns", "infer", map[string]string{})
 	pod.Annotations["phorvex.ai/model-id"] = "fixture-model"
 	c := fakeC(pod)
-	_, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, VLLM: &mockVLLM{resetErr: errors.New("HTTP 500")}}, boundReq(pod, model.ActionKVReset))
+	_, err := kvResetHandler{}.Enact(context.Background(), EnactCtx{Client: c, Reader: c, JournalNamespace: "operator", VLLM: &mockVLLM{resetErr: errors.New("HTTP 500")}}, boundReq(pod, model.ActionKVReset))
 	if err == nil {
 		t.Fatal("kv-reset must FAIL-CLOSED when a reachable stack rejects the flush (no faked success)")
 	}

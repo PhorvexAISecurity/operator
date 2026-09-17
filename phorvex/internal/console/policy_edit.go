@@ -2,7 +2,7 @@
  * Phorvex Console — LIVE PhorvexPolicy control.
  *
  * POST /api/policy/edit is a REAL cluster write: it patches a PhorvexPolicy CR with kubectl
- * (--type merge), exactly as scopeVllmPolicy already does for the attack path. It makes the
+ * (--type merge). It makes the
  * operator-facing knobs editable from the dashboard — mode (active/dryRun), the per-tick move
  * budget, and the enabled actuator set — instead of an out-of-band kubectl/Helm change.
  *
