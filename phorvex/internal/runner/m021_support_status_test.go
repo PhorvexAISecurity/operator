@@ -218,7 +218,7 @@ func TestSupportedActionsRemainSupported(t *testing.T) {
 // an existing per-target prerequisite failure. The pod below lacks a Ready serving
 // endpoint, and native accepts kv-reset — the CONFIG reason must still be the one reported.
 func TestPrerequisiteFailuresSurviveBackendAcceptance(t *testing.T) {
-	pod := model.Pod{Namespace: "ns", Name: "no-endpoint", HasGPU: true, ServingEndpointReady: false}
+	pod := model.Pod{Namespace: "ns", Name: "no-endpoint", ServingDeclared: true, ServingEndpointReady: false}
 	views := []*model.WorkloadView{{Pod: pod}}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	rep := capabilityGaps(pol, views, backendWitness([]model.Pod{pod}, nativeBackend()))

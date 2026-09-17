@@ -70,19 +70,18 @@ func flipNames(rep capabilityReport) []string {
 }
 
 // TestUnsupportedIsExistsNotOr is the M-20 kill shot (Honest-∃, T1-E test (f)): the
-// smeared conjunction. Pod A has the GPU; pod B has the Ready serving endpoint; NEITHER
-// has both. The old fleet-wide OR of independent predicates called kv-reset "supported"
-// (some pod has a GPU AND some pod has an endpoint). The de-OR'd per-pod ∃ reports it
-// UNSUPPORTED, because no single pod is fully eligible.
+// smeared conjunction. Pod A declares serving but no route Service; pod B declares a route
+// Service but no serving context. The fleet has both predicates, but no single pod has both.
+// The de-OR'd per-pod ∃ therefore reports endpoint-rotate unsupported.
 func TestUnsupportedIsExistsNotOr(t *testing.T) {
-	podA := model.Pod{Namespace: "ns", Name: "a", HasGPU: true, ServingEndpointReady: false}
-	podB := model.Pod{Namespace: "ns", Name: "b", HasGPU: false, ServingEndpointReady: true}
+	podA := model.Pod{Namespace: "ns", Name: "a", ServingDeclared: true}
+	podB := model.Pod{Namespace: "ns", Name: "b", RouteService: "inference"}
 	views := []*model.WorkloadView{{Pod: podA}, {Pod: podB}}
-	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
+	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionEndpointRotate: true}}
 
 	got := flipNames(capabilityGaps(pol, views, capWitness([]model.Pod{podA, podB})))
-	if strings.Join(got, ",") != "kv-reset" {
-		t.Fatalf("smeared conjunction: want kv-reset unsupported (no single pod fully eligible), got %v", got)
+	if strings.Join(got, ",") != "endpoint-rotate" {
+		t.Fatalf("smeared conjunction: want endpoint-rotate unsupported (no single pod fully eligible), got %v", got)
 	}
 }
 
