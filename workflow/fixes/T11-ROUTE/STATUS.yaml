@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 11
+revision: 12
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -82,6 +82,22 @@ checks:
     - phorvex/internal/actuator/route_cutover_test.go
     - phorvex/internal/runner/route_reconciled_test.go
     inputs_sha256: e5502160898858ebc59561dfdb9a07d807d9821db1235b0a688f2275d7e73ec6
+  incident:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/incident.md
+    sha256: 2da44cb1d4c01d71601386954701600075cfa2f1169352ca2d0d8e82e2538dbc
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:30:01+00:00'
+    baseline_sha: e35b809c543654134f83683489cf6fce973d7afb
+  p3:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/verdict.md
+    sha256: abb7980b308f3c5a4f55035a1be2f86b6abee3891d6c89aea3135f6e19441bfb
+    source_sha: ba0cf53b4ee3453f1626c25e3a36def85a5f2d37
+    at: '2026-09-17T03:30:01+00:00'
+    incident_sha256: 2da44cb1d4c01d71601386954701600075cfa2f1169352ca2d0d8e82e2538dbc
 fix_id: T11-ROUTE
 issues:
 - M-59
@@ -91,7 +107,7 @@ issues:
 - M-147
 title: Journal route cutover and restore only owned fields
 profile: standard
-state: OFFLINE_VERIFIED
+state: PR_READY
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -136,7 +152,7 @@ verification:
   - L3
   live_required: true
   soak_required: false
-  p3: pending
+  p3: PASS
   l0: PASS
   l1: PASS
   l2: PASS
@@ -152,10 +168,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: skeptic
-  action: Independently review the source delta, incident and submitted checks; return
-    review-verdict.
-updated_at: '2026-09-17T03:27:30+00:00'
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-09-17T03:30:04+00:00'
 configuration_history:
 - at: '2026-09-17T00:33:12+00:00'
   by: codex-lead
@@ -231,10 +247,26 @@ transitions:
   note: Validated role handoff
   approval_ref: null
   forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-09-17T03:30:01+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-09-17T03:30:03+00:00'
+  by: codex-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
 handoff:
-  id: T11-ROUTE:11:submit
-  from: sol-t11-route
+  id: T11-ROUTE:12:review
+  from: codex-lead
   to: codex-lead
-  role: skeptic
-  kind: submit
-  revision: 11
+  role: coordinator
+  kind: review
+  revision: 12
