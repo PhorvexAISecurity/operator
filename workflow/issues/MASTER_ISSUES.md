@@ -2716,7 +2716,7 @@ Severity: HIGH · Tier: unassigned · Fixes: CONSOLE-RECOVERY
 
 ### M-177 · Strict MIG and adapter profile JSON accepts ambiguous case aliases · **OPEN** · `ACTUATION`
 
-Severity: MEDIUM · Tier: unassigned · Fixes: none
+Severity: MEDIUM · Tier: unassigned · Fixes: T14-M177
 
 > Anatomy join review: **required**.
 > `V2` **PENDING** · `ACTUATION` — anatomy locus review required.

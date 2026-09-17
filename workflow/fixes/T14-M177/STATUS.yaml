@@ -1,0 +1,124 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 5
+change_class: A
+approvals:
+  pr_open: AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: codex-lead
+    artifact: 03-decision.md
+    sha256: e3da270282d88a04dffdd2351dd31ae1e30fa1b90050dc4b6dfcd1d58a435ff9
+    source_sha: a10463e4be120ca4ce10f6fc29664e15ed0694c9
+    at: '2026-09-17T06:23:53+00:00'
+    contract_sha256: a3a91a4a0005aa4f49c4698343dc692a0c6988d7e8bae632143fba30bdecfdf4
+    approval_ref: AUTHORIZATION.md
+  red:
+    result: PASS
+    by: codex-lead
+    artifact: evidence/p3/lead-baseline.log
+    sha256: f625096649a7f24cc1b41255fc870f50abaf378b0d81d8195389250c7526fa0b
+    source_sha: a10463e4be120ca4ce10f6fc29664e15ed0694c9
+    at: '2026-09-17T06:24:30+00:00'
+fix_id: T14-M177
+issues:
+- M-177
+title: Reject ambiguous case aliases in operator profile JSON
+profile: standard
+state: AGREED
+roles:
+  human_owner: mehrdad
+  proposer: codex-lead
+  implementer: sol-t14-m177
+  skeptic: codex-lead
+  live_verifier: codex-lead
+  coordinator: codex-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: tier13
+  code_sha: a10463e4be120ca4ce10f6fc29664e15ed0694c9
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/t14-m177
+  base_sha: a10463e4be120ca4ce10f6fc29664e15ed0694c9
+  head_sha: null
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: pending
+  l1: pending
+  l2: pending
+  l3: pending
+  l4: pending
+  positive_control: pending
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: sol-t14-m177
+  action: Implement signed plan; one heavy slot; submit-review --no-notify; local
+    only
+updated_at: '2026-09-17T06:24:30+00:00'
+configuration_history:
+- at: '2026-09-17T06:23:50+00:00'
+  by: codex-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - implementation
+  - next_action
+  - roles
+  - verification
+  approval_ref: AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-09-17T06:23:52+00:00'
+  by: codex-lead
+  artifact: 00-intake.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-09-17T06:23:53+00:00'
+  by: codex-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
