@@ -370,6 +370,15 @@ type TriggersSpec struct {
 	// +kubebuilder:default=true
 	EventDriven bool `json:"eventDriven,omitempty"`
 
+	// EventAgeHorizon is the linear evidence-memory horizon for SecurityEvents.
+	// Event weight reaches zero at this age. Omission defaults independently to
+	// one hour; it is not derived from the proactive movement cadence.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="1h"
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="eventAgeHorizon must be a positive duration"
+	// +kubebuilder:validation:XValidation:rule="duration(self) <= duration('2562047h47m16.854775807s')",message="eventAgeHorizon exceeds the supported duration"
+	EventAgeHorizon *metav1.Duration `json:"eventAgeHorizon,omitempty"`
+
 	// ReactiveOnly suppresses PROACTIVE (exposure-only) moves: when true, an asset is
 	// actionable ONLY while a real attack signal targets it (a non-Phorvex SecurityEvent,
 	// a compromised neighbor, or an AI poison marker). The hygiene-floor proactive
@@ -514,6 +523,7 @@ func init() {
 type TrustSpec struct {
 	// +optional
 	// +listType=set
+	// +kubebuilder:validation:items:MinLength=1
 	PeerPolicies []string `json:"peerPolicies,omitempty"`
 }
 

@@ -1732,13 +1732,11 @@ func sinceEvidenceOf(a killchain.Assessment) model.OptionalFloat {
 	return model.OptionalFloat{Present: true, Value: best}
 }
 
-// eventAgeHorizonSeconds / exposurePressureScaleSeconds mirror the killchain fallbacks so the
-// trace records the horizon the model actually used (dedicated field, else the floor).
+// eventAgeHorizonSeconds / exposurePressureScaleSeconds record the exact effective
+// values used by the model. Event evidence has an independent inherited default;
+// exposure pressure continues to fall back to proactive cadence.
 func eventAgeHorizonSeconds(pol model.Policy) float64 {
-	if pol.EventAgeHorizon > 0 {
-		return pol.EventAgeHorizon.Seconds()
-	}
-	return pol.ProactiveFloor.Seconds()
+	return pol.EffectiveEventAgeHorizon().Seconds()
 }
 
 func exposurePressureScaleSeconds(pol model.Policy) float64 {

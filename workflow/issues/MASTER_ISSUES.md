@@ -406,7 +406,7 @@ Severity: MINOR/ADVISORY · Tier: 1 · Fixes: none
 
 ### M-29 · Event-age decay reuses the move-cadence knob (two sites) · **OPEN** · `CLOCK->BELIEF`
 
-Severity: ADVISORY · Tier: 1 · Fixes: none
+Severity: ADVISORY · Tier: 1 · Fixes: T13-M029
 
 > Anatomy join review: **required**.
 > `V2` **LOCUS** · belief
