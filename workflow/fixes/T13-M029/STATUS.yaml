@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 5
+revision: 8
 change_class: A
 approvals:
   pr_open: AUTHORIZATION.md
@@ -23,12 +23,84 @@ checks:
     sha256: 100f9afc6ba8c9c7247ffe2fd1cd4efd598dcfcaa3511c37bb68082a9e2287e1
     source_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
     at: '2026-09-17T05:32:49+00:00'
+  preflight:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/preflight/receipt.json
+    sha256: ee109960272e5554aee978d97de2d31e124dcfd483a9db54963469c51ad9b18a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+  implementation:
+    result: PASS
+    by: sol-t13-m029
+    artifact: 04-diff.patch
+    sha256: 4a0028d1acfbd85c5c7ff30275a11d9f6f8ace3bbf5786f848b00953626b638a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+  l0:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/preflight/receipt.json
+    sha256: ee109960272e5554aee978d97de2d31e124dcfd483a9db54963469c51ad9b18a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - deploy/helm/phorvex-stack
+    - phorvex
+    - tools
+    - workflow
+    inputs_sha256: 1ce049585bfde42a76bbbc7457ac9b40bec4aad76163732edfdee25ae8620316
+  l1:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/worker/focused-head.md
+    sha256: fd102940f7aef963fc20b49afd4bc119a0e3106ca5df35860bda662ed5e8e8b2
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/internal/belief
+    - phorvex/internal/ctxprov
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/recon
+    - phorvex/internal/runner
+    - tools
+    inputs_sha256: 594d518273a827d1e751191316ab74a4982a0bac8ef32f72b8a1cd6c6eb95c0d
+  l2:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/preflight/receipt.json
+    sha256: ee109960272e5554aee978d97de2d31e124dcfd483a9db54963469c51ad9b18a
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - phorvex
+    - tools/envtest_gate.py
+    inputs_sha256: edafe6e63eb7d44e87a8bf5719b8d51b1d083b608bc56d4d6a957b615d4ff6af
+  positive_control:
+    result: PASS
+    by: sol-t13-m029
+    artifact: evidence/worker/focused-head.md
+    sha256: fd102940f7aef963fc20b49afd4bc119a0e3106ca5df35860bda662ed5e8e8b2
+    source_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
+    at: '2026-09-17T06:10:45+00:00'
+    inputs:
+    - phorvex/api/v1alpha1
+    - phorvex/internal/belief
+    - phorvex/internal/ctxprov
+    - phorvex/internal/decision
+    - phorvex/internal/killchain
+    - phorvex/internal/model
+    - phorvex/internal/runner
+    inputs_sha256: f307c43463d346f95f04558e8ad12baaef1e8ed73aaef025f08c47fb8ed7f3dc
 fix_id: T13-M029
 issues:
 - M-29
 title: Decouple event evidence memory from proactive rotation cadence
 profile: standard
-state: AGREED
+state: OFFLINE_VERIFIED
 roles:
   human_owner: mehrdad
   proposer: codex-lead
@@ -52,7 +124,7 @@ blind_derivation:
 implementation:
   branch: fix/t13-m029
   base_sha: afda18fdb727e5b6e05934824b9d71a542b35d8d
-  head_sha: null
+  head_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
   stacked_on: []
 pull_request:
   url: null
@@ -74,12 +146,12 @@ verification:
   live_required: true
   soak_required: false
   p3: pending
-  l0: pending
-  l1: pending
-  l2: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
   l3: pending
   l4: pending
-  positive_control: pending
+  positive_control: PASS
 synchronization:
   issue_entries: pending
   master_register: pending
@@ -89,10 +161,10 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: sol-t13-m029
-  action: Implement signed plan; one heavy slot; submit-review --no-notify; local
-    only
-updated_at: '2026-09-17T05:32:49+00:00'
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-09-17T06:10:48+00:00'
 configuration_history:
 - at: '2026-09-17T05:31:40+00:00'
   by: codex-lead
@@ -105,6 +177,21 @@ configuration_history:
   - roles
   - verification
   approval_ref: AUTHORIZATION.md
+- at: '2026-09-17T05:57:47+00:00'
+  by: sol-t13-m029
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T05:58:15+00:00'
+  by: sol-t13-m029
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-09-17T06:10:45+00:00'
+  by: sol-t13-m029
+  fields:
+  - implementation
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -122,3 +209,26 @@ transitions:
   note: null
   approval_ref: null
   forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-09-17T06:10:45+00:00'
+  by: sol-t13-m029
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-09-17T06:10:47+00:00'
+  by: sol-t13-m029
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+handoff:
+  id: T13-M029:8:submit
+  from: sol-t13-m029
+  to: codex-lead
+  role: skeptic
+  kind: submit
+  revision: 8

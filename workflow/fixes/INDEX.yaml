@@ -1101,8 +1101,8 @@ fixes:
     issues:
     - M-29
     related_issues: []
-    state: AGREED
+    state: OFFLINE_VERIFIED
     dependencies: []
     stacked_on: []
     branch: fix/t13-m029
-    head_sha: null
+    head_sha: e274bac400e66e01db7bb89d231e6d6941888b6b
