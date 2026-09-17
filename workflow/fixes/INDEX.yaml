@@ -1090,7 +1090,7 @@ fixes:
     issues:
     - M-93
     related_issues: []
-    state: PR_READY
+    state: IN_PR
     dependencies: []
     stacked_on: []
     branch: fix/t12-m093
