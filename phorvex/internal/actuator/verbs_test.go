@@ -45,18 +45,23 @@ func TestRequiredVerbsRoutingAware(t *testing.T) {
 	if got := RequiredVerbs(model.ActionKVReset); len(got) != 1 || got[0].Resource != "pods" || got[0].Verb != "update" {
 		t.Errorf("native-routed kv-reset must keep pods/update, got %+v", got)
 	}
-	if got := RequiredVerbs(model.ActionRouteRotate); len(got) != 2 {
-		t.Errorf("native-routed route-rotate must keep its 2 native verbs, got %+v", got)
+	if got := RequiredVerbs(model.ActionRouteRotate); len(got) != 5 {
+		t.Errorf("native-routed route-rotate must keep its 5 native write and confirmation verbs, got %+v", got)
 	}
 	for _, action := range []model.Action{model.ActionRouteRotate, model.ActionEndpointRotate} {
-		var podPatch, podUpdate, serviceUpdate bool
-		for _, verb := range RequiredVerbsForBackend(BackendNative, action) {
+		verbs := RequiredVerbsForBackend(BackendNative, action)
+		var podPatch, podUpdate, serviceGet, serviceList, serviceUpdate, endpointList, endpointMutation bool
+		for _, verb := range verbs {
 			podPatch = podPatch || (verb.Resource == "pods" && verb.Verb == "patch")
 			podUpdate = podUpdate || (verb.Resource == "pods" && verb.Verb == "update")
+			serviceGet = serviceGet || (verb.Resource == "services" && verb.Verb == "get")
+			serviceList = serviceList || (verb.Resource == "services" && verb.Verb == "list")
 			serviceUpdate = serviceUpdate || (verb.Resource == "services" && verb.Verb == "update")
+			endpointList = endpointList || (verb.Group == "discovery.k8s.io" && verb.Resource == "endpointslices" && verb.Verb == "list")
+			endpointMutation = endpointMutation || (verb.Resource == "endpointslices" && verb.Verb != "list")
 		}
-		if !podPatch || podUpdate || !serviceUpdate {
-			t.Errorf("%s permissions do not match owned-key Pod patch + Service update: %+v", action, RequiredVerbsForBackend(BackendNative, action))
+		if len(verbs) != 5 || !podPatch || podUpdate || !serviceGet || !serviceList || !serviceUpdate || !endpointList || endpointMutation {
+			t.Errorf("%s permissions do not exactly match Pod patch, Service read/update, and read-only EndpointSlice confirmation: %+v", action, verbs)
 		}
 	}
 }
