@@ -133,9 +133,9 @@ func TestM066BareWarmPairRefusedBeforeMutation(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(old, next, pol,
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}},
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).Build()
-	_, err := (warmSwapHandler{}).Enact(context.Background(), EnactCtx{Client: base, Reader: base, JournalNamespace: "operator"}, boundReq(old, model.ActionWarmSwap))
-	if err == nil {
-		t.Fatal("bare warm pair accepted")
+	result, err := (warmSwapHandler{}).Enact(context.Background(), EnactCtx{Client: base, Reader: base, JournalNamespace: "operator"}, boundReq(old, model.ActionWarmSwap))
+	if err != nil || result.NoEffect != NoEffectRefused || result.Emitted {
+		t.Fatalf("bare warm pair was not cleanly refused: result=%+v err=%v", result, err)
 	}
 	got := &corev1.Pod{}
 	if e := base.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: old.Name}, got); e != nil || got.Labels[labelRole] != roleLeader {

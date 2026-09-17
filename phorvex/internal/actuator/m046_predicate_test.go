@@ -62,6 +62,7 @@ func TestM46HandlerUsesCanonicalMIGPredicate(t *testing.T) {
 				Client:      c,
 				Reader:      c,
 				MIG:         &mockMIG{availErr: errors.New("probe stopped before mutation")},
+				VLLM:        &mockVLLM{},
 				MIGProfiles: testMIGProfilesFor(pod.Namespace),
 			}, Request{Namespace: pod.Namespace, Pod: pod.Name, TargetUID: string(pod.UID), Action: model.ActionMIGRebind})
 			if err == nil || !strings.Contains(err.Error(), tt.wantReason) {

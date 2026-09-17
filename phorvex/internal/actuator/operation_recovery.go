@@ -27,7 +27,7 @@ func (n *NativeActuator) RecoverOperations(ctx context.Context, globalKill bool)
 }
 
 func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool, allow func(model.Action) bool) ([]RecoveryEvent, error) {
-	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}
+	ec := EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, VLLM: n.RecoveryVLLM, AdapterSources: n.AdapterSources, ServingSecurity: n.servingSecurity, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval}
 	if globalKill || n.DryRun {
 		return nil, nil
 	}
@@ -53,22 +53,40 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 			events = append(events, ev)
 			continue
 		}
+		entryEC := ec
+		entryEC.ServingRequest = Request{Namespace: r.PolicyNamespace, Pod: r.TargetName, TargetUID: r.TargetUID, PolicyName: r.PolicyName, PolicyUID: r.PolicyUID, Action: action}
+		if servingHTTPAction(action) {
+			if ec.ServingSecurity != nil {
+				snapshot, prepareErr := ec.ServingSecurity.prepareRecovery(ctx, ec.Reader, r)
+				if prepareErr == nil {
+					entryEC.ServingAttempt = snapshot
+				} else if secureServingReceipt(r) {
+					ev.Err = prepareErr
+					events = append(events, ev)
+					continue
+				}
+			} else if secureServingReceipt(r) {
+				ev.Err = fmt.Errorf("serving security configuration is not wired")
+				events = append(events, ev)
+				continue
+			}
+		}
 		if r.Kind == string(model.ActionRouteRotate) || r.Kind == string(model.ActionEndpointRotate) {
-			ev.Effect, ev.Err = recoverRouteCutover(ctx, ec, &entry.CM, &r)
+			ev.Effect, ev.Err = recoverRouteCutover(ctx, entryEC, &entry.CM, &r)
 		} else {
 			var pol *v1alpha1.PhorvexPolicy
-			pol, ev.Err = receiptAuthority(ctx, ec.Reader, r, action)
+			pol, ev.Err = receiptAuthority(ctx, entryEC.Reader, r, action)
 			if ev.Err == nil {
 				ev.Tenant = pol.EffectiveTenant()
 				switch r.Kind {
 				case "warm-swap", "model-shard-replace":
-					ev.Effect, ev.Err = recoverScalarCutover(ctx, ec, &entry.CM, &r)
+					ev.Effect, ev.Err = recoverScalarCutover(ctx, entryEC, &entry.CM, &r)
 				case "quarantine":
-					ev.Effect, ev.Err = recoverQuarantineGC(ctx, ec, &entry.CM, &r)
+					ev.Effect, ev.Err = recoverQuarantineGC(ctx, entryEC, &entry.CM, &r)
 				case "request-drain":
-					ev.Effect, _, ev.Err = recoverRequestDrain(ctx, ec, &entry.CM, &r)
+					ev.Effect, _, ev.Err = recoverRequestDrain(ctx, entryEC, &entry.CM, &r)
 				case "adapter-rotate":
-					ev.Effect, ev.Err = recoverAdapterRotate(ctx, ec, &entry.CM, &r)
+					ev.Effect, ev.Err = recoverAdapterRotate(ctx, entryEC, &entry.CM, &r)
 				}
 			}
 		}

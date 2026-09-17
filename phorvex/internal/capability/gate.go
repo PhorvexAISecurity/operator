@@ -188,8 +188,10 @@ type Witness struct {
 	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
 	// per-namespace label sets (already GET-derived observation substrate) so the scope
 	// check is O(1) and needs no per-candidate network read.
-	codeExec AdmissionVerifier
-	nsLabels map[string]map[string]string
+	codeExec   AdmissionVerifier
+	nsLabels   map[string]map[string]string
+	policyName string
+	policyUID  string
 }
 
 // BuildWitness assembles the per-tick witness.
@@ -203,6 +205,13 @@ func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, a
 func (w Witness) WithCodeExec(cev AdmissionVerifier, nsLabels map[string]map[string]string) Witness {
 	w.codeExec = cev
 	w.nsLabels = nsLabels
+	return w
+}
+
+// WithPolicyIdentity adds immutable policy configuration already held by the runner.
+// It performs no API read and is therefore safe for EligibleObserved counterfactuals.
+func (w Witness) WithPolicyIdentity(name, uid string) Witness {
+	w.policyName, w.policyUID = name, uid
 	return w
 }
 
@@ -315,7 +324,7 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 	if w.act == nil {
 		return false, actuator.ReasonBackendUnavailable + ": no actuator is wired to answer for this action"
 	}
-	if ok, why := w.act.SupportsAction(w.ctx, action, targetFrom(v)); !ok {
+	if ok, why := w.act.SupportsAction(w.ctx, action, w.targetFrom(v)); !ok {
 		return false, why
 	}
 	return true, ""
@@ -355,6 +364,20 @@ func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action
 		}
 	}
 	return true, ""
+}
+
+// Advisory returns local configuration posture only. It never performs an API or Secret read.
+func (w Witness) Advisory(v *model.WorkloadView, action model.Action) string {
+	if w.act == nil || v == nil {
+		return ""
+	}
+	advisory, ok := w.act.(interface {
+		CapabilityAdvisory(model.Action, actuator.Target) string
+	})
+	if !ok {
+		return ""
+	}
+	return advisory.CapabilityAdvisory(action, w.targetFrom(v))
 }
 
 // requiredVerbs follows the backend that this witness will actually dispatch through. The
@@ -512,9 +535,10 @@ func selectorMatches(selector, podLabels map[string]string) bool {
 	return true
 }
 
-func targetFrom(v *model.WorkloadView) actuator.Target {
+func (w Witness) targetFrom(v *model.WorkloadView) actuator.Target {
 	return actuator.Target{
 		Namespace: v.Pod.Namespace, Pod: v.Pod.Name, UID: v.Pod.UID,
 		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU, MIGResource: v.Pod.MIGDevice,
+		PolicyName: w.policyName, PolicyUID: w.policyUID, ServiceAccount: v.Pod.ServiceAccount,
 	}
 }

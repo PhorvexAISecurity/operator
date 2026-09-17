@@ -63,6 +63,7 @@ REQUIRED = {
         'TestM052RealReplicaSetQuarantineStopsAtCapacity',
         'TestM040RequestDrainAPIServerLifecycleAndRecovery',
         'TestRouteCutoverActualAPIAndKCMEndpointSliceLifecycle',
+        'TestM093RealAPISecretAuthorizationAndProtectedTLSRecovery',
     ),
     'github.com/phorvex/phorvex/internal/runner': (
         'TestM005TwoManagersAndHandoff',

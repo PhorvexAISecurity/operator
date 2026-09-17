@@ -49,6 +49,7 @@ func TestMIGCapabilityUsesAuthoritativeNodeGroupedEvidence(t *testing.T) {
 	t.Cleanup(func() { pkgNodeRunner = old })
 	n := NewNativeActuator(c)
 	n.Reader = c
+	n.SetServingSecurity(legacyServingSecurityForTest(t))
 	n.SetMIGProfiles(testMIGProfiles())
 	target := Target{Namespace: "ns", Pod: "infer", UID: string(pod.UID), NodeName: "node-a", HasGPU: true, MIGResource: "nvidia.com/mig-1g.10gb"}
 	for i := 0; i < 2; i++ {
@@ -70,6 +71,7 @@ func TestMIGCapabilityRejectsStalePodUIDAndMissingProfile(t *testing.T) {
 	c := ctrlfake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
 	n := NewNativeActuator(c)
 	n.Reader = c
+	n.SetServingSecurity(legacyServingSecurityForTest(t))
 	n.SetMIGProfiles(testMIGProfiles())
 	old := pkgNodeRunner
 	pkgNodeRunner = &execNodeRunner{}

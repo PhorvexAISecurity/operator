@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actionset"
@@ -53,6 +54,10 @@ type EnactCtx struct {
 	KVXfer           kvTransferController // disaggregated KV-transfer control plane; nil => real default
 	AdapterSources   AdapterSources
 	MIGProfiles      *MIGProfiles
+	ServingSecurity  *ServingSecurityConfig
+	ServingAttempt   *servingCredentialSnapshot
+	ServingTarget    *corev1.Pod
+	ServingRequest   Request
 	// Request-drain observation bounds default to production constants. Tests that
 	// emulate an EndpointSlice controller may shorten them without changing behavior.
 	DrainObservationTimeout    time.Duration
@@ -100,6 +105,9 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	}
 	if req.Action == model.ActionIdentityRotate {
 		return Result{}, fmt.Errorf("native actuator: %s", model.IdentityRotateUnsupportedReason)
+	}
+	if err := prepareServingAttempt(ctx, &ec, req); err != nil {
+		return Result{}, err
 	}
 	h, ok := HandlerRegistry.Get(string(req.Action))
 	if !ok {

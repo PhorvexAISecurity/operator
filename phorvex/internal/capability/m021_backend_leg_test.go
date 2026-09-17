@@ -24,7 +24,10 @@ func phoenixWitness() Witness {
 }
 
 func nativeWitness() Witness {
-	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, actuator.NewNativeActuator(nil))
+	native := actuator.NewNativeActuator(nil)
+	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	native.SetServingSecurity(legacy)
+	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, native)
 }
 
 // TestCapableConsultsBackendForNonAIActions: the old `if !AICapabilityActions[action]

@@ -490,7 +490,10 @@ func cloneMap(m map[string]string) map[string]string {
 // transport leg. This is the M-79 fix (old status reported it supported).
 func TestTransportUnwired_M79(t *testing.T) {
 	views, base := capFleet()
-	wit := BuildWitness(context.Background(), base.idx, nil, nil, actuator.NewNativeActuator(nil)) // NodeExecWired()==false by default
+	native := actuator.NewNativeActuator(nil)
+	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
+	native.SetServingSecurity(legacy)
+	wit := BuildWitness(context.Background(), base.idx, nil, nil, native) // NodeExecWired()==false by default
 	ok, why := wit.Capable(views[0], model.ActionMIGRebind)
 	if ok || !strings.Contains(why, "transport-unwired") {
 		t.Fatalf("mig-rebind with unwired transport: want capability-unsupported transport-unwired, got ok=%v why=%q", ok, why)

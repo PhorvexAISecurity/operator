@@ -68,7 +68,8 @@ type capabilityReport struct {
 	enabled int
 	// optedOut counts selected assets deliberately removed before capability and
 	// allocation evaluation by the application-owner brake.
-	optedOut int
+	optedOut   int
+	advisories []string
 }
 
 // capabilityGaps returns every enabled AI-capability action that is not serviceable on
@@ -95,6 +96,7 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
 	total := len(eligibleViews)
 	rep := capabilityReport{observed: total, optedOut: optedOut}
 	var gaps []actionGap
+	advisorySet := map[string]struct{}{}
 	// [M-21] Enumerate the enabled actions through the SAME source of truth the generator
 	// uses (model.MutatingActions filtered by model.ActionEnabled), for two reasons the
 	// old `range pol.EnabledActions` got wrong:
@@ -119,6 +121,9 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
 					whyCount[why]++
 				}
 			}
+			if advisory := wit.Advisory(v, action); advisory != "" {
+				advisorySet[string(action)+": "+advisory] = struct{}{}
+			}
 		}
 		// total==0 (selector matches no pods) skips here too: no assets ≠ unsupported —
 		// "your policy selects nothing" is a different signal, not a capability gap (M-20).
@@ -129,6 +134,10 @@ func capabilityGaps(pol model.Policy, views []*model.WorkloadView, wit capabilit
 	}
 	sort.Slice(gaps, func(i, j int) bool { return gaps[i].action < gaps[j].action })
 	rep.gaps = gaps
+	for advisory := range advisorySet {
+		rep.advisories = append(rep.advisories, advisory)
+	}
+	sort.Strings(rep.advisories)
 	return rep
 }
 
@@ -229,6 +238,9 @@ func (m *Manager) debounceActionsSupported(e *policyEntry, rep capabilityReport)
 		msg := "all enabled actions have matching capabilities in the selected fleet"
 		if len(gaps) > 0 {
 			msg = "all enabled actions serviceable; " + message
+		}
+		if len(rep.advisories) > 0 {
+			msg += "; insecure compatibility: " + strings.Join(rep.advisories, "; ")
 		}
 		return actionsSupportStatus{status: metav1.ConditionTrue, reason: actionsSupportedReason, message: msg}
 	}

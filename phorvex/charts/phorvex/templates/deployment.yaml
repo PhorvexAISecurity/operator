@@ -84,6 +84,13 @@ spec:
         {{- if .Values.phorvex.mig.profiles.content }}
         - --mig-profiles-file={{ .Values.phorvex.mig.profiles.mountPath }}
         {{- end }}
+        {{- if not (has .Values.phorvex.servingSecurity.mode (list "secure-required" "legacy-plaintext")) }}{{ fail "phorvex.servingSecurity.mode must be secure-required or legacy-plaintext" }}{{- end }}
+        {{- if and (eq .Values.phorvex.servingSecurity.mode "legacy-plaintext") .Values.phorvex.servingSecurity.bindings }}{{ fail "legacy-plaintext does not accept servingSecurity.bindings" }}{{- end }}
+        {{- if and .Values.phorvex.servingSecurity.bindings (not (has .Values.phorvex.actuator (list "native" "hybrid"))) }}{{ fail "servingSecurity.bindings require phorvex.actuator=native or hybrid" }}{{- end }}
+        - --serving-security-mode={{ .Values.phorvex.servingSecurity.mode }}
+        {{- if .Values.phorvex.servingSecurity.bindings }}
+        - --serving-security-file={{ .Values.phorvex.servingSecurity.mountPath }}
+        {{- end }}
         {{- if .Values.phorvex.mig.nodeExec.enabled }}
         {{- if not .Values.phorvex.mig.nodeExec.exclusiveMaintenance }}{{ fail "phorvex.mig.nodeExec.exclusiveMaintenance=true is required when enabling destructive MIG node exec" }}{{- end }}
         {{- $agentNS := required "phorvex.mig.nodeExec.namespace is required when enabled" .Values.phorvex.mig.nodeExec.namespace }}
@@ -215,7 +222,7 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings }}
         volumeMounts:
         {{- if .Values.phorvex.epss.enabled }}
         - name: epss
@@ -252,8 +259,14 @@ spec:
           subPath: profiles.json
           readOnly: true
         {{- end }}
+        {{- if .Values.phorvex.servingSecurity.bindings }}
+        - name: serving-security
+          mountPath: {{ .Values.phorvex.servingSecurity.mountPath }}
+          subPath: security.json
+          readOnly: true
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content }}
+        {{- end }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings }}
       volumes:
       {{- if .Values.phorvex.epss.enabled }}
       - name: epss
@@ -289,6 +302,14 @@ spec:
         secret:
           secretName: {{ required "console.auditTransport.serverSecretName required" .Values.phorvex.console.auditTransport.serverSecretName }}
       {{- end }}
+      {{- end }}
+      {{- if .Values.phorvex.servingSecurity.bindings }}
+      - name: serving-security
+        configMap:
+          name: {{ include "phorvex.fullname" . }}-serving-security
+          items:
+          - key: security.json
+            path: security.json
       {{- end }}
       {{- if .Values.phorvex.calibration.enabled }}
       - name: calibration-evidence

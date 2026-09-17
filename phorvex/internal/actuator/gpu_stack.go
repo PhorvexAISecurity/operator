@@ -48,6 +48,8 @@ import (
 type servingEndpoint struct {
 	podIP      string
 	port       int
+	scheme     string
+	client     *http.Client
 	resetPath  string // the prefix/KV-cache reset path (vLLM default; configurable per pod)
 	healthPath string // liveness probe path (vLLM default /health; configurable per pod)
 	modelsPath string // loaded-models list path (vLLM default /v1/models; configurable per pod)
@@ -63,10 +65,18 @@ type servingEndpoint struct {
 
 func (e servingEndpoint) reachable() bool { return e.podIP != "" && e.port > 0 }
 func (e servingEndpoint) base() string {
-	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port))}).String()
+	scheme := e.scheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port))}).String()
 }
 func (e servingEndpoint) routeURL(route string) string {
-	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: route}).String()
+	scheme := e.scheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(e.podIP, strconv.Itoa(e.port)), Path: route}).String()
 }
 
 const (
@@ -75,7 +85,7 @@ const (
 	annoResetPath    = "phorvex.ai/kv-reset-path" // default vLLM prefix-cache reset
 	annoHealthPath   = "phorvex.ai/health-path"   // default /health (liveness probe)
 	annoModelsPath   = "phorvex.ai/models-path"   // default /v1/models (loaded-model list)
-	annoServingTok   = "phorvex.ai/serving-token" // optional admin bearer (prefer a Secret ref in prod)
+	annoServingTok   = "phorvex.ai/serving-token" // legacy-plaintext compatibility only; secure mode ignores it
 	defaultServePort = 8000
 	// [PENDING-GPU-VALIDATION] confirm EVERY route against the deployed vLLM version: recent vLLM exposes
 	// the prefix-cache reset on the engine; the exact routes differ by version/flag. All configurable via
@@ -258,11 +268,19 @@ func (c *httpVLLM) do(ctx context.Context, method, url, token string) (int, stri
 	return c.request(ctx, method, url, token, "", nil)
 }
 
+func (c *httpVLLM) doEndpoint(ctx context.Context, ep servingEndpoint, method, route string) (int, string, error) {
+	return c.requestWithClient(ctx, ep.client, method, ep.routeURL(route), ep.token, "", nil)
+}
+
 // request is the single serving HTTP execution boundary. Redirects are returned
 // as their original response so a write accepted by the first server is never
 // silently repeated and a later dial failure cannot erase that possible effect.
 // The client is copied before installing this policy; shared clients are immutable.
 func (c *httpVLLM) request(ctx context.Context, method, rawURL, token, contentType string, body []byte) (int, string, error) {
+	return c.requestWithClient(ctx, nil, method, rawURL, token, contentType, body)
+}
+
+func (c *httpVLLM) requestWithClient(ctx context.Context, endpointClient *http.Client, method, rawURL, token, contentType string, body []byte) (int, string, error) {
 	var requestBody io.Reader
 	if body != nil {
 		requestBody = bytes.NewReader(body)
@@ -277,7 +295,10 @@ func (c *httpVLLM) request(ctx context.Context, method, rawURL, token, contentTy
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	hc := c.hc
+	hc := endpointClient
+	if hc == nil {
+		hc = c.hc
+	}
 	if hc == nil {
 		hc = http.DefaultClient
 	}
@@ -367,7 +388,7 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 	if !ep.reachable() {
 		return false, errStackUnreachable
 	}
-	code, _, err := c.do(ctx, http.MethodGet, ep.routeURL(ep.healthPath), ep.token)
+	code, _, err := c.doEndpoint(ctx, ep, http.MethodGet, ep.healthPath)
 	if err != nil {
 		return false, err
 	}
@@ -375,7 +396,7 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 		return false, nil
 	}
 	// health 200 => live; the models route lists the loaded model => model-loaded.
-	mcode, body, err := c.do(ctx, http.MethodGet, ep.routeURL(ep.modelsPath), ep.token)
+	mcode, body, err := c.doEndpoint(ctx, ep, http.MethodGet, ep.modelsPath)
 	if err != nil {
 		if errors.Is(err, errStackUnreachable) {
 			var unavailable *definiteServingUnreachableError
@@ -386,7 +407,13 @@ func (c *httpVLLM) ModelReady(ctx context.Context, ep servingEndpoint) (bool, er
 		}
 		return false, err
 	}
-	return mcode == http.StatusOK && strings.Contains(body, "\"data\""), nil
+	if mcode != http.StatusOK {
+		return false, nil
+	}
+	if _, err := parseAdapterInventory([]byte(body), "\x00"); err != nil {
+		return false, fmt.Errorf("serving model inventory: invalid bounded response")
+	}
+	return true, nil
 }
 
 func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) error {
@@ -398,12 +425,12 @@ func (c *httpVLLM) ResetPrefixCache(ctx context.Context, ep servingEndpoint) err
 	if !ep.reachable() {
 		return errStackUnreachable
 	}
-	code, body, err := c.do(ctx, http.MethodPost, ep.routeURL(ep.resetPath), ep.token)
+	code, _, err := c.doEndpoint(ctx, ep, http.MethodPost, ep.resetPath)
 	if err != nil {
 		return err
 	}
 	if code != http.StatusOK && code != http.StatusNoContent {
-		return fmt.Errorf("vLLM reset_prefix_cache: HTTP %d %s", code, strings.TrimSpace(body))
+		return fmt.Errorf("vLLM reset_prefix_cache: HTTP %d", code)
 	}
 	return nil
 }

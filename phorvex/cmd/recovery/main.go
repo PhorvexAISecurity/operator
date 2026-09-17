@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	var operatorNS, namespace, policy, planOut, applyPlan, resultOut string
+	var operatorNS, namespace, policy, planOut, applyPlan, resultOut, servingSecurityFile, servingSecurityMode string
 	var maxItems int
 	flag.StringVar(&operatorNS, "operator-namespace", "", "protected operator namespace (required)")
 	flag.StringVar(&namespace, "namespace", "", "target policy namespace (required)")
@@ -30,6 +30,8 @@ func main() {
 	flag.StringVar(&planOut, "plan-out", "", "write a versioned protected re-admission plan; inventory remains the default")
 	flag.StringVar(&applyPlan, "apply-plan", "", "apply this exact reviewed plan (separate explicit mode)")
 	flag.StringVar(&resultOut, "result-out", "", "durably write apply results before exit (required with --apply-plan)")
+	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "operator-owned serving TLS credential binding configuration")
+	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "secure-required or explicit legacy-plaintext")
 	flag.Parse()
 	if operatorNS == "" || namespace == "" || policy == "" || (planOut != "" && applyPlan != "") || (applyPlan != "" && resultOut == "") {
 		fmt.Fprintln(os.Stderr, "usage: phorvex-recovery --operator-namespace NS --namespace NS --policy NAME [--max-items N] [--plan-out FILE | --apply-plan FILE --result-out FILE]")
@@ -52,6 +54,15 @@ func main() {
 	}
 	native := actuator.NewNativeActuator(c)
 	native.Reader, native.JournalNamespace = c, operatorNS
+	mode, err := actuator.ParseServingSecurityMode(servingSecurityMode)
+	if err != nil {
+		fatal(err)
+	}
+	security, err := actuator.LoadServingSecurityFile(servingSecurityFile, mode, operatorNS)
+	if err != nil {
+		fatal(err)
+	}
+	native.SetServingSecurity(security)
 	scope := actuator.RecoveryScope{OperatorNamespace: operatorNS, Namespace: namespace, PolicyName: policy, MaxItems: maxItems}
 	ctx := context.Background()
 	if applyPlan != "" {
